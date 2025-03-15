@@ -1,3 +1,0 @@
-{"level":"error","message":"Error parsing feed from Corriere della Sera (https://rss.corriere.it/rss2/homepage.xml): getaddrinfo ENOTFOUND rss.corriere.it","timestamp":"2025-03-15T14:03:38.338Z"}
-{"level":"error","message":"Error getting hot topics: Cannot convert object to primitive value","timestamp":"2025-03-15T14:03:38.827Z"}
-{"level":"error","message":"500 - Cannot convert object to primitive value - /api/hot-topics - GET - ::ffff:172.19.0.3","timestamp":"2025-03-15T14:03:38.827Z"}
