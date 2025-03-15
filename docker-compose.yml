@@ -12,6 +12,9 @@ services:
       - ./backend/logs:/usr/src/app/logs
     networks:
       - app-network
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
   frontend:
     build: ./frontend
