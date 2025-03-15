@@ -1,6 +1,7 @@
 const rssParser = require('./rssParser');
 const logger = require('../utils/logger');
 const cache = require('memory-cache');
+const topicNormalizer = require('./topicNormalizer');
 
 // News sources configuration
 const newsSources = [
@@ -98,13 +99,14 @@ async function getHotTopics() {
     // Flatten all items
     const allItems = allNews.flatMap(group => group.items);
     
-    // Count topics
+    // Count topics using normalized topics
     const topicCounts = {};
     allItems.forEach(item => {
       if (item.topics && Array.isArray(item.topics)) {
         item.topics.forEach(topic => {
-          // Verifica che il topic sia una stringa prima di elaborarlo
+          // Usa solo topic già normalizzati
           if (typeof topic === 'string') {
+            // I topic sono già normalizzati dal parser RSS
             topicCounts[topic] = (topicCounts[topic] || 0) + 1;
           }
         });
@@ -184,6 +186,18 @@ function groupSimilarNews(newsItems) {
       if (similarity > 0.3) { // Threshold for similarity
         group.items.push(item);
         group.sources = [...new Set([...group.sources, item.source])];
+        
+        // Merge topics from all items in the group, ensuring normalization
+        const allTopics = [...group.topics];
+        if (item.topics && Array.isArray(item.topics)) {
+          item.topics.forEach(topic => {
+            if (typeof topic === 'string' && !allTopics.includes(topic)) {
+              allTopics.push(topic);
+            }
+          });
+        }
+        group.topics = allTopics;
+        
         foundGroup = true;
         break;
       }
@@ -199,7 +213,7 @@ function groupSimilarNews(newsItems) {
         title: item.title,
         description: item.description,
         pubDate: item.pubDate,
-        topics: Array.isArray(item.topics) ? item.topics.filter(topic => typeof topic === 'string') : [],
+        topics: Array.isArray(item.topics) ? [...item.topics].filter(topic => typeof topic === 'string') : [],
         url: item.url
       };
     }
@@ -208,6 +222,16 @@ function groupSimilarNews(newsItems) {
   // Convert to array and sort by date
   return Object.values(groups)
     .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+}
+
+// Function to check if a news item matches a topic filter
+function itemMatchesTopic(item, topicFilter) {
+  if (!item || !item.topics || !Array.isArray(item.topics) || !topicFilter) {
+    return false;
+  }
+  
+  // Usa il normalizzatore per verificare se l'item ha il topic, considerando tutte le varianti linguistiche
+  return topicNormalizer.itemHasTopic(item, topicFilter);
 }
 
 // Generate diff between two texts
@@ -281,5 +305,6 @@ module.exports = {
   searchNews,
   getHotTopics,
   getSources,
-  generateDiff
+  generateDiff,
+  itemMatchesTopic
 };

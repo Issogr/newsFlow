@@ -43,3 +43,13 @@ export const fetchSources = async () => {
     throw error;
   }
 };
+
+export const fetchTopicMap = async () => {
+  try {
+    const response = await api.get('/topics/map');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching topic map:', error);
+    throw error;
+  }
+};

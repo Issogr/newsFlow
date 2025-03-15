@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Globe, RefreshCw, Code } from 'lucide-react';
-import { fetchNews, searchNews, fetchHotTopics, fetchSources } from '../services/api';
+import { fetchNews, searchNews, fetchHotTopics, fetchSources, fetchTopicMap } from '../services/api';
 import ErrorMessage from './ErrorMessage';
+import topicHelper from '../utils/topicHelper';
 
 // Componente principale dell'applicazione
 const NewsAggregator = () => {
@@ -19,6 +20,7 @@ const NewsAggregator = () => {
   const [showDiff, setShowDiff] = useState(null);
   const [hotTopics, setHotTopics] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [topicMappings, setTopicMappings] = useState(null);
 
   // Sistema di caching per le notizie
   const CACHE_KEY = 'news_aggregator_cache';
@@ -30,7 +32,8 @@ const NewsAggregator = () => {
       timestamp: Date.now(),
       news: data.news,
       sources: data.sources,
-      topics: data.topics
+      topics: data.topics,
+      topicMappings: data.topicMappings
     };
     
     try {
@@ -83,6 +86,13 @@ const NewsAggregator = () => {
         setFilteredNews(cachedData.news);
         setSources(cachedData.sources);
         setTopics(cachedData.topics);
+        setTopicMappings(cachedData.topicMappings);
+        
+        // Imposta i mapping dei topic nel helper
+        if (cachedData.topicMappings) {
+          topicHelper.setTopicMappings(cachedData.topicMappings.mappings);
+        }
+        
         setLoading(false);
         return;
       }
@@ -90,6 +100,16 @@ const NewsAggregator = () => {
       // Altrimenti, carica dal server
       const newsData = await fetchNews();
       const sourcesData = await fetchSources();
+      
+      // Carica la mappa dei topic
+      let topicMapData = null;
+      try {
+        topicMapData = await fetchTopicMap();
+        setTopicMappings(topicMapData);
+        topicHelper.setTopicMappings(topicMapData.mappings);
+      } catch (topicMapError) {
+        console.error('Errore nel caricamento della mappa dei topic:', topicMapError);
+      }
       
       // Prova a caricare i topic caldi, ma non bloccare l'interfaccia se fallisce
       let hotTopicsData = [];
@@ -99,11 +119,8 @@ const NewsAggregator = () => {
         console.error('Errore nel caricamento dei topic caldi:', topicError);
       }
       
-      // Estrai tutti i topic unici dalle notizie
-      const allTopics = newsData.flatMap(group => 
-        group.items.flatMap(item => item.topics || [])
-      );
-      const uniqueTopics = [...new Set(allTopics)];
+      // Estrai i topic unici (già normalizzati dal backend)
+      const uniqueTopics = topicHelper.extractUniqueTopics(newsData);
       
       // Estrai tutte le fonti uniche
       const allSources = sourcesData.map(source => source.name);
@@ -119,7 +136,8 @@ const NewsAggregator = () => {
       saveToCache({
         news: newsData,
         sources: allSources,
-        topics: uniqueTopics
+        topics: uniqueTopics,
+        topicMappings: topicMapData
       });
       
     } catch (error) {
@@ -135,6 +153,12 @@ const NewsAggregator = () => {
           setFilteredNews(parsedCache.news);
           setTopics(parsedCache.topics);
           setSources(parsedCache.sources);
+          setTopicMappings(parsedCache.topicMappings);
+          
+          if (parsedCache.topicMappings) {
+            topicHelper.setTopicMappings(parsedCache.topicMappings.mappings);
+          }
+          
           // Mostra comunque il messaggio di errore, ma almeno visualizziamo i dati in cache
         } catch (cacheError) {
           // Se anche questo fallisce, lasciamo solo l'errore
@@ -173,9 +197,7 @@ const NewsAggregator = () => {
       // Filtra per argomenti
       if (activeFilters.topics.length > 0) {
         filtered = filtered.filter(group => 
-          group.items.some(item => 
-            item.topics && item.topics.some(topic => activeFilters.topics.includes(topic))
-          )
+          activeFilters.topics.some(topic => topicHelper.groupHasTopic(group, topic))
         );
       }
       
@@ -195,7 +217,7 @@ const NewsAggregator = () => {
     loadNews();
   }, []);
 
-  // Effetto per gestire la ricerca e i filtri
+  // Effetto per gestire i filtri (quando cambiano i filtri o le notizie)
   useEffect(() => {
     // Gestisce i filtri immediati (senza ricerca)
     if (!searchQuery.trim()) {
@@ -208,12 +230,10 @@ const NewsAggregator = () => {
         );
       }
       
-      // Filtra per argomenti
+      // Filtra per argomenti (usando il helper che gestisce le varianti dei topic)
       if (activeFilters.topics.length > 0) {
         filtered = filtered.filter(group => 
-          group.items.some(item => 
-            item.topics && item.topics.some(topic => activeFilters.topics.includes(topic))
-          )
+          activeFilters.topics.some(topic => topicHelper.groupHasTopic(group, topic))
         );
       }
       
@@ -527,7 +547,15 @@ const NewsAggregator = () => {
                     {group.topics && group.topics.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {group.topics.map(topic => (
-                          <span key={topic} className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                          <span 
+                            key={topic} 
+                            className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs cursor-pointer hover:bg-green-200"
+                            onClick={() => {
+                              if (!activeFilters.topics.includes(topic)) {
+                                toggleFilter('topics', topic);
+                              }
+                            }}
+                          >
                             {topic}
                           </span>
                         ))}

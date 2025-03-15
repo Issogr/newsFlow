@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const newsService = require('../services/newsAggregator');
+const topicNormalizer = require('../services/topicNormalizer');
 const cache = require('memory-cache');
 const logger = require('../utils/logger');
 
@@ -110,6 +111,25 @@ router.get('/hot-topics', cacheMiddleware(1800), async (req, res, next) => {
       error: { 
         message: 'Si è verificato un errore nel recupero dei topic. Riprova più tardi.',
         code: 'TOPICS_ERROR'
+      } 
+    });
+  }
+});
+
+// Get topics with their variants
+router.get('/topics/map', cacheMiddleware(86400), (req, res) => {
+  try {
+    // Restituisci la mappa di equivalenza dei topic
+    res.json({
+      topics: Object.keys(topicNormalizer.topicEquivalents),
+      mappings: topicNormalizer.topicEquivalents
+    });
+  } catch (error) {
+    logger.error(`Error getting topic mappings: ${error.message}`);
+    res.status(500).json({ 
+      error: { 
+        message: 'Si è verificato un errore nel recupero delle mappature dei topic.',
+        code: 'TOPIC_MAP_ERROR'
       } 
     });
   }

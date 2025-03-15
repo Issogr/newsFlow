@@ -1,6 +1,7 @@
 const RSSParser = require('rss-parser');
 const axios = require('axios');
 const logger = require('../utils/logger');
+const topicNormalizer = require('./topicNormalizer');
 
 const parser = new RSSParser({
   customFields: {
@@ -58,7 +59,7 @@ async function parseFeed(source) {
       source: source.name,
       sourceId: source.id,
       url: item.link || '',
-      topics: extractTopics(item),
+      topics: extractTopics(item, source.language),
       image: getImageUrl(item)
     }));
   } catch (error) {
@@ -102,36 +103,41 @@ function getImageUrl(item) {
   return null;
 }
 
-function extractTopics(item) {
+function extractTopics(item, language = 'it') {
   if (!item) return [];
   
-  const topics = [];
+  const rawTopics = [];
   
   try {
     // Extract from categories if available
     if (item.categories && Array.isArray(item.categories)) {
-      topics.push(...item.categories.filter(cat => typeof cat === 'string'));
+      rawTopics.push(...item.categories.filter(cat => typeof cat === 'string'));
     }
     
     // Extract common topics from title and description
-    const commonTopics = [
-      'Politica', 'Economia', 'Tecnologia', 'Scienza', 'Sport', 'Cultura', 'Salute', 
-      'Ambiente', 'Esteri', 'Cronaca', 'Spettacolo', 'Politics', 'Economy', 'Technology',
-      'Science', 'Sports', 'Culture', 'Health', 'Environment', 'International', 'Entertainment'
-    ];
+    const commonTopics = Object.keys(topicNormalizer.topicEquivalents);
     
     const content = `${item.title || ''} ${item.description || ''}`.toLowerCase();
     
-    commonTopics.forEach(topic => {
-      if (content.includes(topic.toLowerCase())) {
-        topics.push(topic);
+    // Verifica le equivalenze in tutte le lingue
+    Object.entries(topicNormalizer.topicEquivalents).forEach(([normalizedTopic, variants]) => {
+      for (const variant of variants) {
+        if (content.includes(variant.toLowerCase())) {
+          rawTopics.push(normalizedTopic);
+          break; // Una volta trovata una corrispondenza per questo topic, passa al prossimo
+        }
       }
     });
   } catch (err) {
-    logger.error(`Error extracting topics: ${err.message}`);
+    logger.error(`Error extracting raw topics: ${err.message}`);
   }
   
-  return [...new Set(topics)]; // Remove duplicates
+  // Normalizza i topic e rimuovi i duplicati
+  const normalizedTopics = rawTopics
+    .map(topic => topicNormalizer.normalizeTopic(topic))
+    .filter(Boolean); // Rimuovi i valori null/undefined
+  
+  return [...new Set(normalizedTopics)]; // Rimuovi i duplicati
 }
 
 module.exports = { parseFeed };
