@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Globe, RefreshCw, Code } from 'lucide-react';
 import { fetchNews, searchNews, fetchHotTopics, fetchSources } from '../services/api';
+import ErrorMessage from './ErrorMessage';
 
 // Componente principale dell'applicazione
 const NewsAggregator = () => {
@@ -9,6 +10,7 @@ const NewsAggregator = () => {
   const [sources, setSources] = useState([]);
   const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeFilters, setActiveFilters] = useState({
     sources: [],
     topics: []
@@ -69,6 +71,7 @@ const NewsAggregator = () => {
   // Funzione per recuperare le notizie dal backend
   const loadNews = async () => {
     setLoading(true);
+    setError(null);
     
     try {
       // Prova a caricare dalla cache
@@ -87,7 +90,14 @@ const NewsAggregator = () => {
       // Altrimenti, carica dal server
       const newsData = await fetchNews();
       const sourcesData = await fetchSources();
-      const topicsData = await fetchHotTopics();
+      
+      // Prova a caricare i topic caldi, ma non bloccare l'interfaccia se fallisce
+      let hotTopicsData = [];
+      try {
+        hotTopicsData = await fetchHotTopics();
+      } catch (topicError) {
+        console.error('Errore nel caricamento dei topic caldi:', topicError);
+      }
       
       // Estrai tutti i topic unici dalle notizie
       const allTopics = newsData.flatMap(group => 
@@ -103,7 +113,7 @@ const NewsAggregator = () => {
       setFilteredNews(newsData);
       setSources(allSources);
       setTopics(uniqueTopics);
-      setHotTopics(topicsData.map(t => t.topic));
+      setHotTopics(hotTopicsData.map(t => t.topic));
       
       // Salva in cache
       saveToCache({
@@ -114,18 +124,22 @@ const NewsAggregator = () => {
       
     } catch (error) {
       console.error("Errore nel recupero delle notizie:", error);
+      setError(error);
       
-      // In caso di errore, prova a caricare dalla cache anche se scaduta come fallback
+      // Prova a caricare dalla cache anche se scaduta come fallback di emergenza
       const cachedData = localStorage.getItem(CACHE_KEY);
       if (cachedData) {
-        const parsedCache = JSON.parse(cachedData);
-        setNews(parsedCache.news);
-        setFilteredNews(parsedCache.news);
-        setTopics(parsedCache.topics);
-        setSources(parsedCache.sources);
-        
-        // Mostra un avviso che i dati potrebbero non essere aggiornati
-        alert('Non è stato possibile aggiornare le notizie. I dati mostrati potrebbero non essere aggiornati.');
+        try {
+          const parsedCache = JSON.parse(cachedData);
+          setNews(parsedCache.news);
+          setFilteredNews(parsedCache.news);
+          setTopics(parsedCache.topics);
+          setSources(parsedCache.sources);
+          // Mostra comunque il messaggio di errore, ma almeno visualizziamo i dati in cache
+        } catch (cacheError) {
+          // Se anche questo fallisce, lasciamo solo l'errore
+          console.error("Errore nel caricamento della cache:", cacheError);
+        }
       }
     } finally {
       setLoading(false);
@@ -168,6 +182,9 @@ const NewsAggregator = () => {
       setFilteredNews(filtered);
     } catch (error) {
       console.error("Errore nella ricerca:", error);
+      // Non impostiamo setError qui perché vogliamo mostrare un errore nella UI solo per errori critici
+      // Per errori di ricerca, potremmo mostrare un messaggio meno invasivo
+      alert("Errore durante la ricerca. Riprova più tardi.");
     } finally {
       setIsSearching(false);
     }
@@ -313,9 +330,10 @@ const NewsAggregator = () => {
             <button 
               onClick={loadNews} 
               className="flex items-center bg-blue-700 hover:bg-blue-800 p-2 rounded"
+              disabled={loading}
             >
-              <RefreshCw className="mr-1 h-4 w-4" />
-              Aggiorna
+              <RefreshCw className={`mr-1 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Caricamento...' : 'Aggiorna'}
             </button>
           </div>
         </div>
@@ -336,6 +354,7 @@ const NewsAggregator = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-4 py-2 w-full border rounded"
+                disabled={loading || error}
               />
               {isSearching && (
                 <div className="absolute inset-y-0 right-3 flex items-center">
@@ -357,6 +376,7 @@ const NewsAggregator = () => {
                   className="appearance-none bg-white border rounded p-2 pr-8 text-sm"
                   onChange={(e) => toggleFilter('sources', e.target.value)}
                   value=""
+                  disabled={loading || error}
                 >
                   <option value="" disabled>Fonti</option>
                   {sources.map(source => (
@@ -371,6 +391,7 @@ const NewsAggregator = () => {
                   className="appearance-none bg-white border rounded p-2 pr-8 text-sm"
                   onChange={(e) => toggleFilter('topics', e.target.value)}
                   value=""
+                  disabled={loading || error}
                 >
                   <option value="" disabled>Argomenti</option>
                   {topics.map(topic => (
@@ -383,6 +404,7 @@ const NewsAggregator = () => {
               <button 
                 onClick={resetFilters}
                 className="bg-gray-200 hover:bg-gray-300 p-2 rounded text-sm"
+                disabled={loading || error}
               >
                 Reset
               </button>
@@ -418,38 +440,42 @@ const NewsAggregator = () => {
           )}
           
           {/* Filtri rapidi */}
-          <div className="mt-3 border-t pt-3">
-            <div className="flex flex-wrap gap-2">
-              {/* Filtro per le notizie più recenti */}
-              <button 
-                onClick={() => {
-                  // Ordina le notizie per data (più recenti prima)
-                  const sorted = [...news].sort((a, b) => 
-                    new Date(b.pubDate) - new Date(a.pubDate)
-                  );
-                  setFilteredNews(sorted);
-                }}
-                className="bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center"
-              >
-                Più recenti
-              </button>
-              
-              {/* Topic caldi */}
-              {hotTopics.map(topic => (
+          {!error && (
+            <div className="mt-3 border-t pt-3">
+              <div className="flex flex-wrap gap-2">
+                {/* Filtro per le notizie più recenti */}
                 <button 
-                  key={topic}
-                  onClick={() => toggleFilter('topics', topic)}
-                  className={`${
-                    activeFilters.topics.includes(topic) 
-                      ? 'bg-green-500 text-white' 
-                      : 'bg-green-100 text-green-800 hover:bg-green-200'
-                  } px-3 py-1 rounded-full text-sm flex items-center`}
+                  onClick={() => {
+                    // Ordina le notizie per data (più recenti prima)
+                    const sorted = [...news].sort((a, b) => 
+                      new Date(b.pubDate) - new Date(a.pubDate)
+                    );
+                    setFilteredNews(sorted);
+                  }}
+                  className="bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center"
+                  disabled={loading || error}
                 >
-                  {topic}
+                  Più recenti
                 </button>
-              ))}
+                
+                {/* Topic caldi */}
+                {hotTopics.map(topic => (
+                  <button 
+                    key={topic}
+                    onClick={() => toggleFilter('topics', topic)}
+                    className={`${
+                      activeFilters.topics.includes(topic) 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-green-100 text-green-800 hover:bg-green-200'
+                    } px-3 py-1 rounded-full text-sm flex items-center`}
+                    disabled={loading || error}
+                  >
+                    {topic}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
       
@@ -460,6 +486,11 @@ const NewsAggregator = () => {
             <div className="flex justify-center items-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
             </div>
+          ) : error ? (
+            <ErrorMessage 
+              error={error} 
+              onRetry={loadNews}
+            />
           ) : filteredNews.length === 0 ? (
             <div className="bg-white rounded-lg shadow p-8 text-center">
               <h2 className="text-xl text-gray-600">Nessuna notizia trovata</h2>
