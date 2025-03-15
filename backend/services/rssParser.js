@@ -1,7 +1,8 @@
 const RSSParser = require('rss-parser');
 const axios = require('axios');
 const logger = require('../utils/logger');
-const topicNormalizer = require('./topicNormalizer');
+const ollamaService = require('./ollamaService');
+const topicNormalizer = require('./topicNormalizer'); // Mantenuto come fallback
 
 const parser = new RSSParser({
   customFields: {
@@ -50,18 +51,27 @@ async function parseFeed(source) {
     logger.info(`Parsed feed from ${source.name}, found ${feed.items.length} items`);
     
     // Map feed items to standardized format
-    return feed.items.map(item => ({
-      id: item.guid || item.id || `${source.id}-${item.link}`,
-      title: item.title || 'No title',
-      description: item.description ? stripHtml(item.description) : '',
-      content: item.content ? stripHtml(item.content) : (item['content:encoded'] ? stripHtml(item['content:encoded']) : ''),
-      pubDate: item.pubDate || item.dcdate || item.isoDate || new Date().toISOString(),
-      source: source.name,
-      sourceId: source.id,
-      url: item.link || '',
-      topics: extractTopics(item, source.language),
-      image: getImageUrl(item)
+    const parsedItems = await Promise.all(feed.items.map(async item => {
+      // Costruisci l'articolo base per elaborazione ulteriore
+      const article = {
+        id: item.guid || item.id || `${source.id}-${item.link}`,
+        title: item.title || 'No title',
+        description: item.description ? stripHtml(item.description) : '',
+        content: item.content ? stripHtml(item.content) : (item['content:encoded'] ? stripHtml(item['content:encoded']) : ''),
+        pubDate: item.pubDate || item.dcdate || item.isoDate || new Date().toISOString(),
+        source: source.name,
+        sourceId: source.id,
+        url: item.link || '',
+        image: getImageUrl(item)
+      };
+      
+      // Estrai i topic usando metodi appropriati
+      article.topics = await extractTopics(item, article, source.language);
+      
+      return article;
     }));
+    
+    return parsedItems;
   } catch (error) {
     logger.error(`Error parsing feed from ${source.name} (${source.url}): ${error.message}`);
     return []; // Return empty array in case of error
@@ -103,41 +113,66 @@ function getImageUrl(item) {
   return null;
 }
 
-function extractTopics(item, language = 'it') {
+async function extractTopics(item, article, language = 'it') {
   if (!item) return [];
   
+  // Raccoglie i topic grezzi dai metadati dell'articolo
   const rawTopics = [];
   
   try {
-    // Extract from categories if available
+    // Estrai dai tag o categorie dell'articolo se disponibili
     if (item.categories && Array.isArray(item.categories)) {
       rawTopics.push(...item.categories.filter(cat => typeof cat === 'string'));
     }
-    
-    // Extract common topics from title and description
-    const commonTopics = Object.keys(topicNormalizer.topicEquivalents);
-    
-    const content = `${item.title || ''} ${item.description || ''}`.toLowerCase();
-    
-    // Verifica le equivalenze in tutte le lingue
-    Object.entries(topicNormalizer.topicEquivalents).forEach(([normalizedTopic, variants]) => {
-      for (const variant of variants) {
-        if (content.includes(variant.toLowerCase())) {
-          rawTopics.push(normalizedTopic);
-          break; // Una volta trovata una corrispondenza per questo topic, passa al prossimo
-        }
-      }
-    });
   } catch (err) {
     logger.error(`Error extracting raw topics: ${err.message}`);
   }
   
-  // Normalizza i topic e rimuovi i duplicati
-  const normalizedTopics = rawTopics
-    .map(topic => topicNormalizer.normalizeTopic(topic))
-    .filter(Boolean); // Rimuovi i valori null/undefined
+  // Normalizza i topic estratti (usando Ollama o fallback statico)
+  let normalizedTopics = [];
   
-  return [...new Set(normalizedTopics)]; // Rimuovi i duplicati
+  if (ollamaService.isAvailable()) {
+    // Usa Ollama per normalizzare i topic esistenti
+    if (rawTopics.length > 0) {
+      normalizedTopics = await Promise.all(
+        rawTopics.map(topic => ollamaService.normalizeTopic(topic, 'it'))
+      );
+    }
+    
+    // Se non ci sono abbastanza topic o sono assenti, deduce dai contenuti
+    if (normalizedTopics.length < 2) {
+      // Deduci topic dal contenuto dell'articolo
+      const deducedTopics = await ollamaService.deduceTopics(article, language);
+      
+      // Aggiungi i topic dedotti a quelli già trovati
+      normalizedTopics = [...normalizedTopics, ...deducedTopics];
+    }
+  } else {
+    // Fallback: usa il normalizzatore statico se Ollama non è disponibile
+    normalizedTopics = rawTopics
+      .map(topic => topicNormalizer.normalizeTopic(topic))
+      .filter(Boolean);
+      
+    // Se non ci sono topic, prova con il metodo statico basato su parole chiave
+    if (normalizedTopics.length === 0) {
+      const commonTopics = Object.keys(topicNormalizer.topicEquivalents);
+      const content = `${article.title || ''} ${article.description || ''}`.toLowerCase();
+      
+      // Verifica le equivalenze in tutte le lingue
+      Object.entries(topicNormalizer.topicEquivalents).forEach(([normalizedTopic, variants]) => {
+        for (const variant of variants) {
+          if (content.includes(variant.toLowerCase())) {
+            normalizedTopics.push(normalizedTopic);
+            break; // Una volta trovata una corrispondenza per questo topic, passa al prossimo
+          }
+        }
+      });
+    }
+  }
+  
+  // Rimuovi i duplicati e gli elementi nulli/vuoti
+  return [...new Set(normalizedTopics)]
+    .filter(topic => topic && typeof topic === 'string' && topic.length > 0);
 }
 
 module.exports = { parseFeed };
