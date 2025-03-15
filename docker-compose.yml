@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: news-aggregator-backend
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+    volumes:
+      - ./backend/logs:/usr/src/app/logs
+    networks:
+      - app-network
+
+  frontend:
+    build: ./frontend
+    container_name: news-aggregator-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
