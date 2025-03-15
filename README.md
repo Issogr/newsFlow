@@ -19,19 +19,22 @@ Un'applicazione moderna per l'aggregazione di notizie in tempo reale da fonti au
 ## ✨ Caratteristiche principali
 
 - **Aggregazione multi-fonte**: Raccoglie notizie da numerose fonti autorevoli italiane e internazionali attraverso feed RSS
-- **Raggruppamento intelligente**: Utilizza algoritmi TF-IDF per identificare e raggruppare notizie simili provenienti da fonti diverse
+- **Raggruppamento intelligente**: Utilizza algoritmi TF-IDF e AI per identificare e raggruppare notizie simili provenienti da fonti diverse
+- **Deduzione intelligente di topic**: Utilizza AI per dedurre automaticamente i topic di articoli che ne sono privi
+- **Normalizzazione multilingua**: Riconosce e normalizza topic in diverse lingue in un formato standardizzato
 - **Ricerca avanzata**: Cerca in tutto il database di notizie, non solo tra quelle visualizzate
 - **Filtri flessibili**: Filtra per fonte, argomento o utilizzando i topic caldi del momento
 - **Funzione diff**: Confronta visivamente le differenze nel modo in cui diverse testate riportano la stessa notizia
-- **Sistema di cache a due livelli**:
-  - Cache lato server per ridurre le richieste ai feed RSS
+- **Sistema di cache avanzato**:
+  - Cache lato server multi-livello per ottimizzare le richieste RSS e AI
+  - Elaborazione asincrona in background per evitare timeout
   - Cache lato client per migliorare le prestazioni anche offline
 - **Design responsive**: Interfaccia utente moderna che si adatta a qualsiasi dispositivo
 - **Aggiornamenti in tempo reale**: Dati sempre aggiornati dalle fonti originali
 
 ## 🏗 Architettura
 
-L'applicazione è divisa in due componenti principali, orchestrati tramite Docker:
+L'applicazione è divisa in componenti orchestrati tramite Docker e si connette a un servizio Ollama esistente:
 
 ### Backend (Node.js/Express)
 
@@ -39,7 +42,8 @@ Il backend gestisce:
 - Recupero dati dai feed RSS
 - Analisi e normalizzazione del contenuto
 - Raggruppamento di notizie simili
-- Caching per ottimizzare le prestazioni
+- Elaborazione asincrona in background per deduzione topic
+- Caching multi-livello per ottimizzare le prestazioni
 - API RESTful per il frontend
 
 ### Frontend (React)
@@ -50,7 +54,12 @@ Il frontend si occupa di:
 - Visualizzazione delle differenze tra articoli simili
 - Caching lato client per migliorare l'esperienza offline
 
-![Diagramma architettura](https://via.placeholder.com/800x400?text=Diagramma+Architettura)
+### Servizio Ollama Esterno
+
+L'applicazione si connette a un servizio Ollama esterno che:
+- Deduce topic per articoli che ne sono privi
+- Normalizza topic in diverse lingue
+- Fornisce capacità di IA con minimo impatto sulle prestazioni
 
 ## 🛠 Tecnologie utilizzate
 
@@ -61,7 +70,7 @@ Il frontend si occupa di:
 - **Memory Cache**: Caching lato server
 - **Winston**: Logging
 - **Axios**: Client HTTP
-- **TF-IDF**: Algoritmo per il calcolo della similarità testuale
+- **TF-IDF e AI**: Algoritmi per il calcolo della similarità testuale e deduzione topic
 
 ### Frontend
 - **React**: Libreria UI
@@ -74,12 +83,14 @@ Il frontend si occupa di:
 - **Docker**: Containerizzazione
 - **Nginx**: Server web e reverse proxy
 - **Docker Compose**: Orchestrazione multi-container
+- **Ollama**: Servizio AI per deduzione e normalizzazione topic
 
 ## 💻 Requisiti di sistema
 
 - **Docker**: versione 20.10.0 o superiore
 - **Docker Compose**: versione 1.29.0 o superiore
 - **Porta 80**: disponibile sul sistema host
+- **Accesso a un server Ollama**: con rete Docker condivisa o accessibile via HTTP
 
 ## 🚀 Installazione e setup
 
@@ -92,19 +103,30 @@ cd news-aggregator
 
 ### 2. Configurazione
 
-Nessuna configurazione aggiuntiva è richiesta per l'avvio dell'applicazione con le impostazioni predefinite. Se desideri personalizzare le fonti di notizie o altri parametri, consulta la sezione [Configurazione avanzata](#configurazione-avanzata).
+#### Configurazione per server Ollama esistente
+
+Il file `docker-compose.yml` è configurato per connettersi a un server Ollama esistente sulla rete Docker "ollama-network". Verifica che:
+
+1. Il tuo server Ollama sia raggiungibile all'indirizzo specificato in `OLLAMA_API_URL`
+2. Il modello specificato in `OLLAMA_MODEL` sia disponibile sul server Ollama
+3. La rete Docker "ollama-network" esista e sia accessibile
+
+Se necessario, modifica queste variabili nel `docker-compose.yml`:
+
+```yaml
+environment:
+  - OLLAMA_API_URL=http://ipex-llm:11434/api  # Modifica con l'URL del tuo server Ollama
+  - OLLAMA_MODEL=gemma3:1b                   # Modifica con il modello disponibile
+  - OLLAMA_TIMEOUT=3000                      # Timeout per chiamate a Ollama in ms
+  - USE_OLLAMA=true                          # Imposta a 'false' per disabilitare Ollama
+  - MAX_ARTICLES_PER_SOURCE=10               # Numero massimo di articoli da elaborare per fonte
+```
 
 ### 3. Avvio dell'applicazione
 
 ```bash
-# Rendi eseguibile lo script di avvio
-chmod +x start.sh
-
-# Esegui lo script per configurare l'ambiente
-./start.sh
-
 # Avvia l'applicazione con Docker Compose
-docker-compose up --build
+docker-compose up --build -d
 ```
 
 L'applicazione sarà disponibile all'indirizzo: http://localhost
@@ -161,7 +183,6 @@ Per notizie presenti su più fonti:
 ```
 news-aggregator/
 ├── docker-compose.yml       # Configurazione Docker Compose
-├── start.sh                 # Script di avvio
 ├── backend/
 │   ├── Dockerfile           # Configurazione container backend
 │   ├── package.json         # Dipendenze Node.js
@@ -170,7 +191,10 @@ news-aggregator/
 │   │   └── api.js           # Route API
 │   ├── services/
 │   │   ├── newsAggregator.js # Logica di aggregazione
-│   │   └── rssParser.js      # Parser RSS
+│   │   ├── rssParser.js      # Parser RSS
+│   │   ├── ollamaService.js  # Servizio di AI per topic
+│   │   ├── asyncProcessor.js # Elaborazione asincrona
+│   │   └── topicNormalizer.js # Normalizzazione topic (fallback)
 │   └── utils/
 │       └── logger.js         # Utility di logging
 └── frontend/
@@ -184,7 +208,8 @@ news-aggregator/
         ├── services/
         │   └── api.js       # Client API
         └── components/
-            └── NewsAggregator.js # Componente principale UI
+            ├── NewsAggregator.js # Componente principale UI
+            └── ErrorMessage.js   # Componente per gestione errori
 ```
 
 ## 🔌 API
@@ -256,7 +281,38 @@ Recupera l'elenco delle fonti disponibili.
 ]
 ```
 
+### `GET /api/topics/map`
+
+Recupera la mappatura dei topic in diverse lingue.
+
+**Response**:
+```json
+{
+  "topics": ["Politica", "Economia", "Tecnologia", ...],
+  "mappings": {
+    "Politica": ["politics", "politique", ...],
+    "Economia": ["economy", "économie", ...],
+    ...
+  }
+}
+```
+
 ## ⚙️ Configurazione avanzata
+
+### Variabili di ottimizzazione
+
+Puoi modificare le seguenti variabili nel file `docker-compose.yml` per ottimizzare le prestazioni:
+
+```yaml
+environment:
+  - OLLAMA_TIMEOUT=3000         # Timeout per le richieste Ollama (in millisecondi)
+  - USE_OLLAMA=true             # Imposta a 'false' per disabilitare completamente Ollama
+  - MAX_ARTICLES_PER_SOURCE=10  # Numero massimo di articoli da elaborare per fonte
+```
+
+- Riduci `MAX_ARTICLES_PER_SOURCE` su sistemi meno potenti
+- Aumenta `OLLAMA_TIMEOUT` se il server Ollama è più lento
+- Imposta `USE_OLLAMA=false` in caso di problemi con il server Ollama
 
 ### Aggiungere nuove fonti di notizie
 
@@ -313,13 +369,43 @@ if (similarity > 0.3) { // Soglia di similarità
 **Soluzione**: Verifica che:
 - Docker e Docker Compose siano installati correttamente
 - La porta 80 non sia già in uso
+- La rete Docker "ollama-network" esista e sia accessibile
 - Tutti i file siano stati copiati nei percorsi corretti
 
 ```bash
 # Verifica la porta 80
 sudo lsof -i :80
 
-# Se occupata, modifica la porta in docker-compose.yml
+# Verifica che la rete esista
+docker network ls | grep ollama-network
+
+# Se la rete non esiste, creala
+docker network create ollama-network
+```
+
+#### Errori di timeout durante il caricamento delle notizie
+
+**Problema**: La pagina restituisce errori 504 Gateway Timeout.
+
+**Soluzione**:
+- Verifica che il server Ollama sia attivo e accessibile
+- Aumenta il timeout nei file di configurazione
+- Riduci il numero massimo di articoli per fonte
+- Disabilita temporaneamente Ollama impostando `USE_OLLAMA=false`
+
+#### Il server Ollama non è raggiungibile
+
+**Problema**: Log con errori di connessione a Ollama.
+
+**Soluzione**:
+- Verifica che l'URL in `OLLAMA_API_URL` sia corretto
+- Verifica che il server Ollama sia in esecuzione
+- Assicurati che la rete Docker consenta la comunicazione tra i container
+- Controlla che il modello specificato in `OLLAMA_MODEL` sia disponibile sul server
+
+```bash
+# Verifica la connessione al server Ollama
+docker exec -it news-aggregator-backend curl http://ipex-llm:11434/api/version
 ```
 
 #### Nessuna notizia viene visualizzata
@@ -330,6 +416,7 @@ sudo lsof -i :80
 - Controlla i log del backend: `docker-compose logs backend`
 - Verifica che i feed RSS siano accessibili
 - Controlla la connessione internet
+- Verifica che i DNS funzionino correttamente (8.8.8.8 e 1.1.1.1)
 
 #### Feed RSS non accessibili
 
@@ -352,3 +439,5 @@ Ecco alcune idee per il futuro sviluppo dell'applicazione:
 - **Progressive Web App**: Rendere l'applicazione installabile sui dispositivi
 - **Motore di ricerca semantico**: Migliorare la ricerca con comprensione del linguaggio naturale
 - **Personalizzazione avanzata**: Consentire agli utenti di personalizzare fonti e argomenti
+- **Training di modelli specifici per notizie**: Creare un modello AI specializzato per l'analisi di notizie
+- **Dashboard di amministrazione**: Interfaccia per monitorare e configurare l'applicazione in tempo reale

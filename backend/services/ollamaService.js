@@ -5,12 +5,69 @@ const cache = require('memory-cache');
 // Configurazione Ollama
 const OLLAMA_API_URL = process.env.OLLAMA_API_URL || 'http://localhost:11434/api';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma3:1b'; // o altro modello disponibile
+const USE_OLLAMA = process.env.USE_OLLAMA !== 'false'; // Disabilita Ollama se impostato a 'false'
+
+// Configurazione timeout
+const OLLAMA_TIMEOUT = 3000; // 3 secondi di timeout per le chiamate a Ollama
 
 // Costanti per la cache
 const TOPIC_CACHE_PREFIX = 'ollama_topic_';
 const TOPIC_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 ore
 const CLASSIFICATION_CACHE_PREFIX = 'ollama_classify_';
 const CLASSIFICATION_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 giorni
+
+// Limita le chiamate concorrenti a Ollama
+const MAX_CONCURRENT_REQUESTS = 2;
+let currentRequests = 0;
+const pendingRequests = [];
+
+/**
+ * Gestisce una richiesta a Ollama con limitazione delle chiamate concorrenti
+ * @param {Function} requestFn - Funzione che effettua la richiesta a Ollama
+ * @returns {Promise<any>} - Risultato della richiesta
+ */
+function queueOllamaRequest(requestFn) {
+  return new Promise((resolve, reject) => {
+    // Funzione per eseguire la richiesta
+    const executeRequest = async () => {
+      // Incrementa il contatore delle richieste concorrenti
+      currentRequests++;
+      
+      try {
+        // Esegui la richiesta con timeout
+        const result = await Promise.race([
+          requestFn(),
+          new Promise((_, r) => setTimeout(() => r(new Error('Ollama request timeout')), OLLAMA_TIMEOUT))
+        ]);
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      } finally {
+        // Decrementa il contatore e processa la prossima richiesta in coda
+        currentRequests--;
+        processNextRequest();
+      }
+    };
+    
+    // Verifica se è possibile eseguire la richiesta immediatamente
+    if (currentRequests < MAX_CONCURRENT_REQUESTS) {
+      executeRequest();
+    } else {
+      // Altrimenti, aggiungi alla coda
+      pendingRequests.push(executeRequest);
+    }
+  });
+}
+
+/**
+ * Processa la prossima richiesta in coda
+ */
+function processNextRequest() {
+  if (pendingRequests.length > 0 && currentRequests < MAX_CONCURRENT_REQUESTS) {
+    const nextRequest = pendingRequests.shift();
+    nextRequest();
+  }
+}
 
 /**
  * Chiede a Ollama di normalizzare un topic
@@ -27,60 +84,62 @@ async function normalizeTopic(topic, targetLanguage = 'it') {
   // Controlla se il risultato è in cache
   const cachedResult = cache.get(cacheKey);
   if (cachedResult) {
-    logger.info(`Topic normalization cache hit for: ${topic}`);
     return cachedResult;
   }
   
+  // Se Ollama è disabilitato o non disponibile, usa un semplice formatting
+  if (!USE_OLLAMA || !ollamaAvailable) {
+    const formattedTopic = topic.charAt(0).toUpperCase() + topic.slice(1).toLowerCase();
+    cache.put(cacheKey, formattedTopic, TOPIC_CACHE_TTL);
+    return formattedTopic;
+  }
+  
   try {
-    // Prepara il prompt per Ollama
-    const prompt = `
-    You are a news topic normalization system.
-    You will be given a topic in any language, and you must return the normalized version in ${targetLanguage}.
+    // Definisci la funzione di richiesta
+    const makeRequest = async () => {
+      // Prepara il prompt per Ollama (più breve per ridurre il tempo di elaborazione)
+      const prompt = `Normalizza questo topic di notizie in italiano con prima lettera maiuscola: "${topic}"`;
+      
+      // Chiamata API a Ollama
+      const response = await axios.post(`${OLLAMA_API_URL}/generate`, {
+        model: OLLAMA_MODEL,
+        prompt,
+        options: {
+          temperature: 0.1,
+          num_predict: 10  // Limitato per velocità
+        },
+        stream: false
+      }, {
+        timeout: OLLAMA_TIMEOUT
+      });
+      
+      // Estrai e processa la risposta
+      let normalizedTopic = response.data.response.trim();
+      
+      // Limitazioni e pulizia
+      normalizedTopic = normalizedTopic
+        .split(/[.,\n]/)[0]  // Prendi solo la prima parte fino a punto, virgola o newline
+        .trim();
+      
+      // Formatta correttamente
+      normalizedTopic = normalizedTopic.charAt(0).toUpperCase() + normalizedTopic.slice(1).toLowerCase();
+      
+      return normalizedTopic;
+    };
     
-    - If the topic is in a language other than ${targetLanguage}, translate it
-    - Do not add explanations or comments, return only the normalized topic
-    - Use the first letter capitalized and the rest lowercase
-    - Keep the topic short and concise (maximum 1-2 words)
-    - If the topic is generic or not recognizable as a news category, return "Altro"
-    
-    Topic to normalize: "${topic}"
-    Normalized topic:
-    `;
-    
-    // Chiamata API a Ollama
-    const response = await axios.post(`${OLLAMA_API_URL}/generate`, {
-      model: OLLAMA_MODEL,
-      prompt,
-      options: {
-        temperature: 0.1, // Bassa temperatura per risposte più deterministiche
-        num_predict: 20  // Limita la lunghezza dell'output
-      },
-      stream: false
-    });
-    
-    // Estrai e processa la risposta
-    let normalizedTopic = response.data.response.trim();
-    
-    // Limita a una sola parola o frase
-    if (normalizedTopic.includes('.')) {
-      normalizedTopic = normalizedTopic.split('.')[0];
-    }
-    if (normalizedTopic.includes('\n')) {
-      normalizedTopic = normalizedTopic.split('\n')[0];
-    }
-    
-    // Formatta correttamente
-    normalizedTopic = normalizedTopic.charAt(0).toUpperCase() + normalizedTopic.slice(1).toLowerCase();
+    // Esegui la richiesta tramite la coda
+    const normalizedTopic = await queueOllamaRequest(makeRequest);
     
     // Cache del risultato
     cache.put(cacheKey, normalizedTopic, TOPIC_CACHE_TTL);
-    logger.info(`Normalized topic "${topic}" to "${normalizedTopic}"`);
     
     return normalizedTopic;
   } catch (error) {
     logger.error(`Error normalizing topic with Ollama: ${error.message}`);
     // Fallback: restituisci il topic originale con prima lettera maiuscola
-    return topic.charAt(0).toUpperCase() + topic.slice(1).toLowerCase();
+    const fallbackTopic = topic.charAt(0).toUpperCase() + topic.slice(1).toLowerCase();
+    cache.put(cacheKey, fallbackTopic, TOPIC_CACHE_TTL); // Cache anche il fallback
+    return fallbackTopic;
   }
 }
 
@@ -96,15 +155,15 @@ async function deduceTopics(article, language = 'it') {
   }
   
   // Costruisci il testo da analizzare
-  const text = `${article.title} ${article.description || ''} ${article.content || ''}`;
+  const text = `${article.title} ${article.description || ''}`;
   
   // Se il testo è troppo corto, non possiamo dedurre in modo affidabile
-  if (text.length < 50) {
+  if (text.length < 30) {
     return [];
   }
   
-  // Limita il testo a 1000 caratteri per l'analisi
-  const limitedText = text.substring(0, 1000);
+  // Limita il testo per l'analisi
+  const limitedText = text.substring(0, 500);
   
   // Crea una chiave di cache basata su un hash del testo
   const contentHash = Buffer.from(limitedText).toString('base64').substring(0, 20);
@@ -113,54 +172,52 @@ async function deduceTopics(article, language = 'it') {
   // Controlla se il risultato è in cache
   const cachedResult = cache.get(cacheKey);
   if (cachedResult) {
-    logger.info(`Topic classification cache hit for article: ${article.title.substring(0, 30)}...`);
     return cachedResult;
   }
   
+  // Se Ollama è disabilitato o non disponibile, restituisci un array vuoto
+  if (!USE_OLLAMA || !ollamaAvailable) {
+    return [];
+  }
+  
   try {
-    // Prepara il prompt per Ollama
-    const prompt = `
-    You are a news classification system. Analyze the following text and determine 1-3 main categories of the article.
+    // Definisci la funzione di richiesta
+    const makeRequest = async () => {
+      // Prepara il prompt per Ollama (versione semplificata e diretta)
+      const prompt = `Analizza questo titolo di notizia e restituisci 1-2 categorie come: Politica, Economia, Tecnologia, Scienza, Ambiente, Sport, Cultura, Salute. Solo le categorie separate da virgola, senza altro testo: "${limitedText}"`;
+      
+      // Chiamata API a Ollama
+      const response = await axios.post(`${OLLAMA_API_URL}/generate`, {
+        model: OLLAMA_MODEL,
+        prompt,
+        options: {
+          temperature: 0.2,
+          num_predict: 20
+        },
+        stream: false
+      }, {
+        timeout: OLLAMA_TIMEOUT
+      });
+      
+      // Estrai e processa la risposta
+      const topicsText = response.data.response.trim();
+      
+      // Dividi e normalizza i topic
+      const deducedTopics = topicsText
+        .split(/[,;\n]/) // Divide per virgole, punti e virgola o nuove linee
+        .map(topic => topic.trim())
+        .filter(topic => topic.length > 0)
+        .map(topic => topic.charAt(0).toUpperCase() + topic.slice(1).toLowerCase());
+      
+      // Rimuovi duplicati
+      return [...new Set(deducedTopics)];
+    };
     
-    These are the possible categories: Politica, Economia, Tecnologia, Scienza, Ambiente, Sport, Cultura, Salute, Esteri, Cronaca, Spettacolo, Istruzione.
-    
-    Return only a list of categories separated by commas, without any other comments or explanations.
-    If you're not sure, return only the categories you're confident about.
-    If you can't determine any category, return "Altro".
-    
-    Article text:
-    "${limitedText}"
-    
-    Categories:
-    `;
-    
-    // Chiamata API a Ollama
-    const response = await axios.post(`${OLLAMA_API_URL}/generate`, {
-      model: OLLAMA_MODEL,
-      prompt,
-      options: {
-        temperature: 0.2,
-        num_predict: 50
-      },
-      stream: false
-    });
-    
-    // Estrai e processa la risposta
-    const topicsText = response.data.response.trim();
-    
-    // Dividi e normalizza i topic
-    const deducedTopics = topicsText
-      .split(/[,;\n]/) // Divide per virgole, punti e virgola o nuove linee
-      .map(topic => topic.trim())
-      .filter(topic => topic.length > 0)
-      .map(topic => topic.charAt(0).toUpperCase() + topic.slice(1).toLowerCase());
-    
-    // Rimuovi duplicati
-    const uniqueTopics = [...new Set(deducedTopics)];
+    // Esegui la richiesta tramite la coda
+    const uniqueTopics = await queueOllamaRequest(makeRequest);
     
     // Cache del risultato
     cache.put(cacheKey, uniqueTopics, CLASSIFICATION_CACHE_TTL);
-    logger.info(`Deduced topics for article: ${uniqueTopics.join(', ')}`);
     
     return uniqueTopics;
   } catch (error) {
@@ -174,8 +231,13 @@ async function deduceTopics(article, language = 'it') {
  * @returns {Promise<boolean>} - true se Ollama è disponibile
  */
 async function checkOllamaAvailability() {
+  if (!USE_OLLAMA) {
+    logger.info('Ollama is disabled via environment variable');
+    return false;
+  }
+  
   try {
-    await axios.get(`${OLLAMA_API_URL}/version`);
+    await axios.get(`${OLLAMA_API_URL}/version`, { timeout: 2000 });
     return true;
   } catch (error) {
     logger.error(`Ollama server not available at ${OLLAMA_API_URL}: ${error.message}`);
@@ -199,7 +261,7 @@ let ollamaAvailable = false;
  * @returns {boolean} - true se Ollama è disponibile
  */
 function isAvailable() {
-  return ollamaAvailable;
+  return USE_OLLAMA && ollamaAvailable;
 }
 
 module.exports = {

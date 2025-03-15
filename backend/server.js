@@ -10,6 +10,9 @@ const logger = require('./utils/logger');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Aumenta il timeout del server per gestire richieste più lunghe
+const SERVER_TIMEOUT = 60000; // 60 secondi
+
 // Middleware
 app.use(helmet()); // Security headers
 app.use(cors()); // Enable CORS for all routes
@@ -43,7 +46,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
+// Imposta il timeout del server
+const server = app.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
 });
+
+server.timeout = SERVER_TIMEOUT;

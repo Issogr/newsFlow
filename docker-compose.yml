@@ -8,6 +8,10 @@ services:
       - PORT=5000
       - OLLAMA_API_URL=http://ipex-llm:11434/api
       - OLLAMA_MODEL=gemma3:1b
+      # Variabili di ottimizzazione
+      - OLLAMA_TIMEOUT=3000         # Timeout per chiamate a Ollama in ms
+      - USE_OLLAMA=true             # Imposta a 'false' per disabilitare Ollama completamente
+      - MAX_ARTICLES_PER_SOURCE=10  # Numero massimo di articoli da elaborare per fonte
     volumes:
       - ./backend/logs:/usr/src/app/logs
     networks:
