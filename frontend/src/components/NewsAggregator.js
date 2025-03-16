@@ -1,12 +1,18 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, Filter, Globe, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Search, Filter, Globe, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { fetchNews, searchNews, fetchHotTopics, fetchSources, fetchTopicMap } from '../services/api';
 import ErrorMessage from './ErrorMessage';
 import NewsCard from './NewsCard';
+import NotificationCenter from './NotificationCenter';
 import topicHelper from '../utils/topicHelper';
+import useWebSocket from '../hooks/useWebSocket';
 
 // Componente principale dell'applicazione
 const NewsAggregator = () => {
+  // Refs per evitare loop infiniti
+  const initialLoadDone = useRef(false);
+  const lastWebSocketUpdate = useRef(null);
+  
   // Stati principali
   const [news, setNews] = useState([]);
   const [filteredNews, setFilteredNews] = useState([]);
@@ -22,10 +28,14 @@ const NewsAggregator = () => {
   const [hotTopics, setHotTopics] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
 
+  // Inizializza il WebSocket - IMPORTANTE: senza dipendenze
+  const websocket = useWebSocket();
+
   // Funzione per recuperare le notizie dal backend
   const loadNews = useCallback(async () => {
     setLoading(true);
     setError(null);
+    websocket.resetNewArticlesCount();
     
     try {
       // Carica i dati direttamente dal server
@@ -67,8 +77,10 @@ const NewsAggregator = () => {
       setError(error);
     } finally {
       setLoading(false);
+      // Marca che il caricamento iniziale è completato
+      initialLoadDone.current = true;
     }
-  }, []);
+  }, [websocket]);
 
   // Funzione per gestire la ricerca
   const handleSearch = useCallback(async () => {
@@ -111,13 +123,18 @@ const NewsAggregator = () => {
     }
   }, [searchQuery, news, activeFilters]);
 
-  // Effetto per caricare le notizie all'avvio
+  // Effetto per caricare le notizie UNA sola volta all'avvio
   useEffect(() => {
-    loadNews();
+    if (!initialLoadDone.current) {
+      loadNews();
+    }
   }, [loadNews]);
 
   // Effetto per gestire i filtri (quando cambiano i filtri o le notizie)
   useEffect(() => {
+    // Salta se il caricamento non è stato completato
+    if (!initialLoadDone.current) return;
+    
     // Gestisce i filtri immediati (senza ricerca)
     if (!searchQuery.trim()) {
       // Se non ci sono notizie, non fare nulla
@@ -145,6 +162,9 @@ const NewsAggregator = () => {
 
   // Effetto per eseguire la ricerca quando cambia la query
   useEffect(() => {
+    // Salta se il caricamento non è stato completato
+    if (!initialLoadDone.current) return;
+    
     // Utilizzo un timeout per non eseguire la ricerca ad ogni digitazione
     const timeoutId = setTimeout(() => {
       if (searchQuery.trim()) {
@@ -157,6 +177,36 @@ const NewsAggregator = () => {
     
     return () => clearTimeout(timeoutId);
   }, [searchQuery, handleSearch, news]);
+
+  // Gestione filtri WebSocket - Una volta sola quando cambiano i filtri
+  useEffect(() => {
+    // Salta se il caricamento non è stato completato
+    if (!initialLoadDone.current) return;
+    
+    // Aggiorna i filtri di sottoscrizione WebSocket
+    if (websocket.isConnected) {
+      websocket.updateSubscriptionFilters({
+        topics: activeFilters.topics,
+        sources: activeFilters.sources
+      });
+    }
+  }, [activeFilters, websocket.isConnected]);
+
+  // Gestione aggiornamenti WebSocket per nuovi articoli
+  useEffect(() => {
+    // Salta se il caricamento non è stato completato
+    if (!initialLoadDone.current) return;
+    
+    // Preveniamo loop: se l'update è lo stesso dell'ultimo processato, ignoriamo
+    if (
+      websocket.lastNewsUpdate && 
+      lastWebSocketUpdate.current !== websocket.lastNewsUpdate.timestamp
+    ) {
+      // Aggiorna il riferimento all'ultimo update processato
+      lastWebSocketUpdate.current = websocket.lastNewsUpdate.timestamp;
+      console.log('Nuovi articoli disponibili:', websocket.lastNewsUpdate.count);
+    }
+  }, [websocket.lastNewsUpdate]);
 
   // Gestisce il toggle di un filtro
   const toggleFilter = useCallback((type, value) => {
@@ -205,6 +255,14 @@ const NewsAggregator = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-100">
+      {/* Centro notifiche */}
+      <NotificationCenter
+        notifications={websocket.notifications}
+        onRemoveNotification={websocket.removeNotification}
+        newArticlesCount={websocket.newArticlesCount}
+        onRefresh={loadNews}
+      />
+      
       {/* Header */}
       <header className="bg-blue-600 text-white p-4 shadow-md">
         <div className="container mx-auto flex justify-between items-center">
@@ -212,7 +270,16 @@ const NewsAggregator = () => {
             <Globe className="mr-2" aria-hidden="true" />
             Aggregatore di Notizie
           </h1>
-          <div className="flex items-center">
+          <div className="flex items-center gap-2">
+            {/* Indicatore WebSocket */}
+            <div className="flex items-center mr-2">
+              {websocket.isConnected ? (
+                <Wifi className="h-5 w-5 text-green-300" aria-hidden="true" title="Aggiornamenti in tempo reale attivi" />
+              ) : (
+                <WifiOff className="h-5 w-5 text-red-300" aria-hidden="true" title="Aggiornamenti in tempo reale non disponibili" />
+              )}
+            </div>
+            
             <button 
               onClick={loadNews} 
               className="flex items-center bg-blue-700 hover:bg-blue-800 p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-white"
@@ -411,7 +478,14 @@ const NewsAggregator = () => {
       <footer className="bg-gray-800 text-white p-4">
         <div className="container mx-auto text-center text-sm">
           <p>Aggregatore di Notizie - Creato con React</p>
-          <p className="mt-1 text-gray-400">Caratteristiche avanzate: algoritmo di raggruppamento delle notizie e aggiornamenti in tempo reale.</p>
+          <p className="mt-1 text-gray-400">
+            Caratteristiche avanzate: aggiornamenti in tempo reale, raggruppamento articoli e analisi topic
+            {websocket.isConnected && (
+              <span className="ml-2 text-green-400">
+                ({websocket.updatesReceived} aggiornamenti ricevuti)
+              </span>
+            )}
+          </p>
         </div>
       </footer>
     </div>

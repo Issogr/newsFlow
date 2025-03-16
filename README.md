@@ -1,18 +1,18 @@
-# 📰 Aggregatore di Notizie
+# 📰 Aggregatore di Notizie con Aggiornamenti in Tempo Reale
 
-Un'applicazione moderna per l'aggregazione di notizie in tempo reale da fonti autorevoli italiane e internazionali. L'app raggruppa notizie simili provenienti da diverse fonti, offre potenti opzioni di ricerca e filtro, e permette di confrontare le differenze tra le versioni di una stessa notizia riportate da testate diverse.
+Un'applicazione moderna per l'aggregazione di notizie in tempo reale da fonti autorevoli italiane e internazionali. L'app raggruppa notizie simili provenienti da diverse fonti, offre potenti opzioni di ricerca e filtro, e riceve automaticamente aggiornamenti via WebSocket.
 
 ## 📋 Indice
 
 - [Caratteristiche principali](#caratteristiche-principali)
-- [Miglioramenti recenti](#miglioramenti-recenti)
+- [Nuove funzionalità](#nuove-funzionalità)
 - [Architettura](#architettura)
 - [Tecnologie utilizzate](#tecnologie-utilizzate)
 - [Requisiti di sistema](#requisiti-di-sistema)
 - [Installazione e setup](#installazione-e-setup)
 - [Utilizzo dell'applicazione](#utilizzo-dellapplicazione)
-- [Struttura del progetto](#struttura-del-progetto)
 - [API](#api)
+- [WebSockets](#websockets)
 - [Configurazione avanzata](#configurazione-avanzata)
 - [Sviluppo futuro](#sviluppo-futuro)
 
@@ -24,67 +24,38 @@ Un'applicazione moderna per l'aggregazione di notizie in tempo reale da fonti au
 - **Normalizzazione multilingua**: Riconosce e normalizza topic in diverse lingue in un formato standardizzato
 - **Ricerca avanzata**: Cerca in tutto il database di notizie, non solo tra quelle visualizzate
 - **Filtri flessibili**: Filtra per fonte, argomento o utilizzando i topic caldi del momento
-- **Funzione diff**: Confronta visivamente le differenze nel modo in cui diverse testate riportano la stessa notizia
 - **Elaborazione asincrona**: Elaborazione in background per evitare timeout durante le richieste complesse
 - **Design responsive**: Interfaccia utente moderna che si adatta a qualsiasi dispositivo
-- **Aggiornamenti in tempo reale**: Dati sempre aggiornati dalle fonti originali
+- **Aggiornamenti in tempo reale**: Ricezione automatica di nuovi articoli e aggiornamenti tramite WebSockets
 - **Accessibilità migliorata**: Interfaccia completamente accessibile con supporto per screen reader e navigazione da tastiera
 - **Gestione errori avanzata**: Sistema standardizzato per gestire e visualizzare gli errori
 - **Sicurezza potenziata**: Sanitizzazione HTML e validazione input
 
-## 🚀 Miglioramenti recenti
+## 🚀 Nuove funzionalità
 
-Le seguenti migliorie sono state implementate per aumentare la robustezza, l'accessibilità e le prestazioni dell'applicazione:
+### Aggiornamenti in Tempo Reale
 
-1. **Rimozione dei meccanismi di cache**:
-   - Eliminazione della cache lato server per garantire dati sempre aggiornati
-   - Rimozione della cache lato client per assicurare contenuti freschi ad ogni richiesta
-   - Ottimizzazione delle operazioni di rete per mantenere prestazioni elevate senza caching
+L'applicazione ora include un sistema di aggiornamenti in tempo reale tramite WebSockets, offrendo una serie di vantaggi:
 
-2. **Standardizzazione della gestione degli errori**:
-   - Sistema centralizzato per formattazione e gestione errori
-   - Middleware per cattura automatica delle eccezioni
-   - Messaggi di errore più informativi e user-friendly
+1. **Ricezione automatica di nuovi articoli**:
+   - Notifica dell'arrivo di nuovi articoli senza necessità di refresh manuale della pagina
+   - Badge che mostra il numero di nuovi articoli disponibili
 
-3. **Sistema di retry per i feed RSS**:
-   - Implementazione di backoff esponenziale con jitter
-   - Riprova automatica in caso di fallimento della connessione
-   - Logging dettagliato degli errori di connessione
+2. **Notifiche in tempo reale**:
+   - Sistema di notifiche Toast per informare l'utente di eventi importanti
+   - Notifiche per nuovi articoli, aggiornamenti dei topic e messaggi di sistema
 
-4. **Parsing HTML più sicuro**:
-   - Implementazione di DOMPurify per la sanitizzazione dell'HTML
-   - Prevenzione di potenziali vulnerabilità XSS
+3. **Filtri interattivi con WebSocket**:
+   - I filtri attivi vengono sincronizzati con il server per ricevere aggiornamenti pertinenti
+   - Ottimizzazione del traffico di rete ricevendo solo aggiornamenti rilevanti
 
-5. **Validazione dati migliorata**:
-   - Validazione dei parametri delle richieste con express-validator
-   - Sanitizzazione degli input per prevenire injection
+4. **Stato della connessione visibile**:
+   - Indicatore dello stato della connessione WebSocket
+   - Tentativi automatici di riconnessione in caso di disconnessione
 
-6. **Gestione asincrona migliorata**:
-   - Hook `useAsync` personalizzato per la gestione dello stato asincrono
-   - Gestione più efficiente dei caricamenti e degli errori
-
-7. **Ottimizzazione delle prestazioni React**:
-   - Implementazione di React.memo per prevenire re-render non necessari
-   - Uso di useMemo e useCallback per ottimizzare il calcolo di valori derivati
-
-8. **Accessibilità migliorata**:
-   - Aggiunta di attributi ARIA per supportare tecnologie assistive
-   - Miglioramento della navigazione da tastiera
-   - Contrasto dei colori adeguato alle linee guida WCAG
-
-9. **Container Docker ottimizzati**:
-   - Multi-stage build per ridurre le dimensioni delle immagini
-   - Configurazione di sicurezza migliorata
-   - Dockerfile più efficienti
-
-10. **Health check dei container**:
-    - Endpoint di health check per monitorare lo stato dell'applicazione
-    - Integrabile con sistemi di orchestrazione container
-
-11. **Logging avanzato**:
-    - Configurazione Winston migliorata per la rotazione dei log
-    - Gestione separata degli errori, eccezioni e promise rifiutate
-    - Formattazione JSON per una migliore integrazione con strumenti di analisi
+5. **Riduzione del carico del server**:
+   - Gli aggiornamenti vengono inviati solo quando necessario, riducendo le richieste HTTP
+   - Aggiornamenti incrementali invece di recupero completo dei dati
 
 ## 🏗 Architettura
 
@@ -98,6 +69,7 @@ Il backend gestisce:
 - Raggruppamento di notizie simili
 - Elaborazione asincrona in background per deduzione topic
 - API RESTful per il frontend
+- Server WebSocket per aggiornamenti in tempo reale
 - Gestione standardizzata degli errori
 - Validazione e sanitizzazione degli input
 
@@ -106,9 +78,19 @@ Il backend gestisce:
 Il frontend si occupa di:
 - Presentazione delle notizie in un'interfaccia intuitiva
 - Gestione della ricerca e dei filtri
-- Visualizzazione delle differenze tra articoli simili
-- Gestione avanzata dello stato asincrono
+- Gestione della connessione WebSocket con hook personalizzati
+- Visualizzazione di notifiche in tempo reale
+- Sistema di gestione stato per aggiornamenti ottimizzati
 - Interfaccia accessibile e responsive
+
+### WebSocket (Socket.IO)
+
+Il sistema WebSocket gestisce:
+- Connessioni persistenti tra client e server
+- Sistema di stanze per filtrare gli aggiornamenti rilevanti
+- Notifiche push per nuovi articoli e aggiornamenti di topic
+- Recupero efficiente degli aggiornamenti con payload minimizzati
+- Riconnessione automatica in caso di disconnessione
 
 ### Servizio Ollama Esterno
 
@@ -122,16 +104,16 @@ L'applicazione si connette a un servizio Ollama esterno che:
 ### Backend
 - **Node.js**: Runtime JavaScript
 - **Express**: Framework web
+- **Socket.IO**: Server WebSocket per comunicazione real-time
 - **RSS Parser**: Parsing dei feed RSS
 - **Winston**: Logging avanzato
 - **Axios**: Client HTTP con sistema di retry
 - **TF-IDF e AI**: Algoritmi per il calcolo della similarità testuale e deduzione topic
-- **DOMPurify**: Sanitizzazione HTML
-- **jsdom**: Ambiente DOM lato server
 - **Express Validator**: Validazione e sanitizzazione delle richieste
 
 ### Frontend
 - **React**: Libreria UI con hooks personalizzati
+- **Socket.IO Client**: Client WebSocket per connessione real-time
 - **Tailwind CSS**: Framework CSS per il design
 - **Axios**: Client HTTP
 - **Lucide React**: Icone
@@ -139,7 +121,7 @@ L'applicazione si connette a un servizio Ollama esterno che:
 
 ### Infrastruttura
 - **Docker**: Containerizzazione con multi-stage build
-- **Nginx**: Server web e reverse proxy
+- **Nginx**: Server web, reverse proxy e proxy WebSocket
 - **Docker Compose**: Orchestrazione multi-container
 - **Ollama**: Servizio AI per deduzione e normalizzazione topic
 - **Health Checks**: Monitoraggio dello stato dei container
@@ -178,9 +160,10 @@ environment:
   - OLLAMA_MODEL=gemma3:1b                   # Modifica con il modello disponibile
   - OLLAMA_TIMEOUT=3000                      # Timeout per chiamate a Ollama in ms
   - USE_OLLAMA=true                          # Imposta a 'false' per disabilitare Ollama
-  - MAX_ARTICLES_PER_SOURCE=10               # Numero massimo di articoli da elaborare per fonte
-  - RSS_MAX_RETRIES=3                        # Numero massimo di tentativi per le richieste RSS
-  - RSS_RETRY_DELAY=1000                     # Ritardo iniziale tra i tentativi in ms
+  - MAX_ARTICLES_PER_SOURCE=10               # Numero massimo di articoli per fonte
+  - MIN_UPDATE_INTERVAL=60000                # Intervallo minimo tra aggiornamenti (ms)
+  - WS_PING_TIMEOUT=60000                    # Timeout per ping WebSocket (ms)
+  - WS_PING_INTERVAL=25000                   # Intervallo tra ping WebSocket (ms)
 ```
 
 ### 3. Avvio dell'applicazione
@@ -204,11 +187,12 @@ docker-compose down
 
 L'applicazione presenta un'interfaccia intuitiva con le seguenti sezioni:
 
-- **Header**: Titolo dell'applicazione e pulsante di aggiornamento
+- **Header**: Titolo dell'applicazione, indicatore WebSocket e pulsante di aggiornamento
 - **Barra di ricerca**: Cerca notizie in tutto il database
 - **Filtri**: Selezione per fonte e argomento
 - **Filtri rapidi**: Topic caldi e opzione "più recenti"
 - **Feed principale**: Elenco delle notizie raggruppate
+- **Centro notifiche**: Notifiche in tempo reale e badge per nuovi articoli
 - **Footer**: Informazioni sull'applicazione e statistiche
 
 ### Ricerca di notizie
@@ -226,56 +210,16 @@ Puoi filtrare le notizie in diversi modi:
 - **Topic caldi**: Clicca su uno dei topic nella barra dei filtri rapidi
 - **Più recenti**: Ordina le notizie dalla più recente
 
-I filtri possono essere combinati tra loro.
+I filtri possono essere combinati tra loro e influenzano anche gli aggiornamenti in tempo reale che riceverai.
 
-### Visualizzazione delle differenze
+### Aggiornamenti in tempo reale
 
-Per notizie presenti su più fonti:
+L'applicazione riceve automaticamente aggiornamenti tramite WebSocket:
 
-1. Clicca sul pulsante "Mostra diff" nella card della notizia
-2. Apparirà un riquadro con il confronto tra le versioni
-3. Le differenze sono evidenziate con codice colore:
-   - **Rosso**: testo presente solo nella prima fonte
-   - **Verde**: testo presente solo nella seconda fonte
-   - **Nero**: testo presente in entrambe le fonti
-
-## 📁 Struttura del progetto
-
-```
-news-aggregator/
-├── docker-compose.yml       # Configurazione Docker Compose
-├── backend/
-│   ├── Dockerfile           # Configurazione container backend
-│   ├── package.json         # Dipendenze Node.js
-│   ├── server.js            # Punto di ingresso del server
-│   ├── routes/
-│   │   └── api.js           # Route API
-│   ├── services/
-│   │   ├── newsAggregator.js # Logica di aggregazione
-│   │   ├── rssParser.js      # Parser RSS con retry
-│   │   ├── ollamaService.js  # Servizio di AI per topic
-│   │   ├── asyncProcessor.js # Elaborazione asincrona
-│   │   └── topicNormalizer.js # Normalizzazione topic (fallback)
-│   └── utils/
-│       ├── logger.js         # Utility di logging avanzato
-│       └── errorHandler.js   # Gestione centralizzata degli errori
-└── frontend/
-    ├── Dockerfile           # Configurazione container frontend
-    ├── nginx.conf           # Configurazione Nginx
-    ├── package.json         # Dipendenze React
-    ├── tailwind.config.js   # Configurazione Tailwind CSS
-    └── src/
-        ├── App.js           # Componente principale React
-        ├── index.js         # Punto di ingresso React
-        ├── services/
-        │   └── api.js       # Client API
-        ├── hooks/
-        │   └── useAsync.js  # Hook per gestione stato asincrono
-        └── components/
-            ├── NewsAggregator.js # Componente principale UI
-            ├── NewsCard.js       # Componente per la visualizzazione di una notizia
-            └── ErrorMessage.js   # Componente per gestione errori
-```
+1. **Indicatore di connessione**: Un'icona nella barra superiore mostra lo stato della connessione WebSocket
+2. **Badge nuovi articoli**: Quando sono disponibili nuovi articoli, un badge apparirà nell'angolo in alto a destra
+3. **Notifiche toast**: Le notifiche vengono mostrate in alto a destra per segnalare eventi importanti
+4. **Aggiornamento automatico dei topic**: I topic degli articoli vengono aggiornati automaticamente quando il server AI deduce nuovi argomenti
 
 ## 🔌 API
 
@@ -362,86 +306,106 @@ Recupera la mappatura dei topic in diverse lingue.
 }
 ```
 
-### `GET /api/health`
+### `POST /api/refresh`
 
-Verifica lo stato di salute dell'applicazione.
+Forza un aggiornamento immediato delle notizie.
 
 **Response**:
 ```json
 {
-  "status": "ok",
-  "timestamp": "2025-03-16T12:34:56.789Z",
-  "uptime": 3600
+  "success": true,
+  "message": "Dati aggiornati con successo",
+  "count": 42
 }
 ```
+
+### `GET /api/ws/status`
+
+Recupera lo stato attuale delle connessioni WebSocket.
+
+**Response**:
+```json
+{
+  "activeConnectionsCount": 5,
+  "totalConnections": 10,
+  "newsUpdatesSent": 42,
+  "topicUpdatesSent": 15,
+  "timestamp": "2025-03-16T12:34:56.789Z"
+}
+```
+
+## 📡 WebSockets
+
+L'applicazione utilizza Socket.IO per la comunicazione in tempo reale. Ecco i principali eventi:
+
+### Eventi dal server al client
+
+| Evento | Descrizione | Payload |
+|--------|-------------|---------|
+| `welcome` | Inviato al client quando si connette | `{ message: string, timestamp: string }` |
+| `news:update` | Nuovi articoli disponibili | `{ count: number, data: array, timestamp: string }` |
+| `topic:update` | Aggiornamento topic per un articolo | `{ articleId: string, topics: array, timestamp: string }` |
+| `system:notification` | Notifica di sistema | `{ notificationType: string, message: string, timestamp: string }` |
+| `pong` | Risposta a un ping del client | `{ timestamp: number }` |
+
+### Eventi dal client al server
+
+| Evento | Descrizione | Payload |
+|--------|-------------|---------|
+| `subscribe:filters` | Aggiorna i filtri di sottoscrizione | `{ topics: array, sources: array }` |
+| `ping` | Mantiene attiva la connessione | `{}` |
+
+### Stanze WebSocket
+
+Il server organizza i client in "stanze" per inviare aggiornamenti mirati:
+
+- `all-updates`: Tutti i client connessi
+- `topic:<nome-topic>`: Client interessati a un topic specifico
+- `source:<nome-fonte>`: Client interessati a una fonte specifica
 
 ## ⚙️ Configurazione avanzata
 
-### Variabili di ottimizzazione
+### Variabili di ottimizzazione WebSocket
 
-Puoi modificare le seguenti variabili nel file `docker-compose.yml` per ottimizzare le prestazioni:
+Puoi modificare le seguenti variabili nel file `docker-compose.yml` per ottimizzare le performance WebSocket:
 
 ```yaml
 environment:
-  - OLLAMA_TIMEOUT=3000         # Timeout per le richieste Ollama (in millisecondi)
-  - USE_OLLAMA=true             # Imposta a 'false' per disabilitare completamente Ollama
-  - MAX_ARTICLES_PER_SOURCE=10  # Numero massimo di articoli da elaborare per fonte
-  - RSS_MAX_RETRIES=3           # Numero massimo di tentativi per le richieste RSS
-  - RSS_RETRY_DELAY=1000        # Ritardo iniziale tra i tentativi in ms
-  - SERVER_TIMEOUT=60000        # Timeout del server in ms
-  - LOG_LEVEL=info              # Livello di logging (debug, info, warn, error)
+  - WS_PING_TIMEOUT=60000       # Timeout per ping WebSocket (ms)
+  - WS_PING_INTERVAL=25000      # Intervallo tra ping WebSocket (ms)
+  - MIN_UPDATE_INTERVAL=60000   # Intervallo minimo tra aggiornamenti (ms)
 ```
 
-- Riduci `MAX_ARTICLES_PER_SOURCE` su sistemi meno potenti
-- Aumenta `OLLAMA_TIMEOUT` se il server Ollama è più lento
-- Imposta `USE_OLLAMA=false` in caso di problemi con il server Ollama
-- Regola `RSS_MAX_RETRIES` e `RSS_RETRY_DELAY` in base alla stabilità della connessione
+### Configurazione WebSocket lato client
 
-### Aggiungere nuove fonti di notizie
-
-Puoi aggiungere nuove fonti modificando l'array `newsSources` nel file `backend/services/newsAggregator.js`:
+Il frontend è configurabile attraverso il hook `useWebSocket`:
 
 ```javascript
-const newsSources = [
-  {
-    id: "nuova-fonte",
-    name: "Nome della Fonte",
-    url: "https://www.nuovafonte.it/rss.xml",
-    type: "rss",
-    language: "it"
-  },
-  // altre fonti...
-];
+// Personalizza l'URL e le opzioni
+const websocket = useWebSocket('/socket.io', {
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000
+});
 ```
 
-### Personalizzare l'algoritmo di similarità
+### Configurazione Nginx per WebSocket
 
-Puoi modificare la soglia di similarità nel file `backend/services/newsAggregator.js`:
+Il server Nginx è configurato per supportare WebSocket con timeout estesi:
 
-```javascript
-// Aumenta questo valore per richiedere maggiore similarità tra gli articoli
-if (similarity > 0.3) { // Soglia di similarità
-  // ...
+```nginx
+location /socket.io/ {
+    proxy_pass http://backend:5000/socket.io/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_read_timeout 86400s; # 24h
 }
 ```
-
-### Configurare il logging
-
-Modifica il livello di logging nel file `docker-compose.yml`:
-
-```yaml
-environment:
-  - LOG_LEVEL=debug  # Opzioni: error, warn, info, debug
-```
-
-Per una configurazione più dettagliata, modifica il file `backend/utils/logger.js`.
 
 ## 🚧 Sviluppo futuro
 
 Ecco alcune idee per il futuro sviluppo dell'applicazione:
 - **Traduzione automatica**: Tradurre notizie da lingue diverse
 - **Modalità dark**: Aggiungere un tema scuro per l'interfaccia
-- **Progressive Web App**: Rendere l'applicazione installabile sui dispositivi
-- **Websockets**: Implementare aggiornamenti in tempo reale tramite websockets
-- **Monitoraggio delle prestazioni**: Aggiungere metriche per monitorare i tempi di risposta
 - **Miglioramento prestazioni AI**: Cache lato server multi-livello per ottimizzare le richieste RSS e AI
+- **Dashboard analytics**: Creare una dashboard per analizzare tendenze delle notizie

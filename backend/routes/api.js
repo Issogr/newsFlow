@@ -5,6 +5,7 @@ const topicNormalizer = require('../services/topicNormalizer');
 const logger = require('../utils/logger');
 const { asyncHandler, createError } = require('../utils/errorHandler');
 const { sanitizeParam, sanitizeQuery, validateParam, validateQueryParam } = require('../utils/inputValidator');
+const websocketService = require('../services/websocketService');
 
 // Get all news
 router.get('/news', asyncHandler(async (req, res) => {
@@ -81,6 +82,46 @@ router.get('/articles/:articleId/topics', [
   const topics = asyncProcessor.getTopicsForArticle(articleId);
   
   res.json({ articleId, topics });
+}));
+
+// Endpoint per forzare l'aggiornamento dei dati
+router.post('/refresh', asyncHandler(async (req, res) => {
+  const news = await newsService.forceRefresh();
+  
+  res.json({
+    success: true,
+    message: 'Dati aggiornati con successo',
+    count: news.length
+  });
+}));
+
+// Endpoint per ottenere lo stato di WebSocket
+router.get('/ws/status', (req, res) => {
+  const wsStats = websocketService.getStatistics();
+  res.json(wsStats);
+});
+
+// Endpoint per inviare notifica a tutti i client
+router.post('/ws/notify', [
+  validateQueryParam('message', 'Messaggio richiesto'),
+  sanitizeQuery('message')
+], asyncHandler(async (req, res) => {
+  const { message } = req.query;
+  const type = req.query.type || 'info';
+  
+  // Valida il tipo di notifica
+  if (!['info', 'warning', 'error'].includes(type)) {
+    throw createError(400, 'Tipo di notifica non valido', 'INVALID_NOTIFICATION_TYPE');
+  }
+  
+  // Invia la notifica
+  websocketService.broadcastSystemNotification(message, type);
+  
+  res.json({
+    success: true,
+    message: 'Notifica inviata con successo',
+    type
+  });
 }));
 
 module.exports = router;

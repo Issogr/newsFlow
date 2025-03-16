@@ -6,6 +6,7 @@
 const logger = require('../utils/logger');
 const ollamaService = require('./ollamaService');
 const topicNormalizer = require('./topicNormalizer');
+const websocketService = require('./websocketService');
 
 // Code di elaborazione
 const topicDeductionQueue = [];
@@ -166,7 +167,8 @@ async function processNextJob() {
       const lowerTopic = topic.toLowerCase();
       if (!caseFoldedSet.has(lowerTopic)) {
         caseFoldedSet.add(lowerTopic);
-        combinedTopics.push(topic);
+        // Usa la versione normalizzata per consistenza
+        combinedTopics.push(topic.charAt(0).toUpperCase() + topic.slice(1).toLowerCase());
       }
     });
     
@@ -179,8 +181,18 @@ async function processNextJob() {
       activeJobs.set(job.id, updatedJob);
     }
     
-    // Aggiorna l'articolo originale (tenta di aggiornare direttamente l'articolo)
+    // Aggiorna l'articolo originale e notifica i client tramite WebSocket
     updateArticleTopics(job.id, combinedTopics);
+    
+    // Notifica i client tramite WebSocket solo se ci sono nuovi topic
+    if (combinedTopics.length > existingTopics.length) {
+      try {
+        // Invia aggiornamento tramite WebSocket
+        websocketService.broadcastTopicUpdate(job.id, combinedTopics);
+      } catch (wsError) {
+        logger.error(`Error broadcasting topic update: ${wsError.message}`);
+      }
+    }
     
     logger.info(`Successfully deduced topics for article ${job.id}: ${combinedTopics.join(', ')}`);
   } catch (error) {
@@ -207,9 +219,7 @@ async function processNextJob() {
  * @param {string[]} topics - Nuovi topic
  */
 function updateArticleTopics(articleId, topics) {
-  // Questa funzione è di fatto un noop, ma pronta per future estensioni
-  // come un sistema di websocket o event bus
-  
+  // Questa funzione è stata estesa per inviare notifiche tramite WebSocket
   logger.debug(`Topics updated for article ${articleId}: ${topics.join(', ')}`);
 }
 
@@ -324,5 +334,7 @@ module.exports = {
   getTopicsForArticle,
   // Espone queste funzioni per i test
   _cleanupCompletedJobs: cleanupCompletedJobs,
-  _getActiveJobsCount: () => activeJobs.size
+  _getActiveJobsCount: () => activeJobs.size,
+  // Funzione esposta per scopi di testing
+  deduceTopicsStatically
 };

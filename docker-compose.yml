@@ -15,6 +15,10 @@ services:
       - RSS_RETRY_DELAY=2000        # Aumentato a 2 secondi per dare più tempo alla risoluzione DNS
       - SERVER_TIMEOUT=60000        # Timeout del server in ms
       - LOG_LEVEL=info              # Livello di logging (debug, info, warn, error)
+      - MIN_UPDATE_INTERVAL=60000   # Intervallo minimo per aggiornamenti automatici
+      # Configurazioni WebSocket 
+      - WS_PING_TIMEOUT=60000       # Timeout per ping WebSocket (ms)
+      - WS_PING_INTERVAL=25000      # Intervallo tra ping WebSocket (ms)
     volumes:
       - ./backend/logs:/usr/src/app/logs
     networks:
@@ -34,8 +38,11 @@ services:
       resources:
         limits:
           memory: 512M
+          cpus: '0.5'
         reservations:
           memory: 256M
+          cpus: '0.1'
+    restart: unless-stopped
     logging:
       driver: "json-file"
       options:
@@ -62,8 +69,11 @@ services:
       resources:
         limits:
           memory: 256M
+          cpus: '0.3'
         reservations:
           memory: 128M
+          cpus: '0.1'
+    restart: unless-stopped
     logging:
       driver: "json-file"
       options:

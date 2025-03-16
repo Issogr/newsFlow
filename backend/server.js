@@ -7,7 +7,9 @@ const apiRoutes = require('./routes/api');
 const logger = require('./utils/logger');
 const { errorMiddleware } = require('./utils/errorHandler');
 const path = require('path');
-const fs = require('fs'); // Aggiunto import di fs
+const fs = require('fs');
+const http = require('http');
+const websocketService = require('./services/websocketService');
 
 // Initialize express app
 const app = express();
@@ -24,7 +26,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "cdn.tailwindcss.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
+      connectSrc: ["'self'", "ws:", "wss:"], // Aggiunto per WebSockets
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: [],
@@ -40,7 +42,7 @@ app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? ['http://localhost', 'http://localhost:80', 'http://frontend'] 
     : true,
-  methods: ['GET'],
+  methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   maxAge: 86400 // 24 ore
@@ -88,15 +90,27 @@ if (!fs.existsSync(logDir)) {
 // Routes
 app.use('/api', apiRoutes);
 
-// Health check route migliorato
+// Health check route con informazioni WebSocket
 app.get('/health', (req, res) => {
   const uptime = process.uptime();
+  const wsStats = websocketService.getStatistics();
+  
   res.status(200).json({ 
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: Math.floor(uptime),
-    memory: process.memoryUsage()
+    memory: process.memoryUsage(),
+    websocket: {
+      active: wsStats.activeConnectionsCount,
+      total: wsStats.totalConnections
+    }
   });
+});
+
+// WebSocket status route
+app.get('/api/ws/status', (req, res) => {
+  const wsStats = websocketService.getStatistics();
+  res.json(wsStats);
 });
 
 // Gestione 404 migliorata
@@ -110,9 +124,15 @@ app.use((req, res, next) => {
 // Middleware per gestione errori centralizzata
 app.use(errorMiddleware);
 
-// Imposta il timeout del server
-const server = app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
+// Crea server HTTP separato per permettere a Socket.IO di connettersi
+const server = http.createServer(app);
+
+// Inizializza il servizio WebSocket
+websocketService.initialize(server);
+
+// Avvia il server
+server.listen(PORT, () => {
+  logger.info(`Server running on port ${PORT} with WebSocket support`);
 });
 
 // Gestione timeout migliorata

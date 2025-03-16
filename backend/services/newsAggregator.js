@@ -3,6 +3,7 @@ const logger = require('../utils/logger');
 const topicNormalizer = require('./topicNormalizer');
 const { sanitizeHtml } = require('../utils/inputValidator');
 const { createError } = require('../utils/errorHandler');
+const websocketService = require('./websocketService');
 
 // News sources configuration
 const newsSources = [
@@ -22,6 +23,12 @@ const MAX_CACHED_ARTICLES = 1000;
 // Cache degli articoli (limitata)
 let articlesCache = [];
 
+// Timestamp dell'ultimo aggiornamento
+let lastUpdateTime = 0;
+
+// Intervallo di aggiornamento minimo per evitare aggiornamenti troppo frequenti
+const MIN_UPDATE_INTERVAL = parseInt(process.env.MIN_UPDATE_INTERVAL || '60000', 10); // 1 minuto
+
 /**
  * Pulisce la cache degli articoli se supera il limite
  */
@@ -34,9 +41,41 @@ function cleanupArticlesCache() {
   }
 }
 
+/**
+ * Verifica se ci sono nuovi articoli da notificare
+ * @param {Array} newItems - Nuovi articoli
+ * @param {Array} existingItems - Articoli esistenti nella cache
+ * @returns {Array} - Array dei nuovi articoli non presenti nella cache
+ */
+function findNewArticles(newItems, existingItems) {
+  if (!newItems || !Array.isArray(newItems) || newItems.length === 0) {
+    return [];
+  }
+  
+  if (!existingItems || !Array.isArray(existingItems) || existingItems.length === 0) {
+    return newItems;
+  }
+  
+  // Crea un set di ID degli articoli esistenti per ricerca efficiente
+  const existingIds = new Set(existingItems.map(item => item.id));
+  
+  // Filtra solo gli articoli nuovi
+  return newItems.filter(item => !existingIds.has(item.id));
+}
+
 // Function to fetch all news from all sources
 async function fetchAllNews() {
   try {
+    // Check if we need to respect the minimum update interval
+    const now = Date.now();
+    if (lastUpdateTime > 0 && now - lastUpdateTime < MIN_UPDATE_INTERVAL) {
+      // Se l'ultimo aggiornamento è troppo recente e abbiamo articoli in cache, usa la cache
+      if (articlesCache.length > 0) {
+        logger.debug(`Usando cache (${articlesCache.length} articoli) - Prossimo aggiornamento tra ${Math.round((MIN_UPDATE_INTERVAL - (now - lastUpdateTime)) / 1000)}s`);
+        return groupSimilarNews(articlesCache);
+      }
+    }
+    
     // Fetch from all sources in parallel
     const newsPromises = newsSources.map(source => rssParser.parseFeed(source));
     const newsArrays = await Promise.allSettled(newsPromises);
@@ -66,8 +105,30 @@ async function fetchAllNews() {
       content: sanitizeHtml(item.content || '')
     }));
     
+    // Verifica se ci sono nuovi articoli rispetto alla cache
+    const newArticles = findNewArticles(sanitizedItems, articlesCache);
+    
+    // Se ci sono nuovi articoli, notifica via WebSocket
+    if (newArticles.length > 0) {
+      logger.info(`Trovati ${newArticles.length} nuovi articoli da notificare`);
+      const newGroups = groupSimilarNews(newArticles);
+      
+      // Invia solo se ci sono gruppi interessanti
+      if (newGroups.length > 0) {
+        try {
+          // Invia via WebSocket solo se non è il primo caricamento
+          if (articlesCache.length > 0) {
+            websocketService.broadcastNewsUpdate(newGroups);
+          }
+        } catch (wsError) {
+          logger.error(`Errore nell'invio dell'aggiornamento WebSocket: ${wsError.message}`);
+        }
+      }
+    }
+    
     // Aggiorna la cache degli articoli
     articlesCache = [...sanitizedItems];
+    lastUpdateTime = now;
     
     // Pulisci cache se necessario
     cleanupArticlesCache();
@@ -362,11 +423,41 @@ function itemMatchesTopic(item, topicFilter) {
   return topicNormalizer.itemHasTopic(item, topicFilter);
 }
 
+// Funzione per forzare un aggiornamento e inviare una notifica
+async function forceRefresh() {
+  try {
+    // Resetta il timestamp dell'ultimo aggiornamento
+    lastUpdateTime = 0;
+    
+    // Esegui il fetch
+    const news = await fetchAllNews();
+    
+    // Invia notifica di sistema
+    websocketService.broadcastSystemNotification(
+      "Dati aggiornati con successo", 
+      "info"
+    );
+    
+    return news;
+  } catch (error) {
+    logger.error(`Error in force refresh: ${error.message}`);
+    
+    // Invia notifica di errore
+    websocketService.broadcastSystemNotification(
+      "Errore nell'aggiornamento dei dati", 
+      "error"
+    );
+    
+    throw error;
+  }
+}
+
 module.exports = {
   fetchAllNews,
   searchNews,
   getHotTopics,
   getSources,
   itemMatchesTopic,
+  forceRefresh,
   newsSources // esposto per i test
 };
