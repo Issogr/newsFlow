@@ -7,6 +7,10 @@ import NotificationCenter from './NotificationCenter';
 import topicHelper from '../utils/topicHelper';
 import useWebSocket from '../hooks/useWebSocket';
 
+// Numero di elementi da mostrare inizialmente e per caricamento
+const INITIAL_ITEMS_COUNT = 9;
+const ITEMS_PER_LOAD = 6;
+
 // Componente principale dell'applicazione
 const NewsAggregator = () => {
   // Refs per evitare loop infiniti
@@ -15,12 +19,18 @@ const NewsAggregator = () => {
   const lastTopicUpdate = useRef(null);
   const ignoreNextNewsUpdate = useRef(false);
   
+  // Ref per l'osservatore di intersezione per lo scroll infinito
+  const observer = useRef(null);
+  const loadMoreTriggerRef = useRef(null);
+  
   // Stati principali
   const [news, setNews] = useState([]);
   const [filteredNews, setFilteredNews] = useState([]);
+  const [visibleNewsCount, setVisibleNewsCount] = useState(INITIAL_ITEMS_COUNT);
   const [sources, setSources] = useState([]);
   const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [activeFilters, setActiveFilters] = useState({
     sources: [],
@@ -46,6 +56,53 @@ const NewsAggregator = () => {
       console.log("WebSocket news update ricevuto:", websocket.lastNewsUpdate);
     }
   }, [websocket.lastNewsUpdate]);
+
+  // Calcola le notizie visibili in base allo stato attuale
+  const visibleNews = useMemo(() => {
+    return filteredNews.slice(0, visibleNewsCount);
+  }, [filteredNews, visibleNewsCount]);
+  
+  // Funzione per caricare più notizie (scroll infinito)
+  const loadMore = useCallback(() => {
+    if (loadingMore || visibleNewsCount >= filteredNews.length) return;
+    
+    setLoadingMore(true);
+    
+    // Simula un piccolo ritardo per l'effetto di caricamento
+    setTimeout(() => {
+      setVisibleNewsCount(prev => Math.min(prev + ITEMS_PER_LOAD, filteredNews.length));
+      setLoadingMore(false);
+    }, 300);
+  }, [loadingMore, visibleNewsCount, filteredNews.length]);
+
+  // Setup dell'osservatore di intersezione per lo scroll infinito
+  useEffect(() => {
+    observer.current = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    
+    const currentTrigger = loadMoreTriggerRef.current;
+    if (currentTrigger) {
+      observer.current.observe(currentTrigger);
+    }
+    
+    return () => {
+      if (currentTrigger && observer.current) {
+        observer.current.unobserve(currentTrigger);
+      }
+    };
+  }, [loadMore]);
+
+  // Resetta il contatore di notizie visibili quando cambiano i filtri o si caricano nuove notizie
+  useEffect(() => {
+    setVisibleNewsCount(INITIAL_ITEMS_COUNT);
+  }, [filteredNews.length]);
 
   // Funzione centrale per applicare i filtri a qualsiasi set di notizie
   // Questa funzione sarà riutilizzata in vari punti dell'applicazione
@@ -139,6 +196,9 @@ const NewsAggregator = () => {
 
       console.log("Dati caricati:", newsData);
       console.log("Dati filtrati:", filteredData);
+      
+      // Resetta il contatore di elementi visibili
+      setVisibleNewsCount(INITIAL_ITEMS_COUNT);
       
     } catch (error) {
       console.error("Errore nel recupero delle notizie:", error);
@@ -430,10 +490,18 @@ const NewsAggregator = () => {
       {/* Header */}
       <header className="bg-blue-600 text-white p-4 shadow-md">
         <div className="container mx-auto flex justify-between items-center">
-          <h1 className="text-2xl font-bold flex items-center">
-            <Globe className="mr-2" aria-hidden="true" />
-            Aggregatore di Notizie
-          </h1>
+          <div className="flex items-center">
+            <h1 className="text-2xl font-bold flex items-center">
+              <Globe className="mr-2" aria-hidden="true" />
+              Aggregatore di Notizie
+            </h1>
+            {/* Contatore di notizie trovate */}
+            {!loading && !error && (
+              <span className="ml-4 bg-blue-700 text-white px-3 py-1 rounded-full text-sm">
+                {filteredNews.length} notizie trovate
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {/* Indicatore WebSocket */}
             <div className="flex items-center mr-2">
@@ -585,7 +653,7 @@ const NewsAggregator = () => {
       {/* Contenuto principale */}
       <main className="flex-grow overflow-auto p-4">
         <div className="container mx-auto">
-          {loading ? (
+          {loading && !loadingMore ? (
             <div className="flex justify-center items-center h-64" role="status" aria-label="Caricamento notizie in corso">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
             </div>
@@ -600,34 +668,43 @@ const NewsAggregator = () => {
               <p className="mt-2 text-gray-500">Prova a modificare i filtri o aggiorna la pagina.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredNews.map(group => (
-                <NewsCard 
-                  key={group.id} 
-                  group={group}
-                  activeFilters={activeFilters}
-                  toggleFilter={toggleFilter}
-                />
-              ))}
-            </div>
+            <>
+              {/* Griglia delle notizie caricate */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {visibleNews.map(group => (
+                  <NewsCard 
+                    key={group.id} 
+                    group={group}
+                    activeFilters={activeFilters}
+                    toggleFilter={toggleFilter}
+                  />
+                ))}
+              </div>
+              
+              {/* Elemento trigger per lo scroll infinito */}
+              {visibleNewsCount < filteredNews.length && (
+                <div 
+                  ref={loadMoreTriggerRef} 
+                  className="flex justify-center items-center py-8"
+                >
+                  {loadingMore ? (
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                  ) : (
+                    <span className="text-gray-500 text-sm">Scorri per caricare altre notizie...</span>
+                  )}
+                </div>
+              )}
+              
+              {/* Messaggio quando non ci sono più notizie */}
+              {visibleNewsCount >= filteredNews.length && filteredNews.length > 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  Hai visualizzato tutte le notizie disponibili ({filteredNews.length})
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
-      
-      {/* Piè di pagina */}
-      <footer className="bg-gray-800 text-white p-4">
-        <div className="container mx-auto text-center text-sm">
-          <p>Aggregatore di Notizie - Creato con React</p>
-          <p className="mt-1 text-gray-400">
-            Caratteristiche avanzate: aggiornamenti in tempo reale, raggruppamento articoli e analisi topic
-            {websocket.isConnected && (
-              <span className="ml-2 text-green-400">
-                ({websocket.updatesReceived} aggiornamenti ricevuti)
-              </span>
-            )}
-          </p>
-        </div>
-      </footer>
     </div>
   );
 };
