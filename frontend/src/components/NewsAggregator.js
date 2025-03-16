@@ -468,13 +468,6 @@ const NewsAggregator = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-100">
-      {/* Centro notifiche */}
-      <NotificationCenter
-        notifications={websocket.notifications}
-        onRemoveNotification={websocket.removeNotification}
-        newArticlesCount={websocket.newArticlesCount}
-        onRefresh={loadNews}
-      />
       
       {/* Header */}
       <header className="bg-blue-600 text-white p-4 shadow-md">
@@ -492,6 +485,15 @@ const NewsAggregator = () => {
                 <WifiOff className="h-5 w-5 text-red-300" aria-hidden="true" title="Aggiornamenti in tempo reale non disponibili" />
               )}
             </div>
+            
+            {/* Centro notifiche */}
+            <NotificationCenter
+              notifications={websocket.notifications}
+              onRemoveNotification={websocket.removeNotification}
+              newArticlesCount={websocket.newArticlesCount}
+              onRefresh={loadNews}
+              isConnected={websocket.isConnected}
+            />
             
             <button 
               onClick={loadNews} 
