@@ -18,7 +18,7 @@ const ErrorMessage = ({
 }) => {
   // Messaggi predefiniti per vari tipi di errore
   const getErrorMessage = () => {
-    if (!error) return null;
+    if (!error) return "Si è verificato un errore sconosciuto.";
     
     // Se l'errore è un oggetto con un messaggio specifico dell'API
     if (error.response && error.response.data && error.response.data.error) {
@@ -42,7 +42,7 @@ const ErrorMessage = ({
         case 500:
           return 'Si è verificato un errore interno del server. Il team è stato notificato.';
         default:
-          return `Errore ${error.response.status}: ${error.response.statusText}`;
+          return `Errore ${error.response.status}: ${error.response.statusText || 'Errore sconosciuto'}`;
       }
     }
     
@@ -51,6 +51,7 @@ const ErrorMessage = ({
   };
 
   const errorMessage = getErrorMessage();
+  const errorCode = error?.response?.status || (error?.code ? `Codice: ${error.code}` : '');
 
   return (
     <div 
@@ -63,22 +64,25 @@ const ErrorMessage = ({
       </div>
       <h2 className="text-xl font-semibold text-red-700 mb-2">
         {title}
+        {errorCode && <span className="text-sm ml-2 text-red-500">({errorCode})</span>}
       </h2>
-      <p className="text-red-600 mb-4">
+      <p className="text-red-600 mb-6">
         {errorMessage}
       </p>
       {onRetry && (
         <button
           onClick={onRetry}
-          className="flex items-center mx-auto bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-          aria-label="Riprova a caricare"
+          className="flex items-center mx-auto bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md 
+                   focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2
+                   transition-colors"
+          aria-label="Riprova a caricare i dati"
         >
           <RefreshCw size={16} className="mr-2" aria-hidden="true" />
           Riprova
         </button>
       )}
       <p className="text-sm text-red-500 mt-4">
-        Se il problema persiste, controlla lo stato del servizio o riprova più tardi.
+        Se il problema persiste, controlla lo stato del servizio o contatta l'assistenza.
       </p>
     </div>
   );

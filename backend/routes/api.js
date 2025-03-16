@@ -3,131 +3,84 @@ const router = express.Router();
 const newsService = require('../services/newsAggregator');
 const topicNormalizer = require('../services/topicNormalizer');
 const logger = require('../utils/logger');
+const { asyncHandler, createError } = require('../utils/errorHandler');
+const { sanitizeParam, sanitizeQuery, validateParam, validateQueryParam } = require('../utils/inputValidator');
 
 // Get all news
-router.get('/news', async (req, res, next) => {
-  try {
-    const news = await newsService.fetchAllNews();
-    res.json(news);
-  } catch (error) {
-    // Se l'errore è già formattato (ad es. dal newsService)
-    if (error.status && error.message) {
-      return res.status(error.status).json({ 
-        error: {
-          message: error.message,
-          code: error.code || 'ERROR'
-        }
-      });
-    }
-    
-    // Altrimenti, è un errore generico
-    logger.error(`Error fetching news: ${error.message}`);
-    res.status(500).json({ 
-      error: { 
-        message: 'Si è verificato un errore interno. Riprova più tardi.',
-        code: 'SERVER_ERROR'
-      } 
-    });
+router.get('/news', asyncHandler(async (req, res) => {
+  const news = await newsService.fetchAllNews();
+  
+  // Se non ci sono notizie, lancia un errore
+  if (!news || news.length === 0) {
+    throw createError(404, 'Nessuna notizia disponibile al momento', 'NO_NEWS_AVAILABLE');
   }
-});
+  
+  res.json(news);
+}));
 
-// Search news
-router.get('/news/search', async (req, res, next) => {
-  try {
-    const { query } = req.query;
-    if (!query) {
-      return res.status(400).json({ 
-        error: { 
-          message: 'È necessario specificare un termine di ricerca',
-          code: 'MISSING_QUERY'
-        } 
-      });
-    }
-    
-    const results = await newsService.searchNews(query);
-    res.json(results);
-  } catch (error) {
-    // Se l'errore è già formattato (ad es. dal newsService)
-    if (error.status && error.message) {
-      return res.status(error.status).json({ 
-        error: {
-          message: error.message,
-          code: error.code || 'ERROR'
-        }
-      });
-    }
-    
-    // Altrimenti, è un errore generico
-    logger.error(`Error searching news: ${error.message}`);
-    res.status(500).json({ 
-      error: { 
-        message: 'Si è verificato un errore durante la ricerca. Riprova più tardi.',
-        code: 'SEARCH_ERROR'
-      } 
-    });
+// Search news con validazione e sanitizzazione
+router.get('/news/search', [
+  validateQueryParam('query', 'È necessario specificare un termine di ricerca'),
+  sanitizeQuery('query')
+], asyncHandler(async (req, res) => {
+  const { query } = req.query;
+  
+  // Valida lunghezza minima
+  if (query.length < 2) {
+    throw createError(
+      400, 
+      'Il termine di ricerca deve contenere almeno 2 caratteri', 
+      'INVALID_SEARCH_QUERY'
+    );
   }
-});
+  
+  const results = await newsService.searchNews(query);
+  
+  // Se non ci sono risultati, ritorna un array vuoto ma con status 200
+  res.json(results.length === 0 ? [] : results);
+}));
 
 // Get hot topics
-router.get('/hot-topics', async (req, res, next) => {
-  try {
-    const hotTopics = await newsService.getHotTopics();
-    res.json(hotTopics);
-  } catch (error) {
-    // Se l'errore è già formattato (ad es. dal newsService)
-    if (error.status && error.message) {
-      return res.status(error.status).json({ 
-        error: {
-          message: error.message,
-          code: error.code || 'ERROR'
-        }
-      });
-    }
-    
-    // Altrimenti, è un errore generico
-    logger.error(`Error getting hot topics: ${error.message}`);
-    res.status(500).json({ 
-      error: { 
-        message: 'Si è verificato un errore nel recupero dei topic. Riprova più tardi.',
-        code: 'TOPICS_ERROR'
-      } 
-    });
-  }
-});
+router.get('/hot-topics', asyncHandler(async (req, res) => {
+  const hotTopics = await newsService.getHotTopics();
+  
+  // Se non ci sono hot topics, ritorna un array vuoto ma con status 200
+  res.json(hotTopics.length === 0 ? [] : hotTopics);
+}));
 
 // Get topics with their variants
-router.get('/topics/map', (req, res) => {
-  try {
-    // Restituisci la mappa di equivalenza dei topic
-    res.json({
-      topics: Object.keys(topicNormalizer.topicEquivalents),
-      mappings: topicNormalizer.topicEquivalents
-    });
-  } catch (error) {
-    logger.error(`Error getting topic mappings: ${error.message}`);
-    res.status(500).json({ 
-      error: { 
-        message: 'Si è verificato un errore nel recupero delle mappature dei topic.',
-        code: 'TOPIC_MAP_ERROR'
-      } 
-    });
-  }
-});
+router.get('/topics/map', asyncHandler(async (req, res) => {
+  // Restituisci la mappa di equivalenza dei topic
+  res.json({
+    topics: Object.keys(topicNormalizer.topicEquivalents),
+    mappings: topicNormalizer.topicEquivalents
+  });
+}));
 
 // Get news sources
-router.get('/sources', async (req, res, next) => {
-  try {
-    const sources = newsService.getSources();
-    res.json(sources);
-  } catch (error) {
-    logger.error(`Error getting sources: ${error.message}`);
-    res.status(500).json({ 
-      error: { 
-        message: 'Si è verificato un errore nel recupero delle fonti. Riprova più tardi.',
-        code: 'SOURCES_ERROR'
-      } 
-    });
+router.get('/sources', asyncHandler(async (req, res) => {
+  const sources = newsService.getSources();
+  
+  // Se non ci sono sources, ritorna un array vuoto con status 200
+  res.json(sources.length === 0 ? [] : sources);
+}));
+
+// Nuova API per controllare lo stato di elaborazione dei topic
+router.get('/articles/:articleId/topics', [
+  validateParam('articleId', 'ID articolo non valido'),
+  sanitizeParam('articleId')
+], asyncHandler(async (req, res) => {
+  const { articleId } = req.params;
+  
+  // Verifica se l'articleId è valido 
+  if (!articleId || articleId.length < 5) {
+    throw createError(400, 'ID articolo non valido', 'INVALID_ARTICLE_ID');
   }
-});
+  
+  const asyncProcessor = require('../services/asyncProcessor');
+  const topics = asyncProcessor.getTopicsForArticle(articleId);
+  
+  res.json({ articleId, topics });
+}));
 
 module.exports = router;

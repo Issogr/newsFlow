@@ -14,7 +14,16 @@ const activeJobs = new Map();
 let isProcessing = false;
 
 // Intervallo di elaborazione in ms (più rapido = più CPU, più lento = meno reattivo)
-const PROCESSING_INTERVAL = 100;
+const PROCESSING_INTERVAL = parseInt(process.env.PROCESSING_INTERVAL || '100', 10);
+// Massimo numero di job attivi
+const MAX_ACTIVE_JOBS = parseInt(process.env.MAX_ACTIVE_JOBS || '500', 10);
+// Età massima in ms per i job completati (30 minuti)
+const MAX_JOB_AGE = parseInt(process.env.MAX_JOB_AGE || '1800000', 10);
+// Priorità per tipologia di job
+const JOB_PRIORITIES = {
+  'topic_deduction': 1,
+  'default': 10
+};
 
 /**
  * Avvia un job asincrono per dedurre i topic di un articolo
@@ -24,8 +33,14 @@ const PROCESSING_INTERVAL = 100;
  * @returns {string[]} - Array di topic esistenti o vuoto (i topic dedotti saranno aggiunti in modo asincrono)
  */
 function startTopicDeduction(articleId, article, language) {
-  // Se l'articolo ha già almeno 2 topic, non avviare un nuovo job
-  if (article.topics && Array.isArray(article.topics) && article.topics.length >= 2) {
+  // Validazione input
+  if (!articleId || !article || !article.title) {
+    logger.warn(`Invalid input for topic deduction job: ${articleId}`);
+    return [];
+  }
+  
+  // Se l'articolo ha già almeno 3 topic, non avviare un nuovo job
+  if (article.topics && Array.isArray(article.topics) && article.topics.length >= 3) {
     return article.topics;
   }
   
@@ -34,14 +49,34 @@ function startTopicDeduction(articleId, article, language) {
     return article.topics || [];
   }
   
+  // Limita il numero di job attivi per prevenire memory leak
+  if (activeJobs.size >= MAX_ACTIVE_JOBS) {
+    cleanupCompletedJobs(true); // Pulizia forzata
+    
+    // Se siamo ancora oltre il limite, non creare nuovi job
+    if (activeJobs.size >= MAX_ACTIVE_JOBS) {
+      logger.warn(`Too many active jobs (${activeJobs.size}/${MAX_ACTIVE_JOBS}), skipping topic deduction for ${articleId}`);
+      return article.topics || [];
+    }
+  }
+  
   // Crea un nuovo job
   const job = {
     id: articleId,
-    article,
+    article: {
+      id: article.id,
+      title: article.title,
+      description: article.description || '',
+      language: language
+    }, // Memorizza solo i campi necessari per dedurre i topic
+    type: 'topic_deduction',
+    priority: JOB_PRIORITIES['topic_deduction'],
     language,
     status: 'pending',
     createdAt: Date.now(),
-    result: article.topics || []
+    result: article.topics || [],
+    attempts: 0,
+    maxAttempts: 2
   };
   
   // Salva il job nella memoria
@@ -71,7 +106,8 @@ async function processNextJob() {
   
   isProcessing = true;
   
-  // Estrai il prossimo job dalla coda
+  // Ordina per priorità e prendi il prossimo job
+  topicDeductionQueue.sort((a, b) => a.priority - b.priority);
   const job = topicDeductionQueue.shift();
   
   try {
@@ -79,7 +115,13 @@ async function processNextJob() {
     if (activeJobs.has(job.id)) {
       const updatedJob = activeJobs.get(job.id);
       updatedJob.status = 'processing';
+      updatedJob.attempts += 1;
+      updatedJob.processingStartedAt = Date.now();
       activeJobs.set(job.id, updatedJob);
+    } else {
+      // Se il job non esiste più (pulizia), passa al prossimo
+      setImmediate(processNextJob);
+      return;
     }
     
     // Esegui la deduzione dei topic con timeout di sicurezza
@@ -100,10 +142,33 @@ async function processNextJob() {
       
       // Fallback: usa il metodo statico se Ollama fallisce
       deducedTopics = deduceTopicsStatically(job.article);
+      
+      // Se siamo all'ultimo tentativo, registra l'errore
+      if (job.attempts >= job.maxAttempts) {
+        logger.error(`Final attempt failed for job ${job.id}: ${error.message}`);
+      } else {
+        // Altrimenti rimetti in coda con priorità inferiore 
+        // per un nuovo tentativo, ma solo se abbiamo pochi topic
+        if (existingTopics.length < 2 && deducedTopics.length < 1) {
+          const retryJob = {...job, priority: job.priority + 5};
+          topicDeductionQueue.push(retryJob);
+        }
+      }
     }
     
-    // Combina i topic esistenti con quelli dedotti e rimuovi duplicati
-    const combinedTopics = [...new Set([...existingTopics, ...deducedTopics])];
+    // Combina i topic esistenti con quelli dedotti e rimuovi duplicati (case-insensitive)
+    const caseFoldedSet = new Set();
+    const combinedTopics = [];
+    
+    [...existingTopics, ...deducedTopics].forEach(topic => {
+      if (!topic) return;
+      
+      const lowerTopic = topic.toLowerCase();
+      if (!caseFoldedSet.has(lowerTopic)) {
+        caseFoldedSet.add(lowerTopic);
+        combinedTopics.push(topic);
+      }
+    });
     
     // Aggiorna lo stato del job con il risultato
     if (activeJobs.has(job.id)) {
@@ -126,6 +191,7 @@ async function processNextJob() {
       const updatedJob = activeJobs.get(job.id);
       updatedJob.status = 'error';
       updatedJob.error = error.message;
+      updatedJob.completedAt = Date.now();
       activeJobs.set(job.id, updatedJob);
     }
   }
@@ -141,10 +207,10 @@ async function processNextJob() {
  * @param {string[]} topics - Nuovi topic
  */
 function updateArticleTopics(articleId, topics) {
-  // In mancanza della cache, qui non facciamo nulla.
-  // Nella realtà, dovremmo fornire un sistema per aggiornare l'articolo originale
-  // o implementare un modo per avvertire i client dell'aggiornamento (es: websocket)
-  logger.info(`Topics updated for article ${articleId}: ${topics.join(', ')}`);
+  // Questa funzione è di fatto un noop, ma pronta per future estensioni
+  // come un sistema di websocket o event bus
+  
+  logger.debug(`Topics updated for article ${articleId}: ${topics.join(', ')}`);
 }
 
 /**
@@ -158,14 +224,33 @@ function deduceTopicsStatically(article) {
   if (!article || !article.title) return topics;
   
   // Testo da analizzare
-  const text = `${article.title} ${article.description || ''} ${article.content || ''}`.toLowerCase();
+  const text = `${article.title} ${article.description || ''}`.toLowerCase();
   
-  // Verifica le equivalenze in tutte le lingue
+  // Verifica le equivalenze in tutte le lingue con un approccio più preciso
+  // Per evitare falsi positivi, richiede una corrispondenza più forte
+  const wordsInText = text.split(/\s+/);
+  
   Object.entries(topicNormalizer.topicEquivalents).forEach(([normalizedTopic, variants]) => {
     for (const variant of variants) {
-      if (text.includes(variant.toLowerCase())) {
+      // Per varianti di 1-2 caratteri richiedi match esatto della parola
+      if (variant.length <= 2) {
+        if (wordsInText.includes(variant)) {
+          topics.push(normalizedTopic);
+          break;
+        }
+      } 
+      // Per varianti brevi (3-4 caratteri) richiedi match all'inizio di una parola o parola esatta
+      else if (variant.length <= 4) {
+        const variantRegex = new RegExp(`\\b${variant}\\w*\\b`, 'i');
+        if (variantRegex.test(text)) {
+          topics.push(normalizedTopic);
+          break;
+        }
+      }
+      // Per varianti più lunghe controlla inclusione normale
+      else if (text.includes(variant.toLowerCase())) {
         topics.push(normalizedTopic);
-        break; // Una volta trovata una corrispondenza per questo topic, passa al prossimo
+        break;
       }
     }
   });
@@ -181,31 +266,63 @@ function deduceTopicsStatically(article) {
 function getTopicsForArticle(articleId) {
   const job = activeJobs.get(articleId);
   
-  if (job && (job.status === 'completed' || job.status === 'error')) {
+  if (job) {
     return job.result || [];
   }
   
   return [];
 }
 
-// Funzione per pulire periodicamente i job completati, per gestire la memoria
-function cleanupCompletedJobs() {
-  const MAX_AGE_MS = 30 * 60 * 1000; // 30 minuti
+/**
+ * Pulisce i job completati dalla memoria
+ * @param {boolean} force - Se true, forza una pulizia anche per job recenti
+ */
+function cleanupCompletedJobs(force = false) {
+  const MAX_AGE_MS = force ? 60 * 1000 : MAX_JOB_AGE; // 1 minuto in caso di force, altrimenti 30 minuti
   const now = Date.now();
+  let deletedCount = 0;
   
   for (const [jobId, job] of activeJobs.entries()) {
+    // Rimuovi job completati o in errore che sono più vecchi di MAX_AGE_MS
     if ((job.status === 'completed' || job.status === 'error') && 
         job.completedAt && 
         (now - job.completedAt > MAX_AGE_MS)) {
       activeJobs.delete(jobId);
+      deletedCount++;
     }
+    
+    // Rimuovi job bloccati (timeout su processing)
+    if (job.status === 'processing' && 
+        job.processingStartedAt && 
+        (now - job.processingStartedAt > 60000)) { // 1 minuto di timeout
+      activeJobs.delete(jobId);
+      deletedCount++;
+    }
+    
+    // Rimuovi job troppo vecchi
+    if (job.createdAt && (now - job.createdAt > 3600000)) { // 1 ora max vita
+      activeJobs.delete(jobId);
+      deletedCount++;
+    }
+  }
+  
+  if (deletedCount > 0) {
+    logger.info(`Cleaned up ${deletedCount} completed/stuck jobs. Active jobs: ${activeJobs.size}`);
   }
 }
 
-// Esegui la pulizia ogni 15 minuti
-setInterval(cleanupCompletedJobs, 15 * 60 * 1000);
+// Esegui la pulizia ogni 5 minuti
+const cleanupInterval = setInterval(cleanupCompletedJobs, 5 * 60 * 1000);
+
+// Assicurati che l'interval sia terminato quando il processo termina
+process.on('exit', () => {
+  clearInterval(cleanupInterval);
+});
 
 module.exports = {
   startTopicDeduction,
-  getTopicsForArticle
+  getTopicsForArticle,
+  // Espone queste funzioni per i test
+  _cleanupCompletedJobs: cleanupCompletedJobs,
+  _getActiveJobsCount: () => activeJobs.size
 };

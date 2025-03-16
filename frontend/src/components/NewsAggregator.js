@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, Globe, RefreshCw, Code } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Search, Filter, Globe, RefreshCw } from 'lucide-react';
 import { fetchNews, searchNews, fetchHotTopics, fetchSources, fetchTopicMap } from '../services/api';
 import ErrorMessage from './ErrorMessage';
+import NewsCard from './NewsCard';
 import topicHelper from '../utils/topicHelper';
 
 // Componente principale dell'applicazione
 const NewsAggregator = () => {
+  // Stati principali
   const [news, setNews] = useState([]);
   const [filteredNews, setFilteredNews] = useState([]);
   const [sources, setSources] = useState([]);
@@ -17,13 +19,11 @@ const NewsAggregator = () => {
     topics: []
   });
   const [searchQuery, setSearchQuery] = useState('');
-  const [showDiff, setShowDiff] = useState(null);
   const [hotTopics, setHotTopics] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [topicMappings, setTopicMappings] = useState(null);
 
   // Funzione per recuperare le notizie dal backend
-  const loadNews = async () => {
+  const loadNews = useCallback(async () => {
     setLoading(true);
     setError(null);
     
@@ -36,13 +36,12 @@ const NewsAggregator = () => {
       let topicMapData = null;
       try {
         topicMapData = await fetchTopicMap();
-        setTopicMappings(topicMapData);
         topicHelper.setTopicMappings(topicMapData.mappings);
       } catch (topicMapError) {
         console.error('Errore nel caricamento della mappa dei topic:', topicMapError);
       }
       
-      // Prova a caricare i topic caldi, ma non bloccare l'interfaccia se fallisce
+      // Prova a caricare i topic caldi
       let hotTopicsData = [];
       try {
         hotTopicsData = await fetchHotTopics();
@@ -50,7 +49,7 @@ const NewsAggregator = () => {
         console.error('Errore nel caricamento dei topic caldi:', topicError);
       }
       
-      // Estrai i topic unici (già normalizzati dal backend)
+      // Estrai i topic unici
       const uniqueTopics = topicHelper.extractUniqueTopics(newsData);
       
       // Estrai tutte le fonti uniche
@@ -69,10 +68,10 @@ const NewsAggregator = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Funzione per gestire la ricerca
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) {
       // Se la query è vuota, mostra tutte le notizie
       setFilteredNews(news);
@@ -91,7 +90,45 @@ const NewsAggregator = () => {
       // Filtra per fonti
       if (activeFilters.sources.length > 0) {
         filtered = filtered.filter(group => 
-          group.items.some(item => activeFilters.sources.includes(item.source))
+          group.items && group.items.some(item => activeFilters.sources.includes(item.source))
+        );
+      }
+      
+      // Filtra per argomenti - usando il topicHelper per la normalizzazione
+      if (activeFilters.topics.length > 0) {
+        filtered = filtered.filter(group => 
+          activeFilters.topics.some(topic => topicHelper.groupHasTopic(group, topic))
+        );
+      }
+      
+      setFilteredNews(filtered);
+    } catch (error) {
+      console.error("Errore nella ricerca:", error);
+      // Mostra un messaggio di errore meno invasivo per errori di ricerca
+      alert(`Errore durante la ricerca: ${error.message || 'Riprova più tardi'}`);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [searchQuery, news, activeFilters]);
+
+  // Effetto per caricare le notizie all'avvio
+  useEffect(() => {
+    loadNews();
+  }, [loadNews]);
+
+  // Effetto per gestire i filtri (quando cambiano i filtri o le notizie)
+  useEffect(() => {
+    // Gestisce i filtri immediati (senza ricerca)
+    if (!searchQuery.trim()) {
+      // Se non ci sono notizie, non fare nulla
+      if (!news.length) return;
+      
+      let filtered = [...news];
+      
+      // Filtra per fonti
+      if (activeFilters.sources.length > 0) {
+        filtered = filtered.filter(group => 
+          group.items && group.items.some(item => activeFilters.sources.includes(item.source))
         );
       }
       
@@ -103,44 +140,8 @@ const NewsAggregator = () => {
       }
       
       setFilteredNews(filtered);
-    } catch (error) {
-      console.error("Errore nella ricerca:", error);
-      // Non impostiamo setError qui perché vogliamo mostrare un errore nella UI solo per errori critici
-      // Per errori di ricerca, potremmo mostrare un messaggio meno invasivo
-      alert("Errore durante la ricerca. Riprova più tardi.");
-    } finally {
-      setIsSearching(false);
     }
-  };
-
-  // Effetto per caricare le notizie all'avvio
-  useEffect(() => {
-    loadNews();
-  }, []);
-
-  // Effetto per gestire i filtri (quando cambiano i filtri o le notizie)
-  useEffect(() => {
-    // Gestisce i filtri immediati (senza ricerca)
-    if (!searchQuery.trim()) {
-      let filtered = [...news];
-      
-      // Filtra per fonti
-      if (activeFilters.sources.length > 0) {
-        filtered = filtered.filter(group => 
-          group.items.some(item => activeFilters.sources.includes(item.source))
-        );
-      }
-      
-      // Filtra per argomenti (usando il helper che gestisce le varianti dei topic)
-      if (activeFilters.topics.length > 0) {
-        filtered = filtered.filter(group => 
-          activeFilters.topics.some(topic => topicHelper.groupHasTopic(group, topic))
-        );
-      }
-      
-      setFilteredNews(filtered);
-    }
-  }, [news, activeFilters]);
+  }, [news, activeFilters, searchQuery]);
 
   // Effetto per eseguire la ricerca quando cambia la query
   useEffect(() => {
@@ -148,95 +149,59 @@ const NewsAggregator = () => {
     const timeoutId = setTimeout(() => {
       if (searchQuery.trim()) {
         handleSearch();
+      } else if (searchQuery === '') {
+        // Se la query è vuota, resetta i risultati di ricerca
+        setFilteredNews(news);
       }
     }, 500);
     
     return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
+  }, [searchQuery, handleSearch, news]);
 
   // Gestisce il toggle di un filtro
-  const toggleFilter = (type, value) => {
+  const toggleFilter = useCallback((type, value) => {
+    if (!value || typeof value !== 'string') return;
+    
     setActiveFilters(prev => {
       const newFilters = { ...prev };
-      if (newFilters[type].includes(value)) {
-        newFilters[type] = newFilters[type].filter(item => item !== value);
+      
+      // Verifica se il valore esiste già (case-insensitive)
+      const valueIndex = newFilters[type].findIndex(
+        item => item.toLowerCase() === value.toLowerCase()
+      );
+      
+      if (valueIndex >= 0) {
+        newFilters[type] = [
+          ...newFilters[type].slice(0, valueIndex),
+          ...newFilters[type].slice(valueIndex + 1)
+        ];
       } else {
         newFilters[type] = [...newFilters[type], value];
       }
+      
       return newFilters;
     });
-  };
+  }, []);
 
   // Gestisce il reset dei filtri
-  const resetFilters = () => {
+  const resetFilters = useCallback(() => {
     setActiveFilters({ sources: [], topics: [] });
     setSearchQuery('');
-  };
+  }, []);
 
-  // Funzione per generare il diff tra due testi
-  const generateDiff = (text1, text2) => {
-    // In un'implementazione reale, utilizzeremmo una libreria come diff o jsdiff
-    // Questa è una versione semplificata
-    
-    const words1 = text1.split(/\s+/);
-    const words2 = text2.split(/\s+/);
-    
-    const result = [];
-    let i = 0, j = 0;
-    
-    while (i < words1.length || j < words2.length) {
-      if (i >= words1.length) {
-        // Testo 2 ha più parole
-        result.push({ type: 'added', text: words2.slice(j).join(' ') });
-        break;
-      } else if (j >= words2.length) {
-        // Testo 1 ha più parole
-        result.push({ type: 'removed', text: words1.slice(i).join(' ') });
-        break;
-      } else if (words1[i] === words2[j]) {
-        // Parole identiche
-        result.push({ type: 'unchanged', text: words1[i] });
-        i++;
-        j++;
-      } else {
-        // Parole diverse
-        let foundMatch = false;
-        
-        // Cerca la prossima corrispondenza
-        for (let k = 1; k < 5 && i + k < words1.length; k++) {
-          if (words1[i + k] === words2[j]) {
-            // Trovata corrispondenza più avanti nel testo 1
-            result.push({ type: 'removed', text: words1.slice(i, i + k).join(' ') });
-            i += k;
-            foundMatch = true;
-            break;
-          }
-        }
-        
-        if (!foundMatch) {
-          for (let k = 1; k < 5 && j + k < words2.length; k++) {
-            if (words1[i] === words2[j + k]) {
-              // Trovata corrispondenza più avanti nel testo 2
-              result.push({ type: 'added', text: words2.slice(j, j + k).join(' ') });
-              j += k;
-              foundMatch = true;
-              break;
-            }
-          }
-        }
-        
-        if (!foundMatch) {
-          // Nessuna corrispondenza trovata nelle prossime parole
-          result.push({ type: 'removed', text: words1[i] });
-          result.push({ type: 'added', text: words2[j] });
-          i++;
-          j++;
-        }
-      }
-    }
-    
-    return result;
-  };
+  // Ordina le notizie per data più recente
+  const sortByDate = useCallback(() => {
+    const sorted = [...filteredNews].sort((a, b) => 
+      new Date(b.pubDate) - new Date(a.pubDate)
+    );
+    setFilteredNews(sorted);
+  }, [filteredNews]);
+
+  // Memorizza il calcolo della visibilità dei filtri attivi
+  const hasActiveFilters = useMemo(() => 
+    activeFilters.sources.length > 0 || activeFilters.topics.length > 0, 
+    [activeFilters]
+  );
 
   return (
     <div className="flex flex-col h-screen bg-gray-100">
@@ -244,16 +209,17 @@ const NewsAggregator = () => {
       <header className="bg-blue-600 text-white p-4 shadow-md">
         <div className="container mx-auto flex justify-between items-center">
           <h1 className="text-2xl font-bold flex items-center">
-            <Globe className="mr-2" />
+            <Globe className="mr-2" aria-hidden="true" />
             Aggregatore di Notizie
           </h1>
           <div className="flex items-center">
             <button 
               onClick={loadNews} 
-              className="flex items-center bg-blue-700 hover:bg-blue-800 p-2 rounded"
+              className="flex items-center bg-blue-700 hover:bg-blue-800 p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-white"
               disabled={loading}
+              aria-label={loading ? 'Caricamento in corso...' : 'Aggiorna le notizie'}
             >
-              <RefreshCw className={`mr-1 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`mr-1 h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
               {loading ? 'Caricamento...' : 'Aggiorna'}
             </button>
           </div>
@@ -267,37 +233,40 @@ const NewsAggregator = () => {
             {/* Ricerca */}
             <div className="relative flex-grow">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center">
-                <Search className="h-5 w-5 text-gray-400" />
+                <Search className="h-5 w-5 text-gray-400" aria-hidden="true" />
               </div>
               <input
                 type="text"
                 placeholder="Cerca in tutto il database..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full border rounded"
-                disabled={loading || error}
+                className="pl-10 pr-4 py-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={loading || Boolean(error)}
+                aria-label="Cerca notizie"
               />
               {isSearching && (
                 <div className="absolute inset-y-0 right-3 flex items-center">
-                  <div className="animate-spin h-4 w-4 border-t-2 border-blue-500 rounded-full"></div>
+                  <div className="animate-spin h-4 w-4 border-t-2 border-blue-500 rounded-full" aria-hidden="true"></div>
                 </div>
               )}
             </div>
             
             {/* Filtri */}
             <div className="flex items-center gap-2">
-              <div className="bg-gray-100 p-2 rounded flex items-center">
+              <div className="bg-gray-100 p-2 rounded flex items-center" aria-hidden="true">
                 <Filter className="h-4 w-4 mr-1 text-gray-500" />
                 <span className="text-sm text-gray-600">Filtri:</span>
               </div>
               
               {/* Dropdown per fonti */}
               <div className="relative">
+                <label htmlFor="source-filter" className="sr-only">Filtra per fonte</label>
                 <select 
-                  className="appearance-none bg-white border rounded p-2 pr-8 text-sm"
+                  id="source-filter"
+                  className="appearance-none bg-white border rounded p-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   onChange={(e) => toggleFilter('sources', e.target.value)}
                   value=""
-                  disabled={loading || error}
+                  disabled={loading || Boolean(error)}
                 >
                   <option value="" disabled>Fonti</option>
                   {sources.map(source => (
@@ -308,11 +277,13 @@ const NewsAggregator = () => {
               
               {/* Dropdown per argomenti */}
               <div className="relative">
+                <label htmlFor="topic-filter" className="sr-only">Filtra per argomento</label>
                 <select 
-                  className="appearance-none bg-white border rounded p-2 pr-8 text-sm"
+                  id="topic-filter"
+                  className="appearance-none bg-white border rounded p-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   onChange={(e) => toggleFilter('topics', e.target.value)}
                   value=""
-                  disabled={loading || error}
+                  disabled={loading || Boolean(error)}
                 >
                   <option value="" disabled>Argomenti</option>
                   {topics.map(topic => (
@@ -324,8 +295,9 @@ const NewsAggregator = () => {
               {/* Pulsante reset filtri */}
               <button 
                 onClick={resetFilters}
-                className="bg-gray-200 hover:bg-gray-300 p-2 rounded text-sm"
-                disabled={loading || error}
+                className="bg-gray-200 hover:bg-gray-300 p-2 rounded text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500"
+                disabled={loading || Boolean(error)}
+                aria-label="Reimposta tutti i filtri"
               >
                 Reset
               </button>
@@ -333,14 +305,15 @@ const NewsAggregator = () => {
           </div>
           
           {/* Filtri attivi */}
-          {(activeFilters.sources.length > 0 || activeFilters.topics.length > 0) && (
-            <div className="mt-2 flex flex-wrap gap-2">
+          {hasActiveFilters && (
+            <div className="mt-2 flex flex-wrap gap-2" role="region" aria-label="Filtri attivi">
               {activeFilters.sources.map(source => (
                 <div key={source} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm flex items-center">
                   {source}
                   <button 
                     onClick={() => toggleFilter('sources', source)}
-                    className="ml-1 text-blue-500 hover:text-blue-700"
+                    className="ml-1 text-blue-500 hover:text-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded-full"
+                    aria-label={`Rimuovi filtro fonte: ${source}`}
                   >
                     ×
                   </button>
@@ -351,7 +324,8 @@ const NewsAggregator = () => {
                   {topic}
                   <button 
                     onClick={() => toggleFilter('topics', topic)}
-                    className="ml-1 text-green-500 hover:text-green-700"
+                    className="ml-1 text-green-500 hover:text-green-700 focus:outline-none focus:ring-1 focus:ring-green-500 rounded-full"
+                    aria-label={`Rimuovi filtro argomento: ${topic}`}
                   >
                     ×
                   </button>
@@ -366,15 +340,10 @@ const NewsAggregator = () => {
               <div className="flex flex-wrap gap-2">
                 {/* Filtro per le notizie più recenti */}
                 <button 
-                  onClick={() => {
-                    // Ordina le notizie per data (più recenti prima)
-                    const sorted = [...news].sort((a, b) => 
-                      new Date(b.pubDate) - new Date(a.pubDate)
-                    );
-                    setFilteredNews(sorted);
-                  }}
-                  className="bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center"
-                  disabled={loading || error}
+                  onClick={sortByDate}
+                  className="bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  disabled={loading || Boolean(error)}
+                  aria-label="Ordina per più recenti"
                 >
                   Più recenti
                 </button>
@@ -385,11 +354,17 @@ const NewsAggregator = () => {
                     key={topic}
                     onClick={() => toggleFilter('topics', topic)}
                     className={`${
-                      activeFilters.topics.includes(topic) 
+                      activeFilters.topics.some(t => t.toLowerCase() === topic.toLowerCase())
                         ? 'bg-green-500 text-white' 
                         : 'bg-green-100 text-green-800 hover:bg-green-200'
-                    } px-3 py-1 rounded-full text-sm flex items-center`}
-                    disabled={loading || error}
+                    } px-3 py-1 rounded-full text-sm flex items-center transition-colors focus:outline-none focus:ring-2 focus:ring-green-500`}
+                    disabled={loading || Boolean(error)}
+                    aria-label={
+                      activeFilters.topics.some(t => t.toLowerCase() === topic.toLowerCase())
+                        ? `Rimuovi filtro topic: ${topic}`
+                        : `Filtra per topic: ${topic}`
+                    }
+                    aria-pressed={activeFilters.topics.some(t => t.toLowerCase() === topic.toLowerCase())}
                   >
                     {topic}
                   </button>
@@ -404,7 +379,7 @@ const NewsAggregator = () => {
       <main className="flex-grow overflow-auto p-4">
         <div className="container mx-auto">
           {loading ? (
-            <div className="flex justify-center items-center h-64">
+            <div className="flex justify-center items-center h-64" role="status" aria-label="Caricamento notizie in corso">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
             </div>
           ) : error ? (
@@ -420,118 +395,12 @@ const NewsAggregator = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredNews.map(group => (
-                <div key={group.id} className="bg-white rounded-lg shadow overflow-hidden">
-                  {/* Intestazione card */}
-                  <div className="p-4">
-                    <h2 className="text-lg font-semibold">{group.title}</h2>
-                    <p className="text-gray-600 mt-1">{group.description}</p>
-                    
-                    {/* Fonti e data */}
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {group.sources.map(source => (
-                        <span key={source} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
-                          {source}
-                        </span>
-                      ))}
-                      <span className="text-gray-500 text-xs ml-auto">
-                        {new Date(group.pubDate).toLocaleDateString('it-IT', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </span>
-                    </div>
-                    
-                    {/* Argomenti */}
-                    {group.topics && group.topics.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {group.topics.map(topic => (
-                          <span 
-                            key={topic} 
-                            className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs cursor-pointer hover:bg-green-200"
-                            onClick={() => {
-                              if (!activeFilters.topics.includes(topic)) {
-                                toggleFilter('topics', topic);
-                              }
-                            }}
-                          >
-                            {topic}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Anteprima contenuto */}
-                  <div className="px-4 pb-2">
-                    <p className="text-gray-700">
-                      {group.items[0].content && group.items[0].content.substring(0, 150)}
-                      {group.items[0].content && group.items[0].content.length > 150 ? '...' : ''}
-                    </p>
-                  </div>
-                  
-                  {/* Pulsanti azioni */}
-                  <div className="px-4 pb-4 flex justify-between">
-                    <a
-                      href={group.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                    >
-                      Leggi di più
-                    </a>
-                    
-                    {/* Pulsante Diff (solo se ci sono più fonti) */}
-                    {group.items.length > 1 && (
-                      <button
-                        onClick={() => setShowDiff(showDiff === group.id ? null : group.id)}
-                        className="flex items-center text-purple-600 hover:text-purple-800 text-sm font-medium"
-                      >
-                        <Code className="h-4 w-4 mr-1" />
-                        {showDiff === group.id ? 'Nascondi diff' : 'Mostra diff'}
-                      </button>
-                    )}
-                  </div>
-                  
-                  {/* Sezione Diff */}
-                  {showDiff === group.id && group.items.length > 1 && (
-                    <div className="border-t border-gray-200 p-4 bg-gray-50">
-                      <h3 className="text-sm font-semibold mb-2">Differenze nel contenuto:</h3>
-                      
-                      {group.items.slice(0, 2).map((item, idx, items) => {
-                        // Mostro il diff solo per i primi due articoli per semplicità
-                        if (idx === 0 && items.length > 1) {
-                          const diff = generateDiff(item.content, items[1].content);
-                          
-                          return (
-                            <div key={item.id} className="text-sm">
-                              <div className="flex justify-between mb-1">
-                                <span className="font-medium">{item.source} vs {items[1].source}</span>
-                              </div>
-                              <div className="bg-white p-2 rounded border text-xs font-mono whitespace-pre-wrap">
-                                {diff.map((part, partIdx) => (
-                                  <span 
-                                    key={partIdx} 
-                                    className={`
-                                      ${part.type === 'unchanged' ? 'text-gray-800' : ''}
-                                      ${part.type === 'added' ? 'bg-green-100 text-green-800' : ''}
-                                      ${part.type === 'removed' ? 'bg-red-100 text-red-800' : ''}
-                                    `}
-                                  >
-                                    {part.text}{' '}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })}
-                    </div>
-                  )}
-                </div>
+                <NewsCard 
+                  key={group.id} 
+                  group={group}
+                  activeFilters={activeFilters}
+                  toggleFilter={toggleFilter}
+                />
               ))}
             </div>
           )}
@@ -542,7 +411,7 @@ const NewsAggregator = () => {
       <footer className="bg-gray-800 text-white p-4">
         <div className="container mx-auto text-center text-sm">
           <p>Aggregatore di Notizie - Creato con React</p>
-          <p className="mt-1 text-gray-400">Caratteristiche avanzate: algoritmo TF-IDF per il raggruppamento delle notizie e aggiornamenti in tempo reale.</p>
+          <p className="mt-1 text-gray-400">Caratteristiche avanzate: algoritmo di raggruppamento delle notizie e aggiornamenti in tempo reale.</p>
         </div>
       </footer>
     </div>

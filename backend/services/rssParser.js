@@ -2,41 +2,100 @@ const RSSParser = require('rss-parser');
 const axios = require('axios');
 const logger = require('../utils/logger');
 const ollamaService = require('./ollamaService');
-const topicNormalizer = require('./topicNormalizer'); // Mantenuto come fallback
+const topicNormalizer = require('./topicNormalizer');
 const asyncProcessor = require('./asyncProcessor');
+const { sanitizeHtml } = require('../utils/inputValidator');
 
 // Configurazione dal environment
 const MAX_ARTICLES_PER_SOURCE = parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '10', 10);
+const RSS_MAX_RETRIES = parseInt(process.env.RSS_MAX_RETRIES || '5', 10);
+const RSS_RETRY_DELAY = parseInt(process.env.RSS_RETRY_DELAY || '2000', 10);
 
+// Configurazione avanzata del parser RSS
 const parser = new RSSParser({
   customFields: {
     item: [
       ['media:content', 'media'],
       ['media:thumbnail', 'thumbnail'],
       ['dc:creator', 'creator'],
-      ['dc:date', 'dcdate']
-    ]
+      ['dc:date', 'dcdate'],
+      ['content:encoded', 'contentEncoded']
+    ],
+    feedUrl: 'feedUrl',
+    lastBuildDate: 'lastBuildDate'
   },
-  timeout: 10000,
+  timeout: 15000, // 15 secondi di timeout
   headers: {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
   }
 });
 
-// Function to fetch and parse an RSS feed
+/**
+ * Esegue una richiesta HTTP con retry in caso di errore
+ * @param {string} url - URL da recuperare
+ * @param {Object} options - Opzioni axios
+ * @returns {Promise<Object>} - Promise con la risposta
+ */
+async function fetchWithRetry(url, options) {
+  let lastError;
+  let retryCount = 0;
+  
+  while (retryCount < RSS_MAX_RETRIES) {
+    try {
+      return await axios.get(url, options);
+    } catch (error) {
+      lastError = error;
+      retryCount++;
+      
+      // Determina se rifare la richiesta
+      const shouldRetry = retryCount < RSS_MAX_RETRIES && (
+        error.code === 'ECONNRESET' ||
+        error.code === 'ETIMEDOUT' ||
+        error.code === 'ECONNABORTED' ||
+        (error.response && (error.response.status >= 500 || error.response.status === 429))
+      );
+      
+      if (!shouldRetry) break;
+      
+      // Calcola il tempo di attesa con exponential backoff e jitter
+      const delay = Math.min(
+        RSS_RETRY_DELAY * Math.pow(2, retryCount - 1) + Math.random() * 1000,
+        30000 // Max 30 secondi
+      );
+      
+      logger.warn(`Retry ${retryCount}/${RSS_MAX_RETRIES} per ${url} dopo ${Math.round(delay)}ms - Errore: ${error.message}`);
+      
+      // Attendi prima del prossimo tentativo
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  // Se arriviamo qui, abbiamo esaurito i tentativi
+  throw lastError;
+}
+
+/**
+ * Funzione per recuperare e parsare un feed RSS
+ * @param {Object} source - Configurazione della fonte
+ * @returns {Promise<Array>} - Array di articoli parsati
+ */
 async function parseFeed(source) {
   try {
     logger.info(`Fetching feed from ${source.name} (${source.url})`);
     
-    // Imposta un timeout più lungo per le richieste HTTP
-    const response = await axios.get(source.url, {
+    // Imposta opzioni avanzate con retry
+    const options = {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Accept': 'application/rss+xml, application/xml, text/xml, */*'
       },
       timeout: 15000, // 15 seconds timeout
-      validateStatus: status => status < 500 // Accetta anche risposte 3xx e 4xx
-    });
+      validateStatus: status => status < 500, // Accetta anche risposte 3xx e 4xx
+      responseType: 'text' // Specifica il tipo di risposta come testo per evitare problemi di encoding
+    };
+    
+    // Fetch con retry
+    const response = await fetchWithRetry(source.url, options);
     
     // Verifica se la risposta contiene dati validi
     if (!response.data) {
@@ -45,11 +104,18 @@ async function parseFeed(source) {
     
     logger.info(`Successfully fetched feed from ${source.name}, parsing...`);
     
-    // Parsing dell'XML
-    const feed = await parser.parseString(response.data);
+    // Parsing dell'XML con gestione errori
+    let feed;
+    try {
+      feed = await parser.parseString(response.data);
+    } catch (parseError) {
+      logger.error(`Error parsing XML from ${source.name}: ${parseError.message}`);
+      throw new Error(`Invalid RSS format: ${parseError.message}`);
+    }
     
+    // Validazione del feed
     if (!feed || !feed.items || !Array.isArray(feed.items)) {
-      throw new Error('Invalid feed format');
+      throw new Error('Invalid feed format: missing or invalid items');
     }
     
     logger.info(`Parsed feed from ${source.name}, found ${feed.items.length} items`);
@@ -61,18 +127,49 @@ async function parseFeed(source) {
     
     // Map feed items to standardized format
     const parsedItems = await Promise.all(recentItems.map(async item => {
+      // Validazione dell'item
+      if (!item.title) {
+        logger.warn(`Skipping item from ${source.name} with missing title`);
+        return null;
+      }
+      
+      // Assegna un ID univoco e stabile
+      const itemId = item.guid || item.id || 
+        `${source.id}-${Buffer.from(item.title).toString('base64').substring(0, 20)}-${(item.pubDate || new Date().toISOString()).substring(0, 10)}`;
+      
+      // Estrai il contenuto più completo disponibile
+      let content = '';
+      if (item.contentEncoded) {
+        content = sanitizeHtml(item.contentEncoded);
+      } else if (item.content) {
+        content = sanitizeHtml(item.content);
+      } else if (item['content:encoded']) {
+        content = sanitizeHtml(item['content:encoded']);
+      }
+      
       // Costruisci l'articolo base
       const article = {
-        id: item.guid || item.id || `${source.id}-${item.link}`,
-        title: item.title || 'No title',
-        description: item.description ? stripHtml(item.description) : '',
-        content: item.content ? stripHtml(item.content) : (item['content:encoded'] ? stripHtml(item['content:encoded']) : ''),
+        id: itemId,
+        title: item.title.trim(),
+        description: item.description ? sanitizeHtml(item.description.trim()) : '',
+        content: content,
         pubDate: item.pubDate || item.dcdate || item.isoDate || new Date().toISOString(),
         source: source.name,
         sourceId: source.id,
         url: item.link || '',
-        image: getImageUrl(item)
+        image: getImageUrl(item),
+        author: item.creator || item.author || null,
+        language: source.language
       };
+      
+      // Normalizza la data se necessario
+      if (!(article.pubDate instanceof Date) && typeof article.pubDate === 'string') {
+        try {
+          article.pubDate = new Date(article.pubDate).toISOString();
+        } catch (e) {
+          article.pubDate = new Date().toISOString();
+        }
+      }
       
       // Estrai i topic esistenti immediatamente (il resto sarà elaborato in modo asincrono)
       article.topics = await extractInitialTopics(item, article, source.language);
@@ -83,40 +180,51 @@ async function parseFeed(source) {
       return article;
     }));
     
-    return parsedItems;
+    // Filtra item nulli e con campi obbligatori mancanti
+    return parsedItems.filter(item => item !== null && item.title);
   } catch (error) {
     logger.error(`Error parsing feed from ${source.name} (${source.url}): ${error.message}`);
     return []; // Return empty array in case of error
   }
 }
 
-// Helper functions
-function stripHtml(html) {
-  if (!html || typeof html !== 'string') return '';
-  return html.replace(/<\/?[^>]+(>|$)/g, "").trim();
-}
-
+/**
+ * Estrae l'URL dell'immagine dall'item RSS
+ * @param {Object} item - Item RSS
+ * @returns {string|null} - URL dell'immagine o null
+ */
 function getImageUrl(item) {
   if (!item) return null;
   
   try {
+    // Estrai da media:content
     if (item.media && item.media.$ && item.media.$.url) {
       return item.media.$.url;
     }
+    
+    // Estrai da media:thumbnail
     if (item.thumbnail && item.thumbnail.$ && item.thumbnail.$.url) {
       return item.thumbnail.$.url;
     }
+    
+    // Estrai da enclosure
     if (item.enclosure && item.enclosure.url) {
       return item.enclosure.url;
     }
     
-    // Try to extract image from content
-    const contentToSearch = item.content || item['content:encoded'] || item.description || '';
+    // Estrai da content HTML
+    const contentToSearch = item.content || item['content:encoded'] || item.contentEncoded || item.description || '';
     
     if (typeof contentToSearch === 'string') {
-      const imgRegex = /<img.*?src=["'](.*?)["']/;
+      // Espressione regolare migliorata per estrarre URL immagini
+      const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/i;
       const match = contentToSearch.match(imgRegex);
-      return match ? match[1] : null;
+      if (match && match[1]) {
+        // Filtra URL relativi o non validi
+        if (match[1].startsWith('http')) {
+          return match[1];
+        }
+      }
     }
   } catch (err) {
     logger.error(`Error extracting image URL: ${err.message}`);
@@ -125,6 +233,13 @@ function getImageUrl(item) {
   return null;
 }
 
+/**
+ * Estrae i topic iniziali da un item RSS
+ * @param {Object} item - Item RSS
+ * @param {Object} article - Articolo normalizzato
+ * @param {string} language - Lingua dell'articolo
+ * @returns {Promise<Array>} - Array di topic
+ */
 async function extractInitialTopics(item, article, language = 'it') {
   if (!item) return [];
   
@@ -134,7 +249,7 @@ async function extractInitialTopics(item, article, language = 'it') {
   try {
     // Estrai dai tag o categorie dell'articolo se disponibili
     if (item.categories && Array.isArray(item.categories)) {
-      rawTopics.push(...item.categories.filter(cat => typeof cat === 'string'));
+      rawTopics.push(...item.categories.filter(cat => typeof cat === 'string' && cat.trim().length > 0));
     }
   } catch (err) {
     logger.error(`Error extracting raw topics: ${err.message}`);
@@ -146,25 +261,31 @@ async function extractInitialTopics(item, article, language = 'it') {
     return [];
   }
   
-  // Normalizza i topic esistenti rapidamente
+  // Normalizza i topic esistenti rapidamente - versione migliorata
   // Questa parte è sincrona e rapida per evitare timeout
-  let normalizedTopics;
+  let normalizedTopics = [];
   
-  // Se Ollama è disponibile e ci sono pochi topic, normalizza con Ollama
-  if (ollamaService.isAvailable() && rawTopics.length <= 2) {
+  // Prima verifica se Ollama è disponibile e ci sono pochi topic da normalizzare
+  if (ollamaService.isAvailable() && rawTopics.length <= 3) {
     try {
       // Imposta un timeout molto breve per la normalizzazione
       const normalizationPromises = rawTopics.map(topic => {
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Normalization timeout')), 500)
-        );
-        return Promise.race([ollamaService.normalizeTopic(topic, 'it'), timeoutPromise]);
+        // Promise.race tra la normalizzazione e un timeout
+        return Promise.race([
+          ollamaService.normalizeTopic(topic, language),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Normalization timeout')), 800))
+        ]).catch(err => {
+          // In caso di errore usa il normalizzatore statico come fallback
+          logger.debug(`Fallback to static normalizer for topic "${topic}": ${err.message}`);
+          return topicNormalizer.normalizeTopic(topic);
+        });
       });
       
       // Attendi la normalizzazione con timeout
       normalizedTopics = await Promise.all(normalizationPromises);
     } catch (err) {
-      // In caso di timeout o errore, usa il normalizzatore statico
+      // In caso di errore generale, usa il normalizzatore statico
+      logger.warn(`Error in Ollama topic normalization, using static: ${err.message}`);
       normalizedTopics = rawTopics.map(topic => topicNormalizer.normalizeTopic(topic));
     }
   } else {

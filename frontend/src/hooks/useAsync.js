@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 /**
  * Hook personalizzato per gestire operazioni asincrone con stati di caricamento ed errore
+ * Versione migliorata con gestione delle race condition e cleanup
  * 
  * @param {Function} asyncFn - Funzione asincrona da eseguire
  * @param {boolean} immediate - Se eseguire la funzione immediatamente
@@ -20,11 +21,26 @@ const useAsync = (asyncFn, immediate = true, options = {}) => {
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
   
+  // Ref per tracciare se il componente è montato
+  const isMounted = useRef(true);
+  
+  // Ref per la richiesta corrente (per gestire race condition)
+  const currentRequest = useRef(null);
+  
+  // Cleanup quando il componente si smonta
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+  
   // Reset dello stato
   const reset = useCallback(() => {
-    setStatus('idle');
-    setData(null);
-    setError(null);
+    if (isMounted.current) {
+      setStatus('idle');
+      setData(null);
+      setError(null);
+    }
   }, []);
   
   // Funzione per riprovare l'esecuzione
@@ -34,33 +50,46 @@ const useAsync = (asyncFn, immediate = true, options = {}) => {
   
   // Funzione principale per eseguire l'operazione asincrona
   const execute = useCallback(async (...args) => {
+    if (!isMounted.current) return;
+    
+    // Crea un ID univoco per questa richiesta
+    const requestId = Date.now();
+    currentRequest.current = requestId;
+    
     setStatus('pending');
     setData(null);
     setError(null);
     
     try {
       const result = await asyncFn(...args);
-      setData(result);
-      setStatus('success');
       
-      if (onSuccess) {
-        onSuccess(result);
+      // Verifica se questa è ancora la richiesta più recente e il componente è montato
+      if (currentRequest.current === requestId && isMounted.current) {
+        setData(result);
+        setStatus('success');
+        
+        if (onSuccess && typeof onSuccess === 'function') {
+          onSuccess(result);
+        }
       }
       
       return result;
     } catch (err) {
-      setError(err);
-      setStatus('error');
-      
-      if (onError) {
-        onError(err);
+      // Verifica se questa è ancora la richiesta più recente e il componente è montato
+      if (currentRequest.current === requestId && isMounted.current) {
+        setError(err);
+        setStatus('error');
+        
+        if (onError && typeof onError === 'function') {
+          onError(err);
+        }
       }
       
       throw err;
     }
   }, [asyncFn, onSuccess, onError]);
   
-  // Effetto per l'esecuzione immediata o quando cambia la funzione asincrona
+  // Effetto per l'esecuzione immediata o quando cambia la funzione asincrona o il contatore di retry
   useEffect(() => {
     if (immediate) {
       execute();
