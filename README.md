@@ -5,6 +5,7 @@ Un'applicazione moderna per l'aggregazione di notizie in tempo reale da fonti au
 ## 📋 Indice
 
 - [Caratteristiche principali](#caratteristiche-principali)
+- [Miglioramenti recenti](#miglioramenti-recenti)
 - [Architettura](#architettura)
 - [Tecnologie utilizzate](#tecnologie-utilizzate)
 - [Requisiti di sistema](#requisiti-di-sistema)
@@ -13,7 +14,6 @@ Un'applicazione moderna per l'aggregazione di notizie in tempo reale da fonti au
 - [Struttura del progetto](#struttura-del-progetto)
 - [API](#api)
 - [Configurazione avanzata](#configurazione-avanzata)
-- [Troubleshooting](#troubleshooting)
 - [Sviluppo futuro](#sviluppo-futuro)
 
 ## ✨ Caratteristiche principali
@@ -31,6 +31,58 @@ Un'applicazione moderna per l'aggregazione di notizie in tempo reale da fonti au
   - Cache lato client per migliorare le prestazioni anche offline
 - **Design responsive**: Interfaccia utente moderna che si adatta a qualsiasi dispositivo
 - **Aggiornamenti in tempo reale**: Dati sempre aggiornati dalle fonti originali
+- **Accessibilità migliorata**: Interfaccia completamente accessibile con supporto per screen reader e navigazione da tastiera
+- **Gestione errori avanzata**: Sistema standardizzato per gestire e visualizzare gli errori
+- **Sicurezza potenziata**: Sanitizzazione HTML e validazione input
+
+## 🚀 Miglioramenti recenti
+
+Le seguenti migliorie sono state implementate per aumentare la robustezza, l'accessibilità e le prestazioni dell'applicazione:
+
+1. **Standardizzazione della gestione degli errori**:
+   - Sistema centralizzato per formattazione e gestione errori
+   - Middleware per cattura automatica delle eccezioni
+   - Messaggi di errore più informativi e user-friendly
+
+2. **Sistema di retry per i feed RSS**:
+   - Implementazione di backoff esponenziale con jitter
+   - Riprova automatica in caso di fallimento della connessione
+   - Logging dettagliato degli errori di connessione
+
+3. **Parsing HTML più sicuro**:
+   - Implementazione di DOMPurify per la sanitizzazione dell'HTML
+   - Prevenzione di potenziali vulnerabilità XSS
+
+4. **Validazione dati migliorata**:
+   - Validazione dei parametri delle richieste con express-validator
+   - Sanitizzazione degli input per prevenire injection
+
+5. **Gestione asincrona migliorata**:
+   - Hook `useAsync` personalizzato per la gestione dello stato asincrono
+   - Gestione più efficiente dei caricamenti e degli errori
+
+6. **Ottimizzazione delle prestazioni React**:
+   - Implementazione di React.memo per prevenire re-render non necessari
+   - Uso di useMemo e useCallback per ottimizzare il calcolo di valori derivati
+
+7. **Accessibilità migliorata**:
+   - Aggiunta di attributi ARIA per supportare tecnologie assistive
+   - Miglioramento della navigazione da tastiera
+   - Contrasto dei colori adeguato alle linee guida WCAG
+
+8. **Container Docker ottimizzati**:
+   - Multi-stage build per ridurre le dimensioni delle immagini
+   - Configurazione di sicurezza migliorata
+   - Dockerfile più efficienti
+
+9. **Health check dei container**:
+   - Endpoint di health check per monitorare lo stato dell'applicazione
+   - Integrabile con sistemi di orchestrazione container
+
+10. **Logging avanzato**:
+    - Configurazione Winston migliorata per la rotazione dei log
+    - Gestione separata degli errori, eccezioni e promise rifiutate
+    - Formattazione JSON per una migliore integrazione con strumenti di analisi
 
 ## 🏗 Architettura
 
@@ -45,6 +97,8 @@ Il backend gestisce:
 - Elaborazione asincrona in background per deduzione topic
 - Caching multi-livello per ottimizzare le prestazioni
 - API RESTful per il frontend
+- Gestione standardizzata degli errori
+- Validazione e sanitizzazione degli input
 
 ### Frontend (React)
 
@@ -53,6 +107,8 @@ Il frontend si occupa di:
 - Gestione della ricerca e dei filtri
 - Visualizzazione delle differenze tra articoli simili
 - Caching lato client per migliorare l'esperienza offline
+- Gestione avanzata dello stato asincrono
+- Interfaccia accessibile e responsive
 
 ### Servizio Ollama Esterno
 
@@ -68,22 +124,27 @@ L'applicazione si connette a un servizio Ollama esterno che:
 - **Express**: Framework web
 - **RSS Parser**: Parsing dei feed RSS
 - **Memory Cache**: Caching lato server
-- **Winston**: Logging
-- **Axios**: Client HTTP
+- **Winston**: Logging avanzato
+- **Axios**: Client HTTP con sistema di retry
 - **TF-IDF e AI**: Algoritmi per il calcolo della similarità testuale e deduzione topic
+- **DOMPurify**: Sanitizzazione HTML
+- **jsdom**: Ambiente DOM lato server
+- **Express Validator**: Validazione e sanitizzazione delle richieste
 
 ### Frontend
-- **React**: Libreria UI
+- **React**: Libreria UI con hooks personalizzati
 - **Tailwind CSS**: Framework CSS per il design
 - **Axios**: Client HTTP
 - **Lucide React**: Icone
 - **LocalStorage**: Caching lato client
+- **React Memo**: Ottimizzazione delle prestazioni
 
 ### Infrastruttura
-- **Docker**: Containerizzazione
+- **Docker**: Containerizzazione con multi-stage build
 - **Nginx**: Server web e reverse proxy
 - **Docker Compose**: Orchestrazione multi-container
 - **Ollama**: Servizio AI per deduzione e normalizzazione topic
+- **Health Checks**: Monitoraggio dello stato dei container
 
 ## 💻 Requisiti di sistema
 
@@ -120,6 +181,8 @@ environment:
   - OLLAMA_TIMEOUT=3000                      # Timeout per chiamate a Ollama in ms
   - USE_OLLAMA=true                          # Imposta a 'false' per disabilitare Ollama
   - MAX_ARTICLES_PER_SOURCE=10               # Numero massimo di articoli da elaborare per fonte
+  - RSS_MAX_RETRIES=3                        # Numero massimo di tentativi per le richieste RSS
+  - RSS_RETRY_DELAY=1000                     # Ritardo iniziale tra i tentativi in ms
 ```
 
 ### 3. Avvio dell'applicazione
@@ -191,12 +254,13 @@ news-aggregator/
 │   │   └── api.js           # Route API
 │   ├── services/
 │   │   ├── newsAggregator.js # Logica di aggregazione
-│   │   ├── rssParser.js      # Parser RSS
+│   │   ├── rssParser.js      # Parser RSS con retry
 │   │   ├── ollamaService.js  # Servizio di AI per topic
 │   │   ├── asyncProcessor.js # Elaborazione asincrona
 │   │   └── topicNormalizer.js # Normalizzazione topic (fallback)
 │   └── utils/
-│       └── logger.js         # Utility di logging
+│       ├── logger.js         # Utility di logging avanzato
+│       └── errorHandler.js   # Gestione centralizzata degli errori
 └── frontend/
     ├── Dockerfile           # Configurazione container frontend
     ├── nginx.conf           # Configurazione Nginx
@@ -207,8 +271,11 @@ news-aggregator/
         ├── index.js         # Punto di ingresso React
         ├── services/
         │   └── api.js       # Client API
+        ├── hooks/
+        │   └── useAsync.js  # Hook per gestione stato asincrono
         └── components/
             ├── NewsAggregator.js # Componente principale UI
+            ├── NewsCard.js       # Componente per la visualizzazione di una notizia
             └── ErrorMessage.js   # Componente per gestione errori
 ```
 
@@ -242,7 +309,7 @@ Recupera tutte le notizie raggruppate.
 Cerca notizie in base al termine specificato.
 
 **Parametri**:
-- `query`: Termine di ricerca
+- `query`: Termine di ricerca (validato e sanitizzato)
 
 **Response**: Formato identico a `/api/news`, filtrato in base alla query.
 
@@ -297,6 +364,20 @@ Recupera la mappatura dei topic in diverse lingue.
 }
 ```
 
+### `GET /api/health`
+
+Verifica lo stato di salute dell'applicazione.
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "timestamp": "2025-03-16T12:34:56.789Z",
+  "uptime": 3600,
+  "cacheStatus": "ok"
+}
+```
+
 ## ⚙️ Configurazione avanzata
 
 ### Variabili di ottimizzazione
@@ -308,11 +389,16 @@ environment:
   - OLLAMA_TIMEOUT=3000         # Timeout per le richieste Ollama (in millisecondi)
   - USE_OLLAMA=true             # Imposta a 'false' per disabilitare completamente Ollama
   - MAX_ARTICLES_PER_SOURCE=10  # Numero massimo di articoli da elaborare per fonte
+  - RSS_MAX_RETRIES=3           # Numero massimo di tentativi per le richieste RSS
+  - RSS_RETRY_DELAY=1000        # Ritardo iniziale tra i tentativi in ms
+  - SERVER_TIMEOUT=60000        # Timeout del server in ms
+  - LOG_LEVEL=info              # Livello di logging (debug, info, warn, error)
 ```
 
 - Riduci `MAX_ARTICLES_PER_SOURCE` su sistemi meno potenti
 - Aumenta `OLLAMA_TIMEOUT` se il server Ollama è più lento
 - Imposta `USE_OLLAMA=false` in caso di problemi con il server Ollama
+- Regola `RSS_MAX_RETRIES` e `RSS_RETRY_DELAY` in base alla stabilità della connessione
 
 ### Aggiungere nuove fonti di notizie
 
@@ -358,86 +444,20 @@ if (similarity > 0.3) { // Soglia di similarità
 }
 ```
 
-## 🔧 Troubleshooting
+### Configurare il logging
 
-### Problemi comuni
+Modifica il livello di logging nel file `docker-compose.yml`:
 
-#### L'applicazione non si avvia
-
-**Problema**: `docker-compose up` restituisce un errore.
-
-**Soluzione**: Verifica che:
-- Docker e Docker Compose siano installati correttamente
-- La porta 80 non sia già in uso
-- La rete Docker "ollama-network" esista e sia accessibile
-- Tutti i file siano stati copiati nei percorsi corretti
-
-```bash
-# Verifica la porta 80
-sudo lsof -i :80
-
-# Verifica che la rete esista
-docker network ls | grep ollama-network
-
-# Se la rete non esiste, creala
-docker network create ollama-network
+```yaml
+environment:
+  - LOG_LEVEL=debug  # Opzioni: error, warn, info, debug
 ```
 
-#### Errori di timeout durante il caricamento delle notizie
-
-**Problema**: La pagina restituisce errori 504 Gateway Timeout.
-
-**Soluzione**:
-- Verifica che il server Ollama sia attivo e accessibile
-- Aumenta il timeout nei file di configurazione
-- Riduci il numero massimo di articoli per fonte
-- Disabilita temporaneamente Ollama impostando `USE_OLLAMA=false`
-
-#### Il server Ollama non è raggiungibile
-
-**Problema**: Log con errori di connessione a Ollama.
-
-**Soluzione**:
-- Verifica che l'URL in `OLLAMA_API_URL` sia corretto
-- Verifica che il server Ollama sia in esecuzione
-- Assicurati che la rete Docker consenta la comunicazione tra i container
-- Controlla che il modello specificato in `OLLAMA_MODEL` sia disponibile sul server
-
-```bash
-# Verifica la connessione al server Ollama
-docker exec -it news-aggregator-backend curl http://ipex-llm:11434/api/version
-```
-
-#### Nessuna notizia viene visualizzata
-
-**Problema**: L'interfaccia si carica ma non mostra notizie.
-
-**Soluzione**: 
-- Controlla i log del backend: `docker-compose logs backend`
-- Verifica che i feed RSS siano accessibili
-- Controlla la connessione internet
-- Verifica che i DNS funzionino correttamente (8.8.8.8 e 1.1.1.1)
-
-#### Feed RSS non accessibili
-
-**Problema**: Il backend non riesce ad accedere ai feed RSS.
-
-**Soluzione**:
-- Verifica la connessione internet del container
-- Controlla gli URL dei feed RSS nel file `newsAggregator.js`
-- Alcuni siti potrebbero bloccare le richieste da server; prova ad aggiungere uno User-Agent diverso
+Per una configurazione più dettagliata, modifica il file `backend/utils/logger.js`.
 
 ## 🚧 Sviluppo futuro
 
 Ecco alcune idee per il futuro sviluppo dell'applicazione:
-
-- **Autenticazione utente**: Consentire agli utenti di salvare le proprie preferenze
-- **Notifiche**: Avvisare gli utenti quando viene pubblicata una notizia di loro interesse
 - **Analisi del sentiment**: Analizzare il tono delle notizie (positivo, negativo, neutro)
 - **Traduzione automatica**: Tradurre notizie da lingue diverse
 - **Modalità dark**: Aggiungere un tema scuro per l'interfaccia
-- **Progressive Web App**: Rendere l'applicazione installabile sui dispositivi
-- **Motore di ricerca semantico**: Migliorare la ricerca con comprensione del linguaggio naturale
-- **Personalizzazione avanzata**: Consentire agli utenti di personalizzare fonti e argomenti
-- **Training di modelli specifici per notizie**: Creare un modello AI specializzato per l'analisi di notizie
-- **Dashboard di amministrazione**: Interfaccia per monitorare e configurare l'applicazione in tempo reale

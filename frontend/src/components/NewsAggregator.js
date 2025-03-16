@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, Globe, RefreshCw, Code } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Search, Filter, Globe, RefreshCw, X } from 'lucide-react';
 import { fetchNews, searchNews, fetchHotTopics, fetchSources, fetchTopicMap } from '../services/api';
+import useAsync from '../hooks/useAsync';
 import ErrorMessage from './ErrorMessage';
+import NewsCard from './NewsCard';
 import topicHelper from '../utils/topicHelper';
 
 // Componente principale dell'applicazione
 const NewsAggregator = () => {
+  // Stati
   const [news, setNews] = useState([]);
   const [filteredNews, setFilteredNews] = useState([]);
   const [sources, setSources] = useState([]);
   const [topics, setTopics] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [activeFilters, setActiveFilters] = useState({
     sources: [],
     topics: []
@@ -19,33 +20,163 @@ const NewsAggregator = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showDiff, setShowDiff] = useState(null);
   const [hotTopics, setHotTopics] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [topicMappings, setTopicMappings] = useState(null);
 
   // Sistema di caching per le notizie
   const CACHE_KEY = 'news_aggregator_cache';
   const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minuti di validità cache
+  const MAX_CACHE_SIZE = 5 * 1024 * 1024; // 5MB limite dimensione cache
   
-  // Funzione per salvare i dati in cache
-  const saveToCache = (data) => {
-    const cacheData = {
-      timestamp: Date.now(),
-      news: data.news,
-      sources: data.sources,
-      topics: data.topics,
-      topicMappings: data.topicMappings
-    };
-    
+  // Hook asincrono per il caricamento delle notizie
+  const {
+    execute: executeLoadNews,
+    status: newsStatus,
+    error: newsError,
+    isPending: isLoadingNews,
+    retry: retryLoadNews
+  } = useAsync(async () => {
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+      // Prova a caricare dalla cache
+      const cachedData = loadFromCache();
+      
+      if (cachedData) {
+        // Usa i dati dalla cache
+        setNews(cachedData.news);
+        setFilteredNews(cachedData.news);
+        setSources(cachedData.sources);
+        setTopics(cachedData.topics);
+        setTopicMappings(cachedData.topicMappings);
+        
+        // Imposta i mapping dei topic nel helper
+        if (cachedData.topicMappings) {
+          topicHelper.setTopicMappings(cachedData.topicMappings.mappings);
+        }
+        
+        return cachedData;
+      }
+      
+      // Altrimenti, carica dal server
+      const [newsData, sourcesData, topicMapData, hotTopicsData] = await Promise.all([
+        fetchNews(),
+        fetchSources(),
+        fetchTopicMap().catch(err => {
+          console.error('Errore nel caricamento della mappa dei topic:', err);
+          return null;
+        }),
+        fetchHotTopics().catch(err => {
+          console.error('Errore nel caricamento dei topic caldi:', err);
+          return [];
+        })
+      ]);
+      
+      // Imposta i mapping dei topic nel helper se disponibili
+      if (topicMapData) {
+        topicHelper.setTopicMappings(topicMapData.mappings);
+      }
+      
+      // Estrai i topic unici (già normalizzati dal backend)
+      const uniqueTopics = topicHelper.extractUniqueTopics(newsData);
+      
+      // Estrai tutte le fonti uniche
+      const allSources = sourcesData.map(source => source.name);
+      
+      // Imposta lo stato
+      setNews(newsData);
+      setFilteredNews(newsData);
+      setSources(allSources);
+      setTopics(uniqueTopics);
+      setHotTopics(Array.isArray(hotTopicsData) ? hotTopicsData.map(t => t.topic) : []);
+      setTopicMappings(topicMapData);
+      
+      // Salva in cache
+      saveToCache({
+        news: newsData,
+        sources: allSources,
+        topics: uniqueTopics,
+        topicMappings: topicMapData
+      });
+      
+      return { newsData, sourcesData, topicMapData, hotTopicsData };
+    } catch (error) {
+      console.error("Errore nel recupero delle notizie:", error);
+      
+      // Prova a caricare dalla cache anche se scaduta come fallback di emergenza
+      const cachedData = loadFromCacheIgnoreExpiry();
+      if (cachedData) {
+        setNews(cachedData.news);
+        setFilteredNews(cachedData.news);
+        setSources(cachedData.sources);
+        setTopics(cachedData.topics);
+        setTopicMappings(cachedData.topicMappings);
+        
+        if (cachedData.topicMappings) {
+          topicHelper.setTopicMappings(cachedData.topicMappings.mappings);
+        }
+      }
+      
+      throw error;
+    }
+  }, true);
+  
+  // Hook asincrono per la ricerca
+  const {
+    execute: executeSearch,
+    isPending: isSearching
+  } = useAsync(async (query) => {
+    if (!query.trim()) {
+      // Se la query è vuota, mostra tutte le notizie
+      setFilteredNews(news);
+      return news;
+    }
+    
+    const searchResults = await searchNews(query);
+    
+    // Applica i filtri attuali ai risultati della ricerca
+    const filtered = applyFilters(searchResults, activeFilters);
+    setFilteredNews(filtered);
+    
+    return filtered;
+  }, false);
+
+  // Funzione per salvare i dati in cache
+  const saveToCache = useCallback((data) => {
+    try {
+      const cacheData = {
+        timestamp: Date.now(),
+        news: data.news,
+        sources: data.sources,
+        topics: data.topics,
+        topicMappings: data.topicMappings
+      };
+      
+      const serializedData = JSON.stringify(cacheData);
+      
+      // Verifica la dimensione dei dati prima di salvarli
+      const dataSize = new Blob([serializedData]).size;
+      if (dataSize > MAX_CACHE_SIZE) {
+        console.warn(`Dati troppo grandi per la cache (${dataSize} bytes). Limitato a ${MAX_CACHE_SIZE} bytes.`);
+        return;
+      }
+      
+      localStorage.setItem(CACHE_KEY, serializedData);
       console.log('Dati salvati in cache');
     } catch (error) {
       console.error('Errore nel salvataggio della cache:', error);
+      
+      // In caso di quota exceeded, prova a pulire la cache
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        try {
+          localStorage.removeItem(CACHE_KEY);
+          console.log('Cache precedente rimossa per liberare spazio');
+        } catch (clearError) {
+          console.error('Impossibile pulire la cache:', clearError);
+        }
+      }
     }
-  };
+  }, [MAX_CACHE_SIZE]);
   
   // Funzione per caricare i dati dalla cache
-  const loadFromCache = () => {
+  const loadFromCache = useCallback(() => {
     try {
       const cachedData = localStorage.getItem(CACHE_KEY);
       
@@ -69,192 +200,47 @@ const NewsAggregator = () => {
       console.error('Errore nel caricamento della cache:', error);
       return null;
     }
-  };
-
-  // Funzione per recuperare le notizie dal backend
-  const loadNews = async () => {
-    setLoading(true);
-    setError(null);
-    
+  }, [CACHE_EXPIRY]);
+  
+  // Funzione per caricare i dati dalla cache anche se scaduti (per fallback)
+  const loadFromCacheIgnoreExpiry = useCallback(() => {
     try {
-      // Prova a caricare dalla cache
-      const cachedData = loadFromCache();
-      
-      if (cachedData) {
-        // Usa i dati dalla cache
-        setNews(cachedData.news);
-        setFilteredNews(cachedData.news);
-        setSources(cachedData.sources);
-        setTopics(cachedData.topics);
-        setTopicMappings(cachedData.topicMappings);
-        
-        // Imposta i mapping dei topic nel helper
-        if (cachedData.topicMappings) {
-          topicHelper.setTopicMappings(cachedData.topicMappings.mappings);
-        }
-        
-        setLoading(false);
-        return;
-      }
-      
-      // Altrimenti, carica dal server
-      const newsData = await fetchNews();
-      const sourcesData = await fetchSources();
-      
-      // Carica la mappa dei topic
-      let topicMapData = null;
-      try {
-        topicMapData = await fetchTopicMap();
-        setTopicMappings(topicMapData);
-        topicHelper.setTopicMappings(topicMapData.mappings);
-      } catch (topicMapError) {
-        console.error('Errore nel caricamento della mappa dei topic:', topicMapError);
-      }
-      
-      // Prova a caricare i topic caldi, ma non bloccare l'interfaccia se fallisce
-      let hotTopicsData = [];
-      try {
-        hotTopicsData = await fetchHotTopics();
-      } catch (topicError) {
-        console.error('Errore nel caricamento dei topic caldi:', topicError);
-      }
-      
-      // Estrai i topic unici (già normalizzati dal backend)
-      const uniqueTopics = topicHelper.extractUniqueTopics(newsData);
-      
-      // Estrai tutte le fonti uniche
-      const allSources = sourcesData.map(source => source.name);
-      
-      // Imposta lo stato
-      setNews(newsData);
-      setFilteredNews(newsData);
-      setSources(allSources);
-      setTopics(uniqueTopics);
-      setHotTopics(hotTopicsData.map(t => t.topic));
-      
-      // Salva in cache
-      saveToCache({
-        news: newsData,
-        sources: allSources,
-        topics: uniqueTopics,
-        topicMappings: topicMapData
-      });
-      
-    } catch (error) {
-      console.error("Errore nel recupero delle notizie:", error);
-      setError(error);
-      
-      // Prova a caricare dalla cache anche se scaduta come fallback di emergenza
       const cachedData = localStorage.getItem(CACHE_KEY);
-      if (cachedData) {
-        try {
-          const parsedCache = JSON.parse(cachedData);
-          setNews(parsedCache.news);
-          setFilteredNews(parsedCache.news);
-          setTopics(parsedCache.topics);
-          setSources(parsedCache.sources);
-          setTopicMappings(parsedCache.topicMappings);
-          
-          if (parsedCache.topicMappings) {
-            topicHelper.setTopicMappings(parsedCache.topicMappings.mappings);
-          }
-          
-          // Mostra comunque il messaggio di errore, ma almeno visualizziamo i dati in cache
-        } catch (cacheError) {
-          // Se anche questo fallisce, lasciamo solo l'errore
-          console.error("Errore nel caricamento della cache:", cacheError);
-        }
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Funzione per gestire la ricerca
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      // Se la query è vuota, mostra tutte le notizie
-      setFilteredNews(news);
-      return;
-    }
-    
-    setIsSearching(true);
-    
-    try {
-      // Cerca nel database completo
-      const searchResults = await searchNews(searchQuery);
       
-      // Applica i filtri attuali ai risultati della ricerca
-      let filtered = [...searchResults];
-      
-      // Filtra per fonti
-      if (activeFilters.sources.length > 0) {
-        filtered = filtered.filter(group => 
-          group.items.some(item => activeFilters.sources.includes(item.source))
-        );
+      if (!cachedData) {
+        return null;
       }
       
-      // Filtra per argomenti
-      if (activeFilters.topics.length > 0) {
-        filtered = filtered.filter(group => 
-          activeFilters.topics.some(topic => topicHelper.groupHasTopic(group, topic))
-        );
-      }
-      
-      setFilteredNews(filtered);
+      return JSON.parse(cachedData);
     } catch (error) {
-      console.error("Errore nella ricerca:", error);
-      // Non impostiamo setError qui perché vogliamo mostrare un errore nella UI solo per errori critici
-      // Per errori di ricerca, potremmo mostrare un messaggio meno invasivo
-      alert("Errore durante la ricerca. Riprova più tardi.");
-    } finally {
-      setIsSearching(false);
+      console.error('Errore nel caricamento della cache di fallback:', error);
+      return null;
     }
-  };
-
-  // Effetto per caricare le notizie all'avvio
-  useEffect(() => {
-    loadNews();
   }, []);
 
-  // Effetto per gestire i filtri (quando cambiano i filtri o le notizie)
-  useEffect(() => {
-    // Gestisce i filtri immediati (senza ricerca)
-    if (!searchQuery.trim()) {
-      let filtered = [...news];
-      
-      // Filtra per fonti
-      if (activeFilters.sources.length > 0) {
-        filtered = filtered.filter(group => 
-          group.items.some(item => activeFilters.sources.includes(item.source))
-        );
-      }
-      
-      // Filtra per argomenti (usando il helper che gestisce le varianti dei topic)
-      if (activeFilters.topics.length > 0) {
-        filtered = filtered.filter(group => 
-          activeFilters.topics.some(topic => topicHelper.groupHasTopic(group, topic))
-        );
-      }
-      
-      setFilteredNews(filtered);
-    }
-  }, [news, activeFilters]);
-
-  // Effetto per eseguire la ricerca quando cambia la query
-  useEffect(() => {
-    // Utilizzo un timeout per non eseguire la ricerca ad ogni digitazione
-    const timeoutId = setTimeout(() => {
-      if (searchQuery.trim()) {
-        handleSearch();
-      }
-    }, 500);
+  // Funzione per applicare i filtri ai dati
+  const applyFilters = useCallback((newsData, filters) => {
+    let filtered = [...newsData];
     
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
+    // Filtra per fonti
+    if (filters.sources.length > 0) {
+      filtered = filtered.filter(group => 
+        group.items.some(item => filters.sources.includes(item.source))
+      );
+    }
+    
+    // Filtra per argomenti
+    if (filters.topics.length > 0) {
+      filtered = filtered.filter(group => 
+        filters.topics.some(topic => topicHelper.groupHasTopic(group, topic))
+      );
+    }
+    
+    return filtered;
+  }, []);
 
   // Gestisce il toggle di un filtro
-  const toggleFilter = (type, value) => {
+  const toggleFilter = useCallback((type, value) => {
     setActiveFilters(prev => {
       const newFilters = { ...prev };
       if (newFilters[type].includes(value)) {
@@ -264,18 +250,46 @@ const NewsAggregator = () => {
       }
       return newFilters;
     });
-  };
+  }, []);
 
   // Gestisce il reset dei filtri
-  const resetFilters = () => {
+  const resetFilters = useCallback(() => {
     setActiveFilters({ sources: [], topics: [] });
     setSearchQuery('');
-  };
+  }, []);
+
+  // Funzione per ordinare le notizie per data
+  const sortNewsByDate = useCallback(() => {
+    const sorted = [...news].sort((a, b) => 
+      new Date(b.pubDate) - new Date(a.pubDate)
+    );
+    setFilteredNews(sorted);
+  }, [news]);
+  
+  // Memorizza i risultati filtrati quando cambiano i filtri o le notizie
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      const filtered = applyFilters(news, activeFilters);
+      setFilteredNews(filtered);
+    }
+  }, [news, activeFilters, applyFilters, searchQuery]);
+
+  // Effetto per eseguire la ricerca quando cambia la query
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchQuery.trim()) {
+        executeSearch(searchQuery);
+      }
+    }, 500);
+    
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, executeSearch]);
 
   // Funzione per generare il diff tra due testi
-  const generateDiff = (text1, text2) => {
-    // In un'implementazione reale, utilizzeremmo una libreria come diff o jsdiff
-    // Questa è una versione semplificata
+  const generateDiff = useCallback((text1, text2) => {
+    if (!text1 || !text2 || typeof text1 !== 'string' || typeof text2 !== 'string') {
+      return [{ type: 'unchanged', text: 'Contenuto non disponibile per il confronto' }];
+    }
     
     const words1 = text1.split(/\s+/);
     const words2 = text2.split(/\s+/);
@@ -335,7 +349,20 @@ const NewsAggregator = () => {
     }
     
     return result;
-  };
+  }, []);
+
+  // Tempo rimanente per la cache
+  const cacheTimeRemaining = useMemo(() => {
+    try {
+      const cachedData = localStorage.getItem(CACHE_KEY);
+      if (!cachedData) return 0;
+      
+      const { timestamp } = JSON.parse(cachedData);
+      return Math.max(0, Math.floor((timestamp + CACHE_EXPIRY - Date.now()) / 1000));
+    } catch (error) {
+      return 0;
+    }
+  }, [CACHE_EXPIRY, newsStatus]); // Ricalcola quando lo stato delle notizie cambia
 
   return (
     <div className="flex flex-col h-screen bg-gray-100">
@@ -343,17 +370,19 @@ const NewsAggregator = () => {
       <header className="bg-blue-600 text-white p-4 shadow-md">
         <div className="container mx-auto flex justify-between items-center">
           <h1 className="text-2xl font-bold flex items-center">
-            <Globe className="mr-2" />
+            <Globe className="mr-2" aria-hidden="true" />
             Aggregatore di Notizie
           </h1>
           <div className="flex items-center">
             <button 
-              onClick={loadNews} 
-              className="flex items-center bg-blue-700 hover:bg-blue-800 p-2 rounded"
-              disabled={loading}
+              onClick={retryLoadNews} 
+              className="flex items-center bg-blue-700 hover:bg-blue-800 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
+              disabled={isLoadingNews}
+              aria-label={isLoadingNews ? 'Caricamento in corso' : 'Aggiorna notizie'}
+              aria-busy={isLoadingNews}
             >
-              <RefreshCw className={`mr-1 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'Caricamento...' : 'Aggiorna'}
+              <RefreshCw className={`mr-1 h-4 w-4 ${isLoadingNews ? 'animate-spin' : ''}`} aria-hidden="true" />
+              {isLoadingNews ? 'Caricamento...' : 'Aggiorna'}
             </button>
           </div>
         </div>
@@ -366,37 +395,48 @@ const NewsAggregator = () => {
             {/* Ricerca */}
             <div className="relative flex-grow">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center">
-                <Search className="h-5 w-5 text-gray-400" />
+                <Search className="h-5 w-5 text-gray-400" aria-hidden="true" />
               </div>
               <input
                 type="text"
                 placeholder="Cerca in tutto il database..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full border rounded"
-                disabled={loading || error}
+                className="pl-10 pr-4 py-2 w-full border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={isLoadingNews || newsError}
+                aria-label="Cerca notizie"
               />
               {isSearching && (
                 <div className="absolute inset-y-0 right-3 flex items-center">
-                  <div className="animate-spin h-4 w-4 border-t-2 border-blue-500 rounded-full"></div>
+                  <div className="animate-spin h-4 w-4 border-t-2 border-blue-500 rounded-full" aria-hidden="true"></div>
                 </div>
+              )}
+              {searchQuery && (
+                <button
+                  className="absolute inset-y-0 right-3 flex items-center"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Cancella ricerca"
+                >
+                  <X className="h-4 w-4 text-gray-400" aria-hidden="true" />
+                </button>
               )}
             </div>
             
             {/* Filtri */}
             <div className="flex items-center gap-2">
               <div className="bg-gray-100 p-2 rounded flex items-center">
-                <Filter className="h-4 w-4 mr-1 text-gray-500" />
+                <Filter className="h-4 w-4 mr-1 text-gray-500" aria-hidden="true" />
                 <span className="text-sm text-gray-600">Filtri:</span>
               </div>
               
               {/* Dropdown per fonti */}
               <div className="relative">
                 <select 
-                  className="appearance-none bg-white border rounded p-2 pr-8 text-sm"
+                  className="appearance-none bg-white border rounded p-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   onChange={(e) => toggleFilter('sources', e.target.value)}
                   value=""
-                  disabled={loading || error}
+                  disabled={isLoadingNews || newsError}
+                  aria-label="Filtra per fonte"
                 >
                   <option value="" disabled>Fonti</option>
                   {sources.map(source => (
@@ -408,10 +448,11 @@ const NewsAggregator = () => {
               {/* Dropdown per argomenti */}
               <div className="relative">
                 <select 
-                  className="appearance-none bg-white border rounded p-2 pr-8 text-sm"
+                  className="appearance-none bg-white border rounded p-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   onChange={(e) => toggleFilter('topics', e.target.value)}
                   value=""
-                  disabled={loading || error}
+                  disabled={isLoadingNews || newsError}
+                  aria-label="Filtra per argomento"
                 >
                   <option value="" disabled>Argomenti</option>
                   {topics.map(topic => (
@@ -423,8 +464,9 @@ const NewsAggregator = () => {
               {/* Pulsante reset filtri */}
               <button 
                 onClick={resetFilters}
-                className="bg-gray-200 hover:bg-gray-300 p-2 rounded text-sm"
-                disabled={loading || error}
+                className="bg-gray-200 hover:bg-gray-300 p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                disabled={isLoadingNews || newsError}
+                aria-label="Reimposta tutti i filtri"
               >
                 Reset
               </button>
@@ -433,13 +475,14 @@ const NewsAggregator = () => {
           
           {/* Filtri attivi */}
           {(activeFilters.sources.length > 0 || activeFilters.topics.length > 0) && (
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-2" aria-label="Filtri attivi">
               {activeFilters.sources.map(source => (
                 <div key={source} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm flex items-center">
                   {source}
                   <button 
                     onClick={() => toggleFilter('sources', source)}
-                    className="ml-1 text-blue-500 hover:text-blue-700"
+                    className="ml-1 text-blue-500 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 rounded-full"
+                    aria-label={`Rimuovi filtro fonte: ${source}`}
                   >
                     ×
                   </button>
@@ -450,7 +493,8 @@ const NewsAggregator = () => {
                   {topic}
                   <button 
                     onClick={() => toggleFilter('topics', topic)}
-                    className="ml-1 text-green-500 hover:text-green-700"
+                    className="ml-1 text-green-500 hover:text-green-700 focus:outline-none focus:ring-2 focus:ring-green-300 rounded-full"
+                    aria-label={`Rimuovi filtro argomento: ${topic}`}
                   >
                     ×
                   </button>
@@ -460,20 +504,15 @@ const NewsAggregator = () => {
           )}
           
           {/* Filtri rapidi */}
-          {!error && (
+          {!newsError && (
             <div className="mt-3 border-t pt-3">
               <div className="flex flex-wrap gap-2">
                 {/* Filtro per le notizie più recenti */}
                 <button 
-                  onClick={() => {
-                    // Ordina le notizie per data (più recenti prima)
-                    const sorted = [...news].sort((a, b) => 
-                      new Date(b.pubDate) - new Date(a.pubDate)
-                    );
-                    setFilteredNews(sorted);
-                  }}
-                  className="bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center"
-                  disabled={loading || error}
+                  onClick={sortNewsByDate}
+                  className="bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center focus:outline-none focus:ring-2 focus:ring-purple-400"
+                  disabled={isLoadingNews || newsError}
+                  aria-label="Ordina per data più recente"
                 >
                   Più recenti
                 </button>
@@ -487,8 +526,10 @@ const NewsAggregator = () => {
                       activeFilters.topics.includes(topic) 
                         ? 'bg-green-500 text-white' 
                         : 'bg-green-100 text-green-800 hover:bg-green-200'
-                    } px-3 py-1 rounded-full text-sm flex items-center`}
-                    disabled={loading || error}
+                    } px-3 py-1 rounded-full text-sm flex items-center focus:outline-none focus:ring-2 focus:ring-green-400`}
+                    disabled={isLoadingNews || newsError}
+                    aria-label={`${activeFilters.topics.includes(topic) ? 'Rimuovi' : 'Aggiungi'} filtro argomento: ${topic}`}
+                    aria-pressed={activeFilters.topics.includes(topic)}
                   >
                     {topic}
                   </button>
@@ -502,135 +543,43 @@ const NewsAggregator = () => {
       {/* Contenuto principale */}
       <main className="flex-grow overflow-auto p-4">
         <div className="container mx-auto">
-          {loading ? (
-            <div className="flex justify-center items-center h-64">
+          {isLoadingNews ? (
+            <div 
+              className="flex justify-center items-center h-64"
+              role="status"
+              aria-label="Caricamento notizie in corso"
+            >
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
             </div>
-          ) : error ? (
+          ) : newsError ? (
             <ErrorMessage 
-              error={error} 
-              onRetry={loadNews}
+              error={newsError} 
+              onRetry={retryLoadNews}
             />
           ) : filteredNews.length === 0 ? (
-            <div className="bg-white rounded-lg shadow p-8 text-center">
+            <div 
+              className="bg-white rounded-lg shadow p-8 text-center"
+              role="status"
+              aria-live="polite"
+            >
               <h2 className="text-xl text-gray-600">Nessuna notizia trovata</h2>
               <p className="mt-2 text-gray-500">Prova a modificare i filtri o aggiorna la pagina.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div 
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+              aria-label={`Visualizzazione di ${filteredNews.length} notizie`}
+            >
               {filteredNews.map(group => (
-                <div key={group.id} className="bg-white rounded-lg shadow overflow-hidden">
-                  {/* Intestazione card */}
-                  <div className="p-4">
-                    <h2 className="text-lg font-semibold">{group.title}</h2>
-                    <p className="text-gray-600 mt-1">{group.description}</p>
-                    
-                    {/* Fonti e data */}
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {group.sources.map(source => (
-                        <span key={source} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
-                          {source}
-                        </span>
-                      ))}
-                      <span className="text-gray-500 text-xs ml-auto">
-                        {new Date(group.pubDate).toLocaleDateString('it-IT', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </span>
-                    </div>
-                    
-                    {/* Argomenti */}
-                    {group.topics && group.topics.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {group.topics.map(topic => (
-                          <span 
-                            key={topic} 
-                            className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs cursor-pointer hover:bg-green-200"
-                            onClick={() => {
-                              if (!activeFilters.topics.includes(topic)) {
-                                toggleFilter('topics', topic);
-                              }
-                            }}
-                          >
-                            {topic}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Anteprima contenuto */}
-                  <div className="px-4 pb-2">
-                    <p className="text-gray-700">
-                      {group.items[0].content && group.items[0].content.substring(0, 150)}
-                      {group.items[0].content && group.items[0].content.length > 150 ? '...' : ''}
-                    </p>
-                  </div>
-                  
-                  {/* Pulsanti azioni */}
-                  <div className="px-4 pb-4 flex justify-between">
-                    <a
-                      href={group.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                    >
-                      Leggi di più
-                    </a>
-                    
-                    {/* Pulsante Diff (solo se ci sono più fonti) */}
-                    {group.items.length > 1 && (
-                      <button
-                        onClick={() => setShowDiff(showDiff === group.id ? null : group.id)}
-                        className="flex items-center text-purple-600 hover:text-purple-800 text-sm font-medium"
-                      >
-                        <Code className="h-4 w-4 mr-1" />
-                        {showDiff === group.id ? 'Nascondi diff' : 'Mostra diff'}
-                      </button>
-                    )}
-                  </div>
-                  
-                  {/* Sezione Diff */}
-                  {showDiff === group.id && group.items.length > 1 && (
-                    <div className="border-t border-gray-200 p-4 bg-gray-50">
-                      <h3 className="text-sm font-semibold mb-2">Differenze nel contenuto:</h3>
-                      
-                      {group.items.slice(0, 2).map((item, idx, items) => {
-                        // Mostro il diff solo per i primi due articoli per semplicità
-                        if (idx === 0 && items.length > 1) {
-                          const diff = generateDiff(item.content, items[1].content);
-                          
-                          return (
-                            <div key={item.id} className="text-sm">
-                              <div className="flex justify-between mb-1">
-                                <span className="font-medium">{item.source} vs {items[1].source}</span>
-                              </div>
-                              <div className="bg-white p-2 rounded border text-xs font-mono whitespace-pre-wrap">
-                                {diff.map((part, partIdx) => (
-                                  <span 
-                                    key={partIdx} 
-                                    className={`
-                                      ${part.type === 'unchanged' ? 'text-gray-800' : ''}
-                                      ${part.type === 'added' ? 'bg-green-100 text-green-800' : ''}
-                                      ${part.type === 'removed' ? 'bg-red-100 text-red-800' : ''}
-                                    `}
-                                  >
-                                    {part.text}{' '}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })}
-                    </div>
-                  )}
-                </div>
+                <NewsCard
+                  key={group.id}
+                  group={group}
+                  showDiff={showDiff}
+                  setShowDiff={setShowDiff}
+                  toggleFilter={toggleFilter}
+                  activeFilters={activeFilters}
+                  generateDiff={generateDiff}
+                />
               ))}
             </div>
           )}
@@ -639,21 +588,21 @@ const NewsAggregator = () => {
       
       {/* Statistiche sulle performance */}
       <div className="bg-gray-100 border-t border-gray-200 p-2">
-        <div className="container mx-auto flex justify-between items-center text-xs text-gray-500">
+        <div className="container mx-auto flex flex-wrap justify-between items-center text-xs text-gray-500">
           <div>
             <span>Notizie totali: {news.length}</span>
             <span className="mx-2">|</span>
             <span>Notizie filtrate: {filteredNews.length}</span>
           </div>
           <div>
-            {localStorage.getItem(CACHE_KEY) ? (
+            {cacheTimeRemaining > 0 ? (
               <span className="flex items-center">
-                <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-                Cache attiva (scade in {Math.max(0, Math.floor((JSON.parse(localStorage.getItem(CACHE_KEY)).timestamp + CACHE_EXPIRY - Date.now()) / 1000))}s)
+                <span className="w-2 h-2 bg-green-500 rounded-full mr-1" aria-hidden="true"></span>
+                Cache attiva (scade in {cacheTimeRemaining}s)
               </span>
             ) : (
               <span className="flex items-center">
-                <span className="w-2 h-2 bg-red-500 rounded-full mr-1"></span>
+                <span className="w-2 h-2 bg-red-500 rounded-full mr-1" aria-hidden="true"></span>
                 Cache non attiva
               </span>
             )}

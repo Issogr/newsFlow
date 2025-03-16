@@ -2,7 +2,6 @@ services:
   backend:
     build: ./backend
     container_name: news-aggregator-backend
-    restart: always
     environment:
       - NODE_ENV=production
       - PORT=5000
@@ -12,26 +11,67 @@ services:
       - OLLAMA_TIMEOUT=3000         # Timeout per chiamate a Ollama in ms
       - USE_OLLAMA=true             # Imposta a 'false' per disabilitare Ollama completamente
       - MAX_ARTICLES_PER_SOURCE=10  # Numero massimo di articoli da elaborare per fonte
+      - RSS_MAX_RETRIES=3           # Numero massimo di tentativi di caricamento RSS
+      - RSS_RETRY_DELAY=1000        # Ritardo iniziale tra i tentativi in ms
+      - SERVER_TIMEOUT=60000        # Timeout del server in ms
+      - LOG_LEVEL=info              # Livello di logging (debug, info, warn, error)
     volumes:
       - ./backend/logs:/usr/src/app/logs
     networks:
       - ollama-network
+      - app-network
     dns:
       - 8.8.8.8
       - 1.1.1.1
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   frontend:
     build: ./frontend
     container_name: news-aggregator-frontend
-    restart: always
     ports:
       - "80:80"
     depends_on:
       - backend
     networks:
+      - app-network
       - ollama-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   ollama-network:
     external: true
     name: ollama-network
+  app-network:
+    driver: bridge

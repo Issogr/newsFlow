@@ -1,23 +1,30 @@
 const express = require('express');
 const router = express.Router();
+const { body, query, validationResult } = require('express-validator');
 const newsService = require('../services/newsAggregator');
 const topicNormalizer = require('../services/topicNormalizer');
 const cache = require('memory-cache');
 const logger = require('../utils/logger');
+const { createError, asyncHandler } = require('../utils/errorHandler');
 
-// Cache middleware
+// Cache middleware ottimizzato
 const cacheMiddleware = (duration) => {
   return (req, res, next) => {
     const key = '__express__' + req.originalUrl || req.url;
     const cachedBody = cache.get(key);
     
     if (cachedBody) {
+      logger.debug(`Cache hit for ${key}`);
       res.send(cachedBody);
       return;
     } else {
+      logger.debug(`Cache miss for ${key}`);
       res.sendResponse = res.send;
       res.send = (body) => {
-        cache.put(key, body, duration * 1000);
+        // Non mettere in cache risposte di errore
+        if (res.statusCode < 400) {
+          cache.put(key, body, duration * 1000);
+        }
         res.sendResponse(body);
       };
       next();
@@ -26,129 +33,62 @@ const cacheMiddleware = (duration) => {
 };
 
 // Get all news
-router.get('/news', cacheMiddleware(300), async (req, res, next) => {
-  try {
-    const news = await newsService.fetchAllNews();
-    res.json(news);
-  } catch (error) {
-    // Se l'errore è già formattato (ad es. dal newsService)
-    if (error.status && error.message) {
-      return res.status(error.status).json({ 
-        error: {
-          message: error.message,
-          code: error.code || 'ERROR'
-        }
-      });
-    }
-    
-    // Altrimenti, è un errore generico
-    logger.error(`Error fetching news: ${error.message}`);
-    res.status(500).json({ 
-      error: { 
-        message: 'Si è verificato un errore interno. Riprova più tardi.',
-        code: 'SERVER_ERROR'
-      } 
-    });
-  }
-});
+router.get('/news', cacheMiddleware(300), asyncHandler(async (req, res) => {
+  const news = await newsService.fetchAllNews();
+  res.json(news);
+}));
 
-// Search news
-router.get('/news/search', async (req, res, next) => {
-  try {
-    const { query } = req.query;
-    if (!query) {
-      return res.status(400).json({ 
-        error: { 
-          message: 'È necessario specificare un termine di ricerca',
-          code: 'MISSING_QUERY'
-        } 
-      });
-    }
-    
-    const results = await newsService.searchNews(query);
-    res.json(results);
-  } catch (error) {
-    // Se l'errore è già formattato (ad es. dal newsService)
-    if (error.status && error.message) {
-      return res.status(error.status).json({ 
-        error: {
-          message: error.message,
-          code: error.code || 'ERROR'
-        }
-      });
-    }
-    
-    // Altrimenti, è un errore generico
-    logger.error(`Error searching news: ${error.message}`);
-    res.status(500).json({ 
-      error: { 
-        message: 'Si è verificato un errore durante la ricerca. Riprova più tardi.',
-        code: 'SEARCH_ERROR'
-      } 
-    });
+// Search news with validation
+router.get('/news/search', [
+  query('query').isString().trim().escape().isLength({ min: 1 })
+    .withMessage('È necessario specificare un termine di ricerca valido')
+], asyncHandler(async (req, res) => {
+  // Verifica validazione
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw createError(400, 'È necessario specificare un termine di ricerca valido', 'INVALID_QUERY');
   }
-});
+  
+  const { query } = req.query;
+  const results = await newsService.searchNews(query);
+  res.json(results);
+}));
 
 // Get hot topics
-router.get('/hot-topics', cacheMiddleware(1800), async (req, res, next) => {
-  try {
-    const hotTopics = await newsService.getHotTopics();
-    res.json(hotTopics);
-  } catch (error) {
-    // Se l'errore è già formattato (ad es. dal newsService)
-    if (error.status && error.message) {
-      return res.status(error.status).json({ 
-        error: {
-          message: error.message,
-          code: error.code || 'ERROR'
-        }
-      });
-    }
-    
-    // Altrimenti, è un errore generico
-    logger.error(`Error getting hot topics: ${error.message}`);
-    res.status(500).json({ 
-      error: { 
-        message: 'Si è verificato un errore nel recupero dei topic. Riprova più tardi.',
-        code: 'TOPICS_ERROR'
-      } 
-    });
-  }
-});
+router.get('/hot-topics', cacheMiddleware(1800), asyncHandler(async (req, res) => {
+  const hotTopics = await newsService.getHotTopics();
+  res.json(hotTopics);
+}));
 
 // Get topics with their variants
-router.get('/topics/map', cacheMiddleware(86400), (req, res) => {
-  try {
-    // Restituisci la mappa di equivalenza dei topic
-    res.json({
-      topics: Object.keys(topicNormalizer.topicEquivalents),
-      mappings: topicNormalizer.topicEquivalents
-    });
-  } catch (error) {
-    logger.error(`Error getting topic mappings: ${error.message}`);
-    res.status(500).json({ 
-      error: { 
-        message: 'Si è verificato un errore nel recupero delle mappature dei topic.',
-        code: 'TOPIC_MAP_ERROR'
-      } 
-    });
-  }
-});
+router.get('/topics/map', cacheMiddleware(86400), asyncHandler(async (req, res) => {
+  // Restituisci la mappa di equivalenza dei topic
+  res.json({
+    topics: Object.keys(topicNormalizer.topicEquivalents),
+    mappings: topicNormalizer.topicEquivalents
+  });
+}));
 
 // Get news sources
-router.get('/sources', cacheMiddleware(86400), async (req, res, next) => {
-  try {
-    const sources = newsService.getSources();
-    res.json(sources);
-  } catch (error) {
-    logger.error(`Error getting sources: ${error.message}`);
-    res.status(500).json({ 
-      error: { 
-        message: 'Si è verificato un errore nel recupero delle fonti. Riprova più tardi.',
-        code: 'SOURCES_ERROR'
-      } 
-    });
+router.get('/sources', cacheMiddleware(86400), asyncHandler(async (req, res) => {
+  const sources = newsService.getSources();
+  res.json(sources);
+}));
+
+// Health check endpoint
+router.get('/health', (req, res) => {
+  // Verifica l'accesso alla cache
+  const cacheTest = cache.get('health_test');
+  if (cacheTest === undefined) {
+    cache.put('health_test', 'ok', 10 * 1000);
   }
+  
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    cacheStatus: cacheTest !== undefined ? 'ok' : 'error'
+  });
 });
 
 module.exports = router;

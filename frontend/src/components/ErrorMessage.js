@@ -1,8 +1,21 @@
 import React from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
-// Componente per visualizzare messaggi di errore
-const ErrorMessage = ({ error, onRetry }) => {
+/**
+ * Componente per visualizzare messaggi di errore in modo accessibile
+ * 
+ * @param {Object} props - Proprietà del componente
+ * @param {Error|Object} props.error - Errore da visualizzare
+ * @param {Function} props.onRetry - Funzione di callback per riprovare l'operazione
+ * @param {string} props.title - Titolo personalizzato (opzionale)
+ * @param {string} props.className - Classi CSS aggiuntive (opzionale)
+ */
+const ErrorMessage = ({ 
+  error, 
+  onRetry, 
+  title = "Impossibile caricare le notizie",
+  className = "" 
+}) => {
   // Messaggi predefiniti per vari tipi di errore
   const getErrorMessage = () => {
     if (!error) return null;
@@ -22,6 +35,8 @@ const ErrorMessage = ({ error, onRetry }) => {
       switch (error.response.status) {
         case 404:
           return 'Risorsa non trovata. Il servizio potrebbe essere stato spostato o rimosso.';
+        case 429:
+          return 'Troppe richieste. Attendi qualche momento prima di riprovare.';
         case 503:
           return 'Il servizio non è al momento disponibile. Riprova più tardi.';
         case 500:
@@ -35,23 +50,30 @@ const ErrorMessage = ({ error, onRetry }) => {
     return error.message || 'Si è verificato un errore imprevisto.';
   };
 
+  const errorMessage = getErrorMessage();
+
   return (
-    <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+    <div 
+      className={`bg-red-50 border border-red-200 rounded-lg p-6 text-center ${className}`}
+      role="alert"
+      aria-live="assertive"
+    >
       <div className="flex justify-center mb-4">
-        <AlertCircle size={48} className="text-red-500" />
+        <AlertCircle size={48} className="text-red-500" aria-hidden="true" />
       </div>
       <h2 className="text-xl font-semibold text-red-700 mb-2">
-        Impossibile caricare le notizie
+        {title}
       </h2>
       <p className="text-red-600 mb-4">
-        {getErrorMessage()}
+        {errorMessage}
       </p>
       {onRetry && (
         <button
           onClick={onRetry}
-          className="flex items-center mx-auto bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md"
+          className="flex items-center mx-auto bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          aria-label="Riprova a caricare"
         >
-          <RefreshCw size={16} className="mr-2" />
+          <RefreshCw size={16} className="mr-2" aria-hidden="true" />
           Riprova
         </button>
       )}
