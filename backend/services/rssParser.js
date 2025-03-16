@@ -52,8 +52,37 @@ function handleSourceFailure(source, error) {
 }
 
 /**
+ * Converte dati in formato binario (ArrayBuffer) in stringa
+ * @param {ArrayBuffer} data - Dati binari da convertire
+ * @param {string} contentType - Content-Type della risposta
+ * @returns {string} - Stringa convertita
+ */
+function convertBinaryToString(data, contentType) {
+  // Determina l'encoding basandosi sul content-type
+  let encoding = 'utf-8'; // Default encoding
+  
+  // Cerca l'encoding nel content-type
+  if (contentType && contentType.includes('charset=')) {
+    const charsetMatch = contentType.match(/charset=([^;]+)/i);
+    if (charsetMatch && charsetMatch[1]) {
+      encoding = charsetMatch[1].trim();
+    }
+  }
+  
+  try {
+    // Usa TextDecoder per convertire il buffer
+    return new TextDecoder(encoding).decode(data);
+  } catch (error) {
+    // Fallback a utf-8 se encoding specifico fallisce
+    logger.warn(`Failed to decode with encoding ${encoding}, falling back to utf-8: ${error.message}`);
+    return new TextDecoder('utf-8').decode(data);
+  }
+}
+
+/**
  * Esegue una richiesta HTTP con retry in caso di errore
  * Implementa una logica di retry migliorata con backoff exponenziale
+ * E gestisce automaticamente sia risposte testuali che binarie
  * 
  * @param {string} url - URL da recuperare
  * @param {Object} options - Opzioni axios
@@ -76,22 +105,47 @@ async function fetchWithRetry(url, options) {
   
   while (retryCount < RSS_MAX_RETRIES) {
     try {
-      // Aggiungi un timeout di sicurezza
+      // Usa sempre arraybuffer come responseType per poter gestire qualsiasi tipo di risposta
       const axiosOptions = {
         ...options,
-        timeout: RSS_TIMEOUT
+        timeout: RSS_TIMEOUT,
+        responseType: 'arraybuffer'
       };
       
       const response = await axios.get(url, axiosOptions);
       
+      // Ottieni il content-type dalla risposta
+      const contentType = response.headers['content-type'] || '';
+      let responseData;
+      
+      // Determina se è una risposta binaria o testuale in base al content-type
+      if (contentType.includes('xml') || contentType.includes('text/') || contentType.includes('application/json')) {
+        // Converti l'arraybuffer in stringa per i formati testuali
+        responseData = convertBinaryToString(response.data, contentType);
+      } else {
+        // Per altri formati, prova comunque a convertire in testo
+        // perché a volte i content-type sono incorretti
+        logger.info(`Unexpected content-type (${contentType}) for ${url}, attempting to convert to text`);
+        try {
+          responseData = convertBinaryToString(response.data, contentType);
+          // Verifica se l'output sembra XML
+          if (!responseData.includes('<')) {
+            logger.warn(`Converted data doesn't look like XML for ${url}`);
+          }
+        } catch (conversionError) {
+          logger.error(`Failed to convert response to string: ${conversionError.message}`);
+          throw new Error(`Unsupported content type: ${contentType}`);
+        }
+      }
+      
       // Cache la risposta valida
       responseCache.set(url, {
-        data: response.data,
+        data: responseData,
         timestamp: Date.now(),
         error: false
       });
       
-      return response;
+      return { data: responseData };
     } catch (error) {
       lastError = error;
       retryCount++;
@@ -137,7 +191,10 @@ async function fetchWithRetry(url, options) {
  */
 async function parseFeed(source) {
   try {
-    logger.info(`Fetching feed from ${source.name} (${source.url})`);
+    const url = source.url || '';
+    
+    // Log dell'inizio del fetch del feed
+    logger.info(`Fetching feed from ${source.name} ${source.subId ? '(' + source.subId + ')' : ''} - ${url}`);
     
     // Imposta opzioni avanzate con retry
     const options = {
@@ -146,11 +203,10 @@ async function parseFeed(source) {
         'Accept': 'application/rss+xml, application/xml, text/xml, */*'
       },
       validateStatus: status => status < 500, // Accetta anche risposte 3xx e 4xx
-      responseType: 'text' // Specifica il tipo di risposta come testo per evitare problemi di encoding
     };
     
     // Fetch con retry
-    const response = await fetchWithRetry(source.url, options);
+    const response = await fetchWithRetry(url, options);
     
     // Verifica se la risposta contiene dati validi
     if (!response.data) {
@@ -189,8 +245,9 @@ async function parseFeed(source) {
       }
       
       // Assegna un ID univoco e stabile
+      const sourceId = source.subId || source.id; // Usa subId per feed multipli se disponibile
       const itemId = item.guid || item.id || 
-        `${source.id}-${Buffer.from(item.title).toString('base64').substring(0, 20)}-${(item.pubDate || new Date().toISOString()).substring(0, 10)}`;
+        `${sourceId}-${Buffer.from(item.title).toString('base64').substring(0, 20)}-${(item.pubDate || new Date().toISOString()).substring(0, 10)}`;
       
       // Estrai il contenuto più completo disponibile
       let content = '';
@@ -210,7 +267,7 @@ async function parseFeed(source) {
         content: content,
         pubDate: item.pubDate || item.dcdate || item.isoDate || new Date().toISOString(),
         source: source.name,
-        sourceId: source.id,
+        sourceId: sourceId,
         url: item.link || '',
         image: getImageUrl(item),
         author: item.creator || item.author || null,

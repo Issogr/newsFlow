@@ -4,6 +4,7 @@
 
 const createError = require('./errorHandler').createError;
 const logger = require('./logger');
+const { decode } = require('html-entities'); // Importazione della libreria per decodificare le entità HTML
 
 /**
  * Sanitizza una stringa per prevenire XSS e injection
@@ -106,6 +107,7 @@ function sanitizeBody(fieldNames) {
 /**
  * Sanitizza l'HTML per prevenire XSS
  * Implementazione migliorata con una white-list di tag e attributi consentiti
+ * e decodifica delle entità HTML usando la libreria html-entities
  * 
  * @param {string} html - HTML da sanitizzare
  * @returns {string} - HTML sanitizzato
@@ -187,11 +189,14 @@ function sanitizeHtml(html) {
       return start + attrs + end;
     });
     
+    // Usa html-entities per decodificare TUTTE le entità HTML in modo completo
+    sanitized = decode(sanitized);
+    
     return sanitized;
   } catch (error) {
     logger.error(`Error sanitizing HTML: ${error.message}`);
-    // In caso di errore, rimuovi tutto l'HTML
-    return html.replace(/<[^>]*>/g, '');
+    // In caso di errore, rimuovi tutto l'HTML e decodifica comunque le entità
+    return decode(html.replace(/<[^>]*>/g, ''));
   }
 }
 

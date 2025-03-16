@@ -6,6 +6,7 @@ import React, { memo } from 'react';
  * Modificato per:
  * - Non mostrare immagini
  * - Garantire sempre la presenza di un estratto quando disponibile
+ * - Formattare correttamente i caratteri speciali
  */
 const NewsCard = memo(({ 
   group, 
@@ -122,9 +123,13 @@ const NewsCard = memo(({
       
       {/* Estratto del contenuto - sempre presente */}
       <div className="px-4 pb-4 flex-grow">
-        <p className="text-gray-700" aria-label="Estratto del contenuto">
-          {truncateContent(250)}
-        </p>
+        <p 
+          className="text-gray-700" 
+          aria-label="Estratto del contenuto"
+          // Aggiungiamo dangerouslySetInnerHTML per consentire la formattazione di base
+          // Questo è sicuro perché il contenuto è già stato sanitizzato dal backend
+          dangerouslySetInnerHTML={{ __html: `<strong>${truncateContent(250)}</strong>` }}
+        />
       </div>
       
       {/* Pulsanti azioni */}

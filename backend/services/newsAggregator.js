@@ -8,10 +8,21 @@ const asyncProcessor = require('./asyncProcessor');
 
 // News sources configuration
 const newsSources = [
-  { id: 'corriere', name: 'Corriere della Sera', url: 'https://www.corriere.it/rss/homepage.xml', type: 'rss', language: 'it' },
   { id: 'repubblica', name: 'La Repubblica', url: 'https://www.repubblica.it/rss/homepage/rss2.0.xml', type: 'rss', language: 'it' },
   { id: 'ansa', name: 'ANSA', url: 'https://www.ansa.it/sito/notizie/topnews/topnews_rss.xml', type: 'rss', language: 'it' },
-  { id: 'sole24ore', name: 'Il Sole 24 Ore', url: 'https://www.ilsole24ore.com/rss/italia.xml', type: 'rss', language: 'it' },
+  { 
+    id: 'sole24ore', 
+    name: 'Il Sole 24 Ore', 
+    urls: [
+      'https://www.ilsole24ore.com/rss/italia.xml',
+      'https://www.ilsole24ore.com/rss/mondo.xml',
+      'https://www.ilsole24ore.com/rss/finanza.xml',
+      'https://www.ilsole24ore.com/rss/economia.xml'
+    ], 
+    type: 'multi-rss', 
+    language: 'it' 
+  },
+  { id: 'ivgsavona', name: 'IVG Savona', url: 'https://www.ivg.it/?feed=news-news24', type: 'rss', language: 'it' },
   { id: 'bbc', name: 'BBC News', url: 'http://feeds.bbci.co.uk/news/world/rss.xml', type: 'rss', language: 'en' },
   { id: 'nytimes', name: 'New York Times', url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml', type: 'rss', language: 'en' },
   { id: 'guardian', name: 'The Guardian', url: 'https://www.theguardian.com/world/rss', type: 'rss', language: 'en' },
@@ -77,8 +88,30 @@ async function fetchAllNews() {
       }
     }
     
-    // Fetch from all sources in parallel
-    const newsPromises = newsSources.map(source => rssParser.parseFeed(source));
+    // Prepara le promesse per tutti i feed
+    const newsPromises = [];
+    
+    // Elabora tutte le fonti
+    for (const source of newsSources) {
+      if (source.type === 'multi-rss' && Array.isArray(source.urls)) {
+        // Per fonti con molteplici URL, crea un promise per ogni URL
+        for (const url of source.urls) {
+          const subSourceConfig = { 
+            ...source, 
+            url, 
+            type: 'rss', 
+            // Crea un subId per distinguere gli articoli dalle diverse sottofont
+            subId: `${source.id}-${url.split('/').pop().replace('.xml', '')}` 
+          };
+          newsPromises.push(rssParser.parseFeed(subSourceConfig));
+        }
+      } else {
+        // Per fonti normali, crea un singolo promise
+        newsPromises.push(rssParser.parseFeed(source));
+      }
+    }
+    
+    // Attendi il completamento di tutte le richieste
     const newsArrays = await Promise.allSettled(newsPromises);
     
     // Log dei risultati
