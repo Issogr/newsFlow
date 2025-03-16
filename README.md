@@ -25,10 +25,7 @@ Un'applicazione moderna per l'aggregazione di notizie in tempo reale da fonti au
 - **Ricerca avanzata**: Cerca in tutto il database di notizie, non solo tra quelle visualizzate
 - **Filtri flessibili**: Filtra per fonte, argomento o utilizzando i topic caldi del momento
 - **Funzione diff**: Confronta visivamente le differenze nel modo in cui diverse testate riportano la stessa notizia
-- **Sistema di cache avanzato**:
-  - Cache lato server multi-livello per ottimizzare le richieste RSS e AI
-  - Elaborazione asincrona in background per evitare timeout
-  - Cache lato client per migliorare le prestazioni anche offline
+- **Elaborazione asincrona**: Elaborazione in background per evitare timeout durante le richieste complesse
 - **Design responsive**: Interfaccia utente moderna che si adatta a qualsiasi dispositivo
 - **Aggiornamenti in tempo reale**: Dati sempre aggiornati dalle fonti originali
 - **Accessibilità migliorata**: Interfaccia completamente accessibile con supporto per screen reader e navigazione da tastiera
@@ -39,47 +36,52 @@ Un'applicazione moderna per l'aggregazione di notizie in tempo reale da fonti au
 
 Le seguenti migliorie sono state implementate per aumentare la robustezza, l'accessibilità e le prestazioni dell'applicazione:
 
-1. **Standardizzazione della gestione degli errori**:
+1. **Rimozione dei meccanismi di cache**:
+   - Eliminazione della cache lato server per garantire dati sempre aggiornati
+   - Rimozione della cache lato client per assicurare contenuti freschi ad ogni richiesta
+   - Ottimizzazione delle operazioni di rete per mantenere prestazioni elevate senza caching
+
+2. **Standardizzazione della gestione degli errori**:
    - Sistema centralizzato per formattazione e gestione errori
    - Middleware per cattura automatica delle eccezioni
    - Messaggi di errore più informativi e user-friendly
 
-2. **Sistema di retry per i feed RSS**:
+3. **Sistema di retry per i feed RSS**:
    - Implementazione di backoff esponenziale con jitter
    - Riprova automatica in caso di fallimento della connessione
    - Logging dettagliato degli errori di connessione
 
-3. **Parsing HTML più sicuro**:
+4. **Parsing HTML più sicuro**:
    - Implementazione di DOMPurify per la sanitizzazione dell'HTML
    - Prevenzione di potenziali vulnerabilità XSS
 
-4. **Validazione dati migliorata**:
+5. **Validazione dati migliorata**:
    - Validazione dei parametri delle richieste con express-validator
    - Sanitizzazione degli input per prevenire injection
 
-5. **Gestione asincrona migliorata**:
+6. **Gestione asincrona migliorata**:
    - Hook `useAsync` personalizzato per la gestione dello stato asincrono
    - Gestione più efficiente dei caricamenti e degli errori
 
-6. **Ottimizzazione delle prestazioni React**:
+7. **Ottimizzazione delle prestazioni React**:
    - Implementazione di React.memo per prevenire re-render non necessari
    - Uso di useMemo e useCallback per ottimizzare il calcolo di valori derivati
 
-7. **Accessibilità migliorata**:
+8. **Accessibilità migliorata**:
    - Aggiunta di attributi ARIA per supportare tecnologie assistive
    - Miglioramento della navigazione da tastiera
    - Contrasto dei colori adeguato alle linee guida WCAG
 
-8. **Container Docker ottimizzati**:
+9. **Container Docker ottimizzati**:
    - Multi-stage build per ridurre le dimensioni delle immagini
    - Configurazione di sicurezza migliorata
    - Dockerfile più efficienti
 
-9. **Health check dei container**:
-   - Endpoint di health check per monitorare lo stato dell'applicazione
-   - Integrabile con sistemi di orchestrazione container
+10. **Health check dei container**:
+    - Endpoint di health check per monitorare lo stato dell'applicazione
+    - Integrabile con sistemi di orchestrazione container
 
-10. **Logging avanzato**:
+11. **Logging avanzato**:
     - Configurazione Winston migliorata per la rotazione dei log
     - Gestione separata degli errori, eccezioni e promise rifiutate
     - Formattazione JSON per una migliore integrazione con strumenti di analisi
@@ -95,7 +97,6 @@ Il backend gestisce:
 - Analisi e normalizzazione del contenuto
 - Raggruppamento di notizie simili
 - Elaborazione asincrona in background per deduzione topic
-- Caching multi-livello per ottimizzare le prestazioni
 - API RESTful per il frontend
 - Gestione standardizzata degli errori
 - Validazione e sanitizzazione degli input
@@ -106,7 +107,6 @@ Il frontend si occupa di:
 - Presentazione delle notizie in un'interfaccia intuitiva
 - Gestione della ricerca e dei filtri
 - Visualizzazione delle differenze tra articoli simili
-- Caching lato client per migliorare l'esperienza offline
 - Gestione avanzata dello stato asincrono
 - Interfaccia accessibile e responsive
 
@@ -123,7 +123,6 @@ L'applicazione si connette a un servizio Ollama esterno che:
 - **Node.js**: Runtime JavaScript
 - **Express**: Framework web
 - **RSS Parser**: Parsing dei feed RSS
-- **Memory Cache**: Caching lato server
 - **Winston**: Logging avanzato
 - **Axios**: Client HTTP con sistema di retry
 - **TF-IDF e AI**: Algoritmi per il calcolo della similarità testuale e deduzione topic
@@ -136,7 +135,6 @@ L'applicazione si connette a un servizio Ollama esterno che:
 - **Tailwind CSS**: Framework CSS per il design
 - **Axios**: Client HTTP
 - **Lucide React**: Icone
-- **LocalStorage**: Caching lato client
 - **React Memo**: Ottimizzazione delle prestazioni
 
 ### Infrastruttura
@@ -373,8 +371,7 @@ Verifica lo stato di salute dell'applicazione.
 {
   "status": "ok",
   "timestamp": "2025-03-16T12:34:56.789Z",
-  "uptime": 3600,
-  "cacheStatus": "ok"
+  "uptime": 3600
 }
 ```
 
@@ -417,22 +414,6 @@ const newsSources = [
 ];
 ```
 
-### Modificare i parametri di caching
-
-Per modificare la durata della cache lato server, modifica i valori nel file `backend/routes/api.js`:
-
-```javascript
-router.get('/news', cacheMiddleware(300), async (req, res, next) => {
-  // 300 secondi (5 minuti)
-});
-```
-
-Per la cache lato client, modifica la costante `CACHE_EXPIRY` nel componente React:
-
-```javascript
-const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minuti in millisecondi
-```
-
 ### Personalizzare l'algoritmo di similarità
 
 Puoi modificare la soglia di similarità nel file `backend/services/newsAggregator.js`:
@@ -458,6 +439,9 @@ Per una configurazione più dettagliata, modifica il file `backend/utils/logger.
 ## 🚧 Sviluppo futuro
 
 Ecco alcune idee per il futuro sviluppo dell'applicazione:
-- **Analisi del sentiment**: Analizzare il tono delle notizie (positivo, negativo, neutro)
 - **Traduzione automatica**: Tradurre notizie da lingue diverse
 - **Modalità dark**: Aggiungere un tema scuro per l'interfaccia
+- **Progressive Web App**: Rendere l'applicazione installabile sui dispositivi
+- **Websockets**: Implementare aggiornamenti in tempo reale tramite websockets
+- **Monitoraggio delle prestazioni**: Aggiungere metriche per monitorare i tempi di risposta
+- **Miglioramento prestazioni AI**: Cache lato server multi-livello per ottimizzare le richieste RSS e AI
