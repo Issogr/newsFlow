@@ -13,6 +13,7 @@ const NewsAggregator = () => {
   const initialLoadDone = useRef(false);
   const lastWebSocketUpdate = useRef(null);
   const lastTopicUpdate = useRef(null);
+  const ignoreNextNewsUpdate = useRef(false);
   
   // Stati principali
   const [news, setNews] = useState([]);
@@ -44,6 +45,38 @@ const NewsAggregator = () => {
       console.log("WebSocket news update ricevuto:", websocket.lastNewsUpdate);
     }
   }, [websocket.lastNewsUpdate]);
+
+  // Funzione centrale per applicare i filtri a qualsiasi set di notizie
+  // Questa funzione sarà riutilizzata in vari punti dell'applicazione
+  const applyFilters = useCallback((newsToFilter) => {
+    if (!newsToFilter || !Array.isArray(newsToFilter) || newsToFilter.length === 0) {
+      return [];
+    }
+    
+    // Se c'è una query di ricerca attiva, non applichiamo ulteriori filtri
+    // perché la ricerca è già stata filtrata dal server
+    if (searchQuery.trim() && isSearching) {
+      return newsToFilter;
+    }
+    
+    let filtered = [...newsToFilter];
+    
+    // Filtra per fonti
+    if (activeFilters.sources.length > 0) {
+      filtered = filtered.filter(group => 
+        group.items && group.items.some(item => activeFilters.sources.includes(item.source))
+      );
+    }
+    
+    // Filtra per argomenti utilizzando l'helper
+    if (activeFilters.topics.length > 0) {
+      filtered = filtered.filter(group => 
+        activeFilters.topics.some(topic => topicHelper.groupHasTopic(group, topic))
+      );
+    }
+    
+    return filtered;
+  }, [activeFilters, searchQuery, isSearching]);
 
   useEffect(() => {
     if (websocket.isConnected) {
@@ -96,14 +129,19 @@ const NewsAggregator = () => {
       // Estrai tutte le fonti uniche
       const allSources = sourcesData.map(source => source.name);
       
-      // Imposta lo stato
+      // Imposta lo stato di tutte le news
       setNews(newsData);
-      setFilteredNews(newsData);
+      
+      // CORREZIONE: Applica i filtri attivi ai dati appena caricati
+      const filteredData = applyFilters(newsData);
+      setFilteredNews(filteredData);
+      
       setSources(allSources);
       setTopics(uniqueTopics);
       setHotTopics(hotTopicsData.map(t => t.topic));
 
       console.log("Dati caricati:", newsData);
+      console.log("Dati filtrati:", filteredData);
       
     } catch (error) {
       console.error("Errore nel recupero delle notizie:", error);
@@ -112,14 +150,18 @@ const NewsAggregator = () => {
       setLoading(false);
       // Marca che il caricamento iniziale è completato
       initialLoadDone.current = true;
+      
+      // Imposta il flag per ignorare il prossimo aggiornamento websocket
+      // poiché abbiamo appena caricato tutti i dati
+      ignoreNextNewsUpdate.current = true;
     }
-  }, [websocket]);
+  }, [websocket, applyFilters]);
 
   // Funzione per gestire la ricerca
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) {
-      // Se la query è vuota, mostra tutte le notizie
-      setFilteredNews(news);
+      // Se la query è vuota, applica solo i filtri attivi
+      setFilteredNews(applyFilters(news));
       return;
     }
     
@@ -130,21 +172,7 @@ const NewsAggregator = () => {
       const searchResults = await searchNews(searchQuery);
       
       // Applica i filtri attuali ai risultati della ricerca
-      let filtered = [...searchResults];
-      
-      // Filtra per fonti
-      if (activeFilters.sources.length > 0) {
-        filtered = filtered.filter(group => 
-          group.items && group.items.some(item => activeFilters.sources.includes(item.source))
-        );
-      }
-      
-      // Filtra per argomenti - usando il topicHelper per la normalizzazione
-      if (activeFilters.topics.length > 0) {
-        filtered = filtered.filter(group => 
-          activeFilters.topics.some(topic => topicHelper.groupHasTopic(group, topic))
-        );
-      }
+      let filtered = applyFilters(searchResults);
       
       setFilteredNews(filtered);
     } catch (error) {
@@ -154,7 +182,7 @@ const NewsAggregator = () => {
     } finally {
       setIsSearching(false);
     }
-  }, [searchQuery, news, activeFilters]);
+  }, [searchQuery, news, applyFilters]);
 
   // Effetto per caricare le notizie UNA sola volta all'avvio
   useEffect(() => {
@@ -163,35 +191,25 @@ const NewsAggregator = () => {
     }
   }, [loadNews]);
 
-  // Effetto per gestire i filtri (quando cambiano i filtri o le notizie)
+  // CORREZIONE: Effetto per ri-applicare i filtri quando cambiano i filtri attivi
   useEffect(() => {
     // Salta se il caricamento non è stato completato
     if (!initialLoadDone.current) return;
     
-    // Gestisce i filtri immediati (senza ricerca)
-    if (!searchQuery.trim()) {
-      // Se non ci sono notizie, non fare nulla
-      if (!news.length) return;
-      
-      let filtered = [...news];
-      
-      // Filtra per fonti
-      if (activeFilters.sources.length > 0) {
-        filtered = filtered.filter(group => 
-          group.items && group.items.some(item => activeFilters.sources.includes(item.source))
-        );
-      }
-      
-      // Filtra per argomenti
-      if (activeFilters.topics.length > 0) {
-        filtered = filtered.filter(group => 
-          activeFilters.topics.some(topic => topicHelper.groupHasTopic(group, topic))
-        );
-      }
-      
-      setFilteredNews(filtered);
-    }
-  }, [news, activeFilters, searchQuery]);
+    // Non facciamo nulla se stiamo cercando qualcosa
+    if (searchQuery.trim() && isSearching) return;
+    
+    // Applica i filtri alle notizie
+    const filtered = applyFilters(news);
+    setFilteredNews(filtered);
+    
+    console.log("Filtri applicati:", {
+      sourcesFilters: activeFilters.sources,
+      topicsFilters: activeFilters.topics,
+      risultatiFiltrati: filtered.length
+    });
+    
+  }, [activeFilters, news, applyFilters, searchQuery, isSearching]);
 
   // Effetto per eseguire la ricerca quando cambia la query
   useEffect(() => {
@@ -203,13 +221,14 @@ const NewsAggregator = () => {
       if (searchQuery.trim()) {
         handleSearch();
       } else if (searchQuery === '') {
-        // Se la query è vuota, resetta i risultati di ricerca
-        setFilteredNews(news);
+        // CORREZIONE: Se la query è vuota, applica solo i filtri attivi
+        // invece di reimpostare direttamente tutte le news
+        setFilteredNews(applyFilters(news));
       }
     }, 500);
     
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, handleSearch, news]);
+  }, [searchQuery, handleSearch, news, applyFilters]);
 
   // Gestione filtri WebSocket - Una volta sola quando cambiano i filtri
   useEffect(() => {
@@ -238,6 +257,15 @@ const NewsAggregator = () => {
       // Aggiorna il riferimento all'ultimo update processato
       lastWebSocketUpdate.current = websocket.lastNewsUpdate.timestamp;
       console.log('Nuovi articoli disponibili:', websocket.lastNewsUpdate.count);
+      
+      // CORREZIONE: Non aggiorniamo immediatamente gli articoli
+      // ma lasciamo che l'utente usi il pulsante di aggiornamento o il badge
+      // per mantenere i filtri correnti
+      
+      // Se abbiamo appena caricato tutti i dati, ignoriamo questo aggiornamento
+      if (ignoreNextNewsUpdate.current) {
+        ignoreNextNewsUpdate.current = false;
+      }
     }
   }, [websocket.lastNewsUpdate]);
 
@@ -355,50 +383,26 @@ const NewsAggregator = () => {
             const allTopics = [...prevTopics, ...topics];
             return [...new Set(allTopics)].sort();
           });
+          
+          // CORREZIONE: Dopo aver aggiornato le news, riapplica i filtri
+          // in modo asincrono per evitare problemi di stato
+          setTimeout(() => {
+            setFilteredNews(currentFiltered => {
+              // Se non ci sono filtri attivi, non facciamo nulla
+              if (activeFilters.sources.length === 0 && activeFilters.topics.length === 0) {
+                return currentFiltered;
+              }
+              return applyFilters(updatedNews);
+            });
+          }, 0);
         }
         
         // Restituisci il nuovo array di news
         return updated ? updatedNews : prevNews;
       });
-      
-      // Aggiorna anche il filteredNews se non c'è una ricerca attiva
-      if (!searchQuery.trim()) {
-        setFilteredNews(prevFiltered => {
-          // Aggiorna filteredNews con la stessa logica
-          const updatedFiltered = [...prevFiltered];
-          let updated = false;
-          
-          const filteredMatches = findArticleMatches(prevFiltered, articleId);
-          
-          filteredMatches.forEach(match => {
-            const group = updatedFiltered[match.groupIndex];
-            const item = { ...group.items[match.itemIndex] };
-            
-            const existingTopics = Array.isArray(item.topics) ? item.topics : [];
-            const combinedTopics = [...new Set([...existingTopics, ...topics])];
-            item.topics = combinedTopics;
-            
-            const updatedItems = [...group.items];
-            updatedItems[match.itemIndex] = item;
-            
-            const groupTopics = Array.isArray(group.topics) ? group.topics : [];
-            const updatedGroupTopics = [...new Set([...groupTopics, ...topics])];
-            
-            updatedFiltered[match.groupIndex] = {
-              ...group,
-              items: updatedItems,
-              topics: updatedGroupTopics
-            };
-            
-            updated = true;
-          });
-          
-          return updated ? updatedFiltered : prevFiltered;
-        });
-      }
     }
     
-  }, [websocket.lastTopicUpdate, searchQuery, news]);
+  }, [websocket.lastTopicUpdate, activeFilters, applyFilters]);
 
   // Debug per monitorare i cambiamenti negli articoli
   useEffect(() => {
