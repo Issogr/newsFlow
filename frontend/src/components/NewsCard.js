@@ -3,6 +3,9 @@ import React, { memo } from 'react';
 /**
  * Componente per visualizzare una singola card di notizia
  * Ottimizzato con memo per evitare rendering non necessari
+ * Modificato per:
+ * - Non mostrare immagini
+ * - Garantire sempre la presenza di un estratto quando disponibile
  */
 const NewsCard = memo(({ 
   group, 
@@ -32,10 +35,40 @@ const NewsCard = memo(({
     }
   };
 
-  // Tronca il contenuto dell'articolo
-  const truncateContent = (content, maxLength = 150) => {
-    if (!content || typeof content !== 'string') return '';
-    return content.length > maxLength ? `${content.substring(0, maxLength)}...` : content;
+  // Ottiene il contenuto migliore disponibile tra description e content
+  const getBestContent = () => {
+    // Preferisci il content se disponibile e più lungo della description
+    const mainItem = group.items[0];
+    const content = mainItem.content || '';
+    const description = mainItem.description || group.description || '';
+    
+    // Se il content è più lungo e significativo, usa quello
+    if (content.length > 30 && content.length > description.length) {
+      return content;
+    }
+    
+    // Altrimenti usa la description
+    return description;
+  };
+
+  // Tronca il contenuto dell'articolo ma garantisce una lunghezza minima se disponibile
+  const truncateContent = (maxLength = 200) => {
+    const content = getBestContent();
+    
+    if (!content || typeof content !== 'string') {
+      return 'Nessun contenuto disponibile per questo articolo.';
+    }
+    
+    // Pulisce il testo da eventuali tag HTML residui
+    const cleanContent = content.replace(/<[^>]*>?/gm, '');
+    
+    // Garantisce una lunghezza minima di 100 caratteri se disponibile
+    const minLength = Math.min(100, cleanContent.length);
+    const actualMaxLength = Math.max(maxLength, minLength);
+    
+    return cleanContent.length > actualMaxLength 
+      ? `${cleanContent.substring(0, actualMaxLength)}...` 
+      : cleanContent;
   };
 
   // Verifica se un topic è attivo nei filtri
@@ -46,9 +79,8 @@ const NewsCard = memo(({
   return (
     <article className="bg-white rounded-lg shadow overflow-hidden h-full flex flex-col transition-shadow hover:shadow-md">
       {/* Intestazione card */}
-      <div className="p-4 flex-grow">
+      <div className="p-4">
         <h2 className="text-lg font-semibold">{group.title}</h2>
-        <p className="text-gray-600 mt-1">{group.description}</p>
         
         {/* Fonti e data */}
         <div className="mt-2 flex flex-wrap gap-1">
@@ -88,14 +120,12 @@ const NewsCard = memo(({
         )}
       </div>
       
-      {/* Anteprima contenuto */}
-      {group.items[0].content && (
-        <div className="px-4 pb-2">
-          <p className="text-gray-700" aria-label="Anteprima del contenuto">
-            {truncateContent(group.items[0].content)}
-          </p>
-        </div>
-      )}
+      {/* Estratto del contenuto - sempre presente */}
+      <div className="px-4 pb-4 flex-grow">
+        <p className="text-gray-700" aria-label="Estratto del contenuto">
+          {truncateContent(250)}
+        </p>
+      </div>
       
       {/* Pulsanti azioni */}
       <div className="px-4 py-4 mt-auto border-t border-gray-100">
