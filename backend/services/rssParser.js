@@ -226,11 +226,22 @@ async function parseFeed(source) {
         }
       }
       
-      // Estrai i topic esistenti immediatamente (il resto sarà elaborato in modo asincrono)
-      article.topics = await extractInitialTopics(item, article, source.language);
+      // MIGLIORATO: Prima controlla se ci sono topic già dedotti in precedenza
+      // usando sia ID che titolo per il matching
+      let existingTopics = asyncProcessor.getTopicsForArticle(article.id, article);
       
-      // Avvia l'elaborazione asincrona per la deduzione dei topic mancanti
-      asyncProcessor.startTopicDeduction(article.id, article, source.language);
+      if (existingTopics && existingTopics.length > 0) {
+        article.topics = existingTopics;
+        logger.debug(`Using existing topics for "${article.title}": ${existingTopics.join(', ')}`);
+      } else {
+        // Se non ci sono topic esistenti, estrai i topic dai metadati dell'articolo
+        article.topics = await extractInitialTopics(item, article, source.language);
+        
+        // Avvia l'elaborazione asincrona per la deduzione dei topic mancanti
+        if (article.topics.length < 2) {
+          asyncProcessor.startTopicDeduction(article.id, article, source.language);
+        }
+      }
       
       return article;
     }));

@@ -8,12 +8,20 @@ const ollamaService = require('./ollamaService');
 const topicNormalizer = require('./topicNormalizer');
 const websocketService = require('./websocketService');
 const crypto = require('crypto');
+const fs = require('fs').promises;
+const path = require('path');
 
 // Code di elaborazione
 const topicDeductionQueue = [];
 // Struttura dati per tenere traccia dei job in memoria
 const activeJobs = new Map();
+// Mappa di lookup per trovare rapidamente i topic per titolo di articolo
+const titleToTopicsMap = new Map();
 let isProcessing = false;
+
+// File di cache per i topic
+const TOPICS_CACHE_DIR = path.join(__dirname, '../data');
+const TOPICS_CACHE_FILE = path.join(TOPICS_CACHE_DIR, 'topic-cache.json');
 
 // Intervallo di elaborazione in ms (più rapido = più CPU, più lento = meno reattivo)
 const PROCESSING_INTERVAL = parseInt(process.env.PROCESSING_INTERVAL || '100', 10);
@@ -26,6 +34,126 @@ const JOB_PRIORITIES = {
   'topic_deduction': 1,
   'default': 10
 };
+
+/**
+ * Assicura che la directory per la cache esista
+ */
+async function ensureDirectoryExists() {
+  try {
+    await fs.mkdir(TOPICS_CACHE_DIR, { recursive: true });
+  } catch (err) {
+    if (err.code !== 'EEXIST') {
+      logger.error(`Error creating cache directory: ${err.message}`);
+    }
+  }
+}
+
+/**
+ * Salva lo stato dei topic dedotti in un file
+ */
+async function saveTopicsToFile() {
+  try {
+    // Crea un oggetto con i topic per ogni articolo
+    const topicsCache = {};
+    
+    activeJobs.forEach((job, id) => {
+      if (job.status === 'completed' && job.result && job.result.length > 0) {
+        // Salva sia per ID che per titolo dell'articolo per facilitare il matching successivo
+        const articleTitle = job.article?.title || '';
+        
+        topicsCache[id] = {
+          articleId: job.originalArticleId,
+          title: articleTitle,
+          topics: job.result,
+          timestamp: job.completedAt || Date.now()
+        };
+      }
+    });
+    
+    // Assicurati che la directory esista
+    await ensureDirectoryExists();
+    
+    // Salva nel file
+    await fs.writeFile(TOPICS_CACHE_FILE, JSON.stringify(topicsCache, null, 2));
+    logger.info(`Cached ${Object.keys(topicsCache).length} topic entries to file`);
+  } catch (error) {
+    logger.error(`Error saving topics to file: ${error.message}`);
+  }
+}
+
+/**
+ * Carica lo stato dei topic dedotti da un file
+ */
+async function loadTopicsFromFile() {
+  try {
+    // Verifica se il file esiste
+    await fs.access(TOPICS_CACHE_FILE);
+    
+    // Leggi e parsa il file
+    const data = await fs.readFile(TOPICS_CACHE_FILE, 'utf8');
+    const topicsCache = JSON.parse(data);
+    
+    // Ripristina i topic nella memoria
+    let restoredCount = 0;
+    
+    Object.entries(topicsCache).forEach(([id, entry]) => {
+      // Crea un job "completato" per ogni entry
+      if (entry.topics && Array.isArray(entry.topics) && entry.topics.length > 0) {
+        const articleTitle = entry.title || '';
+        
+        activeJobs.set(id, {
+          id,
+          originalArticleId: entry.articleId,
+          article: { title: articleTitle },
+          status: 'completed',
+          result: entry.topics,
+          completedAt: entry.timestamp
+        });
+        
+        // Aggiungi anche alla mappa titolo->topics per trovare rapidamente per titolo
+        if (articleTitle) {
+          const normalizedTitle = normalizeTitle(articleTitle);
+          titleToTopicsMap.set(normalizedTitle, entry.topics);
+        }
+        
+        restoredCount++;
+      }
+    });
+    
+    logger.info(`Restored ${restoredCount} topic entries from cache file`);
+    logger.info(`Created ${titleToTopicsMap.size} title-to-topics mappings for quick lookup`);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      logger.info('No topics cache file found, starting with empty cache');
+    } else {
+      logger.error(`Error loading topics from file: ${error.message}`);
+    }
+  }
+}
+
+/**
+ * Normalizza un titolo per il confronto
+ * @param {string} title - Titolo da normalizzare
+ * @returns {string} - Titolo normalizzato
+ */
+function normalizeTitle(title) {
+  if (!title || typeof title !== 'string') return '';
+  
+  return title
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '') // Rimuovi caratteri speciali
+    .replace(/\s+/g, ' ')    // Riduci spazi multipli a singoli
+    .trim();
+}
+
+// Carica i topic dal file all'avvio
+(async () => {
+  try {
+    await loadTopicsFromFile();
+  } catch (err) {
+    logger.error(`Failed to load topics cache: ${err.message}`);
+  }
+})();
 
 /**
  * Normalizza un ID articolo per garantire coerenza nel confronto
@@ -106,11 +234,20 @@ function startTopicDeduction(articleId, article, language) {
   const jobId = articleHash || normalizedArticleId;
   
   // Debug dell'ID articolo
-  logger.info(`Starting topic deduction for article ID: "${jobId}" of type ${typeof jobId}`);
+  logger.debug(`Starting topic deduction for article ID: "${jobId}" with title "${article.title}"`);
   
   // Se l'articolo ha già almeno 3 topic, non avviare un nuovo job
   if (article.topics && Array.isArray(article.topics) && article.topics.length >= 3) {
     return article.topics;
+  }
+  
+  // NOVITÀ: Cerca topic anche per titolo
+  const normalizedTitle = normalizeTitle(article.title);
+  const topicsByTitle = titleToTopicsMap.get(normalizedTitle);
+  
+  if (topicsByTitle && topicsByTitle.length > 0) {
+    logger.info(`Found topics by title match for "${article.title}": ${topicsByTitle.join(', ')}`);
+    return topicsByTitle;
   }
   
   // Se c'è già un job in corso per questo articolo, restituisci i topic esistenti
@@ -129,8 +266,21 @@ function startTopicDeduction(articleId, article, language) {
     }
   }
   
+  // Cerca tra i job completati
+  const existingJob = activeJobs.get(jobId);
+  if (existingJob && existingJob.status === 'completed' && existingJob.result && existingJob.result.length > 0) {
+    logger.info(`Using cached topics for article ${jobId}: ${existingJob.result.join(', ')}`);
+    
+    // Aggiorna anche la mappa per titolo
+    if (normalizedTitle) {
+      titleToTopicsMap.set(normalizedTitle, existingJob.result);
+    }
+    
+    return existingJob.result;
+  }
+  
   // Debug dei topic attuali dell'articolo
-  logger.info(`Current topics for article ${jobId}: ${JSON.stringify(article.topics || [])}`);
+  logger.debug(`Current topics for article ${jobId}: ${JSON.stringify(article.topics || [])}`);
   
   // Crea un nuovo job
   const job = {
@@ -264,6 +414,19 @@ async function processNextJob() {
       updatedJob.result = combinedTopics;
       updatedJob.completedAt = Date.now();
       activeJobs.set(job.id, updatedJob);
+      
+      // Aggiorna anche la mappa titolo->topics
+      if (job.article && job.article.title) {
+        const normalizedTitle = normalizeTitle(job.article.title);
+        titleToTopicsMap.set(normalizedTitle, combinedTopics);
+      }
+      
+      // Salva i topic nel file (con throttling per evitare troppe scritture)
+      if (Math.random() < 0.1) { // 10% di probabilità di salvare ad ogni aggiornamento
+        saveTopicsToFile().catch(err => {
+          logger.error(`Failed to save topics cache: ${err.message}`);
+        });
+      }
     }
     
     // Aggiorna l'articolo originale e notifica i client tramite WebSocket
@@ -359,24 +522,39 @@ function deduceTopicsStatically(article) {
 /**
  * Recupera i topic attuali per un articolo (inclusi quelli dedotti)
  * @param {string} articleId - ID dell'articolo
+ * @param {Object} [article] - Articolo completo (opzionale)
  * @returns {string[]} - Topic dedotti o vuoto se il job non esiste
  */
-function getTopicsForArticle(articleId) {
-  if (!articleId) return [];
+function getTopicsForArticle(articleId, article = null) {
+  if (!articleId && !article) return [];
   
-  // Normalizza l'ID per la ricerca
-  const normalizedId = normalizeArticleId(articleId);
-  
-  // Cerca per corrispondenza esatta
-  if (activeJobs.has(normalizedId)) {
-    return activeJobs.get(normalizedId).result || [];
+  // Nuova logica: se abbiamo l'oggetto articolo completo, proviamo anche il match per titolo
+  if (article && article.title) {
+    const normalizedTitle = normalizeTitle(article.title);
+    const topicsByTitle = titleToTopicsMap.get(normalizedTitle);
+    
+    if (topicsByTitle && topicsByTitle.length > 0) {
+      logger.debug(`Found topics by title for "${article.title}": ${topicsByTitle.join(', ')}`);
+      return topicsByTitle;
+    }
   }
   
-  // Cerca per corrispondenza flessibile
-  for (const [jobId, job] of activeJobs.entries()) {
-    if (articleIdsMatch(normalizedId, jobId) || 
-        articleIdsMatch(normalizedId, job.originalArticleId)) {
-      return job.result || [];
+  // Logica originale per ID articolo
+  if (articleId) {
+    // Normalizza l'ID per la ricerca
+    const normalizedId = normalizeArticleId(articleId);
+    
+    // Cerca per corrispondenza esatta
+    if (activeJobs.has(normalizedId)) {
+      return activeJobs.get(normalizedId).result || [];
+    }
+    
+    // Cerca per corrispondenza flessibile
+    for (const [jobId, job] of activeJobs.entries()) {
+      if (articleIdsMatch(normalizedId, jobId) || 
+          articleIdsMatch(normalizedId, job.originalArticleId)) {
+        return job.result || [];
+      }
     }
   }
   
@@ -425,9 +603,16 @@ function cleanupCompletedJobs(force = false) {
 // Esegui la pulizia ogni 5 minuti
 const cleanupInterval = setInterval(cleanupCompletedJobs, 5 * 60 * 1000);
 
-// Assicurati che l'interval sia terminato quando il processo termina
+// Pianifica il salvataggio periodico dei topic su file
+const saveInterval = setInterval(saveTopicsToFile, 10 * 60 * 1000); // Ogni 10 minuti
+
+// Assicurati che gli interval siano terminati quando il processo termina
 process.on('exit', () => {
   clearInterval(cleanupInterval);
+  clearInterval(saveInterval);
+  
+  // Salva i topic prima di terminare
+  saveTopicsToFile().catch(() => {});
 });
 
 module.exports = {

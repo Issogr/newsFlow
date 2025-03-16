@@ -10,7 +10,7 @@ services:
       # Variabili di ottimizzazione
       - OLLAMA_TIMEOUT=3000         # Timeout per chiamate a Ollama in ms
       - USE_OLLAMA=true             # Imposta a 'false' per disabilitare Ollama completamente
-      - MAX_ARTICLES_PER_SOURCE=10  # Numero massimo di articoli da elaborare per fonte
+      - MAX_ARTICLES_PER_SOURCE=30  # Numero massimo di articoli da elaborare per fonte
       - RSS_MAX_RETRIES=5           # Tentativi di retry per problemi DNS
       - RSS_RETRY_DELAY=2000        # Tempo iniziale tra retry in ms
       - RSS_TIMEOUT=15000           # Timeout per le richieste RSS in ms
@@ -22,6 +22,7 @@ services:
       - WS_PING_INTERVAL=25000      # Intervallo tra ping WebSocket (ms)
     volumes:
       - ./backend/logs:/usr/src/app/logs:rw
+      - ./backend/data:/usr/src/app/data:rw
     networks:
       - ollama-network
       - app-network

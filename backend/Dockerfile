@@ -29,9 +29,11 @@ COPY --from=build /app/node_modules ./node_modules
 # Copia il codice
 COPY . .
 
-# Crea la directory dei log e imposta i permessi
+# Crea le directory necessarie e imposta i permessi
 RUN mkdir -p logs && \
-    chown -R nodeuser:nodejs logs
+    mkdir -p data && \
+    chown -R nodeuser:nodejs logs && \
+    chown -R nodeuser:nodejs data
 
 # Esponi la porta
 EXPOSE 5000

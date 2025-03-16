@@ -4,6 +4,7 @@ const topicNormalizer = require('./topicNormalizer');
 const { sanitizeHtml } = require('../utils/inputValidator');
 const { createError } = require('../utils/errorHandler');
 const websocketService = require('./websocketService');
+const asyncProcessor = require('./asyncProcessor');
 
 // News sources configuration
 const newsSources = [
@@ -104,6 +105,24 @@ async function fetchAllNews() {
       description: sanitizeHtml(item.description || ''),
       content: sanitizeHtml(item.content || '')
     }));
+    
+    // MIGLIORATO: Arricchisci gli articoli con i topic dedotti in modo asincrono
+    // Passa l'articolo completo per un matching più efficace
+    for (const item of sanitizedItems) {
+      // Recupera topic sia per ID che per titolo
+      const deducedTopics = asyncProcessor.getTopicsForArticle(item.id, item);
+      
+      if (deducedTopics && deducedTopics.length > 0) {
+        // Combina i topic esistenti con quelli dedotti
+        const existingTopics = Array.isArray(item.topics) ? item.topics : [];
+        const allTopics = [...new Set([...existingTopics, ...deducedTopics])];
+        item.topics = allTopics;
+        logger.debug(`Enriched article ${item.id} with topics: ${deducedTopics.join(', ')}`);
+      } else {
+        // Se non abbiamo topic in cache, avvia la deduzione asincrona
+        asyncProcessor.startTopicDeduction(item.id, item, item.language || 'it');
+      }
+    }
     
     // Verifica se ci sono nuovi articoli rispetto alla cache
     const newArticles = findNewArticles(sanitizedItems, articlesCache);
@@ -332,6 +351,18 @@ function groupSimilarNews(newsItems) {
       const groupId = `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const mainItem = items[0];
       
+      // Raccogli tutti i topic dai vari item del gruppo
+      const allTopics = new Set();
+      items.forEach(item => {
+        if (item.topics && Array.isArray(item.topics)) {
+          item.topics.forEach(topic => {
+            if (typeof topic === 'string') {
+              allTopics.add(topic);
+            }
+          });
+        }
+      });
+      
       groups[groupId] = {
         id: groupId,
         items: [...items],
@@ -339,13 +370,7 @@ function groupSimilarNews(newsItems) {
         title: mainItem.title,
         description: mainItem.description,
         pubDate: mainItem.pubDate,
-        topics: Array.from(new Set(
-          items.flatMap(item => 
-            Array.isArray(item.topics) ? 
-              item.topics.filter(topic => typeof topic === 'string') : 
-              []
-          )
-        )),
+        topics: Array.from(allTopics),
         url: mainItem.url
       };
       
