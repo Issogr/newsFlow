@@ -1,6 +1,5 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
-const cache = require('memory-cache');
 
 // Configurazione Ollama
 const OLLAMA_API_URL = process.env.OLLAMA_API_URL || 'http://localhost:11434/api';
@@ -9,12 +8,6 @@ const USE_OLLAMA = process.env.USE_OLLAMA !== 'false'; // Disabilita Ollama se i
 
 // Configurazione timeout
 const OLLAMA_TIMEOUT = 3000; // 3 secondi di timeout per le chiamate a Ollama
-
-// Costanti per la cache
-const TOPIC_CACHE_PREFIX = 'ollama_topic_';
-const TOPIC_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 ore
-const CLASSIFICATION_CACHE_PREFIX = 'ollama_classify_';
-const CLASSIFICATION_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 giorni
 
 // Limita le chiamate concorrenti a Ollama
 const MAX_CONCURRENT_REQUESTS = 2;
@@ -78,20 +71,9 @@ function processNextRequest() {
 async function normalizeTopic(topic, targetLanguage = 'it') {
   if (!topic || typeof topic !== 'string') return null;
   
-  // Genera una chiave di cache unica
-  const cacheKey = `${TOPIC_CACHE_PREFIX}${topic.toLowerCase()}_${targetLanguage}`;
-  
-  // Controlla se il risultato è in cache
-  const cachedResult = cache.get(cacheKey);
-  if (cachedResult) {
-    return cachedResult;
-  }
-  
   // Se Ollama è disabilitato o non disponibile, usa un semplice formatting
   if (!USE_OLLAMA || !ollamaAvailable) {
-    const formattedTopic = topic.charAt(0).toUpperCase() + topic.slice(1).toLowerCase();
-    cache.put(cacheKey, formattedTopic, TOPIC_CACHE_TTL);
-    return formattedTopic;
+    return topic.charAt(0).toUpperCase() + topic.slice(1).toLowerCase();
   }
   
   try {
@@ -130,16 +112,11 @@ async function normalizeTopic(topic, targetLanguage = 'it') {
     // Esegui la richiesta tramite la coda
     const normalizedTopic = await queueOllamaRequest(makeRequest);
     
-    // Cache del risultato
-    cache.put(cacheKey, normalizedTopic, TOPIC_CACHE_TTL);
-    
     return normalizedTopic;
   } catch (error) {
     logger.error(`Error normalizing topic with Ollama: ${error.message}`);
     // Fallback: restituisci il topic originale con prima lettera maiuscola
-    const fallbackTopic = topic.charAt(0).toUpperCase() + topic.slice(1).toLowerCase();
-    cache.put(cacheKey, fallbackTopic, TOPIC_CACHE_TTL); // Cache anche il fallback
-    return fallbackTopic;
+    return topic.charAt(0).toUpperCase() + topic.slice(1).toLowerCase();
   }
 }
 
@@ -164,16 +141,6 @@ async function deduceTopics(article, language = 'it') {
   
   // Limita il testo per l'analisi
   const limitedText = text.substring(0, 500);
-  
-  // Crea una chiave di cache basata su un hash del testo
-  const contentHash = Buffer.from(limitedText).toString('base64').substring(0, 20);
-  const cacheKey = `${CLASSIFICATION_CACHE_PREFIX}${contentHash}`;
-  
-  // Controlla se il risultato è in cache
-  const cachedResult = cache.get(cacheKey);
-  if (cachedResult) {
-    return cachedResult;
-  }
   
   // Se Ollama è disabilitato o non disponibile, restituisci un array vuoto
   if (!USE_OLLAMA || !ollamaAvailable) {
@@ -215,9 +182,6 @@ async function deduceTopics(article, language = 'it') {
     
     // Esegui la richiesta tramite la coda
     const uniqueTopics = await queueOllamaRequest(makeRequest);
-    
-    // Cache del risultato
-    cache.put(cacheKey, uniqueTopics, CLASSIFICATION_CACHE_TTL);
     
     return uniqueTopics;
   } catch (error) {

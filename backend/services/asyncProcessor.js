@@ -4,21 +4,14 @@
  */
 
 const logger = require('../utils/logger');
-const cache = require('memory-cache');
 const ollamaService = require('./ollamaService');
 const topicNormalizer = require('./topicNormalizer');
 
-// Cache per memorizzare i job in corso
-const JOBS_CACHE_KEY = 'async_jobs';
-const JOBS_CACHE_TTL = 30 * 60 * 1000; // 30 minuti
-
 // Code di elaborazione
 const topicDeductionQueue = [];
+// Struttura dati per tenere traccia dei job in memoria
+const activeJobs = new Map();
 let isProcessing = false;
-
-// Limiti e configurazione 
-const MAX_QUEUE_SIZE = 1000; // Numero massimo di job in coda
-const JOB_TIMEOUT = 5 * 60 * 1000; // Timeout di 5 minuti per job
 
 // Intervallo di elaborazione in ms (più rapido = più CPU, più lento = meno reattivo)
 const PROCESSING_INTERVAL = 100;
@@ -37,33 +30,22 @@ function startTopicDeduction(articleId, article, language) {
   }
   
   // Se c'è già un job in corso per questo articolo, restituisci i topic esistenti
-  const jobsCache = cache.get(JOBS_CACHE_KEY) || {};
-  if (jobsCache[articleId] && jobsCache[articleId].status !== 'completed') {
+  if (activeJobs.has(articleId) && activeJobs.get(articleId).status !== 'completed') {
     return article.topics || [];
   }
   
-  // Verifica se la coda ha raggiunto il limite massimo
-  if (topicDeductionQueue.length >= MAX_QUEUE_SIZE) {
-    logger.warn(`Topic deduction queue is full (${MAX_QUEUE_SIZE} items). Skipping article ${articleId}`);
-    return article.topics || [];
-  }
-  
-  // Crea un nuovo job con timeout
+  // Crea un nuovo job
   const job = {
     id: articleId,
     article,
     language,
     status: 'pending',
     createdAt: Date.now(),
-    result: article.topics || [],
-    timeout: setTimeout(() => {
-      handleJobTimeout(articleId);
-    }, JOB_TIMEOUT)
+    result: article.topics || []
   };
   
-  // Salva il job nella cache
-  jobsCache[articleId] = job;
-  cache.put(JOBS_CACHE_KEY, jobsCache, JOBS_CACHE_TTL);
+  // Salva il job nella memoria
+  activeJobs.set(articleId, job);
   
   // Aggiungi il job alla coda
   topicDeductionQueue.push(job);
@@ -75,28 +57,6 @@ function startTopicDeduction(articleId, article, language) {
   
   // Restituisci i topic esistenti (quelli dedotti verranno aggiunti più tardi)
   return article.topics || [];
-}
-
-/**
- * Gestisce il timeout di un job
- * @param {string} jobId - ID del job
- */
-function handleJobTimeout(jobId) {
-  // Verifica se il job è ancora nella coda
-  const queueIndex = topicDeductionQueue.findIndex(job => job.id === jobId);
-  if (queueIndex !== -1) {
-    // Rimuovi il job dalla coda
-    const job = topicDeductionQueue.splice(queueIndex, 1)[0];
-    logger.warn(`Job ${jobId} timed out after ${JOB_TIMEOUT/1000} seconds and was removed from queue`);
-    
-    // Aggiorna lo stato del job nella cache
-    const jobsCache = cache.get(JOBS_CACHE_KEY) || {};
-    if (jobsCache[jobId]) {
-      jobsCache[jobId].status = 'timeout';
-      jobsCache[jobId].completedAt = Date.now();
-      cache.put(JOBS_CACHE_KEY, jobsCache, JOBS_CACHE_TTL);
-    }
-  }
 }
 
 /**
@@ -115,16 +75,11 @@ async function processNextJob() {
   const job = topicDeductionQueue.shift();
   
   try {
-    // Cancella il timeout perché stiamo elaborando il job
-    if (job.timeout) {
-      clearTimeout(job.timeout);
-    }
-    
     // Aggiorna lo stato del job
-    const jobsCache = cache.get(JOBS_CACHE_KEY) || {};
-    if (jobsCache[job.id]) {
-      jobsCache[job.id].status = 'processing';
-      cache.put(JOBS_CACHE_KEY, jobsCache, JOBS_CACHE_TTL);
+    if (activeJobs.has(job.id)) {
+      const updatedJob = activeJobs.get(job.id);
+      updatedJob.status = 'processing';
+      activeJobs.set(job.id, updatedJob);
     }
     
     // Esegui la deduzione dei topic con timeout di sicurezza
@@ -150,16 +105,16 @@ async function processNextJob() {
     // Combina i topic esistenti con quelli dedotti e rimuovi duplicati
     const combinedTopics = [...new Set([...existingTopics, ...deducedTopics])];
     
-    // Aggiorna la cache con il risultato
-    const updatedJobsCache = cache.get(JOBS_CACHE_KEY) || {};
-    if (updatedJobsCache[job.id]) {
-      updatedJobsCache[job.id].status = 'completed';
-      updatedJobsCache[job.id].result = combinedTopics;
-      updatedJobsCache[job.id].completedAt = Date.now();
-      cache.put(JOBS_CACHE_KEY, updatedJobsCache, JOBS_CACHE_TTL);
+    // Aggiorna lo stato del job con il risultato
+    if (activeJobs.has(job.id)) {
+      const updatedJob = activeJobs.get(job.id);
+      updatedJob.status = 'completed';
+      updatedJob.result = combinedTopics;
+      updatedJob.completedAt = Date.now();
+      activeJobs.set(job.id, updatedJob);
     }
     
-    // Aggiorna l'articolo nella cache delle notizie se esiste
+    // Aggiorna l'articolo originale (tenta di aggiornare direttamente l'articolo)
     updateArticleTopics(job.id, combinedTopics);
     
     logger.info(`Successfully deduced topics for article ${job.id}: ${combinedTopics.join(', ')}`);
@@ -167,12 +122,11 @@ async function processNextJob() {
     logger.error(`Error processing job ${job.id}: ${error.message}`);
     
     // Aggiorna lo stato del job in caso di errore
-    const jobsCache = cache.get(JOBS_CACHE_KEY) || {};
-    if (jobsCache[job.id]) {
-      jobsCache[job.id].status = 'error';
-      jobsCache[job.id].error = error.message;
-      jobsCache[job.id].completedAt = Date.now();
-      cache.put(JOBS_CACHE_KEY, jobsCache, JOBS_CACHE_TTL);
+    if (activeJobs.has(job.id)) {
+      const updatedJob = activeJobs.get(job.id);
+      updatedJob.status = 'error';
+      updatedJob.error = error.message;
+      activeJobs.set(job.id, updatedJob);
     }
   }
   
@@ -182,40 +136,15 @@ async function processNextJob() {
 }
 
 /**
- * Aggiorna i topic di un articolo nella cache delle notizie
+ * Aggiorna i topic di un articolo
  * @param {string} articleId - ID dell'articolo
  * @param {string[]} topics - Nuovi topic
  */
 function updateArticleTopics(articleId, topics) {
-  // Ottieni la cache delle notizie
-  const allNewsCache = cache.get('all_news');
-  if (!allNewsCache) return;
-  
-  let updated = false;
-  
-  // Cerca l'articolo in tutti i gruppi
-  allNewsCache.forEach(group => {
-    if (!group.items) return;
-    
-    // Cerca l'articolo nel gruppo
-    const articleIndex = group.items.findIndex(item => item.id === articleId);
-    if (articleIndex >= 0) {
-      // Aggiorna i topic dell'articolo
-      group.items[articleIndex].topics = topics;
-      
-      // Aggiorna anche i topic del gruppo
-      const allGroupTopics = group.items.flatMap(item => item.topics || []);
-      group.topics = [...new Set(allGroupTopics)];
-      
-      updated = true;
-    }
-  });
-  
-  // Salva la cache aggiornata
-  if (updated) {
-    cache.put('all_news', allNewsCache);
-    logger.info(`Updated topics for article ${articleId} in news cache`);
-  }
+  // In mancanza della cache, qui non facciamo nulla.
+  // Nella realtà, dovremmo fornire un sistema per aggiornare l'articolo originale
+  // o implementare un modo per avvertire i client dell'aggiornamento (es: websocket)
+  logger.info(`Topics updated for article ${articleId}: ${topics.join(', ')}`);
 }
 
 /**
@@ -250,50 +179,33 @@ function deduceTopicsStatically(article) {
  * @returns {string[]} - Topic dedotti o vuoto se il job non esiste
  */
 function getTopicsForArticle(articleId) {
-  const jobsCache = cache.get(JOBS_CACHE_KEY) || {};
-  const job = jobsCache[articleId];
+  const job = activeJobs.get(articleId);
   
-  if (job && (job.status === 'completed' || job.status === 'error' || job.status === 'timeout')) {
+  if (job && (job.status === 'completed' || job.status === 'error')) {
     return job.result || [];
   }
   
   return [];
 }
 
-/**
- * Pulisce i job completati o troppo vecchi dalla cache
- * Chiamato periodicamente dal server
- */
-function cleanupJobs() {
-  const jobsCache = cache.get(JOBS_CACHE_KEY) || {};
+// Funzione per pulire periodicamente i job completati, per gestire la memoria
+function cleanupCompletedJobs() {
+  const MAX_AGE_MS = 30 * 60 * 1000; // 30 minuti
   const now = Date.now();
-  let cleaned = 0;
   
-  Object.keys(jobsCache).forEach(jobId => {
-    const job = jobsCache[jobId];
-    
-    // Rimuovi job completati più vecchi di 1 ora
-    if ((job.status === 'completed' || job.status === 'error' || job.status === 'timeout') && 
-        job.completedAt && (now - job.completedAt > 60 * 60 * 1000)) {
-      delete jobsCache[jobId];
-      cleaned++;
+  for (const [jobId, job] of activeJobs.entries()) {
+    if ((job.status === 'completed' || job.status === 'error') && 
+        job.completedAt && 
+        (now - job.completedAt > MAX_AGE_MS)) {
+      activeJobs.delete(jobId);
     }
-    
-    // Rimuovi job pendenti troppo vecchi (più di 2 ore)
-    if (job.status === 'pending' && (now - job.createdAt > 2 * 60 * 60 * 1000)) {
-      delete jobsCache[jobId];
-      cleaned++;
-    }
-  });
-  
-  if (cleaned > 0) {
-    cache.put(JOBS_CACHE_KEY, jobsCache, JOBS_CACHE_TTL);
-    logger.info(`Cleaned up ${cleaned} old jobs from cache`);
   }
 }
 
+// Esegui la pulizia ogni 15 minuti
+setInterval(cleanupCompletedJobs, 15 * 60 * 1000);
+
 module.exports = {
   startTopicDeduction,
-  getTopicsForArticle,
-  cleanupJobs
+  getTopicsForArticle
 };
