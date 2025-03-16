@@ -12,6 +12,7 @@ const { JSDOM } = require('jsdom');
 const MAX_ARTICLES_PER_SOURCE = parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '10', 10);
 const MAX_RETRIES = parseInt(process.env.RSS_MAX_RETRIES || '3', 10);
 const INITIAL_RETRY_DELAY = parseInt(process.env.RSS_RETRY_DELAY || '1000', 10);
+const MAX_RESPONSE_SIZE = 10 * 1024 * 1024; // 10MB limite per risposte RSS
 
 // Setup DOMPurify per sanitizzazione HTML
 const window = new JSDOM('').window;
@@ -45,8 +46,28 @@ async function fetchWithRetry(url, options, retries = MAX_RETRIES, delay = INITI
   try {
     return await axios.get(url, options);
   } catch (error) {
+    // Migliora il logging per errori DNS
+    if (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN') {
+      logger.error(`DNS resolution failed for ${url}: ${error.code}`, { 
+        errorCode: error.code,
+        hostname: new URL(url).hostname
+      });
+      
+      // Se è l'ultimo tentativo, aggiungi suggerimenti utili
+      if (retries <= 1) {
+        logger.error(`Persistent DNS failure for ${url}. Possible issues:
+          1. Check if domain is valid and accessible from outside Docker
+          2. Verify DNS configuration in docker-compose.yml
+          3. Try using IP address if possible
+          4. Consider adding custom DNS servers to the container`);
+      }
+    }
+    
     if (retries <= 0) {
-      logger.error(`Fetch failed after ${MAX_RETRIES} retries: ${url}`, { error: error.message });
+      logger.error(`Fetch failed after ${MAX_RETRIES} retries: ${url}`, { 
+        error: error.message,
+        code: error.code || 'UNKNOWN'
+      });
       throw error;
     }
     
@@ -105,6 +126,27 @@ async function parseFeed(source) {
     // Verifica se la risposta contiene dati validi
     if (!response.data) {
       throw new Error('Empty response');
+    }
+    
+    // Verifica la dimensione della risposta per prevenire errori di memoria
+    const responseSize = typeof response.data === 'string' ? response.data.length : 
+                         JSON.stringify(response.data).length;
+    
+    if (responseSize > MAX_RESPONSE_SIZE) {
+      logger.warn(`RSS feed from ${source.name} is too large (${Math.round(responseSize/1024/1024)}MB), truncating to prevent memory issues`);
+      // Tronca la risposta per evitare errori di memoria
+      if (typeof response.data === 'string') {
+        response.data = response.data.substring(0, MAX_RESPONSE_SIZE);
+      } else {
+        // Se non è una stringa, converti e tronca
+        response.data = JSON.stringify(response.data).substring(0, MAX_RESPONSE_SIZE);
+      }
+    }
+    
+    // Tentativo di valutare se il contenuto è effettivamente XML
+    if (typeof response.data === 'string' && !response.data.trim().startsWith('<')) {
+      logger.error(`Response from ${source.name} doesn't appear to be XML: ${response.data.substring(0, 100)}...`);
+      throw new Error('Invalid XML format');
     }
     
     logger.info(`Successfully fetched feed from ${source.name}, parsing...`);

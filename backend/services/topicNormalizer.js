@@ -89,11 +89,22 @@ const topicEquivalents = {
  * @returns {string} - Il topic normalizzato o l'originale se non mappato
  */
 function normalizeTopic(topic) {
+  // Validazione input per prevenire errori
   if (!topic || typeof topic !== 'string') return null;
   
+  // Pulisci e standardizza il topic per la ricerca
   const lowerTopic = topic.toLowerCase().trim();
+  if (lowerTopic === '') return null;
+  
+  // Rimuovi caratteri speciali e simboli
+  const cleanTopic = lowerTopic.replace(/[^\w\s]/gi, '');
   
   // Cerca nella mappatura diretta
+  if (topicMappings[cleanTopic]) {
+    return topicMappings[cleanTopic];
+  }
+  
+  // Prova con il topic originale se la pulizia ha rimosso troppo
   if (topicMappings[lowerTopic]) {
     return topicMappings[lowerTopic];
   }
@@ -101,13 +112,14 @@ function normalizeTopic(topic) {
   // Cerca nelle categorie di equivalenza (per parole composte o varianti)
   for (const [normalized, variants] of Object.entries(topicEquivalents)) {
     // Verifica se il topic contiene una delle varianti
-    if (variants.some(variant => lowerTopic.includes(variant))) {
+    if (variants.some(variant => cleanTopic.includes(variant))) {
       return normalized;
     }
   }
   
   // Se non è mappato, lascia il topic originale ma capitalizza la prima lettera
-  return topic.charAt(0).toUpperCase() + topic.slice(1);
+  // e rimuovi spazi in eccesso
+  return topic.charAt(0).toUpperCase() + topic.slice(1).toLowerCase().trim();
 }
 
 /**
@@ -138,27 +150,55 @@ function getTopicVariants(normalizedTopic) {
  * @returns {boolean} - true se l'item contiene il topic o una sua variante
  */
 function itemHasTopic(item, topic) {
-  if (!item || !item.topics || !Array.isArray(item.topics) || !topic) {
+  // Validazione degli input
+  if (!item || !topic) return false;
+  
+  // Assicurati che item.topics sia un array
+  if (!item.topics || !Array.isArray(item.topics)) {
     return false;
   }
   
+  // Filtra elementi vuoti o non validi dall'array topics
+  const validTopics = item.topics.filter(t => t && typeof t === 'string' && t.trim() !== '');
+  if (validTopics.length === 0) return false;
+  
   // Normalizza il topic cercato
   const normalizedSearchTopic = normalizeTopic(topic);
+  if (!normalizedSearchTopic) return false;
   
   // Ottieni tutte le possibili varianti del topic
   const variants = getTopicVariants(normalizedSearchTopic);
   
   // Controlla se l'item ha un topic che corrisponde a una delle varianti
-  return item.topics.some(itemTopic => {
+  return validTopics.some(itemTopic => {
     const normalizedItemTopic = normalizeTopic(itemTopic);
     return normalizedItemTopic === normalizedSearchTopic;
   });
+}
+
+/**
+ * Pulisce e normalizza un array di topic
+ * @param {Array} topics - Array di topic da normalizzare
+ * @returns {Array} - Array di topic normalizzati senza duplicati
+ */
+function cleanAndNormalizeTopics(topics) {
+  if (!Array.isArray(topics)) return [];
+  
+  // Filtra e normalizza tutti i topic
+  const normalizedTopics = topics
+    .filter(topic => topic && typeof topic === 'string' && topic.trim() !== '')
+    .map(topic => normalizeTopic(topic))
+    .filter(Boolean); // Rimuovi eventuali null
+  
+  // Rimuovi duplicati
+  return [...new Set(normalizedTopics)];
 }
 
 module.exports = {
   normalizeTopic,
   getTopicVariants,
   itemHasTopic,
+  cleanAndNormalizeTopics,
   topicMappings,
   topicEquivalents
 };

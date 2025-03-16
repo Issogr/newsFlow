@@ -16,6 +16,10 @@ const JOBS_CACHE_TTL = 30 * 60 * 1000; // 30 minuti
 const topicDeductionQueue = [];
 let isProcessing = false;
 
+// Limiti e configurazione 
+const MAX_QUEUE_SIZE = 1000; // Numero massimo di job in coda
+const JOB_TIMEOUT = 5 * 60 * 1000; // Timeout di 5 minuti per job
+
 // Intervallo di elaborazione in ms (più rapido = più CPU, più lento = meno reattivo)
 const PROCESSING_INTERVAL = 100;
 
@@ -38,14 +42,23 @@ function startTopicDeduction(articleId, article, language) {
     return article.topics || [];
   }
   
-  // Crea un nuovo job
+  // Verifica se la coda ha raggiunto il limite massimo
+  if (topicDeductionQueue.length >= MAX_QUEUE_SIZE) {
+    logger.warn(`Topic deduction queue is full (${MAX_QUEUE_SIZE} items). Skipping article ${articleId}`);
+    return article.topics || [];
+  }
+  
+  // Crea un nuovo job con timeout
   const job = {
     id: articleId,
     article,
     language,
     status: 'pending',
     createdAt: Date.now(),
-    result: article.topics || []
+    result: article.topics || [],
+    timeout: setTimeout(() => {
+      handleJobTimeout(articleId);
+    }, JOB_TIMEOUT)
   };
   
   // Salva il job nella cache
@@ -65,6 +78,28 @@ function startTopicDeduction(articleId, article, language) {
 }
 
 /**
+ * Gestisce il timeout di un job
+ * @param {string} jobId - ID del job
+ */
+function handleJobTimeout(jobId) {
+  // Verifica se il job è ancora nella coda
+  const queueIndex = topicDeductionQueue.findIndex(job => job.id === jobId);
+  if (queueIndex !== -1) {
+    // Rimuovi il job dalla coda
+    const job = topicDeductionQueue.splice(queueIndex, 1)[0];
+    logger.warn(`Job ${jobId} timed out after ${JOB_TIMEOUT/1000} seconds and was removed from queue`);
+    
+    // Aggiorna lo stato del job nella cache
+    const jobsCache = cache.get(JOBS_CACHE_KEY) || {};
+    if (jobsCache[jobId]) {
+      jobsCache[jobId].status = 'timeout';
+      jobsCache[jobId].completedAt = Date.now();
+      cache.put(JOBS_CACHE_KEY, jobsCache, JOBS_CACHE_TTL);
+    }
+  }
+}
+
+/**
  * Processa il prossimo job nella coda
  */
 async function processNextJob() {
@@ -80,6 +115,11 @@ async function processNextJob() {
   const job = topicDeductionQueue.shift();
   
   try {
+    // Cancella il timeout perché stiamo elaborando il job
+    if (job.timeout) {
+      clearTimeout(job.timeout);
+    }
+    
     // Aggiorna lo stato del job
     const jobsCache = cache.get(JOBS_CACHE_KEY) || {};
     if (jobsCache[job.id]) {
@@ -131,6 +171,7 @@ async function processNextJob() {
     if (jobsCache[job.id]) {
       jobsCache[job.id].status = 'error';
       jobsCache[job.id].error = error.message;
+      jobsCache[job.id].completedAt = Date.now();
       cache.put(JOBS_CACHE_KEY, jobsCache, JOBS_CACHE_TTL);
     }
   }
@@ -212,14 +253,47 @@ function getTopicsForArticle(articleId) {
   const jobsCache = cache.get(JOBS_CACHE_KEY) || {};
   const job = jobsCache[articleId];
   
-  if (job && (job.status === 'completed' || job.status === 'error')) {
+  if (job && (job.status === 'completed' || job.status === 'error' || job.status === 'timeout')) {
     return job.result || [];
   }
   
   return [];
 }
 
+/**
+ * Pulisce i job completati o troppo vecchi dalla cache
+ * Chiamato periodicamente dal server
+ */
+function cleanupJobs() {
+  const jobsCache = cache.get(JOBS_CACHE_KEY) || {};
+  const now = Date.now();
+  let cleaned = 0;
+  
+  Object.keys(jobsCache).forEach(jobId => {
+    const job = jobsCache[jobId];
+    
+    // Rimuovi job completati più vecchi di 1 ora
+    if ((job.status === 'completed' || job.status === 'error' || job.status === 'timeout') && 
+        job.completedAt && (now - job.completedAt > 60 * 60 * 1000)) {
+      delete jobsCache[jobId];
+      cleaned++;
+    }
+    
+    // Rimuovi job pendenti troppo vecchi (più di 2 ore)
+    if (job.status === 'pending' && (now - job.createdAt > 2 * 60 * 60 * 1000)) {
+      delete jobsCache[jobId];
+      cleaned++;
+    }
+  });
+  
+  if (cleaned > 0) {
+    cache.put(JOBS_CACHE_KEY, jobsCache, JOBS_CACHE_TTL);
+    logger.info(`Cleaned up ${cleaned} old jobs from cache`);
+  }
+}
+
 module.exports = {
   startTopicDeduction,
-  getTopicsForArticle
+  getTopicsForArticle,
+  cleanupJobs
 };

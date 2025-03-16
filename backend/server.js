@@ -98,6 +98,31 @@ const server = app.listen(PORT, () => {
 
 server.timeout = SERVER_TIMEOUT;
 
+// Configurazione pulizia cache
+const CACHE_CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 ora
+
+/**
+ * Funzione per pulire la cache e prevenire memory leaks
+ */
+function cleanupMemoryCache() {
+  try {
+    const cache = require('memory-cache');
+    
+    // Pulizia dei job asincroni
+    const asyncProcessor = require('./services/asyncProcessor');
+    asyncProcessor.cleanupJobs();
+    
+    // Log pulizia completata
+    logger.debug('Memory cache cleanup executed');
+  } catch (err) {
+    logger.error(`Error during cache cleanup: ${err.message}`);
+  }
+}
+
+// Imposta pulizia periodica della cache
+setInterval(cleanupMemoryCache, CACHE_CLEANUP_INTERVAL);
+logger.info(`Cache cleanup scheduled every ${CACHE_CLEANUP_INTERVAL / 60000} minutes`);
+
 // Gestione degli errori non catturati
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught Exception:', error);

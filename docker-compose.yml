@@ -11,8 +11,8 @@ services:
       - OLLAMA_TIMEOUT=3000         # Timeout per chiamate a Ollama in ms
       - USE_OLLAMA=true             # Imposta a 'false' per disabilitare Ollama completamente
       - MAX_ARTICLES_PER_SOURCE=10  # Numero massimo di articoli da elaborare per fonte
-      - RSS_MAX_RETRIES=3           # Numero massimo di tentativi di caricamento RSS
-      - RSS_RETRY_DELAY=1000        # Ritardo iniziale tra i tentativi in ms
+      - RSS_MAX_RETRIES=5           # Aumentato a 5 tentativi per problemi DNS
+      - RSS_RETRY_DELAY=2000        # Aumentato a 2 secondi per dare più tempo alla risoluzione DNS
       - SERVER_TIMEOUT=60000        # Timeout del server in ms
       - LOG_LEVEL=info              # Livello di logging (debug, info, warn, error)
     volumes:
@@ -21,8 +21,9 @@ services:
       - ollama-network
       - app-network
     dns:
-      - 8.8.8.8
-      - 1.1.1.1
+      - 8.8.8.8       # Google DNS primario
+      - 1.1.1.1       # Cloudflare DNS
+      - 9.9.9.9       # Quad9 DNS (aggiunto per affidabilità)
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
       interval: 30s

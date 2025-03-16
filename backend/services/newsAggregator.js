@@ -5,7 +5,7 @@ const topicNormalizer = require('./topicNormalizer');
 
 // News sources configuration
 const newsSources = [
-  { id: 'corriere', name: 'Corriere della Sera', url: 'https://rss.corriere.it/rss2/homepage.xml', type: 'rss', language: 'it' },
+  { id: 'corriere', name: 'Corriere della Sera', url: 'https://www.corriere.it/rss/homepage.xml', type: 'rss', language: 'it' }, // URL aggiornato
   { id: 'repubblica', name: 'La Repubblica', url: 'https://www.repubblica.it/rss/homepage/rss2.0.xml', type: 'rss', language: 'it' },
   { id: 'ansa', name: 'ANSA', url: 'https://www.ansa.it/sito/notizie/topnews/topnews_rss.xml', type: 'rss', language: 'it' },
   { id: 'sole24ore', name: 'Il Sole 24 Ore', url: 'https://www.ilsole24ore.com/rss/italia.xml', type: 'rss', language: 'it' },
@@ -27,15 +27,37 @@ async function fetchAllNews() {
     const newsPromises = newsSources.map(source => rssParser.parseFeed(source));
     const newsArrays = await Promise.allSettled(newsPromises);
     
+    // Logga info dettagliate sugli errori di fetch per aiutare il debugging
+    const failedSources = newsArrays
+      .map((result, index) => ({ 
+        status: result.status, 
+        source: newsSources[index].name,
+        url: newsSources[index].url,
+        reason: result.status === 'rejected' ? result.reason?.message || 'Unknown error' : null 
+      }))
+      .filter(result => result.status === 'rejected');
+    
+    if (failedSources.length > 0) {
+      logger.warn(`Failed to fetch from ${failedSources.length} sources:`, {
+        failedSources: failedSources
+      });
+    }
+    
     // Elabora i risultati (sia successi che fallimenti)
     const allNewsItems = newsArrays
       .filter(result => result.status === 'fulfilled')
       .flatMap(result => result.value);
     
-    // Se non abbiamo notizie, lancia un errore
+    // Controlla se abbiamo almeno ALCUNE notizie, anche se non da tutte le fonti
     if (allNewsItems.length === 0) {
+      logger.error('No news could be fetched from any source', {
+        sources: newsSources.map(s => s.id)
+      });
       throw new Error('CONNECTION_ERROR');
     }
+    
+    // Se abbiamo almeno una fonte funzionante, continua
+    logger.info(`Successfully fetched ${allNewsItems.length} news items from ${newsArrays.filter(r => r.status === 'fulfilled').length}/${newsSources.length} sources`);
     
     // Group similar news
     const groupedNews = groupSimilarNews(allNewsItems);
@@ -154,6 +176,8 @@ function groupSimilarNews(newsItems) {
   
   // Calculate similarity between two items
   const calculateSimilarity = (item1, item2) => {
+    if (!item1 || !item2 || !item1.title || !item2.title) return 0;
+    
     const text1 = simplifyText(`${item1.title} ${item1.description || ''}`);
     const text2 = simplifyText(`${item2.title} ${item2.description || ''}`);
     
@@ -167,6 +191,14 @@ function groupSimilarNews(newsItems) {
     const union = new Set([...words1, ...words2]);
     
     return intersection.size / (union.size || 1); // Evita divisione per zero
+  };
+  
+  // Utility per normalizzare e filtrare i topic
+  const normalizeTopics = (topicsArray) => {
+    if (!topicsArray || !Array.isArray(topicsArray)) return [];
+    
+    const topicNormalizer = require('./topicNormalizer');
+    return topicNormalizer.cleanAndNormalizeTopics(topicsArray);
   };
   
   // Group items
@@ -185,18 +217,31 @@ function groupSimilarNews(newsItems) {
       const similarity = calculateSimilarity(mainItem, item);
       if (similarity > 0.3) { // Threshold for similarity
         group.items.push(item);
-        group.sources = [...new Set([...group.sources, item.source])];
+        
+        // Aggiungi la fonte se non già presente
+        if (!group.sources.includes(item.source)) {
+          group.sources.push(item.source);
+        }
         
         // Merge topics from all items in the group, ensuring normalization
-        const allTopics = [...group.topics];
+        const allTopics = [...(group.topics || [])];
+        
         if (item.topics && Array.isArray(item.topics)) {
-          item.topics.forEach(topic => {
-            if (typeof topic === 'string' && !allTopics.includes(topic)) {
+          // Aggiungi solo topic validi e non già presenti
+          const validItemTopics = item.topics.filter(topic => 
+            typeof topic === 'string' && topic.trim() !== ''
+          );
+          
+          validItemTopics.forEach(topic => {
+            // Evita duplicati
+            if (!allTopics.includes(topic)) {
               allTopics.push(topic);
             }
           });
         }
-        group.topics = allTopics;
+        
+        // Normalizza e pulisci i topic del gruppo
+        group.topics = normalizeTopics(allTopics);
         
         foundGroup = true;
         break;
@@ -206,6 +251,12 @@ function groupSimilarNews(newsItems) {
     if (!foundGroup) {
       // Create new group
       const groupId = `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Normalizza i topic dell'item prima di creare il gruppo
+      const normalizedTopics = normalizeTopics(
+        Array.isArray(item.topics) ? item.topics : []
+      );
+      
       groups[groupId] = {
         id: groupId,
         items: [item],
@@ -213,11 +264,30 @@ function groupSimilarNews(newsItems) {
         title: item.title,
         description: item.description,
         pubDate: item.pubDate,
-        topics: Array.isArray(item.topics) ? [...item.topics].filter(topic => typeof topic === 'string') : [],
+        topics: normalizedTopics,
         url: item.url
       };
     }
   });
+  
+  // Verifica finale e pulizia dei gruppi
+  for (const groupId in groups) {
+    const group = groups[groupId];
+    
+    // Assicurati che tutti i campi esistano e siano validi
+    group.topics = group.topics || [];
+    group.sources = group.sources || [];
+    group.items = (group.items || []).filter(Boolean);
+    
+    // Rimuovi eventuali duplicati
+    group.topics = [...new Set(group.topics)];
+    group.sources = [...new Set(group.sources)];
+    
+    // Se non ci sono item validi, rimuovi il gruppo
+    if (group.items.length === 0) {
+      delete groups[groupId];
+    }
+  }
   
   // Convert to array and sort by date
   return Object.values(groups)
