@@ -7,6 +7,7 @@ const logger = require('../utils/logger');
 const ollamaService = require('./ollamaService');
 const topicNormalizer = require('./topicNormalizer');
 const websocketService = require('./websocketService');
+const crypto = require('crypto');
 
 // Code di elaborazione
 const topicDeductionQueue = [];
@@ -27,6 +28,63 @@ const JOB_PRIORITIES = {
 };
 
 /**
+ * Normalizza un ID articolo per garantire coerenza nel confronto
+ * @param {string} id - ID dell'articolo da normalizzare
+ * @returns {string} - ID normalizzato
+ */
+function normalizeArticleId(id) {
+  if (!id) return '';
+  
+  // Rimuovi spazi e converti in lowercase per un confronto coerente
+  return id.toString().trim().toLowerCase();
+}
+
+/**
+ * Genera un hash unico per un articolo basato su titolo e URL
+ * @param {Object} article - Oggetto articolo
+ * @returns {string} - Hash unico
+ */
+function generateArticleHash(article) {
+  if (!article || !article.title) return '';
+  
+  const data = article.title + (article.url || '') + (article.pubDate || '');
+  return crypto.createHash('md5').update(data).digest('hex');
+}
+
+/**
+ * Controlla se due ID articolo corrispondono usando un approccio migliorato
+ * @param {string} id1 - Primo ID
+ * @param {string} id2 - Secondo ID
+ * @returns {boolean} - true se gli ID corrispondono
+ */
+function articleIdsMatch(id1, id2) {
+  if (!id1 || !id2) return false;
+  
+  // Normalizzazione degli ID
+  const normalizedId1 = normalizeArticleId(id1);
+  const normalizedId2 = normalizeArticleId(id2);
+  
+  // Confronto esatto
+  if (normalizedId1 === normalizedId2) return true;
+  
+  // Evita falsi positivi con stringhe troppo corte
+  if (normalizedId1.length < 5 || normalizedId2.length < 5) {
+    return false;
+  }
+  
+  // Controllo se uno è contenuto nell'altro ma solo per ID abbastanza lunghi
+  // e se la lunghezza dell'ID più corto è almeno il 70% di quello più lungo
+  const longerLength = Math.max(normalizedId1.length, normalizedId2.length);
+  const shorterLength = Math.min(normalizedId1.length, normalizedId2.length);
+  
+  if (shorterLength / longerLength >= 0.7) {
+    return normalizedId1.includes(normalizedId2) || normalizedId2.includes(normalizedId1);
+  }
+  
+  return false;
+}
+
+/**
  * Avvia un job asincrono per dedurre i topic di un articolo
  * @param {string} articleId - ID dell'articolo
  * @param {Object} article - Oggetto articolo
@@ -40,13 +98,23 @@ function startTopicDeduction(articleId, article, language) {
     return [];
   }
   
+  // Normalizza l'ID
+  const normalizedArticleId = normalizeArticleId(articleId);
+  
+  // Genera un hash univoco per l'articolo
+  const articleHash = generateArticleHash(article);
+  const jobId = articleHash || normalizedArticleId;
+  
+  // Debug dell'ID articolo
+  logger.info(`Starting topic deduction for article ID: "${jobId}" of type ${typeof jobId}`);
+  
   // Se l'articolo ha già almeno 3 topic, non avviare un nuovo job
   if (article.topics && Array.isArray(article.topics) && article.topics.length >= 3) {
     return article.topics;
   }
   
   // Se c'è già un job in corso per questo articolo, restituisci i topic esistenti
-  if (activeJobs.has(articleId) && activeJobs.get(articleId).status !== 'completed') {
+  if (activeJobs.has(jobId) && activeJobs.get(jobId).status !== 'completed') {
     return article.topics || [];
   }
   
@@ -56,20 +124,24 @@ function startTopicDeduction(articleId, article, language) {
     
     // Se siamo ancora oltre il limite, non creare nuovi job
     if (activeJobs.size >= MAX_ACTIVE_JOBS) {
-      logger.warn(`Too many active jobs (${activeJobs.size}/${MAX_ACTIVE_JOBS}), skipping topic deduction for ${articleId}`);
+      logger.warn(`Too many active jobs (${activeJobs.size}/${MAX_ACTIVE_JOBS}), skipping topic deduction for ${jobId}`);
       return article.topics || [];
     }
   }
   
+  // Debug dei topic attuali dell'articolo
+  logger.info(`Current topics for article ${jobId}: ${JSON.stringify(article.topics || [])}`);
+  
   // Crea un nuovo job
   const job = {
-    id: articleId,
+    id: jobId,
     article: {
       id: article.id,
       title: article.title,
       description: article.description || '',
       language: language
     }, // Memorizza solo i campi necessari per dedurre i topic
+    originalArticleId: articleId, // Memorizza l'ID originale non normalizzato
     type: 'topic_deduction',
     priority: JOB_PRIORITIES['topic_deduction'],
     language,
@@ -81,7 +153,7 @@ function startTopicDeduction(articleId, article, language) {
   };
   
   // Salva il job nella memoria
-  activeJobs.set(articleId, job);
+  activeJobs.set(jobId, job);
   
   // Aggiungi il job alla coda
   topicDeductionQueue.push(job);
@@ -125,24 +197,38 @@ async function processNextJob() {
       return;
     }
     
+    // Debug dell'inizio elaborazione
+    logger.info(`Processing topic deduction job for article ${job.id}`);
+    
     // Esegui la deduzione dei topic con timeout di sicurezza
     const existingTopics = job.result || [];
     let deducedTopics = [];
     
     try {
-      // Imposta un timeout esplicito per la deduzione
-      const deductionPromise = ollamaService.deduceTopics(job.article, job.language);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Topic deduction timeout')), 4000)
-      );
+      // Verifica se Ollama è disponibile
+      const ollamaAvailable = ollamaService.isAvailable();
       
-      // Attendi il primo tra completamento e timeout
-      deducedTopics = await Promise.race([deductionPromise, timeoutPromise]);
+      if (ollamaAvailable) {
+        // Imposta un timeout esplicito per la deduzione
+        const deductionPromise = ollamaService.deduceTopics(job.article, job.language);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Topic deduction timeout')), 4000)
+        );
+        
+        // Attendi il primo tra completamento e timeout
+        deducedTopics = await Promise.race([deductionPromise, timeoutPromise]);
+        logger.info(`Deduced topics via Ollama for article ${job.id}: ${JSON.stringify(deducedTopics)}`);
+      } else {
+        // Usa metodo statico se Ollama non è disponibile
+        deducedTopics = deduceTopicsStatically(job.article);
+        logger.info(`Deduced topics statically for article ${job.id}: ${JSON.stringify(deducedTopics)}`);
+      }
     } catch (error) {
-      logger.warn(`Topic deduction timed out or failed for article ${job.id}: ${error.message}`);
+      logger.warn(`Topic deduction failed for article ${job.id}: ${error.message}`);
       
       // Fallback: usa il metodo statico se Ollama fallisce
       deducedTopics = deduceTopicsStatically(job.article);
+      logger.info(`Deduced topics statically for article ${job.id}: ${JSON.stringify(deducedTopics)}`);
       
       // Se siamo all'ultimo tentativo, registra l'errore
       if (job.attempts >= job.maxAttempts) {
@@ -167,7 +253,6 @@ async function processNextJob() {
       const lowerTopic = topic.toLowerCase();
       if (!caseFoldedSet.has(lowerTopic)) {
         caseFoldedSet.add(lowerTopic);
-        // Usa la versione normalizzata per consistenza
         combinedTopics.push(topic.charAt(0).toUpperCase() + topic.slice(1).toLowerCase());
       }
     });
@@ -182,21 +267,24 @@ async function processNextJob() {
     }
     
     // Aggiorna l'articolo originale e notifica i client tramite WebSocket
-    updateArticleTopics(job.id, combinedTopics);
+    updateArticleTopics(job.originalArticleId, combinedTopics);
     
-    // Notifica i client tramite WebSocket solo se ci sono nuovi topic
-    if (combinedTopics.length > existingTopics.length) {
+    // Notifica i client tramite WebSocket solo se ci sono nuovi topic dedotti
+    if (combinedTopics.length > existingTopics.length && combinedTopics.length > 0) {
       try {
+        // Debug pre-invio WebSocket
+        logger.info(`Broadcasting topics for article ${job.originalArticleId}: ${JSON.stringify(combinedTopics)}`);
+        
         // Invia aggiornamento tramite WebSocket
-        websocketService.broadcastTopicUpdate(job.id, combinedTopics);
+        websocketService.broadcastTopicUpdate(job.originalArticleId, combinedTopics);
       } catch (wsError) {
-        logger.error(`Error broadcasting topic update: ${wsError.message}`);
+        logger.error(`Error broadcasting topic update: ${wsError.message}`, wsError);
       }
     }
     
     logger.info(`Successfully deduced topics for article ${job.id}: ${combinedTopics.join(', ')}`);
   } catch (error) {
-    logger.error(`Error processing job ${job.id}: ${error.message}`);
+    logger.error(`Error processing job ${job.id}: ${error.message}`, error);
     
     // Aggiorna lo stato del job in caso di errore
     if (activeJobs.has(job.id)) {
@@ -219,8 +307,8 @@ async function processNextJob() {
  * @param {string[]} topics - Nuovi topic
  */
 function updateArticleTopics(articleId, topics) {
-  // Questa funzione è stata estesa per inviare notifiche tramite WebSocket
-  logger.debug(`Topics updated for article ${articleId}: ${topics.join(', ')}`);
+  // Registra l'aggiornamento
+  logger.info(`Topics updated for article ${articleId}: ${topics.join(', ')}`);
 }
 
 /**
@@ -274,10 +362,22 @@ function deduceTopicsStatically(article) {
  * @returns {string[]} - Topic dedotti o vuoto se il job non esiste
  */
 function getTopicsForArticle(articleId) {
-  const job = activeJobs.get(articleId);
+  if (!articleId) return [];
   
-  if (job) {
-    return job.result || [];
+  // Normalizza l'ID per la ricerca
+  const normalizedId = normalizeArticleId(articleId);
+  
+  // Cerca per corrispondenza esatta
+  if (activeJobs.has(normalizedId)) {
+    return activeJobs.get(normalizedId).result || [];
+  }
+  
+  // Cerca per corrispondenza flessibile
+  for (const [jobId, job] of activeJobs.entries()) {
+    if (articleIdsMatch(normalizedId, jobId) || 
+        articleIdsMatch(normalizedId, job.originalArticleId)) {
+      return job.result || [];
+    }
   }
   
   return [];
@@ -321,6 +421,7 @@ function cleanupCompletedJobs(force = false) {
   }
 }
 
+// Pianifica la pulizia periodica dei job completati
 // Esegui la pulizia ogni 5 minuti
 const cleanupInterval = setInterval(cleanupCompletedJobs, 5 * 60 * 1000);
 
@@ -335,6 +436,9 @@ module.exports = {
   // Espone queste funzioni per i test
   _cleanupCompletedJobs: cleanupCompletedJobs,
   _getActiveJobsCount: () => activeJobs.size,
-  // Funzione esposta per scopi di testing
-  deduceTopicsStatically
+  // Esposta per scopi di ricerca
+  deduceTopicsStatically,
+  // Espone la funzione di normalizzazione ID per uso in altri moduli
+  articleIdsMatch,
+  normalizeArticleId
 };

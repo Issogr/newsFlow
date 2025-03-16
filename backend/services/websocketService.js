@@ -52,6 +52,12 @@ function handleConnection(socket) {
   statistics.totalConnections++;
   statistics.activeConnectionsCount++;
   
+  // DEBUG - Stampa informazioni dettagliate sulla connessione
+  console.log(`⚡ NUOVO CLIENT WEBSOCKET CONNESSO: ${userId}`);
+  console.log(`   - Handshake: ${JSON.stringify(socket.handshake.headers)}`);
+  console.log(`   - Transport: ${socket.conn.transport.name}`);
+  console.log(`   - Connessioni attive: ${statistics.activeConnectionsCount}`);
+  
   // Memorizza la connessione
   activeConnections.set(userId, socket);
   
@@ -161,6 +167,9 @@ function broadcastTopicUpdate(articleId, topics) {
       return;
     }
     
+    // Debug dettagliato
+    logger.info(`TOPIC UPDATE BROADCAST: ArticleID=${articleId}, Topics=${topics.join(', ')}`);
+    
     // Prepara il payload
     const payload = {
       type: 'topic_update',
@@ -168,6 +177,9 @@ function broadcastTopicUpdate(articleId, topics) {
       topics,
       timestamp: new Date().toISOString()
     };
+    
+    // Debug: stampa il payload completo
+    logger.info(`TOPIC UPDATE PAYLOAD: ${JSON.stringify(payload)}`);
     
     // Invia a tutti i client che seguono questi topic
     topics.forEach(topic => {
@@ -178,14 +190,17 @@ function broadcastTopicUpdate(articleId, topics) {
     });
     
     // Invia anche alla stanza generica
+    const connectedClients = io.sockets.adapter.rooms.get('all-updates')?.size || 0;
+    logger.info(`Invio a ${connectedClients} client nella stanza all-updates`);
+    
     io.to('all-updates').emit('topic:update', payload);
     
     // Aggiorna statistiche
     statistics.topicUpdatesSent++;
     
-    logger.debug(`Topic update inviato per articolo ${articleId}: ${topics.join(', ')}`);
+    logger.info(`Topic update inviato per articolo ${articleId}: ${topics.join(', ')}`);
   } catch (error) {
-    logger.error(`Errore nell'invio dell'aggiornamento topic: ${error.message}`);
+    logger.error(`Errore nell'invio dell'aggiornamento topic: ${error.message}`, error);
   }
 }
 

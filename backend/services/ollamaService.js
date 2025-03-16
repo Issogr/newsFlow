@@ -20,12 +20,23 @@ let retryCount = 0;
 const MAX_RETRY = 5;
 const INITIAL_RETRY_DELAY = 5000; // 5 secondi
 
+// Stato della disponibilità di Ollama
+let ollamaAvailable = false;
+
+// Intervallo di controllo della disponibilità
+let availabilityCheckInterval = null;
+
 /**
  * Gestisce una richiesta a Ollama con limitazione delle chiamate concorrenti
  * @param {Function} requestFn - Funzione che effettua la richiesta a Ollama
  * @returns {Promise<any>} - Risultato della richiesta
  */
 function queueOllamaRequest(requestFn) {
+  // Se Ollama non è disponibile, fallisci immediatamente
+  if (!ollamaAvailable) {
+    return Promise.reject(new Error('Ollama service is not available'));
+  }
+
   return new Promise((resolve, reject) => {
     // Funzione per eseguire la richiesta
     const executeRequest = async () => {
@@ -257,7 +268,31 @@ async function deduceTopics(article, language = 'it') {
  * @returns {string[]} - Topic dedotti
  */
 function deduceTopicsStatically(article) {
-  return require('./asyncProcessor').deduceTopicsStatically(article);
+  // Se il modulo asyncProcessor non è ancora definito, importiamo solo la funzione
+  // senza creare dipendenze circolari
+  try {
+    const asyncProcessor = require('./asyncProcessor');
+    return asyncProcessor.deduceTopicsStatically(article);
+  } catch (err) {
+    // Implementa una versione minimale per evitare errori
+    if (!article || !article.title) return [];
+    
+    const text = `${article.title} ${article.description || ''}`.toLowerCase();
+    const results = [];
+    
+    // Trova le parole chiave più evidenti
+    if (text.includes('economia') || text.includes('finanzia') || text.includes('mercato')) {
+      results.push('Economia');
+    }
+    if (text.includes('politica') || text.includes('governo') || text.includes('parlamento')) {
+      results.push('Politica');
+    }
+    if (text.includes('tecnologia') || text.includes('digital') || text.includes('tech')) {
+      results.push('Tecnologia');
+    }
+    
+    return results;
+  }
 }
 
 /**
@@ -272,15 +307,16 @@ async function checkOllamaAvailability() {
   
   try {
     await axios.get(`${OLLAMA_API_URL}/version`, { timeout: 2000 });
+    ollamaAvailable = true;
     return true;
   } catch (error) {
     logger.error(`Ollama server not available at ${OLLAMA_API_URL}: ${error.message}`);
+    ollamaAvailable = false;
     return false;
   }
 }
 
 // Verifica la disponibilità di Ollama all'avvio
-let ollamaAvailable = false;
 (async () => {
   ollamaAvailable = await checkOllamaAvailability();
   if (ollamaAvailable) {
@@ -288,7 +324,32 @@ let ollamaAvailable = false;
   } else {
     logger.warn('Ollama service is not available, falling back to static topic normalization');
   }
+  
+  // Imposta un controllo periodico della disponibilità
+  if (USE_OLLAMA) {
+    const CHECK_INTERVAL = 60000; // Controlla ogni minuto
+    availabilityCheckInterval = setInterval(async () => {
+      const wasAvailable = ollamaAvailable;
+      ollamaAvailable = await checkOllamaAvailability();
+      
+      // Logga solo quando lo stato cambia
+      if (wasAvailable !== ollamaAvailable) {
+        if (ollamaAvailable) {
+          logger.info('Ollama service is now available');
+        } else {
+          logger.warn('Ollama service is no longer available');
+        }
+      }
+    }, CHECK_INTERVAL);
+  }
 })();
+
+// Pulizia alla chiusura
+process.on('exit', () => {
+  if (availabilityCheckInterval) {
+    clearInterval(availabilityCheckInterval);
+  }
+});
 
 /**
  * Controlla se Ollama è disponibile per l'uso

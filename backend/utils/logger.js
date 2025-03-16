@@ -1,6 +1,8 @@
 const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
+const { format } = require('winston');
+require('winston-daily-rotate-file');
 
 // Assicurati che la directory dei log esista
 const logDir = 'logs';
@@ -9,14 +11,37 @@ if (!fs.existsSync(logDir)) {
 }
 
 // Formattazione personalizzata per il console transport
-const consoleFormat = winston.format.printf(({ level, message, timestamp, ...meta }) => {
+const consoleFormat = format.printf(({ level, message, timestamp, ...meta }) => {
   const metaStr = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
   return `${timestamp} [${level.toUpperCase()}]: ${message} ${metaStr}`;
 });
 
+// Determina il livello di log in base all'ambiente
+const LOG_LEVEL = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
+
+// Configurazione rotazione file di log
+const fileRotateTransport = new winston.transports.DailyRotateFile({
+  filename: path.join(logDir, 'application-%DATE%.log'),
+  datePattern: 'YYYY-MM-DD',
+  maxSize: '20m',
+  maxFiles: '14d',
+  auditFile: path.join(logDir, 'audit.json'),
+  zippedArchive: true
+});
+
+// Configurazione rotazione file di errori
+const errorRotateTransport = new winston.transports.DailyRotateFile({
+  filename: path.join(logDir, 'error-%DATE%.log'),
+  datePattern: 'YYYY-MM-DD',
+  maxSize: '20m', 
+  maxFiles: '14d',
+  level: 'error',
+  zippedArchive: true
+});
+
 // Configurazione avanzata di Winston
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+  level: LOG_LEVEL,
   format: winston.format.combine(
     winston.format.timestamp({
       format: 'YYYY-MM-DD HH:mm:ss'
@@ -27,20 +52,11 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'news-aggregator' },
   transports: [
-    // Log di errore su file
-    new winston.transports.File({ 
-      filename: path.join(logDir, 'error.log'), 
-      level: 'error',
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
-    }),
+    // Log rotante per tutti i livelli
+    fileRotateTransport,
     
-    // Log completo su file
-    new winston.transports.File({ 
-      filename: path.join(logDir, 'combined.log'),
-      maxsize: 10485760, // 10MB
-      maxFiles: 5,
-    }),
+    // Log rotante solo per errori
+    errorRotateTransport,
     
     // Log su console
     new winston.transports.Console({
@@ -55,10 +71,12 @@ const logger = winston.createLogger({
   ],
   // Gestione delle eccezioni e dei rifiuti di promessa non gestiti
   exceptionHandlers: [
-    new winston.transports.File({ 
-      filename: path.join(logDir, 'exceptions.log'),
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
+    new winston.transports.DailyRotateFile({
+      filename: path.join(logDir, 'exceptions-%DATE%.log'),
+      datePattern: 'YYYY-MM-DD',
+      maxSize: '20m',
+      maxFiles: '14d',
+      zippedArchive: true
     }),
     new winston.transports.Console({
       format: winston.format.combine(
@@ -71,10 +89,12 @@ const logger = winston.createLogger({
     })
   ],
   rejectionHandlers: [
-    new winston.transports.File({ 
-      filename: path.join(logDir, 'rejections.log'),
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
+    new winston.transports.DailyRotateFile({
+      filename: path.join(logDir, 'rejections-%DATE%.log'),
+      datePattern: 'YYYY-MM-DD',
+      maxSize: '20m',
+      maxFiles: '14d',
+      zippedArchive: true
     }),
     new winston.transports.Console({
       format: winston.format.combine(
@@ -88,7 +108,25 @@ const logger = winston.createLogger({
   ]
 });
 
+// Aggiungi eventi per gestire errori di scrittura nel file di log
+fileRotateTransport.on('error', (error) => {
+  console.error('Error writing to log file:', error);
+});
+
+errorRotateTransport.on('error', (error) => {
+  console.error('Error writing to error log file:', error);
+});
+
+// Aggiunge supporto per level-based logging methods
+logger.verbose = logger.verbose || (message => logger.debug(message));
+logger.silly = logger.silly || (message => logger.debug(message));
+
+// Aggiunge un metodo per controllare se un livello è abilitato
+logger.isLevelEnabled = (level) => {
+  return winston.config.npm.levels[level] <= winston.config.npm.levels[logger.level];
+};
+
 // Logging di avvio applicazione
-logger.info('Logger inizializzato');
+logger.info('Logger initialized with level: ' + LOG_LEVEL);
 
 module.exports = logger;

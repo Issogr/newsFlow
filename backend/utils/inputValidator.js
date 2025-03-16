@@ -33,7 +33,7 @@ function sanitizeString(input) {
  * @param {string} errorMessage - Messaggio di errore
  * @returns {Function} - Middleware Express
  */
-function validateQueryParam(paramName, errorMessage = 'Parametro mancante o non valido') {
+function validateQueryParam(paramName, errorMessage = 'Parameter missing or invalid') {
   return (req, res, next) => {
     if (!req.query[paramName]) {
       return next(createError(400, errorMessage, 'MISSING_PARAM'));
@@ -48,7 +48,7 @@ function validateQueryParam(paramName, errorMessage = 'Parametro mancante o non 
  * @param {string} errorMessage - Messaggio di errore
  * @returns {Function} - Middleware Express
  */
-function validateParam(paramName, errorMessage = 'Parametro mancante o non valido') {
+function validateParam(paramName, errorMessage = 'Parameter missing or invalid') {
   return (req, res, next) => {
     if (!req.params[paramName]) {
       return next(createError(400, errorMessage, 'MISSING_PARAM'));
@@ -104,7 +104,9 @@ function sanitizeBody(fieldNames) {
 }
 
 /**
- * Sanitizza l'HTML per prevenire XSS 
+ * Sanitizza l'HTML per prevenire XSS
+ * Implementazione migliorata con una white-list di tag e attributi consentiti
+ * 
  * @param {string} html - HTML da sanitizzare
  * @returns {string} - HTML sanitizzato
  */
@@ -113,13 +115,84 @@ function sanitizeHtml(html) {
     return '';
   }
   
-  // Libreria DOMPurify non disponibile in Node.js nativo
-  // Implementazione semplificata che rimuove gli script e le attribuzioni potenzialmente pericolose
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/javascript:/gi, '')
-    .replace(/on\w+=/gi, '')
-    .replace(/data:/gi, '');
+  try {
+    // Lista di tag consentiti con attributi permessi
+    const allowedTags = {
+      'p': ['style', 'class'],
+      'a': ['href', 'title', 'target', 'rel', 'class'],
+      'br': [],
+      'strong': ['class'],
+      'b': ['class'],
+      'em': ['class'],
+      'i': ['class'],
+      'u': ['class'],
+      'span': ['class', 'style'],
+      'div': ['class', 'style'],
+      'ul': ['class'],
+      'ol': ['class'],
+      'li': ['class'],
+      'h1': ['class', 'id'],
+      'h2': ['class', 'id'],
+      'h3': ['class', 'id'],
+      'h4': ['class', 'id'],
+      'h5': ['class', 'id'],
+      'h6': ['class', 'id'],
+      'img': ['src', 'alt', 'title', 'width', 'height', 'class']
+    };
+    
+    // Rimuovi tag non consentiti
+    let sanitized = html;
+    
+    // Rimuovi tutti i tag script
+    sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    
+    // Rimuovi i commenti HTML
+    sanitized = sanitized.replace(/<!--[\s\S]*?-->/g, '');
+    
+    // Rimuovi attributi on* e javascript:
+    sanitized = sanitized.replace(/\son\w+\s*=\s*(?:(['"])(?:\\\1|.)*?\1|(?:\S+))/gi, '');
+    sanitized = sanitized.replace(/javascript:/gi, 'removed:');
+    sanitized = sanitized.replace(/data:/gi, 'removed:');
+    
+    // Verifica che gli URL di immagini inizino con http o https
+    sanitized = sanitized.replace(/(<img[^>]+src\s*=\s*['"])([^'"]+)(['"][^>]*>)/gi, (match, start, url, end) => {
+      if (url.trim().toLowerCase().startsWith('http') || url.trim().toLowerCase().startsWith('https')) {
+        return start + url + end;
+      } else {
+        return start + 'removed:' + url + end;
+      }
+    });
+    
+    // Verifica gli URL nei link
+    sanitized = sanitized.replace(/(<a[^>]+href\s*=\s*['"])([^'"]+)(['"][^>]*>)/gi, (match, start, url, end) => {
+      if (url.trim().toLowerCase().startsWith('http') || 
+          url.trim().toLowerCase().startsWith('https') || 
+          url.trim().toLowerCase().startsWith('mailto:') || 
+          url.trim().startsWith('/') || 
+          url.trim().startsWith('#')) {
+        return start + url + end;
+      } else {
+        return start + 'removed:' + url + end;
+      }
+    });
+    
+    // Assicurati che tutti i link esterni abbiano target="_blank" e rel="noopener noreferrer"
+    sanitized = sanitized.replace(/(<a[^>]+href\s*=\s*['"](?:http|https)[^'"]+['"])([^>]*)(>)/gi, (match, start, attrs, end) => {
+      if (!attrs.includes('target=')) {
+        attrs += ' target="_blank"';
+      }
+      if (!attrs.includes('rel=')) {
+        attrs += ' rel="noopener noreferrer"';
+      }
+      return start + attrs + end;
+    });
+    
+    return sanitized;
+  } catch (error) {
+    logger.error(`Error sanitizing HTML: ${error.message}`);
+    // In caso di errore, rimuovi tutto l'HTML
+    return html.replace(/<[^>]*>/g, '');
+  }
 }
 
 module.exports = {

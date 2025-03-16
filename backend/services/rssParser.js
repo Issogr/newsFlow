@@ -10,6 +10,7 @@ const { sanitizeHtml } = require('../utils/inputValidator');
 const MAX_ARTICLES_PER_SOURCE = parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '10', 10);
 const RSS_MAX_RETRIES = parseInt(process.env.RSS_MAX_RETRIES || '5', 10);
 const RSS_RETRY_DELAY = parseInt(process.env.RSS_RETRY_DELAY || '2000', 10);
+const RSS_TIMEOUT = parseInt(process.env.RSS_TIMEOUT || '15000', 10);
 
 // Configurazione avanzata del parser RSS
 const parser = new RSSParser({
@@ -24,25 +25,73 @@ const parser = new RSSParser({
     feedUrl: 'feedUrl',
     lastBuildDate: 'lastBuildDate'
   },
-  timeout: 15000, // 15 secondi di timeout
+  timeout: RSS_TIMEOUT,
   headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36'
   }
 });
 
+// Cache delle risposte recenti per evitare richieste ripetute
+const responseCache = new Map();
+const CACHE_TTL = 60 * 1000; // 1 minuto
+
+/**
+ * Gestisce una fonte di feed RSS non disponibile
+ * @param {Object} source - Configurazione della fonte
+ * @param {Error} error - Errore rilevato
+ */
+function handleSourceFailure(source, error) {
+  logger.error(`Failed to fetch RSS from ${source.name} (${source.url}): ${error.message}`);
+  
+  // Inserisci nella cache un errore per evitare tentativi ripetuti troppo frequenti
+  responseCache.set(source.url, {
+    error: true,
+    timestamp: Date.now(),
+    message: error.message
+  });
+}
+
 /**
  * Esegue una richiesta HTTP con retry in caso di errore
+ * Implementa una logica di retry migliorata con backoff exponenziale
+ * 
  * @param {string} url - URL da recuperare
  * @param {Object} options - Opzioni axios
  * @returns {Promise<Object>} - Promise con la risposta
  */
 async function fetchWithRetry(url, options) {
+  // Verifica se abbiamo una risposta in cache valida
+  const cachedResponse = responseCache.get(url);
+  if (cachedResponse && (Date.now() - cachedResponse.timestamp) < CACHE_TTL) {
+    if (cachedResponse.error) {
+      throw new Error(`Cached error: ${cachedResponse.message}`);
+    }
+    logger.debug(`Using cached response for ${url}`);
+    return { data: cachedResponse.data };
+  }
+  
   let lastError;
   let retryCount = 0;
+  let retryDelay = RSS_RETRY_DELAY;
   
   while (retryCount < RSS_MAX_RETRIES) {
     try {
-      return await axios.get(url, options);
+      // Aggiungi un timeout di sicurezza
+      const axiosOptions = {
+        ...options,
+        timeout: RSS_TIMEOUT
+      };
+      
+      const response = await axios.get(url, axiosOptions);
+      
+      // Cache la risposta valida
+      responseCache.set(url, {
+        data: response.data,
+        timestamp: Date.now(),
+        error: false
+      });
+      
+      return response;
     } catch (error) {
       lastError = error;
       retryCount++;
@@ -58,17 +107,24 @@ async function fetchWithRetry(url, options) {
       if (!shouldRetry) break;
       
       // Calcola il tempo di attesa con exponential backoff e jitter
-      const delay = Math.min(
+      retryDelay = Math.min(
         RSS_RETRY_DELAY * Math.pow(2, retryCount - 1) + Math.random() * 1000,
         30000 // Max 30 secondi
       );
       
-      logger.warn(`Retry ${retryCount}/${RSS_MAX_RETRIES} per ${url} dopo ${Math.round(delay)}ms - Errore: ${error.message}`);
+      logger.warn(`Retry ${retryCount}/${RSS_MAX_RETRIES} for ${url} after ${Math.round(retryDelay)}ms - Error: ${error.message}`);
       
       // Attendi prima del prossimo tentativo
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
     }
   }
+  
+  // Cache l'errore per evitare tentativi ripetuti troppo frequenti
+  responseCache.set(url, {
+    error: true,
+    timestamp: Date.now(),
+    message: lastError.message
+  });
   
   // Se arriviamo qui, abbiamo esaurito i tentativi
   throw lastError;
@@ -86,10 +142,9 @@ async function parseFeed(source) {
     // Imposta opzioni avanzate con retry
     const options = {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36',
         'Accept': 'application/rss+xml, application/xml, text/xml, */*'
       },
-      timeout: 15000, // 15 seconds timeout
       validateStatus: status => status < 500, // Accetta anche risposte 3xx e 4xx
       responseType: 'text' // Specifica il tipo di risposta come testo per evitare problemi di encoding
     };
@@ -183,7 +238,7 @@ async function parseFeed(source) {
     // Filtra item nulli e con campi obbligatori mancanti
     return parsedItems.filter(item => item !== null && item.title);
   } catch (error) {
-    logger.error(`Error parsing feed from ${source.name} (${source.url}): ${error.message}`);
+    handleSourceFailure(source, error);
     return []; // Return empty array in case of error
   }
 }
@@ -297,5 +352,22 @@ async function extractInitialTopics(item, article, language = 'it') {
   return [...new Set(normalizedTopics)]
     .filter(topic => topic && typeof topic === 'string' && topic.length > 0);
 }
+
+// Pulizia periodica della cache
+setInterval(() => {
+  const now = Date.now();
+  let expiredCount = 0;
+  
+  responseCache.forEach((value, key) => {
+    if (now - value.timestamp > CACHE_TTL) {
+      responseCache.delete(key);
+      expiredCount++;
+    }
+  });
+  
+  if (expiredCount > 0) {
+    logger.debug(`Cleaned up ${expiredCount} expired RSS cache entries`);
+  }
+}, 5 * 60 * 1000); // Ogni 5 minuti
 
 module.exports = { parseFeed };

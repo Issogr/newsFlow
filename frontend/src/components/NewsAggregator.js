@@ -12,6 +12,7 @@ const NewsAggregator = () => {
   // Refs per evitare loop infiniti
   const initialLoadDone = useRef(false);
   const lastWebSocketUpdate = useRef(null);
+  const lastTopicUpdate = useRef(null);
   
   // Stati principali
   const [news, setNews] = useState([]);
@@ -28,8 +29,38 @@ const NewsAggregator = () => {
   const [hotTopics, setHotTopics] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Inizializza il WebSocket - IMPORTANTE: senza dipendenze
+  // Inizializza il WebSocket con l'URL base del browser
   const websocket = useWebSocket();
+
+  // Monitor degli aggiornamenti WebSocket
+  useEffect(() => {
+    if (websocket.lastTopicUpdate) {
+      console.log("WebSocket topic update ricevuto:", websocket.lastTopicUpdate);
+    }
+  }, [websocket.lastTopicUpdate]);
+
+  useEffect(() => {
+    if (websocket.lastNewsUpdate) {
+      console.log("WebSocket news update ricevuto:", websocket.lastNewsUpdate);
+    }
+  }, [websocket.lastNewsUpdate]);
+
+  useEffect(() => {
+    if (websocket.isConnected) {
+      console.log("WebSocket connesso. Stato attuale:", {
+        isConnected: websocket.isConnected,
+        updatesReceived: websocket.updatesReceived,
+        notifications: websocket.notifications.length,
+        activeFilters
+      });
+      
+      // Invia filtri iniziali al server WebSocket
+      websocket.updateSubscriptionFilters({
+        topics: activeFilters.topics,
+        sources: activeFilters.sources
+      });
+    }
+  }, [websocket.isConnected, activeFilters]);
 
   // Funzione per recuperare le notizie dal backend
   const loadNews = useCallback(async () => {
@@ -71,6 +102,8 @@ const NewsAggregator = () => {
       setSources(allSources);
       setTopics(uniqueTopics);
       setHotTopics(hotTopicsData.map(t => t.topic));
+
+      console.log("Dati caricati:", newsData);
       
     } catch (error) {
       console.error("Errore nel recupero delle notizie:", error);
@@ -207,6 +240,186 @@ const NewsAggregator = () => {
       console.log('Nuovi articoli disponibili:', websocket.lastNewsUpdate.count);
     }
   }, [websocket.lastNewsUpdate]);
+
+  // NUOVO: Gestione aggiornamenti topic via WebSocket
+  useEffect(() => {
+    // Salta se il caricamento non è stato completato o se non c'è un update
+    if (!initialLoadDone.current || !websocket.lastTopicUpdate) return;
+    
+    // Evita di elaborare lo stesso aggiornamento più volte
+    if (
+      lastTopicUpdate.current === websocket.lastTopicUpdate.timestamp || 
+      !websocket.lastTopicUpdate.articleId ||
+      !websocket.lastTopicUpdate.topics
+    ) {
+      return;
+    }
+    
+    // Aggiorna il riferimento all'ultimo update elaborato
+    lastTopicUpdate.current = websocket.lastTopicUpdate.timestamp;
+    
+    const { articleId, topics } = websocket.lastTopicUpdate;
+    console.log(`Ricevuto aggiornamento topic per articolo ${articleId}:`, topics);
+    
+    // Funzione migliorata per trovare corrispondenze di ID articoli
+    const normalizeArticleId = (id) => id?.toString().trim().toLowerCase() || '';
+    
+    const articleIdsMatch = (id1, id2) => {
+      const normalizedId1 = normalizeArticleId(id1);
+      const normalizedId2 = normalizeArticleId(id2);
+      
+      if (!normalizedId1 || !normalizedId2 || normalizedId1.length < 5 || normalizedId2.length < 5) {
+        return false;
+      }
+      
+      // Corrispondenza esatta
+      if (normalizedId1 === normalizedId2) return true;
+      
+      // Calcola la lunghezza per confronto parziale
+      const longerLength = Math.max(normalizedId1.length, normalizedId2.length);
+      const shorterLength = Math.min(normalizedId1.length, normalizedId2.length);
+      
+      // Richiede almeno 70% di corrispondenza nella lunghezza prima di controllare inclusione
+      if (shorterLength / longerLength >= 0.7) {
+        return normalizedId1.includes(normalizedId2) || normalizedId2.includes(normalizedId1);
+      }
+      
+      return false;
+    };
+    
+    // Cerca articoli corrispondenti
+    const findArticleMatches = (articles, targetId) => {
+      const matches = [];
+      
+      articles.forEach((group, groupIndex) => {
+        group.items.forEach((item, itemIndex) => {
+          if (articleIdsMatch(item.id, targetId) || 
+              (item.url && articleIdsMatch(item.url, targetId))) {
+            matches.push({
+              groupIndex,
+              itemIndex,
+              groupId: group.id,
+              itemId: item.id,
+              url: item.url
+            });
+          }
+        });
+      });
+      
+      return matches;
+    };
+    
+    // Cerca corrispondenze
+    const matches = findArticleMatches(news, articleId);
+    console.log("Corrispondenze trovate:", matches);
+    
+    if (matches.length > 0) {
+      // Aggiorna gli articoli
+      setNews(prevNews => {
+        // Crea una copia profonda dell'array di news
+        const updatedNews = [...prevNews];
+        let updated = false;
+        
+        // Aggiorna ogni corrispondenza trovata
+        matches.forEach(match => {
+          const group = updatedNews[match.groupIndex];
+          const item = { ...group.items[match.itemIndex] };
+          
+          // Combina i topic esistenti con quelli nuovi, evitando duplicati
+          const existingTopics = Array.isArray(item.topics) ? item.topics : [];
+          const combinedTopics = [...new Set([...existingTopics, ...topics])];
+          item.topics = combinedTopics;
+          
+          // Aggiorna l'item nell'array
+          const updatedItems = [...group.items];
+          updatedItems[match.itemIndex] = item;
+          
+          // Aggiorna anche i topic a livello di gruppo
+          const groupTopics = Array.isArray(group.topics) ? group.topics : [];
+          const updatedGroupTopics = [...new Set([...groupTopics, ...topics])];
+          
+          // Crea un nuovo oggetto gruppo con gli items e i topics aggiornati
+          updatedNews[match.groupIndex] = {
+            ...group,
+            items: updatedItems,
+            topics: updatedGroupTopics
+          };
+          
+          console.log(`Topic aggiornati per il gruppo ${group.id}:`, updatedGroupTopics);
+          updated = true;
+        });
+        
+        // Aggiorna anche l'elenco globale dei topic disponibili
+        if (updated) {
+          setTopics(prevTopics => {
+            const allTopics = [...prevTopics, ...topics];
+            return [...new Set(allTopics)].sort();
+          });
+        }
+        
+        // Restituisci il nuovo array di news
+        return updated ? updatedNews : prevNews;
+      });
+      
+      // Aggiorna anche il filteredNews se non c'è una ricerca attiva
+      if (!searchQuery.trim()) {
+        setFilteredNews(prevFiltered => {
+          // Aggiorna filteredNews con la stessa logica
+          const updatedFiltered = [...prevFiltered];
+          let updated = false;
+          
+          const filteredMatches = findArticleMatches(prevFiltered, articleId);
+          
+          filteredMatches.forEach(match => {
+            const group = updatedFiltered[match.groupIndex];
+            const item = { ...group.items[match.itemIndex] };
+            
+            const existingTopics = Array.isArray(item.topics) ? item.topics : [];
+            const combinedTopics = [...new Set([...existingTopics, ...topics])];
+            item.topics = combinedTopics;
+            
+            const updatedItems = [...group.items];
+            updatedItems[match.itemIndex] = item;
+            
+            const groupTopics = Array.isArray(group.topics) ? group.topics : [];
+            const updatedGroupTopics = [...new Set([...groupTopics, ...topics])];
+            
+            updatedFiltered[match.groupIndex] = {
+              ...group,
+              items: updatedItems,
+              topics: updatedGroupTopics
+            };
+            
+            updated = true;
+          });
+          
+          return updated ? updatedFiltered : prevFiltered;
+        });
+      }
+    }
+    
+  }, [websocket.lastTopicUpdate, searchQuery, news]);
+
+  // Debug per monitorare i cambiamenti negli articoli
+  useEffect(() => {
+    if (initialLoadDone.current && websocket.lastTopicUpdate) {
+      console.log("Cercando di aggiornare l'articolo con ID:", websocket.lastTopicUpdate.articleId);
+      
+      // Verifica se l'articolo è presente nel nostro stato
+      let found = false;
+      news.forEach(group => {
+        group.items.forEach(item => {
+          if (item.id === websocket.lastTopicUpdate.articleId || 
+              (item.url && item.url.includes(websocket.lastTopicUpdate.articleId))) {
+            console.log("Articolo trovato!", item);
+            found = true;
+          }
+        });
+      });
+      
+      console.log("Articolo trovato nel nostro stato:", found);
+    }
+  }, [websocket.lastTopicUpdate, news]);
 
   // Gestisce il toggle di un filtro
   const toggleFilter = useCallback((type, value) => {

@@ -8,7 +8,11 @@ import { io } from 'socket.io-client';
  * @param {Object} options - Opzioni di configurazione Socket.io
  * @returns {Object} - Stato e funzioni per gestire la connessione WebSocket
  */
-const useWebSocket = (url = '/') => {
+const useWebSocket = (url = '') => {
+  // Usa l'URL corretta per la connessione WebSocket
+  // Se non viene fornito un URL, usa l'URL base del browser
+  const wsUrl = url || window.location.origin;
+  
   // Stato per la connessione
   const [isConnected, setIsConnected] = useState(false);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
@@ -35,31 +39,59 @@ const useWebSocket = (url = '/') => {
       reconnectionDelayMax: 5000,
       timeout: 20000,
       transports: ['websocket', 'polling'],
-      autoConnect: true
+      autoConnect: true,
+      path: '/socket.io'  // Specifica il path esplicito
     };
     
+    // DEBUG - Stampa URL di connessione
+    console.log(`Attempting WebSocket connection to: ${wsUrl} with options:`, options);
+    
     // Crea l'istanza Socket.io
-    socketRef.current = io(url, options);
+    socketRef.current = io(wsUrl, options);
     
     // Gestione eventi di connessione
     const onConnect = () => {
+      console.log('🟢 WebSocket connected successfully');
       setIsConnected(true);
       setReconnectAttempts(0);
-      console.log('WebSocket connesso');
+      
+      // Aggiungi notifica di connessione avvenuta
+      setNotifications(prev => [
+        {
+          id: Date.now(),
+          type: 'info',
+          message: 'Connessione agli aggiornamenti in tempo reale stabilita',
+          timestamp: new Date().toISOString()
+        },
+        ...prev
+      ].slice(0, 10));
     };
     
     const onDisconnect = (reason) => {
+      console.log(`🔴 WebSocket disconnected: ${reason}`);
       setIsConnected(false);
-      console.log(`WebSocket disconnesso: ${reason}`);
+      
+      // Aggiungi notifica di disconnessione
+      if (reason !== 'io client disconnect') {
+        setNotifications(prev => [
+          {
+            id: Date.now(),
+            type: 'warning',
+            message: 'Connessione agli aggiornamenti in tempo reale persa, riconnessione in corso...',
+            timestamp: new Date().toISOString()
+          },
+          ...prev
+        ].slice(0, 10));
+      }
     };
     
     const onReconnectAttempt = (attempt) => {
+      console.log(`🔄 WebSocket reconnection attempt: ${attempt}`);
       setReconnectAttempts(attempt);
-      console.log(`Tentativo di riconnessione WebSocket: ${attempt}`);
     };
     
     const onReconnectFailed = () => {
-      console.log('Impossibile riconnettersi al server WebSocket');
+      console.log('❌ WebSocket reconnection failed after multiple attempts');
       // Aggiunta notifica per fallimento
       setNotifications(prev => [
         {
@@ -69,26 +101,27 @@ const useWebSocket = (url = '/') => {
           timestamp: new Date().toISOString()
         },
         ...prev
-      ].slice(0, 10)); // Limita il numero di notifiche
+      ].slice(0, 10));
     };
     
     const onError = (error) => {
-      console.error('Errore WebSocket:', error);
+      console.error('🛑 WebSocket error:', error);
     };
     
     // Gestione eventi di dati
     const onWelcome = (data) => {
-      console.log('Messaggio di benvenuto dal server:', data);
+      console.log('👋 Welcome message from server:', data);
       // Avvia il ping periodico
       startPing();
     };
     
     const onPong = (data) => {
+      console.log('📡 Pong received:', data);
       setLastPing(data.timestamp);
     };
     
     const onNewsUpdate = (data) => {
-      console.log('Aggiornamento notizie ricevuto:', data);
+      console.log('📰 News update received:', data);
       setLastNewsUpdate(data);
       setNewArticlesCount(prev => prev + data.count);
       setUpdatesReceived(prev => prev + 1);
@@ -102,17 +135,30 @@ const useWebSocket = (url = '/') => {
           timestamp: data.timestamp
         },
         ...prev
-      ].slice(0, 10)); // Limita il numero di notifiche
+      ].slice(0, 10));
     };
     
     const onTopicUpdate = (data) => {
-      console.log('Aggiornamento topic ricevuto:', data);
+      console.log('🏷️ Topic update received:', data);
       setLastTopicUpdate(data);
       setUpdatesReceived(prev => prev + 1);
+      
+      // Aggiunta notifica per aggiornamento topic
+      if (data && data.articleId && data.topics && data.topics.length > 0) {
+        setNotifications(prev => [
+          {
+            id: Date.now(),
+            type: 'info',
+            message: `Topic aggiornati: ${data.topics.join(', ')}`,
+            timestamp: data.timestamp
+          },
+          ...prev
+        ].slice(0, 10));
+      }
     };
     
     const onSystemNotification = (data) => {
-      console.log('Notifica di sistema ricevuta:', data);
+      console.log('🔔 System notification received:', data);
       
       // Aggiunta notifica
       setNotifications(prev => [
@@ -123,7 +169,7 @@ const useWebSocket = (url = '/') => {
           timestamp: data.timestamp
         },
         ...prev
-      ].slice(0, 10)); // Limita il numero di notifiche
+      ].slice(0, 10));
     };
     
     // Registrazione eventi
@@ -143,6 +189,7 @@ const useWebSocket = (url = '/') => {
     const startPing = () => {
       pingInterval = setInterval(() => {
         if (socketRef.current && isConnected) {
+          console.log('📤 Sending ping to server');
           socketRef.current.emit('ping');
         }
       }, 30000); // Ogni 30 secondi
@@ -150,6 +197,7 @@ const useWebSocket = (url = '/') => {
     
     // Cleanup
     return () => {
+      console.log('🧹 Cleaning up WebSocket connection');
       clearInterval(pingInterval);
       
       if (socketRef.current) {
@@ -168,7 +216,7 @@ const useWebSocket = (url = '/') => {
         socketRef.current = null;
       }
     };
-  }, [url]);
+  }, [wsUrl]);
   
   /**
    * Funzione per aggiornare i filtri di sottoscrizione
@@ -176,10 +224,10 @@ const useWebSocket = (url = '/') => {
    */
   const updateSubscriptionFilters = useCallback((filters) => {
     if (socketRef.current && isConnected) {
+      console.log('📝 Updating subscription filters:', filters);
       socketRef.current.emit('subscribe:filters', filters);
-      console.log('Filtri sottoscrizione aggiornati:', filters);
     } else {
-      console.warn('Impossibile aggiornare filtri: WebSocket non connesso');
+      console.warn('⚠️ Cannot update filters: WebSocket not connected');
     }
   }, [isConnected]);
   
@@ -190,10 +238,11 @@ const useWebSocket = (url = '/') => {
    */
   const sendMessage = useCallback((event, data) => {
     if (socketRef.current && isConnected) {
+      console.log(`📤 Sending message "${event}":`, data);
       socketRef.current.emit(event, data);
       return true;
     } else {
-      console.warn(`Impossibile inviare messaggio "${event}": WebSocket non connesso`);
+      console.warn(`⚠️ Cannot send message "${event}": WebSocket not connected`);
       return false;
     }
   }, [isConnected]);
@@ -202,6 +251,7 @@ const useWebSocket = (url = '/') => {
    * Funzione per ripristinare il contatore di nuovi articoli
    */
   const resetNewArticlesCount = useCallback(() => {
+    console.log('🔄 Resetting new articles count');
     setNewArticlesCount(0);
   }, []);
   
@@ -219,8 +269,8 @@ const useWebSocket = (url = '/') => {
   const reconnect = useCallback(() => {
     if (socketRef.current) {
       if (!isConnected) {
+        console.log('🔄 Manual reconnection attempt');
         socketRef.current.connect();
-        console.log('Tentativo di riconnessione manuale');
       }
     }
   }, [isConnected]);
