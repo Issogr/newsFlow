@@ -236,11 +236,6 @@ function startTopicDeduction(articleId, article, language) {
   // Debug dell'ID articolo
   logger.debug(`Starting topic deduction for article ID: "${jobId}" with title "${article.title}"`);
   
-  // Se l'articolo ha già almeno 3 topic, non avviare un nuovo job
-  if (article.topics && Array.isArray(article.topics) && article.topics.length >= 3) {
-    return article.topics;
-  }
-  
   // NOVITÀ: Cerca topic anche per titolo
   const normalizedTitle = normalizeTitle(article.title);
   const topicsByTitle = titleToTopicsMap.get(normalizedTitle);
@@ -399,6 +394,14 @@ async function processNextJob() {
     
     [...existingTopics, ...deducedTopics].forEach(topic => {
       if (!topic) return;
+      
+      // Se abbiamo già 3 topic, ignora gli altri
+      if (combinedTopics.length >= 3) {
+        return;
+      }
+      
+      // Se l'articolo non ha topic o ne ha meno di 3, continua con la normale deduzione
+      // Questo assicura che ogni articolo abbia fino a 3 topic, ma non di più
       
       const lowerTopic = topic.toLowerCase();
       if (!caseFoldedSet.has(lowerTopic)) {

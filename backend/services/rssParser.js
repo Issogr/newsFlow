@@ -293,11 +293,15 @@ async function parseFeed(source) {
       } else {
         // Se non ci sono topic esistenti, estrai i topic dai metadati dell'articolo
         article.topics = await extractInitialTopics(item, article, source.language);
-        
-        // Avvia l'elaborazione asincrona per la deduzione dei topic mancanti
-        if (article.topics.length < 2) {
-          asyncProcessor.startTopicDeduction(article.id, article, source.language);
-        }
+          
+        // Avvia sempre l'elaborazione asincrona per la deduzione dei topic
+        // Assicura che tutte le notizie abbiano topic dedotti
+        asyncProcessor.startTopicDeduction(article.id, article, source.language);
+      }
+
+      // Limita il numero di topic a 3 se necessario
+      if (article.topics && Array.isArray(article.topics) && article.topics.length > 3) {
+        article.topics = article.topics.slice(0, 3);
       }
       
       return article;

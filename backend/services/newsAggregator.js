@@ -164,8 +164,16 @@ async function fetchAllNews() {
       content: sanitizeHtml(item.content || '')
     }));
     
-    // MIGLIORATO: Arricchisci gli articoli con i topic dedotti in modo asincrono
-    // Passa l'articolo completo per un matching più efficace
+    // Funzione per limitare il numero di topic a 3, mantenendo i più significativi
+    const limitTopicsToThree = (topics) => {
+      if (!topics || !Array.isArray(topics) || topics.length <= 3) return topics;
+      
+      // Priorità a topic specifici e significativi
+      // Si potrebbero ordinare per specificità o rilevanza
+      return topics.slice(0, 3);
+    };
+    
+    // Arricchisci gli articoli con i topic dedotti e limitali a 3
     for (const item of sanitizedItems) {
       // Recupera topic sia per ID che per titolo
       const deducedTopics = asyncProcessor.getTopicsForArticle(item.id, item);
@@ -173,13 +181,19 @@ async function fetchAllNews() {
       if (deducedTopics && deducedTopics.length > 0) {
         // Combina i topic esistenti con quelli dedotti
         const existingTopics = Array.isArray(item.topics) ? item.topics : [];
-        const allTopics = [...new Set([...existingTopics, ...deducedTopics])];
+        
+        // Combina topic e rimuovi duplicati
+        const combinedTopics = [...new Set([...existingTopics, ...deducedTopics])];
+        
+        // Limita a massimo 3 topic
+        const allTopics = limitTopicsToThree(combinedTopics);
+        
         item.topics = allTopics;
-        logger.debug(`Enriched article ${item.id} with topics: ${deducedTopics.join(', ')}`);
-      } else {
-        // Se non abbiamo topic in cache, avvia la deduzione asincrona
-        asyncProcessor.startTopicDeduction(item.id, item, item.language || 'it');
+        logger.debug(`Enriched article ${item.id} with topics: ${allTopics.join(', ')}`);
       }
+      
+      // MODIFICA: Avvia sempre la deduzione asincrona, indipendentemente dai topic esistenti
+      asyncProcessor.startTopicDeduction(item.id, item, item.language || 'it');
     }
     
     // Verifica se ci sono nuovi articoli rispetto alla cache
@@ -428,7 +442,7 @@ function groupSimilarNews(newsItems) {
         title: mainItem.title,
         description: mainItem.description,
         pubDate: mainItem.pubDate,
-        topics: Array.from(allTopics),
+        topics: Array.from(allTopics).slice(0, 3), // Limita a 3 topic
         url: mainItem.url
       };
       
@@ -463,7 +477,8 @@ function groupSimilarNews(newsItems) {
             }
           });
         }
-        group.topics = allTopics;
+        // Limita a massimo 3 topic
+        group.topics = allTopics.slice(0, 3);
         
         processedItems.add(item);
         foundGroup = true;
@@ -474,6 +489,13 @@ function groupSimilarNews(newsItems) {
     if (!foundGroup) {
       // Crea un nuovo gruppo
       const groupId = `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const itemTopics = Array.isArray(item.topics) ? 
+        [...item.topics].filter(topic => typeof topic === 'string') : 
+        [];
+      
+      // Limita a massimo 3 topic
+      const limitedTopics = itemTopics.slice(0, 3);
+      
       groups[groupId] = {
         id: groupId,
         items: [item],
@@ -481,9 +503,7 @@ function groupSimilarNews(newsItems) {
         title: item.title,
         description: item.description,
         pubDate: item.pubDate,
-        topics: Array.isArray(item.topics) ? 
-          [...item.topics].filter(topic => typeof topic === 'string') : 
-          [],
+        topics: limitedTopics,
         url: item.url
       };
       
