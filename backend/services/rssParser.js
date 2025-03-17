@@ -288,20 +288,19 @@ async function parseFeed(source) {
       let existingTopics = asyncProcessor.getTopicsForArticle(article.id, article);
       
       if (existingTopics && existingTopics.length > 0) {
-        article.topics = existingTopics;
+        article.topics = existingTopics.slice(0, 3); // Limita a 3 topic
         logger.debug(`Using existing topics for "${article.title}": ${existingTopics.join(', ')}`);
       } else {
-        // Se non ci sono topic esistenti, estrai i topic dai metadati dell'articolo
-        article.topics = await extractInitialTopics(item, article, source.language);
-          
-        // Avvia sempre l'elaborazione asincrona per la deduzione dei topic
-        // Assicura che tutte le notizie abbiano topic dedotti
-        asyncProcessor.startTopicDeduction(article.id, article, source.language);
-      }
-
-      // Limita il numero di topic a 3 se necessario
-      if (article.topics && Array.isArray(article.topics) && article.topics.length > 3) {
-        article.topics = article.topics.slice(0, 3);
+        // Inizializza un array vuoto per i topic
+        article.topics = [];
+        
+        // Avvia la deduzione asincrona solo se Ollama è disponibile
+        if (ollamaService.isAvailable()) {
+          // Avvia la deduzione asincrona
+          asyncProcessor.startTopicDeduction(article.id, article, source.language);
+        } else {
+          logger.debug(`Ollama not available, skipping topic deduction for ${article.id}`);
+        }
       }
       
       return article;
@@ -362,12 +361,18 @@ function getImageUrl(item) {
 
 /**
  * Estrae i topic iniziali da un item RSS
+ * Ora solo se Ollama è disponibile e usando tag dalle categorie
  * @param {Object} item - Item RSS
  * @param {Object} article - Articolo normalizzato
  * @param {string} language - Lingua dell'articolo
  * @returns {Promise<Array>} - Array di topic
  */
 async function extractInitialTopics(item, article, language = 'it') {
+  // Se Ollama non è disponibile, non estrarre topic
+  if (!ollamaService.isAvailable()) {
+    return [];
+  }
+  
   if (!item) return [];
   
   // Raccoglie i topic grezzi dai metadati dell'articolo
@@ -383,46 +388,38 @@ async function extractInitialTopics(item, article, language = 'it') {
   }
   
   // Se non ci sono topic grezzi, restituisci un array vuoto
-  // La deduzione completa avverrà in modo asincrono
   if (rawTopics.length === 0) {
     return [];
   }
   
-  // Normalizza i topic esistenti rapidamente - versione migliorata
-  // Questa parte è sincrona e rapida per evitare timeout
+  // Normalizza i topic usando Ollama
   let normalizedTopics = [];
   
-  // Prima verifica se Ollama è disponibile e ci sono pochi topic da normalizzare
-  if (ollamaService.isAvailable() && rawTopics.length <= 3) {
-    try {
-      // Imposta un timeout molto breve per la normalizzazione
-      const normalizationPromises = rawTopics.map(topic => {
-        // Promise.race tra la normalizzazione e un timeout
-        return Promise.race([
-          ollamaService.normalizeTopic(topic, language),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Normalization timeout')), 800))
-        ]).catch(err => {
-          // In caso di errore usa il normalizzatore statico come fallback
-          logger.debug(`Fallback to static normalizer for topic "${topic}": ${err.message}`);
-          return topicNormalizer.normalizeTopic(topic);
-        });
+  try {
+    // Imposta un timeout breve per la normalizzazione
+    const normalizationPromises = rawTopics.map(topic => {
+      // Promise.race tra la normalizzazione e un timeout
+      return Promise.race([
+        ollamaService.normalizeTopic(topic, language),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Normalization timeout')), 800))
+      ]).catch(err => {
+        // In caso di errore, salta questo topic
+        logger.debug(`Failed to normalize topic "${topic}": ${err.message}`);
+        return null;
       });
-      
-      // Attendi la normalizzazione con timeout
-      normalizedTopics = await Promise.all(normalizationPromises);
-    } catch (err) {
-      // In caso di errore generale, usa il normalizzatore statico
-      logger.warn(`Error in Ollama topic normalization, using static: ${err.message}`);
-      normalizedTopics = rawTopics.map(topic => topicNormalizer.normalizeTopic(topic));
-    }
-  } else {
-    // Usa direttamente il normalizzatore statico
-    normalizedTopics = rawTopics.map(topic => topicNormalizer.normalizeTopic(topic));
+    });
+    
+    // Attendi la normalizzazione con timeout
+    normalizedTopics = await Promise.all(normalizationPromises);
+  } catch (err) {
+    logger.warn(`Error in Ollama topic normalization: ${err.message}`);
+    return []; // In caso di errore, restituisci array vuoto
   }
   
   // Rimuovi i duplicati e gli elementi nulli/vuoti
   return [...new Set(normalizedTopics)]
-    .filter(topic => topic && typeof topic === 'string' && topic.length > 0);
+    .filter(topic => topic && typeof topic === 'string' && topic.length > 0)
+    .slice(0, 3); // Limita a 3 topic
 }
 
 // Pulizia periodica della cache

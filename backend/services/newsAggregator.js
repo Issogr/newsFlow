@@ -5,6 +5,7 @@ const { sanitizeHtml } = require('../utils/inputValidator');
 const { createError } = require('../utils/errorHandler');
 const websocketService = require('./websocketService');
 const asyncProcessor = require('./asyncProcessor');
+const ollamaService = require('./ollamaService');
 
 // News sources configuration
 const newsSources = [
@@ -164,16 +165,10 @@ async function fetchAllNews() {
       content: sanitizeHtml(item.content || '')
     }));
     
-    // Funzione per limitare il numero di topic a 3, mantenendo i più significativi
-    const limitTopicsToThree = (topics) => {
-      if (!topics || !Array.isArray(topics) || topics.length <= 3) return topics;
-      
-      // Priorità a topic specifici e significativi
-      // Si potrebbero ordinare per specificità o rilevanza
-      return topics.slice(0, 3);
-    };
+    // Verifica se Ollama è disponibile
+    const ollamaAvailable = ollamaService.isAvailable();
     
-    // Arricchisci gli articoli con i topic dedotti e limitali a 3
+    // Arricchisci gli articoli con i topic dedotti solo se Ollama è disponibile
     for (const item of sanitizedItems) {
       // Recupera topic sia per ID che per titolo
       const deducedTopics = asyncProcessor.getTopicsForArticle(item.id, item);
@@ -186,14 +181,17 @@ async function fetchAllNews() {
         const combinedTopics = [...new Set([...existingTopics, ...deducedTopics])];
         
         // Limita a massimo 3 topic
-        const allTopics = limitTopicsToThree(combinedTopics);
+        const limitedTopics = combinedTopics.slice(0, 3);
         
-        item.topics = allTopics;
-        logger.debug(`Enriched article ${item.id} with topics: ${allTopics.join(', ')}`);
+        item.topics = limitedTopics;
+        logger.debug(`Enriched article ${item.id} with topics: ${limitedTopics.join(', ')}`);
+      } else if (ollamaAvailable) {
+        // Se Ollama è disponibile e non abbiamo topic, avvia la deduzione
+        asyncProcessor.startTopicDeduction(item.id, item, item.language || 'it');
+      } else {
+        // Se Ollama non è disponibile, assicurati che l'articolo abbia almeno un array vuoto
+        item.topics = [];
       }
-      
-      // MODIFICA: Avvia sempre la deduzione asincrona, indipendentemente dai topic esistenti
-      asyncProcessor.startTopicDeduction(item.id, item, item.language || 'it');
     }
     
     // Verifica se ci sono nuovi articoli rispetto alla cache
@@ -522,8 +520,11 @@ function itemMatchesTopic(item, topicFilter) {
     return false;
   }
   
-  // Usa il normalizzatore per verificare se l'item ha il topic, considerando tutte le varianti linguistiche
-  return topicNormalizer.itemHasTopic(item, topicFilter);
+  // Confronto diretto case-insensitive
+  return item.topics.some(topic => 
+    typeof topic === 'string' && 
+    topic.toLowerCase() === topicFilter.toLowerCase()
+  );
 }
 
 // Funzione per forzare un aggiornamento e inviare una notifica

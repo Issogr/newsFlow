@@ -51,10 +51,10 @@ router.get('/hot-topics', asyncHandler(async (req, res) => {
 
 // Get topics with their variants
 router.get('/topics/map', asyncHandler(async (req, res) => {
-  // Restituisci la mappa di equivalenza dei topic
+  // Ritorna una struttura vuota per retrocompatibilità poiché non usiamo più mappature statiche
   res.json({
-    topics: Object.keys(topicNormalizer.topicEquivalents),
-    mappings: topicNormalizer.topicEquivalents
+    topics: [],
+    mappings: {}
   });
 }));
 

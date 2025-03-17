@@ -125,7 +125,7 @@ async function normalizeTopic(topic, targetLanguage = 'it') {
   
   // Se Ollama è disabilitato o non disponibile, usa un semplice formatting
   if (!USE_OLLAMA || !ollamaAvailable) {
-    return topicNormalizer.normalizeTopic(topic);
+    return topicNormalizer.formatTopic(topic);
   }
   
   try {
@@ -156,26 +156,21 @@ async function normalizeTopic(topic, targetLanguage = 'it') {
         .trim();
       
       // Formatta correttamente
-      normalizedTopic = normalizedTopic.charAt(0).toUpperCase() + normalizedTopic.slice(1).toLowerCase();
-      
-      return normalizedTopic;
+      return topicNormalizer.formatTopic(normalizedTopic) || topic;
     };
     
     // Esegui la richiesta tramite la coda
-    const normalizedTopic = await queueOllamaRequest(makeRequest);
-    
-    // Controlla se il risultato è un topic valido secondo le nostre regole
-    const validatedTopic = topicNormalizer.normalizeTopic(normalizedTopic);
-    return validatedTopic;
+    return await queueOllamaRequest(makeRequest);
   } catch (error) {
     logger.error(`Error normalizing topic with Ollama: ${error.message}`);
-    // Fallback: usa il normalizzatore statico in caso di errore
-    return topicNormalizer.normalizeTopic(topic);
+    // Fallback: usa il semplice formatter in caso di errore
+    return topicNormalizer.formatTopic(topic);
   }
 }
 
 /**
  * Deduce i topic da un articolo usando Ollama
+ * Consente a Ollama di dedurre liberamente i topic senza limitazioni predefinite
  * @param {Object} article - L'articolo da analizzare (con titolo, descrizione, contenuto)
  * @param {string} language - La lingua dell'articolo
  * @returns {Promise<string[]>} - Array di topic dedotti
@@ -190,15 +185,15 @@ async function deduceTopics(article, language = 'it') {
   
   // Se il testo è troppo corto, non possiamo dedurre in modo affidabile
   if (text.length < 20) {
-    return deduceTopicsStatically(article);
+    return [];
   }
   
   // Limita il testo per l'analisi
   const limitedText = text.substring(0, 500);
   
-  // Se Ollama è disabilitato o non disponibile, usa il metodo statico
+  // Se Ollama è disabilitato o non disponibile, restituisci array vuoto
   if (!USE_OLLAMA || !ollamaAvailable) {
-    return deduceTopicsStatically(article);
+    return [];
   }
   
   try {
@@ -206,9 +201,9 @@ async function deduceTopics(article, language = 'it') {
     const makeRequest = async () => {
       // Prepara il prompt per Ollama (versione migliorata con dettagli specifici)
       const promptMap = {
-        'it': `Analizza questo titolo e descrizione di notizia e restituisci SOLO 1 o 2 categorie tra: Politica, Economia, Tecnologia, Scienza, Ambiente, Sport, Cultura, Salute, Esteri, Cronaca, Spettacolo. Rispondi con SOLO le categorie separate da virgola, senza altri testi. Testo: "${limitedText}"`,
-        'en': `Analyze this news title and description and return ONLY 1 or 2 categories from: Politics, Economy, Technology, Science, Environment, Sports, Culture, Health, International, News, Entertainment. Reply with ONLY the categories separated by comma, without any other text. Text: "${limitedText}"`,
-        'fr': `Analysez ce titre et cette description d'actualité et retournez UNIQUEMENT 1 ou 2 catégories parmi: Politique, Économie, Technologie, Science, Environnement, Sport, Culture, Santé, International, Actualité, Divertissement. Répondez avec UNIQUEMENT les catégories séparées par une virgule, sans autre texte. Texte: "${limitedText}"`
+        'it': `Analizza questo titolo e descrizione di notizia e restituisci 1, 2 o 3 categorie tra: Politica, Economia, Tecnologia, Scienza, Ambiente, Sport, Cultura, Salute, Esteri, Cronaca, Spettacolo. Rispondi con SOLO le categorie separate da virgola, senza altri testi. Testo: "${limitedText}"`,
+        'en': `Analyze this news title and description and return 1, 2 or 3 categories from: Politics, Economy, Technology, Science, Environment, Sports, Culture, Health, International, News, Entertainment. Reply with ONLY the categories separated by comma, without any other text. Text: "${limitedText}"`,
+        'fr': `Analysez ce titre et cette description d'actualité et retournez 1, 2 ou 3 catégories parmi: Politique, Économie, Technologie, Science, Environnement, Sport, Culture, Santé, International, Actualité, Divertissement. Répondez avec UNIQUEMENT les catégories séparées par une virgule, sans autre texte. Texte: "${limitedText}"`
       };
       
       // Usa il prompt nella lingua corretta o quello italiano come fallback
@@ -236,62 +231,18 @@ async function deduceTopics(article, language = 'it') {
         .map(topic => topic.trim())
         .filter(topic => topic.length > 0);
       
-      // Normalizza i topic usando il nostro normalizzatore
-      const normalizedTopics = rawTopics.map(topic => topicNormalizer.normalizeTopic(topic)).filter(Boolean);
+      // Rimuovi duplicati e formatta i topic
+      const uniqueTopics = topicNormalizer.removeDuplicates(rawTopics);
       
-      // Rimuovi duplicati
-      const uniqueTopics = [...new Set(normalizedTopics)];
-      
-      return uniqueTopics;
+      // Limita a massimo 3 topic
+      return topicNormalizer.limitTopics(uniqueTopics, 3);
     };
     
     // Esegui la richiesta tramite la coda
-    const uniqueTopics = await queueOllamaRequest(makeRequest);
-    
-    // Verifica se abbiamo ottenuto risultati validi
-    if (!uniqueTopics || uniqueTopics.length === 0) {
-      // Fallback: usa il metodo statico
-      logger.debug(`No topics deduced by Ollama for article, using static method`);
-      return deduceTopicsStatically(article);
-    }
-    
-    return uniqueTopics;
+    return await queueOllamaRequest(makeRequest);
   } catch (error) {
     logger.error(`Error deducing topics with Ollama: ${error.message}`);
-    return deduceTopicsStatically(article); // Fallback in caso di errore
-  }
-}
-
-/**
- * Deduce topic staticamente usando parole chiave nel testo
- * @param {Object} article - Articolo da analizzare
- * @returns {string[]} - Topic dedotti
- */
-function deduceTopicsStatically(article) {
-  // Se il modulo asyncProcessor non è ancora definito, importiamo solo la funzione
-  // senza creare dipendenze circolari
-  try {
-    const asyncProcessor = require('./asyncProcessor');
-    return asyncProcessor.deduceTopicsStatically(article);
-  } catch (err) {
-    // Implementa una versione minimale per evitare errori
-    if (!article || !article.title) return [];
-    
-    const text = `${article.title} ${article.description || ''}`.toLowerCase();
-    const results = [];
-    
-    // Trova le parole chiave più evidenti
-    if (text.includes('economia') || text.includes('finanzia') || text.includes('mercato')) {
-      results.push('Economia');
-    }
-    if (text.includes('politica') || text.includes('governo') || text.includes('parlamento')) {
-      results.push('Politica');
-    }
-    if (text.includes('tecnologia') || text.includes('digital') || text.includes('tech')) {
-      results.push('Tecnologia');
-    }
-    
-    return results;
+    return []; // Restituisci un array vuoto in caso di errore
   }
 }
 
@@ -322,7 +273,7 @@ async function checkOllamaAvailability() {
   if (ollamaAvailable) {
     logger.info('Ollama service is available and configured correctly');
   } else {
-    logger.warn('Ollama service is not available, falling back to static topic normalization');
+    logger.warn('Ollama service is not available, topics will not be generated until it becomes available');
   }
   
   // Imposta un controllo periodico della disponibilità
@@ -335,9 +286,9 @@ async function checkOllamaAvailability() {
       // Logga solo quando lo stato cambia
       if (wasAvailable !== ollamaAvailable) {
         if (ollamaAvailable) {
-          logger.info('Ollama service is now available');
+          logger.info('Ollama service is now available, topic deduction will resume');
         } else {
-          logger.warn('Ollama service is no longer available');
+          logger.warn('Ollama service is no longer available, topic deduction will be paused');
         }
       }
     }, CHECK_INTERVAL);

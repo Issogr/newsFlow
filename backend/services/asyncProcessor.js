@@ -226,6 +226,12 @@ function startTopicDeduction(articleId, article, language) {
     return [];
   }
   
+  // Se Ollama non è disponibile, non avviare la deduzione
+  if (!ollamaService.isAvailable()) {
+    logger.info(`Ollama service is not available, skipping topic deduction for ${articleId}`);
+    return article.topics || [];
+  }
+  
   // Normalizza l'ID
   const normalizedArticleId = normalizeArticleId(articleId);
   
@@ -316,8 +322,8 @@ function startTopicDeduction(articleId, article, language) {
  * Processa il prossimo job nella coda
  */
 async function processNextJob() {
-  // Se la coda è vuota, termina l'elaborazione
-  if (topicDeductionQueue.length === 0) {
+  // Se la coda è vuota o Ollama non è disponibile, termina l'elaborazione
+  if (topicDeductionQueue.length === 0 || !ollamaService.isAvailable()) {
     isProcessing = false;
     return;
   }
@@ -350,30 +356,17 @@ async function processNextJob() {
     let deducedTopics = [];
     
     try {
-      // Verifica se Ollama è disponibile
-      const ollamaAvailable = ollamaService.isAvailable();
+      // Imposta un timeout esplicito per la deduzione
+      const deductionPromise = ollamaService.deduceTopics(job.article, job.language);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Topic deduction timeout')), 4000)
+      );
       
-      if (ollamaAvailable) {
-        // Imposta un timeout esplicito per la deduzione
-        const deductionPromise = ollamaService.deduceTopics(job.article, job.language);
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Topic deduction timeout')), 4000)
-        );
-        
-        // Attendi il primo tra completamento e timeout
-        deducedTopics = await Promise.race([deductionPromise, timeoutPromise]);
-        logger.info(`Deduced topics via Ollama for article ${job.id}: ${JSON.stringify(deducedTopics)}`);
-      } else {
-        // Usa metodo statico se Ollama non è disponibile
-        deducedTopics = deduceTopicsStatically(job.article);
-        logger.info(`Deduced topics statically for article ${job.id}: ${JSON.stringify(deducedTopics)}`);
-      }
+      // Attendi il primo tra completamento e timeout
+      deducedTopics = await Promise.race([deductionPromise, timeoutPromise]);
+      logger.info(`Deduced topics via Ollama for article ${job.id}: ${JSON.stringify(deducedTopics)}`);
     } catch (error) {
       logger.warn(`Topic deduction failed for article ${job.id}: ${error.message}`);
-      
-      // Fallback: usa il metodo statico se Ollama fallisce
-      deducedTopics = deduceTopicsStatically(job.article);
-      logger.info(`Deduced topics statically for article ${job.id}: ${JSON.stringify(deducedTopics)}`);
       
       // Se siamo all'ultimo tentativo, registra l'errore
       if (job.attempts >= job.maxAttempts) {
@@ -381,7 +374,7 @@ async function processNextJob() {
       } else {
         // Altrimenti rimetti in coda con priorità inferiore 
         // per un nuovo tentativo, ma solo se abbiamo pochi topic
-        if (existingTopics.length < 2 && deducedTopics.length < 1) {
+        if (existingTopics.length < 2) {
           const retryJob = {...job, priority: job.priority + 5};
           topicDeductionQueue.push(retryJob);
         }
@@ -399,9 +392,6 @@ async function processNextJob() {
       if (combinedTopics.length >= 3) {
         return;
       }
-      
-      // Se l'articolo non ha topic o ne ha meno di 3, continua con la normale deduzione
-      // Questo assicura che ogni articolo abbia fino a 3 topic, ma non di più
       
       const lowerTopic = topic.toLowerCase();
       if (!caseFoldedSet.has(lowerTopic)) {
@@ -475,51 +465,6 @@ async function processNextJob() {
 function updateArticleTopics(articleId, topics) {
   // Registra l'aggiornamento
   logger.info(`Topics updated for article ${articleId}: ${topics.join(', ')}`);
-}
-
-/**
- * Deduce topic staticamente usando parole chiave nel testo
- * @param {Object} article - Articolo da analizzare
- * @returns {string[]} - Topic dedotti
- */
-function deduceTopicsStatically(article) {
-  const topics = [];
-  
-  if (!article || !article.title) return topics;
-  
-  // Testo da analizzare
-  const text = `${article.title} ${article.description || ''}`.toLowerCase();
-  
-  // Verifica le equivalenze in tutte le lingue con un approccio più preciso
-  // Per evitare falsi positivi, richiede una corrispondenza più forte
-  const wordsInText = text.split(/\s+/);
-  
-  Object.entries(topicNormalizer.topicEquivalents).forEach(([normalizedTopic, variants]) => {
-    for (const variant of variants) {
-      // Per varianti di 1-2 caratteri richiedi match esatto della parola
-      if (variant.length <= 2) {
-        if (wordsInText.includes(variant)) {
-          topics.push(normalizedTopic);
-          break;
-        }
-      } 
-      // Per varianti brevi (3-4 caratteri) richiedi match all'inizio di una parola o parola esatta
-      else if (variant.length <= 4) {
-        const variantRegex = new RegExp(`\\b${variant}\\w*\\b`, 'i');
-        if (variantRegex.test(text)) {
-          topics.push(normalizedTopic);
-          break;
-        }
-      }
-      // Per varianti più lunghe controlla inclusione normale
-      else if (text.includes(variant.toLowerCase())) {
-        topics.push(normalizedTopic);
-        break;
-      }
-    }
-  });
-  
-  return topics;
 }
 
 /**
@@ -624,8 +569,6 @@ module.exports = {
   // Espone queste funzioni per i test
   _cleanupCompletedJobs: cleanupCompletedJobs,
   _getActiveJobsCount: () => activeJobs.size,
-  // Esposta per scopi di ricerca
-  deduceTopicsStatically,
   // Espone la funzione di normalizzazione ID per uso in altri moduli
   articleIdsMatch,
   normalizeArticleId
