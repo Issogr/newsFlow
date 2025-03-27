@@ -207,7 +207,7 @@ async function deduceTopics(article, language = 'it') {
       };
       
       // Usa il prompt nella lingua corretta o quello italiano come fallback
-      const prompt = promptMap[language] || promptMap['it'];
+      const prompt = promptMap['it'];
       
       // Chiamata API a Ollama
       const response = await axios.post(`${OLLAMA_API_URL}/generate`, {
