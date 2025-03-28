@@ -9,7 +9,7 @@ services:
       - OLLAMA_MODEL=gemma3:1b
       # Variabili di ottimizzazione
       - OLLAMA_TIMEOUT=3000         # Timeout per chiamate a Ollama in ms
-      - USE_OLLAMA=true             # Imposta a 'false' per disabilitare Ollama completamente
+      - USE_OLLAMA=false             # Imposta a 'false' per disabilitare Ollama completamente
       - MAX_ARTICLES_PER_SOURCE=30  # Numero massimo di articoli da elaborare per fonte
       - RSS_MAX_RETRIES=5           # Tentativi di retry per problemi DNS
       - RSS_RETRY_DELAY=2000        # Tempo iniziale tra retry in ms

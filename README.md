@@ -15,6 +15,7 @@ Un'applicazione moderna per l'aggregazione di notizie in tempo reale da fonti au
 - [WebSockets](#websockets)
 - [Configurazione avanzata](#configurazione-avanzata)
 - [Sviluppo futuro](#sviluppo-futuro)
+- [Risoluzione problemi](#risoluzione-problemi)
 
 ## ✨ Caratteristiche principali
 
@@ -132,6 +133,7 @@ L'applicazione si connette a un servizio Ollama esterno che:
 - **Docker Compose**: versione 1.29.0 o superiore
 - **Porta 80**: disponibile sul sistema host
 - **Accesso a un server Ollama**: con rete Docker condivisa o accessibile via HTTP
+- **Permessi**: è necessario creare directory con permessi appropriati prima dell'avvio (vedi sezione installazione)
 
 ## 🚀 Installazione e setup
 
@@ -142,7 +144,21 @@ git clone https://github.com/tuousername/news-aggregator.git
 cd news-aggregator
 ```
 
-### 2. Configurazione
+### 2. Preparazione delle directory (IMPORTANTE)
+
+Prima di avviare l'applicazione, è necessario creare le directory per i log e i dati con i permessi appropriati:
+
+```bash
+# Crea le directory se non esistono
+mkdir -p ./backend/logs ./backend/data
+
+# Imposta i permessi corretti per consentire la scrittura dai container
+sudo chmod 777 ./backend/logs ./backend/data
+```
+
+> ⚠️ **Importante**: Questo passaggio è fondamentale per evitare errori di permessi negati (EACCES) durante l'esecuzione dell'applicazione.
+
+### 3. Configurazione
 
 #### Configurazione per server Ollama esistente
 
@@ -166,7 +182,7 @@ environment:
   - WS_PING_INTERVAL=25000                   # Intervallo tra ping WebSocket (ms)
 ```
 
-### 3. Avvio dell'applicazione
+### 4. Avvio dell'applicazione
 
 ```bash
 # Avvia l'applicazione con Docker Compose
@@ -175,7 +191,7 @@ docker-compose up --build -d
 
 L'applicazione sarà disponibile all'indirizzo: http://localhost
 
-### 4. Arresto dell'applicazione
+### 5. Arresto dell'applicazione
 
 ```bash
 docker-compose down
@@ -409,3 +425,44 @@ Ecco alcune idee per il futuro sviluppo dell'applicazione:
 - **Modalità dark**: Aggiungere un tema scuro per l'interfaccia
 - **Miglioramento prestazioni AI**: Cache lato server multi-livello per ottimizzare le richieste RSS e AI
 - **Dashboard analytics**: Creare una dashboard per analizzare tendenze delle notizie
+
+## 🔧 Risoluzione problemi
+
+### Errori di permessi (EACCES)
+
+Se riscontri errori come `EACCES: permission denied` nei log del container backend, il problema è probabilmente legato ai permessi delle directory `logs` e `data`:
+
+```
+Error: EACCES: permission denied, open 'logs/application-YYYY-MM-DD.log'
+```
+
+**Soluzione**:
+```bash
+# Fermati tutti i container
+docker-compose down
+
+# Configura i permessi corretti 
+mkdir -p ./backend/logs ./backend/data
+sudo chmod 777 ./backend/logs ./backend/data
+
+# Riavvia l'applicazione
+docker-compose up -d
+```
+
+### Problemi di connessione a Ollama
+
+Se l'applicazione non riesce a connettersi al servizio Ollama, verifica:
+
+1. Che il servizio Ollama sia attivo e funzionante
+2. Che l'URL specificato in `OLLAMA_API_URL` sia corretto
+3. Che la rete `ollama-network` esista e sia accessibile
+
+Se necessario, puoi disabilitare temporaneamente l'integrazione con Ollama impostando `USE_OLLAMA=false` nel file `docker-compose.yml`.
+
+### Connessione WebSocket instabile
+
+Se riscontri disconnessioni frequenti del WebSocket:
+
+1. Verifica la configurazione di timeout nel `docker-compose.yml`
+2. Controlla che il proxy Nginx sia configurato correttamente per WebSocket
+3. Aumenta i valori di `WS_PING_TIMEOUT` e `WS_PING_INTERVAL` per reti meno stabili
