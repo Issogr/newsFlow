@@ -39,7 +39,7 @@ const NewsAggregator = () => {
   const [showRecentOnly, setShowRecentOnly] = useState(false);
   
   // Stato per controllare se i filtri sono espansi o collassati
-  const [filtersExpanded, setFiltersExpanded] = useState(true);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   // Inizializza il WebSocket con l'URL base del browser
   const websocket = useWebSocket();

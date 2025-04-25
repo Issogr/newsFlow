@@ -7,6 +7,8 @@ import React, { memo } from 'react';
  * - Non mostrare immagini
  * - Garantire sempre la presenza di un estratto quando disponibile
  * - Formattare correttamente i caratteri speciali
+ * - [RIVISTO] Dimensione titolo più bilanciata
+ * - [RIVISTO] Call to action "Leggi di più" più evidente ma senza icona
  */
 const NewsCard = memo(({ 
   group, 
@@ -78,13 +80,16 @@ const NewsCard = memo(({
   };
 
   return (
-    <article className="bg-white rounded-lg shadow overflow-hidden h-full flex flex-col transition-shadow hover:shadow-md">
+    <article className="bg-white rounded-lg shadow-md overflow-hidden h-full flex flex-col transition-all hover:shadow-lg">
       {/* Intestazione card */}
-      <div className="p-4">
-        <h2 className="text-lg font-semibold">{group.title}</h2>
+      <div className="p-5 border-b border-gray-100">
+        {/* [MODIFICATO] Titolo con dimensione ridotta ma comunque in evidenza */}
+        <h2 className="text-lg font-bold text-gray-800 mb-2 leading-tight">
+          {group.title}
+        </h2>
         
         {/* Fonti e data */}
-        <div className="mt-2 flex flex-wrap gap-1">
+        <div className="mt-3 flex flex-wrap gap-1 items-center">
           {group.sources && group.sources.map(source => (
             <span 
               key={source} 
@@ -101,7 +106,7 @@ const NewsCard = memo(({
         
         {/* Argomenti */}
         {group.topics && group.topics.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
+          <div className="mt-3 flex flex-wrap gap-1">
             {group.topics.map(topic => (
               <button 
                 key={topic} 
@@ -121,28 +126,26 @@ const NewsCard = memo(({
         )}
       </div>
       
-      {/* Estratto del contenuto - sempre presente */}
-      <div className="px-4 pb-4 flex-grow">
+      {/* Estratto del contenuto */}
+      <div className="px-5 py-4 flex-grow">
         <p 
-          className="text-gray-700" 
+          className="text-gray-600 text-sm leading-relaxed" 
           aria-label="Estratto del contenuto"
-          // Aggiungiamo dangerouslySetInnerHTML per consentire la formattazione di base
-          // Questo è sicuro perché il contenuto è già stato sanitizzato dal backend
-          dangerouslySetInnerHTML={{ __html: `<strong>${truncateContent(250)}</strong>` }}
+          dangerouslySetInnerHTML={{ __html: truncateContent(250) }}
         />
       </div>
       
-      {/* Pulsanti azioni */}
-      <div className="px-4 py-4 mt-auto border-t border-gray-100">
+      {/* [MODIFICATO] Pulsante call to action senza icona */}
+      <div className="px-5 py-4 mt-auto border-t border-gray-100 flex justify-center">
         <a
           href={group.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors
-                   focus:outline-none focus:underline"
+          className="flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors
+                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 w-full md:w-auto"
           aria-label={`Leggi l'articolo completo "${group.title}" sul sito originale`}
         >
-          Leggi di più
+          <span className="font-medium">Leggi di più</span>
         </a>
       </div>
     </article>
