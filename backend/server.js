@@ -60,16 +60,14 @@ app.use(morgan('combined', {
   skip: (req) => req.url === '/health' // Evita log eccessivi per endpoint health
 }));
 
-// Rate limiting migliorato con finestre separate per ogni endpoint
-const apiLimiter = rateLimit({
+// [MIGLIORATO] Sistema di rate limiting più granulare
+// Configurazione di base più restrittiva
+const baseRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minuti
-  max: 200, // 200 richieste per finestra
+  max: 200, // Richieste per IP nel periodo
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    // Usa sia IP che endpoint come chiave per limitare diversamente in base all'endpoint
-    return `${req.ip}-${req.path}`;
-  },
+  keyGenerator: (req) => req.ip, // Usa solo IP anziché IP + path
   skip: (req) => req.path === '/health', // Skip rate limit per health check
   message: { 
     error: { 
@@ -79,7 +77,56 @@ const apiLimiter = rateLimit({
   }
 });
 
-app.use('/api', apiLimiter);
+// Rate limit più restrittivo per operazioni di ricerca
+const searchRateLimit = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minuti
+  max: 30, // 30 richieste per finestra
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip,
+  message: { 
+    error: { 
+      message: 'Troppe richieste di ricerca, riprova più tardi',
+      code: 'SEARCH_RATE_LIMIT_EXCEEDED'
+    }
+  }
+});
+
+// Rate limit specifico per operazioni di refresh
+const refreshRateLimit = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 3, // 3 richieste al minuto
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip,
+  message: { 
+    error: { 
+      message: 'Troppe richieste di aggiornamento, riprova più tardi',
+      code: 'REFRESH_RATE_LIMIT_EXCEEDED'
+    }
+  }
+});
+
+// Rate limit per operazioni WebSocket
+const wsRateLimit = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minuti
+  max: 60, // 60 richieste per finestra
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip,
+  message: { 
+    error: { 
+      message: 'Troppe richieste WebSocket, riprova più tardi',
+      code: 'WS_RATE_LIMIT_EXCEEDED'
+    }
+  }
+});
+
+// Applica i rate limiter ai percorsi specifici
+app.use('/api', baseRateLimit);
+app.use('/api/news/search', searchRateLimit);
+app.use('/api/refresh', refreshRateLimit);
+app.use('/api/ws', wsRateLimit);
 
 // Crea cartella logs se non esiste
 const logDir = path.join(__dirname, 'logs');

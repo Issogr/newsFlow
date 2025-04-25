@@ -332,7 +332,13 @@ function getSources() {
   }));
 }
 
-// Function to group similar news using optimized algorithm
+/**
+ * [MIGLIORATO] Function to group similar news using optimized algorithm
+ * with semantic similarity and better matching
+ * 
+ * @param {Array} newsItems - Array of news items
+ * @returns {Array} - Array of grouped news
+ */
 function groupSimilarNews(newsItems) {
   // Validazione input
   if (!Array.isArray(newsItems)) {
@@ -374,42 +380,86 @@ function groupSimilarNews(newsItems) {
     titleIndex[simpleTitle].push(item);
   });
   
-  // Funzione ottimizzata per il calcolo della similarità
+  /**
+   * [MIGLIORATO] Calcolo della similarità tra articoli
+   * Considera semantica e pesi differenziati per titolo/contenuto
+   */
   const calculateSimilarity = (item1, item2) => {
-    // I titoli identici hanno max similarità
+    // Similarità esatta del titolo (priorità massima)
     if (item1.title === item2.title) return 1.0;
     
+    // Normalizza i testi
     const text1 = simplifyText(`${item1.title} ${item1.description || ''}`);
     const text2 = simplifyText(`${item2.title} ${item2.description || ''}`);
     
     if (!text1 || !text2) return 0;
     
-    // Cache delle parole per evitare split ripetuti
+    // Calcola similarità basata su parole
     const words1 = text1.split(' ');
     const words2 = text2.split(' ');
+    
+    // Peso maggiore per parole nel titolo
+    const titleWords1 = simplifyText(item1.title).split(' ');
+    const titleWords2 = simplifyText(item2.title).split(' ');
     
     // Set per calcolo Jaccard
     const set1 = new Set(words1);
     const set2 = new Set(words2);
+    const titleSet1 = new Set(titleWords1);
+    const titleSet2 = new Set(titleWords2);
     
-    // Ottimizzazione: se la differenza di dimensione è troppo grande, la similarità sarà bassa
-    if (Math.abs(set1.size - set2.size) / Math.max(set1.size, set2.size) > 0.5) {
-      return 0;
-    }
-    
-    // Calcola l'intersezione in modo ottimizzato (utilizzando il set più piccolo)
-    const [smallerSet, largerSet] = set1.size < set2.size ? [set1, set2] : [set2, set1];
-    
+    // Calcola intersezione
     let intersectionSize = 0;
-    for (const word of smallerSet) {
-      if (largerSet.has(word)) {
-        intersectionSize++;
+    let titleIntersectionSize = 0;
+    
+    // Ottimizzazione: usa il set più piccolo per l'iterazione
+    const [smallerSet, largerSet] = set1.size < set2.size ? [set1, set2] : [set2, set1];
+    const [smallerTitleSet, largerTitleSet] = titleSet1.size < titleSet2.size ? 
+      [titleSet1, titleSet2] : [titleSet2, titleSet1];
+    
+    smallerSet.forEach(word => {
+      if (largerSet.has(word)) intersectionSize++;
+    });
+    
+    smallerTitleSet.forEach(word => {
+      if (largerTitleSet.has(word)) titleIntersectionSize++;
+    });
+    
+    const unionSize = set1.size + set2.size - intersectionSize;
+    const titleUnionSize = titleSet1.size + titleSet2.size - titleIntersectionSize;
+    
+    // Evita divisione per zero
+    if (unionSize === 0 || titleUnionSize === 0) return 0;
+    
+    // Calcola similarità con peso maggiore per il titolo (70%)
+    const contentSimilarity = intersectionSize / unionSize;
+    const titleSimilarity = titleIntersectionSize / titleUnionSize;
+    
+    // [NUOVO] Considera anche topic comuni
+    let topicSimilarity = 0;
+    if (item1.topics && item2.topics && 
+        Array.isArray(item1.topics) && Array.isArray(item2.topics) &&
+        item1.topics.length > 0 && item2.topics.length > 0) {
+      
+      const topicSet1 = new Set(item1.topics.map(t => t.toLowerCase()));
+      const topicSet2 = new Set(item2.topics.map(t => t.toLowerCase()));
+      
+      let commonTopics = 0;
+      topicSet1.forEach(topic => {
+        if (topicSet2.has(topic)) commonTopics++;
+      });
+      
+      // Se hanno almeno un topic in comune, aumenta la similarità
+      if (commonTopics > 0) {
+        topicSimilarity = commonTopics / Math.max(topicSet1.size, topicSet2.size);
       }
     }
     
-    const unionSize = set1.size + set2.size - intersectionSize;
-    
-    return intersectionSize / unionSize;
+    // Formula di similarità complessiva con pesi:
+    // - 60% similarità titolo
+    // - 20% similarità contenuto
+    // - 20% similarità topic
+    return 0.6 * titleSimilarity + 0.2 * contentSimilarity + 0.2 * topicSimilarity;
   };
   
   // Prima grouping per titoli identici o molto simili
@@ -454,7 +504,10 @@ function groupSimilarNews(newsItems) {
     if (processedItems.has(item)) return;
     
     let foundGroup = false;
+    let bestGroupId = null;
+    let bestSimilarity = 0;
     
+    // Trova il gruppo con la migliore similarità
     for (const groupId in groups) {
       const group = groups[groupId];
       if (!group.items || !group.items[0]) continue;
@@ -462,29 +515,36 @@ function groupSimilarNews(newsItems) {
       const mainItem = group.items[0]; // Confronta con il primo item del gruppo
       
       const similarity = calculateSimilarity(mainItem, item);
-      if (similarity > 0.4) { // Soglia di similarità aumentata per precisione
-        group.items.push(item);
-        group.sources = [...new Set([...group.sources, item.source])];
-        
-        // Unisci i topic da tutti gli item nel gruppo, assicurando la normalizzazione
-        const allTopics = [...group.topics];
-        if (item.topics && Array.isArray(item.topics)) {
-          item.topics.forEach(topic => {
-            if (typeof topic === 'string' && !allTopics.includes(topic)) {
-              allTopics.push(topic);
-            }
-          });
-        }
-        // Limita a massimo 3 topic
-        group.topics = allTopics.slice(0, 3);
-        
-        processedItems.add(item);
+      
+      // [MIGLIORATO] Seleziona il gruppo con la migliore similarità,
+      // non il primo che supera la soglia
+      if (similarity > bestSimilarity && similarity > 0.4) {
+        bestSimilarity = similarity;
+        bestGroupId = groupId;
         foundGroup = true;
-        break;
       }
     }
     
-    if (!foundGroup) {
+    if (foundGroup && bestGroupId) {
+      const group = groups[bestGroupId];
+      
+      group.items.push(item);
+      group.sources = [...new Set([...group.sources, item.source])];
+      
+      // Unisci i topic da tutti gli item nel gruppo, assicurando la normalizzazione
+      const allTopics = [...group.topics];
+      if (item.topics && Array.isArray(item.topics)) {
+        item.topics.forEach(topic => {
+          if (typeof topic === 'string' && !allTopics.includes(topic)) {
+            allTopics.push(topic);
+          }
+        });
+      }
+      // Limita a massimo 3 topic
+      group.topics = allTopics.slice(0, 3);
+      
+      processedItems.add(item);
+    } else {
       // Crea un nuovo gruppo
       const groupId = `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const itemTopics = Array.isArray(item.topics) ? 
@@ -510,8 +570,13 @@ function groupSimilarNews(newsItems) {
   });
   
   // Converti in array e ordina per data
-  return Object.values(groups)
+  const groupsArray = Object.values(groups)
     .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  
+  // [NUOVO] Log delle statistiche di raggruppamento
+  logger.debug(`Grouped ${validItems.length} news items into ${groupsArray.length} groups (${Math.round((1 - groupsArray.length/validItems.length) * 100)}% reduction)`);
+  
+  return groupsArray;
 }
 
 // Function to check if a news item matches a topic filter

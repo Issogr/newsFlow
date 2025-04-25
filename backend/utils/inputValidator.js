@@ -1,10 +1,29 @@
 /**
  * Modulo per la validazione e sanitizzazione degli input
+ * [MIGLIORATO] Con sanitizzazione HTML robusta contro attacchi XSS
  */
 
 const createError = require('./errorHandler').createError;
 const logger = require('./logger');
 const { decode } = require('html-entities'); // Importazione della libreria per decodificare le entità HTML
+
+// [NUOVO] Aggiunte necessarie per DOMPurify
+const createDOMPurify = require('dompurify');
+const { JSDOM } = require('jsdom');
+
+// [NUOVO] Creiamo l'istanza DOMPurify una sola volta
+const window = new JSDOM('').window;
+const DOMPurify = createDOMPurify(window);
+
+// [NUOVO] Configurazione sicura di DOMPurify
+const ALLOWED_TAGS = [
+  'p', 'a', 'br', 'strong', 'b', 'em', 'i', 'u', 'span', 'div', 
+  'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'img'
+];
+
+const ALLOWED_ATTR = [
+  'href', 'target', 'rel', 'src', 'alt', 'title', 'class', 'style'
+];
 
 /**
  * Sanitizza una stringa per prevenire XSS e injection
@@ -105,9 +124,8 @@ function sanitizeBody(fieldNames) {
 }
 
 /**
- * Sanitizza l'HTML per prevenire XSS
- * Implementazione migliorata con una white-list di tag e attributi consentiti
- * e decodifica delle entità HTML usando la libreria html-entities
+ * [MIGLIORATO] Sanitizza l'HTML per prevenire XSS
+ * Utilizza DOMPurify per una sanitizzazione robusta contro attacchi XSS
  * 
  * @param {string} html - HTML da sanitizzare
  * @returns {string} - HTML sanitizzato
@@ -118,86 +136,118 @@ function sanitizeHtml(html) {
   }
   
   try {
-    // Lista di tag consentiti con attributi permessi
-    const allowedTags = {
-      'p': ['style', 'class'],
-      'a': ['href', 'title', 'target', 'rel', 'class'],
-      'br': [],
-      'strong': ['class'],
-      'b': ['class'],
-      'em': ['class'],
-      'i': ['class'],
-      'u': ['class'],
-      'span': ['class', 'style'],
-      'div': ['class', 'style'],
-      'ul': ['class'],
-      'ol': ['class'],
-      'li': ['class'],
-      'h1': ['class', 'id'],
-      'h2': ['class', 'id'],
-      'h3': ['class', 'id'],
-      'h4': ['class', 'id'],
-      'h5': ['class', 'id'],
-      'h6': ['class', 'id'],
-      'img': ['src', 'alt', 'title', 'width', 'height', 'class']
-    };
+    // Sanitizza l'HTML con DOMPurify
+    const sanitizedHtml = DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: ALLOWED_TAGS,
+      ALLOWED_ATTR: ALLOWED_ATTR,
+      FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'meta'],
+      FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
+      ALLOW_DATA_ATTR: false,
+      USE_PROFILES: { html: true },
+      ADD_URI_SAFE_ATTR: ['target']
+    });
     
-    // Rimuovi tag non consentiti
-    let sanitized = html;
+    // Modifica gli URL nelle immagini per assicurarsi che inizino con http o https
+    const parser = new window.DOMParser();
+    const doc = parser.parseFromString(sanitizedHtml, 'text/html');
     
-    // Rimuovi tutti i tag script
-    sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-    
-    // Rimuovi i commenti HTML
-    sanitized = sanitized.replace(/<!--[\s\S]*?-->/g, '');
-    
-    // Rimuovi attributi on* e javascript:
-    sanitized = sanitized.replace(/\son\w+\s*=\s*(?:(['"])(?:\\\1|.)*?\1|(?:\S+))/gi, '');
-    sanitized = sanitized.replace(/javascript:/gi, 'removed:');
-    sanitized = sanitized.replace(/data:/gi, 'removed:');
-    
-    // Verifica che gli URL di immagini inizino con http o https
-    sanitized = sanitized.replace(/(<img[^>]+src\s*=\s*['"])([^'"]+)(['"][^>]*>)/gi, (match, start, url, end) => {
-      if (url.trim().toLowerCase().startsWith('http') || url.trim().toLowerCase().startsWith('https')) {
-        return start + url + end;
-      } else {
-        return start + 'removed:' + url + end;
+    // Sanitizza gli attributi src delle immagini
+    const images = doc.querySelectorAll('img');
+    images.forEach(img => {
+      const src = img.getAttribute('src');
+      if (src && !(src.toLowerCase().startsWith('http://') || src.toLowerCase().startsWith('https://'))) {
+        img.setAttribute('src', 'removed:' + src);
       }
     });
     
-    // Verifica gli URL nei link
-    sanitized = sanitized.replace(/(<a[^>]+href\s*=\s*['"])([^'"]+)(['"][^>]*>)/gi, (match, start, url, end) => {
-      if (url.trim().toLowerCase().startsWith('http') || 
-          url.trim().toLowerCase().startsWith('https') || 
-          url.trim().toLowerCase().startsWith('mailto:') || 
-          url.trim().startsWith('/') || 
-          url.trim().startsWith('#')) {
-        return start + url + end;
-      } else {
-        return start + 'removed:' + url + end;
+    // Sanitizza gli attributi href dei link
+    const links = doc.querySelectorAll('a');
+    links.forEach(link => {
+      const href = link.getAttribute('href');
+      if (href) {
+        // Permetti solo link http, https, mailto, o relativi
+        if (!(href.toLowerCase().startsWith('http://') || 
+              href.toLowerCase().startsWith('https://') || 
+              href.toLowerCase().startsWith('mailto:') || 
+              href.startsWith('/') || 
+              href.startsWith('#'))) {
+          link.setAttribute('href', 'removed:' + href);
+        }
+        
+        // Assicurati che tutti i link esterni abbiano target="_blank" e rel="noopener noreferrer"
+        if (href.toLowerCase().startsWith('http://') || href.toLowerCase().startsWith('https://')) {
+          link.setAttribute('target', '_blank');
+          link.setAttribute('rel', 'noopener noreferrer');
+        }
       }
     });
     
-    // Assicurati che tutti i link esterni abbiano target="_blank" e rel="noopener noreferrer"
-    sanitized = sanitized.replace(/(<a[^>]+href\s*=\s*['"](?:http|https)[^'"]+['"])([^>]*)(>)/gi, (match, start, attrs, end) => {
-      if (!attrs.includes('target=')) {
-        attrs += ' target="_blank"';
-      }
-      if (!attrs.includes('rel=')) {
-        attrs += ' rel="noopener noreferrer"';
-      }
-      return start + attrs + end;
-    });
-    
-    // Usa html-entities per decodificare TUTTE le entità HTML in modo completo
-    sanitized = decode(sanitized);
-    
-    return sanitized;
+    // Usa html-entities per decodificare le entità HTML in modo completo
+    return decode(doc.body.innerHTML);
   } catch (error) {
     logger.error(`Error sanitizing HTML: ${error.message}`);
-    // In caso di errore, rimuovi tutto l'HTML e decodifica comunque le entità
-    return decode(html.replace(/<[^>]*>/g, ''));
+    
+    // Fallback in caso di errore: rimuovi tutto l'HTML
+    try {
+      return decode(DOMPurify.sanitize(html, { ALLOWED_TAGS: [] }));
+    } catch (fallbackError) {
+      logger.error(`Fallback sanitization failed: ${fallbackError.message}`);
+      return decode(html.replace(/<[^>]*>/g, ''));
+    }
   }
+}
+
+/**
+ * [NUOVO] Sanitizza un oggetto contentente HTML in modo ricorsivo
+ * Utile per sanitizzare oggetti JSON complessi che contengono HTML
+ * 
+ * @param {Object|Array|string} data - Oggetto o array da sanitizzare
+ * @returns {Object|Array|string} - Oggetto o array sanitizzato
+ */
+function sanitizeDeep(data) {
+  if (typeof data !== 'object' || data === null) {
+    return typeof data === 'string' ? sanitizeString(data) : data;
+  }
+  
+  if (Array.isArray(data)) {
+    return data.map(item => sanitizeDeep(item));
+  }
+  
+  const result = {};
+  for (const key in data) {
+    if (Object.prototype.hasOwnProperty.call(data, key)) {
+      result[key] = sanitizeDeep(data[key]);
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * [NUOVO] Verifica se un input contiene pattern di attacco XSS
+ * Utile per segnalare potenziali tentativi di attacco
+ * 
+ * @param {string} input - Input da verificare
+ * @returns {boolean} - true se l'input contiene pattern sospetti
+ */
+function containsXSSPatterns(input) {
+  if (typeof input !== 'string') return false;
+  
+  const suspiciousPatterns = [
+    /<script.*?>.*?<\/script>/i,
+    /javascript:/i,
+    /on\w+\s*=/i,
+    /data:(?!image)/i,
+    /<iframe.*?>.*?<\/iframe>/i,
+    /<svg.*?>.*?<\/svg>/i,
+    /document\.cookie/i,
+    /document\.location/i,
+    /eval\(/i,
+    /localStorage/i,
+    /sessionStorage/i
+  ];
+  
+  return suspiciousPatterns.some(pattern => pattern.test(input));
 }
 
 module.exports = {
@@ -207,5 +257,8 @@ module.exports = {
   sanitizeQuery,
   sanitizeParam,
   sanitizeBody,
-  sanitizeHtml
+  sanitizeHtml,
+  // [NUOVO] Esporta le nuove funzioni
+  sanitizeDeep,
+  containsXSSPatterns
 };

@@ -35,6 +35,10 @@ const JOB_PRIORITIES = {
   'default': 10
 };
 
+//Variabili per la gestione del salvataggio debounced
+let saveTopicsTimeout = null;
+let dirtyState = false;
+
 /**
  * Assicura che la directory per la cache esista
  */
@@ -50,8 +54,12 @@ async function ensureDirectoryExists() {
 
 /**
  * Salva lo stato dei topic dedotti in un file
+ * Implementa un meccanismo più efficiente per la persistenza
  */
 async function saveTopicsToFile() {
+  // Se non c'è stato un cambiamento, non salvare
+  if (!dirtyState) return;
+  
   try {
     // Crea un oggetto con i topic per ogni articolo
     const topicsCache = {};
@@ -76,9 +84,31 @@ async function saveTopicsToFile() {
     // Salva nel file
     await fs.writeFile(TOPICS_CACHE_FILE, JSON.stringify(topicsCache, null, 2));
     logger.info(`Cached ${Object.keys(topicsCache).length} topic entries to file`);
+    
+    // Resetta lo stato di modifica
+    dirtyState = false;
   } catch (error) {
     logger.error(`Error saving topics to file: ${error.message}`);
   }
+}
+
+/**
+ * [MIGLIORATO] Implementa un sistema debounced per il salvataggio dei topic
+ * Limita le scritture su disco mantenendo la coerenza dei dati
+ */
+function debouncedSaveTopics() {
+  // Marca lo stato come modificato
+  dirtyState = true;
+  
+  // Cancella il timeout esistente
+  clearTimeout(saveTopicsTimeout);
+  
+  // Imposta un nuovo timeout
+  saveTopicsTimeout = setTimeout(() => {
+    saveTopicsToFile().catch(err => {
+      logger.error(`Failed to save topics cache: ${err.message}`);
+    });
+  }, 5000); // 5 secondi di debounce
 }
 
 /**
@@ -213,7 +243,9 @@ function articleIdsMatch(id1, id2) {
 }
 
 /**
- * Avvia un job asincrono per dedurre i topic di un articolo
+ * [MIGLIORATO] Avvia un job asincrono per dedurre i topic di un articolo
+ * Corretto il memory leak potenziale con controlli proattivi sulla dimensione della coda
+ * 
  * @param {string} articleId - ID dell'articolo
  * @param {Object} article - Oggetto articolo
  * @param {string} language - Lingua dell'articolo
@@ -254,6 +286,13 @@ function startTopicDeduction(articleId, article, language) {
   // Se c'è già un job in corso per questo articolo, restituisci i topic esistenti
   if (activeJobs.has(jobId) && activeJobs.get(jobId).status !== 'completed') {
     return article.topics || [];
+  }
+  
+  // [MIGLIORATO] Controllo proattivo della dimensione della coda
+  // Esegue la pulizia quando raggiunge l'80% della capacità massima
+  if (activeJobs.size >= MAX_ACTIVE_JOBS * 0.8) {
+    logger.info(`Active jobs reached ${activeJobs.size}/${MAX_ACTIVE_JOBS} (80% threshold), performing cleanup`);
+    cleanupCompletedJobs(true); // Pulizia forzata
   }
   
   // Limita il numero di job attivi per prevenire memory leak
@@ -414,12 +453,8 @@ async function processNextJob() {
         titleToTopicsMap.set(normalizedTitle, combinedTopics);
       }
       
-      // Salva i topic nel file (con throttling per evitare troppe scritture)
-      if (Math.random() < 0.1) { // 10% di probabilità di salvare ad ogni aggiornamento
-        saveTopicsToFile().catch(err => {
-          logger.error(`Failed to save topics cache: ${err.message}`);
-        });
-      }
+      // [MIGLIORATO] Usa il sistema debounced per il salvataggio
+      debouncedSaveTopics();
     }
     
     // Aggiorna l'articolo originale e notifica i client tramite WebSocket
@@ -510,13 +545,16 @@ function getTopicsForArticle(articleId, article = null) {
 }
 
 /**
- * Pulisce i job completati dalla memoria
+ * [MIGLIORATO] Pulisce i job completati dalla memoria
+ * Ottimizzato per ridurre il rischio di memory leak e migliorato monitoraggio
+ * 
  * @param {boolean} force - Se true, forza una pulizia anche per job recenti
  */
 function cleanupCompletedJobs(force = false) {
   const MAX_AGE_MS = force ? 60 * 1000 : MAX_JOB_AGE; // 1 minuto in caso di force, altrimenti 30 minuti
   const now = Date.now();
   let deletedCount = 0;
+  let jobsBeforeCleaning = activeJobs.size;
   
   for (const [jobId, job] of activeJobs.entries()) {
     // Rimuovi job completati o in errore che sono più vecchi di MAX_AGE_MS
@@ -531,19 +569,47 @@ function cleanupCompletedJobs(force = false) {
     if (job.status === 'processing' && 
         job.processingStartedAt && 
         (now - job.processingStartedAt > 60000)) { // 1 minuto di timeout
+      logger.warn(`Removing stuck job ${jobId} (processing for > 60s)`);
       activeJobs.delete(jobId);
       deletedCount++;
     }
     
     // Rimuovi job troppo vecchi
     if (job.createdAt && (now - job.createdAt > 3600000)) { // 1 ora max vita
+      logger.warn(`Removing old job ${jobId} (created > 60m ago)`);
       activeJobs.delete(jobId);
       deletedCount++;
     }
   }
   
-  if (deletedCount > 0) {
-    logger.info(`Cleaned up ${deletedCount} completed/stuck jobs. Active jobs: ${activeJobs.size}`);
+  // [MIGLIORATO] Monitoring avanzato dello stato dei job
+  if (deletedCount > 0 || force) {
+    const jobsAfterCleaning = activeJobs.size;
+    const reductionPercent = jobsBeforeCleaning > 0 
+      ? ((jobsBeforeCleaning - jobsAfterCleaning) / jobsBeforeCleaning * 100).toFixed(1)
+      : 0;
+    
+    logger.info(
+      `Cleaned up ${deletedCount} completed/stuck jobs. ` +
+      `Active jobs: ${jobsAfterCleaning}/${MAX_ACTIVE_JOBS} ` +
+      `(reduced by ${reductionPercent}%)`
+    );
+    
+    // [MIGLIORATO] Se abbiamo effettuato una pulizia significativa, forza il salvataggio
+    if (deletedCount > 10 || (jobsBeforeCleaning > 0 && reductionPercent > 20)) {
+      saveTopicsToFile().catch(err => {
+        logger.error(`Failed to save topics cache after cleanup: ${err.message}`);
+      });
+    }
+  }
+  
+  // [MIGLIORATO] Se siamo ancora vicini al limite dopo la pulizia, log di avviso
+  if (activeJobs.size > MAX_ACTIVE_JOBS * 0.9) {
+    logger.warn(
+      `After cleanup, still at ${activeJobs.size}/${MAX_ACTIVE_JOBS} jobs ` +
+      `(${((activeJobs.size / MAX_ACTIVE_JOBS) * 100).toFixed(1)}%). ` +
+      `Consider increasing MAX_ACTIVE_JOBS or improving cleanup policy.`
+    );
   }
 }
 
@@ -551,13 +617,31 @@ function cleanupCompletedJobs(force = false) {
 // Esegui la pulizia ogni 5 minuti
 const cleanupInterval = setInterval(cleanupCompletedJobs, 5 * 60 * 1000);
 
-// Pianifica il salvataggio periodico dei topic su file
-const saveInterval = setInterval(saveTopicsToFile, 10 * 60 * 1000); // Ogni 10 minuti
+// [MIGLIORATO] Imposta un intervallo più frequente per il monitoraggio dei job
+// Questo permette di rilevare crescite improvvise
+const monitorInterval = setInterval(() => {
+  const activeJobsCount = activeJobs.size;
+  const pendingJobsCount = topicDeductionQueue.length;
+  
+  if (activeJobsCount > MAX_ACTIVE_JOBS * 0.7 || pendingJobsCount > 100) {
+    logger.warn(
+      `Job queue status alert: ${activeJobsCount}/${MAX_ACTIVE_JOBS} active jobs ` +
+      `(${((activeJobsCount / MAX_ACTIVE_JOBS) * 100).toFixed(1)}%), ` +
+      `${pendingJobsCount} pending jobs`
+    );
+    
+    // Pulizia automatica se ci avviciniamo al limite
+    if (activeJobsCount > MAX_ACTIVE_JOBS * 0.8) {
+      cleanupCompletedJobs(true);
+    }
+  }
+}, 30 * 1000); // Ogni 30 secondi
 
 // Assicurati che gli interval siano terminati quando il processo termina
 process.on('exit', () => {
   clearInterval(cleanupInterval);
-  clearInterval(saveInterval);
+  clearInterval(monitorInterval);
+  clearTimeout(saveTopicsTimeout);
   
   // Salva i topic prima di terminare
   saveTopicsToFile().catch(() => {});

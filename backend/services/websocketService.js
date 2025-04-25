@@ -1,5 +1,6 @@
 /**
  * Servizio per gestire la comunicazione in tempo reale tramite WebSockets
+ * [MIGLIORATO] Con gestione errori robusta e logging avanzato
  */
 
 const logger = require('../utils/logger');
@@ -12,7 +13,9 @@ const statistics = {
   totalConnections: 0,
   activeConnectionsCount: 0,
   topicUpdatesSent: 0,
-  newsUpdatesSent: 0
+  newsUpdatesSent: 0,
+  failedBroadcasts: 0,
+  roomSizes: {}
 };
 
 /**
@@ -39,8 +42,42 @@ function initialize(server) {
   // Gestione connessioni
   io.on('connection', handleConnection);
   
+  // [NUOVO] Imposta un intervallo per aggiornare le statistiche delle stanze
+  setInterval(updateRoomStatistics, 60000); // Ogni minuto
+  
   logger.info('Servizio WebSocket inizializzato');
   return io;
+}
+
+/**
+ * [NUOVO] Aggiorna le statistiche sulle dimensioni delle stanze
+ */
+function updateRoomStatistics() {
+  if (!io) return;
+  
+  try {
+    const rooms = io.sockets.adapter.rooms;
+    if (!rooms) return;
+    
+    // Aggiorna le statistiche per le stanze principali
+    statistics.roomSizes = {
+      'all-updates': rooms.get('all-updates')?.size || 0
+    };
+    
+    // Aggiorna le statistiche per le stanze dei topic
+    for (const [roomName, room] of rooms.entries()) {
+      if (roomName.startsWith('topic:')) {
+        statistics.roomSizes[roomName] = room.size;
+      }
+      if (roomName.startsWith('source:')) {
+        statistics.roomSizes[roomName] = room.size;
+      }
+    }
+    
+    logger.debug(`WebSocket room statistics updated: ${JSON.stringify(statistics.roomSizes)}`);
+  } catch (error) {
+    logger.error(`Error updating room statistics: ${error.message}`);
+  }
 }
 
 /**
@@ -64,7 +101,7 @@ function handleConnection(socket) {
   logger.info(`Nuova connessione WebSocket: ${userId}. Connessioni attive: ${statistics.activeConnectionsCount}`);
   
   // Invia messaggio di benvenuto
-  socket.emit('welcome', {
+  safeBroadcast(socket, 'welcome', {
     message: 'Connesso agli aggiornamenti in tempo reale',
     timestamp: new Date().toISOString()
   });
@@ -77,8 +114,51 @@ function handleConnection(socket) {
   
   // Ping/pong per mantenere attiva la connessione
   socket.on('ping', () => {
-    socket.emit('pong', { timestamp: Date.now() });
+    safeBroadcast(socket, 'pong', { timestamp: Date.now() });
   });
+}
+
+/**
+ * [NUOVO] Funzione per inviare messaggi in modo sicuro con gestione errori
+ * @param {Object} socket - Socket di destinazione
+ * @param {string} event - Nome dell'evento da emettere
+ * @param {any} data - Dati da inviare
+ * @returns {boolean} - true se il messaggio è stato inviato con successo
+ */
+function safeBroadcast(socket, event, data) {
+  try {
+    socket.emit(event, data);
+    return true;
+  } catch (error) {
+    logger.error(`Error broadcasting event ${event} to socket ${socket.id}: ${error.message}`);
+    statistics.failedBroadcasts++;
+    return false;
+  }
+}
+
+/**
+ * [NUOVO] Funzione per inviare messaggi in modo sicuro a una stanza specifica
+ * @param {string} room - Nome della stanza
+ * @param {string} event - Nome dell'evento da emettere
+ * @param {any} data - Dati da inviare
+ * @returns {boolean} - true se il messaggio è stato inviato con successo
+ */
+function safeRoomBroadcast(room, event, data) {
+  if (!io) return false;
+  
+  try {
+    io.to(room).emit(event, data);
+    
+    // Aggiorna le statistiche di broadcast
+    const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
+    logger.debug(`Broadcast "${event}" sent to room "${room}" (${roomSize} clients)`);
+    
+    return true;
+  } catch (error) {
+    logger.error(`Error broadcasting to room ${room} for event ${event}: ${error.message}`);
+    statistics.failedBroadcasts++;
+    return false;
+  }
 }
 
 /**
@@ -92,15 +172,14 @@ function handleFilterSubscription(socket, userId) {
     try {
       // Validazione dei filtri
       if (!filters || typeof filters !== 'object') {
-        socket.emit('error', { message: 'Filtri non validi' });
+        safeBroadcast(socket, 'error', { message: 'Filtri non validi' });
         return;
       }
       
       // Lascia tutte le stanze precedenti
-      socket.rooms.forEach(room => {
-        if (room !== socket.id) {
-          socket.leave(room);
-        }
+      const previousRooms = [...socket.rooms].filter(room => room !== socket.id);
+      previousRooms.forEach(room => {
+        socket.leave(room);
       });
       
       // Stanza generica per tutti gli aggiornamenti
@@ -129,15 +208,18 @@ function handleFilterSubscription(socket, userId) {
       }
       
       // Conferma iscrizione
-      socket.emit('filters:subscribed', {
+      safeBroadcast(socket, 'filters:subscribed', {
         topics: filters.topics || [],
         sources: filters.sources || [],
         timestamp: new Date().toISOString()
       });
       
+      // [NUOVO] Aggiorna statistiche delle stanze
+      updateRoomStatistics();
+      
     } catch (error) {
       logger.error(`Errore nella gestione dell'iscrizione ai filtri: ${error.message}`);
-      socket.emit('error', { message: 'Errore nella sottoscrizione ai filtri' });
+      safeBroadcast(socket, 'error', { message: 'Errore nella sottoscrizione ai filtri' });
     }
   };
 }
@@ -148,12 +230,17 @@ function handleFilterSubscription(socket, userId) {
  */
 function handleDisconnection(userId) {
   activeConnections.delete(userId);
-  statistics.activeConnectionsCount--;
+  statistics.activeConnectionsCount = Math.max(0, statistics.activeConnectionsCount - 1);
   logger.info(`Disconnessione WebSocket: ${userId}. Connessioni attive: ${statistics.activeConnectionsCount}`);
+  
+  // [NUOVO] Aggiorna statistiche dopo un breve ritardo per dare tempo ai socket di aggiornare le stanze
+  setTimeout(updateRoomStatistics, 1000);
 }
 
 /**
  * Invia aggiornamenti sui topic di un articolo a tutti i client interessati
+ * [MIGLIORATO] Con gestione errori robusta per ogni broadcast
+ * 
  * @param {string} articleId - ID dell'articolo
  * @param {Array} topics - Nuovi topic dedotti
  */
@@ -182,23 +269,28 @@ function broadcastTopicUpdate(articleId, topics) {
     logger.info(`TOPIC UPDATE PAYLOAD: ${JSON.stringify(payload)}`);
     
     // Invia a tutti i client che seguono questi topic
-    topics.forEach(topic => {
+    let successfulBroadcasts = 0;
+    for (const topic of topics) {
       if (topic && typeof topic === 'string') {
         const roomName = `topic:${topic.toLowerCase()}`;
-        io.to(roomName).emit('topic:update', payload);
+        if (safeRoomBroadcast(roomName, 'topic:update', payload)) {
+          successfulBroadcasts++;
+        }
       }
-    });
+    }
     
     // Invia anche alla stanza generica
     const connectedClients = io.sockets.adapter.rooms.get('all-updates')?.size || 0;
     logger.info(`Invio a ${connectedClients} client nella stanza all-updates`);
     
-    io.to('all-updates').emit('topic:update', payload);
+    if (safeRoomBroadcast('all-updates', 'topic:update', payload)) {
+      successfulBroadcasts++;
+    }
     
     // Aggiorna statistiche
     statistics.topicUpdatesSent++;
     
-    logger.info(`Topic update inviato per articolo ${articleId}: ${topics.join(', ')}`);
+    logger.info(`Topic update inviato per articolo ${articleId}: ${topics.join(', ')} (${successfulBroadcasts} broadcasts riusciti)`);
   } catch (error) {
     logger.error(`Errore nell'invio dell'aggiornamento topic: ${error.message}`, error);
   }
@@ -206,6 +298,8 @@ function broadcastTopicUpdate(articleId, topics) {
 
 /**
  * Invia nuovi articoli a tutti i client
+ * [MIGLIORATO] Con gestione separata per ogni stanza
+ * 
  * @param {Array} newsGroups - Gruppi di notizie
  */
 function broadcastNewsUpdate(newsGroups) {
@@ -229,78 +323,156 @@ function broadcastNewsUpdate(newsGroups) {
       timestamp: new Date().toISOString()
     };
     
+    // Contatore di broadcast riusciti
+    let successfulBroadcasts = 0;
+    
     // Invia a tutti i client nella stanza generica
-    io.to('all-updates').emit('news:update', payload);
+    if (safeRoomBroadcast('all-updates', 'news:update', payload)) {
+      successfulBroadcasts++;
+    }
     
     // Invia anche a stanze specifiche in base a topic e fonti
+    const topicRooms = new Set();
+    const sourceRooms = new Set();
+    
+    // Raccogli tutte le stanze rilevanti
     limitedGroups.forEach(group => {
-      // Invia alle stanze dei topic
+      // Raccogli stanze dei topic
       if (group.topics && Array.isArray(group.topics)) {
         group.topics.forEach(topic => {
           if (topic && typeof topic === 'string') {
-            const roomName = `topic:${topic.toLowerCase()}`;
-            io.to(roomName).emit('news:topic', {
-              ...payload,
-              topic
-            });
+            topicRooms.add(`topic:${topic.toLowerCase()}`);
           }
         });
       }
       
-      // Invia alle stanze delle fonti
+      // Raccogli stanze delle fonti
       if (group.sources && Array.isArray(group.sources)) {
         group.sources.forEach(source => {
           if (source && typeof source === 'string') {
-            const roomName = `source:${source.toLowerCase()}`;
-            io.to(roomName).emit('news:source', {
-              ...payload,
-              source
-            });
+            sourceRooms.add(`source:${source.toLowerCase()}`);
           }
         });
       }
     });
     
+    // Invia alle stanze dei topic
+    for (const roomName of topicRooms) {
+      const specificPayload = {
+        ...payload,
+        topic: roomName.replace('topic:', '')
+      };
+      
+      if (safeRoomBroadcast(roomName, 'news:topic', specificPayload)) {
+        successfulBroadcasts++;
+      }
+    }
+    
+    // Invia alle stanze delle fonti
+    for (const roomName of sourceRooms) {
+      const specificPayload = {
+        ...payload,
+        source: roomName.replace('source:', '')
+      };
+      
+      if (safeRoomBroadcast(roomName, 'news:source', specificPayload)) {
+        successfulBroadcasts++;
+      }
+    }
+    
     // Aggiorna statistiche
     statistics.newsUpdatesSent++;
     
-    logger.info(`Aggiornamento notizie inviato: ${limitedGroups.length} gruppi a ${statistics.activeConnectionsCount} client`);
+    logger.info(`Aggiornamento notizie inviato: ${limitedGroups.length} gruppi a ${statistics.activeConnectionsCount} client (${successfulBroadcasts} broadcasts riusciti)`);
   } catch (error) {
     logger.error(`Errore nell'invio dell'aggiornamento notizie: ${error.message}`);
+    statistics.failedBroadcasts++;
   }
 }
 
 /**
  * Notifica i client di un evento di sistema
+ * [MIGLIORATO] Con gestione errori migliore
+ * 
  * @param {string} message - Messaggio di sistema 
  * @param {string} type - Tipo di notifica (info, warning, error)
  */
 function broadcastSystemNotification(message, type = 'info') {
   if (!io) return;
   
-  const payload = {
-    type: 'system_notification',
-    notificationType: type,
-    message,
-    timestamp: new Date().toISOString()
-  };
-  
-  io.emit('system:notification', payload);
-  
-  logger.info(`Notifica di sistema inviata: ${message}`);
+  try {
+    const payload = {
+      type: 'system_notification',
+      notificationType: type,
+      message,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Usa il broadcast sicuro
+    let success = false;
+    try {
+      io.emit('system:notification', payload);
+      success = true;
+    } catch (emitError) {
+      logger.error(`Error broadcasting system notification: ${emitError.message}`);
+      statistics.failedBroadcasts++;
+      
+      // Fallback: prova a inviare alla stanza all-updates
+      success = safeRoomBroadcast('all-updates', 'system:notification', payload);
+    }
+    
+    if (success) {
+      logger.info(`Notifica di sistema inviata: ${message}`);
+    } else {
+      logger.warn(`Impossibile inviare notifica di sistema: ${message}`);
+    }
+  } catch (error) {
+    logger.error(`Errore critico nell'invio della notifica di sistema: ${error.message}`);
+    statistics.failedBroadcasts++;
+  }
 }
 
 /**
  * Ottiene statistiche sul servizio WebSocket
+ * [MIGLIORATO] Con più informazioni diagnostiche
+ * 
  * @returns {Object} - Statistiche
  */
 function getStatistics() {
+  const uptime = io ? Math.floor((Date.now() - io.startTime) / 1000) : 0;
+  
+  // Calcola stanze di topic popolari
+  const topicRooms = {};
+  const sourceRooms = {};
+  
+  for (const [roomName, size] of Object.entries(statistics.roomSizes)) {
+    if (roomName.startsWith('topic:')) {
+      topicRooms[roomName.replace('topic:', '')] = size;
+    } else if (roomName.startsWith('source:')) {
+      sourceRooms[roomName.replace('source:', '')] = size;
+    }
+  }
+  
   return {
     ...statistics,
+    uptime,
     timestamp: new Date().toISOString(),
-    rooms: io ? Array.from(io.sockets.adapter.rooms.keys()) : []
+    rooms: io ? {
+      all: statistics.roomSizes['all-updates'] || 0,
+      topicRooms, 
+      sourceRooms
+    } : {},
+    serverInfo: {
+      engine: io?.engine?.opts || {},
+      transports: io ? Object.keys(io.engine.clients) : []
+    }
   };
 }
+
+// [NUOVO] Imposta il timestamp di avvio
+io = {
+  startTime: Date.now()
+};
 
 module.exports = {
   initialize,

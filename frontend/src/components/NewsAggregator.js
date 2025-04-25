@@ -239,21 +239,24 @@ const NewsAggregator = () => {
     
   }, [activeFilters, news, applyFilters, showRecentOnly]);
 
-  // Gestione filtri WebSocket - Una volta sola quando cambiano i filtri
+  // [MIGLIORATO] Gestione filtri WebSocket dopo riconnessione
+  // Usa reconnectionEvent per risintonizzare i filtri quando il WebSocket si riconnette
   useEffect(() => {
     // Salta se il caricamento non è stato completato
     if (!initialLoadDone.current) return;
     
-    // Aggiorna i filtri di sottoscrizione WebSocket
-    if (websocket.isConnected) {
+    // Aggiorna i filtri di sottoscrizione WebSocket dopo riconnessione
+    if (websocket.isConnected && websocket.reconnectionEvent > 0) {
+      console.log('Risincronizzazione filtri dopo riconnessione WebSocket');
       websocket.updateSubscriptionFilters({
         topics: activeFilters.topics,
         sources: activeFilters.sources
       });
     }
-  }, [activeFilters, websocket.isConnected]);
+  }, [websocket.reconnectionEvent, websocket.isConnected, activeFilters]);
 
-  // Gestione aggiornamenti WebSocket per nuovi articoli
+  // [MIGLIORATO] Gestione aggiornamenti WebSocket per nuovi articoli
+  // Implementa la logica per aggiornare effettivamente l'interfaccia con i nuovi articoli
   useEffect(() => {
     // Salta se il caricamento non è stato completato
     if (!initialLoadDone.current) return;
@@ -261,7 +264,9 @@ const NewsAggregator = () => {
     // Preveniamo loop: se l'update è lo stesso dell'ultimo processato, ignoriamo
     if (
       websocket.lastNewsUpdate && 
-      lastWebSocketUpdate.current !== websocket.lastNewsUpdate.timestamp
+      lastWebSocketUpdate.current !== websocket.lastNewsUpdate.timestamp &&
+      websocket.lastNewsUpdate.data && 
+      Array.isArray(websocket.lastNewsUpdate.data)
     ) {
       // Aggiorna il riferimento all'ultimo update processato
       lastWebSocketUpdate.current = websocket.lastNewsUpdate.timestamp;
@@ -270,9 +275,33 @@ const NewsAggregator = () => {
       // Se abbiamo appena caricato tutti i dati, ignoriamo questo aggiornamento
       if (ignoreNextNewsUpdate.current) {
         ignoreNextNewsUpdate.current = false;
+        return;
       }
+      
+      // Aggiorna lo stato delle notizie
+      setNews(prevNews => {
+        // Aggiungi solo articoli non già presenti
+        const newGroups = websocket.lastNewsUpdate.data.filter(newGroup => 
+          !prevNews.some(existingGroup => existingGroup.id === newGroup.id)
+        );
+        
+        console.log(`Aggiungendo ${newGroups.length} nuovi gruppi di notizie`);
+        
+        // Se non ci sono nuovi gruppi, restituisci lo stato precedente
+        if (newGroups.length === 0) return prevNews;
+        
+        // Aggiorna le notizie mettendo i nuovi gruppi all'inizio
+        const updatedNews = [...newGroups, ...prevNews];
+        
+        // Riapplica i filtri in modo asincrono
+        setTimeout(() => {
+          setFilteredNews(applyFilters(updatedNews));
+        }, 0);
+        
+        return updatedNews;
+      });
     }
-  }, [websocket.lastNewsUpdate]);
+  }, [websocket.lastNewsUpdate, applyFilters]);
 
   // Gestione aggiornamenti topic via WebSocket
   useEffect(() => {
@@ -407,7 +436,7 @@ const NewsAggregator = () => {
       });
     }
     
-  }, [websocket.lastTopicUpdate, activeFilters, applyFilters, showRecentOnly]);
+  }, [websocket.lastTopicUpdate, activeFilters, applyFilters, showRecentOnly, news]);
 
   // Debug per monitorare i cambiamenti negli articoli
   useEffect(() => {
