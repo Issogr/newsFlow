@@ -27,7 +27,6 @@ services:
       - ./backend/logs:/usr/src/app/logs:rw
       - ./backend/data:/usr/src/app/data:rw
     networks:
-      - ollama-network
       - app-network
     dns:
       - 8.8.8.8       # Google DNS primario
@@ -87,6 +86,3 @@ services:
 networks:
   app-network:
     driver: bridge
-  ollama-network:
-    external: true
-    name: ollama-network

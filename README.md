@@ -160,13 +160,14 @@ sudo chmod 777 ./backend/logs ./backend/data
 
 ### 3. Configurazione
 
-#### Configurazione per server Ollama esistente
+#### Configurazione per server Ollama esistente (opzionale)
 
-Il file `docker-compose.yml` è configurato per connettersi a un server Ollama esistente sulla rete Docker "ollama-network". Verifica che:
+La configurazione base (`docker-compose.yml`) funziona anche senza Ollama locale.
+Se vuoi connetterti a un server Ollama sulla rete Docker `ollama-network`, verifica che:
 
 1. Il tuo server Ollama sia raggiungibile all'indirizzo specificato in `OLLAMA_API_URL`
 2. Il modello specificato in `OLLAMA_MODEL` sia disponibile sul server Ollama
-3. La rete Docker "ollama-network" esista e sia accessibile
+3. La rete Docker `ollama-network` esista e sia accessibile
 
 Se necessario, modifica queste variabili nel `docker-compose.yml`:
 
@@ -188,8 +189,11 @@ environment:
 ### 4. Avvio dell'applicazione
 
 ```bash
-# Avvia l'applicazione con Docker Compose
+# Avvio base (senza rete Ollama esterna)
 docker-compose up --build -d
+
+# Avvio con Ollama locale su rete esterna opzionale
+docker-compose -f docker-compose.yml -f docker-compose.ollama.yml up --build -d
 ```
 
 L'applicazione sarà disponibile all'indirizzo: http://localhost
@@ -472,9 +476,11 @@ Se l'applicazione non riesce a connettersi al servizio Ollama, verifica:
 
 1. Che il servizio Ollama sia attivo e funzionante
 2. Che l'URL specificato in `OLLAMA_API_URL` sia corretto
-3. Che la rete `ollama-network` esista e sia accessibile
+3. Che la rete `ollama-network` esista e sia accessibile (solo se usi `docker-compose.ollama.yml`)
 
-Se necessario, puoi disabilitare temporaneamente l'integrazione con Ollama impostando `USE_OLLAMA=false` nel file `docker-compose.yml`.
+Se necessario, puoi:
+- disabilitare temporaneamente l'integrazione impostando `USE_OLLAMA=false` nel file `docker-compose.yml`
+- avviare senza file override `docker-compose.ollama.yml`
 
 ### Connessione WebSocket instabile
 
