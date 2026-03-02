@@ -152,11 +152,12 @@ Prima di avviare l'applicazione, è necessario creare le directory per i log e i
 # Crea le directory se non esistono
 mkdir -p ./backend/logs ./backend/data
 
-# Imposta i permessi corretti per consentire la scrittura dai container
-sudo chmod 777 ./backend/logs ./backend/data
+# Opzionale: allinea ownership/permessi (utile in caso di errori EACCES)
+sudo chown -R 1001:1001 ./backend/logs ./backend/data
+sudo chmod -R 775 ./backend/logs ./backend/data
 ```
 
-> ⚠️ **Importante**: Questo passaggio è fondamentale per evitare errori di permessi negati (EACCES) durante l'esecuzione dell'applicazione.
+> ℹ️ `docker-compose.yml` include un servizio `init-permissions` che prova automaticamente a correggere i permessi prima di avviare il backend.
 
 ### 3. Configurazione
 
@@ -462,9 +463,10 @@ Error: EACCES: permission denied, open 'logs/application-YYYY-MM-DD.log'
 # Fermati tutti i container
 docker-compose down
 
-# Configura i permessi corretti 
+# Configura i permessi corretti
 mkdir -p ./backend/logs ./backend/data
-sudo chmod 777 ./backend/logs ./backend/data
+sudo chown -R 1001:1001 ./backend/logs ./backend/data
+sudo chmod -R 775 ./backend/logs ./backend/data
 
 # Riavvia l'applicazione
 docker-compose up -d
