@@ -1,11 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const newsService = require('../services/newsAggregator');
-const topicNormalizer = require('../services/topicNormalizer');
-const logger = require('../utils/logger');
 const { asyncHandler, createError } = require('../utils/errorHandler');
 const { sanitizeParam, sanitizeQuery, validateParam, validateQueryParam } = require('../utils/inputValidator');
 const websocketService = require('../services/websocketService');
+const { requireAdminToken } = require('../utils/auth');
 
 // Get all news
 router.get('/news', asyncHandler(async (req, res) => {
@@ -85,7 +84,7 @@ router.get('/articles/:articleId/topics', [
 }));
 
 // Endpoint per forzare l'aggiornamento dei dati
-router.post('/refresh', asyncHandler(async (req, res) => {
+router.post('/refresh', requireAdminToken, asyncHandler(async (req, res) => {
   const news = await newsService.forceRefresh();
   
   res.json({
@@ -102,7 +101,7 @@ router.get('/ws/status', (req, res) => {
 });
 
 // Endpoint per inviare notifica a tutti i client
-router.post('/ws/notify', [
+router.post('/ws/notify', requireAdminToken, [
   validateQueryParam('message', 'Messaggio richiesto'),
   sanitizeQuery('message')
 ], asyncHandler(async (req, res) => {

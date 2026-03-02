@@ -5,15 +5,26 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const apiRoutes = require('./routes/api');
 const logger = require('./utils/logger');
-const { errorMiddleware } = require('./utils/errorHandler');
+const { errorMiddleware, createError } = require('./utils/errorHandler');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const websocketService = require('./services/websocketService');
+const { getAllowedOrigins, isOriginAllowed } = require('./utils/networkConfig');
 
 // Initialize express app
 const app = express();
 const PORT = process.env.PORT || 5000;
+const allowedOrigins = getAllowedOrigins();
+logger.info(`Allowed origins configurate: ${allowedOrigins.join(', ')}`);
+
+if (process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', true);
+} else if (process.env.TRUST_PROXY === 'false') {
+  app.set('trust proxy', false);
+} else {
+  app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
+}
 
 // Aumenta il timeout del server per gestire richieste più lunghe
 const SERVER_TIMEOUT = parseInt(process.env.SERVER_TIMEOUT || '60000', 10); // 60 secondi
@@ -39,11 +50,16 @@ app.use(helmet({
 
 // CORS configurato solo per origini specifiche
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['http://localhost', 'http://localhost:80', 'http://frontend'] 
-    : true,
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin, allowedOrigins)) {
+      return callback(null, true);
+    }
+
+    logger.warn(`Richiesta CORS bloccata per origin non consentita: ${origin || 'unknown'}`);
+    return callback(createError(403, 'Origine non consentita', 'FORBIDDEN'));
+  },
   methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Token'],
   credentials: true,
   maxAge: 86400 // 24 ore
 }));

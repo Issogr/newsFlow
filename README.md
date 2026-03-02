@@ -174,6 +174,9 @@ Se necessario, modifica queste variabili nel `docker-compose.yml`:
 environment:
   - OLLAMA_API_URL=http://ipex-llm:11434/api  # Modifica con l'URL del tuo server Ollama
   - OLLAMA_MODEL=gemma3:1b                   # Modifica con il modello disponibile
+  - ALLOWED_ORIGINS=http://localhost,http://localhost:80 # Origini consentite per CORS/WebSocket
+  - TRUST_PROXY=true                         # Abilita IP client reali dietro reverse proxy
+  - ADMIN_API_TOKEN=change-me                # Token richiesto per endpoint amministrativi
   - OLLAMA_TIMEOUT=3000                      # Timeout per chiamate a Ollama in ms
   - USE_OLLAMA=true                          # Imposta a 'false' per disabilitare Ollama
   - MAX_ARTICLES_PER_SOURCE=10               # Numero massimo di articoli per fonte
@@ -326,6 +329,10 @@ Recupera la mappatura dei topic in diverse lingue.
 
 Forza un aggiornamento immediato delle notizie.
 
+**Autenticazione richiesta**:
+- Header `Authorization: Bearer <ADMIN_API_TOKEN>` oppure
+- Header `X-Admin-Token: <ADMIN_API_TOKEN>`
+
 **Response**:
 ```json
 {
@@ -334,6 +341,14 @@ Forza un aggiornamento immediato delle notizie.
   "count": 42
 }
 ```
+
+### `POST /api/ws/notify?message=...&type=info`
+
+Invia una notifica di sistema a tutti i client connessi.
+
+**Autenticazione richiesta**:
+- Header `Authorization: Bearer <ADMIN_API_TOKEN>` oppure
+- Header `X-Admin-Token: <ADMIN_API_TOKEN>`
 
 ### `GET /api/ws/status`
 
@@ -390,6 +405,8 @@ environment:
   - WS_PING_TIMEOUT=60000       # Timeout per ping WebSocket (ms)
   - WS_PING_INTERVAL=25000      # Intervallo tra ping WebSocket (ms)
   - MIN_UPDATE_INTERVAL=60000   # Intervallo minimo tra aggiornamenti (ms)
+  - ALLOWED_ORIGINS=http://localhost,http://localhost:80 # CORS e WebSocket origin whitelist
+  - TRUST_PROXY=true            # Richiesto dietro reverse proxy/load balancer
 ```
 
 ### Configurazione WebSocket lato client
@@ -414,7 +431,7 @@ location /socket.io/ {
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection $connection_upgrade;
-    proxy_read_timeout 86400s; # 24h
+    proxy_read_timeout 3600s; # 1h
 }
 ```
 

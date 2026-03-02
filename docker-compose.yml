@@ -7,6 +7,9 @@ services:
       - PORT=5000
       - OLLAMA_API_URL=http://ipex-llm:11434/api
       - OLLAMA_MODEL=gemma3:1b
+      - ALLOWED_ORIGINS=http://localhost,http://localhost:80
+      - TRUST_PROXY=true
+      - ADMIN_API_TOKEN=change-me
       # Variabili di ottimizzazione
       - OLLAMA_TIMEOUT=3000         # Timeout per chiamate a Ollama in ms
       - USE_OLLAMA=false             # Imposta a 'false' per disabilitare Ollama completamente

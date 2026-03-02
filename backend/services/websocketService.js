@@ -4,7 +4,10 @@
  */
 
 const logger = require('../utils/logger');
+const { getAllowedOrigins, isOriginAllowed } = require('../utils/networkConfig');
 let io = null;
+let roomStatsInterval = null;
+let websocketStartTime = Date.now();
 
 // Mappa delle connessioni attive (userId -> socket)
 const activeConnections = new Map();
@@ -24,13 +27,19 @@ const statistics = {
  */
 function initialize(server) {
   const socketIo = require('socket.io');
+  const allowedOrigins = getAllowedOrigins();
   
   // Configura Socket.IO con CORS e opzioni di sicurezza
   io = socketIo(server, {
     cors: {
-      origin: process.env.NODE_ENV === 'production' 
-        ? ['http://localhost', 'http://localhost:80', 'http://frontend'] 
-        : '*',
+      origin: (origin, callback) => {
+        if (isOriginAllowed(origin, allowedOrigins)) {
+          return callback(null, true);
+        }
+
+        logger.warn(`WebSocket origin bloccata: ${origin || 'unknown'}`);
+        return callback(new Error('Origin not allowed'));
+      },
       methods: ['GET', 'POST'],
       credentials: true
     },
@@ -42,8 +51,13 @@ function initialize(server) {
   // Gestione connessioni
   io.on('connection', handleConnection);
   
+  websocketStartTime = Date.now();
+
   // [NUOVO] Imposta un intervallo per aggiornare le statistiche delle stanze
-  setInterval(updateRoomStatistics, 60000); // Ogni minuto
+  if (roomStatsInterval) {
+    clearInterval(roomStatsInterval);
+  }
+  roomStatsInterval = setInterval(updateRoomStatistics, 60000); // Ogni minuto
   
   logger.info('Servizio WebSocket inizializzato');
   return io;
@@ -89,16 +103,11 @@ function handleConnection(socket) {
   statistics.totalConnections++;
   statistics.activeConnectionsCount++;
   
-  // DEBUG - Stampa informazioni dettagliate sulla connessione
-  console.log(`⚡ NUOVO CLIENT WEBSOCKET CONNESSO: ${userId}`);
-  console.log(`   - Handshake: ${JSON.stringify(socket.handshake.headers)}`);
-  console.log(`   - Transport: ${socket.conn.transport.name}`);
-  console.log(`   - Connessioni attive: ${statistics.activeConnectionsCount}`);
-  
   // Memorizza la connessione
   activeConnections.set(userId, socket);
   
   logger.info(`Nuova connessione WebSocket: ${userId}. Connessioni attive: ${statistics.activeConnectionsCount}`);
+  logger.debug(`Transport WebSocket per ${userId}: ${socket.conn?.transport?.name || 'unknown'}`);
   
   // Invia messaggio di benvenuto
   safeBroadcast(socket, 'welcome', {
@@ -439,7 +448,7 @@ function broadcastSystemNotification(message, type = 'info') {
  * @returns {Object} - Statistiche
  */
 function getStatistics() {
-  const uptime = io ? Math.floor((Date.now() - io.startTime) / 1000) : 0;
+  const uptime = io ? Math.floor((Date.now() - websocketStartTime) / 1000) : 0;
   
   // Calcola stanze di topic popolari
   const topicRooms = {};
@@ -464,15 +473,18 @@ function getStatistics() {
     } : {},
     serverInfo: {
       engine: io?.engine?.opts || {},
-      transports: io ? Object.keys(io.engine.clients) : []
+      transports: io?.engine?.opts?.transports || [],
+      clientsCount: io?.engine?.clientsCount || 0
     }
   };
 }
 
-// [NUOVO] Imposta il timestamp di avvio
-io = {
-  startTime: Date.now()
-};
+process.on('exit', () => {
+  if (roomStatsInterval) {
+    clearInterval(roomStatsInterval);
+    roomStatsInterval = null;
+  }
+});
 
 module.exports = {
   initialize,

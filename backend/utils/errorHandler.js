@@ -20,9 +20,13 @@ const ERROR_MESSAGES = {
   'RESOURCE_NOT_FOUND': 'La risorsa richiesta non è stata trovata',
   'INVALID_ARTICLE_ID': 'ID articolo non valido',
   'RATE_LIMIT_EXCEEDED': 'Troppe richieste, riprova più tardi',
+  'SEARCH_RATE_LIMIT_EXCEEDED': 'Troppe richieste di ricerca, riprova più tardi',
+  'REFRESH_RATE_LIMIT_EXCEEDED': 'Troppe richieste di aggiornamento, riprova più tardi',
+  'WS_RATE_LIMIT_EXCEEDED': 'Troppe richieste WebSocket, riprova più tardi',
   'VALIDATION_ERROR': 'I dati forniti non sono validi',
   'UNAUTHORIZED': 'Non sei autorizzato ad accedere a questa risorsa',
-  'FORBIDDEN': 'Accesso negato a questa risorsa'
+  'FORBIDDEN': 'Accesso negato a questa risorsa',
+  'ADMIN_TOKEN_NOT_CONFIGURED': 'Il token amministrativo non è configurato sul server'
 };
 
 /**
@@ -69,18 +73,23 @@ const errorMiddleware = (err, req, res, next) => {
   }
   
   // Log dell'errore con dettagli della richiesta
+  const requestContext = {
+    path: req.path,
+    method: req.method,
+    ip: req.ip,
+    query: req.query,
+    params: req.params,
+    userAgent: req.get('user-agent')
+  };
+
   if (status >= 500) {
     logger.error(`${status} - ${err.message || 'Unknown error'} - ${req.originalUrl} - ${req.method} - ${req.ip}`, {
       stack: err.stack,
-      query: req.query,
-      params: req.params,
-      headers: req.headers,
-      path: req.path
+      request: requestContext
     });
   } else if (status >= 400) {
     logger.warn(`${status} - ${err.message || 'Client error'} - ${req.originalUrl} - ${req.method} - ${req.ip}`, {
-      query: req.query,
-      params: req.params
+      request: requestContext
     });
   }
 

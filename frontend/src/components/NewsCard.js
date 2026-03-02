@@ -128,11 +128,9 @@ const NewsCard = memo(({
       
       {/* Estratto del contenuto */}
       <div className="px-5 py-4 flex-grow">
-        <p 
-          className="text-gray-600 text-sm leading-relaxed" 
-          aria-label="Estratto del contenuto"
-          dangerouslySetInnerHTML={{ __html: truncateContent(250) }}
-        />
+        <p className="text-gray-600 text-sm leading-relaxed" aria-label="Estratto del contenuto">
+          {truncateContent(250)}
+        </p>
       </div>
       
       {/* [MODIFICATO] Pulsante call to action senza icona */}

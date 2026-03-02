@@ -1,6 +1,6 @@
 const rssParser = require('./rssParser');
+const crypto = require('crypto');
 const logger = require('../utils/logger');
-const topicNormalizer = require('./topicNormalizer');
 const { sanitizeHtml } = require('../utils/inputValidator');
 const { createError } = require('../utils/errorHandler');
 const websocketService = require('./websocketService');
@@ -99,6 +99,35 @@ function findNewArticles(newItems, existingItems) {
   
   // Filtra solo gli articoli nuovi
   return newItems.filter(item => !existingIds.has(item.id));
+}
+
+function getStableArticleKey(item) {
+  if (!item || typeof item !== 'object') return '';
+
+  if (item.id && typeof item.id === 'string') return item.id;
+  if (item.url && typeof item.url === 'string') return item.url;
+  if (item.title && typeof item.title === 'string') return item.title;
+
+  return '';
+}
+
+function buildStableGroupId(items) {
+  const stableKeys = (Array.isArray(items) ? items : [])
+    .map(getStableArticleKey)
+    .filter(Boolean)
+    .sort();
+
+  if (stableKeys.length === 0) {
+    return `group-${Date.now()}`;
+  }
+
+  const digest = crypto
+    .createHash('sha1')
+    .update(stableKeys.join('|'))
+    .digest('hex')
+    .slice(0, 16);
+
+  return `group-${digest}`;
 }
 
 // Function to fetch all news from all sources
@@ -468,7 +497,7 @@ function groupSimilarNews(newsItems) {
   // Step 1: Raggruppa per titoli identici (dopo semplificazione)
   Object.entries(titleIndex).forEach(([simpleTitle, items]) => {
     if (items.length > 1) {
-      const groupId = `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const groupId = buildStableGroupId(items);
       const mainItem = items[0];
       
       // Raccogli tutti i topic dai vari item del gruppo
@@ -546,7 +575,7 @@ function groupSimilarNews(newsItems) {
       processedItems.add(item);
     } else {
       // Crea un nuovo gruppo
-      const groupId = `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const groupId = buildStableGroupId([item]);
       const itemTopics = Array.isArray(item.topics) ? 
         [...item.topics].filter(topic => typeof topic === 'string') : 
         [];
@@ -628,5 +657,7 @@ module.exports = {
   getSources,
   itemMatchesTopic,
   forceRefresh,
-  newsSources // esposto per i test
+  newsSources, // esposto per i test
+  _groupSimilarNews: groupSimilarNews,
+  _buildStableGroupId: buildStableGroupId
 };
