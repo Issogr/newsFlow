@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Installa le dipendenze di produzione
-RUN npm install --production
+RUN npm install --omit=dev --no-audit --no-fund
 
 # Production stage
 FROM node:18-alpine
@@ -16,9 +16,6 @@ FROM node:18-alpine
 # Crea un utente non-root
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S -u 1001 -G nodejs nodeuser
-
-# Installa dipendenze per il parsing HTML
-RUN apk add --no-cache --virtual .gyp python3 make g++
 
 # Imposta la directory di lavoro
 WORKDIR /usr/src/app

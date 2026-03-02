@@ -43,10 +43,6 @@ services:
         condition: service_completed_successfully
     networks:
       - app-network
-    dns:
-      - 8.8.8.8       # Google DNS primario
-      - 1.1.1.1       # Cloudflare DNS
-      - 9.9.9.9       # Quad9 DNS (aggiunto per affidabilità)
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
       interval: 30s
