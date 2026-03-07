@@ -63,11 +63,9 @@ News Aggregator is a web app that collects articles from multiple RSS sources, s
 - `GET /api/me/settings/export`: export personal settings and custom sources
 - `POST /api/me/settings/import`: import personal settings and custom sources
 - `POST /api/me/sources`: add a personal RSS source after validation
+- `PATCH /api/me/sources/:sourceId`: update a personal RSS source after validation
 - `DELETE /api/me/sources/:sourceId`: remove a personal RSS source
 - `GET /api/news`: grouped news with pagination and filters
-- `GET /api/hot-topics`: most frequent topics
-- `GET /api/sources`: available sources
-- `GET /api/articles/:articleId/topics`: topics for one article
 - `GET /api/articles/:articleId/reader`: cached clean reader view for one article
 - `POST /api/refresh`: force a refresh (admin token required)
 - `GET /api/ws/status`: WebSocket status

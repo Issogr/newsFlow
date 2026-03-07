@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pencil, Plus, Settings, Trash2, X } from 'lucide-react';
 import {
   addUserSource,
@@ -8,6 +8,7 @@ import {
   updateUserSource,
   updateUserSettings
 } from '../services/api';
+import { clampSettingValue, getSettingsLimits } from '../config/settingsLimits';
 
 const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate }) => {
   const [settings, setSettings] = useState(currentUser.settings);
@@ -18,15 +19,47 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
   const [editingSourceId, setEditingSourceId] = useState('');
   const [editingSourceForm, setEditingSourceForm] = useState({ name: '', url: '', language: 'it' });
   const importInputRef = useRef(null);
-  const defaultSourceOptions = [
+  const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
+  const defaultSourceOptions = useMemo(() => ([
     ...availableSources,
     ...customSources.filter((customSource) => !availableSources.some((source) => source.id === customSource.id))
-  ];
+  ]), [availableSources, customSources]);
 
   useEffect(() => {
     setSettings(currentUser.settings);
     setCustomSources(currentUser.customSources || []);
   }, [currentUser]);
+
+  const syncUserState = useCallback((nextSettings, nextCustomSources) => {
+    setSettings(nextSettings);
+    setCustomSources(nextCustomSources);
+    onUserUpdate({
+      ...currentUser,
+      settings: nextSettings,
+      customSources: nextCustomSources
+    });
+  }, [currentUser, onUserUpdate]);
+
+  const runSavingAction = useCallback(async (action) => {
+    setSaving(true);
+    setError(null);
+
+    try {
+      return await action();
+    } catch (requestError) {
+      setError(requestError);
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const updateNumericSetting = useCallback((key, value, limits) => {
+    setSettings((current) => ({
+      ...current,
+      [key]: clampSettingValue(value, limits)
+    }));
+  }, []);
 
   const toggleHiddenSource = (sourceId) => {
     setSettings((current) => {
@@ -41,35 +74,22 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    setError(null);
-    try {
+    await runSavingAction(async () => {
       const response = await updateUserSettings(settings);
-      onUserUpdate({ ...currentUser, settings: response.settings, customSources });
+      syncUserState(response.settings, customSources);
       onClose();
-    } catch (requestError) {
-      setError(requestError);
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   const handleAddSource = async (event) => {
     event.preventDefault();
-    setSaving(true);
-    setError(null);
 
-    try {
+    await runSavingAction(async () => {
       const response = await addUserSource(sourceForm);
       const nextCustomSources = [response.source, ...customSources];
-      setCustomSources(nextCustomSources);
       setSourceForm({ url: '' });
-      onUserUpdate({ ...currentUser, settings, customSources: nextCustomSources });
-    } catch (requestError) {
-      setError(requestError);
-    } finally {
-      setSaving(false);
-    }
+      syncUserState(settings, nextCustomSources);
+    });
   };
 
   const startEditSource = (source) => {
@@ -87,29 +107,18 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
   };
 
   const handleUpdateSource = async (sourceId) => {
-    setSaving(true);
-    setError(null);
-
-    try {
+    await runSavingAction(async () => {
       const response = await updateUserSource(sourceId, editingSourceForm);
       const nextCustomSources = customSources.map((source) => (
         source.id === sourceId ? response.source : source
       ));
-      setCustomSources(nextCustomSources);
-      onUserUpdate({ ...currentUser, settings, customSources: nextCustomSources });
+      syncUserState(settings, nextCustomSources);
       cancelEditSource();
-    } catch (requestError) {
-      setError(requestError);
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   const handleExport = async () => {
-    setSaving(true);
-    setError(null);
-
-    try {
+    await runSavingAction(async () => {
       const payload = await exportUserSettings();
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);
@@ -120,11 +129,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    } catch (requestError) {
-      setError(requestError);
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   const handleImportClick = () => {
@@ -137,48 +142,33 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
       return;
     }
 
-    setSaving(true);
-    setError(null);
-
     try {
       const text = await file.text();
       const payload = JSON.parse(text);
-      const response = await importUserSettings(payload);
-      onUserUpdate({
-        ...currentUser,
-        settings: response.settings,
-        customSources: response.customSources
+
+      await runSavingAction(async () => {
+        const response = await importUserSettings(payload);
+        syncUserState(response.settings, response.customSources);
       });
-      setCustomSources(response.customSources);
-      setSettings(response.settings);
     } catch (requestError) {
       setError(requestError instanceof SyntaxError ? new Error('Invalid settings file format') : requestError);
     } finally {
       if (event.target) {
         event.target.value = '';
       }
-      setSaving(false);
     }
   };
 
   const handleDeleteSource = async (sourceId) => {
-    setSaving(true);
-    setError(null);
-    try {
+    await runSavingAction(async () => {
       await deleteUserSource(sourceId);
       const nextCustomSources = customSources.filter((source) => source.id !== sourceId);
       const nextSettings = {
         ...settings,
         hiddenSourceIds: settings.hiddenSourceIds.filter((item) => item !== sourceId)
       };
-      setCustomSources(nextCustomSources);
-      setSettings(nextSettings);
-      onUserUpdate({ ...currentUser, settings: nextSettings, customSources: nextCustomSources });
-    } catch (requestError) {
-      setError(requestError);
-    } finally {
-      setSaving(false);
-    }
+      syncUserState(nextSettings, nextCustomSources);
+    });
   };
 
   return (
@@ -247,10 +237,10 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
                 <span className="mb-2 block text-sm font-medium text-slate-700">{t('articleRetention')}</span>
                 <input
                   type="number"
-                  min="1"
-                  max="24"
+                  min={settingsLimits.articleRetentionHours.min}
+                  max={settingsLimits.articleRetentionHours.max}
                   value={settings.articleRetentionHours}
-                  onChange={(event) => setSettings((current) => ({ ...current, articleRetentionHours: Number(event.target.value) || 1 }))}
+                  onChange={(event) => updateNumericSetting('articleRetentionHours', event.target.value, settingsLimits.articleRetentionHours)}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
                 />
               </label>
@@ -259,10 +249,10 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
                 <span className="mb-2 block text-sm font-medium text-slate-700">{t('quickFilterHours')}</span>
                 <input
                   type="number"
-                  min="1"
-                  max="3"
+                  min={settingsLimits.recentHours.min}
+                  max={settingsLimits.recentHours.max}
                   value={settings.recentHours}
-                  onChange={(event) => setSettings((current) => ({ ...current, recentHours: Number(event.target.value) || 1 }))}
+                  onChange={(event) => updateNumericSetting('recentHours', event.target.value, settingsLimits.recentHours)}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
                 />
               </label>

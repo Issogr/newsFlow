@@ -75,11 +75,6 @@ router.post('/me/settings/import', requireAuthenticatedUser, asyncHandler(async 
   res.json({ success: true, ...result });
 }));
 
-router.post('/me/sources/preview', requireAuthenticatedUser, asyncHandler(async (req, res) => {
-  const preview = await userService.previewUserSource(req.body || {});
-  res.json({ success: true, preview });
-}));
-
 router.post('/me/sources', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   const source = await userService.addUserSource(req.user.id, req.body || {});
   await newsService.ingestAllNews({ broadcast: false });
@@ -109,41 +104,6 @@ router.get('/news', [requireAuthenticatedUser, sanitizeQuery('search')], asyncHa
   const filters = parseNewsQuery(req.query);
   const result = await newsService.getNewsFeed(filters, getUserContext(req));
   res.json(result);
-}));
-
-router.get('/news/search', [
-  requireAuthenticatedUser,
-  validateQueryParam('query', 'È necessario specificare un termine di ricerca'),
-  sanitizeQuery('query')
-], asyncHandler(async (req, res) => {
-  const { query } = req.query;
-  const filters = parseNewsQuery(req.query);
-  const result = await newsService.searchNews(query, filters, getUserContext(req));
-  res.json(result);
-}));
-
-router.get('/hot-topics', requireAuthenticatedUser, asyncHandler(async (req, res) => {
-  res.json(await newsService.getHotTopics(12, getUserContext(req)));
-}));
-
-router.get('/sources', requireAuthenticatedUser, asyncHandler(async (req, res) => {
-  res.json(newsService.getSources(getUserContext(req)));
-}));
-
-router.get('/articles/:articleId/topics', [
-  requireAuthenticatedUser,
-  validateParam('articleId', 'ID articolo non valido'),
-  sanitizeParam('articleId')
-], asyncHandler(async (req, res) => {
-  const { articleId } = req.params;
-  if (articleId.length < 5) {
-    throw createError(400, 'ID articolo non valido', 'INVALID_ARTICLE_ID');
-  }
-
-  res.json({
-    articleId,
-    topics: newsService.getArticleTopics(articleId, getUserContext(req))
-  });
 }));
 
 router.get('/articles/:articleId/reader', [

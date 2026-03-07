@@ -62,7 +62,15 @@ function buildAuthResponse(user, sessionToken) {
     token: sessionToken,
     user: buildUserPayload(user),
     settings: getUserSettings(user.id),
+    limits: getUserLimits(),
     customSources: database.listUserSources(user.id)
+  };
+}
+
+function getUserLimits() {
+  return {
+    articleRetentionHoursMax: GLOBAL_RETENTION_HOURS,
+    recentHoursMax: MAX_RECENT_HOURS
   };
 }
 
@@ -134,6 +142,7 @@ function getCurrentUser(userId) {
   return {
     user: buildUserPayload(user),
     settings: getUserSettings(userId),
+    limits: getUserLimits(),
     customSources: database.listUserSources(userId)
   };
 }
@@ -357,7 +366,6 @@ module.exports = {
   getUserSettings,
   updateUserSettings,
   addUserSource,
-  previewUserSource,
   updateUserSource,
   removeUserSource,
   exportUserSettings,

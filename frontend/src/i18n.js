@@ -1,4 +1,5 @@
 export const SUPPORTED_LOCALES = ['en', 'it'];
+export const LOCALE_STORAGE_KEY = 'news-aggregator-locale';
 
 export const translations = {
   en: {
@@ -22,9 +23,6 @@ export const translations = {
     loadingMore: 'Loading...',
     loadMore: 'Load more groups',
     noMoreResults: 'You reached the end of the available results.',
-    localeLabel: 'Language',
-    localeEnglish: 'English',
-    localeItalian: 'Italiano',
     settings: 'Settings',
     saveSettings: 'Save settings',
     saving: 'Saving...',
@@ -33,7 +31,6 @@ export const translations = {
     importSettings: 'Import settings',
     importSettingsHelp: 'Import replaces your current custom sources and hidden-source preferences.',
     logout: 'Logout',
-    account: 'Account',
     preferences: 'Preferences',
     customSources: 'Custom sources',
     noCustomSources: 'No custom sources yet.',
@@ -51,7 +48,6 @@ export const translations = {
     useBrowserLanguage: 'Use browser language',
     articleRetention: 'Article retention (hours)',
     quickFilterHours: 'Quick filter hours',
-    authTitle: 'Personalize your news space',
     authSubtitle: 'Create a user or sign in to save your sources, defaults, and reading preferences.',
     signIn: 'Sign in',
     createAccount: 'Create account',
@@ -61,7 +57,6 @@ export const translations = {
     loginAction: 'Login',
     registerAction: 'Create user',
     addSourceHelp: 'RSS feeds added here are personal and do not affect other users.',
-    welcomeUser: ({ username }) => `Hello ${username}`,
     authErrorUsernameTaken: 'Username already taken',
     authErrorInvalidCredentials: 'Invalid username or password',
     authErrorInvalidUsername: 'Username must be at least 3 characters long',
@@ -136,9 +131,6 @@ export const translations = {
     loadingMore: 'Caricamento...',
     loadMore: 'Carica altri gruppi',
     noMoreResults: 'Hai raggiunto la fine dei risultati disponibili.',
-    localeLabel: 'Lingua',
-    localeEnglish: 'English',
-    localeItalian: 'Italiano',
     settings: 'Impostazioni',
     saveSettings: 'Salva impostazioni',
     saving: 'Salvataggio...',
@@ -147,7 +139,6 @@ export const translations = {
     importSettings: 'Importa impostazioni',
     importSettingsHelp: 'L\'import sostituisce le tue fonti personali correnti e le preferenze sulle fonti nascoste.',
     logout: 'Esci',
-    account: 'Account',
     preferences: 'Preferenze',
     customSources: 'Fonti personali',
     noCustomSources: 'Nessuna fonte personale per ora.',
@@ -165,7 +156,6 @@ export const translations = {
     useBrowserLanguage: 'Usa lingua browser',
     articleRetention: 'Retention articoli (ore)',
     quickFilterHours: 'Ore filtro rapido',
-    authTitle: 'Personalizza il tuo spazio notizie',
     authSubtitle: 'Crea un utente o accedi per salvare fonti, preferenze e configurazione personale.',
     signIn: 'Accedi',
     createAccount: 'Crea account',
@@ -175,7 +165,6 @@ export const translations = {
     loginAction: 'Accedi',
     registerAction: 'Crea utente',
     addSourceHelp: 'Le fonti RSS aggiunte qui sono personali e non influenzano gli altri utenti.',
-    welcomeUser: ({ username }) => `Ciao ${username}`,
     authErrorUsernameTaken: 'Username gia in uso',
     authErrorInvalidCredentials: 'Username o password non validi',
     authErrorInvalidUsername: 'Lo username deve contenere almeno 3 caratteri',
@@ -241,6 +230,22 @@ export function detectBrowserLocale() {
     .find((value) => value.startsWith('it') || value.startsWith('en'));
 
   return match?.startsWith('it') ? 'it' : 'en';
+}
+
+export function isSupportedLocale(locale) {
+  return SUPPORTED_LOCALES.includes(locale);
+}
+
+export function resolvePreferredLocale(preferredLocale, storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY)) {
+  if (isSupportedLocale(preferredLocale)) {
+    return preferredLocale;
+  }
+
+  if (isSupportedLocale(storedLocale)) {
+    return storedLocale;
+  }
+
+  return detectBrowserLocale();
 }
 
 export function createTranslator(locale) {

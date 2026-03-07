@@ -1,46 +1,46 @@
 import React from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
-const ErrorMessage = ({ 
-  error, 
-  onRetry, 
+const ErrorMessage = ({
+  error,
+  onRetry,
   title,
-  className = "",
+  className = '',
   t
 }) => {
   const getErrorMessage = () => {
-    if (!error) return t('unknownError');
+    if (!error) {
+      return t('unknownError');
+    }
 
     if (error.message === 'Network Error') {
       return t('networkError');
     }
 
+    const apiMessage = error.response?.data?.error?.message;
+
     if (error.response) {
       switch (error.response.status) {
         case 400:
-          return t('error400');
+          return apiMessage || t('error400');
         case 401:
-          return t('error401');
+          return apiMessage || t('error401');
         case 403:
-          return t('error403');
+          return apiMessage || t('error403');
         case 404:
-          return t('error404');
+          return apiMessage || t('error404');
         case 429:
-          return t('error429');
+          return apiMessage || t('error429');
         case 503:
-          return t('error503');
+          return apiMessage || t('error503');
         case 500:
-          return t('error500');
+          return apiMessage || t('error500');
         default:
-          return t('unknownStatusError', {
+          return apiMessage || t('unknownStatusError', {
             status: error.response.status,
             statusText: error.response.statusText
           });
       }
-    }
-
-    if (error.response && error.response.data && error.response.data.error) {
-      return error.response.data.error.message;
     }
 
     return error.message || t('genericError');
@@ -55,14 +55,14 @@ const ErrorMessage = ({
       className={`bg-red-50 border border-red-200 rounded-lg p-6 text-center ${className}`}
       role="alert"
       aria-live="assertive"
-      >
-        <div className="flex justify-center mb-4">
-          <AlertCircle size={48} className="text-red-500" aria-hidden="true" />
-        </div>
-        <h2 className="text-xl font-semibold text-red-700 mb-2">
-          {resolvedTitle}
-          {errorCode && <span className="text-sm ml-2 text-red-500">({errorCode})</span>}
-        </h2>
+    >
+      <div className="flex justify-center mb-4">
+        <AlertCircle size={48} className="text-red-500" aria-hidden="true" />
+      </div>
+      <h2 className="text-xl font-semibold text-red-700 mb-2">
+        {resolvedTitle}
+        {errorCode && <span className="text-sm ml-2 text-red-500">({errorCode})</span>}
+      </h2>
       <p className="text-red-600 mb-6">
         {errorMessage}
       </p>

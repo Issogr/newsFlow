@@ -115,6 +115,17 @@ function getDb() {
   return db;
 }
 
+function closeDb() {
+  if (!db) {
+    lastWriteCheckAt = null;
+    return;
+  }
+
+  db.close();
+  db = null;
+  lastWriteCheckAt = null;
+}
+
 function verifyWriteAccess() {
   const database = getDb();
   const probeValue = new Date().toISOString();
@@ -749,21 +760,6 @@ function mergeTopicsForArticle(articleId, topics = []) {
   return transaction(articleId, topics);
 }
 
-function getTopicsForArticle(articleId) {
-  if (!articleId) {
-    return [];
-  }
-
-  return getDb().prepare(`
-    SELECT topic
-    FROM article_topics
-    WHERE article_id = ?
-    ORDER BY topic ASC
-  `).all(articleId)
-    .map((row) => row.topic)
-    .filter((topic) => topicNormalizer.isMeaningfulTopic(topic));
-}
-
 function getArticles(filters = {}, options = {}) {
   const database = getDb();
   const { sql, params } = buildArticleQuery(filters, options);
@@ -934,37 +930,6 @@ function getSourceStats(configuredSources = [], options = {}) {
   });
 
   return merged.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-}
-
-function getTopicStats(limit = 20, options = {}) {
-  const scopeFilter = buildScopeFilter(options, 'a');
-  const retentionFilter = buildRetentionFilter(options, 'a');
-  const hiddenSourceFilter = getSourceExclusionClause(options.hiddenSourceIds || []);
-  const where = [scopeFilter.clause];
-  const params = [...scopeFilter.params];
-
-  if (retentionFilter) {
-    where.push(retentionFilter.clause);
-    params.push(...retentionFilter.params);
-  }
-
-  if (hiddenSourceFilter) {
-    where.push(hiddenSourceFilter.clause);
-    params.push(...hiddenSourceFilter.params);
-  }
-
-  const rows = getDb().prepare(`
-    SELECT topic, COUNT(*) AS count
-    FROM article_topics
-    JOIN articles a ON a.id = article_topics.article_id
-    WHERE ${where.join(' AND ')}
-    GROUP BY topic
-    ORDER BY count DESC, topic ASC
-  `).all(...params);
-
-  return rows
-    .filter((row) => topicNormalizer.isMeaningfulTopic(row.topic))
-    .slice(0, limit);
 }
 
 function getTopicStatsByFilters(filters = {}, limit = 20, options = {}) {
@@ -1451,16 +1416,15 @@ function deleteAllUserSources(userId) {
 
 module.exports = {
   getDb,
+  closeDb,
   getArticles,
   getArticleById,
   getArticlesByIds,
-  getTopicsForArticle,
   mergeTopicsForArticle,
   upsertArticles,
   countArticles,
   deleteArticlesOlderThan,
   getSourceStats,
-  getTopicStats,
   getTopicStatsByFilters,
   createIngestionRun,
   completeIngestionRun,

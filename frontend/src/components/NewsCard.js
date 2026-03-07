@@ -2,53 +2,58 @@ import React, { memo } from 'react';
 import { BookOpenText, ExternalLink } from 'lucide-react';
 import { getDateLocale, getLanguageMeta } from '../i18n';
 
-const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenReader }) => {
-  const sourceEntries = (() => {
-    const map = new Map();
-    (group?.items || []).forEach((item) => {
-      if (!map.has(item.sourceId)) {
-        map.set(item.sourceId, {
-          id: item.sourceId,
-          name: item.source
-        });
-      }
-    });
-    return [...map.values()];
-  })();
+function getSourceEntries(group) {
+  const sourceMap = new Map();
 
+  (group?.items || []).forEach((item) => {
+    if (!sourceMap.has(item.sourceId)) {
+      sourceMap.set(item.sourceId, {
+        id: item.sourceId,
+        name: item.source
+      });
+    }
+  });
+
+  return [...sourceMap.values()];
+}
+
+function formatPublicationDate(dateString, locale) {
+  if (!dateString) {
+    return '';
+  }
+
+  try {
+    return new Date(dateString).toLocaleDateString(getDateLocale(locale), {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return '';
+  }
+}
+
+function buildSummary(group, t) {
+  const mainItem = group?.items?.[0];
+  const content = mainItem?.content || mainItem?.description || group?.description || '';
+  const normalized = content.replace(/\s+/g, ' ').trim();
+
+  if (!normalized) {
+    return t('noExcerpt');
+  }
+
+  return normalized.length > 240 ? `${normalized.slice(0, 240)}...` : normalized;
+}
+
+const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenReader }) => {
   if (!group?.items?.length) {
     return null;
   }
 
-  const formatPublicationDate = (dateString) => {
-    if (!dateString) {
-      return '';
-    }
-
-    try {
-      return new Date(dateString).toLocaleDateString(getDateLocale(locale), {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return '';
-    }
-  };
-
-  const summary = (() => {
-    const mainItem = group.items[0];
-    const content = mainItem.content || mainItem.description || group.description || '';
-    const normalized = content.replace(/\s+/g, ' ').trim();
-
-    if (!normalized) {
-      return t('noExcerpt');
-    }
-
-    return normalized.length > 240 ? `${normalized.slice(0, 240)}...` : normalized;
-  })();
+  const sourceEntries = getSourceEntries(group);
+  const summary = buildSummary(group, t);
 
   const isTopicActive = (topic) => activeFilters.topics.includes(topic);
   const isSourceActive = (sourceId) => activeFilters.sourceIds.includes(sourceId);
@@ -68,7 +73,7 @@ const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenRe
           >
             {languageMeta.emoji}
           </span>
-          <span>{formatPublicationDate(group.pubDate)}</span>
+          <span>{formatPublicationDate(group.pubDate, locale)}</span>
         </div>
 
         <h2 className="text-lg font-semibold leading-tight text-slate-900">

@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import './App.css';
 import NewsAggregator from './components/NewsAggregator';
 import AuthScreen from './components/AuthScreen';
-import { createTranslator, detectBrowserLocale } from './i18n';
+import { createTranslator, resolvePreferredLocale } from './i18n';
 import {
   fetchCurrentUser,
   getAuthToken,
@@ -19,11 +18,7 @@ function App() {
   const [loadingSession, setLoadingSession] = useState(Boolean(getAuthToken()));
 
   const locale = useMemo(() => {
-    const preferred = authData?.settings?.defaultLanguage;
-    if (preferred === 'it' || preferred === 'en') {
-      return preferred;
-    }
-    return detectBrowserLocale();
+    return resolvePreferredLocale(authData?.settings?.defaultLanguage);
   }, [authData?.settings?.defaultLanguage]);
   const t = useMemo(() => createTranslator(locale), [locale]);
 

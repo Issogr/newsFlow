@@ -4,23 +4,23 @@ const fs = require('fs');
 const { format } = require('winston');
 require('winston-daily-rotate-file');
 
-// Assicurati che la directory dei log esista
+// Ensure the log directory exists.
 const logDir = 'logs';
 if (!fs.existsSync(logDir)) {
   fs.mkdirSync(logDir);
 }
 
-// Formattazione personalizzata per il console transport
+// Custom formatting for console output.
 const consoleFormat = format.printf(({ level, message, timestamp, ...meta }) => {
   const metaStr = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
   return `${timestamp} [${level.toUpperCase()}]: ${message} ${metaStr}`;
 });
 
-// Determina il livello di log in base all'ambiente
+// Resolve the log level from the current environment.
 const LOG_LEVEL = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
 const isTestEnvironment = process.env.NODE_ENV === 'test';
 
-// Configurazione rotazione file di log
+// Application log rotation.
 const fileRotateTransport = !isTestEnvironment ? new winston.transports.DailyRotateFile({
   filename: path.join(logDir, 'application-%DATE%.log'),
   datePattern: 'YYYY-MM-DD',
@@ -30,7 +30,7 @@ const fileRotateTransport = !isTestEnvironment ? new winston.transports.DailyRot
   zippedArchive: true
 }) : null;
 
-// Configurazione rotazione file di errori
+// Error log rotation.
 const errorRotateTransport = !isTestEnvironment ? new winston.transports.DailyRotateFile({
   filename: path.join(logDir, 'error-%DATE%.log'),
   datePattern: 'YYYY-MM-DD',
@@ -40,7 +40,7 @@ const errorRotateTransport = !isTestEnvironment ? new winston.transports.DailyRo
   zippedArchive: true
 }) : null;
 
-// Configurazione avanzata di Winston
+// Winston logger configuration.
 const logger = winston.createLogger({
   level: LOG_LEVEL,
   format: winston.format.combine(
@@ -65,7 +65,7 @@ const logger = winston.createLogger({
       )
     })
   ],
-  // Gestione delle eccezioni e dei rifiuti di promessa non gestiti
+  // Handle uncaught exceptions and unhandled promise rejections.
   exceptionHandlers: !isTestEnvironment ? [
     new winston.transports.DailyRotateFile({
       filename: path.join(logDir, 'exceptions-%DATE%.log'),
@@ -104,7 +104,7 @@ const logger = winston.createLogger({
   ] : []
 });
 
-// Aggiungi eventi per gestire errori di scrittura nel file di log
+// Report file transport write errors.
 if (!isTestEnvironment) {
   fileRotateTransport.on('error', (error) => {
     console.error('Error writing to log file:', error);
@@ -115,16 +115,7 @@ if (!isTestEnvironment) {
   });
 }
 
-// Aggiunge supporto per level-based logging methods
-logger.verbose = logger.verbose || (message => logger.debug(message));
-logger.silly = logger.silly || (message => logger.debug(message));
-
-// Aggiunge un metodo per controllare se un livello è abilitato
-logger.isLevelEnabled = (level) => {
-  return winston.config.npm.levels[level] <= winston.config.npm.levels[logger.level];
-};
-
-// Logging di avvio applicazione
+// Log logger startup once transports are ready.
 if (!isTestEnvironment) {
   logger.info('Logger initialized with level: ' + LOG_LEVEL);
 }

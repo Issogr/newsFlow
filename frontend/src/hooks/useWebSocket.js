@@ -3,24 +3,17 @@ import { io } from 'socket.io-client';
 import { getAuthToken } from '../services/api';
 
 const MAX_NOTIFICATIONS = 10;
-const PING_INTERVAL_MS = 30000;
-const PONG_TIMEOUT_MS = 5000;
 
 const useWebSocket = (url = '', messages = {}) => {
   const wsUrl = url || window.location.origin;
   const socketRef = useRef(null);
   const messagesRef = useRef(messages);
-  const pingIntervalRef = useRef(null);
-  const pongTimeoutRef = useRef(null);
   const isConnectedRef = useRef(false);
-  const pingPendingRef = useRef(false);
 
   const [isConnected, setIsConnected] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [lastNewsUpdate, setLastNewsUpdate] = useState(null);
-  const [lastTopicUpdate, setLastTopicUpdate] = useState(null);
   const [newArticlesCount, setNewArticlesCount] = useState(0);
-  const [reconnectionEvent, setReconnectionEvent] = useState(0);
 
   useEffect(() => {
     isConnectedRef.current = isConnected;
@@ -33,62 +26,6 @@ const useWebSocket = (url = '', messages = {}) => {
   const pushNotification = useCallback((notification) => {
     setNotifications((current) => [notification, ...current].slice(0, MAX_NOTIFICATIONS));
   }, []);
-
-  const clearPongTimeout = useCallback(() => {
-    if (pongTimeoutRef.current) {
-      clearTimeout(pongTimeoutRef.current);
-      pongTimeoutRef.current = null;
-    }
-  }, []);
-
-  const stopPingLoop = useCallback(() => {
-    if (pingIntervalRef.current) {
-      clearInterval(pingIntervalRef.current);
-      pingIntervalRef.current = null;
-    }
-    clearPongTimeout();
-    pingPendingRef.current = false;
-  }, [clearPongTimeout]);
-
-  const reconnectSocket = useCallback(() => {
-    if (!socketRef.current) {
-      return;
-    }
-
-    socketRef.current.disconnect();
-    socketRef.current.connect();
-  }, []);
-
-  const sendPing = useCallback(() => {
-    const socket = socketRef.current;
-    if (!socket || !isConnectedRef.current) {
-      return;
-    }
-
-    if (pingPendingRef.current) {
-      reconnectSocket();
-      return;
-    }
-
-    pingPendingRef.current = true;
-    clearPongTimeout();
-    pongTimeoutRef.current = setTimeout(() => {
-      if (pingPendingRef.current) {
-        pingPendingRef.current = false;
-        reconnectSocket();
-      }
-    }, PONG_TIMEOUT_MS);
-
-    socket.emit('ping');
-  }, [clearPongTimeout, reconnectSocket]);
-
-  const startPingLoop = useCallback(() => {
-    if (pingIntervalRef.current) {
-      return;
-    }
-
-    pingIntervalRef.current = setInterval(sendPing, PING_INTERVAL_MS);
-  }, [sendPing]);
 
   useEffect(() => {
     const socket = io(wsUrl, {
@@ -107,7 +44,6 @@ const useWebSocket = (url = '', messages = {}) => {
 
     const onConnect = () => {
       setIsConnected(true);
-      startPingLoop();
       pushNotification({
         id: Date.now(),
         type: 'info',
@@ -118,7 +54,6 @@ const useWebSocket = (url = '', messages = {}) => {
 
     const onDisconnect = (reason) => {
       setIsConnected(false);
-      stopPingLoop();
 
       if (reason !== 'io client disconnect') {
         pushNotification({
@@ -130,11 +65,6 @@ const useWebSocket = (url = '', messages = {}) => {
       }
     };
 
-    const onReconnect = () => {
-      setReconnectionEvent((value) => value + 1);
-      startPingLoop();
-    };
-
     const onReconnectFailed = () => {
       pushNotification({
         id: Date.now(),
@@ -142,11 +72,6 @@ const useWebSocket = (url = '', messages = {}) => {
         message: messagesRef.current.reconnectFailed || 'Unable to restore the real-time connection',
         timestamp: new Date().toISOString()
       });
-    };
-
-    const onPong = () => {
-      pingPendingRef.current = false;
-      clearPongTimeout();
     };
 
     const onNewsUpdate = (payload) => {
@@ -166,14 +91,6 @@ const useWebSocket = (url = '', messages = {}) => {
       });
     };
 
-    const onTopicUpdate = (payload) => {
-      if (!payload?.articleId) {
-        return;
-      }
-
-      setLastTopicUpdate(payload);
-    };
-
     const onSystemNotification = (payload) => {
       if (!payload?.message) {
         return;
@@ -189,27 +106,20 @@ const useWebSocket = (url = '', messages = {}) => {
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
-    socket.on('pong', onPong);
     socket.on('news:update', onNewsUpdate);
-    socket.on('topic:update', onTopicUpdate);
     socket.on('system:notification', onSystemNotification);
-    socket.io.on('reconnect', onReconnect);
     socket.io.on('reconnect_failed', onReconnectFailed);
 
     return () => {
-      stopPingLoop();
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
-      socket.off('pong', onPong);
       socket.off('news:update', onNewsUpdate);
-      socket.off('topic:update', onTopicUpdate);
       socket.off('system:notification', onSystemNotification);
-      socket.io.off('reconnect', onReconnect);
       socket.io.off('reconnect_failed', onReconnectFailed);
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [clearPongTimeout, pushNotification, startPingLoop, stopPingLoop, wsUrl]);
+  }, [pushNotification, wsUrl]);
 
   const updateSubscriptionFilters = useCallback((filters) => {
     if (!socketRef.current || !isConnectedRef.current) {
@@ -231,9 +141,7 @@ const useWebSocket = (url = '', messages = {}) => {
     isConnected,
     notifications,
     lastNewsUpdate,
-    lastTopicUpdate,
     newArticlesCount,
-    reconnectionEvent,
     updateSubscriptionFilters,
     resetNewArticlesCount,
     removeNotification

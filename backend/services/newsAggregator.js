@@ -326,7 +326,7 @@ async function ensureSeedData() {
     return;
   }
 
-  await ingestAllNews({ force: true, broadcast: false });
+  await ingestAllNews({ broadcast: false });
 }
 
 async function getNewsFeed(filters = {}, userContext = {}) {
@@ -400,30 +400,8 @@ async function getNewsFeed(filters = {}, userContext = {}) {
   };
 }
 
-async function searchNews(query, filters = {}, userContext = {}) {
-  if (!query || String(query).trim().length < 2) {
-    throw createError(400, 'Il termine di ricerca deve contenere almeno 2 caratteri', 'INVALID_SEARCH_QUERY');
-  }
-
-  return getNewsFeed({ ...filters, search: query }, userContext);
-}
-
-async function getHotTopics(limit = 12, userContext = {}) {
-  await ensureSeedData();
-  return database.getTopicStats(limit, getQueryOptions(userContext));
-}
-
-function getSources(userContext = {}) {
-  return database.getSourceStats(getAvailableSources(userContext), getQueryOptions(userContext));
-}
-
-function getArticleTopics(articleId, userContext = {}) {
-  const article = database.getArticleById(articleId, getQueryOptions(userContext));
-  return article ? database.getTopicsForArticle(articleId) : [];
-}
-
 async function forceRefresh() {
-  const result = await ingestAllNews({ force: true, broadcast: true });
+  const result = await ingestAllNews({ broadcast: true });
   websocketService.broadcastSystemNotification('Dati aggiornati con successo', 'info');
   return result;
 }
@@ -433,12 +411,12 @@ function startScheduler() {
     return;
   }
 
-  ingestAllNews({ force: true, broadcast: false }).catch((error) => {
+  ingestAllNews({ broadcast: false }).catch((error) => {
     logger.warn(`Initial ingestion failed: ${error.message}`);
   });
 
   schedulerHandle = setInterval(() => {
-    ingestAllNews({ force: true, broadcast: true }).catch((error) => {
+    ingestAllNews({ broadcast: true }).catch((error) => {
       logger.warn(`Scheduled ingestion failed: ${error.message}`);
     });
   }, SCRAPE_INTERVAL_MS);
@@ -456,10 +434,6 @@ process.on('exit', stopScheduler);
 module.exports = {
   ingestAllNews,
   getNewsFeed,
-  searchNews,
-  getHotTopics,
-  getSources,
-  getArticleTopics,
   forceRefresh,
   startScheduler,
   stopScheduler,

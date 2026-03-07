@@ -17,7 +17,8 @@ import ReaderPanel from './ReaderPanel';
 import BrandMark from './BrandMark';
 import SettingsPanel from './SettingsPanel';
 import useWebSocket from '../hooks/useWebSocket';
-import { createTranslator, detectBrowserLocale, getDateLocale } from '../i18n';
+import { createTranslator, getDateLocale, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
+import { getSettingsLimits } from '../config/settingsLimits';
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -47,17 +48,17 @@ const appendUniqueGroups = (currentGroups, incomingGroups) => {
   return [...merged.values()];
 };
 
+const getSourceReloadSignature = (hiddenSourceIds, customSources) => JSON.stringify({
+  hiddenSourceIds,
+  customSources: (customSources || []).map((source) => [source.id, source.url])
+});
+
 const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
   const preferredLanguage = currentUser?.settings?.defaultLanguage;
-  const [locale, setLocale] = useState(() => {
-    const savedLocale = window.localStorage.getItem('news-aggregator-locale');
-    if (preferredLanguage === 'it' || preferredLanguage === 'en') {
-      return preferredLanguage;
-    }
-    return savedLocale === 'it' || savedLocale === 'en' ? savedLocale : detectBrowserLocale();
-  });
+  const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
   const t = useMemo(() => createTranslator(locale), [locale]);
   const dateLocale = useMemo(() => getDateLocale(locale), [locale]);
+  const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
   const websocketMessages = useMemo(() => ({
     connected: t('wsConnected'),
     disconnected: t('wsDisconnected'),
@@ -68,15 +69,12 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
     isConnected,
     notifications,
     lastNewsUpdate,
-    lastTopicUpdate,
     newArticlesCount,
-    reconnectionEvent,
     updateSubscriptionFilters,
     resetNewArticlesCount,
     removeNotification
   } = useWebSocket('', websocketMessages);
   const lastNewsUpdateRef = useRef(null);
-  const lastTopicUpdateRef = useRef(null);
 
   const [news, setNews] = useState([]);
   const [meta, setMeta] = useState(null);
@@ -93,26 +91,26 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
   const [filtersExpanded, setFiltersExpanded] = useState(true);
   const [readerState, setReaderState] = useState({ isOpen: false, group: null, articleId: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const recentHours = Math.max(1, Math.min(Number(currentUser?.settings?.recentHours) || 3, 3));
+  const recentHours = Math.max(
+    settingsLimits.recentHours.min,
+    Math.min(Number(currentUser?.settings?.recentHours) || settingsLimits.recentHours.max, settingsLimits.recentHours.max)
+  );
   const hiddenSourceIds = useMemo(() => currentUser?.settings?.hiddenSourceIds || [], [currentUser?.settings?.hiddenSourceIds]);
-  const customSourcesSignature = useMemo(() => {
-    return JSON.stringify((currentUser?.customSources || []).map((source) => [source.id, source.url]));
-  }, [currentUser?.customSources]);
-  const hiddenSourcesInitializedRef = useRef(false);
-  const customSourcesInitializedRef = useRef(false);
+  const sourceReloadSignature = useMemo(() => {
+    return getSourceReloadSignature(hiddenSourceIds, currentUser?.customSources || []);
+  }, [currentUser?.customSources, hiddenSourceIds]);
+  const sourceReloadSignatureRef = useRef(sourceReloadSignature);
   const visibleAvailableSources = useMemo(() => {
     return availableSources.filter((source) => !hiddenSourceIds.includes(source.id));
   }, [availableSources, hiddenSourceIds]);
 
   useEffect(() => {
-    window.localStorage.setItem('news-aggregator-locale', locale);
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
     document.documentElement.lang = locale;
   }, [locale]);
 
   useEffect(() => {
-    if (preferredLanguage === 'it' || preferredLanguage === 'en') {
-      setLocale(preferredLanguage);
-    }
+    setLocale(resolvePreferredLocale(preferredLanguage));
   }, [preferredLanguage]);
 
   useEffect(() => {
@@ -162,22 +160,13 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
   }, [activeFilters.sourceIds, activeFilters.topics, debouncedSearch, recentHours, resetNewArticlesCount, showRecentOnly]);
 
   useEffect(() => {
-    if (!hiddenSourcesInitializedRef.current) {
-      hiddenSourcesInitializedRef.current = true;
+    if (sourceReloadSignature === sourceReloadSignatureRef.current) {
       return;
     }
 
+    sourceReloadSignatureRef.current = sourceReloadSignature;
     loadNews({ page: 1, append: false, resetRealtime: false });
-  }, [hiddenSourceIds, loadNews]);
-
-  useEffect(() => {
-    if (!customSourcesInitializedRef.current) {
-      customSourcesInitializedRef.current = true;
-      return;
-    }
-
-    loadNews({ page: 1, append: false, resetRealtime: false });
-  }, [customSourcesSignature, loadNews]);
+  }, [loadNews, sourceReloadSignature]);
 
   useEffect(() => {
     loadNews({ page: 1, append: false, resetRealtime: false });
@@ -195,17 +184,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
   }, [activeFilters.sourceIds, activeFilters.topics, isConnected, updateSubscriptionFilters]);
 
   useEffect(() => {
-    if (!reconnectionEvent) {
-      return;
-    }
-
-    updateSubscriptionFilters({
-      topics: activeFilters.topics,
-      sourceIds: activeFilters.sourceIds
-    });
-  }, [activeFilters.sourceIds, activeFilters.topics, reconnectionEvent, updateSubscriptionFilters]);
-
-  useEffect(() => {
     if (!lastNewsUpdate?.timestamp || lastNewsUpdate.timestamp === lastNewsUpdateRef.current) {
       return;
     }
@@ -220,39 +198,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
       setNews((current) => mergeUniqueGroups(current, lastNewsUpdate.data));
     }
   }, [debouncedSearch, lastNewsUpdate, showRecentOnly]);
-
-  useEffect(() => {
-    const topicUpdate = lastTopicUpdate;
-    if (!topicUpdate?.timestamp || topicUpdate.timestamp === lastTopicUpdateRef.current) {
-      return;
-    }
-
-    lastTopicUpdateRef.current = topicUpdate.timestamp;
-
-    setNews((current) => current.map((group) => {
-      const updatedItems = group.items.map((item) => {
-        if (item.id !== topicUpdate.articleId) {
-          return item;
-        }
-
-        return {
-          ...item,
-          topics: [...new Set([...(item.topics || []), ...(topicUpdate.topics || [])])]
-        };
-      });
-
-      const groupHasUpdatedItem = updatedItems.some((item) => item.id === topicUpdate.articleId);
-      if (!groupHasUpdatedItem) {
-        return group;
-      }
-
-      return {
-        ...group,
-        items: updatedItems,
-        topics: [...new Set([...(group.topics || []), ...(topicUpdate.topics || [])])]
-      };
-    }));
-  }, [lastTopicUpdate]);
 
   const toggleFilter = useCallback((type, value) => {
     setActiveFilters((current) => {

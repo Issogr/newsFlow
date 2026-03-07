@@ -1,5 +1,22 @@
 # Changelog
 
+## 3.0.8
+
+- added targeted backend tests for news aggregation paging, broadcasting, and empty-feed failure handling
+- added deeper SQLite tests for article filtering, user source cleanup, and source/topic statistics
+
+## 3.0.7
+
+- added backend lint configuration compatible with ESLint 9 so static checks run correctly again
+- added backend integration tests for authentication, user settings, personal source flows, and SQLite migrations
+- added frontend smoke tests for session bootstrapping and authenticated shell rendering
+
+## 3.0.6
+
+- removed unused API and WebSocket code paths to simplify the live update and feed interfaces
+- reduced frontend complexity by simplifying real-time connection handling and consolidating settings and locale helpers
+- removed unused frontend testing dependencies and other small dead code paths to improve readability
+
 ## 3.0.5
 
 - removed the Ollama AI integration and related configuration from the application

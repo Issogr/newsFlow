@@ -77,20 +77,6 @@ const baseRateLimit = rateLimit({
   }
 });
 
-const searchRateLimit = rateLimit({
-  windowMs: 5 * 60 * 1000,
-  max: 40,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.ip,
-  message: {
-    error: {
-      message: 'Troppe richieste di ricerca, riprova più tardi',
-      code: 'SEARCH_RATE_LIMIT_EXCEEDED'
-    }
-  }
-});
-
 const refreshRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 3,
@@ -106,7 +92,6 @@ const refreshRateLimit = rateLimit({
 });
 
 app.use('/api', baseRateLimit);
-app.use('/api/news/search', searchRateLimit);
 app.use('/api/refresh', refreshRateLimit);
 app.use('/api', apiRoutes);
 

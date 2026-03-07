@@ -20,7 +20,6 @@ const ERROR_MESSAGES = {
   'RESOURCE_NOT_FOUND': 'La risorsa richiesta non è stata trovata',
   'INVALID_ARTICLE_ID': 'ID articolo non valido',
   'RATE_LIMIT_EXCEEDED': 'Troppe richieste, riprova più tardi',
-  'SEARCH_RATE_LIMIT_EXCEEDED': 'Troppe richieste di ricerca, riprova più tardi',
   'REFRESH_RATE_LIMIT_EXCEEDED': 'Troppe richieste di aggiornamento, riprova più tardi',
   'WS_RATE_LIMIT_EXCEEDED': 'Troppe richieste WebSocket, riprova più tardi',
   'VALIDATION_ERROR': 'I dati forniti non sono validi',

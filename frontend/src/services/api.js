@@ -82,11 +82,6 @@ export const importUserSettings = async (payload) => {
   return response.data;
 };
 
-export const previewUserSource = async (payload) => {
-  const response = await api.post('/me/sources/preview', payload);
-  return response.data;
-};
-
 export const addUserSource = async (payload) => {
   const response = await api.post('/me/sources', payload);
   return response.data;
@@ -139,23 +134,3 @@ export const fetchReaderArticle = async (articleId, { refresh = false } = {}) =>
 
   return response.data;
 };
-
-const apiService = {
-  setAuthToken,
-  getAuthToken,
-  registerUser,
-  loginUser,
-  logoutUser,
-  fetchCurrentUser,
-  updateUserSettings,
-  exportUserSettings,
-  importUserSettings,
-  previewUserSource,
-  addUserSource,
-  updateUserSource,
-  deleteUserSource,
-  fetchNews,
-  fetchReaderArticle
-};
-
-export default apiService;
