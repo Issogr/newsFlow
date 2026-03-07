@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.2
+
+- added settings export and import for personal preferences and custom RSS sources
+
 ## 3.0.1
 
 - changed personal source preferences from default selected sources to hidden sources excluded from each user feed

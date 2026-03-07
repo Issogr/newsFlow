@@ -1,6 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Plus, Settings, Trash2, X } from 'lucide-react';
-import { addUserSource, deleteUserSource, updateUserSettings } from '../services/api';
+import {
+  addUserSource,
+  deleteUserSource,
+  exportUserSettings,
+  importUserSettings,
+  updateUserSettings
+} from '../services/api';
 
 const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate }) => {
   const [settings, setSettings] = useState(currentUser.settings);
@@ -8,6 +14,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [sourceForm, setSourceForm] = useState({ name: '', url: '', language: 'it' });
+  const importInputRef = useRef(null);
   const defaultSourceOptions = [
     ...availableSources,
     ...customSources.filter((customSource) => !availableSources.some((source) => source.id === customSource.id))
@@ -62,6 +69,62 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
     }
   };
 
+  const handleExport = async () => {
+    setSaving(true);
+    setError(null);
+
+    try {
+      const payload = await exportUserSettings();
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `news-flow-settings-${currentUser.user.username}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (requestError) {
+      setError(requestError);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleImportClick = () => {
+    importInputRef.current?.click();
+  };
+
+  const handleImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text);
+      const response = await importUserSettings(payload);
+      onUserUpdate({
+        ...currentUser,
+        settings: response.settings,
+        customSources: response.customSources
+      });
+      setCustomSources(response.customSources);
+      setSettings(response.settings);
+    } catch (requestError) {
+      setError(requestError instanceof SyntaxError ? new Error('Invalid settings file format') : requestError);
+    } finally {
+      if (event.target) {
+        event.target.value = '';
+      }
+      setSaving(false);
+    }
+  };
+
   const handleDeleteSource = async (sourceId) => {
     setSaving(true);
     setError(null);
@@ -99,6 +162,35 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
+          <section className="space-y-4">
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={saving}
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+              >
+                {t('exportSettings')}
+              </button>
+              <button
+                type="button"
+                onClick={handleImportClick}
+                disabled={saving}
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+              >
+                {t('importSettings')}
+              </button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={handleImport}
+              />
+            </div>
+            <p className="text-sm text-slate-500">{t('importSettingsHelp')}</p>
+          </section>
+
           <section className="space-y-4">
             <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t('preferences')}</h3>
             <div className="grid gap-4 md:grid-cols-2">

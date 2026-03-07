@@ -1316,6 +1316,34 @@ function deleteUserSource(userId, sourceId) {
   return transaction(userId, sourceId);
 }
 
+function deleteAllUserSources(userId) {
+  if (!userId) {
+    return 0;
+  }
+
+  const database = getDb();
+  const transaction = database.transaction((ownerId) => {
+    database.prepare(`
+      DELETE FROM article_search
+      WHERE article_id IN (
+        SELECT id FROM articles WHERE owner_user_id = ?
+      )
+    `).run(ownerId);
+
+    database.prepare(`
+      DELETE FROM articles
+      WHERE owner_user_id = ?
+    `).run(ownerId);
+
+    return database.prepare(`
+      DELETE FROM user_sources
+      WHERE user_id = ?
+    `).run(ownerId).changes;
+  });
+
+  return transaction(userId);
+}
+
 module.exports = {
   getDb,
   getArticles,
@@ -1347,6 +1375,7 @@ module.exports = {
   listAllActiveUserSources,
   createUserSource,
   deleteUserSource,
+  deleteAllUserSources,
   verifyWriteAccess,
   getWriteAccessStatus,
   buildSearchQuery

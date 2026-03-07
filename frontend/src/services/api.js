@@ -72,6 +72,16 @@ export const updateUserSettings = async (payload) => {
   return response.data;
 };
 
+export const exportUserSettings = async () => {
+  const response = await api.get('/me/settings/export');
+  return response.data;
+};
+
+export const importUserSettings = async (payload) => {
+  const response = await api.post('/me/settings/import', payload);
+  return response.data;
+};
+
 export const addUserSource = async (payload) => {
   const response = await api.post('/me/sources', payload);
   return response.data;
@@ -128,6 +138,8 @@ const apiService = {
   logoutUser,
   fetchCurrentUser,
   updateUserSettings,
+  exportUserSettings,
+  importUserSettings,
   addUserSource,
   deleteUserSource,
   fetchNews,

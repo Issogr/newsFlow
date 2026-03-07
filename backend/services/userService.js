@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const database = require('./database');
 const rssParser = require('./rssParser');
+const newsSources = require('../config/newsSources');
 const { createError } = require('../utils/errorHandler');
 const {
   hashPassword,
@@ -39,6 +40,10 @@ function getDefaultSettings() {
     recentHours: MAX_RECENT_HOURS,
     hiddenSourceIds: []
   };
+}
+
+function getGlobalSourceIds() {
+  return new Set(newsSources.map((source) => source.id));
 }
 
 function getUserSettings(userId) {
@@ -202,6 +207,91 @@ function removeUserSource(userId, sourceId) {
   }
 }
 
+function exportUserSettings(userId) {
+  const settings = getUserSettings(userId);
+  const customSources = database.listUserSources(userId);
+  const customSourceIds = new Set(customSources.map((source) => source.id));
+
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    settings: {
+      defaultLanguage: settings.defaultLanguage,
+      articleRetentionHours: settings.articleRetentionHours,
+      recentHours: settings.recentHours,
+      hiddenSourceIds: settings.hiddenSourceIds.filter((sourceId) => !customSourceIds.has(sourceId))
+    },
+    customSources: customSources.map((source) => ({
+      name: source.name,
+      url: source.url,
+      language: source.language,
+      isHidden: settings.hiddenSourceIds.includes(source.id)
+    }))
+  };
+}
+
+async function importUserSettings(userId, payload = {}) {
+  const importedSettings = payload.settings || {};
+  const importedCustomSources = Array.isArray(payload.customSources) ? payload.customSources : [];
+  const globalSourceIds = getGlobalSourceIds();
+
+  for (const source of importedCustomSources) {
+    const name = String(source?.name || '').trim();
+    const url = String(source?.url || '').trim();
+    if (!name || !url) {
+      throw createError(400, 'Imported custom sources must include a name and RSS URL', 'INVALID_IMPORT_PAYLOAD');
+    }
+
+    try {
+      await rssParser.validateFeedUrl(url);
+    } catch (error) {
+      throw createError(400, `Imported RSS URL is not valid: ${url}`, 'INVALID_RSS_URL', error);
+    }
+  }
+
+  database.deleteAllUserSources(userId);
+
+  const now = new Date().toISOString();
+  const recreatedSources = importedCustomSources.map((source) => {
+    const createdSource = {
+      id: createId(),
+      userId,
+      name: String(source.name).trim().slice(0, 80),
+      url: String(source.url).trim(),
+      language: String(source.language || 'it').trim().toLowerCase().slice(0, 5) || 'it',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      validatedAt: now
+    };
+
+    database.createUserSource(createdSource);
+    return {
+      ...createdSource,
+      isHidden: Boolean(source.isHidden)
+    };
+  });
+
+  const hiddenGlobalSourceIds = Array.isArray(importedSettings.hiddenSourceIds)
+    ? importedSettings.hiddenSourceIds.filter((sourceId) => globalSourceIds.has(sourceId))
+    : [];
+  const hiddenCustomSourceIds = recreatedSources
+    .filter((source) => source.isHidden)
+    .map((source) => source.id);
+
+  const settings = updateUserSettings(userId, {
+    defaultLanguage: importedSettings.defaultLanguage,
+    articleRetentionHours: importedSettings.articleRetentionHours,
+    recentHours: importedSettings.recentHours,
+    hiddenSourceIds: [...hiddenGlobalSourceIds, ...hiddenCustomSourceIds]
+  });
+
+  return {
+    settings,
+    customSources: database.listUserSources(userId)
+  };
+}
+
 module.exports = {
   registerUser,
   loginUser,
@@ -211,5 +301,7 @@ module.exports = {
   updateUserSettings,
   addUserSource,
   removeUserSource,
+  exportUserSettings,
+  importUserSettings,
   getDefaultSettings
 };

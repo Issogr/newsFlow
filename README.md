@@ -11,6 +11,7 @@ News Aggregator is a web app that collects articles from multiple RSS sources, s
 - The frontend requests grouped news with server-side search, pagination, and filters.
 - Users can create personal accounts and save private instance preferences.
 - Each user can hide default sources, set a lower personal retention window, set a lower quick-filter window, choose a default UI language, and add private custom RSS feeds.
+- Users can export and import their personal settings and custom RSS sources.
 - The web UI supports English and Italian, defaulting to the browser/system language and allowing manual switching.
 - Reader mode can fetch the original article server-side, strip images/layout noise, and show a clean reading view inside the app.
 - WebSocket notifications inform connected users when new grouped news or updated topics are available.
@@ -28,6 +29,7 @@ News Aggregator is a web app that collects articles from multiple RSS sources, s
 - Small language badge on news cards to show article language
 - In-app reader mode with SQLite caching and source text extraction
 - Per-user private settings and custom RSS source validation
+- Settings export/import for personal preferences and custom sources
 - Optional AI topic enrichment with Ollama
 
 ## Architecture
@@ -58,6 +60,8 @@ News Aggregator is a web app that collects articles from multiple RSS sources, s
 - `POST /api/auth/logout`: logout the current session
 - `GET /api/me`: current user, personal settings, and personal sources
 - `PATCH /api/me/settings`: update per-user defaults
+- `GET /api/me/settings/export`: export personal settings and custom sources
+- `POST /api/me/settings/import`: import personal settings and custom sources
 - `POST /api/me/sources`: add a personal RSS source after validation
 - `DELETE /api/me/sources/:sourceId`: remove a personal RSS source
 - `GET /api/news`: grouped news with pagination and filters

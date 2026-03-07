@@ -95,7 +95,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const recentHours = Math.max(1, Math.min(Number(currentUser?.settings?.recentHours) || 3, 3));
   const hiddenSourceIds = useMemo(() => currentUser?.settings?.hiddenSourceIds || [], [currentUser?.settings?.hiddenSourceIds]);
+  const customSourcesSignature = useMemo(() => {
+    return JSON.stringify((currentUser?.customSources || []).map((source) => [source.id, source.url]));
+  }, [currentUser?.customSources]);
   const hiddenSourcesInitializedRef = useRef(false);
+  const customSourcesInitializedRef = useRef(false);
   const visibleAvailableSources = useMemo(() => {
     return availableSources.filter((source) => !hiddenSourceIds.includes(source.id));
   }, [availableSources, hiddenSourceIds]);
@@ -165,6 +169,15 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
 
     loadNews({ page: 1, append: false, resetRealtime: false });
   }, [hiddenSourceIds, loadNews]);
+
+  useEffect(() => {
+    if (!customSourcesInitializedRef.current) {
+      customSourcesInitializedRef.current = true;
+      return;
+    }
+
+    loadNews({ page: 1, append: false, resetRealtime: false });
+  }, [customSourcesSignature, loadNews]);
 
   useEffect(() => {
     loadNews({ page: 1, append: false, resetRealtime: false });
