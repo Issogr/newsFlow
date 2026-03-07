@@ -2,6 +2,20 @@ jest.mock('./rssParser', () => ({
   parseFeed: jest.fn()
 }));
 
+jest.mock('./database', () => ({
+  createIngestionRun: jest.fn(() => ({ id: 1 })),
+  completeIngestionRun: jest.fn(),
+  countArticles: jest.fn(() => 1),
+  upsertArticles: jest.fn(() => ({ insertedIds: [], insertedCount: 0, updatedCount: 0 })),
+  mergeTopicsForArticle: jest.fn(),
+  getArticlesByIds: jest.fn(() => []),
+  getArticles: jest.fn(() => []),
+  getLatestIngestionRun: jest.fn(() => null),
+  getSourceStats: jest.fn(() => []),
+  getTopicStats: jest.fn(() => []),
+  getTopicsForArticle: jest.fn(() => [])
+}));
+
 jest.mock('../utils/logger', () => ({
   debug: jest.fn(),
   info: jest.fn(),
@@ -11,16 +25,13 @@ jest.mock('../utils/logger', () => ({
 
 jest.mock('./websocketService', () => ({
   broadcastNewsUpdate: jest.fn(),
+  broadcastTopicUpdate: jest.fn(),
   broadcastSystemNotification: jest.fn()
 }));
 
 jest.mock('./asyncProcessor', () => ({
-  getTopicsForArticle: jest.fn(() => []),
-  startTopicDeduction: jest.fn()
-}));
-
-jest.mock('./ollamaService', () => ({
-  isAvailable: jest.fn(() => false)
+  enqueueArticle: jest.fn(),
+  getTopicsForArticle: jest.fn(() => [])
 }));
 
 const newsAggregator = require('./newsAggregator');
@@ -32,6 +43,7 @@ describe('newsAggregator stable grouping', () => {
     description: 'Descrizione A',
     pubDate: '2026-03-02T10:00:00.000Z',
     source: 'Fonte A',
+    sourceId: 'fonte-a',
     url: 'https://example.com/a',
     topics: ['Politica']
   };
@@ -42,6 +54,7 @@ describe('newsAggregator stable grouping', () => {
     description: 'Descrizione B',
     pubDate: '2026-03-02T10:05:00.000Z',
     source: 'Fonte B',
+    sourceId: 'fonte-b',
     url: 'https://example.com/b',
     topics: ['Politica']
   };

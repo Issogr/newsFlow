@@ -1,738 +1,430 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Filter, Globe, RefreshCw, Wifi, WifiOff, Clock, ChevronDown, ChevronUp } from 'lucide-react';
-import { fetchNews, fetchHotTopics, fetchSources, fetchTopicMap } from '../services/api';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Filter,
+  Globe,
+  RefreshCw,
+  Search,
+  Wifi,
+  WifiOff,
+  Clock3,
+  ChevronDown,
+  ChevronUp
+} from 'lucide-react';
+import { fetchNews } from '../services/api';
 import ErrorMessage from './ErrorMessage';
 import NewsCard from './NewsCard';
 import NotificationCenter from './NotificationCenter';
-import topicHelper from '../utils/topicHelper';
 import useWebSocket from '../hooks/useWebSocket';
 
-// Numero di elementi da mostrare inizialmente e per caricamento
-const INITIAL_ITEMS_COUNT = 9;
-const ITEMS_PER_LOAD = 6;
+const PAGE_SIZE = 12;
+const RECENT_HOURS = 3;
+const SEARCH_DEBOUNCE_MS = 350;
+const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 
-// Componente principale dell'applicazione
+const mergeUniqueGroups = (currentGroups, incomingGroups) => {
+  const merged = new Map();
+
+  [...incomingGroups, ...currentGroups].forEach((group) => {
+    if (group?.id && !merged.has(group.id)) {
+      merged.set(group.id, group);
+    }
+  });
+
+  return [...merged.values()];
+};
+
+const appendUniqueGroups = (currentGroups, incomingGroups) => {
+  const merged = new Map();
+
+  [...currentGroups, ...incomingGroups].forEach((group) => {
+    if (group?.id && !merged.has(group.id)) {
+      merged.set(group.id, group);
+    }
+  });
+
+  return [...merged.values()];
+};
+
 const NewsAggregator = () => {
-  // Refs per evitare loop infiniti
-  const initialLoadDone = useRef(false);
-  const lastWebSocketUpdate = useRef(null);
-  const lastTopicUpdate = useRef(null);
-  const ignoreNextNewsUpdate = useRef(false);
-  
-  // Ref per l'osservatore di intersezione per lo scroll infinito
-  const observer = useRef(null);
-  const loadMoreTriggerRef = useRef(null);
-  
-  // Stati principali
+  const {
+    isConnected,
+    notifications,
+    lastNewsUpdate,
+    lastTopicUpdate,
+    newArticlesCount,
+    reconnectionEvent,
+    updateSubscriptionFilters,
+    resetNewArticlesCount,
+    removeNotification
+  } = useWebSocket();
+  const lastNewsUpdateRef = useRef(null);
+  const lastTopicUpdateRef = useRef(null);
+
   const [news, setNews] = useState([]);
-  const [filteredNews, setFilteredNews] = useState([]);
-  const [visibleNewsCount, setVisibleNewsCount] = useState(INITIAL_ITEMS_COUNT);
-  const [sources, setSources] = useState([]);
-  const [topics, setTopics] = useState([]);
+  const [meta, setMeta] = useState(null);
+  const [availableSources, setAvailableSources] = useState([]);
+  const [availableTopics, setAvailableTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
-  const [activeFilters, setActiveFilters] = useState({
-    sources: [],
-    topics: []
-  });
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [activeFilters, setActiveFilters] = useState(EMPTY_FILTERS);
   const [showRecentOnly, setShowRecentOnly] = useState(false);
-  
-  // Stato per controllare se i filtri sono espansi o collassati
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
-
-  // Inizializza il WebSocket con l'URL base del browser
-  const websocket = useWebSocket();
-
-  // Monitor degli aggiornamenti WebSocket
-  useEffect(() => {
-    if (websocket.lastTopicUpdate) {
-      console.log("WebSocket topic update ricevuto:", websocket.lastTopicUpdate);
-    }
-  }, [websocket.lastTopicUpdate]);
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
 
   useEffect(() => {
-    if (websocket.lastNewsUpdate) {
-      console.log("WebSocket news update ricevuto:", websocket.lastNewsUpdate);
-    }
-  }, [websocket.lastNewsUpdate]);
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, SEARCH_DEBOUNCE_MS);
 
-  // Calcola le notizie visibili in base allo stato attuale
-  const visibleNews = useMemo(() => {
-    return filteredNews.slice(0, visibleNewsCount);
-  }, [filteredNews, visibleNewsCount]);
-  
-  // Funzione per caricare più notizie (scroll infinito)
-  const loadMore = useCallback(() => {
-    if (loadingMore || visibleNewsCount >= filteredNews.length) return;
-    
-    setLoadingMore(true);
-    
-    // Simula un piccolo ritardo per l'effetto di caricamento
-    setTimeout(() => {
-      setVisibleNewsCount(prev => Math.min(prev + ITEMS_PER_LOAD, filteredNews.length));
-      setLoadingMore(false);
-    }, 300);
-  }, [loadingMore, visibleNewsCount, filteredNews.length]);
+    return () => clearTimeout(timeoutId);
+  }, [search]);
 
-  // Setup dell'osservatore di intersezione per lo scroll infinito
-  useEffect(() => {
-    observer.current = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        if (entry.isIntersecting) {
-          loadMore();
-        }
-      },
-      { threshold: 0.1 }
-    );
-    
-    const currentTrigger = loadMoreTriggerRef.current;
-    if (currentTrigger) {
-      observer.current.observe(currentTrigger);
-    }
-    
-    return () => {
-      if (currentTrigger && observer.current) {
-        observer.current.unobserve(currentTrigger);
-      }
-    };
-  }, [loadMore]);
-
-  // Resetta il contatore di notizie visibili quando cambiano i filtri o si caricano nuove notizie
-  useEffect(() => {
-    setVisibleNewsCount(INITIAL_ITEMS_COUNT);
-  }, [filteredNews.length]);
-
-  // Funzione centrale per applicare i filtri a qualsiasi set di notizie
-  // Questa funzione sarà riutilizzata in vari punti dell'applicazione
-  const applyFilters = useCallback((newsToFilter) => {
-    if (!newsToFilter || !Array.isArray(newsToFilter) || newsToFilter.length === 0) {
-      return [];
-    }
-    
-    let filtered = [...newsToFilter];
-    
-    // Filtra per fonti
-    if (activeFilters.sources.length > 0) {
-      filtered = filtered.filter(group => 
-        group.items && group.items.some(item => activeFilters.sources.includes(item.source))
-      );
-    }
-    
-    // Filtra per argomenti utilizzando l'helper
-    if (activeFilters.topics.length > 0) {
-      filtered = filtered.filter(group => 
-        activeFilters.topics.some(topic => topicHelper.groupHasTopic(group, topic))
-      );
-    }
-    
-    // Filtra per notizie recenti (ultime 3 ore)
-    if (showRecentOnly) {
-      const threeHoursAgo = new Date();
-      threeHoursAgo.setHours(threeHoursAgo.getHours() - 3);
-      
-      filtered = filtered.filter(group => {
-        const pubDate = new Date(group.pubDate);
-        return pubDate >= threeHoursAgo;
-      });
-    }
-    
-    return filtered;
-  }, [activeFilters, showRecentOnly]);
-
-  useEffect(() => {
-    if (websocket.isConnected) {
-      console.log("WebSocket connesso. Stato attuale:", {
-        isConnected: websocket.isConnected,
-        updatesReceived: websocket.updatesReceived,
-        notifications: websocket.notifications.length,
-        activeFilters
-      });
-      
-      // Invia filtri iniziali al server WebSocket
-      websocket.updateSubscriptionFilters({
-        topics: activeFilters.topics,
-        sources: activeFilters.sources
-      });
-    }
-  }, [websocket.isConnected, activeFilters]);
-
-  // Funzione per recuperare le notizie dal backend
-  const loadNews = useCallback(async () => {
-    setLoading(true);
+  const loadNews = useCallback(async ({ page = 1, append = false, resetRealtime = true } = {}) => {
+    const setBusyState = append ? setLoadingMore : setLoading;
+    setBusyState(true);
     setError(null);
-    websocket.resetNewArticlesCount();
-    
+
     try {
-      // Carica i dati direttamente dal server
-      const newsData = await fetchNews();
-      const sourcesData = await fetchSources();
-      
-      // Carica la mappa dei topic
-      let topicMapData = null;
-      try {
-        topicMapData = await fetchTopicMap();
-        topicHelper.setTopicMappings(topicMapData.mappings);
-      } catch (topicMapError) {
-        console.error('Errore nel caricamento della mappa dei topic:', topicMapError);
+      const response = await fetchNews({
+        page,
+        pageSize: PAGE_SIZE,
+        search: debouncedSearch,
+        sourceIds: activeFilters.sourceIds,
+        topics: activeFilters.topics,
+        recentHours: showRecentOnly ? RECENT_HOURS : null
+      });
+
+      setNews((current) => append ? appendUniqueGroups(current, response.items || []) : (response.items || []));
+      setMeta(response.meta || null);
+      setAvailableSources(response.filters?.sources || []);
+      setAvailableTopics(response.filters?.topics || []);
+
+      if (resetRealtime) {
+        resetNewArticlesCount();
       }
-      
-      // Estrai i topic unici
-      const uniqueTopics = topicHelper.extractUniqueTopics(newsData);
-      
-      // Estrai tutte le fonti uniche
-      const allSources = sourcesData.map(source => source.name);
-      
-      // Imposta lo stato di tutte le news
-      setNews(newsData);
-      
-      // Applica i filtri attivi ai dati appena caricati
-      const filteredData = applyFilters(newsData);
-      setFilteredNews(filteredData);
-      
-      setSources(allSources);
-      setTopics(uniqueTopics);
-
-      console.log("Dati caricati:", newsData);
-      console.log("Dati filtrati:", filteredData);
-      
-      // Resetta il contatore di elementi visibili
-      setVisibleNewsCount(INITIAL_ITEMS_COUNT);
-      
-    } catch (error) {
-      console.error("Errore nel recupero delle notizie:", error);
-      setError(error);
+    } catch (requestError) {
+      setError(requestError);
     } finally {
-      setLoading(false);
-      // Marca che il caricamento iniziale è completato
-      initialLoadDone.current = true;
-      
-      // Imposta il flag per ignorare il prossimo aggiornamento websocket
-      // poiché abbiamo appena caricato tutti i dati
-      ignoreNextNewsUpdate.current = true;
+      setBusyState(false);
     }
-  }, [websocket, applyFilters]);
+  }, [activeFilters.sourceIds, activeFilters.topics, debouncedSearch, resetNewArticlesCount, showRecentOnly]);
 
-  // Effetto per caricare le notizie UNA sola volta all'avvio
   useEffect(() => {
-    if (!initialLoadDone.current) {
-      loadNews();
-    }
+    loadNews({ page: 1, append: false, resetRealtime: false });
   }, [loadNews]);
 
-  // Effetto per ri-applicare i filtri quando cambiano i filtri attivi
   useEffect(() => {
-    // Salta se il caricamento non è stato completato
-    if (!initialLoadDone.current) return;
-    
-    // Applica i filtri alle notizie
-    const filtered = applyFilters(news);
-    setFilteredNews(filtered);
-    
-    console.log("Filtri applicati:", {
-      sourcesFilters: activeFilters.sources,
-      topicsFilters: activeFilters.topics,
-      showRecentOnly,
-      risultatiFiltrati: filtered.length
-    });
-    
-  }, [activeFilters, news, applyFilters, showRecentOnly]);
-
-  // [MIGLIORATO] Gestione filtri WebSocket dopo riconnessione
-  // Usa reconnectionEvent per risintonizzare i filtri quando il WebSocket si riconnette
-  useEffect(() => {
-    // Salta se il caricamento non è stato completato
-    if (!initialLoadDone.current) return;
-    
-    // Aggiorna i filtri di sottoscrizione WebSocket dopo riconnessione
-    if (websocket.isConnected && websocket.reconnectionEvent > 0) {
-      console.log('Risincronizzazione filtri dopo riconnessione WebSocket');
-      websocket.updateSubscriptionFilters({
-        topics: activeFilters.topics,
-        sources: activeFilters.sources
-      });
-    }
-  }, [websocket.reconnectionEvent, websocket.isConnected, activeFilters]);
-
-  // [MIGLIORATO] Gestione aggiornamenti WebSocket per nuovi articoli
-  // Implementa la logica per aggiornare effettivamente l'interfaccia con i nuovi articoli
-  useEffect(() => {
-    // Salta se il caricamento non è stato completato
-    if (!initialLoadDone.current) return;
-    
-    // Preveniamo loop: se l'update è lo stesso dell'ultimo processato, ignoriamo
-    if (
-      websocket.lastNewsUpdate && 
-      lastWebSocketUpdate.current !== websocket.lastNewsUpdate.timestamp &&
-      websocket.lastNewsUpdate.data && 
-      Array.isArray(websocket.lastNewsUpdate.data)
-    ) {
-      // Aggiorna il riferimento all'ultimo update processato
-      lastWebSocketUpdate.current = websocket.lastNewsUpdate.timestamp;
-      console.log('Nuovi articoli disponibili:', websocket.lastNewsUpdate.count);
-      
-      // Se abbiamo appena caricato tutti i dati, ignoriamo questo aggiornamento
-      if (ignoreNextNewsUpdate.current) {
-        ignoreNextNewsUpdate.current = false;
-        return;
-      }
-      
-      // Aggiorna lo stato delle notizie
-      setNews(prevNews => {
-        // Aggiungi solo articoli non già presenti
-        const newGroups = websocket.lastNewsUpdate.data.filter(newGroup => 
-          !prevNews.some(existingGroup => existingGroup.id === newGroup.id)
-        );
-        
-        console.log(`Aggiungendo ${newGroups.length} nuovi gruppi di notizie`);
-        
-        // Se non ci sono nuovi gruppi, restituisci lo stato precedente
-        if (newGroups.length === 0) return prevNews;
-        
-        // Aggiorna le notizie mettendo i nuovi gruppi all'inizio
-        const updatedNews = [...newGroups, ...prevNews];
-        
-        // Riapplica i filtri in modo asincrono
-        setTimeout(() => {
-          setFilteredNews(applyFilters(updatedNews));
-        }, 0);
-        
-        return updatedNews;
-      });
-    }
-  }, [websocket.lastNewsUpdate, applyFilters]);
-
-  // Gestione aggiornamenti topic via WebSocket
-  useEffect(() => {
-    // Salta se il caricamento non è stato completato o se non c'è un update
-    if (!initialLoadDone.current || !websocket.lastTopicUpdate) return;
-    
-    // Evita di elaborare lo stesso aggiornamento più volte
-    if (
-      lastTopicUpdate.current === websocket.lastTopicUpdate.timestamp || 
-      !websocket.lastTopicUpdate.articleId ||
-      !websocket.lastTopicUpdate.topics
-    ) {
+    if (!isConnected) {
       return;
     }
-    
-    // Aggiorna il riferimento all'ultimo update elaborato
-    lastTopicUpdate.current = websocket.lastTopicUpdate.timestamp;
-    
-    const { articleId, topics } = websocket.lastTopicUpdate;
-    console.log(`Ricevuto aggiornamento topic per articolo ${articleId}:`, topics);
-    
-    // Funzione migliorata per trovare corrispondenze di ID articoli
-    const normalizeArticleId = (id) => id?.toString().trim().toLowerCase() || '';
-    
-    const articleIdsMatch = (id1, id2) => {
-      const normalizedId1 = normalizeArticleId(id1);
-      const normalizedId2 = normalizeArticleId(id2);
-      
-      if (!normalizedId1 || !normalizedId2 || normalizedId1.length < 5 || normalizedId2.length < 5) {
-        return false;
-      }
-      
-      // Corrispondenza esatta
-      if (normalizedId1 === normalizedId2) return true;
-      
-      // Calcola la lunghezza per confronto parziale
-      const longerLength = Math.max(normalizedId1.length, normalizedId2.length);
-      const shorterLength = Math.min(normalizedId1.length, normalizedId2.length);
-      
-      // Richiede almeno 70% di corrispondenza nella lunghezza prima di controllare inclusione
-      if (shorterLength / longerLength >= 0.7) {
-        return normalizedId1.includes(normalizedId2) || normalizedId2.includes(normalizedId1);
-      }
-      
-      return false;
-    };
-    
-    // Cerca articoli corrispondenti
-    const findArticleMatches = (articles, targetId) => {
-      const matches = [];
-      
-      articles.forEach((group, groupIndex) => {
-        group.items.forEach((item, itemIndex) => {
-          if (articleIdsMatch(item.id, targetId) || 
-              (item.url && articleIdsMatch(item.url, targetId))) {
-            matches.push({
-              groupIndex,
-              itemIndex,
-              groupId: group.id,
-              itemId: item.id,
-              url: item.url
-            });
-          }
-        });
-      });
-      
-      return matches;
-    };
-    
-    // Cerca corrispondenze
-    const matches = findArticleMatches(news, articleId);
-    console.log("Corrispondenze trovate:", matches);
-    
-    if (matches.length > 0) {
-      // Aggiorna gli articoli
-      setNews(prevNews => {
-        // Crea una copia profonda dell'array di news
-        const updatedNews = [...prevNews];
-        let updated = false;
-        
-        // Aggiorna ogni corrispondenza trovata
-        matches.forEach(match => {
-          const group = updatedNews[match.groupIndex];
-          const item = { ...group.items[match.itemIndex] };
-          
-          // Combina i topic esistenti con quelli nuovi, evitando duplicati
-          const existingTopics = Array.isArray(item.topics) ? item.topics : [];
-          const combinedTopics = [...new Set([...existingTopics, ...topics])];
-          item.topics = combinedTopics;
-          
-          // Aggiorna l'item nell'array
-          const updatedItems = [...group.items];
-          updatedItems[match.itemIndex] = item;
-          
-          // Aggiorna anche i topic a livello di gruppo
-          const groupTopics = Array.isArray(group.topics) ? group.topics : [];
-          const updatedGroupTopics = [...new Set([...groupTopics, ...topics])];
-          
-          // Crea un nuovo oggetto gruppo con gli items e i topics aggiornati
-          updatedNews[match.groupIndex] = {
-            ...group,
-            items: updatedItems,
-            topics: updatedGroupTopics
-          };
-          
-          console.log(`Topic aggiornati per il gruppo ${group.id}:`, updatedGroupTopics);
-          updated = true;
-        });
-        
-        // Aggiorna anche l'elenco globale dei topic disponibili
-        if (updated) {
-          setTopics(prevTopics => {
-            const allTopics = [...prevTopics, ...topics];
-            return [...new Set(allTopics)].sort();
-          });
-          
-          // Dopo aver aggiornato le news, riapplica i filtri
-          // in modo asincrono per evitare problemi di stato
-          setTimeout(() => {
-            setFilteredNews(currentFiltered => {
-              // Se non ci sono filtri attivi, non facciamo nulla
-              if (activeFilters.sources.length === 0 && activeFilters.topics.length === 0 && !showRecentOnly) {
-                return currentFiltered;
-              }
-              return applyFilters(updatedNews);
-            });
-          }, 0);
-        }
-        
-        // Restituisci il nuovo array di news
-        return updated ? updatedNews : prevNews;
-      });
-    }
-    
-  }, [websocket.lastTopicUpdate, activeFilters, applyFilters, showRecentOnly, news]);
 
-  // Debug per monitorare i cambiamenti negli articoli
+    updateSubscriptionFilters({
+      topics: activeFilters.topics,
+      sourceIds: activeFilters.sourceIds
+    });
+  }, [activeFilters.sourceIds, activeFilters.topics, isConnected, updateSubscriptionFilters]);
+
   useEffect(() => {
-    if (initialLoadDone.current && websocket.lastTopicUpdate) {
-      console.log("Cercando di aggiornare l'articolo con ID:", websocket.lastTopicUpdate.articleId);
-      
-      // Verifica se l'articolo è presente nel nostro stato
-      let found = false;
-      news.forEach(group => {
-        group.items.forEach(item => {
-          if (item.id === websocket.lastTopicUpdate.articleId || 
-              (item.url && item.url.includes(websocket.lastTopicUpdate.articleId))) {
-            console.log("Articolo trovato!", item);
-            found = true;
-          }
-        });
-      });
-      
-      console.log("Articolo trovato nel nostro stato:", found);
+    if (!reconnectionEvent) {
+      return;
     }
-  }, [websocket.lastTopicUpdate, news]);
 
-  // Gestisce il toggle di un filtro
-  const toggleFilter = useCallback((type, value) => {
-    if (!value || typeof value !== 'string') return;
-    
-    setActiveFilters(prev => {
-      const newFilters = { ...prev };
-      
-      // Verifica se il valore esiste già (case-insensitive)
-      const valueIndex = newFilters[type].findIndex(
-        item => item.toLowerCase() === value.toLowerCase()
-      );
-      
-      if (valueIndex >= 0) {
-        newFilters[type] = [
-          ...newFilters[type].slice(0, valueIndex),
-          ...newFilters[type].slice(valueIndex + 1)
-        ];
-      } else {
-        newFilters[type] = [...newFilters[type], value];
+    updateSubscriptionFilters({
+      topics: activeFilters.topics,
+      sourceIds: activeFilters.sourceIds
+    });
+  }, [activeFilters.sourceIds, activeFilters.topics, reconnectionEvent, updateSubscriptionFilters]);
+
+  useEffect(() => {
+    if (!lastNewsUpdate?.timestamp || lastNewsUpdate.timestamp === lastNewsUpdateRef.current) {
+      return;
+    }
+
+    lastNewsUpdateRef.current = lastNewsUpdate.timestamp;
+
+    if (debouncedSearch || showRecentOnly) {
+      return;
+    }
+
+    if (Array.isArray(lastNewsUpdate.data) && lastNewsUpdate.data.length > 0) {
+      setNews((current) => mergeUniqueGroups(current, lastNewsUpdate.data));
+    }
+  }, [debouncedSearch, lastNewsUpdate, showRecentOnly]);
+
+  useEffect(() => {
+    const topicUpdate = lastTopicUpdate;
+    if (!topicUpdate?.timestamp || topicUpdate.timestamp === lastTopicUpdateRef.current) {
+      return;
+    }
+
+    lastTopicUpdateRef.current = topicUpdate.timestamp;
+
+    setNews((current) => current.map((group) => {
+      const updatedItems = group.items.map((item) => {
+        if (item.id !== topicUpdate.articleId) {
+          return item;
+        }
+
+        return {
+          ...item,
+          topics: [...new Set([...(item.topics || []), ...(topicUpdate.topics || [])])]
+        };
+      });
+
+      const groupHasUpdatedItem = updatedItems.some((item) => item.id === topicUpdate.articleId);
+      if (!groupHasUpdatedItem) {
+        return group;
       }
-      
-      return newFilters;
+
+      return {
+        ...group,
+        items: updatedItems,
+        topics: [...new Set([...(group.topics || []), ...(topicUpdate.topics || [])])]
+      };
+    }));
+  }, [lastTopicUpdate]);
+
+  const toggleFilter = useCallback((type, value) => {
+    setActiveFilters((current) => {
+      const values = current[type] || [];
+      const exists = values.includes(value);
+
+      return {
+        ...current,
+        [type]: exists ? values.filter((item) => item !== value) : [...values, value]
+      };
     });
   }, []);
 
-  // Gestisce il toggle del filtro "ultime 3 ore"
-  const toggleRecentFilter = useCallback(() => {
-    setShowRecentOnly(prev => !prev);
-  }, []);
-
-  // Gestisce il toggle dell'espansione/collasso dei filtri
-  const toggleFiltersExpanded = useCallback(() => {
-    setFiltersExpanded(prev => !prev);
-  }, []);
-
-  // Gestisce il reset dei filtri
   const resetFilters = useCallback(() => {
-    setActiveFilters({ sources: [], topics: [] });
+    setActiveFilters({ sourceIds: [], topics: [] });
     setShowRecentOnly(false);
+    setSearch('');
+    setDebouncedSearch('');
   }, []);
 
-  // Memorizza il calcolo della visibilità dei filtri attivi
-  const hasActiveFilters = useMemo(() => 
-    activeFilters.sources.length > 0 || activeFilters.topics.length > 0 || showRecentOnly, 
-    [activeFilters, showRecentOnly]
-  );
-
-  // Calcola il numero di filtri attivi per mostrarlo nell'intestazione
   const activeFiltersCount = useMemo(() => {
-    let count = activeFilters.topics.length + activeFilters.sources.length;
-    if (showRecentOnly) count++;
-    return count;
-  }, [activeFilters, showRecentOnly]);
+    return activeFilters.sourceIds.length + activeFilters.topics.length + (showRecentOnly ? 1 : 0) + (debouncedSearch ? 1 : 0);
+  }, [activeFilters.sourceIds.length, activeFilters.topics.length, debouncedSearch, showRecentOnly]);
+
+  const hasActiveFilters = activeFiltersCount > 0;
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
-      
-      {/* Header */}
-      <header className="bg-blue-600 text-white p-4 shadow-md">
-        <div className="container mx-auto flex justify-between items-center">
-          <div className="flex items-center">
-            <h1 className="text-2xl font-bold flex items-center">
-              <Globe className="mr-2" aria-hidden="true" />
-              Aggregatore di Notizie
-            </h1>
-            {/* Contatore di notizie trovate */}
-            {!loading && !error && (
-              <span className="ml-4 bg-blue-700 text-white px-3 py-1 rounded-full text-sm">
-                {filteredNews.length} notizie trovate
-              </span>
-            )}
+    <div className="min-h-screen bg-slate-100 text-slate-900">
+      <header className="border-b border-slate-200 bg-white shadow-sm">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 lg:px-6">
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                  <Globe className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-semibold tracking-tight">News Flow</h1>
+                  <p className="text-sm text-slate-500">Raccolta notizie con aggiornamenti schedulati, filtri server-side e tagging persistente.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 self-start md:self-auto">
+              <div className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-600">
+                {isConnected ? (
+                  <Wifi className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+                ) : (
+                  <WifiOff className="h-4 w-4 text-amber-600" aria-hidden="true" />
+                )}
+                <span>{isConnected ? 'Live attivo' : 'Live offline'}</span>
+              </div>
+
+              <NotificationCenter
+                notifications={notifications}
+                onRemoveNotification={removeNotification}
+                newArticlesCount={newArticlesCount}
+                onRefresh={() => loadNews({ page: 1, append: false, resetRealtime: true })}
+                isConnected={isConnected}
+              />
+
+              <button
+                type="button"
+                onClick={() => loadNews({ page: 1, append: false, resetRealtime: true })}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={loading}
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+                Aggiorna
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Indicatore WebSocket */}
-            <div className="flex items-center mr-2">
-              {websocket.isConnected ? (
-                <Wifi className="h-5 w-5 text-green-300" aria-hidden="true" title="Aggiornamenti in tempo reale attivi" />
-              ) : (
-                <WifiOff className="h-5 w-5 text-red-300" aria-hidden="true" title="Aggiornamenti in tempo reale non disponibili" />
+
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+              <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Cerca su titolo, contenuto o topic..."
+                className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+              />
+            </label>
+
+            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+              <span className="rounded-full bg-slate-100 px-3 py-1.5">
+                {meta?.totalGroups ? `${meta.totalGroups} gruppi` : `${news.length} gruppi visibili`}
+              </span>
+              {meta?.lastRefreshAt && (
+                <span className="rounded-full bg-slate-100 px-3 py-1.5">
+                  Aggiornato {new Date(meta.lastRefreshAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                </span>
               )}
             </div>
-            
-            {/* Centro notifiche */}
-            <NotificationCenter
-              notifications={websocket.notifications}
-              onRemoveNotification={websocket.removeNotification}
-              newArticlesCount={websocket.newArticlesCount}
-              onRefresh={loadNews}
-              isConnected={websocket.isConnected}
-            />
-            
-            <button 
-              onClick={loadNews} 
-              className="flex items-center bg-blue-700 hover:bg-blue-800 p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-white"
-              disabled={loading}
-              aria-label={loading ? 'Caricamento in corso...' : 'Aggiorna le notizie'}
-            >
-              <RefreshCw className={`mr-1 h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
-              {loading ? 'Caricamento...' : 'Aggiorna'}
-            </button>
           </div>
         </div>
       </header>
-      
-      {/* Filtri a chips con header collassabile */}
-      <div className="bg-white shadow-sm">
-        {/* Intestazione cliccabile dei filtri */}
-        <div 
-          className="container mx-auto p-4 cursor-pointer border-b border-gray-200"
-          onClick={toggleFiltersExpanded}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Filter className="h-5 w-5 text-gray-500" aria-hidden="true" />
-              <h2 className="text-lg font-medium text-gray-700">Filtri</h2>
+
+      <section className="mx-auto max-w-7xl px-4 py-4 lg:px-6">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <button
+            type="button"
+            onClick={() => setFiltersExpanded((value) => !value)}
+            className="flex w-full items-center justify-between px-5 py-4 text-left"
+          >
+            <div className="flex items-center gap-3">
+              <Filter className="h-5 w-5 text-slate-500" aria-hidden="true" />
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Filtri</h2>
+                <p className="text-sm text-slate-600">Fonte, topic e finestra temporale.</p>
+              </div>
               {activeFiltersCount > 0 && (
-                <span className="bg-blue-500 text-white text-xs font-semibold rounded-full px-2 py-1 ml-2">
+                <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-medium text-white">
                   {activeFiltersCount}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              {hasActiveFilters && (
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation(); // Impedisce a questo click di propagarsi all'header e causare il toggle
-                    resetFilters();
-                  }}
-                  className="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  disabled={loading || Boolean(error)}
-                  aria-label="Reimposta tutti i filtri"
+            {filtersExpanded ? <ChevronUp className="h-5 w-5 text-slate-500" /> : <ChevronDown className="h-5 w-5 text-slate-500" />}
+          </button>
+
+          {filtersExpanded && (
+            <div className="border-t border-slate-100 px-5 py-5">
+              <div className="mb-5 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowRecentOnly((value) => !value)}
+                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                    showRecentOnly ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
+                  }`}
                 >
-                  Reset
+                  <Clock3 className="h-4 w-4" aria-hidden="true" />
+                  Ultime {RECENT_HOURS} ore
                 </button>
-              )}
-              {filtersExpanded ? (
-                <ChevronUp className="h-5 w-5 text-gray-500" aria-hidden="true" />
-              ) : (
-                <ChevronDown className="h-5 w-5 text-gray-500" aria-hidden="true" />
-              )}
-            </div>
-          </div>
-        </div>
-        
-        {/* Contenuto dei filtri (collassabile) */}
-        <div className={`container mx-auto overflow-hidden transition-all duration-300 ${filtersExpanded ? 'max-h-screen p-4' : 'max-h-0 p-0'}`}>
-          {/* Filtro temporale */}
-          <div className="mb-3">
-            <button 
-              onClick={toggleRecentFilter}
-              className={`${
-                showRecentOnly
-                  ? 'bg-purple-500 text-white' 
-                  : 'bg-purple-100 text-purple-800 hover:bg-purple-200'
-              } px-3 py-1 rounded-full text-sm flex items-center transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500`}
-              disabled={loading || Boolean(error)}
-              aria-label={showRecentOnly ? 'Mostra tutte le notizie' : 'Mostra solo le notizie delle ultime 3 ore'}
-              aria-pressed={showRecentOnly}
-            >
-              <Clock className="h-4 w-4 mr-1" aria-hidden="true" />
-              Ultime 3 ore
-            </button>
-          </div>
-          
-          {/* Argomenti (Topics) */}
-          <div className="mb-3">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Argomenti:</h3>
-            <div className="flex flex-wrap gap-2">
-              {topics.map(topic => (
-                <button 
-                  key={topic}
-                  onClick={() => toggleFilter('topics', topic)}
-                  className={`${
-                    activeFilters.topics.some(t => t.toLowerCase() === topic.toLowerCase())
-                      ? 'bg-green-500 text-white' 
-                      : 'bg-green-100 text-green-800 hover:bg-green-200'
-                  } px-3 py-1 rounded-full text-sm flex items-center transition-colors focus:outline-none focus:ring-2 focus:ring-green-500`}
-                  disabled={loading || Boolean(error)}
-                  aria-label={
-                    activeFilters.topics.some(t => t.toLowerCase() === topic.toLowerCase())
-                      ? `Rimuovi filtro topic: ${topic}`
-                      : `Filtra per topic: ${topic}`
-                  }
-                  aria-pressed={activeFilters.topics.some(t => t.toLowerCase() === topic.toLowerCase())}
-                >
-                  {topic}
-                </button>
-              ))}
-            </div>
-          </div>
-          
-          {/* Fonti (Sources) */}
-          <div className="mb-3">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Fonti:</h3>
-            <div className="flex flex-wrap gap-2">
-              {sources.map(source => (
-                <button 
-                  key={source}
-                  onClick={() => toggleFilter('sources', source)}
-                  className={`${
-                    activeFilters.sources.includes(source)
-                      ? 'bg-blue-500 text-white' 
-                      : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
-                  } px-3 py-1 rounded-full text-sm flex items-center transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                  disabled={loading || Boolean(error)}
-                  aria-label={
-                    activeFilters.sources.includes(source)
-                      ? `Rimuovi filtro fonte: ${source}`
-                      : `Filtra per fonte: ${source}`
-                  }
-                  aria-pressed={activeFilters.sources.includes(source)}
-                >
-                  {source}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Contenuto principale */}
-      <main className="flex-grow overflow-auto p-4">
-        <div className="container mx-auto">
-          {loading && !loadingMore ? (
-            <div className="flex justify-center items-center h-64" role="status" aria-label="Caricamento notizie in corso">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-            </div>
-          ) : error ? (
-            <ErrorMessage 
-              error={error} 
-              onRetry={loadNews}
-            />
-          ) : filteredNews.length === 0 ? (
-            <div className="bg-white rounded-lg shadow p-8 text-center">
-              <h2 className="text-xl text-gray-600">Nessuna notizia trovata</h2>
-              <p className="mt-2 text-gray-500">Prova a modificare i filtri o aggiorna la pagina.</p>
-            </div>
-          ) : (
-            <>
-              {/* Griglia delle notizie caricate */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {visibleNews.map(group => (
-                  <NewsCard 
-                    key={group.id} 
-                    group={group}
-                    activeFilters={activeFilters}
-                    toggleFilter={toggleFilter}
-                  />
-                ))}
+
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                  >
+                    Reset filtri
+                  </button>
+                )}
               </div>
-              
-              {/* Elemento trigger per lo scroll infinito */}
-              {visibleNewsCount < filteredNews.length && (
-                <div 
-                  ref={loadMoreTriggerRef} 
-                  className="flex justify-center items-center py-8"
-                >
-                  {loadingMore ? (
-                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-                  ) : (
-                    <span className="text-gray-500 text-sm">Scorri per caricare altre notizie...</span>
-                  )}
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-700">Fonti</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {availableSources.map((source) => {
+                      const isActive = activeFilters.sourceIds.includes(source.id);
+                      return (
+                        <button
+                          key={source.id}
+                          type="button"
+                          onClick={() => toggleFilter('sourceIds', source.id)}
+                          className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                            isActive
+                              ? 'bg-sky-600 text-white'
+                              : 'bg-sky-100 text-sky-900 hover:bg-sky-200'
+                          }`}
+                        >
+                          {source.name} {source.count > 0 ? `(${source.count})` : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              )}
-              
-              {/* Messaggio quando non ci sono più notizie */}
-              {visibleNewsCount >= filteredNews.length && filteredNews.length > 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  Hai visualizzato tutte le notizie disponibili ({filteredNews.length})
+
+                <div>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-700">Topic</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {availableTopics.map((topic) => {
+                      const isActive = activeFilters.topics.includes(topic.topic);
+                      return (
+                        <button
+                          key={topic.topic}
+                          type="button"
+                          onClick={() => toggleFilter('topics', topic.topic)}
+                          className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                            isActive
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200'
+                          }`}
+                        >
+                          {topic.topic} ({topic.count})
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              )}
-            </>
+              </div>
+            </div>
           )}
         </div>
+      </section>
+
+      <main className="mx-auto max-w-7xl px-4 pb-10 lg:px-6">
+        {loading && !loadingMore ? (
+          <div className="flex h-64 items-center justify-center">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
+          </div>
+        ) : error ? (
+          <ErrorMessage error={error} onRetry={() => loadNews({ page: 1, append: false, resetRealtime: true })} />
+        ) : news.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+            <h2 className="text-xl font-semibold text-slate-800">Nessuna notizia trovata</h2>
+            <p className="mt-2 text-slate-500">Prova ad allargare i filtri oppure aggiorna il feed.</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {news.map((group) => (
+                <NewsCard
+                  key={group.id}
+                  group={group}
+                  activeFilters={activeFilters}
+                  toggleFilter={toggleFilter}
+                />
+              ))}
+            </div>
+
+            <div className="mt-8 flex justify-center">
+              {meta?.hasMore ? (
+                <button
+                  type="button"
+                  onClick={() => loadNews({ page: (meta?.page || 1) + 1, append: true, resetRealtime: false })}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={loadingMore}
+                >
+                  {loadingMore && <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                  {loadingMore ? 'Caricamento...' : 'Carica altri gruppi'}
+                </button>
+              ) : (
+                <p className="text-sm text-slate-500">Hai raggiunto la fine dei risultati disponibili.</p>
+              )}
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

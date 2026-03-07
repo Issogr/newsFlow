@@ -80,7 +80,7 @@ const NotificationCenter = ({
       {/* Icona della campanella con badge */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 right-4 z-50 p-2 rounded-full bg-white shadow-md hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="relative z-20 rounded-full bg-white p-2 shadow-md transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
         aria-label={`${totalCount} notifiche`}
         aria-expanded={isOpen}
         aria-controls="notification-menu"
@@ -105,7 +105,7 @@ const NotificationCenter = ({
       {isOpen && (
         <div
           id="notification-menu"
-          className="fixed top-16 right-4 z-50 w-80 max-h-[70vh] overflow-y-auto bg-white rounded-lg shadow-xl border border-gray-200"
+          className="absolute right-0 top-14 z-50 w-80 max-h-[70vh] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-xl"
           role="menu"
         >
           {/* Intestazione del menu */}
