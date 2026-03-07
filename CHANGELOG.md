@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.6
+
+- moved the live connection status from the header badge into the notifications panel
+- moved the refresh action into the site logo/title block and removed the separate refresh button
+- simplified the language selector by removing the extra label and keeping only the locale switch
+
 ## 2.2.5
 
 - added custom News Flow branding with a new site logo and favicon

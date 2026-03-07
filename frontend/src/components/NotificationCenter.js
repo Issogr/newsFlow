@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, X, Info, AlertCircle, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Bell, X, Info, AlertCircle, AlertTriangle, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 
 const NotificationCenter = ({ 
@@ -99,6 +99,15 @@ const NotificationCenter = ({
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
+          </div>
+
+          <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+            {isConnected ? (
+              <Wifi className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+            ) : (
+              <WifiOff className="h-4 w-4 text-amber-600" aria-hidden="true" />
+            )}
+            <span>{isConnected ? t('liveActive') : t('liveOffline')}</span>
           </div>
 
           {newArticlesCount > 0 && (

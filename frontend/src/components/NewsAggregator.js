@@ -3,8 +3,6 @@ import {
   Filter,
   RefreshCw,
   Search,
-  Wifi,
-  WifiOff,
   Clock3,
   ChevronDown,
   ChevronUp
@@ -245,20 +243,30 @@ const NewsAggregator = () => {
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 lg:px-6">
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div>
-              <div className="flex items-center gap-3">
-                <BrandMark className="h-11 w-11" />
+              <button
+                type="button"
+                onClick={() => loadNews({ page: 1, append: false, resetRealtime: true })}
+                className="group flex items-start gap-3 rounded-2xl text-left transition-opacity hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
+                aria-label={t('refresh')}
+                disabled={loading}
+              >
+                <div className="relative">
+                  <BrandMark className="h-11 w-11" />
+                  {loading && (
+                    <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-sm">
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin text-slate-700" aria-hidden="true" />
+                    </span>
+                  )}
+                </div>
                 <div>
                   <h1 className="text-2xl font-semibold tracking-tight">{t('pageTitle')}</h1>
                   <p className="text-sm text-slate-500">{t('pageSubtitle')}</p>
                 </div>
-              </div>
+              </button>
             </div>
 
             <div className="flex items-center gap-3 self-start md:self-auto">
               <div className="flex items-center rounded-full border border-slate-200 bg-white p-1 shadow-sm">
-                <span className="px-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  {t('localeLabel')}
-                </span>
                 <button
                   type="button"
                   onClick={() => setLocale('it')}
@@ -281,15 +289,6 @@ const NewsAggregator = () => {
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-600">
-                {isConnected ? (
-                  <Wifi className="h-4 w-4 text-emerald-600" aria-hidden="true" />
-                ) : (
-                  <WifiOff className="h-4 w-4 text-amber-600" aria-hidden="true" />
-                )}
-                <span>{isConnected ? t('liveActive') : t('liveOffline')}</span>
-              </div>
-
               <NotificationCenter
                 notifications={notifications}
                 onRemoveNotification={removeNotification}
@@ -299,16 +298,6 @@ const NewsAggregator = () => {
                 locale={dateLocale}
                 t={t}
               />
-
-              <button
-                type="button"
-                onClick={() => loadNews({ page: 1, append: false, resetRealtime: true })}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={loading}
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
-                {t('refresh')}
-              </button>
             </div>
           </div>
 
