@@ -131,7 +131,7 @@ async function parseFeed(source) {
         content: sanitizeHtml(item.contentEncoded || item.content || ''),
         pubDate: normalizeDate(item.pubDate || item.dcdate || item.isoDate),
         source: source.name,
-        sourceId: source.subId || source.id,
+        sourceId: source.id,
         url: item.link || '',
         image: getImageUrl(item),
         author: sanitizeHtml(item.creator || item.author || ''),

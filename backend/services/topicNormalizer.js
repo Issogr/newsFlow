@@ -40,6 +40,15 @@ const KEYWORD_TOPICS = {
   Spettacolo: ['attore', 'attrice', 'serie tv', 'box office', 'album', 'sanremo', 'concerto']
 };
 
+const BLOCKED_TOPICS = new Set([
+  'copertina',
+  'homepage',
+  'home page',
+  'topnews',
+  'top news',
+  'rss'
+]);
+
 function cleanTopicValue(topic) {
   return String(topic || '')
     .normalize('NFD')
@@ -52,7 +61,7 @@ function cleanTopicValue(topic) {
 
 function formatTopic(topic) {
   const cleaned = cleanTopicValue(topic);
-  if (!cleaned) {
+  if (!isMeaningfulTopic(cleaned)) {
     return null;
   }
 
@@ -66,7 +75,7 @@ function formatTopic(topic) {
 
 function normalizeTopic(topic) {
   const cleaned = cleanTopicValue(topic);
-  if (!cleaned) {
+  if (!isMeaningfulTopic(cleaned)) {
     return null;
   }
 
@@ -77,6 +86,24 @@ function normalizeTopic(topic) {
   }
 
   return formatTopic(cleaned);
+}
+
+function isMeaningfulTopic(topic) {
+  const cleaned = cleanTopicValue(topic);
+
+  if (!cleaned || cleaned.length < 2) {
+    return false;
+  }
+
+  if (/^\d/.test(cleaned)) {
+    return false;
+  }
+
+  if (BLOCKED_TOPICS.has(cleaned)) {
+    return false;
+  }
+
+  return true;
 }
 
 function removeDuplicates(topics) {
@@ -146,6 +173,7 @@ function extractTopics(article = {}, rawTopics = []) {
 module.exports = {
   CANONICAL_TOPICS,
   cleanTopicValue,
+  isMeaningfulTopic,
   formatTopic,
   normalizeTopic,
   removeDuplicates,

@@ -2,11 +2,52 @@ const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 const logger = require('../utils/logger');
+const configuredSources = require('../config/newsSources');
+const topicNormalizer = require('./topicNormalizer');
 
 const DATA_DIR = path.join(__dirname, '../data');
 const DB_PATH = process.env.NEWS_DB_PATH || path.join(DATA_DIR, 'news.db');
 
 let db;
+
+const configuredSourceById = new Map(configuredSources.map((source) => [source.id, source]));
+
+function canonicalizeSourceId(sourceId, sourceName) {
+  if (configuredSourceById.has(sourceId)) {
+    return sourceId;
+  }
+
+  const matchedSource = configuredSources.find((source) => {
+    return source.id === sourceId
+      || String(sourceId || '').startsWith(`${source.id}-`)
+      || source.name === sourceName;
+  });
+
+  return matchedSource?.id || sourceId;
+}
+
+function canonicalizeSourceName(sourceId, sourceName) {
+  const canonicalId = canonicalizeSourceId(sourceId, sourceName);
+  return configuredSourceById.get(canonicalId)?.name || sourceName;
+}
+
+function getSourceFilterClauses(sourceIds = []) {
+  const clauses = [];
+  const params = [];
+
+  sourceIds.forEach((sourceId) => {
+    const canonicalId = canonicalizeSourceId(sourceId);
+    const canonicalName = configuredSourceById.get(canonicalId)?.name;
+
+    clauses.push('(a.source_id = ? OR a.source_id LIKE ? OR a.source_name = ?)');
+    params.push(canonicalId, `${canonicalId}-%`, canonicalName || canonicalId);
+  });
+
+  return {
+    clause: clauses.join(' OR '),
+    params
+  };
+}
 
 function ensureDatabaseDirectory() {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
@@ -125,8 +166,9 @@ function buildArticleQuery(filters = {}) {
   }
 
   if (state.sourceIds.length > 0) {
-    where.push(`a.source_id IN (${state.sourceIds.map(() => '?').join(', ')})`);
-    params.push(...state.sourceIds);
+    const sourceFilter = getSourceFilterClauses(state.sourceIds);
+    where.push(`(${sourceFilter.clause})`);
+    params.push(...sourceFilter.params);
   }
 
   if (state.topics.length > 0) {
@@ -198,7 +240,9 @@ function hydrateArticleRows(rows) {
 
   return rows.map((row) => ({
     ...row,
-    topics: topicMap.get(row.id) || []
+    sourceId: canonicalizeSourceId(row.sourceId, row.source),
+    source: canonicalizeSourceName(row.sourceId, row.source),
+    topics: (topicMap.get(row.id) || []).filter((topic) => topicNormalizer.isMeaningfulTopic(topic))
   }));
 }
 
@@ -298,11 +342,16 @@ function mergeTopicsForArticle(articleId, topics = [], options = {}) {
   `);
 
   const transaction = database.transaction((articleIdentifier, topicList) => {
-    topicList.forEach((topic) => {
+    topicList
+      .filter((topic) => topicNormalizer.isMeaningfulTopic(topic))
+      .forEach((topic) => {
       insertStmt.run(articleIdentifier, topic, options.isAiGenerated ? 1 : 0);
-    });
+      });
 
-    return selectStmt.all(articleIdentifier).map((row) => row.topic);
+    return selectStmt
+      .all(articleIdentifier)
+      .map((row) => row.topic)
+      .filter((topic) => topicNormalizer.isMeaningfulTopic(topic));
   });
 
   return transaction(articleId, topics);
@@ -318,7 +367,9 @@ function getTopicsForArticle(articleId) {
     FROM article_topics
     WHERE article_id = ?
     ORDER BY topic ASC
-  `).all(articleId).map((row) => row.topic);
+  `).all(articleId)
+    .map((row) => row.topic)
+    .filter((topic) => topicNormalizer.isMeaningfulTopic(topic));
 }
 
 function getArticles(filters = {}) {
@@ -366,15 +417,27 @@ function getSourceStats(configuredSources = []) {
     ORDER BY count DESC, name ASC
   `).all();
 
-  const countMap = new Map(rows.map((row) => [row.id, row]));
+  const aggregatedRows = rows.reduce((map, row) => {
+    const canonicalId = canonicalizeSourceId(row.id, row.name);
+    const current = map.get(canonicalId) || {
+      id: canonicalId,
+      name: canonicalizeSourceName(row.id, row.name),
+      count: 0
+    };
+
+    current.count += row.count;
+    map.set(canonicalId, current);
+    return map;
+  }, new Map());
+
   const merged = configuredSources.map((source) => ({
     id: source.id,
     name: source.name,
     language: source.language,
-    count: countMap.get(source.id)?.count || 0
+    count: aggregatedRows.get(source.id)?.count || 0
   }));
 
-  rows.forEach((row) => {
+  aggregatedRows.forEach((row) => {
     if (!configuredSources.some((source) => source.id === row.id)) {
       merged.push({ ...row, language: null });
     }
@@ -384,13 +447,16 @@ function getSourceStats(configuredSources = []) {
 }
 
 function getTopicStats(limit = 20) {
-  return getDb().prepare(`
+  const rows = getDb().prepare(`
     SELECT topic, COUNT(*) AS count
     FROM article_topics
     GROUP BY topic
     ORDER BY count DESC, topic ASC
-    LIMIT ?
-  `).all(limit);
+  `).all();
+
+  return rows
+    .filter((row) => topicNormalizer.isMeaningfulTopic(row.topic))
+    .slice(0, limit);
 }
 
 function createIngestionRun() {
