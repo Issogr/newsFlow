@@ -1,11 +1,58 @@
 import React, { useState } from 'react';
-import { KeyRound, LogIn, UserPlus } from 'lucide-react';
+import { LogIn, UserPlus } from 'lucide-react';
 import BrandMark from './BrandMark';
 
 const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
   const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+
+  const getFriendlyError = () => {
+    if (!error) {
+      return '';
+    }
+
+    const apiCode = error.response?.data?.error?.code;
+    const apiMessage = error.response?.data?.error?.message;
+    const status = error.response?.status;
+
+    if (error.code === 'ECONNABORTED') {
+      return t('authErrorTimeout');
+    }
+
+    if (!error.response) {
+      return t('authErrorNetwork');
+    }
+
+    if (apiCode === 'USER_ALREADY_EXISTS' || status === 409 || apiMessage === 'Username already exists') {
+      return t('authErrorUsernameTaken');
+    }
+
+    if (apiCode === 'INVALID_USERNAME' || status === 400 || apiMessage === 'Username must contain at least 3 characters') {
+      return t('authErrorInvalidUsername');
+    }
+
+    if (apiCode === 'UNAUTHORIZED' || status === 401 || apiMessage === 'Invalid username or password') {
+      return t('authErrorInvalidCredentials');
+    }
+
+    if (status === 429) {
+      return t('authErrorRateLimit');
+    }
+
+    if (status === 503) {
+      return t('authErrorUnavailable');
+    }
+
+    if (status === 500) {
+      return t('authErrorServer');
+    }
+
+    return apiMessage || t('authErrorGeneric');
+  };
+
+  const rawErrorMessage = error?.message || '';
+  const friendlyError = getFriendlyError();
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -72,7 +119,10 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
 
           {error && (
             <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error.message}
+              <p className="font-medium">{friendlyError}</p>
+              {rawErrorMessage && rawErrorMessage !== friendlyError && (
+                <p className="mt-1 text-xs text-red-600">{rawErrorMessage}</p>
+              )}
             </div>
           )}
 
@@ -85,11 +135,6 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
             {mode === 'login' ? t('loginAction') : t('registerAction')}
           </button>
         </form>
-
-        <div className="mt-6 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-          <KeyRound className="h-4 w-4 shrink-0 text-slate-400" />
-          <span>{t('authTitle')}</span>
-        </div>
       </div>
     </div>
   );
