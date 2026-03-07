@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.10
+
+- allowed local-network origins such as `.local` hostnames and LAN IPs so self-hosted access works from other devices
+
 ## 3.0.9
 
 - renamed source exclusion settings from hidden to excluded across the API and frontend to keep the terminology consistent

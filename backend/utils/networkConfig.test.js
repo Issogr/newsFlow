@@ -28,7 +28,19 @@ describe('networkConfig utils', () => {
     expect(isOriginAllowed('https://any.example', ['*'])).toBe(true);
   });
 
+  test('isOriginAllowed accepts local network origins with the special token', () => {
+    expect(isOriginAllowed('http://fedora.local', ['@local-network'])).toBe(true);
+    expect(isOriginAllowed('http://192.168.1.188', ['@local-network'])).toBe(true);
+    expect(isOriginAllowed('http://10.0.0.25:8080', ['@local-network'])).toBe(true);
+  });
+
+  test('isOriginAllowed supports wildcard origin entries', () => {
+    expect(isOriginAllowed('http://fedora.local', ['http://*.local'])).toBe(true);
+    expect(isOriginAllowed('https://app.example.com', ['https://*.example.com'])).toBe(true);
+  });
+
   test('isOriginAllowed rejects non-whitelisted origins', () => {
     expect(isOriginAllowed('https://denied.example', ['https://allowed.example'])).toBe(false);
+    expect(isOriginAllowed('https://public.example', ['@local-network'])).toBe(false);
   });
 });

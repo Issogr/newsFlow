@@ -14,6 +14,7 @@ module.exports = [
       sourceType: 'commonjs',
       globals: {
         Buffer: 'readonly',
+        URL: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
         afterAll: 'readonly',
