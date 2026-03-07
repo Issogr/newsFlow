@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const apiRoutes = require('./routes/api');
 const logger = require('./utils/logger');
+const database = require('./services/database');
 const websocketService = require('./services/websocketService');
 const newsService = require('./services/newsAggregator');
 const { errorMiddleware, createError } = require('./utils/errorHandler');
@@ -111,6 +112,7 @@ app.use('/api', apiRoutes);
 
 app.get('/health', (req, res) => {
   const wsStats = websocketService.getStatistics();
+  const dbStatus = database.getWriteAccessStatus();
 
   res.status(200).json({
     status: 'ok',
@@ -120,6 +122,10 @@ app.get('/health', (req, res) => {
     websocket: {
       active: wsStats.activeConnectionsCount,
       total: wsStats.totalConnections
+    },
+    database: {
+      writable: dbStatus.writable,
+      checkedAt: dbStatus.checkedAt
     }
   });
 });
@@ -131,6 +137,14 @@ app.use((req, res, next) => {
 app.use(errorMiddleware);
 
 const server = http.createServer(app);
+try {
+  const dbWriteStatus = database.verifyWriteAccess();
+  logger.info(`Database write check passed at ${dbWriteStatus.checkedAt}`);
+} catch (error) {
+  logger.error(`Database write check failed: ${error.message}`);
+  process.exit(1);
+}
+
 websocketService.initialize(server);
 newsService.startScheduler();
 

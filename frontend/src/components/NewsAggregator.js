@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Cog,
   Filter,
+  LogOut,
   RefreshCw,
   Search,
   Clock3,
@@ -13,11 +15,11 @@ import NewsCard from './NewsCard';
 import NotificationCenter from './NotificationCenter';
 import ReaderPanel from './ReaderPanel';
 import BrandMark from './BrandMark';
+import SettingsPanel from './SettingsPanel';
 import useWebSocket from '../hooks/useWebSocket';
 import { createTranslator, detectBrowserLocale, getDateLocale } from '../i18n';
 
 const PAGE_SIZE = 12;
-const RECENT_HOURS = 3;
 const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 
@@ -45,9 +47,13 @@ const appendUniqueGroups = (currentGroups, incomingGroups) => {
   return [...merged.values()];
 };
 
-const NewsAggregator = () => {
+const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
+  const preferredLanguage = currentUser?.settings?.defaultLanguage;
   const [locale, setLocale] = useState(() => {
     const savedLocale = window.localStorage.getItem('news-aggregator-locale');
+    if (preferredLanguage === 'it' || preferredLanguage === 'en') {
+      return preferredLanguage;
+    }
     return savedLocale === 'it' || savedLocale === 'en' ? savedLocale : detectBrowserLocale();
   });
   const t = useMemo(() => createTranslator(locale), [locale]);
@@ -75,6 +81,7 @@ const NewsAggregator = () => {
   const [news, setNews] = useState([]);
   const [meta, setMeta] = useState(null);
   const [availableSources, setAvailableSources] = useState([]);
+  const [sourceCatalog, setSourceCatalog] = useState([]);
   const [availableTopics, setAvailableTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -85,11 +92,31 @@ const NewsAggregator = () => {
   const [showRecentOnly, setShowRecentOnly] = useState(false);
   const [filtersExpanded, setFiltersExpanded] = useState(true);
   const [readerState, setReaderState] = useState({ isOpen: false, group: null, articleId: null });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const recentHours = Math.max(1, Math.min(Number(currentUser?.settings?.recentHours) || 3, 3));
+  const hiddenSourceIds = useMemo(() => currentUser?.settings?.hiddenSourceIds || [], [currentUser?.settings?.hiddenSourceIds]);
+  const hiddenSourcesInitializedRef = useRef(false);
+  const visibleAvailableSources = useMemo(() => {
+    return availableSources.filter((source) => !hiddenSourceIds.includes(source.id));
+  }, [availableSources, hiddenSourceIds]);
 
   useEffect(() => {
     window.localStorage.setItem('news-aggregator-locale', locale);
     document.documentElement.lang = locale;
   }, [locale]);
+
+  useEffect(() => {
+    if (preferredLanguage === 'it' || preferredLanguage === 'en') {
+      setLocale(preferredLanguage);
+    }
+  }, [preferredLanguage]);
+
+  useEffect(() => {
+    setActiveFilters((current) => ({
+      ...current,
+      sourceIds: current.sourceIds.filter((sourceId) => !hiddenSourceIds.includes(sourceId))
+    }));
+  }, [hiddenSourceIds]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -111,12 +138,13 @@ const NewsAggregator = () => {
         search: debouncedSearch,
         sourceIds: activeFilters.sourceIds,
         topics: activeFilters.topics,
-        recentHours: showRecentOnly ? RECENT_HOURS : null
+        recentHours: showRecentOnly ? recentHours : null
       });
 
       setNews((current) => append ? appendUniqueGroups(current, response.items || []) : (response.items || []));
       setMeta(response.meta || null);
       setAvailableSources(response.filters?.sources || []);
+      setSourceCatalog(response.filters?.sourceCatalog || []);
       setAvailableTopics(response.filters?.topics || []);
 
       if (resetRealtime) {
@@ -127,7 +155,16 @@ const NewsAggregator = () => {
     } finally {
       setBusyState(false);
     }
-  }, [activeFilters.sourceIds, activeFilters.topics, debouncedSearch, resetNewArticlesCount, showRecentOnly]);
+  }, [activeFilters.sourceIds, activeFilters.topics, debouncedSearch, recentHours, resetNewArticlesCount, showRecentOnly]);
+
+  useEffect(() => {
+    if (!hiddenSourcesInitializedRef.current) {
+      hiddenSourcesInitializedRef.current = true;
+      return;
+    }
+
+    loadNews({ page: 1, append: false, resetRealtime: false });
+  }, [hiddenSourceIds, loadNews]);
 
   useEffect(() => {
     loadNews({ page: 1, append: false, resetRealtime: false });
@@ -298,6 +335,24 @@ const NewsAggregator = () => {
                 locale={dateLocale}
                 t={t}
               />
+
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+              >
+                <Cog className="h-4 w-4" />
+                {t('settings')}
+              </button>
+
+              <button
+                type="button"
+                onClick={onLogout}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+              >
+                <LogOut className="h-4 w-4" />
+                {t('logout')}
+              </button>
             </div>
           </div>
 
@@ -362,7 +417,7 @@ const NewsAggregator = () => {
                   }`}
                 >
                   <Clock3 className="h-4 w-4" aria-hidden="true" />
-                  {t('latestHours', { hours: RECENT_HOURS })}
+                  {t('latestHours', { hours: recentHours })}
                 </button>
 
                 {hasActiveFilters && (
@@ -380,7 +435,7 @@ const NewsAggregator = () => {
                 <div>
                   <h3 className="mb-3 text-sm font-semibold text-slate-700">{t('sources')}</h3>
                   <div className="flex flex-wrap gap-2">
-                    {availableSources.map((source) => {
+                    {visibleAvailableSources.map((source) => {
                       const isActive = activeFilters.sourceIds.includes(source.id);
                       return (
                         <button
@@ -482,6 +537,16 @@ const NewsAggregator = () => {
           locale={locale}
           t={t}
           onClose={closeReader}
+        />
+      )}
+
+      {settingsOpen && (
+        <SettingsPanel
+          t={t}
+          currentUser={currentUser}
+          availableSources={sourceCatalog}
+          onClose={() => setSettingsOpen(false)}
+          onUserUpdate={onUserUpdate}
         />
       )}
     </div>

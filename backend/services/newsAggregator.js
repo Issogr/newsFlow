@@ -46,6 +46,44 @@ function expandConfiguredSources() {
   });
 }
 
+function expandUserSources(userSources = []) {
+  return userSources
+    .filter((source) => source?.isActive !== false)
+    .map((source) => ({
+      id: source.id,
+      name: source.name,
+      url: source.url,
+      type: 'rss',
+      language: source.language || 'it',
+      ownerUserId: source.userId
+    }));
+}
+
+function getAvailableSources(userContext = {}) {
+  const userSources = userContext.userId ? database.listUserSources(userContext.userId) : [];
+  return [
+    ...newsSources,
+    ...userSources.map((source) => ({
+      id: source.id,
+      name: source.name,
+      language: source.language,
+      type: 'rss',
+      url: source.url
+    }))
+  ];
+}
+
+function getQueryOptions(userContext = {}) {
+  return {
+    userId: userContext.userId || null,
+    maxArticleAgeHours: Math.min(
+      ARTICLE_RETENTION_HOURS,
+      Number.isFinite(userContext.articleRetentionHours) ? userContext.articleRetentionHours : ARTICLE_RETENTION_HOURS
+    ),
+    hiddenSourceIds: Array.isArray(userContext.hiddenSourceIds) ? userContext.hiddenSourceIds : []
+  };
+}
+
 function simplifyText(text) {
   return String(text || '')
     .toLowerCase()
@@ -189,7 +227,10 @@ async function ingestAllNews(options = {}) {
     try {
       purgeExpiredArticles();
 
-      const sourceConfigs = expandConfiguredSources();
+      const sourceConfigs = [
+        ...expandConfiguredSources(),
+        ...expandUserSources(database.listAllActiveUserSources())
+      ];
       const results = await Promise.allSettled(sourceConfigs.map((source) => rssParser.parseFeed(source)));
       const fetchedArticles = results
         .filter((result) => result.status === 'fulfilled')
@@ -206,7 +247,7 @@ async function ingestAllNews(options = {}) {
         asyncProcessor.enqueueArticle(article);
       });
 
-      const insertedArticles = database.getArticlesByIds(upsertResult.insertedIds);
+      const insertedArticles = database.getArticlesByIds(upsertResult.insertedIds, { userId: null, maxArticleAgeHours: ARTICLE_RETENTION_HOURS });
       const insertedGroups = groupSimilarNews(insertedArticles);
 
       if (broadcast && insertedGroups.length > 0) {
@@ -257,8 +298,11 @@ async function ensureSeedData() {
   await ingestAllNews({ force: true, broadcast: false });
 }
 
-async function getNewsFeed(filters = {}) {
+async function getNewsFeed(filters = {}, userContext = {}) {
   await ensureSeedData();
+
+  const queryOptions = getQueryOptions(userContext);
+  const availableSources = getAvailableSources(userContext);
 
   const page = Math.max(1, Number(filters.page) || 1);
   const pageSize = Math.max(1, Math.min(Number(filters.pageSize) || 12, 30));
@@ -278,7 +322,7 @@ async function getNewsFeed(filters = {}) {
       recentHours: filters.recentHours,
       limit: batchSize,
       offset: articleOffset
-    });
+    }, queryOptions);
 
     if (batch.length === 0) {
       exhausted = true;
@@ -310,35 +354,41 @@ async function getNewsFeed(filters = {}) {
       ingestion: latestIngestion
     },
     filters: {
-      sources: database.getSourceStats(newsSources),
+      sources: database.getSourceStats(availableSources, queryOptions),
+      sourceCatalog: availableSources.map((source) => ({
+        id: source.id,
+        name: source.name,
+        language: source.language || null
+      })),
       topics: database.getTopicStatsByFilters({
         search: filters.search,
         sourceIds: filters.sourceIds,
         recentHours: filters.recentHours
-      }, 18)
+      }, 18, queryOptions)
     }
   };
 }
 
-async function searchNews(query, filters = {}) {
+async function searchNews(query, filters = {}, userContext = {}) {
   if (!query || String(query).trim().length < 2) {
     throw createError(400, 'Il termine di ricerca deve contenere almeno 2 caratteri', 'INVALID_SEARCH_QUERY');
   }
 
-  return getNewsFeed({ ...filters, search: query });
+  return getNewsFeed({ ...filters, search: query }, userContext);
 }
 
-async function getHotTopics(limit = 12) {
+async function getHotTopics(limit = 12, userContext = {}) {
   await ensureSeedData();
-  return database.getTopicStats(limit);
+  return database.getTopicStats(limit, getQueryOptions(userContext));
 }
 
-function getSources() {
-  return database.getSourceStats(newsSources);
+function getSources(userContext = {}) {
+  return database.getSourceStats(getAvailableSources(userContext), getQueryOptions(userContext));
 }
 
-function getArticleTopics(articleId) {
-  return database.getTopicsForArticle(articleId);
+function getArticleTopics(articleId, userContext = {}) {
+  const article = database.getArticleById(articleId, getQueryOptions(userContext));
+  return article ? database.getTopicsForArticle(articleId) : [];
 }
 
 async function forceRefresh() {

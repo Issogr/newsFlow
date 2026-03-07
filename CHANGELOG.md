@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.0.1
+
+- changed personal source preferences from default selected sources to hidden sources excluded from each user feed
+- hidden sources now disappear from each user's source filters while remaining restorable from personal settings
+- added a database write-permission startup check and database status reporting in the health endpoint
+
+## 3.0.0
+
+- added user registration and login with optional passwords
+- added per-user sessions, private settings, and personal default language selection
+- added per-user hidden sources, lower personal retention, and lower quick-filter window settings
+- added personal RSS source management with feed validation and private ingestion
+
 ## 2.2.7
 
 - added configurable automatic cleanup for articles and reader cache older than 24 hours

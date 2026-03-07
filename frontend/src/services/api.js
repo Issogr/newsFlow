@@ -1,11 +1,24 @@
 import axios from 'axios';
 
+let authToken = window.localStorage.getItem('news-aggregator-token') || '';
+
 const api = axios.create({
   baseURL: '/api',
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json'
   }
+});
+
+api.interceptors.request.use((config) => {
+  const nextConfig = { ...config };
+  nextConfig.headers = nextConfig.headers || {};
+
+  if (authToken) {
+    nextConfig.headers.Authorization = `Bearer ${authToken}`;
+  }
+
+  return nextConfig;
 });
 
 api.interceptors.response.use(
@@ -23,6 +36,52 @@ api.interceptors.response.use(
   }
 );
 
+export const setAuthToken = (token) => {
+  authToken = token || '';
+  if (authToken) {
+    window.localStorage.setItem('news-aggregator-token', authToken);
+  } else {
+    window.localStorage.removeItem('news-aggregator-token');
+  }
+};
+
+export const getAuthToken = () => authToken;
+
+export const registerUser = async ({ username, password }) => {
+  const response = await api.post('/auth/register', { username, password });
+  return response.data;
+};
+
+export const loginUser = async ({ username, password }) => {
+  const response = await api.post('/auth/login', { username, password });
+  return response.data;
+};
+
+export const logoutUser = async () => {
+  const response = await api.post('/auth/logout');
+  return response.data;
+};
+
+export const fetchCurrentUser = async () => {
+  const response = await api.get('/me');
+  return response.data;
+};
+
+export const updateUserSettings = async (payload) => {
+  const response = await api.patch('/me/settings', payload);
+  return response.data;
+};
+
+export const addUserSource = async (payload) => {
+  const response = await api.post('/me/sources', payload);
+  return response.data;
+};
+
+export const deleteUserSource = async (sourceId) => {
+  const response = await api.delete(`/me/sources/${sourceId}`);
+  return response.data;
+};
+
 export const fetchNews = async ({
   page = 1,
   pageSize = 12,
@@ -31,10 +90,7 @@ export const fetchNews = async ({
   topics = [],
   recentHours = null
 } = {}) => {
-  const params = {
-    page,
-    pageSize
-  };
+  const params = { page, pageSize };
 
   if (search?.trim()) {
     params.search = search.trim();
@@ -65,6 +121,15 @@ export const fetchReaderArticle = async (articleId, { refresh = false } = {}) =>
 };
 
 const apiService = {
+  setAuthToken,
+  getAuthToken,
+  registerUser,
+  loginUser,
+  logoutUser,
+  fetchCurrentUser,
+  updateUserSettings,
+  addUserSource,
+  deleteUserSource,
   fetchNews,
   fetchReaderArticle
 };

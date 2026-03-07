@@ -288,7 +288,11 @@ async function fetchReaderPayload(article) {
 }
 
 async function getReaderArticle(articleId, options = {}) {
-  const article = database.getArticleById(articleId);
+  const queryOptions = {
+    userId: options.userId || null,
+    maxArticleAgeHours: options.maxArticleAgeHours || null
+  };
+  const article = database.getArticleById(articleId, queryOptions);
   if (!article) {
     throw createError(404, 'Article not found.', 'RESOURCE_NOT_FOUND');
   }

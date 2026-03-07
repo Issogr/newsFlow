@@ -136,6 +136,7 @@ async function parseFeed(source) {
         image: getImageUrl(item),
         author: sanitizeHtml(item.creator || item.author || ''),
         language: source.language || 'it',
+        ownerUserId: source.ownerUserId || null,
         rawTopics: Array.isArray(item.categories)
           ? item.categories.map((topic) => sanitizeHtml(topic)).filter(Boolean)
           : []
@@ -157,6 +158,14 @@ setInterval(() => {
 
 module.exports = {
   parseFeed,
+  validateFeedUrl: async (url) => {
+    const xml = await fetchFeedXml(url);
+    const feed = await parser.parseString(xml);
+    return {
+      title: sanitizeHtml(feed?.title || ''),
+      itemCount: Array.isArray(feed?.items) ? feed.items.length : 0
+    };
+  },
   _buildArticleId: buildArticleId,
   _normalizeDate: normalizeDate
 };

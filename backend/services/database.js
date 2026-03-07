@@ -7,9 +7,10 @@ const topicNormalizer = require('./topicNormalizer');
 
 const DATA_DIR = path.join(__dirname, '../data');
 const DB_PATH = process.env.NEWS_DB_PATH || path.join(DATA_DIR, 'news.db');
-const LATEST_MIGRATION_VERSION = 2;
+const LATEST_MIGRATION_VERSION = 3;
 
 let db;
+let lastWriteCheckAt = null;
 
 const configuredSourceById = new Map(configuredSources.map((source) => [source.id, source]));
 
@@ -50,6 +51,47 @@ function getSourceFilterClauses(sourceIds = []) {
   };
 }
 
+function getSourceExclusionClause(sourceIds = []) {
+  if (!Array.isArray(sourceIds) || sourceIds.length === 0) {
+    return null;
+  }
+
+  const sourceFilter = getSourceFilterClauses(sourceIds);
+  if (!sourceFilter.clause) {
+    return null;
+  }
+
+  return {
+    clause: `NOT (${sourceFilter.clause})`,
+    params: sourceFilter.params
+  };
+}
+
+function buildScopeFilter(options = {}, alias = 'a') {
+  if (options.userId) {
+    return {
+      clause: `(${alias}.owner_user_id IS NULL OR ${alias}.owner_user_id = ?)`,
+      params: [options.userId]
+    };
+  }
+
+  return {
+    clause: `${alias}.owner_user_id IS NULL`,
+    params: []
+  };
+}
+
+function buildRetentionFilter(options = {}, alias = 'a') {
+  if (!options.maxArticleAgeHours || !Number.isFinite(options.maxArticleAgeHours) || options.maxArticleAgeHours <= 0) {
+    return null;
+  }
+
+  return {
+    clause: `${alias}.published_at >= ?`,
+    params: [new Date(Date.now() - (options.maxArticleAgeHours * 60 * 60 * 1000)).toISOString()]
+  };
+}
+
 function ensureDatabaseDirectory() {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 }
@@ -73,12 +115,48 @@ function getDb() {
   return db;
 }
 
+function verifyWriteAccess() {
+  const database = getDb();
+  const probeValue = new Date().toISOString();
+  const writeProbe = database.prepare(`
+    INSERT INTO app_meta (key, value)
+    VALUES ('__write_check__', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `);
+  const rollbackError = new Error('__ROLLBACK_WRITE_CHECK__');
+
+  try {
+    database.transaction(() => {
+      writeProbe.run(probeValue);
+      throw rollbackError;
+    })();
+  } catch (error) {
+    if (error !== rollbackError) {
+      throw error;
+    }
+  }
+
+  lastWriteCheckAt = new Date().toISOString();
+  return {
+    writable: true,
+    checkedAt: lastWriteCheckAt
+  };
+}
+
+function getWriteAccessStatus() {
+  return {
+    writable: Boolean(lastWriteCheckAt),
+    checkedAt: lastWriteCheckAt
+  };
+}
+
 function initializeSchema(database) {
   database.exec(`
     CREATE TABLE IF NOT EXISTS articles (
       id TEXT PRIMARY KEY,
       source_id TEXT NOT NULL,
       source_name TEXT NOT NULL,
+      owner_user_id TEXT,
       title TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       content TEXT NOT NULL DEFAULT '',
@@ -121,6 +199,51 @@ function initializeSchema(database) {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions (user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions (expires_at);
+
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id TEXT PRIMARY KEY,
+      default_language TEXT NOT NULL DEFAULT 'auto',
+      article_retention_hours INTEGER NOT NULL DEFAULT 24,
+      recent_hours INTEGER NOT NULL DEFAULT 3,
+      default_source_ids TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_sources (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      url TEXT NOT NULL,
+      language TEXT NOT NULL DEFAULT 'it',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      validated_at TEXT,
+      UNIQUE(user_id, url),
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_sources_user_id ON user_sources (user_id);
 
     CREATE TABLE IF NOT EXISTS reader_cache (
       article_id TEXT PRIMARY KEY,
@@ -181,6 +304,12 @@ function runMigrations(database) {
   if (currentVersion < 2) {
     migrateToV2(database);
     currentVersion = 2;
+    setCurrentMigrationVersion(database, currentVersion);
+  }
+
+  if (currentVersion < 3) {
+    migrateToV3(database);
+    currentVersion = 3;
     setCurrentMigrationVersion(database, currentVersion);
   }
 }
@@ -270,6 +399,63 @@ function migrateToV2(database) {
   logger.info('DB migration v2 skipped: reader_cache.content_blocks already exists');
 }
 
+function migrateToV3(database) {
+  if (!columnExists(database, 'articles', 'owner_user_id')) {
+    database.exec('ALTER TABLE articles ADD COLUMN owner_user_id TEXT');
+  }
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_articles_owner_user_id ON articles (owner_user_id);
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions (user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions (expires_at);
+
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id TEXT PRIMARY KEY,
+      default_language TEXT NOT NULL DEFAULT 'auto',
+      article_retention_hours INTEGER NOT NULL DEFAULT 24,
+      recent_hours INTEGER NOT NULL DEFAULT 3,
+      default_source_ids TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_sources (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      url TEXT NOT NULL,
+      language TEXT NOT NULL DEFAULT 'it',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      validated_at TEXT,
+      UNIQUE(user_id, url),
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_sources_user_id ON user_sources (user_id);
+  `);
+
+  logger.info('Applied DB migration v3: added user accounts, sessions, settings, sources, and article ownership');
+}
+
 function buildFilterState(filters = {}) {
   return {
     search: typeof filters.search === 'string' ? filters.search.trim() : '',
@@ -297,12 +483,28 @@ function buildSearchQuery(search) {
   return tokens.map((token) => `${token}*`).join(' AND ');
 }
 
-function buildArticleQuery(filters = {}) {
+function buildArticleQuery(filters = {}, options = {}) {
   const state = buildFilterState(filters);
   const params = [];
   const joins = [];
   const where = [];
   const searchQuery = buildSearchQuery(state.search);
+  const scopeFilter = buildScopeFilter(options, 'a');
+  const retentionFilter = buildRetentionFilter(options, 'a');
+  const hiddenSourceFilter = getSourceExclusionClause(options.hiddenSourceIds || []);
+
+  where.push(scopeFilter.clause);
+  params.push(...scopeFilter.params);
+
+  if (retentionFilter) {
+    where.push(retentionFilter.clause);
+    params.push(...retentionFilter.params);
+  }
+
+  if (hiddenSourceFilter) {
+    where.push(hiddenSourceFilter.clause);
+    params.push(...hiddenSourceFilter.params);
+  }
 
   if (searchQuery) {
     joins.push('JOIN article_search ON article_search.article_id = a.id');
@@ -400,6 +602,7 @@ function upsertArticles(articles = []) {
       id,
       source_id,
       source_name,
+      owner_user_id,
       title,
       description,
       content,
@@ -410,10 +613,11 @@ function upsertArticles(articles = []) {
       published_at,
       created_at,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       source_id = excluded.source_id,
       source_name = excluded.source_name,
+      owner_user_id = excluded.owner_user_id,
       title = excluded.title,
       description = excluded.description,
       content = excluded.content,
@@ -441,6 +645,7 @@ function upsertArticles(articles = []) {
         article.id,
         article.sourceId,
         article.source,
+        article.ownerUserId || null,
         article.title,
         article.description || '',
         article.content || '',
@@ -517,24 +722,43 @@ function getTopicsForArticle(articleId) {
     .filter((topic) => topicNormalizer.isMeaningfulTopic(topic));
 }
 
-function getArticles(filters = {}) {
+function getArticles(filters = {}, options = {}) {
   const database = getDb();
-  const { sql, params } = buildArticleQuery(filters);
+  const { sql, params } = buildArticleQuery(filters, options);
   const rows = database.prepare(sql).all(...params);
   return hydrateArticleRows(rows);
 }
 
-function getArticleById(articleId) {
+function getArticleById(articleId, options = {}) {
   if (!articleId) {
     return null;
   }
 
-  return getArticlesByIds([articleId])[0] || null;
+  return getArticlesByIds([articleId], options)[0] || null;
 }
 
-function getArticlesByIds(articleIds = []) {
+function getArticlesByIds(articleIds = [], options = {}) {
   if (!Array.isArray(articleIds) || articleIds.length === 0) {
     return [];
+  }
+
+  const params = [...articleIds];
+  const where = [`a.id IN (${articleIds.map(() => '?').join(', ')})`];
+  const scopeFilter = buildScopeFilter(options, 'a');
+  const retentionFilter = buildRetentionFilter(options, 'a');
+  const hiddenSourceFilter = getSourceExclusionClause(options.hiddenSourceIds || []);
+
+  where.push(scopeFilter.clause);
+  params.push(...scopeFilter.params);
+
+  if (retentionFilter) {
+    where.push(retentionFilter.clause);
+    params.push(...retentionFilter.params);
+  }
+
+  if (hiddenSourceFilter) {
+    where.push(hiddenSourceFilter.clause);
+    params.push(...hiddenSourceFilter.params);
   }
 
   const rows = getDb().prepare(`
@@ -551,15 +775,35 @@ function getArticlesByIds(articleIds = []) {
       a.language,
       a.published_at AS pubDate
     FROM articles a
-    WHERE a.id IN (${articleIds.map(() => '?').join(', ')})
+    WHERE ${where.join(' AND ')}
     ORDER BY datetime(a.published_at) DESC, a.id DESC
-  `).all(...articleIds);
+  `).all(...params);
 
   return hydrateArticleRows(rows);
 }
 
-function countArticles() {
-  return getDb().prepare('SELECT COUNT(*) AS count FROM articles').get().count;
+function countArticles(options = {}) {
+  const scopeFilter = buildScopeFilter(options, 'articles');
+  const retentionFilter = buildRetentionFilter(options, 'articles');
+  const hiddenSourceFilter = getSourceExclusionClause(options.hiddenSourceIds || []);
+  const where = [scopeFilter.clause];
+  const params = [...scopeFilter.params];
+
+  if (retentionFilter) {
+    where.push(retentionFilter.clause);
+    params.push(...retentionFilter.params);
+  }
+
+  if (hiddenSourceFilter) {
+    where.push(hiddenSourceFilter.clause.replaceAll('a.', 'articles.'));
+    params.push(...hiddenSourceFilter.params);
+  }
+
+  return getDb().prepare(`
+    SELECT COUNT(*) AS count
+    FROM articles
+    WHERE ${where.join(' AND ')}
+  `).get(...params).count;
 }
 
 function deleteArticlesOlderThan(isoTimestamp) {
@@ -596,13 +840,30 @@ function deleteArticlesOlderThan(isoTimestamp) {
   return transaction(isoTimestamp);
 }
 
-function getSourceStats(configuredSources = []) {
+function getSourceStats(configuredSources = [], options = {}) {
+  const scopeFilter = buildScopeFilter(options, 'articles');
+  const retentionFilter = buildRetentionFilter(options, 'articles');
+  const hiddenSourceFilter = getSourceExclusionClause(options.hiddenSourceIds || []);
+  const where = [scopeFilter.clause];
+  const params = [...scopeFilter.params];
+
+  if (retentionFilter) {
+    where.push(retentionFilter.clause);
+    params.push(...retentionFilter.params);
+  }
+
+  if (hiddenSourceFilter) {
+    where.push(hiddenSourceFilter.clause.replaceAll('a.', 'articles.'));
+    params.push(...hiddenSourceFilter.params);
+  }
+
   const rows = getDb().prepare(`
     SELECT source_id AS id, source_name AS name, COUNT(*) AS count
     FROM articles
+    WHERE ${where.join(' AND ')}
     GROUP BY source_id, source_name
     ORDER BY count DESC, name ASC
-  `).all();
+  `).all(...params);
 
   const aggregatedRows = rows.reduce((map, row) => {
     const canonicalId = canonicalizeSourceId(row.id, row.name);
@@ -633,25 +894,59 @@ function getSourceStats(configuredSources = []) {
   return merged.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
-function getTopicStats(limit = 20) {
+function getTopicStats(limit = 20, options = {}) {
+  const scopeFilter = buildScopeFilter(options, 'a');
+  const retentionFilter = buildRetentionFilter(options, 'a');
+  const hiddenSourceFilter = getSourceExclusionClause(options.hiddenSourceIds || []);
+  const where = [scopeFilter.clause];
+  const params = [...scopeFilter.params];
+
+  if (retentionFilter) {
+    where.push(retentionFilter.clause);
+    params.push(...retentionFilter.params);
+  }
+
+  if (hiddenSourceFilter) {
+    where.push(hiddenSourceFilter.clause);
+    params.push(...hiddenSourceFilter.params);
+  }
+
   const rows = getDb().prepare(`
     SELECT topic, COUNT(*) AS count
     FROM article_topics
+    JOIN articles a ON a.id = article_topics.article_id
+    WHERE ${where.join(' AND ')}
     GROUP BY topic
     ORDER BY count DESC, topic ASC
-  `).all();
+  `).all(...params);
 
   return rows
     .filter((row) => topicNormalizer.isMeaningfulTopic(row.topic))
     .slice(0, limit);
 }
 
-function getTopicStatsByFilters(filters = {}, limit = 20) {
+function getTopicStatsByFilters(filters = {}, limit = 20, options = {}) {
   const state = buildFilterState(filters);
   const params = [];
   const joins = ['JOIN articles a ON a.id = article_topics.article_id'];
   const where = [];
   const searchQuery = buildSearchQuery(state.search);
+  const scopeFilter = buildScopeFilter(options, 'a');
+  const retentionFilter = buildRetentionFilter(options, 'a');
+  const hiddenSourceFilter = getSourceExclusionClause(options.hiddenSourceIds || []);
+
+  where.push(scopeFilter.clause);
+  params.push(...scopeFilter.params);
+
+  if (retentionFilter) {
+    where.push(retentionFilter.clause);
+    params.push(...retentionFilter.params);
+  }
+
+  if (hiddenSourceFilter) {
+    where.push(hiddenSourceFilter.clause);
+    params.push(...hiddenSourceFilter.params);
+  }
 
   if (searchQuery) {
     joins.push('JOIN article_search ON article_search.article_id = a.id');
@@ -809,6 +1104,218 @@ function upsertReaderCache(articleId, payload = {}) {
   );
 }
 
+function createUser(user = {}) {
+  getDb().prepare(`
+    INSERT INTO users (id, username, password_hash, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    user.id,
+    user.username,
+    user.passwordHash || null,
+    user.createdAt,
+    user.updatedAt
+  );
+}
+
+function findUserByUsername(username) {
+  if (!username) {
+    return null;
+  }
+
+  return getDb().prepare(`
+    SELECT id, username, password_hash AS passwordHash, created_at AS createdAt, updated_at AS updatedAt
+    FROM users
+    WHERE lower(username) = lower(?)
+  `).get(username);
+}
+
+function findUserById(userId) {
+  if (!userId) {
+    return null;
+  }
+
+  return getDb().prepare(`
+    SELECT id, username, password_hash AS passwordHash, created_at AS createdAt, updated_at AS updatedAt
+    FROM users
+    WHERE id = ?
+  `).get(userId);
+}
+
+function createUserSession(session = {}) {
+  getDb().prepare(`
+    INSERT INTO user_sessions (token_hash, user_id, created_at, expires_at)
+    VALUES (?, ?, ?, ?)
+  `).run(session.tokenHash, session.userId, session.createdAt, session.expiresAt);
+}
+
+function findSessionByTokenHash(tokenHash) {
+  if (!tokenHash) {
+    return null;
+  }
+
+  return getDb().prepare(`
+    SELECT user_sessions.token_hash AS tokenHash, user_sessions.user_id AS userId,
+           user_sessions.created_at AS createdAt, user_sessions.expires_at AS expiresAt,
+           users.username AS username
+    FROM user_sessions
+    JOIN users ON users.id = user_sessions.user_id
+    WHERE user_sessions.token_hash = ?
+  `).get(tokenHash);
+}
+
+function deleteSessionByTokenHash(tokenHash) {
+  if (!tokenHash) {
+    return 0;
+  }
+
+  return getDb().prepare(`
+    DELETE FROM user_sessions
+    WHERE token_hash = ?
+  `).run(tokenHash).changes;
+}
+
+function purgeExpiredSessions() {
+  return getDb().prepare(`
+    DELETE FROM user_sessions
+    WHERE expires_at < ?
+  `).run(new Date().toISOString()).changes;
+}
+
+function getUserSettings(userId) {
+  if (!userId) {
+    return null;
+  }
+
+  const row = getDb().prepare(`
+    SELECT user_id AS userId, default_language AS defaultLanguage,
+           article_retention_hours AS articleRetentionHours,
+           recent_hours AS recentHours,
+           default_source_ids AS hiddenSourceIds,
+           updated_at AS updatedAt
+    FROM user_settings
+    WHERE user_id = ?
+  `).get(userId);
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...row,
+    hiddenSourceIds: row.hiddenSourceIds ? JSON.parse(row.hiddenSourceIds) : []
+  };
+}
+
+function upsertUserSettings(userId, settings = {}) {
+  const now = new Date().toISOString();
+
+  getDb().prepare(`
+    INSERT INTO user_settings (
+      user_id,
+      default_language,
+      article_retention_hours,
+      recent_hours,
+      default_source_ids,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      default_language = excluded.default_language,
+      article_retention_hours = excluded.article_retention_hours,
+      recent_hours = excluded.recent_hours,
+      default_source_ids = excluded.default_source_ids,
+      updated_at = excluded.updated_at
+  `).run(
+    userId,
+    settings.defaultLanguage || 'auto',
+    settings.articleRetentionHours || 24,
+    settings.recentHours || 3,
+    JSON.stringify(settings.hiddenSourceIds || []),
+    now
+  );
+
+  return getUserSettings(userId);
+}
+
+function listUserSources(userId) {
+  if (!userId) {
+    return [];
+  }
+
+  return getDb().prepare(`
+    SELECT id, user_id AS userId, name, url, language,
+           is_active AS isActive, created_at AS createdAt,
+           updated_at AS updatedAt, validated_at AS validatedAt
+    FROM user_sources
+    WHERE user_id = ?
+    ORDER BY datetime(created_at) DESC, name ASC
+  `).all(userId).map((row) => ({
+    ...row,
+    isActive: Boolean(row.isActive)
+  }));
+}
+
+function listAllActiveUserSources() {
+  return getDb().prepare(`
+    SELECT id, user_id AS userId, name, url, language,
+           is_active AS isActive, created_at AS createdAt,
+           updated_at AS updatedAt, validated_at AS validatedAt
+    FROM user_sources
+    WHERE is_active = 1
+    ORDER BY datetime(created_at) DESC, name ASC
+  `).all().map((row) => ({
+    ...row,
+    isActive: Boolean(row.isActive)
+  }));
+}
+
+function createUserSource(source = {}) {
+  getDb().prepare(`
+    INSERT INTO user_sources (
+      id, user_id, name, url, language, is_active, created_at, updated_at, validated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    source.id,
+    source.userId,
+    source.name,
+    source.url,
+    source.language || 'it',
+    source.isActive ? 1 : 0,
+    source.createdAt,
+    source.updatedAt,
+    source.validatedAt || null
+  );
+}
+
+function deleteUserSource(userId, sourceId) {
+  if (!userId || !sourceId) {
+    return 0;
+  }
+
+  const database = getDb();
+  const transaction = database.transaction((ownerId, customSourceId) => {
+    const removed = database.prepare(`
+      DELETE FROM user_sources
+      WHERE user_id = ? AND id = ?
+    `).run(ownerId, customSourceId).changes;
+
+    database.prepare(`
+      DELETE FROM article_search
+      WHERE article_id IN (
+        SELECT id FROM articles WHERE owner_user_id = ? AND source_id = ?
+      )
+    `).run(ownerId, customSourceId);
+
+    database.prepare(`
+      DELETE FROM articles
+      WHERE owner_user_id = ? AND source_id = ?
+    `).run(ownerId, customSourceId);
+
+    return removed;
+  });
+
+  return transaction(userId, sourceId);
+}
+
 module.exports = {
   getDb,
   getArticles,
@@ -827,5 +1334,20 @@ module.exports = {
   getLatestIngestionRun,
   getReaderCache,
   upsertReaderCache,
+  createUser,
+  findUserByUsername,
+  findUserById,
+  createUserSession,
+  findSessionByTokenHash,
+  deleteSessionByTokenHash,
+  purgeExpiredSessions,
+  getUserSettings,
+  upsertUserSettings,
+  listUserSources,
+  listAllActiveUserSources,
+  createUserSource,
+  deleteUserSource,
+  verifyWriteAccess,
+  getWriteAccessStatus,
   buildSearchQuery
 };
