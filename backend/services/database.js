@@ -7,7 +7,7 @@ const topicNormalizer = require('./topicNormalizer');
 
 const DATA_DIR = path.join(__dirname, '../data');
 const DB_PATH = process.env.NEWS_DB_PATH || path.join(DATA_DIR, 'news.db');
-const LATEST_MIGRATION_VERSION = 3;
+const LATEST_MIGRATION_VERSION = 4;
 
 let db;
 let lastWriteCheckAt = null;
@@ -176,7 +176,6 @@ function initializeSchema(database) {
     CREATE TABLE IF NOT EXISTS article_topics (
       article_id TEXT NOT NULL,
       topic TEXT NOT NULL,
-      is_ai_generated INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (article_id, topic),
       FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
@@ -312,6 +311,12 @@ function runMigrations(database) {
     currentVersion = 3;
     setCurrentMigrationVersion(database, currentVersion);
   }
+
+  if (currentVersion < 4) {
+    migrateToV4(database);
+    currentVersion = 4;
+    setCurrentMigrationVersion(database, currentVersion);
+  }
 }
 
 function columnExists(database, tableName, columnName) {
@@ -320,16 +325,15 @@ function columnExists(database, tableName, columnName) {
 }
 
 function migrateToV1(database) {
+  const hasLegacyTopicMetadataColumn = columnExists(database, 'article_topics', 'is_ai_generated');
   const selectTopics = database.prepare(`
-    SELECT article_id AS articleId, topic, is_ai_generated AS isAiGenerated
+    SELECT article_id AS articleId, topic
     FROM article_topics
     ORDER BY article_id ASC, topic ASC
   `);
   const upsertTopic = database.prepare(`
-    INSERT INTO article_topics (article_id, topic, is_ai_generated)
-    VALUES (?, ?, ?)
-    ON CONFLICT(article_id, topic) DO UPDATE SET
-      is_ai_generated = MAX(article_topics.is_ai_generated, excluded.is_ai_generated)
+    INSERT OR IGNORE INTO article_topics (article_id, topic)
+    VALUES (?, ?)
   `);
   const deleteTopic = database.prepare(`
     DELETE FROM article_topics
@@ -371,7 +375,7 @@ function migrateToV1(database) {
       }
 
       if (normalizedTopic !== row.topic) {
-        upsertTopic.run(row.articleId, normalizedTopic, row.isAiGenerated);
+        upsertTopic.run(row.articleId, normalizedTopic);
         const deletion = deleteTopic.run(row.articleId, row.topic);
         removedTopicRows += deletion.changes;
         normalizedTopicRows += 1;
@@ -386,7 +390,7 @@ function migrateToV1(database) {
   });
 
   const result = migrate();
-  logger.info(`Applied DB migration v1: ${result.updatedSourceRows} source rows updated, ${result.removedTopicRows} topic rows removed, ${result.normalizedTopicRows} topic rows normalized`);
+  logger.info(`Applied DB migration v1: ${result.updatedSourceRows} source rows updated, ${result.removedTopicRows} topic rows removed, ${result.normalizedTopicRows} topic rows normalized${hasLegacyTopicMetadataColumn ? ' (legacy topic metadata ignored)' : ''}`);
 }
 
 function migrateToV2(database) {
@@ -454,6 +458,44 @@ function migrateToV3(database) {
   `);
 
   logger.info('Applied DB migration v3: added user accounts, sessions, settings, sources, and article ownership');
+}
+
+function migrateToV4(database) {
+  if (!columnExists(database, 'article_topics', 'is_ai_generated')) {
+    logger.info('DB migration v4 skipped: article_topics already clean');
+    return;
+  }
+
+  const previousForeignKeyState = database.pragma('foreign_keys', { simple: true });
+  database.pragma('foreign_keys = OFF');
+
+  try {
+    database.transaction(() => {
+      database.exec(`
+        ALTER TABLE article_topics RENAME TO article_topics_legacy;
+
+        CREATE TABLE article_topics (
+          article_id TEXT NOT NULL,
+          topic TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (article_id, topic),
+          FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
+        );
+
+        INSERT INTO article_topics (article_id, topic, created_at)
+        SELECT article_id, topic, created_at
+        FROM article_topics_legacy;
+
+        DROP TABLE article_topics_legacy;
+
+        CREATE INDEX IF NOT EXISTS idx_article_topics_topic ON article_topics (topic);
+      `);
+    })();
+  } finally {
+    database.pragma(`foreign_keys = ${previousForeignKeyState ? 'ON' : 'OFF'}`);
+  }
+
+  logger.info('Applied DB migration v4: removed legacy topic metadata column');
 }
 
 function buildFilterState(filters = {}) {
@@ -679,7 +721,7 @@ function upsertArticles(articles = []) {
   return transaction(articles);
 }
 
-function mergeTopicsForArticle(articleId, topics = [], options = {}) {
+function mergeTopicsForArticle(articleId, topics = []) {
   if (!articleId || !Array.isArray(topics) || topics.length === 0) {
     return [];
   }
@@ -687,15 +729,15 @@ function mergeTopicsForArticle(articleId, topics = [], options = {}) {
   const database = getDb();
   const selectStmt = database.prepare('SELECT topic FROM article_topics WHERE article_id = ? ORDER BY topic ASC');
   const insertStmt = database.prepare(`
-    INSERT OR IGNORE INTO article_topics (article_id, topic, is_ai_generated)
-    VALUES (?, ?, ?)
+    INSERT OR IGNORE INTO article_topics (article_id, topic)
+    VALUES (?, ?)
   `);
 
   const transaction = database.transaction((articleIdentifier, topicList) => {
     topicList
       .filter((topic) => topicNormalizer.isMeaningfulTopic(topic))
       .forEach((topic) => {
-        insertStmt.run(articleIdentifier, topic, options.isAiGenerated ? 1 : 0);
+        insertStmt.run(articleIdentifier, topic);
       });
 
     return selectStmt

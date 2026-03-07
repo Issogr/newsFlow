@@ -29,11 +29,6 @@ jest.mock('./websocketService', () => ({
   broadcastSystemNotification: jest.fn()
 }));
 
-jest.mock('./asyncProcessor', () => ({
-  enqueueArticle: jest.fn(),
-  getTopicsForArticle: jest.fn(() => [])
-}));
-
 const newsAggregator = require('./newsAggregator');
 
 describe('newsAggregator stable grouping', () => {

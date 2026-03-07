@@ -6,7 +6,7 @@ News Aggregator is a web app that collects articles from multiple RSS sources, s
 
 - The backend periodically fetches configured RSS feeds.
 - Each article is normalized and stored in a local SQLite database.
-- Topics are assigned from RSS categories and text keywords; optional Ollama integration can enrich them further.
+- Topics are assigned from RSS categories and text keywords.
 - Similar articles from different sources are grouped into a single news cluster.
 - The frontend requests grouped news with server-side search, pagination, and filters.
 - Users can create personal accounts and save private instance preferences.
@@ -31,7 +31,6 @@ News Aggregator is a web app that collects articles from multiple RSS sources, s
 - In-app reader mode with SQLite caching and source text extraction
 - Per-user private settings and custom RSS source validation
 - Settings export/import for personal preferences and custom sources
-- Optional AI topic enrichment with Ollama
 
 ## Architecture
 
@@ -82,8 +81,6 @@ Useful backend variables:
 - `MAX_ARTICLES_PER_SOURCE`: max articles read from each feed
 - `NEWS_DB_PATH`: SQLite file path
 - `SESSION_TTL_DAYS`: session duration for user logins
-- `USE_OLLAMA`: enable optional AI topic enrichment
-- `OLLAMA_API_URL`: Ollama endpoint
 - `ADMIN_API_TOKEN`: admin token for protected endpoints
 
 ## Run

@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.5
+
+- removed the Ollama AI integration and related configuration from the application
+- removed the last legacy AI topic metadata from the SQLite schema and database migration path
+
 ## 3.0.4
 
 - secured WebSocket connections with user session authentication

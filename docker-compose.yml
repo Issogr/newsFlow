@@ -17,15 +17,11 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5000
-      - OLLAMA_API_URL=http://ipex-llm:11434/api
-      - OLLAMA_MODEL=gemma3:1b
       - ALLOWED_ORIGINS=http://localhost,http://localhost:80
       - TRUST_PROXY=true
       - ADMIN_API_TOKEN=change-me
       - NEWS_DB_PATH=/usr/src/app/data/news.db
       # Variabili di ottimizzazione
-      - OLLAMA_TIMEOUT=3000         # Timeout per chiamate a Ollama in ms
-      - USE_OLLAMA=false             # Imposta a 'false' per disabilitare Ollama completamente
       - MAX_ARTICLES_PER_SOURCE=25  # Numero massimo di articoli da elaborare per fonte
       - RSS_MAX_RETRIES=5           # Tentativi di retry per problemi DNS
       - RSS_RETRY_DELAY=2000        # Tempo iniziale tra retry in ms

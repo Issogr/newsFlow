@@ -4,7 +4,6 @@ const database = require('./database');
 const logger = require('../utils/logger');
 const topicNormalizer = require('./topicNormalizer');
 const websocketService = require('./websocketService');
-const asyncProcessor = require('./asyncProcessor');
 const { createError } = require('../utils/errorHandler');
 const newsSources = require('../config/newsSources');
 
@@ -270,7 +269,6 @@ async function ingestAllNews(options = {}) {
       const upsertResult = database.upsertArticles(normalizedArticles);
       normalizedArticles.forEach((article) => {
         database.mergeTopicsForArticle(article.id, article.topics);
-        asyncProcessor.enqueueArticle(article);
       });
 
       const insertedGroups = buildInsertedGroupsByOwner(normalizedArticles, upsertResult.insertedIds);
