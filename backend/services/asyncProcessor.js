@@ -35,7 +35,8 @@ function enqueueArticle(article) {
     content: article.content || '',
     language: article.language || 'it',
     source: article.source,
-    sourceId: article.sourceId
+    sourceId: article.sourceId,
+    ownerUserId: article.ownerUserId || null
   });
 
   scheduleProcessing();
@@ -68,7 +69,8 @@ async function processArticle(article) {
     database.mergeTopicsForArticle(article.id, mergedTopics, { isAiGenerated: true });
     websocketService.broadcastTopicUpdate(article.id, mergedTopics, {
       sourceId: article.sourceId,
-      source: article.source
+      source: article.source,
+      ownerUserId: article.ownerUserId || null
     });
     logger.info(`Async topic enrichment completed for article ${article.id}`);
   } catch (error) {

@@ -1,5 +1,7 @@
 const logger = require('../utils/logger');
 const { getAllowedOrigins, isOriginAllowed } = require('../utils/networkConfig');
+const database = require('./database');
+const { extractBearerToken, hashSessionToken } = require('../utils/auth');
 
 let io;
 let websocketStartTime = Date.now();
@@ -35,6 +37,36 @@ function initialize(server) {
     transports: ['websocket', 'polling']
   });
 
+  io.use((socket, next) => {
+    try {
+      database.purgeExpiredSessions();
+
+      const auth = socket.handshake?.auth || {};
+      const headers = socket.handshake?.headers || {};
+      const tokenFromAuth = typeof auth.token === 'string' ? auth.token.trim() : '';
+      const tokenFromBearer = extractBearerToken(headers.authorization);
+      const tokenFromHeader = typeof headers['x-session-token'] === 'string' ? headers['x-session-token'].trim() : '';
+      const sessionToken = tokenFromAuth || tokenFromBearer || tokenFromHeader;
+
+      if (!sessionToken) {
+        next(new Error('Authentication required'));
+        return;
+      }
+
+      const session = database.findSessionByTokenHash(hashSessionToken(sessionToken));
+      if (!session || new Date(session.expiresAt) < new Date()) {
+        next(new Error('Invalid session'));
+        return;
+      }
+
+      socket.data.userId = session.userId;
+      socket.data.username = session.username;
+      next();
+    } catch (error) {
+      next(new Error(`WebSocket auth failed: ${error.message}`));
+    }
+  });
+
   io.on('connection', (socket) => {
     statistics.totalConnections += 1;
     statistics.activeConnectionsCount += 1;
@@ -43,7 +75,8 @@ function initialize(server) {
 
     socket.emit('welcome', {
       message: 'Connesso agli aggiornamenti in tempo reale',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      userId: socket.data.userId
     });
 
     socket.on('subscribe:filters', (filters = {}) => {
@@ -88,6 +121,17 @@ function groupMatchesFilters(group, filters = {}) {
   return hasTopicMatch && hasSourceMatch;
 }
 
+function socketCanReceiveGroup(socket, group) {
+  const socketUserId = socket.data?.userId || null;
+  const groupOwnerUserId = group?.ownerUserId || null;
+
+  if (!groupOwnerUserId) {
+    return true;
+  }
+
+  return socketUserId === groupOwnerUserId;
+}
+
 function emitToSocket(socket, event, payload) {
   try {
     socket.emit(event, payload);
@@ -107,7 +151,9 @@ function broadcastNewsUpdate(newsGroups = []) {
   let recipients = 0;
 
   activeConnections.forEach((socket) => {
-    const matchingGroups = newsGroups.filter((group) => groupMatchesFilters(group, socket.data.filters));
+    const matchingGroups = newsGroups.filter((group) => {
+      return socketCanReceiveGroup(socket, group) && groupMatchesFilters(group, socket.data.filters);
+    });
     if (matchingGroups.length === 0) {
       return;
     }
@@ -141,6 +187,17 @@ function shouldReceiveTopicUpdate(filters, topics = [], sourceId) {
   return topicMatch && sourceMatch;
 }
 
+function socketCanReceiveTopicUpdate(socket, context = {}) {
+  const socketUserId = socket.data?.userId || null;
+  const ownerUserId = context.ownerUserId || null;
+
+  if (!ownerUserId) {
+    return true;
+  }
+
+  return socketUserId === ownerUserId;
+}
+
 function broadcastTopicUpdate(articleId, topics = [], context = {}) {
   if (!io || !articleId || !Array.isArray(topics) || topics.length === 0) {
     return;
@@ -155,6 +212,10 @@ function broadcastTopicUpdate(articleId, topics = [], context = {}) {
   let recipients = 0;
 
   activeConnections.forEach((socket) => {
+    if (!socketCanReceiveTopicUpdate(socket, context)) {
+      return;
+    }
+
     if (!shouldReceiveTopicUpdate(socket.data.filters, topics, context.sourceId)) {
       return;
     }

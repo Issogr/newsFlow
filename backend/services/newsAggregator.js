@@ -173,6 +173,7 @@ function groupSimilarNews(newsItems) {
       groups.push({
         id: buildStableGroupId([item]),
         items: [item],
+        ownerUserId: item.ownerUserId || null,
         sources: [item.source],
         title: item.title,
         description: item.description,
@@ -186,6 +187,7 @@ function groupSimilarNews(newsItems) {
     bestGroup.items.push(item);
     bestGroup.sources = [...new Set([...bestGroup.sources, item.source])];
     bestGroup.topics = topicNormalizer.limitTopics([...bestGroup.topics, ...(item.topics || [])], 4);
+    bestGroup.ownerUserId = bestGroup.ownerUserId || item.ownerUserId || null;
     if (new Date(item.pubDate) > new Date(bestGroup.pubDate)) {
       bestGroup.pubDate = item.pubDate;
       bestGroup.title = item.title;
@@ -212,6 +214,30 @@ function normalizeIncomingArticles(articles = []) {
   });
 
   return [...dedupedArticles.values()];
+}
+
+function buildInsertedGroupsByOwner(normalizedArticles = [], insertedIds = []) {
+  const insertedIdSet = new Set(insertedIds);
+  const insertedArticles = normalizedArticles.filter((article) => insertedIdSet.has(article.id));
+  const globalArticles = insertedArticles.filter((article) => !article.ownerUserId);
+  const privateGroupsByUserId = new Map();
+
+  const globalGroups = groupSimilarNews(globalArticles);
+
+  insertedArticles
+    .filter((article) => article.ownerUserId)
+    .forEach((article) => {
+      const current = privateGroupsByUserId.get(article.ownerUserId) || [];
+      current.push(article);
+      privateGroupsByUserId.set(article.ownerUserId, current);
+    });
+
+  return {
+    globalGroups,
+    privateGroupsByUserId: new Map(
+      [...privateGroupsByUserId.entries()].map(([userId, articles]) => [userId, groupSimilarNews(articles)])
+    )
+  };
 }
 
 async function ingestAllNews(options = {}) {
@@ -247,11 +273,18 @@ async function ingestAllNews(options = {}) {
         asyncProcessor.enqueueArticle(article);
       });
 
-      const insertedArticles = database.getArticlesByIds(upsertResult.insertedIds, { userId: null, maxArticleAgeHours: ARTICLE_RETENTION_HOURS });
-      const insertedGroups = groupSimilarNews(insertedArticles);
+      const insertedGroups = buildInsertedGroupsByOwner(normalizedArticles, upsertResult.insertedIds);
 
-      if (broadcast && insertedGroups.length > 0) {
-        websocketService.broadcastNewsUpdate(insertedGroups);
+      if (broadcast) {
+        if (insertedGroups.globalGroups.length > 0) {
+          websocketService.broadcastNewsUpdate(insertedGroups.globalGroups);
+        }
+
+        insertedGroups.privateGroupsByUserId.forEach((groups, userId) => {
+          if (groups.length > 0) {
+            websocketService.broadcastNewsUpdate(groups.map((group) => ({ ...group, ownerUserId: userId })));
+          }
+        });
       }
 
       lastRefreshAt = new Date().toISOString();

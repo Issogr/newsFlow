@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
+import { getAuthToken } from '../services/api';
 
 const MAX_NOTIFICATIONS = 10;
 const PING_INTERVAL_MS = 30000;
@@ -91,6 +92,9 @@ const useWebSocket = (url = '', messages = {}) => {
 
   useEffect(() => {
     const socket = io(wsUrl, {
+      auth: {
+        token: getAuthToken()
+      },
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,

@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.4
+
+- secured WebSocket connections with user session authentication
+- limited live news and topic updates to the correct user session so private feeds do not leak across users
+
 ## 3.0.3
 
 - added automatic feed name and language detection when saving a new personal RSS source
