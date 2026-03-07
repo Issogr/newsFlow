@@ -1,5 +1,6 @@
 const express = require('express');
 const newsService = require('../services/newsAggregator');
+const readerService = require('../services/readerService');
 const websocketService = require('../services/websocketService');
 const { asyncHandler, createError } = require('../utils/errorHandler');
 const { sanitizeParam, sanitizeQuery, validateParam, validateQueryParam } = require('../utils/inputValidator');
@@ -66,6 +67,23 @@ router.get('/articles/:articleId/topics', [
     articleId,
     topics: newsService.getArticleTopics(articleId)
   });
+}));
+
+router.get('/articles/:articleId/reader', [
+  validateParam('articleId', 'ID articolo non valido'),
+  sanitizeParam('articleId')
+], asyncHandler(async (req, res) => {
+  const { articleId } = req.params;
+
+  if (articleId.length < 5) {
+    throw createError(400, 'ID articolo non valido', 'INVALID_ARTICLE_ID');
+  }
+
+  const readerArticle = await readerService.getReaderArticle(articleId, {
+    forceRefresh: req.query.refresh === 'true'
+  });
+
+  res.json(readerArticle);
 }));
 
 router.post('/refresh', requireAdminToken, asyncHandler(async (req, res) => {

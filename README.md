@@ -10,6 +10,7 @@ News Aggregator is a web app that collects articles from multiple RSS sources, s
 - Similar articles from different sources are grouped into a single news cluster.
 - The frontend requests grouped news with server-side search, pagination, and filters.
 - The web UI supports English and Italian, defaulting to the browser/system language and allowing manual switching.
+- Reader mode can fetch the original article server-side, strip images/layout noise, and show a clean reading view inside the app.
 - WebSocket notifications inform connected users when new grouped news or updated topics are available.
 
 ## Main Features
@@ -22,6 +23,7 @@ News Aggregator is a web app that collects articles from multiple RSS sources, s
 - Real-time updates for multiple connected users
 - English/Italian interface with automatic browser-language default
 - Small language badge on news cards to show article language
+- In-app reader mode with SQLite caching and source text extraction
 - Optional AI topic enrichment with Ollama
 
 ## Architecture
@@ -48,6 +50,7 @@ News Aggregator is a web app that collects articles from multiple RSS sources, s
 - `GET /api/hot-topics`: most frequent topics
 - `GET /api/sources`: available sources
 - `GET /api/articles/:articleId/topics`: topics for one article
+- `GET /api/articles/:articleId/reader`: cached clean reader view for one article
 - `POST /api/refresh`: force a refresh (admin token required)
 - `GET /api/ws/status`: WebSocket status
 

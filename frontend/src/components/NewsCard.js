@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { getDateLocale, getLanguageMeta } from '../i18n';
 
-const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t }) => {
+const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenReader }) => {
   const sourceEntries = (() => {
     const map = new Map();
     (group?.items || []).forEach((item) => {
@@ -118,14 +118,23 @@ const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t }) => {
       </div>
 
       <div className="border-t border-slate-100 px-5 py-4">
-        <a
-          href={group.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700"
-        >
-          {t('openOriginalSource')}
-        </a>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => onOpenReader(group, group.items[0]?.id)}
+            className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            {t('readerMode')}
+          </button>
+          <a
+            href={group.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+          >
+            {t('openOriginalSource')}
+          </a>
+        </div>
       </div>
     </article>
   );

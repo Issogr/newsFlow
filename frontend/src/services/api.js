@@ -56,8 +56,17 @@ export const fetchNews = async ({
   return response.data;
 };
 
+export const fetchReaderArticle = async (articleId, { refresh = false } = {}) => {
+  const response = await api.get(`/articles/${articleId}/reader`, {
+    params: refresh ? { refresh: 'true' } : undefined
+  });
+
+  return response.data;
+};
+
 const apiService = {
-  fetchNews
+  fetchNews,
+  fetchReaderArticle
 };
 
 export default apiService;

@@ -115,6 +115,20 @@ function initializeSchema(database) {
       error_message TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS reader_cache (
+      article_id TEXT PRIMARY KEY,
+      url TEXT NOT NULL,
+      title TEXT NOT NULL,
+      site_name TEXT,
+      byline TEXT,
+      language TEXT,
+      excerpt TEXT,
+      content_text TEXT NOT NULL,
+      minutes_to_read INTEGER NOT NULL DEFAULT 1,
+      fetched_at TEXT NOT NULL,
+      FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
+    );
+
     CREATE VIRTUAL TABLE IF NOT EXISTS article_search USING fts5(
       article_id UNINDEXED,
       title,
@@ -379,6 +393,14 @@ function getArticles(filters = {}) {
   return hydrateArticleRows(rows);
 }
 
+function getArticleById(articleId) {
+  if (!articleId) {
+    return null;
+  }
+
+  return getArticlesByIds([articleId])[0] || null;
+}
+
 function getArticlesByIds(articleIds = []) {
   if (!Array.isArray(articleIds) || articleIds.length === 0) {
     return [];
@@ -547,9 +569,79 @@ function getLatestIngestionRun() {
   `).get();
 }
 
+function getReaderCache(articleId, maxAgeMs) {
+  if (!articleId) {
+    return null;
+  }
+
+  const row = getDb().prepare(`
+    SELECT article_id AS articleId, url, title, site_name AS siteName,
+           byline, language, excerpt, content_text AS contentText,
+           minutes_to_read AS minutesToRead, fetched_at AS fetchedAt
+    FROM reader_cache
+    WHERE article_id = ?
+  `).get(articleId);
+
+  if (!row) {
+    return null;
+  }
+
+  if (maxAgeMs) {
+    const ageMs = Date.now() - new Date(row.fetchedAt).getTime();
+    if (ageMs > maxAgeMs) {
+      return null;
+    }
+  }
+
+  return row;
+}
+
+function upsertReaderCache(articleId, payload = {}) {
+  if (!articleId || !payload.contentText) {
+    return;
+  }
+
+  getDb().prepare(`
+    INSERT INTO reader_cache (
+      article_id,
+      url,
+      title,
+      site_name,
+      byline,
+      language,
+      excerpt,
+      content_text,
+      minutes_to_read,
+      fetched_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(article_id) DO UPDATE SET
+      url = excluded.url,
+      title = excluded.title,
+      site_name = excluded.site_name,
+      byline = excluded.byline,
+      language = excluded.language,
+      excerpt = excluded.excerpt,
+      content_text = excluded.content_text,
+      minutes_to_read = excluded.minutes_to_read,
+      fetched_at = excluded.fetched_at
+  `).run(
+    articleId,
+    payload.url || '',
+    payload.title || '',
+    payload.siteName || null,
+    payload.byline || null,
+    payload.language || null,
+    payload.excerpt || null,
+    payload.contentText,
+    payload.minutesToRead || 1,
+    payload.fetchedAt || new Date().toISOString()
+  );
+}
+
 module.exports = {
   getDb,
   getArticles,
+  getArticleById,
   getArticlesByIds,
   getTopicsForArticle,
   mergeTopicsForArticle,
@@ -561,5 +653,7 @@ module.exports = {
   createIngestionRun,
   completeIngestionRun,
   getLatestIngestionRun,
+  getReaderCache,
+  upsertReaderCache,
   buildSearchQuery
 };

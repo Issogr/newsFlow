@@ -14,6 +14,7 @@ import { fetchNews } from '../services/api';
 import ErrorMessage from './ErrorMessage';
 import NewsCard from './NewsCard';
 import NotificationCenter from './NotificationCenter';
+import ReaderPanel from './ReaderPanel';
 import useWebSocket from '../hooks/useWebSocket';
 import { createTranslator, detectBrowserLocale, getDateLocale } from '../i18n';
 
@@ -85,6 +86,7 @@ const NewsAggregator = () => {
   const [activeFilters, setActiveFilters] = useState(EMPTY_FILTERS);
   const [showRecentOnly, setShowRecentOnly] = useState(false);
   const [filtersExpanded, setFiltersExpanded] = useState(true);
+  const [readerState, setReaderState] = useState({ isOpen: false, group: null, articleId: null });
 
   useEffect(() => {
     window.localStorage.setItem('news-aggregator-locale', locale);
@@ -228,6 +230,14 @@ const NewsAggregator = () => {
   }, [activeFilters.sourceIds.length, activeFilters.topics.length, debouncedSearch, showRecentOnly]);
 
   const hasActiveFilters = activeFiltersCount > 0;
+
+  const openReader = useCallback((group, articleId) => {
+    setReaderState({ isOpen: true, group, articleId });
+  }, []);
+
+  const closeReader = useCallback(() => {
+    setReaderState({ isOpen: false, group: null, articleId: null });
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -454,6 +464,7 @@ const NewsAggregator = () => {
                   toggleFilter={toggleFilter}
                   locale={locale}
                   t={t}
+                  onOpenReader={openReader}
                 />
               ))}
             </div>
@@ -476,6 +487,16 @@ const NewsAggregator = () => {
           </>
         )}
       </main>
+
+      {readerState.isOpen && readerState.group && (
+        <ReaderPanel
+          group={readerState.group}
+          initialArticleId={readerState.articleId}
+          locale={locale}
+          t={t}
+          onClose={closeReader}
+        />
+      )}
     </div>
   );
 };

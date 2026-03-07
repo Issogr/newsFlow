@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.0
+
+- added in-app reader mode with clean text extraction and no images
+- added SQLite caching for reader content to speed up repeated reads
+- added server endpoint for per-article reader views
+
 ## 2.1.0
 
 - added English/Italian UI localization with browser-language default and manual switch
