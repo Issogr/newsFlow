@@ -59,6 +59,7 @@ News Aggregator is a web app that collects articles from multiple RSS sources, s
 Useful backend variables:
 
 - `SCRAPE_INTERVAL_MS`: scraping interval
+- `ARTICLE_RETENTION_HOURS`: automatically remove articles and reader cache older than this age
 - `MAX_ARTICLES_PER_SOURCE`: max articles read from each feed
 - `NEWS_DB_PATH`: SQLite file path
 - `USE_OLLAMA`: enable optional AI topic enrichment
@@ -76,5 +77,6 @@ Then open `http://localhost`.
 ## Notes
 
 - Data is stored locally in `backend/data/news.db`.
+- By default, articles older than 24 hours are automatically removed from storage.
 - This setup is intentionally simple: no external database is required.
 - It works well for a single deployed service and multiple simultaneous users.

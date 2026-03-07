@@ -562,6 +562,40 @@ function countArticles() {
   return getDb().prepare('SELECT COUNT(*) AS count FROM articles').get().count;
 }
 
+function deleteArticlesOlderThan(isoTimestamp) {
+  if (!isoTimestamp) {
+    return 0;
+  }
+
+  const database = getDb();
+  const selectArticleIds = database.prepare(`
+    SELECT id
+    FROM articles
+    WHERE published_at < ?
+  `);
+  const deleteSearchEntries = database.prepare(`
+    DELETE FROM article_search
+    WHERE article_id = ?
+  `);
+  const deleteArticle = database.prepare(`
+    DELETE FROM articles
+    WHERE id = ?
+  `);
+
+  const transaction = database.transaction((threshold) => {
+    const articleIds = selectArticleIds.all(threshold).map((row) => row.id);
+
+    articleIds.forEach((articleId) => {
+      deleteSearchEntries.run(articleId);
+      deleteArticle.run(articleId);
+    });
+
+    return articleIds.length;
+  });
+
+  return transaction(isoTimestamp);
+}
+
 function getSourceStats(configuredSources = []) {
   const rows = getDb().prepare(`
     SELECT source_id AS id, source_name AS name, COUNT(*) AS count
@@ -784,6 +818,7 @@ module.exports = {
   mergeTopicsForArticle,
   upsertArticles,
   countArticles,
+  deleteArticlesOlderThan,
   getSourceStats,
   getTopicStats,
   getTopicStatsByFilters,

@@ -10,10 +10,26 @@ const newsSources = require('../config/newsSources');
 
 const SCRAPE_INTERVAL_MS = parseInt(process.env.SCRAPE_INTERVAL_MS || '300000', 10);
 const MAX_SCAN_ARTICLES = parseInt(process.env.MAX_SCAN_ARTICLES || '600', 10);
+const ARTICLE_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
 
 let refreshPromise = null;
 let lastRefreshAt = null;
 let schedulerHandle = null;
+
+function purgeExpiredArticles() {
+  if (!Number.isFinite(ARTICLE_RETENTION_HOURS) || ARTICLE_RETENTION_HOURS <= 0) {
+    return 0;
+  }
+
+  const cutoff = new Date(Date.now() - (ARTICLE_RETENTION_HOURS * 60 * 60 * 1000)).toISOString();
+  const removedCount = database.deleteArticlesOlderThan(cutoff);
+
+  if (removedCount > 0) {
+    logger.info(`Purged ${removedCount} articles older than ${ARTICLE_RETENTION_HOURS} hours`);
+  }
+
+  return removedCount;
+}
 
 function expandConfiguredSources() {
   return newsSources.flatMap((source) => {
@@ -171,6 +187,8 @@ async function ingestAllNews(options = {}) {
     const ingestionRun = database.createIngestionRun();
 
     try {
+      purgeExpiredArticles();
+
       const sourceConfigs = expandConfiguredSources();
       const results = await Promise.allSettled(sourceConfigs.map((source) => rssParser.parseFeed(source)));
       const fetchedArticles = results
@@ -230,6 +248,8 @@ async function ingestAllNews(options = {}) {
 }
 
 async function ensureSeedData() {
+  purgeExpiredArticles();
+
   if (database.countArticles() > 0) {
     return;
   }

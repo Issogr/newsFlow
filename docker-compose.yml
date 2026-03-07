@@ -33,6 +33,7 @@ services:
       - SERVER_TIMEOUT=60000        # Timeout del server in ms
       - LOG_LEVEL=info              # Livello di logging (debug, info, warn, error)
       - SCRAPE_INTERVAL_MS=300000   # Intervallo scraping real-time-ish (5 min)
+      - ARTICLE_RETENTION_HOURS=24  # Elimina articoli e cache piu vecchi di 24 ore
       - MAX_SCAN_ARTICLES=600       # Massimo numero di articoli da scansionare per query raggruppata
       # Configurazioni WebSocket 
       - WS_PING_TIMEOUT=60000       # Timeout per ping WebSocket (ms)

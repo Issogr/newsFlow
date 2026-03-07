@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.7
+
+- added configurable automatic cleanup for articles and reader cache older than 24 hours
+
 ## 2.2.6
 
 - moved the live connection status from the header badge into the notifications panel
