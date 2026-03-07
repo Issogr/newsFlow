@@ -82,8 +82,18 @@ export const importUserSettings = async (payload) => {
   return response.data;
 };
 
+export const previewUserSource = async (payload) => {
+  const response = await api.post('/me/sources/preview', payload);
+  return response.data;
+};
+
 export const addUserSource = async (payload) => {
   const response = await api.post('/me/sources', payload);
+  return response.data;
+};
+
+export const updateUserSource = async (sourceId, payload) => {
+  const response = await api.patch(`/me/sources/${sourceId}`, payload);
   return response.data;
 };
 
@@ -140,7 +150,9 @@ const apiService = {
   updateUserSettings,
   exportUserSettings,
   importUserSettings,
+  previewUserSource,
   addUserSource,
+  updateUserSource,
   deleteUserSource,
   fetchNews,
   fetchReaderArticle

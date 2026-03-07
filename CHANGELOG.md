@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.3
+
+- added automatic feed name and language detection when saving a new personal RSS source
+- added editing support for personal RSS sources after creation
+
 ## 3.0.2
 
 - added settings export and import for personal preferences and custom RSS sources

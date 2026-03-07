@@ -1286,6 +1286,69 @@ function createUserSource(source = {}) {
   );
 }
 
+function findUserSourceById(userId, sourceId) {
+  if (!userId || !sourceId) {
+    return null;
+  }
+
+  const row = getDb().prepare(`
+    SELECT id, user_id AS userId, name, url, language,
+           is_active AS isActive, created_at AS createdAt,
+           updated_at AS updatedAt, validated_at AS validatedAt
+    FROM user_sources
+    WHERE user_id = ? AND id = ?
+  `).get(userId, sourceId);
+
+  return row ? { ...row, isActive: Boolean(row.isActive) } : null;
+}
+
+function updateUserSource(userId, sourceId, updates = {}) {
+  if (!userId || !sourceId) {
+    return 0;
+  }
+
+  return getDb().prepare(`
+    UPDATE user_sources
+    SET name = ?,
+        url = ?,
+        language = ?,
+        updated_at = ?,
+        validated_at = ?
+    WHERE user_id = ? AND id = ?
+  `).run(
+    updates.name,
+    updates.url,
+    updates.language,
+    updates.updatedAt,
+    updates.validatedAt || null,
+    userId,
+    sourceId
+  ).changes;
+}
+
+function deleteArticlesForUserSource(userId, sourceId) {
+  if (!userId || !sourceId) {
+    return 0;
+  }
+
+  const database = getDb();
+  const transaction = database.transaction((ownerId, customSourceId) => {
+    database.prepare(`
+      DELETE FROM article_search
+      WHERE article_id IN (
+        SELECT id FROM articles WHERE owner_user_id = ? AND source_id = ?
+      )
+    `).run(ownerId, customSourceId);
+
+    return database.prepare(`
+      DELETE FROM articles
+      WHERE owner_user_id = ? AND source_id = ?
+    `).run(ownerId, customSourceId).changes;
+  });
+
+  return transaction(userId, sourceId);
+}
+
 function deleteUserSource(userId, sourceId) {
   if (!userId || !sourceId) {
     return 0;
@@ -1374,6 +1437,9 @@ module.exports = {
   listUserSources,
   listAllActiveUserSources,
   createUserSource,
+  findUserSourceById,
+  updateUserSource,
+  deleteArticlesForUserSource,
   deleteUserSource,
   deleteAllUserSources,
   verifyWriteAccess,

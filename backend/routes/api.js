@@ -75,10 +75,25 @@ router.post('/me/settings/import', requireAuthenticatedUser, asyncHandler(async 
   res.json({ success: true, ...result });
 }));
 
+router.post('/me/sources/preview', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+  const preview = await userService.previewUserSource(req.body || {});
+  res.json({ success: true, preview });
+}));
+
 router.post('/me/sources', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   const source = await userService.addUserSource(req.user.id, req.body || {});
   await newsService.ingestAllNews({ broadcast: false });
   res.status(201).json({ success: true, source });
+}));
+
+router.patch('/me/sources/:sourceId', [
+  requireAuthenticatedUser,
+  validateParam('sourceId', 'Invalid source ID'),
+  sanitizeParam('sourceId')
+], asyncHandler(async (req, res) => {
+  const source = await userService.updateUserSource(req.user.id, req.params.sourceId, req.body || {});
+  await newsService.ingestAllNews({ broadcast: false });
+  res.json({ success: true, source });
 }));
 
 router.delete('/me/sources/:sourceId', [

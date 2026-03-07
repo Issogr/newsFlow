@@ -162,17 +162,18 @@ function updateUserSettings(userId, payload = {}) {
 }
 
 async function addUserSource(userId, payload = {}) {
-  const name = String(payload.name || '').trim().slice(0, 80);
   const url = String(payload.url || '').trim();
 
-  if (!name || !url) {
-    throw createError(400, 'Name and RSS URL are required', 'INVALID_SOURCE_PAYLOAD');
+  if (!url) {
+    throw createError(400, 'RSS URL is required', 'INVALID_SOURCE_PAYLOAD');
   }
 
-  try {
-    await rssParser.validateFeedUrl(url);
-  } catch (error) {
-    throw createError(400, 'RSS URL is not valid or cannot be parsed', 'INVALID_RSS_URL', error);
+  const preview = await previewUserSource({ url });
+  const name = String(payload.name || preview.name || '').trim().slice(0, 80);
+  const language = String(payload.language || preview.language || 'it').trim().toLowerCase().slice(0, 5) || 'it';
+
+  if (!name) {
+    throw createError(400, 'Could not detect a valid feed title from the RSS URL', 'INVALID_SOURCE_PAYLOAD');
   }
 
   const now = new Date().toISOString();
@@ -181,7 +182,7 @@ async function addUserSource(userId, payload = {}) {
     userId,
     name,
     url,
-    language: String(payload.language || 'it').trim().toLowerCase().slice(0, 5) || 'it',
+    language,
     isActive: true,
     createdAt: now,
     updatedAt: now,
@@ -198,6 +199,62 @@ async function addUserSource(userId, payload = {}) {
   }
 
   return source;
+}
+
+async function updateUserSource(userId, sourceId, payload = {}) {
+  const existingSource = database.findUserSourceById(userId, sourceId);
+  if (!existingSource) {
+    throw createError(404, 'Source not found', 'RESOURCE_NOT_FOUND');
+  }
+
+  const url = String(payload.url || existingSource.url).trim();
+  if (!url) {
+    throw createError(400, 'RSS URL is required', 'INVALID_SOURCE_PAYLOAD');
+  }
+
+  const preview = await previewUserSource({ url });
+  const nextSource = {
+    name: String(payload.name || preview.name || existingSource.name).trim().slice(0, 80),
+    url,
+    language: String(payload.language || preview.language || existingSource.language).trim().toLowerCase().slice(0, 5) || existingSource.language,
+    updatedAt: new Date().toISOString(),
+    validatedAt: new Date().toISOString()
+  };
+
+  if (!nextSource.name) {
+    throw createError(400, 'Could not determine a valid source name for this RSS URL', 'INVALID_SOURCE_PAYLOAD');
+  }
+
+  try {
+    database.updateUserSource(userId, sourceId, nextSource);
+  } catch (error) {
+    if (String(error.message || '').includes('UNIQUE')) {
+      throw createError(409, 'This RSS source already exists for the user', 'SOURCE_ALREADY_EXISTS', error);
+    }
+    throw error;
+  }
+
+  database.deleteArticlesForUserSource(userId, sourceId);
+  return database.findUserSourceById(userId, sourceId);
+}
+
+async function previewUserSource(payload = {}) {
+  const url = String(payload.url || '').trim();
+
+  if (!url) {
+    throw createError(400, 'RSS URL is required', 'INVALID_SOURCE_PAYLOAD');
+  }
+
+  try {
+    const preview = await rssParser.validateFeedUrl(url);
+    return {
+      name: preview.title || '',
+      language: preview.language || 'it',
+      itemCount: preview.itemCount || 0
+    };
+  } catch (error) {
+    throw createError(400, 'RSS URL is not valid or cannot be parsed', 'INVALID_RSS_URL', error);
+  }
 }
 
 function removeUserSource(userId, sourceId) {
@@ -300,6 +357,8 @@ module.exports = {
   getUserSettings,
   updateUserSettings,
   addUserSource,
+  previewUserSource,
+  updateUserSource,
   removeUserSource,
   exportUserSettings,
   importUserSettings,

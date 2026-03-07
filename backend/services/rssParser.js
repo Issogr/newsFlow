@@ -28,6 +28,54 @@ const parser = new RSSParser({
 
 const responseCache = new Map();
 
+function normalizeLanguageCode(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) {
+    return '';
+  }
+
+  if (normalized.startsWith('it')) return 'it';
+  if (normalized.startsWith('en')) return 'en';
+  if (normalized.startsWith('fr')) return 'fr';
+  if (normalized.startsWith('es')) return 'es';
+  if (normalized.startsWith('de')) return 'de';
+
+  return normalized.slice(0, 2);
+}
+
+function detectFeedLanguage(feed) {
+  const explicitLanguage = normalizeLanguageCode(feed?.language || feed?.lang);
+  if (explicitLanguage) {
+    return explicitLanguage;
+  }
+
+  const sampleText = [
+    feed?.title,
+    feed?.description,
+    ...(Array.isArray(feed?.items) ? feed.items.slice(0, 5).flatMap((item) => [item?.title, item?.contentSnippet, item?.description]) : [])
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  const languageScores = {
+    it: [' il ', ' lo ', ' gli ', ' della ', ' delle ', ' notizie ', ' oggi ', ' con '],
+    en: [' the ', ' and ', ' from ', ' news ', ' with ', ' today ', ' this '],
+    fr: [' les ', ' des ', ' avec ', ' aujourd', ' monde ', ' pour '],
+    es: [' las ', ' los ', ' con ', ' hoy ', ' mundo ', ' para '],
+    de: [' und ', ' der ', ' die ', ' mit ', ' heute ', ' nachrichten ']
+  };
+
+  const scoredLanguages = Object.entries(languageScores)
+    .map(([language, markers]) => ({
+      language,
+      score: markers.reduce((total, marker) => total + (sampleText.includes(marker) ? 1 : 0), 0)
+    }))
+    .sort((left, right) => right.score - left.score);
+
+  return scoredLanguages[0]?.score > 0 ? scoredLanguages[0].language : 'it';
+}
+
 function normalizeDate(value) {
   const parsed = new Date(value || Date.now());
   return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
@@ -163,6 +211,7 @@ module.exports = {
     const feed = await parser.parseString(xml);
     return {
       title: sanitizeHtml(feed?.title || ''),
+      language: detectFeedLanguage(feed),
       itemCount: Array.isArray(feed?.items) ? feed.items.length : 0
     };
   },

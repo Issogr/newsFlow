@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Plus, Settings, Trash2, X } from 'lucide-react';
+import { Pencil, Plus, Settings, Trash2, X } from 'lucide-react';
 import {
   addUserSource,
   deleteUserSource,
   exportUserSettings,
   importUserSettings,
+  updateUserSource,
   updateUserSettings
 } from '../services/api';
 
@@ -13,7 +14,9 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
   const [customSources, setCustomSources] = useState(currentUser.customSources || []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [sourceForm, setSourceForm] = useState({ name: '', url: '', language: 'it' });
+  const [sourceForm, setSourceForm] = useState({ url: '' });
+  const [editingSourceId, setEditingSourceId] = useState('');
+  const [editingSourceForm, setEditingSourceForm] = useState({ name: '', url: '', language: 'it' });
   const importInputRef = useRef(null);
   const defaultSourceOptions = [
     ...availableSources,
@@ -60,8 +63,41 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
       const response = await addUserSource(sourceForm);
       const nextCustomSources = [response.source, ...customSources];
       setCustomSources(nextCustomSources);
-      setSourceForm({ name: '', url: '', language: settings.defaultLanguage === 'en' ? 'en' : 'it' });
+      setSourceForm({ url: '' });
       onUserUpdate({ ...currentUser, settings, customSources: nextCustomSources });
+    } catch (requestError) {
+      setError(requestError);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startEditSource = (source) => {
+    setEditingSourceId(source.id);
+    setEditingSourceForm({
+      name: source.name,
+      url: source.url,
+      language: source.language || 'it'
+    });
+  };
+
+  const cancelEditSource = () => {
+    setEditingSourceId('');
+    setEditingSourceForm({ name: '', url: '', language: 'it' });
+  };
+
+  const handleUpdateSource = async (sourceId) => {
+    setSaving(true);
+    setError(null);
+
+    try {
+      const response = await updateUserSource(sourceId, editingSourceForm);
+      const nextCustomSources = customSources.map((source) => (
+        source.id === sourceId ? response.source : source
+      ));
+      setCustomSources(nextCustomSources);
+      onUserUpdate({ ...currentUser, settings, customSources: nextCustomSources });
+      cancelEditSource();
     } catch (requestError) {
       setError(requestError);
     } finally {
@@ -256,52 +292,85 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
           <section className="space-y-4">
             <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t('customSources')}</h3>
             <p className="text-sm text-slate-500">{t('addSourceHelp')}</p>
-            <form onSubmit={handleAddSource} className="grid gap-3 md:grid-cols-[1fr_1.4fr_120px_auto]">
-              <input
-                placeholder={t('sourceName')}
-                value={sourceForm.name}
-                onChange={(event) => setSourceForm((current) => ({ ...current, name: event.target.value }))}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-                required
-              />
+            <form onSubmit={handleAddSource} className="grid gap-3 md:grid-cols-[1fr_auto]">
               <input
                 placeholder={t('rssUrl')}
                 value={sourceForm.url}
-                onChange={(event) => setSourceForm((current) => ({ ...current, url: event.target.value }))}
+                onChange={(event) => setSourceForm({ url: event.target.value })}
                 className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
                 required
               />
-              <select
-                value={sourceForm.language}
-                onChange={(event) => setSourceForm((current) => ({ ...current, language: event.target.value }))}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-              >
-                <option value="it">IT</option>
-                <option value="en">EN</option>
-                <option value="fr">FR</option>
-              </select>
               <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
                 <Plus className="h-4 w-4" />
-                {t('addSource')}
+                {saving ? t('saveSourceDetecting') : t('addSource')}
               </button>
             </form>
+            <p className="text-sm text-slate-500">{t('sourceAutoDetectedOnSave')}</p>
 
             <div className="space-y-3">
               {customSources.length === 0 ? (
                 <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">{t('noCustomSources')}</div>
               ) : (
-                customSources.map((source) => (
-                  <div key={source.id} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                    <div>
-                      <p className="font-medium text-slate-800">{source.name}</p>
-                      <p className="text-sm text-slate-500">{source.url}</p>
+                customSources.map((source) => {
+                  const isEditing = editingSourceId === source.id;
+
+                  return (
+                    <div key={source.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      {isEditing ? (
+                        <div className="space-y-3">
+                          <input
+                            value={editingSourceForm.name}
+                            onChange={(event) => setEditingSourceForm((current) => ({ ...current, name: event.target.value }))}
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3"
+                            placeholder={t('sourceName')}
+                          />
+                          <input
+                            value={editingSourceForm.url}
+                            onChange={(event) => setEditingSourceForm((current) => ({ ...current, url: event.target.value }))}
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3"
+                            placeholder={t('rssUrl')}
+                          />
+                          <div className="flex flex-wrap items-center gap-3">
+                            <select
+                              value={editingSourceForm.language}
+                              onChange={(event) => setEditingSourceForm((current) => ({ ...current, language: event.target.value }))}
+                              className="rounded-2xl border border-slate-200 bg-white px-4 py-3"
+                            >
+                              <option value="it">IT</option>
+                              <option value="en">EN</option>
+                              <option value="fr">FR</option>
+                              <option value="es">ES</option>
+                              <option value="de">DE</option>
+                            </select>
+                            <button type="button" onClick={() => handleUpdateSource(source.id)} disabled={saving} className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
+                              {saving ? t('saveSourceDetecting') : t('saveSource')}
+                            </button>
+                            <button type="button" onClick={cancelEditSource} className="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                              {t('cancel')}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="font-medium text-slate-800">{source.name}</p>
+                            <p className="text-sm text-slate-500">{source.url}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => startEditSource(source)} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                              <Pencil className="h-4 w-4" />
+                              {t('editSource')}
+                            </button>
+                            <button type="button" onClick={() => handleDeleteSource(source.id)} className="inline-flex items-center gap-2 rounded-full border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
+                              <Trash2 className="h-4 w-4" />
+                              {t('remove')}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <button type="button" onClick={() => handleDeleteSource(source.id)} className="inline-flex items-center gap-2 rounded-full border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
-                      <Trash2 className="h-4 w-4" />
-                      {t('remove')}
-                    </button>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </section>

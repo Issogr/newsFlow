@@ -12,6 +12,7 @@ News Aggregator is a web app that collects articles from multiple RSS sources, s
 - Users can create personal accounts and save private instance preferences.
 - Each user can hide default sources, set a lower personal retention window, set a lower quick-filter window, choose a default UI language, and add private custom RSS feeds.
 - Users can export and import their personal settings and custom RSS sources.
+- When adding a personal RSS source, users only need the RSS URL; the app automatically detects the feed name and language, and the source can be edited later if needed.
 - The web UI supports English and Italian, defaulting to the browser/system language and allowing manual switching.
 - Reader mode can fetch the original article server-side, strip images/layout noise, and show a clean reading view inside the app.
 - WebSocket notifications inform connected users when new grouped news or updated topics are available.
