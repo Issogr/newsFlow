@@ -396,7 +396,7 @@ function migrateToV1(database) {
     selectTopics.all().forEach((row) => {
       const normalizedTopic = topicNormalizer.normalizeTopic(row.topic);
 
-      if (!normalizedTopic || !topicNormalizer.isMeaningfulTopic(normalizedTopic)) {
+      if (!normalizedTopic || !topicNormalizer.isCanonicalTopic(normalizedTopic)) {
         const deletion = deleteTopic.run(row.articleId, row.topic);
         removedTopicRows += deletion.changes;
         return;
@@ -683,7 +683,7 @@ function hydrateArticleRows(rows) {
     sourceId: getCanonicalSourceId(row.sourceId, row.source),
     source: getCanonicalSourceName(row.sourceId, row.source),
     subSource: getSourceVariantLabel(row.sourceId, row.source),
-    topics: (topicMap.get(row.id) || []).filter((topic) => topicNormalizer.isMeaningfulTopic(topic))
+    topics: (topicMap.get(row.id) || []).filter((topic) => topicNormalizer.isCanonicalTopic(topic))
   }));
 }
 
@@ -787,7 +787,8 @@ function mergeTopicsForArticle(articleId, topics = []) {
 
   const transaction = database.transaction((articleIdentifier, topicList) => {
     topicList
-      .filter((topic) => topicNormalizer.isMeaningfulTopic(topic))
+      .map((topic) => topicNormalizer.normalizeTopic(topic))
+      .filter((topic) => topicNormalizer.isCanonicalTopic(topic))
       .forEach((topic) => {
         insertStmt.run(articleIdentifier, topic);
       });
@@ -795,7 +796,7 @@ function mergeTopicsForArticle(articleId, topics = []) {
     return selectStmt
       .all(articleIdentifier)
       .map((row) => row.topic)
-      .filter((topic) => topicNormalizer.isMeaningfulTopic(topic));
+      .filter((topic) => topicNormalizer.isCanonicalTopic(topic));
   });
 
   return transaction(articleId, topics);
@@ -1134,7 +1135,7 @@ function getTopicStatsByFilters(filters = {}, limit = 20, options = {}) {
   `).all(...params);
 
   return rows
-    .filter((row) => topicNormalizer.isMeaningfulTopic(row.topic))
+    .filter((row) => topicNormalizer.isCanonicalTopic(row.topic))
     .slice(0, limit);
 }
 

@@ -49,6 +49,8 @@ const BLOCKED_TOPICS = new Set([
   'rss'
 ]);
 
+const CANONICAL_TOPIC_SET = new Set(CANONICAL_TOPICS.map((topic) => cleanTopicValue(topic)));
+
 function cleanTopicValue(topic) {
   return String(topic || '')
     .normalize('NFD')
@@ -61,7 +63,7 @@ function cleanTopicValue(topic) {
 
 function formatTopic(topic) {
   const cleaned = cleanTopicValue(topic);
-  if (!isMeaningfulTopic(cleaned)) {
+  if (!isMeaningfulTopic(cleaned) || !CANONICAL_TOPIC_SET.has(cleaned)) {
     return null;
   }
 
@@ -79,13 +81,23 @@ function normalizeTopic(topic) {
     return null;
   }
 
+  const canonicalMatch = CANONICAL_TOPICS.find((item) => cleanTopicValue(item) === cleaned);
+  if (canonicalMatch) {
+    return canonicalMatch;
+  }
+
   for (const [canonicalTopic, aliases] of Object.entries(TOPIC_ALIASES)) {
     if (aliases.some((alias) => cleaned === cleanTopicValue(alias) || cleaned.includes(cleanTopicValue(alias)))) {
       return canonicalTopic;
     }
   }
 
-  return formatTopic(cleaned);
+  return null;
+}
+
+function isCanonicalTopic(topic) {
+  const normalized = normalizeTopic(topic);
+  return Boolean(normalized && CANONICAL_TOPIC_SET.has(cleanTopicValue(normalized)));
 }
 
 function isMeaningfulTopic(topic) {
@@ -176,6 +188,7 @@ module.exports = {
   isMeaningfulTopic,
   formatTopic,
   normalizeTopic,
+  isCanonicalTopic,
   removeDuplicates,
   limitTopics,
   inferTopicsFromText,
