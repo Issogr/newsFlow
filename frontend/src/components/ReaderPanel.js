@@ -170,15 +170,6 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => loadReader(selectedArticleId, true)}
-              disabled={refreshing || !selectedArticleId}
-              className="inline-flex items-center gap-2 rounded-full border border-stone-300 px-3 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              {t('refreshReader')}
-            </button>
-            <button
-              type="button"
               onClick={onClose}
               className="rounded-full p-2 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800"
               aria-label={t('closeReader')}
@@ -242,6 +233,15 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
               </div>
 
               <div className="mb-5 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => loadReader(selectedArticleId, true)}
+                  disabled={refreshing || !selectedArticleId}
+                  className="inline-flex items-center gap-2 rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  {t('refreshReader')}
+                </button>
                 <a
                   href={selectedArticle.url}
                   target="_blank"

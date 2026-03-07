@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.4
+
+- moved the reader refresh action next to the original source link to leave more space for the reader title
+
 ## 2.2.3
 
 - updated reader mode to use the same base font as the rest of the website for better readability
