@@ -3,6 +3,48 @@ import { ExternalLink, RefreshCw, X } from 'lucide-react';
 import { fetchReaderArticle } from '../services/api';
 import { getDateLocale, getLanguageMeta } from '../i18n';
 
+const blockClassName = {
+  paragraph: 'text-[1.06rem] leading-8 text-stone-800',
+  blockquote: 'border-l-4 border-stone-300 pl-5 italic text-stone-700',
+  preformatted: 'overflow-x-auto rounded-2xl bg-stone-900 px-4 py-4 text-sm leading-7 text-stone-100'
+};
+
+function renderReaderBlock(block, index) {
+  if (!block) {
+    return null;
+  }
+
+  if (block.type === 'heading') {
+    const TagName = `h${Math.min(Math.max(block.level || 2, 1), 6)}`;
+    const sizeClass = block.level <= 2 ? 'text-2xl md:text-3xl' : block.level === 3 ? 'text-xl md:text-2xl' : 'text-lg';
+    return <TagName key={`${block.type}-${index}`} className={`font-semibold leading-tight text-stone-900 ${sizeClass}`}>{block.text}</TagName>;
+  }
+
+  if (block.type === 'unordered-list' || block.type === 'ordered-list') {
+    const ListTag = block.type === 'ordered-list' ? 'ol' : 'ul';
+    return (
+      <ListTag
+        key={`${block.type}-${index}`}
+        className={`space-y-3 pl-6 text-[1.04rem] leading-8 text-stone-800 ${block.type === 'ordered-list' ? 'list-decimal' : 'list-disc'}`}
+      >
+        {block.items.map((item, itemIndex) => (
+          <li key={`${block.type}-${index}-${itemIndex}`}>{item}</li>
+        ))}
+      </ListTag>
+    );
+  }
+
+  if (block.type === 'preformatted') {
+    return <pre key={`${block.type}-${index}`} className={blockClassName.preformatted}>{block.text}</pre>;
+  }
+
+  if (block.type === 'blockquote') {
+    return <blockquote key={`${block.type}-${index}`} className={blockClassName.blockquote}>{block.text}</blockquote>;
+  }
+
+  return <p key={`${block.type}-${index}`} className={blockClassName.paragraph}>{block.text}</p>;
+}
+
 const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
   const dateLocale = getDateLocale(locale);
   const [selectedArticleId, setSelectedArticleId] = useState(initialArticleId || group?.items?.[0]?.id || null);
@@ -191,7 +233,7 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
                 <div className="rounded-3xl border border-red-200 bg-red-50 px-6 py-8 text-center text-red-700 shadow-sm">
                   <p className="font-medium">{t('readerUnavailable')}</p>
                 </div>
-              ) : selectedReader ? (
+                ) : selectedReader ? (
                 <article className="rounded-[2rem] border border-stone-200 bg-white px-6 py-8 shadow-sm md:px-10">
                   {selectedReader.excerpt && (
                     <p className="mb-6 text-lg leading-8 text-stone-600">{selectedReader.excerpt}</p>
@@ -207,10 +249,8 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
                     <p className="mb-6 text-sm font-medium uppercase tracking-[0.16em] text-stone-400">{selectedReader.byline}</p>
                   )}
 
-                  <div className="space-y-5 text-[1.06rem] leading-8 text-stone-800">
-                    {selectedReader.paragraphs.map((paragraph, index) => (
-                      <p key={`${selectedReader.articleId}-${index}`}>{paragraph}</p>
-                    ))}
+                  <div className="space-y-5">
+                    {(selectedReader.contentBlocks || []).map((block, index) => renderReaderBlock(block, index))}
                   </div>
                 </article>
               ) : null}

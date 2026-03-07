@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.1
+
+- improved reader mode to preserve article structure more accurately
+- added structured reader blocks for paragraphs, headings, lists, quotes, and preformatted text
+- added reader cache support for structured content blocks
+
 ## 2.2.0
 
 - added in-app reader mode with clean text extraction and no images

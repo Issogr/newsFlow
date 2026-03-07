@@ -7,6 +7,7 @@ const topicNormalizer = require('./topicNormalizer');
 
 const DATA_DIR = path.join(__dirname, '../data');
 const DB_PATH = process.env.NEWS_DB_PATH || path.join(DATA_DIR, 'news.db');
+const LATEST_MIGRATION_VERSION = 2;
 
 let db;
 
@@ -66,6 +67,7 @@ function getDb() {
   db.pragma('temp_store = MEMORY');
 
   initializeSchema(db);
+  runMigrations(db);
   logger.info(`SQLite database ready at ${DB_PATH}`);
 
   return db;
@@ -115,6 +117,11 @@ function initializeSchema(database) {
       error_message TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS app_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS reader_cache (
       article_id TEXT PRIMARY KEY,
       url TEXT NOT NULL,
@@ -124,6 +131,7 @@ function initializeSchema(database) {
       language TEXT,
       excerpt TEXT,
       content_text TEXT NOT NULL,
+      content_blocks TEXT,
       minutes_to_read INTEGER NOT NULL DEFAULT 1,
       fetched_at TEXT NOT NULL,
       FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
@@ -137,6 +145,129 @@ function initializeSchema(database) {
       tokenize = 'unicode61 remove_diacritics 2'
     );
   `);
+}
+
+function getCurrentMigrationVersion(database) {
+  const row = database.prepare(`
+    SELECT value
+    FROM app_meta
+    WHERE key = 'migration_version'
+  `).get();
+
+  return Number(row?.value || 0);
+}
+
+function setCurrentMigrationVersion(database, version) {
+  database.prepare(`
+    INSERT INTO app_meta (key, value)
+    VALUES ('migration_version', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(String(version));
+}
+
+function runMigrations(database) {
+  let currentVersion = getCurrentMigrationVersion(database);
+
+  if (currentVersion >= LATEST_MIGRATION_VERSION) {
+    return;
+  }
+
+  if (currentVersion < 1) {
+    migrateToV1(database);
+    currentVersion = 1;
+    setCurrentMigrationVersion(database, currentVersion);
+  }
+
+  if (currentVersion < 2) {
+    migrateToV2(database);
+    currentVersion = 2;
+    setCurrentMigrationVersion(database, currentVersion);
+  }
+}
+
+function columnExists(database, tableName, columnName) {
+  const columns = database.prepare(`PRAGMA table_info(${tableName})`).all();
+  return columns.some((column) => column.name === columnName);
+}
+
+function migrateToV1(database) {
+  const selectTopics = database.prepare(`
+    SELECT article_id AS articleId, topic, is_ai_generated AS isAiGenerated
+    FROM article_topics
+    ORDER BY article_id ASC, topic ASC
+  `);
+  const upsertTopic = database.prepare(`
+    INSERT INTO article_topics (article_id, topic, is_ai_generated)
+    VALUES (?, ?, ?)
+    ON CONFLICT(article_id, topic) DO UPDATE SET
+      is_ai_generated = MAX(article_topics.is_ai_generated, excluded.is_ai_generated)
+  `);
+  const deleteTopic = database.prepare(`
+    DELETE FROM article_topics
+    WHERE article_id = ? AND topic = ?
+  `);
+  const updateArticleSource = database.prepare(`
+    UPDATE articles
+    SET source_id = ?, source_name = ?
+    WHERE (source_id = ? OR source_id LIKE ? OR source_name = ?)
+      AND (source_id != ? OR source_name != ?)
+  `);
+
+  const migrate = database.transaction(() => {
+    let updatedSourceRows = 0;
+    let removedTopicRows = 0;
+    let normalizedTopicRows = 0;
+
+    configuredSources.forEach((source) => {
+      const result = updateArticleSource.run(
+        source.id,
+        source.name,
+        source.id,
+        `${source.id}-%`,
+        source.name,
+        source.id,
+        source.name
+      );
+
+      updatedSourceRows += result.changes;
+    });
+
+    selectTopics.all().forEach((row) => {
+      const normalizedTopic = topicNormalizer.normalizeTopic(row.topic);
+
+      if (!normalizedTopic || !topicNormalizer.isMeaningfulTopic(normalizedTopic)) {
+        const deletion = deleteTopic.run(row.articleId, row.topic);
+        removedTopicRows += deletion.changes;
+        return;
+      }
+
+      if (normalizedTopic !== row.topic) {
+        upsertTopic.run(row.articleId, normalizedTopic, row.isAiGenerated);
+        const deletion = deleteTopic.run(row.articleId, row.topic);
+        removedTopicRows += deletion.changes;
+        normalizedTopicRows += 1;
+      }
+    });
+
+    return {
+      updatedSourceRows,
+      removedTopicRows,
+      normalizedTopicRows
+    };
+  });
+
+  const result = migrate();
+  logger.info(`Applied DB migration v1: ${result.updatedSourceRows} source rows updated, ${result.removedTopicRows} topic rows removed, ${result.normalizedTopicRows} topic rows normalized`);
+}
+
+function migrateToV2(database) {
+  if (!columnExists(database, 'reader_cache', 'content_blocks')) {
+    database.exec('ALTER TABLE reader_cache ADD COLUMN content_blocks TEXT');
+    logger.info('Applied DB migration v2: added reader_cache.content_blocks');
+    return;
+  }
+
+  logger.info('DB migration v2 skipped: reader_cache.content_blocks already exists');
 }
 
 function buildFilterState(filters = {}) {
@@ -359,7 +490,7 @@ function mergeTopicsForArticle(articleId, topics = [], options = {}) {
     topicList
       .filter((topic) => topicNormalizer.isMeaningfulTopic(topic))
       .forEach((topic) => {
-      insertStmt.run(articleIdentifier, topic, options.isAiGenerated ? 1 : 0);
+        insertStmt.run(articleIdentifier, topic, options.isAiGenerated ? 1 : 0);
       });
 
     return selectStmt
@@ -577,7 +708,7 @@ function getReaderCache(articleId, maxAgeMs) {
   const row = getDb().prepare(`
     SELECT article_id AS articleId, url, title, site_name AS siteName,
            byline, language, excerpt, content_text AS contentText,
-           minutes_to_read AS minutesToRead, fetched_at AS fetchedAt
+           content_blocks AS contentBlocks, minutes_to_read AS minutesToRead, fetched_at AS fetchedAt
     FROM reader_cache
     WHERE article_id = ?
   `).get(articleId);
@@ -593,7 +724,10 @@ function getReaderCache(articleId, maxAgeMs) {
     }
   }
 
-  return row;
+  return {
+    ...row,
+    contentBlocks: row.contentBlocks ? JSON.parse(row.contentBlocks) : null
+  };
 }
 
 function upsertReaderCache(articleId, payload = {}) {
@@ -611,9 +745,10 @@ function upsertReaderCache(articleId, payload = {}) {
       language,
       excerpt,
       content_text,
+      content_blocks,
       minutes_to_read,
       fetched_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(article_id) DO UPDATE SET
       url = excluded.url,
       title = excluded.title,
@@ -622,6 +757,7 @@ function upsertReaderCache(articleId, payload = {}) {
       language = excluded.language,
       excerpt = excluded.excerpt,
       content_text = excluded.content_text,
+      content_blocks = excluded.content_blocks,
       minutes_to_read = excluded.minutes_to_read,
       fetched_at = excluded.fetched_at
   `).run(
@@ -633,6 +769,7 @@ function upsertReaderCache(articleId, payload = {}) {
     payload.language || null,
     payload.excerpt || null,
     payload.contentText,
+    Array.isArray(payload.contentBlocks) ? JSON.stringify(payload.contentBlocks) : null,
     payload.minutesToRead || 1,
     payload.fetchedAt || new Date().toISOString()
   );
