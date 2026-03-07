@@ -17,6 +17,27 @@ const SCRAPE_INTERVAL_MS = parseInt(process.env.SCRAPE_INTERVAL_MS || '300000', 
 const MAX_SCAN_ARTICLES = parseInt(process.env.MAX_SCAN_ARTICLES || '600', 10);
 const ARTICLE_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
 
+const TITLE_STOP_WORDS = new Set([
+  'a', 'ad', 'agli', 'ai', 'al', 'alla', 'alle', 'allo', 'anche', 'che', 'con', 'da', 'dal', 'dalla', 'dalle', 'dei', 'del', 'della',
+  'delle', 'di', 'e', 'ed', 'for', 'gli', 'i', 'il', 'in', 'la', 'le', 'lo', 'nel', 'nella', 'nelle', 'o', 'per', 'piu', 'su', 'sul',
+  'sulla', 'the', 'tra', 'un', 'una'
+]);
+
+const ENTITY_STOP_WORDS = new Set([
+  'ansa', 'bbc', 'breaking', 'home', 'il', 'la', 'le', 'live', 'mondo', 'news', 'politica', 'sole', 'ultima', 'ultim ora', 'world'
+]);
+
+const TITLE_PREFIX_PATTERNS = [
+  /^aggiornamento\s*[:\-]\s*/i,
+  /^breaking\s*[:\-]\s*/i,
+  /^diretta\s*[:\-]\s*/i,
+  /^live\s*[:\-]\s*/i,
+  /^ultima ora\s*[:\-]\s*/i,
+  /^ultim ora\s*[:\-]\s*/i
+];
+
+const simHashProfileCache = new WeakMap();
+
 let refreshPromise = null;
 let lastRefreshAt = null;
 let schedulerHandle = null;
@@ -97,6 +118,170 @@ function simplifyText(text) {
     .trim();
 }
 
+function normalizeTitleForMatching(title) {
+  let normalizedTitle = String(title || '').trim();
+
+  TITLE_PREFIX_PATTERNS.forEach((pattern) => {
+    normalizedTitle = normalizedTitle.replace(pattern, '');
+  });
+
+  const simplifiedTitle = simplifyText(normalizedTitle);
+  if (!simplifiedTitle) {
+    return '';
+  }
+
+  return simplifiedTitle
+    .split(' ')
+    .filter((token) => token.length > 2 && !TITLE_STOP_WORDS.has(token))
+    .join(' ')
+    .trim();
+}
+
+function toTokenSet(text) {
+  return new Set(String(text || '').split(' ').filter((token) => token.length > 1));
+}
+
+function getWeightedFeatureMap(item = {}) {
+  const featureWeights = new Map();
+
+  const addFeatures = (values, weight) => {
+    values.forEach((value) => {
+      const normalizedValue = String(value || '').trim();
+      if (!normalizedValue) {
+        return;
+      }
+
+      featureWeights.set(normalizedValue, (featureWeights.get(normalizedValue) || 0) + weight);
+    });
+  };
+
+  const normalizedTitle = normalizeTitleForMatching(item.title);
+  const titleTokens = [...toTokenSet(normalizedTitle)];
+  const topicTokens = (item.topics || []).map((topic) => simplifyText(topic)).filter(Boolean);
+  const entityTokens = [...extractNamedEntities(item)];
+
+  addFeatures(titleTokens, 6);
+  addFeatures(topicTokens, 4);
+  addFeatures(entityTokens, 4);
+
+  return {
+    normalizedTitle,
+    titleTokens: new Set(titleTokens),
+    topicTokens: new Set(topicTokens),
+    entityTokens: new Set(entityTokens),
+    featureWeights
+  };
+}
+
+function buildSimHash(featureWeights = new Map()) {
+  const vector = Array(64).fill(0);
+
+  featureWeights.forEach((weight, feature) => {
+    const hash = BigInt(`0x${crypto.createHash('sha1').update(feature).digest('hex').slice(0, 16)}`);
+
+    for (let index = 0; index < 64; index += 1) {
+      const bitmask = 1n << BigInt(index);
+      vector[index] += (hash & bitmask) ? weight : -weight;
+    }
+  });
+
+  return vector.reduce((fingerprint, score, index) => {
+    if (score >= 0) {
+      return fingerprint | (1n << BigInt(index));
+    }
+
+    return fingerprint;
+  }, 0n);
+}
+
+function calculateHammingDistance(leftFingerprint, rightFingerprint) {
+  let value = BigInt(leftFingerprint) ^ BigInt(rightFingerprint);
+  let distance = 0;
+
+  while (value > 0n) {
+    distance += Number(value & 1n);
+    value >>= 1n;
+  }
+
+  return distance;
+}
+
+function getSimHashProfile(item = {}) {
+  if (simHashProfileCache.has(item)) {
+    return simHashProfileCache.get(item);
+  }
+
+  const featureProfile = getWeightedFeatureMap(item);
+  const profile = {
+    ...featureProfile,
+    fingerprint: buildSimHash(featureProfile.featureWeights)
+  };
+
+  simHashProfileCache.set(item, profile);
+  return profile;
+}
+
+function calculateSetScore(valuesA = [], valuesB = []) {
+  const setA = valuesA instanceof Set ? valuesA : new Set(valuesA);
+  const setB = valuesB instanceof Set ? valuesB : new Set(valuesB);
+
+  if (setA.size === 0 || setB.size === 0) {
+    return 0;
+  }
+
+  const intersection = [...setA].filter((value) => setB.has(value)).length;
+  const union = setA.size + setB.size - intersection;
+
+  return union > 0 ? intersection / union : 0;
+}
+
+function extractNamedEntities(item = {}) {
+  const text = [item.title, item.description]
+    .filter(Boolean)
+    .join(' ');
+
+  if (!text) {
+    return new Set();
+  }
+
+  const matches = text.match(/\b(?:[A-Z][\p{L}\p{M}'-]+|[A-Z]{2,})(?:\s+(?:[A-Z][\p{L}\p{M}'-]+|[A-Z]{2,})){0,2}\b/gu) || [];
+
+  return new Set(
+    matches
+      .map((match) => simplifyText(match))
+      .filter((entity) => entity.length > 2 && !ENTITY_STOP_WORDS.has(entity))
+  );
+}
+
+function calculateTimeProximityScore(itemA, itemB) {
+  const timestampA = Date.parse(itemA?.pubDate || '');
+  const timestampB = Date.parse(itemB?.pubDate || '');
+
+  if (!Number.isFinite(timestampA) || !Number.isFinite(timestampB)) {
+    return 0;
+  }
+
+  const hoursDifference = Math.abs(timestampA - timestampB) / (1000 * 60 * 60);
+
+  if (hoursDifference <= 2) {
+    return 1;
+  }
+
+  if (hoursDifference <= 6) {
+    return 0.8;
+  }
+
+  if (hoursDifference <= 12) {
+    return 0.55;
+  }
+
+  if (hoursDifference <= 24) {
+    return 0.3;
+  }
+
+  return 0;
+}
+
 function getStableArticleKey(item) {
   if (!item || typeof item !== 'object') {
     return '';
@@ -127,31 +312,45 @@ function calculateSimilarity(itemA, itemB) {
     return 1;
   }
 
-  const titleA = simplifyText(itemA.title);
-  const titleB = simplifyText(itemB.title);
-  const bodyA = simplifyText(`${itemA.title} ${itemA.description || ''}`);
-  const bodyB = simplifyText(`${itemB.title} ${itemB.description || ''}`);
-  const titleSetA = new Set(titleA.split(' ').filter(Boolean));
-  const titleSetB = new Set(titleB.split(' ').filter(Boolean));
-  const bodySetA = new Set(bodyA.split(' ').filter(Boolean));
-  const bodySetB = new Set(bodyB.split(' ').filter(Boolean));
+  const profileA = getSimHashProfile(itemA);
+  const profileB = getSimHashProfile(itemB);
 
-  const titleIntersection = [...titleSetA].filter((word) => titleSetB.has(word)).length;
-  const bodyIntersection = [...bodySetA].filter((word) => bodySetB.has(word)).length;
-  const titleUnion = titleSetA.size + titleSetB.size - titleIntersection;
-  const bodyUnion = bodySetA.size + bodySetB.size - bodyIntersection;
+  const titleScore = calculateSetScore(profileA.titleTokens, profileB.titleTokens);
+  const topicScore = calculateSetScore(profileA.topicTokens, profileB.topicTokens);
+  const entityScore = calculateSetScore(profileA.entityTokens, profileB.entityTokens);
+  const timeScore = calculateTimeProximityScore(itemA, itemB);
+  const simHashScore = 1 - (calculateHammingDistance(profileA.fingerprint, profileB.fingerprint) / 64);
+  const strongTitleMatch = profileA.normalizedTitle && profileB.normalizedTitle && (
+    profileA.normalizedTitle === profileB.normalizedTitle
+    || (profileA.normalizedTitle.length >= 18
+      && profileB.normalizedTitle.length >= 18
+      && (
+        profileA.normalizedTitle.includes(profileB.normalizedTitle)
+        || profileB.normalizedTitle.includes(profileA.normalizedTitle)
+      ))
+  );
 
-  const titleScore = titleUnion > 0 ? titleIntersection / titleUnion : 0;
-  const bodyScore = bodyUnion > 0 ? bodyIntersection / bodyUnion : 0;
+  if (strongTitleMatch && (entityScore > 0 || timeScore >= 0.55 || topicScore >= 0.5 || simHashScore >= 0.82)) {
+    return Math.min(1, 0.78 + (0.12 * entityScore) + (0.1 * Math.max(timeScore, topicScore)));
+  }
 
-  const topicSetA = new Set((itemA.topics || []).map((topic) => topic.toLowerCase()));
-  const topicSetB = new Set((itemB.topics || []).map((topic) => topic.toLowerCase()));
-  const topicIntersection = [...topicSetA].filter((topic) => topicSetB.has(topic)).length;
-  const topicScore = topicSetA.size > 0 && topicSetB.size > 0
-    ? topicIntersection / Math.max(topicSetA.size, topicSetB.size)
-    : 0;
+  if (titleScore < 0.22 && entityScore === 0 && topicScore < 0.5) {
+    return 0;
+  }
 
-  return (0.6 * titleScore) + (0.25 * bodyScore) + (0.15 * topicScore);
+  if (simHashScore < 0.66 && titleScore < 0.28 && entityScore === 0) {
+    return 0;
+  }
+
+  if (simHashScore < 0.62 && titleScore < 0.18 && entityScore === 0 && topicScore === 0) {
+    return 0;
+  }
+
+  return (0.62 * simHashScore)
+    + (0.14 * titleScore)
+    + (0.1 * topicScore)
+    + (0.08 * entityScore)
+    + (0.06 * timeScore);
 }
 
 function groupSimilarNews(newsItems) {
@@ -167,8 +366,11 @@ function groupSimilarNews(newsItems) {
     let bestScore = 0;
 
     groups.forEach((group) => {
-      const score = calculateSimilarity(group.items[0], item);
-      if (score > 0.45 && score > bestScore) {
+      const score = group.items.reduce((highestScore, groupedItem) => {
+        return Math.max(highestScore, calculateSimilarity(groupedItem, item));
+      }, 0);
+
+      if (score > 0.58 && score > bestScore) {
         bestGroup = group;
         bestScore = score;
       }
@@ -454,5 +656,6 @@ module.exports = {
   stopScheduler,
   newsSources,
   _groupSimilarNews: groupSimilarNews,
-  _buildStableGroupId: buildStableGroupId
+  _buildStableGroupId: buildStableGroupId,
+  _calculateSimilarity: calculateSimilarity
 };

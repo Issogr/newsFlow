@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.14
+
+- replaced the custom near-duplicate grouping heuristic with a SimHash-based approach enriched by time proximity and shared named-entity/topic signals
+
 ## 3.0.13
 
 - removed backend file logging and switched fully to stdout/stderr logging for simpler container operation
