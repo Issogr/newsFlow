@@ -1,4 +1,5 @@
 import React, { memo } from 'react';
+import { BookOpenText, ExternalLink } from 'lucide-react';
 import { getDateLocale, getLanguageMeta } from '../i18n';
 
 const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenReader }) => {
@@ -124,6 +125,7 @@ const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenRe
             onClick={() => onOpenReader(group, group.items[0]?.id)}
             className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
           >
+            <BookOpenText className="mr-2 h-4 w-4" />
             {t('readerMode')}
           </button>
           <a
@@ -132,6 +134,7 @@ const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenRe
             rel="noopener noreferrer"
             className="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700"
           >
+            <ExternalLink className="mr-2 h-4 w-4" />
             {t('openOriginalSource')}
           </a>
         </div>

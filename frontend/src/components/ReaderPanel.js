@@ -1,13 +1,26 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, RefreshCw, X } from 'lucide-react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  BookOpenText,
+  CalendarDays,
+  Clock3,
+  ExternalLink,
+  Languages,
+  Newspaper,
+  RefreshCw,
+  X
+} from 'lucide-react';
 import { fetchReaderArticle } from '../services/api';
 import { getDateLocale, getLanguageMeta } from '../i18n';
 
 const blockClassName = {
-  paragraph: 'text-[1.06rem] leading-8 text-stone-800',
-  blockquote: 'border-l-4 border-stone-300 pl-5 italic text-stone-700',
+  paragraph: 'text-[1.08rem] leading-8 text-stone-800',
+  blockquote: 'border-l-4 border-stone-300 bg-stone-50/80 pl-5 pr-2 italic text-stone-700',
   preformatted: 'overflow-x-auto rounded-2xl bg-stone-900 px-4 py-4 text-sm leading-7 text-stone-100'
 };
+
+const metaChipClassName = 'inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 shadow-sm';
 
 function renderReaderBlock(block, index) {
   if (!block) {
@@ -17,7 +30,7 @@ function renderReaderBlock(block, index) {
   if (block.type === 'heading') {
     const TagName = `h${Math.min(Math.max(block.level || 2, 1), 6)}`;
     const sizeClass = block.level <= 2 ? 'text-2xl md:text-3xl' : block.level === 3 ? 'text-xl md:text-2xl' : 'text-lg';
-    return <TagName key={`${block.type}-${index}`} className={`font-semibold leading-tight text-stone-900 ${sizeClass}`}>{block.text}</TagName>;
+    return <TagName key={`${block.type}-${index}`} className={`font-semibold leading-tight tracking-tight text-stone-900 ${sizeClass}`}>{block.text}</TagName>;
   }
 
   if (block.type === 'unordered-list' || block.type === 'ordered-list') {
@@ -145,8 +158,13 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
       <section className="ml-auto flex h-full w-full max-w-4xl flex-col bg-stone-50 shadow-2xl">
         <div className="flex items-center justify-between border-b border-stone-200 bg-white px-5 py-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">{t('cleanReadingView')}</p>
-            <h2 className="mt-1 text-lg font-semibold text-stone-900">{selectedReader?.title || selectedArticle?.title || t('readerMode')}</h2>
+            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">
+              <BookOpenText className="h-4 w-4" />
+              {t('cleanReadingView')}
+            </p>
+            <h2 className="mt-2 max-w-2xl text-xl font-semibold leading-tight text-stone-900 md:text-2xl">
+              {selectedReader?.title || selectedArticle?.title || t('readerMode')}
+            </h2>
           </div>
 
           <div className="flex items-center gap-2">
@@ -172,7 +190,10 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
 
         {group?.items?.length > 1 && (
           <div className="border-b border-stone-200 bg-white px-5 py-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">{t('sourceVersions')}</p>
+            <p className="mb-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
+              <Newspaper className="h-4 w-4" />
+              {t('sourceVersions')}
+            </p>
             <div className="flex flex-wrap gap-2">
               {group.items.map((item) => {
                 const isActive = item.id === selectedArticleId;
@@ -195,18 +216,26 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
 
         <div className="flex-1 overflow-y-auto px-5 py-6 md:px-8">
           {selectedArticle && (
-            <div className="mx-auto max-w-3xl">
+            <div className="mx-auto max-w-[46rem]">
               <div className="mb-6 flex flex-wrap items-center gap-3 text-sm text-stone-500">
-                <span className="rounded-full bg-white px-3 py-1.5 shadow-sm">{selectedArticle.source}</span>
-                <span className="rounded-full bg-white px-3 py-1.5 shadow-sm">{formatDate(selectedArticle.pubDate)}</span>
+                <span className={metaChipClassName}>
+                  <Newspaper className="h-4 w-4 text-stone-400" />
+                  {selectedArticle.source}
+                </span>
+                <span className={metaChipClassName}>
+                  <CalendarDays className="h-4 w-4 text-stone-400" />
+                  {formatDate(selectedArticle.pubDate)}
+                </span>
                 <span
-                  className="rounded-full bg-white px-3 py-1.5 shadow-sm"
+                  className={metaChipClassName}
                   title={t('newsLanguage', { language: languageMeta.label })}
                 >
+                  <Languages className="h-4 w-4 text-stone-400" />
                   {languageMeta.emoji}
                 </span>
                 {selectedReader?.minutesToRead && (
-                  <span className="rounded-full bg-white px-3 py-1.5 shadow-sm">
+                  <span className={metaChipClassName}>
+                    <Clock3 className="h-4 w-4 text-stone-400" />
                     {t('readTime', { minutes: selectedReader.minutesToRead })}
                   </span>
                 )}
@@ -227,20 +256,29 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
               {loading && !selectedReader ? (
                 <div className="rounded-3xl border border-stone-200 bg-white px-6 py-10 text-center shadow-sm">
                   <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-stone-200 border-t-slate-900" />
-                  <p className="mt-4 text-sm text-stone-500">{t('loadingReader')}</p>
+                  <p className="mt-4 inline-flex items-center gap-2 text-sm text-stone-500">
+                    <BookOpenText className="h-4 w-4" />
+                    {t('loadingReader')}
+                  </p>
                 </div>
               ) : error ? (
                 <div className="rounded-3xl border border-red-200 bg-red-50 px-6 py-8 text-center text-red-700 shadow-sm">
-                  <p className="font-medium">{t('readerUnavailable')}</p>
+                  <p className="inline-flex items-center gap-2 font-medium">
+                    <AlertCircle className="h-4 w-4" />
+                    {t('readerUnavailable')}
+                  </p>
                 </div>
                 ) : selectedReader ? (
                 <article className="rounded-[2rem] border border-stone-200 bg-white px-6 py-8 shadow-sm md:px-10">
                   {selectedReader.excerpt && (
-                    <p className="mb-6 text-lg leading-8 text-stone-600">{selectedReader.excerpt}</p>
+                    <p className="mb-7 border-l-4 border-stone-200 pl-4 text-lg leading-8 text-stone-600 md:text-[1.18rem]">
+                      {selectedReader.excerpt}
+                    </p>
                   )}
 
                   {selectedReader.fallback && (
-                    <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <div className="mb-6 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
                       {t('readerFallback')}
                     </div>
                   )}
@@ -249,7 +287,7 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
                     <p className="mb-6 text-sm font-medium uppercase tracking-[0.16em] text-stone-400">{selectedReader.byline}</p>
                   )}
 
-                  <div className="space-y-5">
+                  <div className="space-y-6 font-serif tracking-[0.01em]">
                     {(selectedReader.contentBlocks || []).map((block, index) => renderReaderBlock(block, index))}
                   </div>
                 </article>

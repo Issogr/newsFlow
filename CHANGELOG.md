@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.2
+
+- improved reader panel typography and spacing for easier reading
+- added icons to reader mode metadata, states, and actions
+
 ## 2.2.1
 
 - improved reader mode to preserve article structure more accurately
