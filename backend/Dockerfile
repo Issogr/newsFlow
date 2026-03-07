@@ -28,10 +28,8 @@ COPY --from=build /app/node_modules ./node_modules
 # Copia il codice
 COPY . .
 
-# Crea le directory necessarie e imposta i permessi
-RUN mkdir -p logs && \
-    mkdir -p data && \
-    chown -R nodeuser:nodejs logs && \
+# Crea la directory dati e imposta i permessi
+RUN mkdir -p data && \
     chown -R nodeuser:nodejs data
 
 # Esponi la porta

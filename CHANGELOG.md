@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.13
+
+- removed backend file logging and switched fully to stdout/stderr logging for simpler container operation
+- simplified Docker setup by removing the backend log volume and log-directory permission handling
+
 ## 3.0.12
 
 - added per-user sub-feed exclusions so grouped sources can stay enabled while specific feeds are disabled in settings
