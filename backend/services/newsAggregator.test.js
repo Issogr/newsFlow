@@ -138,6 +138,7 @@ describe('newsAggregator service flows', () => {
       ingestion: { id: 7, status: 'completed' }
     });
     expect(result.filters.sourceCatalog).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'ansa', name: 'ANSA' }),
       expect.objectContaining({ id: 'custom-1', name: 'My Feed', language: 'en' })
     ]));
     expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({ limit: 40, offset: 0 }), expect.objectContaining({ userId: 'user-1' }));
@@ -148,7 +149,7 @@ describe('newsAggregator service flows', () => {
       { id: 'custom-1', name: 'My Feed', url: 'https://example.com/custom.xml', language: 'en', userId: 'user-1', isActive: true }
     ]);
     rssParser.parseFeed
-      .mockResolvedValueOnce([{ id: 'global-1', sourceId: 'ansa', source: 'ANSA', title: 'Global economy update', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/g', rawTopics: ['Economy'] }])
+      .mockResolvedValueOnce([{ id: 'global-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Global economy update', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/g', rawTopics: ['Economy'] }])
       .mockResolvedValueOnce([{ id: 'private-1', sourceId: 'custom-1', source: 'My Feed', title: 'Private portfolio update', pubDate: '2026-03-07T11:00:00.000Z', url: 'https://example.com/p', rawTopics: ['Markets'], ownerUserId: 'user-1' }]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['global-1', 'private-1'], insertedCount: 2, updatedCount: 0 });
 
@@ -156,9 +157,13 @@ describe('newsAggregator service flows', () => {
 
     expect(result).toMatchObject({ success: true, fetchedCount: 2, insertedCount: 2, updatedCount: 0 });
     expect(database.cleanupRemovedConfiguredSourceData).toHaveBeenCalledTimes(1);
+    expect(database.upsertArticles).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ rawSourceId: 'ansa_mondo', rawSource: 'ANSA - Mondo', sourceId: 'ansa', source: 'ANSA', subSource: 'Mondo' })
+    ]));
     expect(database.mergeTopicsForArticle).toHaveBeenCalledTimes(2);
     expect(websocketService.broadcastNewsUpdate).toHaveBeenCalledTimes(2);
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0]).toMatchObject({ id: expect.stringContaining('group-'), ownerUserId: null });
+    expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].items[0]).toMatchObject({ sourceId: 'ansa', subSource: 'Mondo' });
     expect(websocketService.broadcastNewsUpdate.mock.calls[1][0][0]).toMatchObject({ ownerUserId: 'user-1' });
   });
 

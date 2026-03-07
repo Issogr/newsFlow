@@ -6,6 +6,12 @@ const topicNormalizer = require('./topicNormalizer');
 const websocketService = require('./websocketService');
 const { createError } = require('../utils/errorHandler');
 const newsSources = require('../config/newsSources');
+const {
+  getCanonicalSourceId,
+  getCanonicalSourceName,
+  getConfiguredSourceGroups,
+  getSourceVariantLabel
+} = require('../utils/sourceCatalog');
 
 const SCRAPE_INTERVAL_MS = parseInt(process.env.SCRAPE_INTERVAL_MS || '300000', 10);
 const MAX_SCAN_ARTICLES = parseInt(process.env.MAX_SCAN_ARTICLES || '600', 10);
@@ -41,18 +47,7 @@ function cleanupRemovedConfiguredSourceData() {
 }
 
 function expandConfiguredSources() {
-  return newsSources.flatMap((source) => {
-    if (source.type === 'multi-rss' && Array.isArray(source.urls)) {
-      return source.urls.map((url) => ({
-        ...source,
-        type: 'rss',
-        url,
-        subId: `${source.id}-${url.split('/').pop().replace('.xml', '').replace(/[^a-z0-9-]/gi, '')}`
-      }));
-    }
-
-    return [source];
-  });
+  return newsSources;
 }
 
 function expandUserSources(userSources = []) {
@@ -71,7 +66,7 @@ function expandUserSources(userSources = []) {
 function getAvailableSources(userContext = {}) {
   const userSources = userContext.userId ? database.listUserSources(userContext.userId) : [];
   return [
-    ...newsSources,
+    ...getConfiguredSourceGroups(),
     ...userSources.map((source) => ({
       id: source.id,
       name: source.name,
@@ -89,7 +84,8 @@ function getQueryOptions(userContext = {}) {
       ARTICLE_RETENTION_HOURS,
       Number.isFinite(userContext.articleRetentionHours) ? userContext.articleRetentionHours : ARTICLE_RETENTION_HOURS
     ),
-    excludedSourceIds: Array.isArray(userContext.excludedSourceIds) ? userContext.excludedSourceIds : []
+    excludedSourceIds: Array.isArray(userContext.excludedSourceIds) ? userContext.excludedSourceIds : [],
+    excludedSubSourceIds: Array.isArray(userContext.excludedSubSourceIds) ? userContext.excludedSubSourceIds : []
   };
 }
 
@@ -215,8 +211,15 @@ function normalizeIncomingArticles(articles = []) {
 
   articles.forEach((article) => {
     const baseTopics = topicNormalizer.extractTopics(article, article.rawTopics);
+    const canonicalSourceId = getCanonicalSourceId(article.sourceId, article.source);
+    const canonicalSourceName = getCanonicalSourceName(article.sourceId, article.source);
     const normalizedArticle = {
       ...article,
+      rawSourceId: article.sourceId,
+      rawSource: article.source,
+      sourceId: canonicalSourceId,
+      source: canonicalSourceName,
+      subSource: getSourceVariantLabel(article.sourceId, article.source),
       topics: baseTopics
     };
     dedupedArticles.set(article.id, normalizedArticle);
@@ -400,7 +403,8 @@ async function getNewsFeed(filters = {}, userContext = {}) {
       sourceCatalog: availableSources.map((source) => ({
         id: source.id,
         name: source.name,
-        language: source.language || null
+        language: source.language || null,
+        subSources: Array.isArray(source.subSources) ? source.subSources : []
       })),
       topics: database.getTopicStatsByFilters({
         search: filters.search,

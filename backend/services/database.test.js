@@ -4,8 +4,11 @@ const path = require('path');
 const SqliteDatabase = require('better-sqlite3');
 const configuredSources = require('../config/newsSources');
 
-const primarySource = configuredSources[0] || { id: 'source-a', name: 'Source A' };
-const secondarySource = configuredSources[1] || { id: 'source-b', name: 'Source B' };
+const primarySource = configuredSources.find((source) => !source.groupId) || configuredSources[0] || { id: 'source-a', name: 'Source A' };
+const secondarySource = configuredSources.find((source) => !source.groupId && source.id !== primarySource.id) || configuredSources[1] || { id: 'source-b', name: 'Source B' };
+const groupedSource = configuredSources.find((source) => source.groupId) || null;
+const groupedSourceFamilyId = groupedSource?.groupId || groupedSource?.id || 'grouped-source';
+const groupedSourceFamilyName = groupedSource?.groupName || groupedSource?.name || 'Grouped Source';
 
 function createTempDbPath() {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'news-db-test-'));
@@ -46,12 +49,14 @@ describe('database migrations', () => {
       WHERE key = 'migration_version'
     `).get()?.value;
     const topicColumns = sqlite.prepare('PRAGMA table_info(article_topics)').all().map((column) => column.name);
+    const settingsColumns = sqlite.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('4');
+    expect(migrationVersion).toBe('5');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
+    expect(settingsColumns).toContain('excluded_sub_source_ids');
   });
 
   test('migrates legacy topic metadata without losing topics', () => {
@@ -204,6 +209,10 @@ describe('database queries and user data', () => {
 
     const visibleForUser = database.getArticles({}, { userId: 'user-1', maxArticleAgeHours: 24 });
     expect(visibleForUser.map((article) => article.id)).toEqual(['private-1', 'global-2', 'global-1']);
+    expect(visibleForUser[0]).toEqual(expect.objectContaining({
+      rawSourceId: 'custom-1',
+      rawSource: 'Private Feed'
+    }));
 
     const excludedFiltered = database.getArticles({}, { userId: 'user-1', excludedSourceIds: [secondarySource.id], maxArticleAgeHours: 24 });
     expect(excludedFiltered.map((article) => article.id)).toEqual(['private-1', 'global-1']);
@@ -233,7 +242,8 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      excludedSourceIds: [primarySource.id]
+      excludedSourceIds: [primarySource.id],
+      excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
     });
 
     expect(settings).toMatchObject({
@@ -241,7 +251,8 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      excludedSourceIds: [primarySource.id]
+      excludedSourceIds: [primarySource.id],
+      excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
     });
 
     database.createUserSource({
@@ -298,8 +309,8 @@ describe('database queries and user data', () => {
     database.upsertArticles([
       {
         id: 'global-1',
-        sourceId: `${primarySource.id}-economy`,
-        source: primarySource.name,
+        sourceId: groupedSource?.id || primarySource.id,
+        source: groupedSource?.name || primarySource.name,
         title: 'Economy briefing',
         description: 'Markets and finance',
         content: 'Economy body',
@@ -324,22 +335,36 @@ describe('database queries and user data', () => {
     database.mergeTopicsForArticle('global-2', ['Science']);
 
     const sourceStats = database.getSourceStats([
-      { id: primarySource.id, name: primarySource.name, language: 'it' },
+      { id: groupedSourceFamilyId, name: groupedSourceFamilyName, language: 'it' },
       { id: secondarySource.id, name: secondarySource.name, language: 'en' }
     ]);
+    const groupedArticles = database.getArticles({ sourceIds: [groupedSourceFamilyId] });
+    const groupedArticlesWithExcludedSubFeed = groupedSource
+      ? database.getArticles({ sourceIds: [groupedSourceFamilyId] }, { excludedSubSourceIds: [groupedSource.id] })
+      : groupedArticles;
 
     expect(sourceStats).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: primarySource.id, name: primarySource.name, count: 1 }),
+      expect.objectContaining({ id: groupedSourceFamilyId, name: groupedSourceFamilyName, count: 1 }),
       expect.objectContaining({ id: secondarySource.id, name: secondarySource.name, count: 1 })
     ]));
+    expect(groupedArticles[0]).toEqual(expect.objectContaining({
+      sourceId: groupedSourceFamilyId,
+      source: groupedSourceFamilyName,
+      rawSourceId: groupedSource?.id || primarySource.id,
+      rawSource: groupedSource?.name || primarySource.name,
+      subSource: groupedSource?.subSource || null
+    }));
+    if (groupedSource) {
+      expect(groupedArticlesWithExcludedSubFeed).toEqual([]);
+    }
 
-    const searchTopics = database.getTopicStatsByFilters({ search: 'briefing', sourceIds: [primarySource.id] }, 10);
+    const searchTopics = database.getTopicStatsByFilters({ search: 'briefing', sourceIds: [groupedSourceFamilyId] }, 10);
     expect(searchTopics).toEqual([
       { topic: 'Economy', count: 1 },
       { topic: 'Markets', count: 1 }
     ]);
 
-    const excludedTopics = database.getTopicStatsByFilters({}, 10, { excludedSourceIds: [primarySource.id] });
+    const excludedTopics = database.getTopicStatsByFilters({}, 10, { excludedSourceIds: [groupedSourceFamilyId] });
     expect(excludedTopics).toEqual([{ topic: 'Science', count: 1 }]);
   });
 
@@ -358,7 +383,8 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 24,
       recentHours: 3,
-      excludedSourceIds: ['retired-source', primarySource.id, 'custom-1']
+      excludedSourceIds: ['retired-source', primarySource.id, 'custom-1'],
+      excludedSubSourceIds: ['retired-sub-source', groupedSource?.id || 'missing-sub-source']
     });
 
     database.createUserSource({
@@ -414,6 +440,9 @@ describe('database queries and user data', () => {
 
     expect(cleanupResult).toEqual({ removedArticles: 1, updatedSettings: 1 });
     expect(database.getArticles({}, { userId: 'user-1' }).map((article) => article.id)).toEqual(['private-article', 'kept-global']);
-    expect(database.getUserSettings('user-1').excludedSourceIds).toEqual([primarySource.id, 'custom-1']);
+    expect(database.getUserSettings('user-1')).toEqual(expect.objectContaining({
+      excludedSourceIds: [primarySource.id, 'custom-1'],
+      excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
+    }));
   });
 });

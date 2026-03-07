@@ -22,6 +22,14 @@ const blockClassName = {
 
 const metaChipClassName = 'inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 shadow-sm';
 
+function getArticleSourceLabel(article) {
+  if (!article) {
+    return '';
+  }
+
+  return article.source || article.rawSource || '';
+}
+
 function renderReaderBlock(block, index) {
   if (!block) {
     return null;
@@ -91,6 +99,18 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
   const selectedArticle = useMemo(() => {
     return group?.items?.find((item) => item.id === selectedArticleId) || group?.items?.[0] || null;
   }, [group?.items, selectedArticleId]);
+
+  const sourceVersionItems = useMemo(() => {
+    const groupedItems = new Map();
+
+    (group?.items || []).forEach((item) => {
+      if (!groupedItems.has(item.sourceId)) {
+        groupedItems.set(item.sourceId, item);
+      }
+    });
+
+    return [...groupedItems.values()];
+  }, [group?.items]);
 
   const selectedReader = selectedArticleId ? readerByArticleId[selectedArticleId] : null;
 
@@ -179,25 +199,25 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
           </div>
         </div>
 
-        {group?.items?.length > 1 && (
+        {sourceVersionItems.length > 1 && (
           <div className="border-b border-stone-200 bg-white px-5 py-3">
             <p className="mb-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
               <Newspaper className="h-4 w-4" />
               {t('sourceVersions')}
             </p>
             <div className="flex flex-wrap gap-2">
-              {group.items.map((item) => {
-                const isActive = item.id === selectedArticleId;
+              {sourceVersionItems.map((item) => {
+                const isActive = item.sourceId === selectedArticle?.sourceId;
                 return (
                   <button
-                    key={item.id}
+                    key={item.sourceId}
                     type="button"
                     onClick={() => setSelectedArticleId(item.id)}
                     className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                       isActive ? 'bg-slate-900 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
                     }`}
                   >
-                    {item.source}
+                    {getArticleSourceLabel(item)}
                   </button>
                 );
               })}
@@ -211,7 +231,7 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
               <div className="mb-6 flex flex-wrap items-center gap-3 text-sm text-stone-500">
                 <span className={metaChipClassName}>
                   <Newspaper className="h-4 w-4 text-stone-400" />
-                  {selectedArticle.source}
+                  {getArticleSourceLabel(selectedArticle)}
                 </span>
                 <span className={metaChipClassName}>
                   <CalendarDays className="h-4 w-4 text-stone-400" />

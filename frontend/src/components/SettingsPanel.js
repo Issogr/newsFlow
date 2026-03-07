@@ -24,6 +24,15 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
     const customSourceIds = new Set(customSources.map((source) => source.id));
     return availableSources.filter((source) => !customSourceIds.has(source.id));
   }, [availableSources, customSources]);
+  const excludedSubFeedCatalog = useMemo(() => {
+    return excludedSourceCatalog
+      .filter((source) => Array.isArray(source.subSources) && source.subSources.length > 1)
+      .map((source) => ({
+        id: source.id,
+        name: source.name,
+        subSources: source.subSources
+      }));
+  }, [excludedSourceCatalog]);
 
   useEffect(() => {
     setSettings(currentUser.settings);
@@ -63,12 +72,31 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
 
   const toggleExcludedSource = (sourceId) => {
     setSettings((current) => {
-      const exists = current.excludedSourceIds.includes(sourceId);
+      const excludedSourceIds = current.excludedSourceIds || [];
+      const excludedSubSourceIds = current.excludedSubSourceIds || [];
+      const exists = excludedSourceIds.includes(sourceId);
       return {
         ...current,
         excludedSourceIds: exists
-          ? current.excludedSourceIds.filter((item) => item !== sourceId)
-          : [...current.excludedSourceIds, sourceId]
+          ? excludedSourceIds.filter((item) => item !== sourceId)
+          : [...excludedSourceIds, sourceId],
+        excludedSubSourceIds: exists
+          ? excludedSubSourceIds
+          : excludedSubSourceIds.filter((item) => !excludedSubFeedCatalog.some((source) => source.id === sourceId && source.subSources.some((subSource) => subSource.id === item)))
+      };
+    });
+  };
+
+  const toggleExcludedSubFeed = (subSourceId) => {
+    setSettings((current) => {
+      const excludedSubSourceIds = current.excludedSubSourceIds || [];
+      const exists = excludedSubSourceIds.includes(subSourceId);
+
+      return {
+        ...current,
+        excludedSubSourceIds: exists
+          ? excludedSubSourceIds.filter((item) => item !== subSourceId)
+          : [...excludedSubSourceIds, subSourceId]
       };
     });
   };
@@ -264,7 +292,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
             <p className="text-sm text-slate-500">{t('excludedSourcesHelp')}</p>
             <div className="flex flex-wrap gap-2">
               {excludedSourceCatalog.map((source) => {
-                const isSelected = settings.excludedSourceIds.includes(source.id);
+                const isSelected = (settings.excludedSourceIds || []).includes(source.id);
                 return (
                   <button
                     key={source.id}
@@ -277,6 +305,43 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
                 );
               })}
             </div>
+          </section>
+
+          <section className="space-y-4">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t('excludedSubFeeds')}</h3>
+            <p className="text-sm text-slate-500">{t('excludedSubFeedsHelp')}</p>
+            {excludedSubFeedCatalog.length === 0 ? (
+              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">{t('noExcludedSubFeeds')}</div>
+            ) : (
+              <div className="space-y-3">
+                {excludedSubFeedCatalog.map((source) => {
+                  const isParentExcluded = (settings.excludedSourceIds || []).includes(source.id);
+
+                  return (
+                    <div key={source.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-sm font-medium text-slate-800">{source.name}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {source.subSources.map((subSource) => {
+                          const isSelected = (settings.excludedSubSourceIds || []).includes(subSource.id);
+
+                          return (
+                            <button
+                              key={subSource.id}
+                              type="button"
+                              disabled={isParentExcluded}
+                              onClick={() => toggleExcludedSubFeed(subSource.id)}
+                              className={`rounded-full px-3 py-1.5 text-sm transition-colors ${isSelected ? 'bg-amber-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-200'} disabled:cursor-not-allowed disabled:opacity-50`}
+                            >
+                              {subSource.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           <section className="space-y-4">

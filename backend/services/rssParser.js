@@ -83,7 +83,7 @@ function normalizeDate(value) {
 
 function buildArticleId(source, item) {
   const uniqueInput = [
-    source.subId || source.id,
+    source.id,
     item.guid || item.id || '',
     item.link || '',
     item.title || '',

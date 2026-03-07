@@ -4,49 +4,48 @@ const Database = require('better-sqlite3');
 const logger = require('../utils/logger');
 const configuredSources = require('../config/newsSources');
 const topicNormalizer = require('./topicNormalizer');
+const {
+  getCanonicalSourceId,
+  getCanonicalSourceName,
+  getConfiguredSourceGroupIds,
+  getGroupedConfiguredSourceIds,
+  getRawConfiguredSourceIds,
+  getSourceAliases,
+  getSourceVariantLabel
+} = require('../utils/sourceCatalog');
 
 const DATA_DIR = path.join(__dirname, '../data');
 const DB_PATH = process.env.NEWS_DB_PATH || path.join(DATA_DIR, 'news.db');
-const LATEST_MIGRATION_VERSION = 4;
+const LATEST_MIGRATION_VERSION = 5;
 
 let db;
 let lastWriteCheckAt = null;
 
-const configuredSourceById = new Map(configuredSources.map((source) => [source.id, source]));
+function getSourceFilterClauses(sourceIds = []) {
+  const aliasedIds = new Set();
+  const aliasedNames = new Set();
 
-function canonicalizeSourceId(sourceId, sourceName) {
-  if (configuredSourceById.has(sourceId)) {
-    return sourceId;
-  }
-
-  const matchedSource = configuredSources.find((source) => {
-    return source.id === sourceId
-      || String(sourceId || '').startsWith(`${source.id}-`)
-      || source.name === sourceName;
+  sourceIds.forEach((sourceId) => {
+    const aliases = getSourceAliases(sourceId);
+    aliases.ids.forEach((id) => aliasedIds.add(id));
+    aliases.names.forEach((name) => aliasedNames.add(name));
   });
 
-  return matchedSource?.id || sourceId;
-}
-
-function canonicalizeSourceName(sourceId, sourceName) {
-  const canonicalId = canonicalizeSourceId(sourceId, sourceName);
-  return configuredSourceById.get(canonicalId)?.name || sourceName;
-}
-
-function getSourceFilterClauses(sourceIds = []) {
   const clauses = [];
   const params = [];
 
-  sourceIds.forEach((sourceId) => {
-    const canonicalId = canonicalizeSourceId(sourceId);
-    const canonicalName = configuredSourceById.get(canonicalId)?.name;
+  if (aliasedIds.size > 0) {
+    clauses.push(`a.source_id IN (${[...aliasedIds].map(() => '?').join(', ')})`);
+    params.push(...aliasedIds);
+  }
 
-    clauses.push('(a.source_id = ? OR a.source_id LIKE ? OR a.source_name = ?)');
-    params.push(canonicalId, `${canonicalId}-%`, canonicalName || canonicalId);
-  });
+  if (aliasedNames.size > 0) {
+    clauses.push(`a.source_name IN (${[...aliasedNames].map(() => '?').join(', ')})`);
+    params.push(...aliasedNames);
+  }
 
   return {
-    clause: clauses.join(' OR '),
+    clause: clauses.length > 1 ? `(${clauses.join(' OR ')})` : (clauses[0] || ''),
     params
   };
 }
@@ -64,6 +63,17 @@ function getSourceExclusionClause(sourceIds = []) {
   return {
     clause: `NOT (${sourceFilter.clause})`,
     params: sourceFilter.params
+  };
+}
+
+function getSubSourceExclusionClause(subSourceIds = []) {
+  if (!Array.isArray(subSourceIds) || subSourceIds.length === 0) {
+    return null;
+  }
+
+  return {
+    clause: `a.source_id NOT IN (${subSourceIds.map(() => '?').join(', ')})`,
+    params: subSourceIds
   };
 }
 
@@ -235,6 +245,7 @@ function initializeSchema(database) {
       article_retention_hours INTEGER NOT NULL DEFAULT 24,
       recent_hours INTEGER NOT NULL DEFAULT 3,
       default_source_ids TEXT NOT NULL DEFAULT '[]',
+      excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
     );
@@ -326,6 +337,12 @@ function runMigrations(database) {
   if (currentVersion < 4) {
     migrateToV4(database);
     currentVersion = 4;
+    setCurrentMigrationVersion(database, currentVersion);
+  }
+
+  if (currentVersion < 5) {
+    migrateToV5(database);
+    currentVersion = 5;
     setCurrentMigrationVersion(database, currentVersion);
   }
 }
@@ -447,6 +464,7 @@ function migrateToV3(database) {
       article_retention_hours INTEGER NOT NULL DEFAULT 24,
       recent_hours INTEGER NOT NULL DEFAULT 3,
       default_source_ids TEXT NOT NULL DEFAULT '[]',
+      excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
     );
@@ -509,6 +527,20 @@ function migrateToV4(database) {
   logger.info('Applied DB migration v4: removed legacy topic metadata column');
 }
 
+function migrateToV5(database) {
+  if (columnExists(database, 'user_settings', 'excluded_sub_source_ids')) {
+    logger.info('DB migration v5 skipped: user_settings already has excluded_sub_source_ids');
+    return;
+  }
+
+  database.exec(`
+    ALTER TABLE user_settings
+    ADD COLUMN excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]'
+  `);
+
+  logger.info('Applied DB migration v5: added excluded sub-source settings');
+}
+
 function buildFilterState(filters = {}) {
   return {
     search: typeof filters.search === 'string' ? filters.search.trim() : '',
@@ -545,6 +577,7 @@ function buildArticleQuery(filters = {}, options = {}) {
   const scopeFilter = buildScopeFilter(options, 'a');
   const retentionFilter = buildRetentionFilter(options, 'a');
   const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
+  const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
 
   where.push(scopeFilter.clause);
   params.push(...scopeFilter.params);
@@ -557,6 +590,11 @@ function buildArticleQuery(filters = {}, options = {}) {
   if (excludedSourceFilter) {
     where.push(excludedSourceFilter.clause);
     params.push(...excludedSourceFilter.params);
+  }
+
+  if (excludedSubSourceFilter) {
+    where.push(excludedSubSourceFilter.clause);
+    params.push(...excludedSubSourceFilter.params);
   }
 
   if (searchQuery) {
@@ -640,8 +678,11 @@ function hydrateArticleRows(rows) {
 
   return rows.map((row) => ({
     ...row,
-    sourceId: canonicalizeSourceId(row.sourceId, row.source),
-    source: canonicalizeSourceName(row.sourceId, row.source),
+    rawSourceId: row.sourceId,
+    rawSource: row.source,
+    sourceId: getCanonicalSourceId(row.sourceId, row.source),
+    source: getCanonicalSourceName(row.sourceId, row.source),
+    subSource: getSourceVariantLabel(row.sourceId, row.source),
     topics: (topicMap.get(row.id) || []).filter((topic) => topicNormalizer.isMeaningfulTopic(topic))
   }));
 }
@@ -696,8 +737,8 @@ function upsertArticles(articles = []) {
 
       upsertStmt.run(
         article.id,
-        article.sourceId,
-        article.source,
+        article.rawSourceId || article.sourceId,
+        article.rawSource || article.source,
         article.ownerUserId || null,
         article.title,
         article.description || '',
@@ -785,6 +826,7 @@ function getArticlesByIds(articleIds = [], options = {}) {
   const scopeFilter = buildScopeFilter(options, 'a');
   const retentionFilter = buildRetentionFilter(options, 'a');
   const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
+  const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
 
   where.push(scopeFilter.clause);
   params.push(...scopeFilter.params);
@@ -797,6 +839,11 @@ function getArticlesByIds(articleIds = [], options = {}) {
   if (excludedSourceFilter) {
     where.push(excludedSourceFilter.clause);
     params.push(...excludedSourceFilter.params);
+  }
+
+  if (excludedSubSourceFilter) {
+    where.push(excludedSubSourceFilter.clause);
+    params.push(...excludedSubSourceFilter.params);
   }
 
   const rows = getDb().prepare(`
@@ -824,6 +871,7 @@ function countArticles(options = {}) {
   const scopeFilter = buildScopeFilter(options, 'articles');
   const retentionFilter = buildRetentionFilter(options, 'articles');
   const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
+  const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
   const where = [scopeFilter.clause];
   const params = [...scopeFilter.params];
 
@@ -835,6 +883,11 @@ function countArticles(options = {}) {
   if (excludedSourceFilter) {
     where.push(excludedSourceFilter.clause.replaceAll('a.', 'articles.'));
     params.push(...excludedSourceFilter.params);
+  }
+
+  if (excludedSubSourceFilter) {
+    where.push(excludedSubSourceFilter.clause.replaceAll('a.', 'articles.'));
+    params.push(...excludedSubSourceFilter.params);
   }
 
   return getDb().prepare(`
@@ -880,7 +933,9 @@ function deleteArticlesOlderThan(isoTimestamp) {
 
 function cleanupRemovedConfiguredSourceData() {
   const database = getDb();
-  const configuredSourceIds = new Set(configuredSources.map((source) => source.id));
+  const rawConfiguredSourceIds = getRawConfiguredSourceIds();
+  const configuredSourceGroupIds = getConfiguredSourceGroupIds();
+  const groupedConfiguredSourceIds = getGroupedConfiguredSourceIds();
   const selectGlobalArticles = database.prepare(`
     SELECT id, source_id AS sourceId, source_name AS sourceName
     FROM articles
@@ -895,7 +950,9 @@ function cleanupRemovedConfiguredSourceData() {
     WHERE id = ?
   `);
   const selectSettings = database.prepare(`
-    SELECT user_id AS userId, default_source_ids AS excludedSourceIds
+    SELECT user_id AS userId,
+           default_source_ids AS excludedSourceIds,
+           excluded_sub_source_ids AS excludedSubSourceIds
     FROM user_settings
   `);
   const selectUserSourceIds = database.prepare(`
@@ -905,7 +962,9 @@ function cleanupRemovedConfiguredSourceData() {
   `);
   const updateSettings = database.prepare(`
     UPDATE user_settings
-    SET default_source_ids = ?, updated_at = ?
+    SET default_source_ids = ?,
+        excluded_sub_source_ids = ?,
+        updated_at = ?
     WHERE user_id = ?
   `);
 
@@ -915,9 +974,7 @@ function cleanupRemovedConfiguredSourceData() {
     const now = new Date().toISOString();
 
     selectGlobalArticles.all().forEach((article) => {
-      const canonicalSourceId = canonicalizeSourceId(article.sourceId, article.sourceName);
-
-      if (configuredSourceIds.has(canonicalSourceId)) {
+      if (rawConfiguredSourceIds.has(article.sourceId) || configuredSourceGroupIds.has(article.sourceId)) {
         return;
       }
 
@@ -928,16 +985,26 @@ function cleanupRemovedConfiguredSourceData() {
 
     selectSettings.all().forEach((row) => {
       const excludedSourceIds = row.excludedSourceIds ? JSON.parse(row.excludedSourceIds) : [];
+      const excludedSubSourceIds = row.excludedSubSourceIds ? JSON.parse(row.excludedSubSourceIds) : [];
       const customSourceIds = new Set(selectUserSourceIds.all(row.userId).map((source) => source.id));
       const nextExcludedSourceIds = excludedSourceIds.filter((sourceId) => {
-        return configuredSourceIds.has(sourceId) || customSourceIds.has(sourceId);
+        return configuredSourceGroupIds.has(sourceId) || customSourceIds.has(sourceId);
       });
+      const nextExcludedSubSourceIds = excludedSubSourceIds.filter((sourceId) => groupedConfiguredSourceIds.has(sourceId));
 
-      if (nextExcludedSourceIds.length === excludedSourceIds.length) {
+      if (
+        nextExcludedSourceIds.length === excludedSourceIds.length
+        && nextExcludedSubSourceIds.length === excludedSubSourceIds.length
+      ) {
         return;
       }
 
-      updateSettings.run(JSON.stringify(nextExcludedSourceIds), now, row.userId);
+      updateSettings.run(
+        JSON.stringify(nextExcludedSourceIds),
+        JSON.stringify(nextExcludedSubSourceIds),
+        now,
+        row.userId
+      );
       updatedSettings += 1;
     });
 
@@ -954,6 +1021,7 @@ function getSourceStats(configuredSources = [], options = {}) {
   const scopeFilter = buildScopeFilter(options, 'articles');
   const retentionFilter = buildRetentionFilter(options, 'articles');
   const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
+  const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
   const where = [scopeFilter.clause];
   const params = [...scopeFilter.params];
 
@@ -967,6 +1035,11 @@ function getSourceStats(configuredSources = [], options = {}) {
     params.push(...excludedSourceFilter.params);
   }
 
+  if (excludedSubSourceFilter) {
+    where.push(excludedSubSourceFilter.clause.replaceAll('a.', 'articles.'));
+    params.push(...excludedSubSourceFilter.params);
+  }
+
   const rows = getDb().prepare(`
     SELECT source_id AS id, source_name AS name, COUNT(*) AS count
     FROM articles
@@ -976,10 +1049,10 @@ function getSourceStats(configuredSources = [], options = {}) {
   `).all(...params);
 
   const aggregatedRows = rows.reduce((map, row) => {
-    const canonicalId = canonicalizeSourceId(row.id, row.name);
+    const canonicalId = getCanonicalSourceId(row.id, row.name);
     const current = map.get(canonicalId) || {
       id: canonicalId,
-      name: canonicalizeSourceName(row.id, row.name),
+      name: getCanonicalSourceName(row.id, row.name),
       count: 0
     };
 
@@ -1013,6 +1086,7 @@ function getTopicStatsByFilters(filters = {}, limit = 20, options = {}) {
   const scopeFilter = buildScopeFilter(options, 'a');
   const retentionFilter = buildRetentionFilter(options, 'a');
   const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
+  const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
 
   where.push(scopeFilter.clause);
   params.push(...scopeFilter.params);
@@ -1025,6 +1099,11 @@ function getTopicStatsByFilters(filters = {}, limit = 20, options = {}) {
   if (excludedSourceFilter) {
     where.push(excludedSourceFilter.clause);
     params.push(...excludedSourceFilter.params);
+  }
+
+  if (excludedSubSourceFilter) {
+    where.push(excludedSubSourceFilter.clause);
+    params.push(...excludedSubSourceFilter.params);
   }
 
   if (searchQuery) {
@@ -1270,6 +1349,7 @@ function getUserSettings(userId) {
            article_retention_hours AS articleRetentionHours,
            recent_hours AS recentHours,
            default_source_ids AS excludedSourceIds,
+           excluded_sub_source_ids AS excludedSubSourceIds,
            updated_at AS updatedAt
     FROM user_settings
     WHERE user_id = ?
@@ -1281,7 +1361,8 @@ function getUserSettings(userId) {
 
   return {
     ...row,
-    excludedSourceIds: row.excludedSourceIds ? JSON.parse(row.excludedSourceIds) : []
+    excludedSourceIds: row.excludedSourceIds ? JSON.parse(row.excludedSourceIds) : [],
+    excludedSubSourceIds: row.excludedSubSourceIds ? JSON.parse(row.excludedSubSourceIds) : []
   };
 }
 
@@ -1295,13 +1376,15 @@ function upsertUserSettings(userId, settings = {}) {
       article_retention_hours,
       recent_hours,
       default_source_ids,
+      excluded_sub_source_ids,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       default_language = excluded.default_language,
       article_retention_hours = excluded.article_retention_hours,
       recent_hours = excluded.recent_hours,
       default_source_ids = excluded.default_source_ids,
+      excluded_sub_source_ids = excluded.excluded_sub_source_ids,
       updated_at = excluded.updated_at
   `).run(
     userId,
@@ -1309,6 +1392,7 @@ function upsertUserSettings(userId, settings = {}) {
     settings.articleRetentionHours || 24,
     settings.recentHours || 3,
     JSON.stringify(settings.excludedSourceIds || []),
+    JSON.stringify(settings.excludedSubSourceIds || []),
     now
   );
 

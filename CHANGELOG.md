@@ -1,8 +1,14 @@
 # Changelog
 
+## 3.0.12
+
+- added per-user sub-feed exclusions so grouped sources can stay enabled while specific feeds are disabled in settings
+
 ## 3.0.11
 
 - service restart now removes articles and stale excluded-source settings for default sources that were removed from configuration
+- removed the old multi-RSS source handling and kept configured sources as explicit single-feed entries
+- grouped related feeds such as ANSA and Il Sole 24 Ore under shared source families for filters, exclusions, and source stats
 
 ## 3.0.10
 

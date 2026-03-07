@@ -48,8 +48,9 @@ const appendUniqueGroups = (currentGroups, incomingGroups) => {
   return [...merged.values()];
 };
 
-const getSourceReloadSignature = (excludedSourceIds, customSources) => JSON.stringify({
+const getSourceReloadSignature = (excludedSourceIds, excludedSubSourceIds, customSources) => JSON.stringify({
   excludedSourceIds,
+  excludedSubSourceIds,
   customSources: (customSources || []).map((source) => [source.id, source.url])
 });
 
@@ -96,9 +97,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
     Math.min(Number(currentUser?.settings?.recentHours) || settingsLimits.recentHours.max, settingsLimits.recentHours.max)
   );
   const excludedSourceIds = useMemo(() => currentUser?.settings?.excludedSourceIds || [], [currentUser?.settings?.excludedSourceIds]);
+  const excludedSubSourceIds = useMemo(() => currentUser?.settings?.excludedSubSourceIds || [], [currentUser?.settings?.excludedSubSourceIds]);
   const sourceReloadSignature = useMemo(() => {
-    return getSourceReloadSignature(excludedSourceIds, currentUser?.customSources || []);
-  }, [currentUser?.customSources, excludedSourceIds]);
+    return getSourceReloadSignature(excludedSourceIds, excludedSubSourceIds, currentUser?.customSources || []);
+  }, [currentUser?.customSources, excludedSourceIds, excludedSubSourceIds]);
   const sourceReloadSignatureRef = useRef(sourceReloadSignature);
   const visibleAvailableSources = useMemo(() => {
     return availableSources.filter((source) => !excludedSourceIds.includes(source.id));

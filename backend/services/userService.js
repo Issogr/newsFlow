@@ -1,8 +1,8 @@
 const crypto = require('crypto');
 const database = require('./database');
 const rssParser = require('./rssParser');
-const newsSources = require('../config/newsSources');
 const { createError } = require('../utils/errorHandler');
+const { getConfiguredSourceGroupIds, getGroupedConfiguredSourceIds } = require('../utils/sourceCatalog');
 const {
   hashPassword,
   verifyPassword,
@@ -38,12 +38,17 @@ function getDefaultSettings() {
     defaultLanguage: 'auto',
     articleRetentionHours: GLOBAL_RETENTION_HOURS,
     recentHours: MAX_RECENT_HOURS,
-    excludedSourceIds: []
+    excludedSourceIds: [],
+    excludedSubSourceIds: []
   };
 }
 
 function getGlobalSourceIds() {
-  return new Set(newsSources.map((source) => source.id));
+  return getConfiguredSourceGroupIds();
+}
+
+function getGroupedSubSourceIds() {
+  return getGroupedConfiguredSourceIds();
 }
 
 function getUserSettings(userId) {
@@ -164,7 +169,10 @@ function updateUserSettings(userId, payload = {}) {
     recentHours,
     excludedSourceIds: Array.isArray(payload.excludedSourceIds)
       ? payload.excludedSourceIds.filter(Boolean).slice(0, 30)
-      : currentSettings.excludedSourceIds
+      : currentSettings.excludedSourceIds,
+    excludedSubSourceIds: Array.isArray(payload.excludedSubSourceIds)
+      ? payload.excludedSubSourceIds.filter(Boolean).slice(0, 60)
+      : currentSettings.excludedSubSourceIds
   });
 
   return settings;
@@ -279,13 +287,14 @@ function exportUserSettings(userId) {
   const customSourceIds = new Set(customSources.map((source) => source.id));
 
   return {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     settings: {
       defaultLanguage: settings.defaultLanguage,
       articleRetentionHours: settings.articleRetentionHours,
       recentHours: settings.recentHours,
-      excludedSourceIds: settings.excludedSourceIds.filter((sourceId) => !customSourceIds.has(sourceId))
+      excludedSourceIds: settings.excludedSourceIds.filter((sourceId) => !customSourceIds.has(sourceId)),
+      excludedSubSourceIds: settings.excludedSubSourceIds
     },
     customSources: customSources.map((source) => ({
       name: source.name,
@@ -300,6 +309,7 @@ async function importUserSettings(userId, payload = {}) {
   const importedSettings = payload.settings || {};
   const importedCustomSources = Array.isArray(payload.customSources) ? payload.customSources : [];
   const globalSourceIds = getGlobalSourceIds();
+  const groupedSubSourceIds = getGroupedSubSourceIds();
 
   for (const source of importedCustomSources) {
     const name = String(source?.name || '').trim();
@@ -341,6 +351,9 @@ async function importUserSettings(userId, payload = {}) {
   const excludedGlobalSourceIds = Array.isArray(importedSettings.excludedSourceIds)
     ? importedSettings.excludedSourceIds.filter((sourceId) => globalSourceIds.has(sourceId))
     : [];
+  const excludedSubSourceIds = Array.isArray(importedSettings.excludedSubSourceIds)
+    ? importedSettings.excludedSubSourceIds.filter((sourceId) => groupedSubSourceIds.has(sourceId))
+    : [];
   const excludedCustomSourceIds = recreatedSources
     .filter((source) => source.isExcluded)
     .map((source) => source.id);
@@ -349,7 +362,8 @@ async function importUserSettings(userId, payload = {}) {
     defaultLanguage: importedSettings.defaultLanguage,
     articleRetentionHours: importedSettings.articleRetentionHours,
     recentHours: importedSettings.recentHours,
-    excludedSourceIds: [...excludedGlobalSourceIds, ...excludedCustomSourceIds]
+    excludedSourceIds: [...excludedGlobalSourceIds, ...excludedCustomSourceIds],
+    excludedSubSourceIds
   });
 
   return {
