@@ -30,6 +30,16 @@ function purgeExpiredArticles() {
   return removedCount;
 }
 
+function cleanupRemovedConfiguredSourceData() {
+  const result = database.cleanupRemovedConfiguredSourceData();
+
+  if (result.removedArticles > 0 || result.updatedSettings > 0) {
+    logger.info(`Removed ${result.removedArticles} articles and updated ${result.updatedSettings} user settings for deleted default sources`);
+  }
+
+  return result;
+}
+
 function expandConfiguredSources() {
   return newsSources.flatMap((source) => {
     if (source.type === 'multi-rss' && Array.isArray(source.urls)) {
@@ -251,6 +261,7 @@ async function ingestAllNews(options = {}) {
 
     try {
       purgeExpiredArticles();
+      cleanupRemovedConfiguredSourceData();
 
       const sourceConfigs = [
         ...expandConfiguredSources(),

@@ -878,6 +878,78 @@ function deleteArticlesOlderThan(isoTimestamp) {
   return transaction(isoTimestamp);
 }
 
+function cleanupRemovedConfiguredSourceData() {
+  const database = getDb();
+  const configuredSourceIds = new Set(configuredSources.map((source) => source.id));
+  const selectGlobalArticles = database.prepare(`
+    SELECT id, source_id AS sourceId, source_name AS sourceName
+    FROM articles
+    WHERE owner_user_id IS NULL
+  `);
+  const deleteSearchEntries = database.prepare(`
+    DELETE FROM article_search
+    WHERE article_id = ?
+  `);
+  const deleteArticle = database.prepare(`
+    DELETE FROM articles
+    WHERE id = ?
+  `);
+  const selectSettings = database.prepare(`
+    SELECT user_id AS userId, default_source_ids AS excludedSourceIds
+    FROM user_settings
+  `);
+  const selectUserSourceIds = database.prepare(`
+    SELECT id
+    FROM user_sources
+    WHERE user_id = ?
+  `);
+  const updateSettings = database.prepare(`
+    UPDATE user_settings
+    SET default_source_ids = ?, updated_at = ?
+    WHERE user_id = ?
+  `);
+
+  const transaction = database.transaction(() => {
+    let removedArticles = 0;
+    let updatedSettings = 0;
+    const now = new Date().toISOString();
+
+    selectGlobalArticles.all().forEach((article) => {
+      const canonicalSourceId = canonicalizeSourceId(article.sourceId, article.sourceName);
+
+      if (configuredSourceIds.has(canonicalSourceId)) {
+        return;
+      }
+
+      deleteSearchEntries.run(article.id);
+      deleteArticle.run(article.id);
+      removedArticles += 1;
+    });
+
+    selectSettings.all().forEach((row) => {
+      const excludedSourceIds = row.excludedSourceIds ? JSON.parse(row.excludedSourceIds) : [];
+      const customSourceIds = new Set(selectUserSourceIds.all(row.userId).map((source) => source.id));
+      const nextExcludedSourceIds = excludedSourceIds.filter((sourceId) => {
+        return configuredSourceIds.has(sourceId) || customSourceIds.has(sourceId);
+      });
+
+      if (nextExcludedSourceIds.length === excludedSourceIds.length) {
+        return;
+      }
+
+      updateSettings.run(JSON.stringify(nextExcludedSourceIds), now, row.userId);
+      updatedSettings += 1;
+    });
+
+    return {
+      removedArticles,
+      updatedSettings
+    };
+  });
+
+  return transaction();
+}
+
 function getSourceStats(configuredSources = [], options = {}) {
   const scopeFilter = buildScopeFilter(options, 'articles');
   const retentionFilter = buildRetentionFilter(options, 'articles');
@@ -1424,6 +1496,7 @@ module.exports = {
   upsertArticles,
   countArticles,
   deleteArticlesOlderThan,
+  cleanupRemovedConfiguredSourceData,
   getSourceStats,
   getTopicStatsByFilters,
   createIngestionRun,

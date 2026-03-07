@@ -7,6 +7,7 @@ jest.mock('./database', () => ({
   completeIngestionRun: jest.fn(),
   countArticles: jest.fn(() => 1),
   deleteArticlesOlderThan: jest.fn(() => 0),
+  cleanupRemovedConfiguredSourceData: jest.fn(() => ({ removedArticles: 0, updatedSettings: 0 })),
   upsertArticles: jest.fn(() => ({ insertedIds: [], insertedCount: 0, updatedCount: 0 })),
   mergeTopicsForArticle: jest.fn(),
   getArticlesByIds: jest.fn(() => []),
@@ -81,6 +82,7 @@ describe('newsAggregator service flows', () => {
     jest.clearAllMocks();
     database.countArticles.mockReturnValue(1);
     database.deleteArticlesOlderThan.mockReturnValue(0);
+    database.cleanupRemovedConfiguredSourceData.mockReturnValue({ removedArticles: 0, updatedSettings: 0 });
     database.getArticles.mockReturnValue([]);
     database.getLatestIngestionRun.mockReturnValue(null);
     database.getSourceStats.mockReturnValue([]);
@@ -153,6 +155,7 @@ describe('newsAggregator service flows', () => {
     const result = await newsAggregator.ingestAllNews({ broadcast: true });
 
     expect(result).toMatchObject({ success: true, fetchedCount: 2, insertedCount: 2, updatedCount: 0 });
+    expect(database.cleanupRemovedConfiguredSourceData).toHaveBeenCalledTimes(1);
     expect(database.mergeTopicsForArticle).toHaveBeenCalledTimes(2);
     expect(websocketService.broadcastNewsUpdate).toHaveBeenCalledTimes(2);
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0]).toMatchObject({ id: expect.stringContaining('group-'), ownerUserId: null });
@@ -172,5 +175,15 @@ describe('newsAggregator service flows', () => {
       status: 'failed',
       errorMessage: expect.any(String)
     }));
+  });
+
+  test('ingestAllNews cleans stale default-source data before fetching feeds', async () => {
+    database.cleanupRemovedConfiguredSourceData.mockReturnValue({ removedArticles: 2, updatedSettings: 1 });
+
+    await newsAggregator.ingestAllNews({ broadcast: false });
+
+    expect(database.deleteArticlesOlderThan).toHaveBeenCalledTimes(1);
+    expect(database.cleanupRemovedConfiguredSourceData).toHaveBeenCalledTimes(1);
+    expect(rssParser.parseFeed).toHaveBeenCalled();
   });
 });

@@ -342,4 +342,78 @@ describe('database queries and user data', () => {
     const excludedTopics = database.getTopicStatsByFilters({}, 10, { excludedSourceIds: [primarySource.id] });
     expect(excludedTopics).toEqual([{ topic: 'Science', count: 1 }]);
   });
+
+  test('removes stale default-source articles and cleans excluded ids on restart cleanup', () => {
+    const now = new Date().toISOString();
+
+    database.createUser({
+      id: 'user-1',
+      username: 'alice',
+      passwordHash: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    database.upsertUserSettings('user-1', {
+      defaultLanguage: 'en',
+      articleRetentionHours: 24,
+      recentHours: 3,
+      excludedSourceIds: ['retired-source', primarySource.id, 'custom-1']
+    });
+
+    database.createUserSource({
+      id: 'custom-1',
+      userId: 'user-1',
+      name: 'Private Feed',
+      url: 'https://example.com/private.xml',
+      language: 'en',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      validatedAt: now
+    });
+
+    database.upsertArticles([
+      {
+        id: 'kept-global',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Keep me',
+        description: 'Current default source article',
+        content: 'Current body',
+        url: 'https://example.com/keep',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'stale-global',
+        sourceId: 'retired-source',
+        source: 'Retired Source',
+        title: 'Remove me',
+        description: 'Removed default source article',
+        content: 'Retired body',
+        url: 'https://example.com/remove',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'private-article',
+        sourceId: 'custom-1',
+        source: 'Private Feed',
+        ownerUserId: 'user-1',
+        title: 'Private stays',
+        description: 'Private article',
+        content: 'Private body',
+        url: 'https://example.com/private',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+
+    const cleanupResult = database.cleanupRemovedConfiguredSourceData();
+
+    expect(cleanupResult).toEqual({ removedArticles: 1, updatedSettings: 1 });
+    expect(database.getArticles({}, { userId: 'user-1' }).map((article) => article.id)).toEqual(['private-article', 'kept-global']);
+    expect(database.getUserSettings('user-1').excludedSourceIds).toEqual([primarySource.id, 'custom-1']);
+  });
 });

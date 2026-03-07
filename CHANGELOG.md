@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.11
+
+- service restart now removes articles and stale excluded-source settings for default sources that were removed from configuration
+
 ## 3.0.10
 
 - allowed local-network origins such as `.local` hostnames and LAN IPs so self-hosted access works from other devices
