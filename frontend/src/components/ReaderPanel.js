@@ -287,7 +287,7 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
                     <p className="mb-6 text-sm font-medium uppercase tracking-[0.16em] text-stone-400">{selectedReader.byline}</p>
                   )}
 
-                  <div className="space-y-6 font-serif tracking-[0.01em]">
+                  <div className="space-y-6 tracking-[0.01em]">
                     {(selectedReader.contentBlocks || []).map((block, index) => renderReaderBlock(block, index))}
                   </div>
                 </article>

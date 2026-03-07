@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.3
+
+- updated reader mode to use the same base font as the rest of the website for better readability
+
 ## 2.2.2
 
 - improved reader panel typography and spacing for easier reading
