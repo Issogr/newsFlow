@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.5
+
+- added custom News Flow branding with a new site logo and favicon
+- updated the in-app header and web manifest to use the new brand assets
+
 ## 2.2.4
 
 - moved the reader refresh action next to the original source link to leave more space for the reader title

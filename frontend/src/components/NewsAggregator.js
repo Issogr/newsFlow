@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Filter,
-  Globe,
   RefreshCw,
   Search,
   Wifi,
@@ -15,6 +14,7 @@ import ErrorMessage from './ErrorMessage';
 import NewsCard from './NewsCard';
 import NotificationCenter from './NotificationCenter';
 import ReaderPanel from './ReaderPanel';
+import BrandMark from './BrandMark';
 import useWebSocket from '../hooks/useWebSocket';
 import { createTranslator, detectBrowserLocale, getDateLocale } from '../i18n';
 
@@ -246,9 +246,7 @@ const NewsAggregator = () => {
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div>
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white">
-                  <Globe className="h-5 w-5" aria-hidden="true" />
-                </div>
+                <BrandMark className="h-11 w-11" />
                 <div>
                   <h1 className="text-2xl font-semibold tracking-tight">{t('pageTitle')}</h1>
                   <p className="text-sm text-slate-500">{t('pageSubtitle')}</p>
