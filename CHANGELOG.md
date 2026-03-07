@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.16
+
+- replaced the separate header settings/logout buttons with a compact user menu beside notifications that shows the username, settings, and logout actions
+
 ## 3.0.15
 
 - restricted news topics to a canonical taxonomy so invalid feed labels like home, home top, argomento, and bits no longer appear in topic filters

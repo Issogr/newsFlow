@@ -7,7 +7,8 @@ import {
   Search,
   Clock3,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  User
 } from 'lucide-react';
 import { fetchNews } from '../services/api';
 import ErrorMessage from './ErrorMessage';
@@ -19,6 +20,7 @@ import SettingsPanel from './SettingsPanel';
 import useWebSocket from '../hooks/useWebSocket';
 import { createTranslator, getDateLocale, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
 import { getSettingsLimits } from '../config/settingsLimits';
+import { useOnClickOutside } from '../hooks/useOnClickOutside';
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -92,6 +94,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
   const [filtersExpanded, setFiltersExpanded] = useState(true);
   const [readerState, setReaderState] = useState({ isOpen: false, group: null, articleId: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
   const recentHours = Math.max(
     settingsLimits.recentHours.min,
     Math.min(Number(currentUser?.settings?.recentHours) || settingsLimits.recentHours.max, settingsLimits.recentHours.max)
@@ -105,6 +109,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
   const visibleAvailableSources = useMemo(() => {
     return availableSources.filter((source) => !excludedSourceIds.includes(source.id));
   }, [availableSources, excludedSourceIds]);
+
+  useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
   useEffect(() => {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
@@ -296,23 +302,50 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
                 t={t}
               />
 
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
-              >
-                <Cog className="h-4 w-4" />
-                {t('settings')}
-              </button>
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setUserMenuOpen((current) => !current)}
+                  className="relative z-20 rounded-full bg-white p-2 shadow-md transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-expanded={userMenuOpen}
+                  aria-haspopup="menu"
+                  aria-label={t('userMenu')}
+                >
+                  <User className="h-6 w-6 text-gray-600" />
+                </button>
 
-              <button
-                type="button"
-                onClick={onLogout}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
-              >
-                <LogOut className="h-4 w-4" />
-                {t('logout')}
-              </button>
+                {userMenuOpen && (
+                  <div className="absolute right-0 top-14 z-30 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl" role="menu">
+                    <div className="border-b border-slate-100 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{t('userMenu')}</p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">{currentUser?.user?.username}</p>
+                    </div>
+                    <div className="p-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSettingsOpen(true);
+                          setUserMenuOpen(false);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                        role="menuitem"
+                      >
+                        <Cog className="h-4 w-4" />
+                        {t('settings')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onLogout}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                        role="menuitem"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        {t('logout')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
