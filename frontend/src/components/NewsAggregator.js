@@ -15,6 +15,7 @@ import ErrorMessage from './ErrorMessage';
 import NewsCard from './NewsCard';
 import NotificationCenter from './NotificationCenter';
 import useWebSocket from '../hooks/useWebSocket';
+import { createTranslator, detectBrowserLocale, getDateLocale } from '../i18n';
 
 const PAGE_SIZE = 12;
 const RECENT_HOURS = 3;
@@ -46,6 +47,18 @@ const appendUniqueGroups = (currentGroups, incomingGroups) => {
 };
 
 const NewsAggregator = () => {
+  const [locale, setLocale] = useState(() => {
+    const savedLocale = window.localStorage.getItem('news-aggregator-locale');
+    return savedLocale === 'it' || savedLocale === 'en' ? savedLocale : detectBrowserLocale();
+  });
+  const t = useMemo(() => createTranslator(locale), [locale]);
+  const dateLocale = useMemo(() => getDateLocale(locale), [locale]);
+  const websocketMessages = useMemo(() => ({
+    connected: t('wsConnected'),
+    disconnected: t('wsDisconnected'),
+    reconnectFailed: t('wsReconnectFailed'),
+    newGroups: (count) => t('wsNewGroups', { count })
+  }), [t]);
   const {
     isConnected,
     notifications,
@@ -56,7 +69,7 @@ const NewsAggregator = () => {
     updateSubscriptionFilters,
     resetNewArticlesCount,
     removeNotification
-  } = useWebSocket();
+  } = useWebSocket('', websocketMessages);
   const lastNewsUpdateRef = useRef(null);
   const lastTopicUpdateRef = useRef(null);
 
@@ -72,6 +85,11 @@ const NewsAggregator = () => {
   const [activeFilters, setActiveFilters] = useState(EMPTY_FILTERS);
   const [showRecentOnly, setShowRecentOnly] = useState(false);
   const [filtersExpanded, setFiltersExpanded] = useState(true);
+
+  useEffect(() => {
+    window.localStorage.setItem('news-aggregator-locale', locale);
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -222,20 +240,46 @@ const NewsAggregator = () => {
                   <Globe className="h-5 w-5" aria-hidden="true" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-semibold tracking-tight">News Flow</h1>
-                  <p className="text-sm text-slate-500">Raccolta notizie con aggiornamenti schedulati, filtri server-side e tagging persistente.</p>
+                  <h1 className="text-2xl font-semibold tracking-tight">{t('pageTitle')}</h1>
+                  <p className="text-sm text-slate-500">{t('pageSubtitle')}</p>
                 </div>
               </div>
             </div>
 
             <div className="flex items-center gap-3 self-start md:self-auto">
+              <div className="flex items-center rounded-full border border-slate-200 bg-white p-1 shadow-sm">
+                <span className="px-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  {t('localeLabel')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLocale('it')}
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                    locale === 'it' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                  aria-pressed={locale === 'it'}
+                >
+                  IT
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLocale('en')}
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                    locale === 'en' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                  aria-pressed={locale === 'en'}
+                >
+                  EN
+                </button>
+              </div>
+
               <div className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-600">
                 {isConnected ? (
                   <Wifi className="h-4 w-4 text-emerald-600" aria-hidden="true" />
                 ) : (
                   <WifiOff className="h-4 w-4 text-amber-600" aria-hidden="true" />
                 )}
-                <span>{isConnected ? 'Live attivo' : 'Live offline'}</span>
+                <span>{isConnected ? t('liveActive') : t('liveOffline')}</span>
               </div>
 
               <NotificationCenter
@@ -244,6 +288,8 @@ const NewsAggregator = () => {
                 newArticlesCount={newArticlesCount}
                 onRefresh={() => loadNews({ page: 1, append: false, resetRealtime: true })}
                 isConnected={isConnected}
+                locale={dateLocale}
+                t={t}
               />
 
               <button
@@ -253,7 +299,7 @@ const NewsAggregator = () => {
                 disabled={loading}
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
-                Aggiorna
+                {t('refresh')}
               </button>
             </div>
           </div>
@@ -265,18 +311,20 @@ const NewsAggregator = () => {
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Cerca su titolo, contenuto o topic..."
+                placeholder={t('searchPlaceholder')}
                 className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
               />
             </label>
 
             <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
               <span className="rounded-full bg-slate-100 px-3 py-1.5">
-                {meta?.totalGroups ? `${meta.totalGroups} gruppi` : `${news.length} gruppi visibili`}
+                {meta?.totalGroups ? t('totalGroups', { count: meta.totalGroups }) : t('visibleGroups', { count: news.length })}
               </span>
               {meta?.lastRefreshAt && (
                 <span className="rounded-full bg-slate-100 px-3 py-1.5">
-                  Aggiornato {new Date(meta.lastRefreshAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                  {t('updatedAt', {
+                    time: new Date(meta.lastRefreshAt).toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })
+                  })}
                 </span>
               )}
             </div>
@@ -294,8 +342,8 @@ const NewsAggregator = () => {
             <div className="flex items-center gap-3">
               <Filter className="h-5 w-5 text-slate-500" aria-hidden="true" />
               <div>
-                <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Filtri</h2>
-                <p className="text-sm text-slate-600">Fonte, topic e finestra temporale.</p>
+                <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t('filtersTitle')}</h2>
+                <p className="text-sm text-slate-600">{t('filtersSubtitle')}</p>
               </div>
               {activeFiltersCount > 0 && (
                 <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-medium text-white">
@@ -317,7 +365,7 @@ const NewsAggregator = () => {
                   }`}
                 >
                   <Clock3 className="h-4 w-4" aria-hidden="true" />
-                  Ultime {RECENT_HOURS} ore
+                  {t('latestHours', { hours: RECENT_HOURS })}
                 </button>
 
                 {hasActiveFilters && (
@@ -326,14 +374,14 @@ const NewsAggregator = () => {
                     onClick={resetFilters}
                     className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
                   >
-                    Reset filtri
+                    {t('resetFilters')}
                   </button>
                 )}
               </div>
 
               <div className="grid gap-6 lg:grid-cols-2">
                 <div>
-                  <h3 className="mb-3 text-sm font-semibold text-slate-700">Fonti</h3>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-700">{t('sources')}</h3>
                   <div className="flex flex-wrap gap-2">
                     {availableSources.map((source) => {
                       const isActive = activeFilters.sourceIds.includes(source.id);
@@ -356,7 +404,7 @@ const NewsAggregator = () => {
                 </div>
 
                 <div>
-                  <h3 className="mb-3 text-sm font-semibold text-slate-700">Topic</h3>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-700">{t('topics')}</h3>
                   <div className="flex flex-wrap gap-2">
                     {availableTopics.map((topic) => {
                       const isActive = activeFilters.topics.includes(topic.topic);
@@ -389,11 +437,11 @@ const NewsAggregator = () => {
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
           </div>
         ) : error ? (
-          <ErrorMessage error={error} onRetry={() => loadNews({ page: 1, append: false, resetRealtime: true })} />
+          <ErrorMessage error={error} onRetry={() => loadNews({ page: 1, append: false, resetRealtime: true })} t={t} />
         ) : news.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-            <h2 className="text-xl font-semibold text-slate-800">Nessuna notizia trovata</h2>
-            <p className="mt-2 text-slate-500">Prova ad allargare i filtri oppure aggiorna il feed.</p>
+            <h2 className="text-xl font-semibold text-slate-800">{t('noNewsTitle')}</h2>
+            <p className="mt-2 text-slate-500">{t('noNewsText')}</p>
           </div>
         ) : (
           <>
@@ -404,6 +452,8 @@ const NewsAggregator = () => {
                   group={group}
                   activeFilters={activeFilters}
                   toggleFilter={toggleFilter}
+                  locale={locale}
+                  t={t}
                 />
               ))}
             </div>
@@ -417,10 +467,10 @@ const NewsAggregator = () => {
                   disabled={loadingMore}
                 >
                   {loadingMore && <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                  {loadingMore ? 'Caricamento...' : 'Carica altri gruppi'}
+                  {loadingMore ? t('loadingMore') : t('loadMore')}
                 </button>
               ) : (
-                <p className="text-sm text-slate-500">Hai raggiunto la fine dei risultati disponibili.</p>
+                <p className="text-sm text-slate-500">{t('noMoreResults')}</p>
               )}
             </div>
           </>

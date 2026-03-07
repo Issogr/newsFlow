@@ -5,9 +5,10 @@ const MAX_NOTIFICATIONS = 10;
 const PING_INTERVAL_MS = 30000;
 const PONG_TIMEOUT_MS = 5000;
 
-const useWebSocket = (url = '') => {
+const useWebSocket = (url = '', messages = {}) => {
   const wsUrl = url || window.location.origin;
   const socketRef = useRef(null);
+  const messagesRef = useRef(messages);
   const pingIntervalRef = useRef(null);
   const pongTimeoutRef = useRef(null);
   const isConnectedRef = useRef(false);
@@ -23,6 +24,10 @@ const useWebSocket = (url = '') => {
   useEffect(() => {
     isConnectedRef.current = isConnected;
   }, [isConnected]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const pushNotification = useCallback((notification) => {
     setNotifications((current) => [notification, ...current].slice(0, MAX_NOTIFICATIONS));
@@ -102,7 +107,7 @@ const useWebSocket = (url = '') => {
       pushNotification({
         id: Date.now(),
         type: 'info',
-        message: 'Connessione real-time attiva',
+        message: messagesRef.current.connected || 'Real-time connection active',
         timestamp: new Date().toISOString()
       });
     };
@@ -115,7 +120,7 @@ const useWebSocket = (url = '') => {
         pushNotification({
           id: Date.now(),
           type: 'warning',
-          message: 'Connessione real-time persa, riconnessione in corso...',
+          message: messagesRef.current.disconnected || 'Real-time connection lost, reconnecting...',
           timestamp: new Date().toISOString()
         });
       }
@@ -130,7 +135,7 @@ const useWebSocket = (url = '') => {
       pushNotification({
         id: Date.now(),
         type: 'error',
-        message: 'Impossibile ristabilire la connessione real-time',
+        message: messagesRef.current.reconnectFailed || 'Unable to restore the real-time connection',
         timestamp: new Date().toISOString()
       });
     };
@@ -150,7 +155,9 @@ const useWebSocket = (url = '') => {
       pushNotification({
         id: Date.now(),
         type: 'info',
-        message: `${payload.count} nuovi gruppi di notizie disponibili`,
+        message: typeof messagesRef.current.newGroups === 'function'
+          ? messagesRef.current.newGroups(payload.count)
+          : `${payload.count} new news groups available`,
         timestamp: payload.timestamp || new Date().toISOString()
       });
     };

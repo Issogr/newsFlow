@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
+import { getDateLocale, getLanguageMeta } from '../i18n';
 
-const NewsCard = memo(({ group, activeFilters, toggleFilter }) => {
+const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t }) => {
   const sourceEntries = (() => {
     const map = new Map();
     (group?.items || []).forEach((item) => {
@@ -24,7 +25,7 @@ const NewsCard = memo(({ group, activeFilters, toggleFilter }) => {
     }
 
     try {
-      return new Date(dateString).toLocaleDateString('it-IT', {
+      return new Date(dateString).toLocaleDateString(getDateLocale(locale), {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
@@ -42,7 +43,7 @@ const NewsCard = memo(({ group, activeFilters, toggleFilter }) => {
     const normalized = content.replace(/\s+/g, ' ').trim();
 
     if (!normalized) {
-      return 'Nessun estratto disponibile per questo articolo.';
+      return t('noExcerpt');
     }
 
     return normalized.length > 240 ? `${normalized.slice(0, 240)}...` : normalized;
@@ -50,13 +51,21 @@ const NewsCard = memo(({ group, activeFilters, toggleFilter }) => {
 
   const isTopicActive = (topic) => activeFilters.topics.includes(topic);
   const isSourceActive = (sourceId) => activeFilters.sourceIds.includes(sourceId);
+  const languageMeta = getLanguageMeta(group.items[0]?.language, locale);
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-lg">
       <div className="border-b border-slate-100 p-5">
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
           <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">
-            {group.items.length > 1 ? `${group.items.length} fonti` : 'Fonte singola'}
+            {sourceEntries.length > 1 ? t('sourceCount', { count: sourceEntries.length }) : t('singleSource')}
+          </span>
+          <span
+            className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+            title={t('newsLanguage', { language: languageMeta.label })}
+            aria-label={t('newsLanguage', { language: languageMeta.label })}
+          >
+            {languageMeta.emoji}
           </span>
           <span>{formatPublicationDate(group.pubDate)}</span>
         </div>
@@ -115,7 +124,7 @@ const NewsCard = memo(({ group, activeFilters, toggleFilter }) => {
           rel="noopener noreferrer"
           className="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700"
         >
-          Apri la fonte originale
+          {t('openOriginalSource')}
         </a>
       </div>
     </article>
