@@ -82,7 +82,7 @@ describe('API auth and user flows', () => {
         defaultLanguage: 'auto',
         articleRetentionHours: 24,
         recentHours: 3,
-        hiddenSourceIds: []
+        excludedSourceIds: []
       },
       limits: {
         articleRetentionHoursMax: 24,
@@ -115,7 +115,7 @@ describe('API auth and user flows', () => {
         defaultLanguage: 'en',
         articleRetentionHours: 999,
         recentHours: 999,
-        hiddenSourceIds: ['ansa']
+        excludedSourceIds: ['ansa']
       })
       .expect(200);
 
@@ -125,7 +125,7 @@ describe('API auth and user flows', () => {
         defaultLanguage: 'en',
         articleRetentionHours: 24,
         recentHours: 3,
-        hiddenSourceIds: ['ansa']
+        excludedSourceIds: ['ansa']
       }
     });
     expect(updateResponse.body.settings).toMatchObject({

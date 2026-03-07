@@ -20,10 +20,10 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
   const [editingSourceForm, setEditingSourceForm] = useState({ name: '', url: '', language: 'it' });
   const importInputRef = useRef(null);
   const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
-  const defaultSourceOptions = useMemo(() => ([
-    ...availableSources,
-    ...customSources.filter((customSource) => !availableSources.some((source) => source.id === customSource.id))
-  ]), [availableSources, customSources]);
+  const excludedSourceCatalog = useMemo(() => {
+    const customSourceIds = new Set(customSources.map((source) => source.id));
+    return availableSources.filter((source) => !customSourceIds.has(source.id));
+  }, [availableSources, customSources]);
 
   useEffect(() => {
     setSettings(currentUser.settings);
@@ -61,14 +61,14 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
     }));
   }, []);
 
-  const toggleHiddenSource = (sourceId) => {
+  const toggleExcludedSource = (sourceId) => {
     setSettings((current) => {
-      const exists = current.hiddenSourceIds.includes(sourceId);
+      const exists = current.excludedSourceIds.includes(sourceId);
       return {
         ...current,
-        hiddenSourceIds: exists
-          ? current.hiddenSourceIds.filter((item) => item !== sourceId)
-          : [...current.hiddenSourceIds, sourceId]
+        excludedSourceIds: exists
+          ? current.excludedSourceIds.filter((item) => item !== sourceId)
+          : [...current.excludedSourceIds, sourceId]
       };
     });
   };
@@ -165,7 +165,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
       const nextCustomSources = customSources.filter((source) => source.id !== sourceId);
       const nextSettings = {
         ...settings,
-        hiddenSourceIds: settings.hiddenSourceIds.filter((item) => item !== sourceId)
+        excludedSourceIds: settings.excludedSourceIds.filter((item) => item !== sourceId)
       };
       syncUserState(nextSettings, nextCustomSources);
     });
@@ -260,17 +260,17 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
           </section>
 
           <section className="space-y-4">
-            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t('hiddenSources')}</h3>
-            <p className="text-sm text-slate-500">{t('hiddenSourcesHelp')}</p>
+            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t('excludedSources')}</h3>
+            <p className="text-sm text-slate-500">{t('excludedSourcesHelp')}</p>
             <div className="flex flex-wrap gap-2">
-              {defaultSourceOptions.map((source) => {
-                const isActive = settings.hiddenSourceIds.includes(source.id);
+              {excludedSourceCatalog.map((source) => {
+                const isSelected = settings.excludedSourceIds.includes(source.id);
                 return (
                   <button
                     key={source.id}
                     type="button"
-                    onClick={() => toggleHiddenSource(source.id)}
-                    className={`rounded-full px-3 py-1.5 text-sm transition-colors ${isActive ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                    onClick={() => toggleExcludedSource(source.id)}
+                    className={`rounded-full px-3 py-1.5 text-sm transition-colors ${isSelected ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                   >
                     {source.name}
                   </button>

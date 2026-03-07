@@ -79,7 +79,7 @@ function getQueryOptions(userContext = {}) {
       ARTICLE_RETENTION_HOURS,
       Number.isFinite(userContext.articleRetentionHours) ? userContext.articleRetentionHours : ARTICLE_RETENTION_HOURS
     ),
-    hiddenSourceIds: Array.isArray(userContext.hiddenSourceIds) ? userContext.hiddenSourceIds : []
+    excludedSourceIds: Array.isArray(userContext.excludedSourceIds) ? userContext.excludedSourceIds : []
   };
 }
 

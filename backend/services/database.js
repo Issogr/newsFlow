@@ -544,7 +544,7 @@ function buildArticleQuery(filters = {}, options = {}) {
   const searchQuery = buildSearchQuery(state.search);
   const scopeFilter = buildScopeFilter(options, 'a');
   const retentionFilter = buildRetentionFilter(options, 'a');
-  const hiddenSourceFilter = getSourceExclusionClause(options.hiddenSourceIds || []);
+  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
 
   where.push(scopeFilter.clause);
   params.push(...scopeFilter.params);
@@ -554,9 +554,9 @@ function buildArticleQuery(filters = {}, options = {}) {
     params.push(...retentionFilter.params);
   }
 
-  if (hiddenSourceFilter) {
-    where.push(hiddenSourceFilter.clause);
-    params.push(...hiddenSourceFilter.params);
+  if (excludedSourceFilter) {
+    where.push(excludedSourceFilter.clause);
+    params.push(...excludedSourceFilter.params);
   }
 
   if (searchQuery) {
@@ -784,7 +784,7 @@ function getArticlesByIds(articleIds = [], options = {}) {
   const where = [`a.id IN (${articleIds.map(() => '?').join(', ')})`];
   const scopeFilter = buildScopeFilter(options, 'a');
   const retentionFilter = buildRetentionFilter(options, 'a');
-  const hiddenSourceFilter = getSourceExclusionClause(options.hiddenSourceIds || []);
+  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
 
   where.push(scopeFilter.clause);
   params.push(...scopeFilter.params);
@@ -794,9 +794,9 @@ function getArticlesByIds(articleIds = [], options = {}) {
     params.push(...retentionFilter.params);
   }
 
-  if (hiddenSourceFilter) {
-    where.push(hiddenSourceFilter.clause);
-    params.push(...hiddenSourceFilter.params);
+  if (excludedSourceFilter) {
+    where.push(excludedSourceFilter.clause);
+    params.push(...excludedSourceFilter.params);
   }
 
   const rows = getDb().prepare(`
@@ -823,7 +823,7 @@ function getArticlesByIds(articleIds = [], options = {}) {
 function countArticles(options = {}) {
   const scopeFilter = buildScopeFilter(options, 'articles');
   const retentionFilter = buildRetentionFilter(options, 'articles');
-  const hiddenSourceFilter = getSourceExclusionClause(options.hiddenSourceIds || []);
+  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
   const where = [scopeFilter.clause];
   const params = [...scopeFilter.params];
 
@@ -832,9 +832,9 @@ function countArticles(options = {}) {
     params.push(...retentionFilter.params);
   }
 
-  if (hiddenSourceFilter) {
-    where.push(hiddenSourceFilter.clause.replaceAll('a.', 'articles.'));
-    params.push(...hiddenSourceFilter.params);
+  if (excludedSourceFilter) {
+    where.push(excludedSourceFilter.clause.replaceAll('a.', 'articles.'));
+    params.push(...excludedSourceFilter.params);
   }
 
   return getDb().prepare(`
@@ -881,7 +881,7 @@ function deleteArticlesOlderThan(isoTimestamp) {
 function getSourceStats(configuredSources = [], options = {}) {
   const scopeFilter = buildScopeFilter(options, 'articles');
   const retentionFilter = buildRetentionFilter(options, 'articles');
-  const hiddenSourceFilter = getSourceExclusionClause(options.hiddenSourceIds || []);
+  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
   const where = [scopeFilter.clause];
   const params = [...scopeFilter.params];
 
@@ -890,9 +890,9 @@ function getSourceStats(configuredSources = [], options = {}) {
     params.push(...retentionFilter.params);
   }
 
-  if (hiddenSourceFilter) {
-    where.push(hiddenSourceFilter.clause.replaceAll('a.', 'articles.'));
-    params.push(...hiddenSourceFilter.params);
+  if (excludedSourceFilter) {
+    where.push(excludedSourceFilter.clause.replaceAll('a.', 'articles.'));
+    params.push(...excludedSourceFilter.params);
   }
 
   const rows = getDb().prepare(`
@@ -940,7 +940,7 @@ function getTopicStatsByFilters(filters = {}, limit = 20, options = {}) {
   const searchQuery = buildSearchQuery(state.search);
   const scopeFilter = buildScopeFilter(options, 'a');
   const retentionFilter = buildRetentionFilter(options, 'a');
-  const hiddenSourceFilter = getSourceExclusionClause(options.hiddenSourceIds || []);
+  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
 
   where.push(scopeFilter.clause);
   params.push(...scopeFilter.params);
@@ -950,9 +950,9 @@ function getTopicStatsByFilters(filters = {}, limit = 20, options = {}) {
     params.push(...retentionFilter.params);
   }
 
-  if (hiddenSourceFilter) {
-    where.push(hiddenSourceFilter.clause);
-    params.push(...hiddenSourceFilter.params);
+  if (excludedSourceFilter) {
+    where.push(excludedSourceFilter.clause);
+    params.push(...excludedSourceFilter.params);
   }
 
   if (searchQuery) {
@@ -1197,7 +1197,7 @@ function getUserSettings(userId) {
     SELECT user_id AS userId, default_language AS defaultLanguage,
            article_retention_hours AS articleRetentionHours,
            recent_hours AS recentHours,
-           default_source_ids AS hiddenSourceIds,
+           default_source_ids AS excludedSourceIds,
            updated_at AS updatedAt
     FROM user_settings
     WHERE user_id = ?
@@ -1209,7 +1209,7 @@ function getUserSettings(userId) {
 
   return {
     ...row,
-    hiddenSourceIds: row.hiddenSourceIds ? JSON.parse(row.hiddenSourceIds) : []
+    excludedSourceIds: row.excludedSourceIds ? JSON.parse(row.excludedSourceIds) : []
   };
 }
 
@@ -1236,7 +1236,7 @@ function upsertUserSettings(userId, settings = {}) {
     settings.defaultLanguage || 'auto',
     settings.articleRetentionHours || 24,
     settings.recentHours || 3,
-    JSON.stringify(settings.hiddenSourceIds || []),
+    JSON.stringify(settings.excludedSourceIds || []),
     now
   );
 

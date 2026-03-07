@@ -38,7 +38,7 @@ function getDefaultSettings() {
     defaultLanguage: 'auto',
     articleRetentionHours: GLOBAL_RETENTION_HOURS,
     recentHours: MAX_RECENT_HOURS,
-    hiddenSourceIds: []
+    excludedSourceIds: []
   };
 }
 
@@ -162,9 +162,9 @@ function updateUserSettings(userId, payload = {}) {
     defaultLanguage: normalizeLanguage(payload.defaultLanguage || currentSettings.defaultLanguage),
     articleRetentionHours,
     recentHours,
-    hiddenSourceIds: Array.isArray(payload.hiddenSourceIds)
-      ? payload.hiddenSourceIds.filter(Boolean).slice(0, 30)
-      : currentSettings.hiddenSourceIds
+    excludedSourceIds: Array.isArray(payload.excludedSourceIds)
+      ? payload.excludedSourceIds.filter(Boolean).slice(0, 30)
+      : currentSettings.excludedSourceIds
   });
 
   return settings;
@@ -279,19 +279,19 @@ function exportUserSettings(userId) {
   const customSourceIds = new Set(customSources.map((source) => source.id));
 
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     settings: {
       defaultLanguage: settings.defaultLanguage,
       articleRetentionHours: settings.articleRetentionHours,
       recentHours: settings.recentHours,
-      hiddenSourceIds: settings.hiddenSourceIds.filter((sourceId) => !customSourceIds.has(sourceId))
+      excludedSourceIds: settings.excludedSourceIds.filter((sourceId) => !customSourceIds.has(sourceId))
     },
     customSources: customSources.map((source) => ({
       name: source.name,
       url: source.url,
       language: source.language,
-      isHidden: settings.hiddenSourceIds.includes(source.id)
+      isExcluded: settings.excludedSourceIds.includes(source.id)
     }))
   };
 }
@@ -332,24 +332,24 @@ async function importUserSettings(userId, payload = {}) {
     };
 
     database.createUserSource(createdSource);
-    return {
-      ...createdSource,
-      isHidden: Boolean(source.isHidden)
-    };
-  });
+      return {
+        ...createdSource,
+        isExcluded: Boolean(source.isExcluded)
+      };
+    });
 
-  const hiddenGlobalSourceIds = Array.isArray(importedSettings.hiddenSourceIds)
-    ? importedSettings.hiddenSourceIds.filter((sourceId) => globalSourceIds.has(sourceId))
+  const excludedGlobalSourceIds = Array.isArray(importedSettings.excludedSourceIds)
+    ? importedSettings.excludedSourceIds.filter((sourceId) => globalSourceIds.has(sourceId))
     : [];
-  const hiddenCustomSourceIds = recreatedSources
-    .filter((source) => source.isHidden)
+  const excludedCustomSourceIds = recreatedSources
+    .filter((source) => source.isExcluded)
     .map((source) => source.id);
 
   const settings = updateUserSettings(userId, {
     defaultLanguage: importedSettings.defaultLanguage,
     articleRetentionHours: importedSettings.articleRetentionHours,
     recentHours: importedSettings.recentHours,
-    hiddenSourceIds: [...hiddenGlobalSourceIds, ...hiddenCustomSourceIds]
+    excludedSourceIds: [...excludedGlobalSourceIds, ...excludedCustomSourceIds]
   });
 
   return {

@@ -42,7 +42,7 @@ describe('App', () => {
         defaultLanguage: 'en',
         articleRetentionHours: 24,
         recentHours: 3,
-        hiddenSourceIds: []
+        excludedSourceIds: []
       },
       limits: {
         articleRetentionHoursMax: 24,

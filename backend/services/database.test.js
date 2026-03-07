@@ -131,7 +131,7 @@ describe('database queries and user data', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  test('stores articles and applies scope, hidden-source, search, topic, and recency filters', () => {
+  test('stores articles and applies scope, excluded-source, search, topic, and recency filters', () => {
     const now = Date.now();
     const recentIso = new Date(now - (45 * 60 * 1000)).toISOString();
     const recentIsoTwo = new Date(now - (20 * 60 * 1000)).toISOString();
@@ -205,8 +205,8 @@ describe('database queries and user data', () => {
     const visibleForUser = database.getArticles({}, { userId: 'user-1', maxArticleAgeHours: 24 });
     expect(visibleForUser.map((article) => article.id)).toEqual(['private-1', 'global-2', 'global-1']);
 
-    const hiddenFiltered = database.getArticles({}, { userId: 'user-1', hiddenSourceIds: [secondarySource.id], maxArticleAgeHours: 24 });
-    expect(hiddenFiltered.map((article) => article.id)).toEqual(['private-1', 'global-1']);
+    const excludedFiltered = database.getArticles({}, { userId: 'user-1', excludedSourceIds: [secondarySource.id], maxArticleAgeHours: 24 });
+    expect(excludedFiltered.map((article) => article.id)).toEqual(['private-1', 'global-1']);
 
     const searchFiltered = database.getArticles({ search: 'outlook' }, { userId: 'user-1', maxArticleAgeHours: 24 });
     expect(searchFiltered.map((article) => article.id)).toEqual(['global-1']);
@@ -233,7 +233,7 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      hiddenSourceIds: [primarySource.id]
+      excludedSourceIds: [primarySource.id]
     });
 
     expect(settings).toMatchObject({
@@ -241,7 +241,7 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      hiddenSourceIds: [primarySource.id]
+      excludedSourceIds: [primarySource.id]
     });
 
     database.createUserSource({
@@ -339,7 +339,7 @@ describe('database queries and user data', () => {
       { topic: 'Markets', count: 1 }
     ]);
 
-    const hiddenTopics = database.getTopicStatsByFilters({}, 10, { hiddenSourceIds: [primarySource.id] });
-    expect(hiddenTopics).toEqual([{ topic: 'Science', count: 1 }]);
+    const excludedTopics = database.getTopicStatsByFilters({}, 10, { excludedSourceIds: [primarySource.id] });
+    expect(excludedTopics).toEqual([{ topic: 'Science', count: 1 }]);
   });
 });

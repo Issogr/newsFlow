@@ -48,8 +48,8 @@ const appendUniqueGroups = (currentGroups, incomingGroups) => {
   return [...merged.values()];
 };
 
-const getSourceReloadSignature = (hiddenSourceIds, customSources) => JSON.stringify({
-  hiddenSourceIds,
+const getSourceReloadSignature = (excludedSourceIds, customSources) => JSON.stringify({
+  excludedSourceIds,
   customSources: (customSources || []).map((source) => [source.id, source.url])
 });
 
@@ -95,14 +95,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
     settingsLimits.recentHours.min,
     Math.min(Number(currentUser?.settings?.recentHours) || settingsLimits.recentHours.max, settingsLimits.recentHours.max)
   );
-  const hiddenSourceIds = useMemo(() => currentUser?.settings?.hiddenSourceIds || [], [currentUser?.settings?.hiddenSourceIds]);
+  const excludedSourceIds = useMemo(() => currentUser?.settings?.excludedSourceIds || [], [currentUser?.settings?.excludedSourceIds]);
   const sourceReloadSignature = useMemo(() => {
-    return getSourceReloadSignature(hiddenSourceIds, currentUser?.customSources || []);
-  }, [currentUser?.customSources, hiddenSourceIds]);
+    return getSourceReloadSignature(excludedSourceIds, currentUser?.customSources || []);
+  }, [currentUser?.customSources, excludedSourceIds]);
   const sourceReloadSignatureRef = useRef(sourceReloadSignature);
   const visibleAvailableSources = useMemo(() => {
-    return availableSources.filter((source) => !hiddenSourceIds.includes(source.id));
-  }, [availableSources, hiddenSourceIds]);
+    return availableSources.filter((source) => !excludedSourceIds.includes(source.id));
+  }, [availableSources, excludedSourceIds]);
 
   useEffect(() => {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
@@ -116,9 +116,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
   useEffect(() => {
     setActiveFilters((current) => ({
       ...current,
-      sourceIds: current.sourceIds.filter((sourceId) => !hiddenSourceIds.includes(sourceId))
+      sourceIds: current.sourceIds.filter((sourceId) => !excludedSourceIds.includes(sourceId))
     }));
-  }, [hiddenSourceIds]);
+  }, [excludedSourceIds]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {

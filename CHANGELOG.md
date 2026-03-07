@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.9
+
+- renamed source exclusion settings from hidden to excluded across the API and frontend to keep the terminology consistent
+- removed the temporary hidden-source compatibility layer because the project is still pre-release
+
 ## 3.0.8
 
 - added targeted backend tests for news aggregation paging, broadcasting, and empty-feed failure handling

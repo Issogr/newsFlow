@@ -36,7 +36,7 @@ function getUserContext(req) {
   return {
     userId: req.user.id,
     articleRetentionHours: settings.articleRetentionHours,
-    hiddenSourceIds: settings.hiddenSourceIds,
+    excludedSourceIds: settings.excludedSourceIds,
     settings
   };
 }
