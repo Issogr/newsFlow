@@ -459,6 +459,45 @@ function getTopicStats(limit = 20) {
     .slice(0, limit);
 }
 
+function getTopicStatsByFilters(filters = {}, limit = 20) {
+  const state = buildFilterState(filters);
+  const params = [];
+  const joins = ['JOIN articles a ON a.id = article_topics.article_id'];
+  const where = [];
+  const searchQuery = buildSearchQuery(state.search);
+
+  if (searchQuery) {
+    joins.push('JOIN article_search ON article_search.article_id = a.id');
+    where.push('article_search MATCH ?');
+    params.push(searchQuery);
+  }
+
+  if (state.sourceIds.length > 0) {
+    const sourceFilter = getSourceFilterClauses(state.sourceIds);
+    where.push(`(${sourceFilter.clause})`);
+    params.push(...sourceFilter.params);
+  }
+
+  if (state.recentHours) {
+    const recentThreshold = new Date(Date.now() - (state.recentHours * 60 * 60 * 1000)).toISOString();
+    where.push('a.published_at >= ?');
+    params.push(recentThreshold);
+  }
+
+  const rows = getDb().prepare(`
+    SELECT article_topics.topic AS topic, COUNT(*) AS count
+    FROM article_topics
+    ${joins.join('\n')}
+    ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
+    GROUP BY article_topics.topic
+    ORDER BY count DESC, article_topics.topic ASC
+  `).all(...params);
+
+  return rows
+    .filter((row) => topicNormalizer.isMeaningfulTopic(row.topic))
+    .slice(0, limit);
+}
+
 function createIngestionRun() {
   const startedAt = new Date().toISOString();
   const result = getDb().prepare(`
@@ -518,6 +557,7 @@ module.exports = {
   countArticles,
   getSourceStats,
   getTopicStats,
+  getTopicStatsByFilters,
   createIngestionRun,
   completeIngestionRun,
   getLatestIngestionRun,

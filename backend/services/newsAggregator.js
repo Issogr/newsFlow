@@ -291,7 +291,11 @@ async function getNewsFeed(filters = {}) {
     },
     filters: {
       sources: database.getSourceStats(newsSources),
-      topics: database.getTopicStats(18)
+      topics: database.getTopicStatsByFilters({
+        search: filters.search,
+        sourceIds: filters.sourceIds,
+        recentHours: filters.recentHours
+      }, 18)
     }
   };
 }
