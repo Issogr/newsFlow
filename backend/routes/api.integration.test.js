@@ -2,6 +2,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const request = require('supertest');
+const { getCanonicalSourceId } = require('../utils/sourceCatalog');
+
+const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
 
 function createTempDbPath() {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'news-api-test-'));
@@ -116,7 +119,7 @@ describe('API auth and user flows', () => {
         defaultLanguage: 'en',
         articleRetentionHours: 999,
         recentHours: 999,
-        excludedSourceIds: ['ansa'],
+        excludedSourceIds: [ansaSourceId],
         excludedSubSourceIds: ['ansa_mondo']
       })
       .expect(200);
@@ -127,7 +130,7 @@ describe('API auth and user flows', () => {
         defaultLanguage: 'en',
         articleRetentionHours: 24,
         recentHours: 3,
-        excludedSourceIds: ['ansa'],
+        excludedSourceIds: [ansaSourceId],
         excludedSubSourceIds: ['ansa_mondo']
       }
     });
@@ -237,7 +240,7 @@ describe('API auth and user flows', () => {
           defaultLanguage: 'en',
           articleRetentionHours: 12,
           recentHours: 2,
-          excludedSourceIds: ['ansa'],
+          excludedSourceIds: [ansaSourceId],
           excludedSubSourceIds: []
         },
         customSources: [
@@ -257,7 +260,7 @@ describe('API auth and user flows', () => {
         defaultLanguage: 'en',
         articleRetentionHours: 12,
         recentHours: 2,
-        excludedSourceIds: expect.arrayContaining(['ansa'])
+          excludedSourceIds: expect.arrayContaining([ansaSourceId])
       }),
       customSources: [
         expect.objectContaining({

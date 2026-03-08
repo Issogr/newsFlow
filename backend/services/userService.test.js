@@ -68,7 +68,7 @@ describe('userService imports', () => {
         defaultLanguage: 'it',
         articleRetentionHours: 12,
         recentHours: 2,
-        excludedSourceIds: ['bbc']
+        excludedSourceIds: []
       }),
       customSources: [
         expect.objectContaining({
@@ -83,7 +83,7 @@ describe('userService imports', () => {
       defaultLanguage: 'it',
       articleRetentionHours: 12,
       recentHours: 2,
-      excludedSourceIds: ['bbc']
+      excludedSourceIds: []
     });
   });
 });

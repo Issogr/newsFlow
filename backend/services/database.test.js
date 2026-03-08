@@ -3,12 +3,25 @@ const os = require('os');
 const path = require('path');
 const SqliteDatabase = require('better-sqlite3');
 const configuredSources = require('../config/newsSources');
+const {
+  getCanonicalSourceId,
+  getCanonicalSourceName,
+  getConfiguredSourceGroups
+} = require('../utils/sourceCatalog');
 
+const sourceGroups = getConfiguredSourceGroups();
 const primarySource = configuredSources.find((source) => !source.groupId) || configuredSources[0] || { id: 'source-a', name: 'Source A' };
 const secondarySource = configuredSources.find((source) => !source.groupId && source.id !== primarySource.id) || configuredSources[1] || { id: 'source-b', name: 'Source B' };
 const groupedSource = configuredSources.find((source) => source.groupId) || null;
-const groupedSourceFamilyId = groupedSource?.groupId || groupedSource?.id || 'grouped-source';
-const groupedSourceFamilyName = groupedSource?.groupName || groupedSource?.name || 'Grouped Source';
+const groupedSourceFamily = groupedSource
+  ? sourceGroups.find((group) => group.subSources.some((subSource) => subSource.id === groupedSource.id))
+  : null;
+const groupedSourceFamilyId = groupedSourceFamily?.id || groupedSource?.id || 'grouped-source';
+const groupedSourceFamilyName = groupedSourceFamily?.name || groupedSource?.name || 'Grouped Source';
+const primarySourceFamilyId = getCanonicalSourceId(primarySource.id, primarySource.name);
+const primarySourceFamilyName = getCanonicalSourceName(primarySource.id, primarySource.name);
+const secondarySourceFamilyId = getCanonicalSourceId(secondarySource.id, secondarySource.name);
+const secondarySourceFamilyName = getCanonicalSourceName(secondarySource.id, secondarySource.name);
 
 function createTempDbPath() {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'news-db-test-'));
@@ -53,7 +66,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('5');
+    expect(migrationVersion).toBe('6');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
@@ -114,6 +127,60 @@ describe('database migrations', () => {
 
     expect(topicColumns).toEqual(['article_id', 'topic', 'created_at']);
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
+  });
+
+  test('migrates saved source preferences to registrable-domain ids', () => {
+    const sqlite = new SqliteDatabase(dbPath);
+
+    sqlite.exec(`
+      CREATE TABLE app_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE user_settings (
+        user_id TEXT PRIMARY KEY,
+        default_language TEXT NOT NULL DEFAULT 'auto',
+        article_retention_hours INTEGER NOT NULL DEFAULT 24,
+        recent_hours INTEGER NOT NULL DEFAULT 3,
+        default_source_ids TEXT NOT NULL DEFAULT '[]',
+        excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE user_sources (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        language TEXT NOT NULL DEFAULT 'it',
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        validated_at TEXT,
+        UNIQUE(user_id, url)
+      );
+
+      INSERT INTO app_meta (key, value) VALUES ('migration_version', '5');
+      INSERT INTO users (id, username) VALUES ('user-1', 'alice');
+      INSERT INTO user_settings (user_id, default_source_ids) VALUES ('user-1', '["ansa","custom-1"]');
+      INSERT INTO user_sources (id, user_id, name, url, language) VALUES ('custom-1', 'user-1', 'Example Feed', 'https://feeds.example.com/one.xml', 'en');
+    `);
+
+    sqlite.close();
+
+    database = require('./database');
+    expect(database.getUserSettings('user-1')).toEqual(expect.objectContaining({
+      excludedSourceIds: ['ansa.it', 'example.com']
+    }));
   });
 });
 
@@ -214,7 +281,7 @@ describe('database queries and user data', () => {
       rawSource: 'Private Feed'
     }));
 
-    const excludedFiltered = database.getArticles({}, { userId: 'user-1', excludedSourceIds: [secondarySource.id], maxArticleAgeHours: 24 });
+    const excludedFiltered = database.getArticles({}, { userId: 'user-1', excludedSourceIds: [secondarySourceFamilyId], maxArticleAgeHours: 24 });
     expect(excludedFiltered.map((article) => article.id)).toEqual(['private-1', 'global-1']);
 
     const searchFiltered = database.getArticles({ search: 'outlook' }, { userId: 'user-1', maxArticleAgeHours: 24 });
@@ -242,7 +309,7 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      excludedSourceIds: [primarySource.id],
+      excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
     });
 
@@ -251,7 +318,7 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      excludedSourceIds: [primarySource.id],
+      excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
     });
 
@@ -336,7 +403,7 @@ describe('database queries and user data', () => {
 
     const sourceStats = database.getSourceStats([
       { id: groupedSourceFamilyId, name: groupedSourceFamilyName, language: 'it' },
-      { id: secondarySource.id, name: secondarySource.name, language: 'en' }
+      { id: secondarySourceFamilyId, name: secondarySourceFamilyName, language: 'en' }
     ]);
     const groupedArticles = database.getArticles({ sourceIds: [groupedSourceFamilyId] });
     const groupedArticlesWithExcludedSubFeed = groupedSource
@@ -345,7 +412,7 @@ describe('database queries and user data', () => {
 
     expect(sourceStats).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: groupedSourceFamilyId, name: groupedSourceFamilyName, count: 1 }),
-      expect.objectContaining({ id: secondarySource.id, name: secondarySource.name, count: 1 })
+      expect.objectContaining({ id: secondarySourceFamilyId, name: secondarySourceFamilyName, count: 1 })
     ]));
     expect(groupedArticles[0]).toEqual(expect.objectContaining({
       sourceId: groupedSourceFamilyId,
@@ -367,6 +434,75 @@ describe('database queries and user data', () => {
     expect(excludedTopics).toEqual([{ topic: 'Scienza', count: 1 }]);
   });
 
+  test('groups custom user feeds by registrable domain for filtering and display', () => {
+    const now = new Date().toISOString();
+
+    database.createUser({
+      id: 'user-1',
+      username: 'alice',
+      passwordHash: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    database.createUserSource({
+      id: 'custom-1',
+      userId: 'user-1',
+      name: 'Example World',
+      url: 'https://feeds.example.com/world.xml',
+      language: 'en',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      validatedAt: now
+    });
+    database.createUserSource({
+      id: 'custom-2',
+      userId: 'user-1',
+      name: 'Example Politics',
+      url: 'https://feeds.example.com/politics.xml',
+      language: 'en',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      validatedAt: now
+    });
+
+    database.upsertArticles([
+      {
+        id: 'custom-article-1',
+        sourceId: 'custom-1',
+        source: 'Example World',
+        ownerUserId: 'user-1',
+        title: 'World story',
+        description: 'World description',
+        content: 'World body',
+        url: 'https://example.com/world-story',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'custom-article-2',
+        sourceId: 'custom-2',
+        source: 'Example Politics',
+        ownerUserId: 'user-1',
+        title: 'Politics story',
+        description: 'Politics description',
+        content: 'Politics body',
+        url: 'https://example.com/politics-story',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+
+    const groupedArticles = database.getArticles({ sourceIds: ['example.com'] }, { userId: 'user-1' });
+
+    expect(groupedArticles).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceId: 'example.com', source: 'Example', subSource: 'World' }),
+      expect.objectContaining({ sourceId: 'example.com', source: 'Example', subSource: 'Politics' })
+    ]));
+  });
+
   test('removes stale default-source articles and cleans excluded ids on restart cleanup', () => {
     const now = new Date().toISOString();
 
@@ -382,7 +518,7 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 24,
       recentHours: 3,
-      excludedSourceIds: ['retired-source', primarySource.id, 'custom-1'],
+      excludedSourceIds: ['retired-source', primarySourceFamilyId, 'custom-1'],
       excludedSubSourceIds: ['retired-sub-source', groupedSource?.id || 'missing-sub-source']
     });
 
@@ -440,7 +576,7 @@ describe('database queries and user data', () => {
     expect(cleanupResult).toEqual({ removedArticles: 1, updatedSettings: 1 });
     expect(database.getArticles({}, { userId: 'user-1' }).map((article) => article.id)).toEqual(['private-article', 'kept-global']);
     expect(database.getUserSettings('user-1')).toEqual(expect.objectContaining({
-      excludedSourceIds: [primarySource.id, 'custom-1'],
+      excludedSourceIds: [primarySourceFamilyId, 'custom-1'],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
     }));
   });
@@ -472,7 +608,7 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      excludedSourceIds: [primarySource.id],
+      excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: []
     });
 
@@ -521,7 +657,7 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      excludedSourceIds: [primarySource.id]
+      excludedSourceIds: [primarySourceFamilyId]
     });
   });
 });

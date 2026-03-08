@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.2
+
+- replaced manual configured source-family grouping with registrable-domain grouping so feeds from the same publisher domain, such as ABC News, merge automatically
+- removed the temporary saved-preference compatibility layer for old source ids and added a database migration to rewrite stored exclusions to the new registrable-domain source families
+- extended registrable-domain source grouping to custom user feeds so same-domain personal feeds merge consistently in filters, source chips, and source statistics
+
 ## 3.1.1
 
 - split backend aggregation logic into focused grouping, ingestion, and feed-query modules

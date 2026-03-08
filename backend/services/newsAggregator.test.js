@@ -35,6 +35,10 @@ const rssParser = require('./rssParser');
 const database = require('./database');
 const websocketService = require('./websocketService');
 const newsAggregator = require('./newsAggregator');
+const { getCanonicalSourceId, getCanonicalSourceName } = require('../utils/sourceCatalog');
+
+const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
+const ansaSourceName = getCanonicalSourceName('ansa_mondo', 'ANSA - Mondo');
 
 describe('newsAggregator stable grouping', () => {
   const itemA = {
@@ -84,7 +88,7 @@ describe('newsAggregator stable grouping', () => {
         description: 'Vertice tra Trump e Meloni negli Usa sui dazi commerciali.',
         pubDate: '2026-03-02T10:00:00.000Z',
         source: 'ANSA',
-        sourceId: 'ansa',
+        sourceId: ansaSourceId,
         url: 'https://example.com/ansa-1',
         topics: ['Politica', 'Esteri']
       },
@@ -208,7 +212,7 @@ describe('newsAggregator service flows', () => {
   test('getNewsFeed paginates grouped results and includes user source catalog', async () => {
     const groupedArticleA = {
       id: 'global-1',
-      sourceId: 'ansa',
+        sourceId: ansaSourceId,
       source: 'ANSA',
       title: 'Economy outlook improves',
       description: 'Global economy article',
@@ -231,7 +235,7 @@ describe('newsAggregator service flows', () => {
       .mockReturnValueOnce([groupedArticleA, groupedArticleB])
       .mockReturnValueOnce([]);
     database.getLatestIngestionRun.mockReturnValue({ id: 7, status: 'completed' });
-    database.getSourceStats.mockReturnValue([{ id: 'ansa', name: 'ANSA', count: 1 }]);
+    database.getSourceStats.mockReturnValue([{ id: ansaSourceId, name: ansaSourceName, count: 1 }]);
     database.getTopicStatsByFilters.mockReturnValue([{ topic: 'Economy', count: 1 }]);
     database.listUserSources.mockReturnValue([
       { id: 'custom-1', name: 'My Feed', language: 'en', url: 'https://example.com/custom.xml' }
@@ -250,8 +254,8 @@ describe('newsAggregator service flows', () => {
       ingestion: { id: 7, status: 'completed' }
     });
     expect(result.filters.sourceCatalog).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'ansa', name: 'ANSA' }),
-      expect.objectContaining({ id: 'custom-1', name: 'My Feed', language: 'en' })
+      expect.objectContaining({ id: ansaSourceId, name: ansaSourceName }),
+      expect.objectContaining({ id: 'example.com', name: 'My Feed', language: 'en' })
     ]));
     expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({ limit: 40, offset: 0 }), expect.objectContaining({ userId: 'user-1' }));
   });
@@ -270,7 +274,7 @@ describe('newsAggregator service flows', () => {
     expect(result).toMatchObject({ success: true, fetchedCount: 2, insertedCount: 2, updatedCount: 0 });
     expect(database.cleanupRemovedConfiguredSourceData).toHaveBeenCalledTimes(1);
     expect(database.upsertArticles).toHaveBeenCalledWith(expect.arrayContaining([
-      expect.objectContaining({ rawSourceId: 'ansa_mondo', rawSource: 'ANSA - Mondo', sourceId: 'ansa', source: 'ANSA', subSource: 'Mondo' })
+      expect.objectContaining({ rawSourceId: 'ansa_mondo', rawSource: 'ANSA - Mondo', sourceId: ansaSourceId, source: ansaSourceName, subSource: 'Mondo' })
     ]));
     expect(database.mergeTopicsForArticles).toHaveBeenCalledWith(expect.arrayContaining([
       expect.objectContaining({ articleId: 'global-1', topics: expect.any(Array) }),
@@ -278,7 +282,7 @@ describe('newsAggregator service flows', () => {
     ]));
     expect(websocketService.broadcastNewsUpdate).toHaveBeenCalledTimes(2);
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0]).toMatchObject({ id: expect.stringContaining('group-'), ownerUserId: null });
-    expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].items[0]).toMatchObject({ sourceId: 'ansa', subSource: 'Mondo' });
+    expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].items[0]).toMatchObject({ sourceId: ansaSourceId, subSource: 'Mondo' });
     expect(websocketService.broadcastNewsUpdate.mock.calls[1][0][0]).toMatchObject({ ownerUserId: 'user-1' });
   });
 

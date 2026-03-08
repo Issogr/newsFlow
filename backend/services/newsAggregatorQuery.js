@@ -1,6 +1,6 @@
 const database = require('./database');
 const newsSources = require('../config/newsSources');
-const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
+const { buildDomainSourceGroups, getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 const {
   insertArticleIntoGroups,
   sortGroupsByPubDate
@@ -28,16 +28,36 @@ function expandUserSources(userSources = []) {
 
 function getAvailableSources(userContext = {}) {
   const userSources = userContext.userId ? database.listUserSources(userContext.userId) : [];
-  return [
-    ...getConfiguredSourceGroups(),
-    ...userSources.map((source) => ({
-      id: source.id,
-      name: source.name,
-      language: source.language,
-      type: 'rss',
-      url: source.url
-    }))
-  ];
+  const availableSources = new Map(getConfiguredSourceGroups().map((group) => [group.id, { ...group, subSources: [...group.subSources] }]));
+  const customGroups = buildDomainSourceGroups(userSources);
+
+  customGroups.forEach((group) => {
+    const existingGroup = availableSources.get(group.id);
+
+    if (!existingGroup) {
+      availableSources.set(group.id, {
+        id: group.id,
+        name: group.name,
+        language: group.language,
+        subSources: group.subSources.map((subSource) => ({ ...subSource }))
+      });
+      return;
+    }
+
+    const mergedSubSources = new Map(existingGroup.subSources.map((subSource) => [subSource.id, subSource]));
+    group.subSources.forEach((subSource) => {
+      if (!mergedSubSources.has(subSource.id)) {
+        mergedSubSources.set(subSource.id, { ...subSource });
+      }
+    });
+
+    availableSources.set(group.id, {
+      ...existingGroup,
+      subSources: [...mergedSubSources.values()]
+    });
+  });
+
+  return [...availableSources.values()];
 }
 
 function getQueryOptions(userContext = {}) {

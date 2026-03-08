@@ -5,9 +5,11 @@ const logger = require('../utils/logger');
 const configuredSources = require('../config/newsSources');
 const topicNormalizer = require('./topicNormalizer');
 const {
+  buildDomainSourceGroups,
   getCanonicalSourceId,
   getCanonicalSourceName,
   getConfiguredSourceGroupIds,
+  getLegacyConfiguredSourceGroupIds,
   getGroupedConfiguredSourceIds,
   getRawConfiguredSourceIds,
   getSourceAliases,
@@ -16,7 +18,7 @@ const {
 
 const DATA_DIR = path.join(__dirname, '../data');
 const DB_PATH = process.env.NEWS_DB_PATH || path.join(DATA_DIR, 'news.db');
-const LATEST_MIGRATION_VERSION = 5;
+const LATEST_MIGRATION_VERSION = 6;
 
 let db;
 let lastWriteCheckAt = null;
@@ -31,12 +33,12 @@ function chunkValues(values = [], size = 200) {
   return chunks;
 }
 
-function getSourceFilterClauses(sourceIds = []) {
+function getSourceFilterClauses(sourceIds = [], options = {}) {
   const aliasedIds = new Set();
   const aliasedNames = new Set();
 
   sourceIds.forEach((sourceId) => {
-    const aliases = getSourceAliases(sourceId);
+    const aliases = getResolvedSourceAliases(sourceId, null, options.userId || null);
     aliases.ids.forEach((id) => aliasedIds.add(id));
     aliases.names.forEach((name) => aliasedNames.add(name));
   });
@@ -60,12 +62,12 @@ function getSourceFilterClauses(sourceIds = []) {
   };
 }
 
-function getSourceExclusionClause(sourceIds = []) {
+function getSourceExclusionClause(sourceIds = [], options = {}) {
   if (!Array.isArray(sourceIds) || sourceIds.length === 0) {
     return null;
   }
 
-  const sourceFilter = getSourceFilterClauses(sourceIds);
+  const sourceFilter = getSourceFilterClauses(sourceIds, options);
   if (!sourceFilter.clause) {
     return null;
   }
@@ -84,6 +86,75 @@ function getSubSourceExclusionClause(subSourceIds = []) {
   return {
     clause: `a.source_id NOT IN (${subSourceIds.map(() => '?').join(', ')})`,
     params: subSourceIds
+  };
+}
+
+function getCustomSourceGroups(userId) {
+  if (!userId) {
+    return new Map();
+  }
+
+  return buildDomainSourceGroups(listUserSources(userId));
+}
+
+function resolveCustomSourceGroup(sourceId, sourceName, userId) {
+  if (!userId) {
+    return null;
+  }
+
+  const customSourceGroups = getCustomSourceGroups(userId);
+
+  for (const group of customSourceGroups.values()) {
+    if (group.id === sourceId || group.memberIds.has(sourceId) || group.memberNames.has(sourceName)) {
+      return group;
+    }
+  }
+
+  return null;
+}
+
+function getResolvedSourceAliases(sourceId, sourceName, userId) {
+  const configuredAliases = getSourceAliases(sourceId, sourceName);
+  const customSourceGroup = resolveCustomSourceGroup(sourceId, sourceName, userId);
+
+  if (!customSourceGroup) {
+    return configuredAliases;
+  }
+
+  return {
+    ids: [...new Set([...configuredAliases.ids, customSourceGroup.id, ...customSourceGroup.memberIds])],
+    names: [...new Set([...configuredAliases.names, customSourceGroup.name, ...customSourceGroup.memberNames])]
+  };
+}
+
+function getResolvedSourceMetadata(sourceId, sourceName, userId) {
+  const configuredSourceId = getCanonicalSourceId(sourceId, sourceName);
+  const configuredSourceName = getCanonicalSourceName(sourceId, sourceName);
+  const configuredSubSource = getSourceVariantLabel(sourceId, sourceName);
+
+  if (configuredSourceId !== sourceId || configuredSourceName !== sourceName || configuredSubSource) {
+    return {
+      sourceId: configuredSourceId,
+      sourceName: configuredSourceName,
+      subSource: configuredSubSource
+    };
+  }
+
+  const customSourceGroup = resolveCustomSourceGroup(sourceId, sourceName, userId);
+  if (!customSourceGroup) {
+    return {
+      sourceId,
+      sourceName,
+      subSource: null
+    };
+  }
+
+  return {
+    sourceId: customSourceGroup.id,
+    sourceName: customSourceGroup.name,
+    subSource: customSourceGroup.subSources.length > 1
+      ? (customSourceGroup.subSources.find((subSource) => subSource.id === sourceId)?.label || null)
+      : null
   };
 }
 
@@ -355,6 +426,12 @@ function runMigrations(database) {
     currentVersion = 5;
     setCurrentMigrationVersion(database, currentVersion);
   }
+
+  if (currentVersion < 6) {
+    migrateToV6(database);
+    currentVersion = 6;
+    setCurrentMigrationVersion(database, currentVersion);
+  }
 }
 
 function columnExists(database, tableName, columnName) {
@@ -551,6 +628,45 @@ function migrateToV5(database) {
   logger.info('Applied DB migration v5: added excluded sub-source settings');
 }
 
+function migrateToV6(database) {
+  const configuredSourceGroupIds = getConfiguredSourceGroupIds();
+  const legacyConfiguredSourceGroupIds = getLegacyConfiguredSourceGroupIds();
+  const selectSettings = database.prepare(`
+    SELECT user_id AS userId, default_source_ids AS excludedSourceIds
+    FROM user_settings
+  `);
+  const updateSettings = database.prepare(`
+    UPDATE user_settings
+    SET default_source_ids = ?, updated_at = ?
+    WHERE user_id = ?
+  `);
+
+  const migrate = database.transaction(() => {
+    let updatedSettings = 0;
+    const now = new Date().toISOString();
+
+    selectSettings.all().forEach((row) => {
+      const customSourceGroupIds = new Set(getCustomSourceGroups(row.userId).keys());
+      const excludedSourceIds = row.excludedSourceIds ? JSON.parse(row.excludedSourceIds) : [];
+      const nextExcludedSourceIds = [...new Set(excludedSourceIds
+        .map((sourceId) => getResolvedSourceMetadata(sourceId, null, row.userId).sourceId)
+        .filter((sourceId) => configuredSourceGroupIds.has(sourceId) || customSourceGroupIds.has(sourceId)))];
+
+      if (JSON.stringify(nextExcludedSourceIds) === JSON.stringify(excludedSourceIds)) {
+        return;
+      }
+
+      updateSettings.run(JSON.stringify(nextExcludedSourceIds), now, row.userId);
+      updatedSettings += 1;
+    });
+
+    return updatedSettings;
+  });
+
+  const updatedSettings = migrate();
+  logger.info(`Applied DB migration v6: normalized ${updatedSettings} saved source preference sets to registrable-domain source families`);
+}
+
 function buildFilterState(filters = {}) {
   return {
     search: typeof filters.search === 'string' ? filters.search.trim() : '',
@@ -586,7 +702,7 @@ function buildArticleQuery(filters = {}, options = {}) {
   const searchQuery = buildSearchQuery(state.search);
   const scopeFilter = buildScopeFilter(options, 'a');
   const retentionFilter = buildRetentionFilter(options, 'a');
-  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
+  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
   const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
 
   where.push(scopeFilter.clause);
@@ -614,7 +730,7 @@ function buildArticleQuery(filters = {}, options = {}) {
   }
 
   if (state.sourceIds.length > 0) {
-    const sourceFilter = getSourceFilterClauses(state.sourceIds);
+    const sourceFilter = getSourceFilterClauses(state.sourceIds, options);
     where.push(`(${sourceFilter.clause})`);
     params.push(...sourceFilter.params);
   }
@@ -682,19 +798,23 @@ function getTopicsByArticleIds(articleIds) {
   return topicMap;
 }
 
-function hydrateArticleRows(rows) {
+function hydrateArticleRows(rows, options = {}) {
   const articleIds = rows.map((row) => row.id);
   const topicMap = getTopicsByArticleIds(articleIds);
 
-  return rows.map((row) => ({
-    ...row,
-    rawSourceId: row.sourceId,
-    rawSource: row.source,
-    sourceId: getCanonicalSourceId(row.sourceId, row.source),
-    source: getCanonicalSourceName(row.sourceId, row.source),
-    subSource: getSourceVariantLabel(row.sourceId, row.source),
-    topics: (topicMap.get(row.id) || []).filter((topic) => topicNormalizer.isCanonicalTopic(topic))
-  }));
+  return rows.map((row) => {
+    const sourceMetadata = getResolvedSourceMetadata(row.sourceId, row.source, options.userId || row.ownerUserId || null);
+
+    return {
+      ...row,
+      rawSourceId: row.sourceId,
+      rawSource: row.source,
+      sourceId: sourceMetadata.sourceId,
+      source: sourceMetadata.sourceName,
+      subSource: sourceMetadata.subSource,
+      topics: (topicMap.get(row.id) || []).filter((topic) => topicNormalizer.isCanonicalTopic(topic))
+    };
+  });
 }
 
 function upsertArticles(articles = []) {
@@ -866,7 +986,7 @@ function getArticles(filters = {}, options = {}) {
   const database = getDb();
   const { sql, params } = buildArticleQuery(filters, options);
   const rows = database.prepare(sql).all(...params);
-  return hydrateArticleRows(rows);
+  return hydrateArticleRows(rows, options);
 }
 
 function getArticleById(articleId, options = {}) {
@@ -886,7 +1006,7 @@ function getArticlesByIds(articleIds = [], options = {}) {
   const where = [`a.id IN (${articleIds.map(() => '?').join(', ')})`];
   const scopeFilter = buildScopeFilter(options, 'a');
   const retentionFilter = buildRetentionFilter(options, 'a');
-  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
+  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
   const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
 
   where.push(scopeFilter.clause);
@@ -925,13 +1045,13 @@ function getArticlesByIds(articleIds = [], options = {}) {
     ORDER BY datetime(a.published_at) DESC, a.id DESC
   `).all(...params);
 
-  return hydrateArticleRows(rows);
+  return hydrateArticleRows(rows, options);
 }
 
 function countArticles(options = {}) {
   const scopeFilter = buildScopeFilter(options, 'articles');
   const retentionFilter = buildRetentionFilter(options, 'articles');
-  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
+  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
   const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
   const where = [scopeFilter.clause];
   const params = [...scopeFilter.params];
@@ -996,6 +1116,7 @@ function cleanupRemovedConfiguredSourceData() {
   const database = getDb();
   const rawConfiguredSourceIds = getRawConfiguredSourceIds();
   const configuredSourceGroupIds = getConfiguredSourceGroupIds();
+  const legacyConfiguredSourceGroupIds = getLegacyConfiguredSourceGroupIds();
   const groupedConfiguredSourceIds = getGroupedConfiguredSourceIds();
   const selectGlobalArticles = database.prepare(`
     SELECT id, source_id AS sourceId, source_name AS sourceName
@@ -1035,7 +1156,7 @@ function cleanupRemovedConfiguredSourceData() {
     const now = new Date().toISOString();
 
     selectGlobalArticles.all().forEach((article) => {
-      if (rawConfiguredSourceIds.has(article.sourceId) || configuredSourceGroupIds.has(article.sourceId)) {
+      if (rawConfiguredSourceIds.has(article.sourceId) || configuredSourceGroupIds.has(article.sourceId) || legacyConfiguredSourceGroupIds.has(article.sourceId)) {
         return;
       }
 
@@ -1081,7 +1202,7 @@ function cleanupRemovedConfiguredSourceData() {
 function getSourceStats(configuredSources = [], options = {}) {
   const scopeFilter = buildScopeFilter(options, 'articles');
   const retentionFilter = buildRetentionFilter(options, 'articles');
-  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
+  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
   const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
   const where = [scopeFilter.clause];
   const params = [...scopeFilter.params];
@@ -1110,10 +1231,11 @@ function getSourceStats(configuredSources = [], options = {}) {
   `).all(...params);
 
   const aggregatedRows = rows.reduce((map, row) => {
-    const canonicalId = getCanonicalSourceId(row.id, row.name);
+    const sourceMetadata = getResolvedSourceMetadata(row.id, row.name, options.userId || null);
+    const canonicalId = sourceMetadata.sourceId;
     const current = map.get(canonicalId) || {
       id: canonicalId,
-      name: getCanonicalSourceName(row.id, row.name),
+      name: sourceMetadata.sourceName,
       count: 0
     };
 
@@ -1146,7 +1268,7 @@ function getTopicStatsByFilters(filters = {}, limit = 20, options = {}) {
   const searchQuery = buildSearchQuery(state.search);
   const scopeFilter = buildScopeFilter(options, 'a');
   const retentionFilter = buildRetentionFilter(options, 'a');
-  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || []);
+  const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
   const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
 
   where.push(scopeFilter.clause);
@@ -1174,7 +1296,7 @@ function getTopicStatsByFilters(filters = {}, limit = 20, options = {}) {
   }
 
   if (state.sourceIds.length > 0) {
-    const sourceFilter = getSourceFilterClauses(state.sourceIds);
+    const sourceFilter = getSourceFilterClauses(state.sourceIds, options);
     where.push(`(${sourceFilter.clause})`);
     params.push(...sourceFilter.params);
   }
