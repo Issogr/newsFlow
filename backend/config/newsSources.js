@@ -13,9 +13,8 @@ module.exports = [
   { id: 'sole24ore_mondo', name: 'Il Sole 24 Ore - Mondo', groupId: 'sole24ore', groupName: 'Il Sole 24 Ore', subSource: 'Mondo', url: 'https://www.ilsole24ore.com/rss/mondo.xml', type: 'rss', language: 'it' },
   { id: 'genova24', name: 'Genova24', url: 'https://www.genova24.it/feed', type: 'rss', language: 'it' },
   { id: 'ivgsavona', name: 'IVG Savona', url: 'https://www.ivg.it/?feed=news-news24', type: 'rss', language: 'it' },
-  { id: 'savonanews', name: 'Savona News', url: 'https://www.savonanews.it/rss.xml', type: 'rss', language: 'it' },
   { id: 'imperiapost', name: 'ImperiaPost', url: 'https://www.imperiapost.it/feed', type: 'rss', language: 'it' },
-  { id: 'bbc', name: 'BBC News', url: 'http://feeds.bbci.co.uk/news/world/rss.xml', type: 'rss', language: 'en' },
-  { id: 'guardian', name: 'The Guardian', url: 'https://www.theguardian.com/world/rss', type: 'rss', language: 'en' },
-  { id: 'lemonde', name: 'Le Monde', url: 'https://www.lemonde.fr/rss/une.xml', type: 'rss', language: 'fr' }
+  { id: 'abc-us', name: 'ABC News US Headlines', url: 'http://feeds.abcnews.com/abcnews/usheadlines', type: 'rss', language: 'en' },
+  { id: 'abc-world', name: 'ABC News World', url: 'http://feeds.abcnews.com/abcnews/internationalheadlines', type: 'rss', language: 'en' },
+  { id: 'abc-politics', name: 'ABC News Politics', url: 'http://feeds.abcnews.com/abcnews/politicsheadlines', type: 'rss', language: 'en' }
 ];
