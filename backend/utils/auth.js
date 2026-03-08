@@ -76,33 +76,6 @@ function extractSessionToken(req) {
   return extractBearerToken(headers.authorization) || headers['x-session-token'] || '';
 }
 
-function requireAdminToken(req, res, next) {
-  const configuredToken = process.env.ADMIN_API_TOKEN || process.env.API_ADMIN_TOKEN || '';
-
-  if (!configuredToken) {
-    return next(createError(
-      503,
-      'Token amministrativo non configurato sul server',
-      'ADMIN_TOKEN_NOT_CONFIGURED'
-    ));
-  }
-
-  const headers = req.headers || {};
-  const tokenFromHeader = headers['x-admin-token'];
-  const tokenFromBearer = extractBearerToken(headers.authorization);
-  const providedToken = tokenFromBearer || tokenFromHeader || '';
-
-  if (!safeTokenCompare(configuredToken, providedToken)) {
-    return next(createError(
-      401,
-      'Token amministrativo non valido',
-      'UNAUTHORIZED'
-    ));
-  }
-
-  return next();
-}
-
 function requireAuthenticatedUser(req, res, next) {
   database.purgeExpiredSessions();
   const sessionToken = extractSessionToken(req);
@@ -126,7 +99,6 @@ function requireAuthenticatedUser(req, res, next) {
 }
 
 module.exports = {
-  requireAdminToken,
   requireAuthenticatedUser,
   extractBearerToken,
   extractSessionToken,

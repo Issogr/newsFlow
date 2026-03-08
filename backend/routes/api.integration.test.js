@@ -41,7 +41,6 @@ describe('API auth and user flows', () => {
 
     jest.doMock('../services/newsAggregator', () => ({
       ingestAllNews: jest.fn().mockResolvedValue({ success: true }),
-      forceRefresh: jest.fn().mockResolvedValue({ success: true }),
       startScheduler: jest.fn(),
       stopScheduler: jest.fn()
     }));

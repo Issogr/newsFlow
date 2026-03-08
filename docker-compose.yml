@@ -18,7 +18,6 @@ services:
       - PORT=5000
       - ALLOWED_ORIGINS=http://localhost,http://localhost:80,http://127.0.0.1,http://127.0.0.1:80,@local-network
       - TRUST_PROXY=true
-      - ADMIN_API_TOKEN=change-me
       - NEWS_DB_PATH=/usr/src/app/data/news.db
       # Variabili di ottimizzazione
       - MAX_ARTICLES_PER_SOURCE=25  # Numero massimo di articoli da elaborare per fonte

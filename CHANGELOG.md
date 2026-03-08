@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.18
+
+- removed the unused admin and debug API endpoints for manual refresh, WebSocket status, and broadcast notifications
+- removed the related admin-token deployment and documentation requirements to simplify Kubernetes and container setup
+
 ## 3.0.17
 
 - removed article previews from news cards and tightened card chip rows so source and topic areas keep a cleaner, more uniform one-line height

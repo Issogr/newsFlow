@@ -67,8 +67,6 @@ News Aggregator is a web app that collects articles from multiple RSS sources, s
 - `DELETE /api/me/sources/:sourceId`: remove a personal RSS source
 - `GET /api/news`: grouped news with pagination and filters
 - `GET /api/articles/:articleId/reader`: cached clean reader view for one article
-- `POST /api/refresh`: force a refresh (admin token required)
-- `GET /api/ws/status`: WebSocket status
 
 ## Configuration
 
@@ -79,7 +77,6 @@ Useful backend variables:
 - `MAX_ARTICLES_PER_SOURCE`: max articles read from each feed
 - `NEWS_DB_PATH`: SQLite file path
 - `SESSION_TTL_DAYS`: session duration for user logins
-- `ADMIN_API_TOKEN`: admin token for protected endpoints
 
 ## Run
 

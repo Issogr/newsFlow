@@ -2,10 +2,9 @@ const express = require('express');
 const newsService = require('../services/newsAggregator');
 const readerService = require('../services/readerService');
 const userService = require('../services/userService');
-const websocketService = require('../services/websocketService');
 const { asyncHandler, createError } = require('../utils/errorHandler');
-const { sanitizeParam, sanitizeQuery, validateParam, validateQueryParam, sanitizeBody } = require('../utils/inputValidator');
-const { requireAdminToken, requireAuthenticatedUser } = require('../utils/auth');
+const { sanitizeParam, sanitizeQuery, validateParam, sanitizeBody } = require('../utils/inputValidator');
+const { requireAuthenticatedUser } = require('../utils/auth');
 
 const router = express.Router();
 
@@ -125,34 +124,6 @@ router.get('/articles/:articleId/reader', [
   });
 
   res.json(readerArticle);
-}));
-
-router.post('/refresh', requireAdminToken, asyncHandler(async (req, res) => {
-  const result = await newsService.forceRefresh();
-  res.json({
-    success: true,
-    message: 'Dati aggiornati con successo',
-    ...result
-  });
-}));
-
-router.get('/ws/status', (req, res) => {
-  res.json(websocketService.getStatistics());
-});
-
-router.post('/ws/notify', requireAdminToken, [
-  validateQueryParam('message', 'Messaggio richiesto'),
-  sanitizeQuery('message')
-], asyncHandler(async (req, res) => {
-  const message = req.query.message;
-  const type = req.query.type || 'info';
-
-  if (!['info', 'warning', 'error'].includes(type)) {
-    throw createError(400, 'Tipo di notifica non valido', 'INVALID_NOTIFICATION_TYPE');
-  }
-
-  websocketService.broadcastSystemNotification(message, type);
-  res.json({ success: true, message: 'Notifica inviata con successo', type });
 }));
 
 module.exports = router;

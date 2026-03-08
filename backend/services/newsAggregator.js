@@ -617,12 +617,6 @@ async function getNewsFeed(filters = {}, userContext = {}) {
   };
 }
 
-async function forceRefresh() {
-  const result = await ingestAllNews({ broadcast: true });
-  websocketService.broadcastSystemNotification('Dati aggiornati con successo', 'info');
-  return result;
-}
-
 function startScheduler() {
   if (schedulerHandle) {
     return;
@@ -651,7 +645,6 @@ process.on('exit', stopScheduler);
 module.exports = {
   ingestAllNews,
   getNewsFeed,
-  forceRefresh,
   startScheduler,
   stopScheduler,
   newsSources,

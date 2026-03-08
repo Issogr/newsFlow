@@ -50,7 +50,7 @@ app.use(cors({
     callback(createError(403, 'Origine non consentita', 'FORBIDDEN'));
   },
   methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Token'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   maxAge: 86400
 }));
@@ -77,22 +77,7 @@ const baseRateLimit = rateLimit({
   }
 });
 
-const refreshRateLimit = rateLimit({
-  windowMs: 60 * 1000,
-  max: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.ip,
-  message: {
-    error: {
-      message: 'Troppe richieste di aggiornamento, riprova più tardi',
-      code: 'REFRESH_RATE_LIMIT_EXCEEDED'
-    }
-  }
-});
-
 app.use('/api', baseRateLimit);
-app.use('/api/refresh', refreshRateLimit);
 app.use('/api', apiRoutes);
 
 app.get('/health', (req, res) => {
