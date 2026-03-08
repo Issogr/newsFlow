@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.17
+
+- removed article previews from news cards and tightened card chip rows so source and topic areas keep a cleaner, more uniform one-line height
+
 ## 3.0.16
 
 - replaced the separate header settings/logout buttons with a compact user menu beside notifications that shows the username, settings, and logout actions

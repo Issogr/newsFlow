@@ -35,33 +35,20 @@ function formatPublicationDate(dateString, locale) {
   }
 }
 
-function buildSummary(group, t) {
-  const mainItem = group?.items?.[0];
-  const content = mainItem?.content || mainItem?.description || group?.description || '';
-  const normalized = content.replace(/\s+/g, ' ').trim();
-
-  if (!normalized) {
-    return t('noExcerpt');
-  }
-
-  return normalized.length > 240 ? `${normalized.slice(0, 240)}...` : normalized;
-}
-
 const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenReader }) => {
   if (!group?.items?.length) {
     return null;
   }
 
   const sourceEntries = getSourceEntries(group);
-  const summary = buildSummary(group, t);
 
   const isTopicActive = (topic) => activeFilters.topics.includes(topic);
   const isSourceActive = (sourceId) => activeFilters.sourceIds.includes(sourceId);
   const languageMeta = getLanguageMeta(group.items[0]?.language, locale);
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-lg">
-      <div className="border-b border-slate-100 p-5">
+    <article className="flex h-full min-h-[19rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-lg">
+      <div className="flex flex-1 flex-col border-b border-slate-100 p-5">
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
           <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">
             {sourceEntries.length > 1 ? t('sourceCount', { count: sourceEntries.length }) : t('singleSource')}
@@ -76,11 +63,11 @@ const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenRe
           <span>{formatPublicationDate(group.pubDate, locale)}</span>
         </div>
 
-        <h2 className="text-lg font-semibold leading-tight text-slate-900">
+        <h2 className="min-h-[3.5rem] text-lg font-semibold leading-tight text-slate-900">
           {group.title}
         </h2>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 min-h-6 flex flex-wrap content-start gap-2">
           {sourceEntries.map((source) => (
             <button
               key={source.id}
@@ -98,29 +85,23 @@ const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenRe
           ))}
         </div>
 
-        {group.topics?.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {group.topics.map((topic) => (
-              <button
-                key={topic}
-                type="button"
-                onClick={() => toggleFilter('topics', topic)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  isTopicActive(topic)
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                }`}
-                aria-pressed={isTopicActive(topic)}
-              >
-                {topic}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex-1 p-5">
-        <p className="text-sm leading-6 text-slate-600">{summary}</p>
+        <div className="mt-3 min-h-6 flex flex-wrap content-start gap-2">
+          {group.topics?.map((topic) => (
+            <button
+              key={topic}
+              type="button"
+              onClick={() => toggleFilter('topics', topic)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                isTopicActive(topic)
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+              }`}
+              aria-pressed={isTopicActive(topic)}
+            >
+              {topic}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="border-t border-slate-100 px-5 py-4">
