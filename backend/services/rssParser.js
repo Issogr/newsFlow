@@ -10,6 +10,18 @@ const RSS_RETRY_DELAY = parseInt(process.env.RSS_RETRY_DELAY || '1500', 10);
 const RSS_TIMEOUT = parseInt(process.env.RSS_TIMEOUT || '15000', 10);
 const CACHE_TTL = parseInt(process.env.RSS_CACHE_TTL || '60000', 10);
 
+function summarizeErrorMessage(error) {
+  const message = String(error?.message || 'Unknown error')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (message.length <= 220) {
+    return message;
+  }
+
+  return `${message.slice(0, 217)}...`;
+}
+
 const parser = new RSSParser({
   customFields: {
     item: [
@@ -190,7 +202,7 @@ async function parseFeed(source) {
           : []
       }));
   } catch (error) {
-    logger.error(`Failed to parse RSS feed ${source.name} (${url}): ${error.message}`);
+    logger.error(`Failed to parse RSS feed ${source.name} (${url}): ${summarizeErrorMessage(error)}`);
     return [];
   }
 }

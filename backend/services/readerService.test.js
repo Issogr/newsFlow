@@ -127,7 +127,7 @@ describe('readerService', () => {
       title: article.title,
       contentText: expect.stringContaining('Fallback body paragraph.')
     }));
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Reader mode extraction failed'));
+    expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('Reader mode extraction fell back'));
   });
 
   test('throws when the article is missing', async () => {
