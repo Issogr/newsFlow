@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.1.1
+
+- split backend aggregation logic into focused grouping, ingestion, and feed-query modules
+- split the settings UI into dedicated sections plus a state hook for transfer, exclusions, and custom source editing
+
 ## 3.1.0
 
 - replaced full ingestion after personal source changes with targeted per-user refreshes, queued ingestion work, and batched article/topic persistence for lower backend load
