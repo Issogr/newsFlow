@@ -47,6 +47,10 @@ export const setAuthToken = (token) => {
 
 export const getAuthToken = () => authToken;
 
+export const isRequestCanceled = (error) => {
+  return axios.isCancel?.(error) || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';
+};
+
 export const registerUser = async ({ username, password }) => {
   const response = await api.post('/auth/register', { username, password });
   return response.data;
@@ -103,7 +107,8 @@ export const fetchNews = async ({
   search = '',
   sourceIds = [],
   topics = [],
-  recentHours = null
+  recentHours = null,
+  signal
 } = {}) => {
   const params = { page, pageSize };
 
@@ -123,13 +128,14 @@ export const fetchNews = async ({
     params.recentHours = recentHours;
   }
 
-  const response = await api.get('/news', { params });
+  const response = await api.get('/news', { params, signal });
   return response.data;
 };
 
-export const fetchReaderArticle = async (articleId, { refresh = false } = {}) => {
+export const fetchReaderArticle = async (articleId, { refresh = false, signal } = {}) => {
   const response = await api.get(`/articles/${articleId}/reader`, {
-    params: refresh ? { refresh: 'true' } : undefined
+    params: refresh ? { refresh: 'true' } : undefined,
+    signal
   });
 
   return response.data;

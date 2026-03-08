@@ -41,6 +41,16 @@ const simHashProfileCache = new WeakMap();
 let refreshPromise = null;
 let lastRefreshAt = null;
 let schedulerHandle = null;
+let ingestionQueue = Promise.resolve();
+
+function enqueueIngestionTask(task) {
+  const queuedTask = ingestionQueue
+    .catch(() => undefined)
+    .then(task);
+
+  ingestionQueue = queuedTask.catch(() => undefined);
+  return queuedTask;
+}
 
 function purgeExpiredArticles() {
   if (!Number.isFinite(ARTICLE_RETENTION_HOURS) || ARTICLE_RETENTION_HOURS <= 0) {
@@ -303,6 +313,20 @@ function buildStableGroupId(items) {
   return `group-${crypto.createHash('sha1').update(stableKeys.join('|')).digest('hex').slice(0, 16)}`;
 }
 
+function sortGroupsByPubDate(groups = []) {
+  return groups.sort((left, right) => new Date(right.pubDate) - new Date(left.pubDate));
+}
+
+function createEmptyRefreshPayload() {
+  return {
+    success: true,
+    fetchedCount: 0,
+    insertedCount: 0,
+    updatedCount: 0,
+    lastRefreshAt
+  };
+}
+
 function calculateSimilarity(itemA, itemB) {
   if (!itemA?.title || !itemB?.title) {
     return 0;
@@ -353,59 +377,66 @@ function calculateSimilarity(itemA, itemB) {
     + (0.06 * timeScore);
 }
 
+function insertArticleIntoGroups(groups, item) {
+  if (!item?.title) {
+    return groups;
+  }
+
+  let bestGroup = null;
+  let bestScore = 0;
+
+  groups.forEach((group) => {
+    const score = group.items.reduce((highestScore, groupedItem) => {
+      return Math.max(highestScore, calculateSimilarity(groupedItem, item));
+    }, 0);
+
+    if (score > 0.58 && score > bestScore) {
+      bestGroup = group;
+      bestScore = score;
+    }
+  });
+
+  if (!bestGroup) {
+    groups.push({
+      id: buildStableGroupId([item]),
+      items: [item],
+      ownerUserId: item.ownerUserId || null,
+      sources: [item.source],
+      title: item.title,
+      description: item.description,
+      pubDate: item.pubDate,
+      topics: [...(item.topics || [])],
+      url: item.url
+    });
+    return groups;
+  }
+
+  bestGroup.items.push(item);
+  bestGroup.sources = [...new Set([...bestGroup.sources, item.source])];
+  bestGroup.topics = topicNormalizer.limitTopics([...bestGroup.topics, ...(item.topics || [])], 4);
+  bestGroup.ownerUserId = bestGroup.ownerUserId || item.ownerUserId || null;
+  if (new Date(item.pubDate) > new Date(bestGroup.pubDate)) {
+    bestGroup.pubDate = item.pubDate;
+    bestGroup.title = item.title;
+    bestGroup.description = item.description;
+    bestGroup.url = item.url;
+  }
+
+  bestGroup.id = buildStableGroupId(bestGroup.items);
+  return groups;
+}
+
 function groupSimilarNews(newsItems) {
   if (!Array.isArray(newsItems) || newsItems.length === 0) {
     return [];
   }
 
-  const validItems = newsItems.filter((item) => item?.title);
   const groups = [];
-
-  validItems.forEach((item) => {
-    let bestGroup = null;
-    let bestScore = 0;
-
-    groups.forEach((group) => {
-      const score = group.items.reduce((highestScore, groupedItem) => {
-        return Math.max(highestScore, calculateSimilarity(groupedItem, item));
-      }, 0);
-
-      if (score > 0.58 && score > bestScore) {
-        bestGroup = group;
-        bestScore = score;
-      }
-    });
-
-    if (!bestGroup) {
-      groups.push({
-        id: buildStableGroupId([item]),
-        items: [item],
-        ownerUserId: item.ownerUserId || null,
-        sources: [item.source],
-        title: item.title,
-        description: item.description,
-        pubDate: item.pubDate,
-        topics: [...(item.topics || [])],
-        url: item.url
-      });
-      return;
-    }
-
-    bestGroup.items.push(item);
-    bestGroup.sources = [...new Set([...bestGroup.sources, item.source])];
-    bestGroup.topics = topicNormalizer.limitTopics([...bestGroup.topics, ...(item.topics || [])], 4);
-    bestGroup.ownerUserId = bestGroup.ownerUserId || item.ownerUserId || null;
-    if (new Date(item.pubDate) > new Date(bestGroup.pubDate)) {
-      bestGroup.pubDate = item.pubDate;
-      bestGroup.title = item.title;
-      bestGroup.description = item.description;
-      bestGroup.url = item.url;
-    }
-
-    bestGroup.id = buildStableGroupId(bestGroup.items);
+  newsItems.forEach((item) => {
+    insertArticleIntoGroups(groups, item);
   });
 
-  return groups.sort((left, right) => new Date(right.pubDate) - new Date(left.pubDate));
+  return sortGroupsByPubDate(groups);
 }
 
 function normalizeIncomingArticles(articles = []) {
@@ -454,6 +485,94 @@ function buildInsertedGroupsByOwner(normalizedArticles = [], insertedIds = []) {
   };
 }
 
+function persistNormalizedArticles(normalizedArticles = []) {
+  const upsertResult = database.upsertArticles(normalizedArticles);
+  database.mergeTopicsForArticles(normalizedArticles.map((article) => ({
+    articleId: article.id,
+    topics: article.topics
+  })));
+  return upsertResult;
+}
+
+function broadcastInsertedGroups(insertedGroups) {
+  if (insertedGroups.globalGroups.length > 0) {
+    websocketService.broadcastNewsUpdate(insertedGroups.globalGroups);
+  }
+
+  insertedGroups.privateGroupsByUserId.forEach((groups, userId) => {
+    if (groups.length > 0) {
+      websocketService.broadcastNewsUpdate(groups.map((group) => ({ ...group, ownerUserId: userId })));
+    }
+  });
+}
+
+async function ingestSourceConfigs(sourceConfigs = [], options = {}) {
+  const {
+    broadcast = true,
+    includeMaintenance = false,
+    failWhenEmpty = false,
+    updateRefreshTimestamp = false,
+    trackIngestionRun = false
+  } = options;
+  const ingestionRun = trackIngestionRun ? database.createIngestionRun() : null;
+
+  try {
+    if (includeMaintenance) {
+      purgeExpiredArticles();
+      cleanupRemovedConfiguredSourceData();
+    }
+
+    const results = await Promise.allSettled(sourceConfigs.map((source) => rssParser.parseFeed(source)));
+    const fetchedArticles = results
+      .filter((result) => result.status === 'fulfilled')
+      .flatMap((result) => result.value);
+    const normalizedArticles = normalizeIncomingArticles(fetchedArticles);
+
+    if (failWhenEmpty && normalizedArticles.length === 0 && database.countArticles() === 0) {
+      throw createError(503, 'Impossibile connettersi ai feed di notizie. Riprova più tardi.', 'CONNECTION_ERROR');
+    }
+
+    const upsertResult = persistNormalizedArticles(normalizedArticles);
+    const insertedGroups = buildInsertedGroupsByOwner(normalizedArticles, upsertResult.insertedIds);
+
+    if (broadcast) {
+      broadcastInsertedGroups(insertedGroups);
+    }
+
+    if (updateRefreshTimestamp) {
+      lastRefreshAt = new Date().toISOString();
+    }
+
+    const payload = {
+      success: true,
+      fetchedCount: normalizedArticles.length,
+      insertedCount: upsertResult.insertedCount,
+      updatedCount: upsertResult.updatedCount,
+      lastRefreshAt
+    };
+
+    if (ingestionRun) {
+      database.completeIngestionRun(ingestionRun.id, {
+        status: 'completed',
+        fetchedCount: payload.fetchedCount,
+        insertedCount: payload.insertedCount,
+        updatedCount: payload.updatedCount
+      });
+    }
+
+    return payload;
+  } catch (error) {
+    if (ingestionRun) {
+      database.completeIngestionRun(ingestionRun.id, {
+        status: 'failed',
+        errorMessage: error.message
+      });
+    }
+
+    throw error;
+  }
+}
+
 async function ingestAllNews(options = {}) {
   const broadcast = options.broadcast !== false;
 
@@ -461,78 +580,58 @@ async function ingestAllNews(options = {}) {
     return refreshPromise;
   }
 
-  refreshPromise = (async () => {
-    const ingestionRun = database.createIngestionRun();
-
+  refreshPromise = enqueueIngestionTask(async () => {
     try {
-      purgeExpiredArticles();
-      cleanupRemovedConfiguredSourceData();
-
       const sourceConfigs = [
         ...expandConfiguredSources(),
         ...expandUserSources(database.listAllActiveUserSources())
       ];
-      const results = await Promise.allSettled(sourceConfigs.map((source) => rssParser.parseFeed(source)));
-      const fetchedArticles = results
-        .filter((result) => result.status === 'fulfilled')
-        .flatMap((result) => result.value);
-      const normalizedArticles = normalizeIncomingArticles(fetchedArticles);
-
-      if (normalizedArticles.length === 0 && database.countArticles() === 0) {
-        throw createError(503, 'Impossibile connettersi ai feed di notizie. Riprova più tardi.', 'CONNECTION_ERROR');
-      }
-
-      const upsertResult = database.upsertArticles(normalizedArticles);
-      normalizedArticles.forEach((article) => {
-        database.mergeTopicsForArticle(article.id, article.topics);
-      });
-
-      const insertedGroups = buildInsertedGroupsByOwner(normalizedArticles, upsertResult.insertedIds);
-
-      if (broadcast) {
-        if (insertedGroups.globalGroups.length > 0) {
-          websocketService.broadcastNewsUpdate(insertedGroups.globalGroups);
-        }
-
-        insertedGroups.privateGroupsByUserId.forEach((groups, userId) => {
-          if (groups.length > 0) {
-            websocketService.broadcastNewsUpdate(groups.map((group) => ({ ...group, ownerUserId: userId })));
-          }
-        });
-      }
-
-      lastRefreshAt = new Date().toISOString();
-      const payload = {
-        success: true,
-        fetchedCount: normalizedArticles.length,
-        insertedCount: upsertResult.insertedCount,
-        updatedCount: upsertResult.updatedCount,
-        lastRefreshAt
-      };
-
-      database.completeIngestionRun(ingestionRun.id, {
-        status: 'completed',
-        fetchedCount: payload.fetchedCount,
-        insertedCount: payload.insertedCount,
-        updatedCount: payload.updatedCount
+      const payload = await ingestSourceConfigs(sourceConfigs, {
+        broadcast,
+        includeMaintenance: true,
+        failWhenEmpty: true,
+        updateRefreshTimestamp: true,
+        trackIngestionRun: true
       });
 
       logger.info(`Ingestion completed: ${payload.fetchedCount} fetched, ${payload.insertedCount} inserted, ${payload.updatedCount} updated`);
       return payload;
     } catch (error) {
-      database.completeIngestionRun(ingestionRun.id, {
-        status: 'failed',
-        errorMessage: error.message
-      });
-
       logger.error(`News ingestion failed: ${error.message}`);
       throw error.status ? error : createError(500, 'Errore durante l\'aggiornamento delle notizie.', 'SERVER_ERROR', error);
-    } finally {
-      refreshPromise = null;
     }
-  })();
+  }).finally(() => {
+    refreshPromise = null;
+  });
 
   return refreshPromise;
+}
+
+async function refreshUserSources(userId, options = {}) {
+  if (!userId) {
+    return createEmptyRefreshPayload();
+  }
+
+  return enqueueIngestionTask(async () => {
+    const selectedSourceIds = Array.isArray(options.sourceIds) && options.sourceIds.length > 0
+      ? new Set(options.sourceIds)
+      : null;
+    const activeSources = database.listUserSources(userId)
+      .filter((source) => source?.isActive !== false)
+      .filter((source) => !selectedSourceIds || selectedSourceIds.has(source.id));
+
+    if (activeSources.length === 0) {
+      return createEmptyRefreshPayload();
+    }
+
+    return ingestSourceConfigs(expandUserSources(activeSources), {
+      broadcast: options.broadcast === true,
+      includeMaintenance: false,
+      failWhenEmpty: false,
+      updateRefreshTimestamp: false,
+      trackIngestionRun: false
+    });
+  });
 }
 
 async function ensureSeedData() {
@@ -558,7 +657,7 @@ async function getNewsFeed(filters = {}, userContext = {}) {
 
   let articleOffset = 0;
   let exhausted = false;
-  let collectedArticles = [];
+  let scannedArticles = 0;
   let groupedResults = [];
 
   while (!exhausted && articleOffset < MAX_SCAN_ARTICLES && groupedResults.length < targetGroups) {
@@ -576,8 +675,11 @@ async function getNewsFeed(filters = {}, userContext = {}) {
       break;
     }
 
-    collectedArticles = [...collectedArticles, ...batch];
-    groupedResults = groupSimilarNews(collectedArticles);
+    scannedArticles += batch.length;
+    batch.forEach((article) => {
+      insertArticleIntoGroups(groupedResults, article);
+    });
+    sortGroupsByPubDate(groupedResults);
     articleOffset += batch.length;
 
     if (batch.length < batchSize) {
@@ -596,7 +698,7 @@ async function getNewsFeed(filters = {}, userContext = {}) {
       pageSize,
       hasMore: groupedResults.length > (startIndex + pageSize) || !exhausted,
       totalGroups: exhausted ? groupedResults.length : null,
-      scannedArticles: collectedArticles.length,
+      scannedArticles,
       lastRefreshAt,
       ingestion: latestIngestion
     },
@@ -644,11 +746,13 @@ process.on('exit', stopScheduler);
 
 module.exports = {
   ingestAllNews,
+  refreshUserSources,
   getNewsFeed,
   startScheduler,
   stopScheduler,
   newsSources,
   _groupSimilarNews: groupSimilarNews,
   _buildStableGroupId: buildStableGroupId,
-  _calculateSimilarity: calculateSimilarity
+  _calculateSimilarity: calculateSimilarity,
+  _insertArticleIntoGroups: insertArticleIntoGroups
 };

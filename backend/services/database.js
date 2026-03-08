@@ -21,6 +21,16 @@ const LATEST_MIGRATION_VERSION = 5;
 let db;
 let lastWriteCheckAt = null;
 
+function chunkValues(values = [], size = 200) {
+  const chunks = [];
+
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+
+  return chunks;
+}
+
 function getSourceFilterClauses(sourceIds = []) {
   const aliasedIds = new Set();
   const aliasedNames = new Set();
@@ -688,9 +698,17 @@ function hydrateArticleRows(rows) {
 }
 
 function upsertArticles(articles = []) {
+  if (!Array.isArray(articles) || articles.length === 0) {
+    return {
+      insertedIds: [],
+      updatedIds: [],
+      insertedCount: 0,
+      updatedCount: 0
+    };
+  }
+
   const database = getDb();
   const now = new Date().toISOString();
-  const selectStmt = database.prepare('SELECT id FROM articles WHERE id = ?');
   const upsertStmt = database.prepare(`
     INSERT INTO articles (
       id,
@@ -727,13 +745,22 @@ function upsertArticles(articles = []) {
     INSERT INTO article_search (article_id, title, description, content)
     VALUES (?, ?, ?, ?)
   `);
+  const existingIdSet = new Set(
+    chunkValues(articles.map((article) => article.id).filter(Boolean)).flatMap((articleIds) => {
+      return database.prepare(`
+        SELECT id
+        FROM articles
+        WHERE id IN (${articleIds.map(() => '?').join(', ')})
+      `).all(...articleIds).map((row) => row.id);
+    })
+  );
 
   const transaction = database.transaction((items) => {
     const insertedIds = [];
     const updatedIds = [];
 
     items.forEach((article) => {
-      const exists = selectStmt.get(article.id);
+      const exists = existingIdSet.has(article.id);
 
       upsertStmt.run(
         article.id,
@@ -748,7 +775,7 @@ function upsertArticles(articles = []) {
         article.author || null,
         article.language || 'it',
         article.pubDate,
-        exists ? article.createdAt || now : now,
+        article.createdAt || now,
         now
       );
 
@@ -800,6 +827,39 @@ function mergeTopicsForArticle(articleId, topics = []) {
   });
 
   return transaction(articleId, topics);
+}
+
+function mergeTopicsForArticles(entries = []) {
+  const normalizedEntries = Array.isArray(entries)
+    ? entries.filter((entry) => entry?.articleId && Array.isArray(entry.topics) && entry.topics.length > 0)
+    : [];
+
+  if (normalizedEntries.length === 0) {
+    return 0;
+  }
+
+  const database = getDb();
+  const insertStmt = database.prepare(`
+    INSERT OR IGNORE INTO article_topics (article_id, topic)
+    VALUES (?, ?)
+  `);
+
+  const transaction = database.transaction((items) => {
+    let insertedCount = 0;
+
+    items.forEach(({ articleId, topics }) => {
+      topics
+        .map((topic) => topicNormalizer.normalizeTopic(topic))
+        .filter((topic) => topicNormalizer.isCanonicalTopic(topic))
+        .forEach((topic) => {
+          insertedCount += insertStmt.run(articleId, topic).changes;
+        });
+    });
+
+    return insertedCount;
+  });
+
+  return transaction(normalizedEntries);
 }
 
 function getArticles(filters = {}, options = {}) {
@@ -1571,6 +1631,91 @@ function deleteAllUserSources(userId) {
   return transaction(userId);
 }
 
+function importUserState(userId, sources = [], settings = {}) {
+  if (!userId) {
+    return {
+      settings: null,
+      customSources: []
+    };
+  }
+
+  const database = getDb();
+  const now = new Date().toISOString();
+  const insertSourceStmt = database.prepare(`
+    INSERT INTO user_sources (
+      id, user_id, name, url, language, is_active, created_at, updated_at, validated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const upsertSettingsStmt = database.prepare(`
+    INSERT INTO user_settings (
+      user_id,
+      default_language,
+      article_retention_hours,
+      recent_hours,
+      default_source_ids,
+      excluded_sub_source_ids,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      default_language = excluded.default_language,
+      article_retention_hours = excluded.article_retention_hours,
+      recent_hours = excluded.recent_hours,
+      default_source_ids = excluded.default_source_ids,
+      excluded_sub_source_ids = excluded.excluded_sub_source_ids,
+      updated_at = excluded.updated_at
+  `);
+
+  const transaction = database.transaction((ownerId, importedSources, nextSettings) => {
+    database.prepare(`
+      DELETE FROM article_search
+      WHERE article_id IN (
+        SELECT id FROM articles WHERE owner_user_id = ?
+      )
+    `).run(ownerId);
+
+    database.prepare(`
+      DELETE FROM articles
+      WHERE owner_user_id = ?
+    `).run(ownerId);
+
+    database.prepare(`
+      DELETE FROM user_sources
+      WHERE user_id = ?
+    `).run(ownerId);
+
+    importedSources.forEach((source) => {
+      insertSourceStmt.run(
+        source.id,
+        ownerId,
+        source.name,
+        source.url,
+        source.language || 'it',
+        source.isActive ? 1 : 0,
+        source.createdAt,
+        source.updatedAt,
+        source.validatedAt || null
+      );
+    });
+
+    upsertSettingsStmt.run(
+      ownerId,
+      nextSettings.defaultLanguage || 'auto',
+      nextSettings.articleRetentionHours || 24,
+      nextSettings.recentHours || 3,
+      JSON.stringify(nextSettings.excludedSourceIds || []),
+      JSON.stringify(nextSettings.excludedSubSourceIds || []),
+      nextSettings.updatedAt || now
+    );
+  });
+
+  transaction(userId, sources, settings);
+
+  return {
+    settings: getUserSettings(userId),
+    customSources: listUserSources(userId)
+  };
+}
+
 module.exports = {
   getDb,
   closeDb,
@@ -1578,6 +1723,7 @@ module.exports = {
   getArticleById,
   getArticlesByIds,
   mergeTopicsForArticle,
+  mergeTopicsForArticles,
   upsertArticles,
   countArticles,
   deleteArticlesOlderThan,
@@ -1606,6 +1752,7 @@ module.exports = {
   deleteArticlesForUserSource,
   deleteUserSource,
   deleteAllUserSources,
+  importUserState,
   verifyWriteAccess,
   getWriteAccessStatus,
   buildSearchQuery

@@ -71,13 +71,13 @@ router.get('/me/settings/export', requireAuthenticatedUser, asyncHandler(async (
 
 router.post('/me/settings/import', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   const result = await userService.importUserSettings(req.user.id, req.body || {});
-  await newsService.ingestAllNews({ broadcast: false });
+  await newsService.refreshUserSources(req.user.id, { broadcast: false });
   res.json({ success: true, ...result });
 }));
 
 router.post('/me/sources', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   const source = await userService.addUserSource(req.user.id, req.body || {});
-  await newsService.ingestAllNews({ broadcast: false });
+  await newsService.refreshUserSources(req.user.id, { sourceIds: [source.id], broadcast: false });
   res.status(201).json({ success: true, source });
 }));
 
@@ -87,7 +87,7 @@ router.patch('/me/sources/:sourceId', [
   sanitizeParam('sourceId')
 ], asyncHandler(async (req, res) => {
   const source = await userService.updateUserSource(req.user.id, req.params.sourceId, req.body || {});
-  await newsService.ingestAllNews({ broadcast: false });
+  await newsService.refreshUserSources(req.user.id, { sourceIds: [source.id], broadcast: false });
   res.json({ success: true, source });
 }));
 

@@ -10,13 +10,14 @@ import {
   ChevronUp,
   User
 } from 'lucide-react';
-import { fetchNews } from '../services/api';
+import { fetchNews, isRequestCanceled } from '../services/api';
 import ErrorMessage from './ErrorMessage';
 import NewsCard from './NewsCard';
 import NotificationCenter from './NotificationCenter';
 import ReaderPanel from './ReaderPanel';
 import BrandMark from './BrandMark';
 import SettingsPanel from './SettingsPanel';
+import useLatestRequest from '../hooks/useLatestRequest';
 import useWebSocket from '../hooks/useWebSocket';
 import { createTranslator, getDateLocale, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
 import { getSettingsLimits } from '../config/settingsLimits';
@@ -26,10 +27,10 @@ const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 
-const mergeUniqueGroups = (currentGroups, incomingGroups) => {
+const mergeGroups = (primaryGroups, secondaryGroups) => {
   const merged = new Map();
 
-  [...incomingGroups, ...currentGroups].forEach((group) => {
+  [...primaryGroups, ...secondaryGroups].forEach((group) => {
     if (group?.id && !merged.has(group.id)) {
       merged.set(group.id, group);
     }
@@ -38,17 +39,9 @@ const mergeUniqueGroups = (currentGroups, incomingGroups) => {
   return [...merged.values()];
 };
 
-const appendUniqueGroups = (currentGroups, incomingGroups) => {
-  const merged = new Map();
+const mergeUniqueGroups = (currentGroups, incomingGroups) => mergeGroups(incomingGroups, currentGroups);
 
-  [...currentGroups, ...incomingGroups].forEach((group) => {
-    if (group?.id && !merged.has(group.id)) {
-      merged.set(group.id, group);
-    }
-  });
-
-  return [...merged.values()];
-};
+const appendUniqueGroups = (currentGroups, incomingGroups) => mergeGroups(currentGroups, incomingGroups);
 
 const getSourceReloadSignature = (excludedSourceIds, excludedSubSourceIds, customSources) => JSON.stringify({
   excludedSourceIds,
@@ -78,6 +71,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
     removeNotification
   } = useWebSocket('', websocketMessages);
   const lastNewsUpdateRef = useRef(null);
+  const { startLatestRequest } = useLatestRequest();
 
   const [news, setNews] = useState([]);
   const [meta, setMeta] = useState(null);
@@ -138,6 +132,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
 
   const loadNews = useCallback(async ({ page = 1, append = false, resetRealtime = true } = {}) => {
     const setBusyState = append ? setLoadingMore : setLoading;
+    const request = startLatestRequest();
+
     setBusyState(true);
     setError(null);
 
@@ -148,8 +144,13 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
         search: debouncedSearch,
         sourceIds: activeFilters.sourceIds,
         topics: activeFilters.topics,
-        recentHours: showRecentOnly ? recentHours : null
+        recentHours: showRecentOnly ? recentHours : null,
+        signal: request.signal
       });
+
+      if (!request.isLatest()) {
+        return;
+      }
 
       setNews((current) => append ? appendUniqueGroups(current, response.items || []) : (response.items || []));
       setMeta(response.meta || null);
@@ -161,11 +162,15 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
         resetNewArticlesCount();
       }
     } catch (requestError) {
-      setError(requestError);
+      if (!isRequestCanceled(requestError) && request.isLatest()) {
+        setError(requestError);
+      }
     } finally {
-      setBusyState(false);
+      if (request.isLatest()) {
+        setBusyState(false);
+      }
     }
-  }, [activeFilters.sourceIds, activeFilters.topics, debouncedSearch, recentHours, resetNewArticlesCount, showRecentOnly]);
+  }, [activeFilters.sourceIds, activeFilters.topics, debouncedSearch, recentHours, resetNewArticlesCount, showRecentOnly, startLatestRequest]);
 
   useEffect(() => {
     if (sourceReloadSignature === sourceReloadSignatureRef.current) {

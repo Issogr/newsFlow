@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.1.0
+
+- replaced full ingestion after personal source changes with targeted per-user refreshes, queued ingestion work, and batched article/topic persistence for lower backend load
+- made user settings import atomic, throttled expired-session cleanup, expanded CORS for `PATCH` and `DELETE`, and tightened WebSocket filtering and notification handling
+- improved RSS and reader internals with bounded cache cleanup, shared error summarization, and small dead-code removals and metadata/query cleanups
+- prevented stale frontend news and reader requests from overwriting newer UI state by adding abort-aware latest-request handling
+- simplified frontend code paths with shared request helpers, safer settings exclusions, and small merge/filter readability refactors
+- added backend and frontend regression coverage for import flows, targeted refreshes, session cleanup throttling, stale-request protection, and smoke-tested the passwordless auth/settings/logout flow
+
 ## 3.0.18
 
 - removed the unused admin and debug API endpoints for manual refresh, WebSocket status, and broadcast notifications

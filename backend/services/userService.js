@@ -79,6 +79,50 @@ function getUserLimits() {
   };
 }
 
+function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overrides = {}) {
+  const articleRetentionHours = Math.min(
+    GLOBAL_RETENTION_HOURS,
+    Math.max(1, normalizeInt(payload.articleRetentionHours, currentSettings.articleRetentionHours))
+  );
+  const recentHours = Math.min(
+    MAX_RECENT_HOURS,
+    Math.max(1, normalizeInt(payload.recentHours, currentSettings.recentHours))
+  );
+
+  return {
+    defaultLanguage: normalizeLanguage(payload.defaultLanguage || currentSettings.defaultLanguage),
+    articleRetentionHours,
+    recentHours,
+    excludedSourceIds: Array.isArray(overrides.excludedSourceIds)
+      ? overrides.excludedSourceIds
+      : (Array.isArray(payload.excludedSourceIds)
+        ? payload.excludedSourceIds.filter(Boolean).slice(0, 30)
+        : currentSettings.excludedSourceIds),
+    excludedSubSourceIds: Array.isArray(overrides.excludedSubSourceIds)
+      ? overrides.excludedSubSourceIds
+      : (Array.isArray(payload.excludedSubSourceIds)
+        ? payload.excludedSubSourceIds.filter(Boolean).slice(0, 60)
+        : currentSettings.excludedSubSourceIds)
+  };
+}
+
+async function mapWithConcurrency(items = [], concurrency = 4, iteratee = async (item) => item) {
+  const results = [];
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await iteratee(items[currentIndex], currentIndex);
+    }
+  }
+
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
 function registerUser(payload = {}) {
   const username = sanitizeUsername(payload.username);
   const password = String(payload.password || '');
@@ -154,26 +198,7 @@ function getCurrentUser(userId) {
 
 function updateUserSettings(userId, payload = {}) {
   const currentSettings = getUserSettings(userId);
-  const articleRetentionHours = Math.min(
-    GLOBAL_RETENTION_HOURS,
-    Math.max(1, normalizeInt(payload.articleRetentionHours, currentSettings.articleRetentionHours))
-  );
-  const recentHours = Math.min(
-    MAX_RECENT_HOURS,
-    Math.max(1, normalizeInt(payload.recentHours, currentSettings.recentHours))
-  );
-
-  const settings = database.upsertUserSettings(userId, {
-    defaultLanguage: normalizeLanguage(payload.defaultLanguage || currentSettings.defaultLanguage),
-    articleRetentionHours,
-    recentHours,
-    excludedSourceIds: Array.isArray(payload.excludedSourceIds)
-      ? payload.excludedSourceIds.filter(Boolean).slice(0, 30)
-      : currentSettings.excludedSourceIds,
-    excludedSubSourceIds: Array.isArray(payload.excludedSubSourceIds)
-      ? payload.excludedSubSourceIds.filter(Boolean).slice(0, 60)
-      : currentSettings.excludedSubSourceIds
-  });
+  const settings = database.upsertUserSettings(userId, normalizeUserSettingsPayload(payload, currentSettings));
 
   return settings;
 }
@@ -311,7 +336,7 @@ async function importUserSettings(userId, payload = {}) {
   const globalSourceIds = getGlobalSourceIds();
   const groupedSubSourceIds = getGroupedSubSourceIds();
 
-  for (const source of importedCustomSources) {
+  await mapWithConcurrency(importedCustomSources, 4, async (source) => {
     const name = String(source?.name || '').trim();
     const url = String(source?.url || '').trim();
     if (!name || !url) {
@@ -323,13 +348,11 @@ async function importUserSettings(userId, payload = {}) {
     } catch (error) {
       throw createError(400, `Imported RSS URL is not valid: ${url}`, 'INVALID_RSS_URL', error);
     }
-  }
-
-  database.deleteAllUserSources(userId);
+  });
 
   const now = new Date().toISOString();
   const recreatedSources = importedCustomSources.map((source) => {
-    const createdSource = {
+    return {
       id: createId(),
       userId,
       name: String(source.name).trim().slice(0, 80),
@@ -338,15 +361,10 @@ async function importUserSettings(userId, payload = {}) {
       isActive: true,
       createdAt: now,
       updatedAt: now,
-      validatedAt: now
+      validatedAt: now,
+      isExcluded: Boolean(source.isExcluded)
     };
-
-    database.createUserSource(createdSource);
-      return {
-        ...createdSource,
-        isExcluded: Boolean(source.isExcluded)
-      };
-    });
+  });
 
   const excludedGlobalSourceIds = Array.isArray(importedSettings.excludedSourceIds)
     ? importedSettings.excludedSourceIds.filter((sourceId) => globalSourceIds.has(sourceId))
@@ -357,19 +375,16 @@ async function importUserSettings(userId, payload = {}) {
   const excludedCustomSourceIds = recreatedSources
     .filter((source) => source.isExcluded)
     .map((source) => source.id);
-
-  const settings = updateUserSettings(userId, {
-    defaultLanguage: importedSettings.defaultLanguage,
-    articleRetentionHours: importedSettings.articleRetentionHours,
-    recentHours: importedSettings.recentHours,
+  const nextSettings = normalizeUserSettingsPayload(importedSettings, getUserSettings(userId), {
     excludedSourceIds: [...excludedGlobalSourceIds, ...excludedCustomSourceIds],
     excludedSubSourceIds
   });
 
-  return {
-    settings,
-    customSources: database.listUserSources(userId)
-  };
+  return database.importUserState(
+    userId,
+    recreatedSources.map(({ isExcluded, ...source }) => source),
+    nextSettings
+  );
 }
 
 module.exports = {

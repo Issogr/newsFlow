@@ -9,7 +9,7 @@ jest.mock('./database', () => ({
   deleteArticlesOlderThan: jest.fn(() => 0),
   cleanupRemovedConfiguredSourceData: jest.fn(() => ({ removedArticles: 0, updatedSettings: 0 })),
   upsertArticles: jest.fn(() => ({ insertedIds: [], insertedCount: 0, updatedCount: 0 })),
-  mergeTopicsForArticle: jest.fn(),
+  mergeTopicsForArticles: jest.fn(() => 0),
   getArticlesByIds: jest.fn(() => []),
   getArticles: jest.fn(() => []),
   getLatestIngestionRun: jest.fn(() => null),
@@ -272,7 +272,10 @@ describe('newsAggregator service flows', () => {
     expect(database.upsertArticles).toHaveBeenCalledWith(expect.arrayContaining([
       expect.objectContaining({ rawSourceId: 'ansa_mondo', rawSource: 'ANSA - Mondo', sourceId: 'ansa', source: 'ANSA', subSource: 'Mondo' })
     ]));
-    expect(database.mergeTopicsForArticle).toHaveBeenCalledTimes(2);
+    expect(database.mergeTopicsForArticles).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ articleId: 'global-1', topics: expect.any(Array) }),
+      expect.objectContaining({ articleId: 'private-1', topics: expect.any(Array) })
+    ]));
     expect(websocketService.broadcastNewsUpdate).toHaveBeenCalledTimes(2);
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0]).toMatchObject({ id: expect.stringContaining('group-'), ownerUserId: null });
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].items[0]).toMatchObject({ sourceId: 'ansa', subSource: 'Mondo' });
@@ -302,5 +305,26 @@ describe('newsAggregator service flows', () => {
     expect(database.deleteArticlesOlderThan).toHaveBeenCalledTimes(1);
     expect(database.cleanupRemovedConfiguredSourceData).toHaveBeenCalledTimes(1);
     expect(rssParser.parseFeed).toHaveBeenCalled();
+  });
+
+  test('refreshUserSources fetches only the requested active user sources', async () => {
+    database.listUserSources.mockReturnValue([
+      { id: 'custom-1', name: 'Alpha Feed', url: 'https://example.com/alpha.xml', language: 'en', userId: 'user-1', isActive: true },
+      { id: 'custom-2', name: 'Beta Feed', url: 'https://example.com/beta.xml', language: 'it', userId: 'user-1', isActive: true },
+      { id: 'custom-3', name: 'Inactive Feed', url: 'https://example.com/inactive.xml', language: 'it', userId: 'user-1', isActive: false }
+    ]);
+    rssParser.parseFeed.mockResolvedValue([{ id: 'private-1', sourceId: 'custom-2', source: 'Beta Feed', title: 'Private update', pubDate: '2026-03-07T11:00:00.000Z', url: 'https://example.com/p', rawTopics: ['Markets'], ownerUserId: 'user-1' }]);
+    database.upsertArticles.mockReturnValue({ insertedIds: ['private-1'], insertedCount: 1, updatedCount: 0 });
+
+    const result = await newsAggregator.refreshUserSources('user-1', { sourceIds: ['custom-2'], broadcast: false });
+
+    expect(result).toMatchObject({ success: true, fetchedCount: 1, insertedCount: 1, updatedCount: 0 });
+    expect(rssParser.parseFeed).toHaveBeenCalledTimes(1);
+    expect(rssParser.parseFeed).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'custom-2',
+      name: 'Beta Feed',
+      ownerUserId: 'user-1'
+    }));
+    expect(database.createIngestionRun).not.toHaveBeenCalled();
   });
 });

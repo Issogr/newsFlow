@@ -1,7 +1,7 @@
 const logger = require('../utils/logger');
 const { getAllowedOrigins, isOriginAllowed } = require('../utils/networkConfig');
 const database = require('./database');
-const { extractBearerToken, hashSessionToken } = require('../utils/auth');
+const { extractBearerToken, hashSessionToken, purgeExpiredSessionsIfNeeded } = require('../utils/auth');
 
 let io;
 let websocketStartTime = Date.now();
@@ -38,7 +38,7 @@ function initialize(server) {
 
   io.use((socket, next) => {
     try {
-      database.purgeExpiredSessions();
+      purgeExpiredSessionsIfNeeded();
 
       const auth = socket.handshake?.auth || {};
       const headers = socket.handshake?.headers || {};
@@ -71,11 +71,16 @@ function initialize(server) {
     statistics.activeConnectionsCount += 1;
     activeConnections.set(socket.id, socket);
     socket.data.filters = { topics: [], sourceIds: [] };
+    socket.data.filterSets = { topics: new Set(), sourceIds: new Set() };
 
     socket.on('subscribe:filters', (filters = {}) => {
       socket.data.filters = {
         topics: Array.isArray(filters.topics) ? filters.topics.filter(Boolean) : [],
         sourceIds: Array.isArray(filters.sourceIds) ? filters.sourceIds.filter(Boolean) : []
+      };
+      socket.data.filterSets = {
+        topics: new Set(socket.data.filters.topics),
+        sourceIds: new Set(socket.data.filters.sourceIds)
       };
     });
 
@@ -92,33 +97,27 @@ function initialize(server) {
 }
 
 function groupMatchesFilters(group, filters = {}) {
-  const topicFilters = Array.isArray(filters.topics) ? filters.topics : [];
-  const sourceFilters = Array.isArray(filters.sourceIds) ? filters.sourceIds : [];
+  const topicFilters = filters.topics instanceof Set
+    ? filters.topics
+    : new Set(Array.isArray(filters.topics) ? filters.topics : []);
+  const sourceFilters = filters.sourceIds instanceof Set
+    ? filters.sourceIds
+    : new Set(Array.isArray(filters.sourceIds) ? filters.sourceIds : []);
 
-  if (topicFilters.length === 0 && sourceFilters.length === 0) {
+  if (topicFilters.size === 0 && sourceFilters.size === 0) {
     return true;
   }
 
-  const hasTopicMatch = topicFilters.length === 0 || topicFilters.some((topic) => {
-    return Array.isArray(group.topics) && group.topics.includes(topic);
-  });
+  const groupTopics = group.topicSet || new Set(Array.isArray(group.topics) ? group.topics : []);
+  const groupSourceIds = group.sourceIdSet || new Set(
+    Array.isArray(group.items) ? group.items.map((item) => item.sourceId).filter(Boolean) : []
+  );
 
-  const hasSourceMatch = sourceFilters.length === 0 || sourceFilters.some((sourceId) => {
-    return Array.isArray(group.items) && group.items.some((item) => item.sourceId === sourceId);
-  });
+  const hasTopicMatch = topicFilters.size === 0 || [...topicFilters].some((topic) => groupTopics.has(topic));
+
+  const hasSourceMatch = sourceFilters.size === 0 || [...sourceFilters].some((sourceId) => groupSourceIds.has(sourceId));
 
   return hasTopicMatch && hasSourceMatch;
-}
-
-function socketCanReceiveGroup(socket, group) {
-  const socketUserId = socket.data?.userId || null;
-  const groupOwnerUserId = group?.ownerUserId || null;
-
-  if (!groupOwnerUserId) {
-    return true;
-  }
-
-  return socketUserId === groupOwnerUserId;
 }
 
 function emitToSocket(socket, event, payload) {
@@ -138,11 +137,33 @@ function broadcastNewsUpdate(newsGroups = []) {
   }
 
   let recipients = 0;
+  const preparedGroups = newsGroups.map((group) => ({
+    ...group,
+    topicSet: new Set(Array.isArray(group.topics) ? group.topics : []),
+    sourceIdSet: new Set(Array.isArray(group.items) ? group.items.map((item) => item.sourceId).filter(Boolean) : [])
+  }));
+  const globalGroups = preparedGroups.filter((group) => !group.ownerUserId);
+  const privateGroupsByUserId = new Map();
+
+  preparedGroups.forEach((group) => {
+    if (!group.ownerUserId) {
+      return;
+    }
+
+    const userGroups = privateGroupsByUserId.get(group.ownerUserId) || [];
+    userGroups.push(group);
+    privateGroupsByUserId.set(group.ownerUserId, userGroups);
+  });
 
   activeConnections.forEach((socket) => {
-    const matchingGroups = newsGroups.filter((group) => {
-      return socketCanReceiveGroup(socket, group) && groupMatchesFilters(group, socket.data.filters);
+    const candidateGroups = [
+      ...globalGroups,
+      ...(privateGroupsByUserId.get(socket.data?.userId) || [])
+    ];
+    const matchingGroups = candidateGroups.filter((group) => {
+      return groupMatchesFilters(group, socket.data.filterSets || socket.data.filters);
     });
+
     if (matchingGroups.length === 0) {
       return;
     }

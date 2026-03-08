@@ -33,6 +33,12 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
         subSources: source.subSources
       }));
   }, [excludedSourceCatalog]);
+  const subSourceIdsBySourceId = useMemo(() => {
+    return new Map(excludedSubFeedCatalog.map((source) => [
+      source.id,
+      new Set(source.subSources.map((subSource) => subSource.id))
+    ]));
+  }, [excludedSubFeedCatalog]);
 
   useEffect(() => {
     setSettings(currentUser.settings);
@@ -82,7 +88,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
           : [...excludedSourceIds, sourceId],
         excludedSubSourceIds: exists
           ? excludedSubSourceIds
-          : excludedSubSourceIds.filter((item) => !excludedSubFeedCatalog.some((source) => source.id === sourceId && source.subSources.some((subSource) => subSource.id === item)))
+          : excludedSubSourceIds.filter((item) => !subSourceIdsBySourceId.get(sourceId)?.has(item))
       };
     });
   };
@@ -193,7 +199,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
       const nextCustomSources = customSources.filter((source) => source.id !== sourceId);
       const nextSettings = {
         ...settings,
-        excludedSourceIds: settings.excludedSourceIds.filter((item) => item !== sourceId)
+        excludedSourceIds: (settings.excludedSourceIds || []).filter((item) => item !== sourceId)
       };
       syncUserState(nextSettings, nextCustomSources);
     });

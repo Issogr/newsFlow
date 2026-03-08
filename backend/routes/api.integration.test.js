@@ -41,6 +41,7 @@ describe('API auth and user flows', () => {
 
     jest.doMock('../services/newsAggregator', () => ({
       ingestAllNews: jest.fn().mockResolvedValue({ success: true }),
+      refreshUserSources: jest.fn().mockResolvedValue({ success: true }),
       startScheduler: jest.fn(),
       stopScheduler: jest.fn()
     }));
@@ -205,7 +206,68 @@ describe('API auth and user flows', () => {
 
     expect(currentUserResponse.body.customSources).toEqual([]);
     expect(rssParser.validateFeedUrl).toHaveBeenCalledTimes(2);
-    expect(newsService.ingestAllNews).toHaveBeenCalledTimes(2);
+    expect(newsService.refreshUserSources).toHaveBeenCalledTimes(2);
+    expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(1, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: false }));
+    expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(2, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: false }));
+  });
+
+  test('imports settings atomically and refreshes only the current user sources', async () => {
+    rssParser.validateFeedUrl
+      .mockResolvedValueOnce({ title: 'Existing Feed', language: 'en', itemCount: 1 })
+      .mockResolvedValueOnce({ title: 'Imported Feed', language: 'it', itemCount: 4 });
+
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'import-user', password: 'secret' })
+      .expect(201);
+
+    const token = registerResponse.body.token;
+
+    await request(app)
+      .post('/api/me/sources')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ url: 'https://example.com/existing.xml' })
+      .expect(201);
+
+    const importResponse = await request(app)
+      .post('/api/me/settings/import')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        settings: {
+          defaultLanguage: 'en',
+          articleRetentionHours: 12,
+          recentHours: 2,
+          excludedSourceIds: ['ansa'],
+          excludedSubSourceIds: []
+        },
+        customSources: [
+          {
+            name: 'Imported Feed',
+            url: 'https://example.com/imported.xml',
+            language: 'it',
+            isExcluded: true
+          }
+        ]
+      })
+      .expect(200);
+
+    expect(importResponse.body).toMatchObject({
+      success: true,
+      settings: expect.objectContaining({
+        defaultLanguage: 'en',
+        articleRetentionHours: 12,
+        recentHours: 2,
+        excludedSourceIds: expect.arrayContaining(['ansa'])
+      }),
+      customSources: [
+        expect.objectContaining({
+          name: 'Imported Feed',
+          url: 'https://example.com/imported.xml',
+          language: 'it'
+        })
+      ]
+    });
+    expect(newsService.refreshUserSources).toHaveBeenLastCalledWith(expect.any(String), { broadcast: false });
   });
 
   test('logs out the current session and rejects it afterward', async () => {

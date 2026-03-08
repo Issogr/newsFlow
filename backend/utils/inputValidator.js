@@ -1,5 +1,4 @@
 const { decode } = require('html-entities');
-const { createError } = require('./errorHandler');
 
 function sanitizeString(input) {
   if (typeof input !== 'string') {
@@ -24,15 +23,6 @@ function sanitizeHtml(input) {
   return decode(withoutScripts)
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-function validateQueryParam(paramName, errorMessage = 'Parameter missing or invalid') {
-  return (req, res, next) => {
-    if (!req.query[paramName]) {
-      return next(createError(400, errorMessage, 'MISSING_PARAM'));
-    }
-    return next();
-  };
 }
 
 function validateParam(paramName, errorMessage = 'Parameter missing or invalid') {
@@ -81,7 +71,6 @@ function sanitizeBody(fieldNames = []) {
 module.exports = {
   sanitizeString,
   sanitizeHtml,
-  validateQueryParam,
   validateParam,
   sanitizeQuery,
   sanitizeParam,

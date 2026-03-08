@@ -444,4 +444,84 @@ describe('database queries and user data', () => {
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
     }));
   });
+
+  test('rolls back user source imports when a duplicate source would violate constraints', () => {
+    const now = new Date().toISOString();
+
+    database.createUser({
+      id: 'user-1',
+      username: 'alice',
+      passwordHash: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    database.createUserSource({
+      id: 'existing-source',
+      userId: 'user-1',
+      name: 'Existing Feed',
+      url: 'https://example.com/existing.xml',
+      language: 'en',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      validatedAt: now
+    });
+
+    database.upsertUserSettings('user-1', {
+      defaultLanguage: 'en',
+      articleRetentionHours: 12,
+      recentHours: 2,
+      excludedSourceIds: [primarySource.id],
+      excludedSubSourceIds: []
+    });
+
+    expect(() => {
+      database.importUserState('user-1', [
+        {
+          id: 'duplicate-1',
+          userId: 'user-1',
+          name: 'Duplicate Feed A',
+          url: 'https://example.com/duplicate.xml',
+          language: 'it',
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+          validatedAt: now
+        },
+        {
+          id: 'duplicate-2',
+          userId: 'user-1',
+          name: 'Duplicate Feed B',
+          url: 'https://example.com/duplicate.xml',
+          language: 'it',
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+          validatedAt: now
+        }
+      ], {
+        defaultLanguage: 'it',
+        articleRetentionHours: 24,
+        recentHours: 3,
+        excludedSourceIds: ['bbc'],
+        excludedSubSourceIds: [],
+        updatedAt: now
+      });
+    }).toThrow();
+
+    expect(database.listUserSources('user-1')).toEqual([
+      expect.objectContaining({
+        id: 'existing-source',
+        name: 'Existing Feed',
+        url: 'https://example.com/existing.xml'
+      })
+    ]);
+    expect(database.getUserSettings('user-1')).toMatchObject({
+      defaultLanguage: 'en',
+      articleRetentionHours: 12,
+      recentHours: 2,
+      excludedSourceIds: [primarySource.id]
+    });
+  });
 });

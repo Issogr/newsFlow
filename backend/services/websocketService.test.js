@@ -38,12 +38,12 @@ describe('websocketService', () => {
 
     socketFactory = jest.fn(() => ioMock);
     databaseMock = {
-      purgeExpiredSessions: jest.fn(),
       findSessionByTokenHash: jest.fn()
     };
     authMock = {
       extractBearerToken: jest.fn(() => ''),
-      hashSessionToken: jest.fn((token) => `hashed:${token}`)
+      hashSessionToken: jest.fn((token) => `hashed:${token}`),
+      purgeExpiredSessionsIfNeeded: jest.fn()
     };
 
     jest.doMock('socket.io', () => socketFactory);
@@ -79,7 +79,7 @@ describe('websocketService', () => {
 
     ioMock.middleware(socket, next);
 
-    expect(databaseMock.purgeExpiredSessions).toHaveBeenCalled();
+    expect(authMock.purgeExpiredSessionsIfNeeded).toHaveBeenCalled();
     expect(authMock.hashSessionToken).toHaveBeenCalledWith('session-token');
     expect(socket.data).toMatchObject({ userId: 'user-1', username: 'alice' });
     expect(next).toHaveBeenCalledWith();

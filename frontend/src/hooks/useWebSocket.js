@@ -9,6 +9,7 @@ const useWebSocket = (url = '', messages = {}) => {
   const socketRef = useRef(null);
   const messagesRef = useRef(messages);
   const isConnectedRef = useRef(false);
+  const notificationIdRef = useRef(0);
 
   const [isConnected, setIsConnected] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -25,6 +26,11 @@ const useWebSocket = (url = '', messages = {}) => {
 
   const pushNotification = useCallback((notification) => {
     setNotifications((current) => [notification, ...current].slice(0, MAX_NOTIFICATIONS));
+  }, []);
+
+  const createNotificationId = useCallback(() => {
+    notificationIdRef.current += 1;
+    return notificationIdRef.current;
   }, []);
 
   useEffect(() => {
@@ -45,7 +51,7 @@ const useWebSocket = (url = '', messages = {}) => {
     const onConnect = () => {
       setIsConnected(true);
       pushNotification({
-        id: Date.now(),
+        id: createNotificationId(),
         type: 'info',
         message: messagesRef.current.connected || 'Real-time connection active',
         timestamp: new Date().toISOString()
@@ -57,7 +63,7 @@ const useWebSocket = (url = '', messages = {}) => {
 
       if (reason !== 'io client disconnect') {
         pushNotification({
-          id: Date.now(),
+          id: createNotificationId(),
           type: 'warning',
           message: messagesRef.current.disconnected || 'Real-time connection lost, reconnecting...',
           timestamp: new Date().toISOString()
@@ -67,7 +73,7 @@ const useWebSocket = (url = '', messages = {}) => {
 
     const onReconnectFailed = () => {
       pushNotification({
-        id: Date.now(),
+        id: createNotificationId(),
         type: 'error',
         message: messagesRef.current.reconnectFailed || 'Unable to restore the real-time connection',
         timestamp: new Date().toISOString()
@@ -82,7 +88,7 @@ const useWebSocket = (url = '', messages = {}) => {
       setLastNewsUpdate(payload);
       setNewArticlesCount((current) => current + payload.count);
       pushNotification({
-        id: Date.now(),
+        id: createNotificationId(),
         type: 'info',
         message: typeof messagesRef.current.newGroups === 'function'
           ? messagesRef.current.newGroups(payload.count)
@@ -97,7 +103,7 @@ const useWebSocket = (url = '', messages = {}) => {
       }
 
       pushNotification({
-        id: Date.now(),
+        id: createNotificationId(),
         type: payload.notificationType || 'info',
         message: payload.message,
         timestamp: payload.timestamp || new Date().toISOString()
@@ -119,7 +125,7 @@ const useWebSocket = (url = '', messages = {}) => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [pushNotification, wsUrl]);
+  }, [createNotificationId, pushNotification, wsUrl]);
 
   const updateSubscriptionFilters = useCallback((filters) => {
     if (!socketRef.current || !isConnectedRef.current) {

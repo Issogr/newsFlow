@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const RSSParser = require('rss-parser');
 const logger = require('../utils/logger');
+const summarizeErrorMessage = require('../utils/summarizeError');
 const { sanitizeHtml } = require('../utils/inputValidator');
 
 const MAX_ARTICLES_PER_SOURCE = parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '25', 10);
@@ -9,18 +10,7 @@ const RSS_MAX_RETRIES = parseInt(process.env.RSS_MAX_RETRIES || '4', 10);
 const RSS_RETRY_DELAY = parseInt(process.env.RSS_RETRY_DELAY || '1500', 10);
 const RSS_TIMEOUT = parseInt(process.env.RSS_TIMEOUT || '15000', 10);
 const CACHE_TTL = parseInt(process.env.RSS_CACHE_TTL || '60000', 10);
-
-function summarizeErrorMessage(error) {
-  const message = String(error?.message || 'Unknown error')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (message.length <= 220) {
-    return message;
-  }
-
-  return `${message.slice(0, 217)}...`;
-}
+const MAX_CACHE_ENTRIES = parseInt(process.env.RSS_CACHE_MAX_ENTRIES || '200', 10);
 
 const parser = new RSSParser({
   customFields: {
@@ -39,6 +29,51 @@ const parser = new RSSParser({
 });
 
 const responseCache = new Map();
+let cleanupHandle = null;
+
+function pruneResponseCache(now = Date.now()) {
+  for (const [url, entry] of responseCache.entries()) {
+    if ((now - entry.timestamp) > CACHE_TTL) {
+      responseCache.delete(url);
+    }
+  }
+
+  if (responseCache.size <= MAX_CACHE_ENTRIES) {
+    return;
+  }
+
+  const sortedEntries = [...responseCache.entries()].sort((left, right) => left[1].timestamp - right[1].timestamp);
+  const overflowCount = responseCache.size - MAX_CACHE_ENTRIES;
+
+  sortedEntries.slice(0, overflowCount).forEach(([url]) => {
+    responseCache.delete(url);
+  });
+}
+
+function ensureCleanupInterval() {
+  if (cleanupHandle) {
+    return cleanupHandle;
+  }
+
+  cleanupHandle = setInterval(() => {
+    pruneResponseCache();
+  }, 5 * 60 * 1000);
+
+  if (typeof cleanupHandle.unref === 'function') {
+    cleanupHandle.unref();
+  }
+
+  return cleanupHandle;
+}
+
+function shutdown() {
+  if (cleanupHandle) {
+    clearInterval(cleanupHandle);
+    cleanupHandle = null;
+  }
+}
+
+ensureCleanupInterval();
 
 function normalizeLanguageCode(value) {
   const normalized = String(value || '').trim().toLowerCase();
@@ -131,6 +166,8 @@ function getImageUrl(item) {
 }
 
 async function fetchFeedXml(url) {
+  pruneResponseCache();
+
   const cached = responseCache.get(url);
   if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
     return cached.data;
@@ -154,6 +191,7 @@ async function fetchFeedXml(url) {
         data: response.data,
         timestamp: Date.now()
       });
+      pruneResponseCache();
 
       return response.data;
     } catch (error) {
@@ -207,17 +245,9 @@ async function parseFeed(source) {
   }
 }
 
-setInterval(() => {
-  const now = Date.now();
-  for (const [url, entry] of responseCache.entries()) {
-    if (now - entry.timestamp > CACHE_TTL) {
-      responseCache.delete(url);
-    }
-  }
-}, 5 * 60 * 1000);
-
 module.exports = {
   parseFeed,
+  shutdown,
   validateFeedUrl: async (url) => {
     const xml = await fetchFeedXml(url);
     const feed = await parser.parseString(xml);
@@ -228,5 +258,7 @@ module.exports = {
     };
   },
   _buildArticleId: buildArticleId,
-  _normalizeDate: normalizeDate
+  _normalizeDate: normalizeDate,
+  _pruneResponseCache: pruneResponseCache,
+  _responseCache: responseCache
 };

@@ -3,6 +3,9 @@ const database = require('../services/database');
 const { createError } = require('./errorHandler');
 
 const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '30', 10);
+const SESSION_PURGE_INTERVAL_MS = parseInt(process.env.SESSION_PURGE_INTERVAL_MS || '300000', 10);
+
+let lastSessionPurgeAt = 0;
 
 function extractBearerToken(authorizationHeader) {
   if (!authorizationHeader || typeof authorizationHeader !== 'string') {
@@ -76,8 +79,22 @@ function extractSessionToken(req) {
   return extractBearerToken(headers.authorization) || headers['x-session-token'] || '';
 }
 
+function purgeExpiredSessionsIfNeeded(now = Date.now()) {
+  if (!Number.isFinite(SESSION_PURGE_INTERVAL_MS) || SESSION_PURGE_INTERVAL_MS <= 0) {
+    return 0;
+  }
+
+  if ((now - lastSessionPurgeAt) < SESSION_PURGE_INTERVAL_MS) {
+    return 0;
+  }
+
+  const purgedCount = database.purgeExpiredSessions();
+  lastSessionPurgeAt = now;
+  return purgedCount;
+}
+
 function requireAuthenticatedUser(req, res, next) {
-  database.purgeExpiredSessions();
+  purgeExpiredSessionsIfNeeded();
   const sessionToken = extractSessionToken(req);
 
   if (!sessionToken) {
@@ -98,8 +115,13 @@ function requireAuthenticatedUser(req, res, next) {
   return next();
 }
 
+function resetSessionCleanupState() {
+  lastSessionPurgeAt = 0;
+}
+
 module.exports = {
   requireAuthenticatedUser,
+  purgeExpiredSessionsIfNeeded,
   extractBearerToken,
   extractSessionToken,
   safeTokenCompare,
@@ -107,5 +129,6 @@ module.exports = {
   verifyPassword,
   generateSessionToken,
   hashSessionToken,
-  createSessionExpiryDate
+  createSessionExpiryDate,
+  _resetSessionCleanupState: resetSessionCleanupState
 };

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -11,7 +11,8 @@ import {
   RefreshCw,
   X
 } from 'lucide-react';
-import { fetchReaderArticle } from '../services/api';
+import { fetchReaderArticle, isRequestCanceled } from '../services/api';
+import useLatestRequest from '../hooks/useLatestRequest';
 import { getDateLocale, getLanguageMeta } from '../i18n';
 
 const blockClassName = {
@@ -73,12 +74,20 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const readerCacheRef = useRef({});
+  const { startLatestRequest, resetLatestRequest } = useLatestRequest();
+
+  useEffect(() => {
+    readerCacheRef.current = readerByArticleId;
+  }, [readerByArticleId]);
 
   useEffect(() => {
     setSelectedArticleId(initialArticleId || group?.items?.[0]?.id || null);
     setReaderByArticleId({});
     setError(null);
-  }, [group, initialArticleId]);
+    readerCacheRef.current = {};
+    resetLatestRequest();
+  }, [group, initialArticleId, resetLatestRequest]);
 
   useEffect(() => {
     const handleEscape = (event) => {
@@ -119,9 +128,11 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
       return;
     }
 
-    if (!refresh && readerByArticleId[articleId]) {
+    if (!refresh && readerCacheRef.current[articleId]) {
       return;
     }
+
+    const request = startLatestRequest();
 
     setError(null);
     if (refresh) {
@@ -131,18 +142,27 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
     }
 
     try {
-      const payload = await fetchReaderArticle(articleId, { refresh });
+      const payload = await fetchReaderArticle(articleId, { refresh, signal: request.signal });
+
+      if (!request.isLatest()) {
+        return;
+      }
+
       setReaderByArticleId((current) => ({
         ...current,
         [articleId]: payload
       }));
     } catch (requestError) {
-      setError(requestError);
+      if (!isRequestCanceled(requestError) && request.isLatest()) {
+        setError(requestError);
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (request.isLatest()) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [readerByArticleId]);
+  }, [startLatestRequest]);
 
   useEffect(() => {
     if (selectedArticleId) {

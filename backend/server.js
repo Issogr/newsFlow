@@ -9,6 +9,7 @@ const logger = require('./utils/logger');
 const database = require('./services/database');
 const websocketService = require('./services/websocketService');
 const newsService = require('./services/newsAggregator');
+const rssParser = require('./services/rssParser');
 const { errorMiddleware, createError } = require('./utils/errorHandler');
 const { getAllowedOrigins, isOriginAllowed } = require('./utils/networkConfig');
 
@@ -49,7 +50,7 @@ app.use(cors({
 
     callback(createError(403, 'Origine non consentita', 'FORBIDDEN'));
   },
-  methods: ['GET', 'POST'],
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   maxAge: 86400
@@ -129,6 +130,7 @@ server.headersTimeout = 66000;
 process.on('SIGTERM', () => {
   logger.info('SIGTERM ricevuto. Shutdown graceful in corso...');
   newsService.stopScheduler();
+  rssParser.shutdown();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 10000);
 });

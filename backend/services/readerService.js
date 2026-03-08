@@ -3,24 +3,13 @@ const { JSDOM } = require('jsdom');
 const { Readability } = require('@mozilla/readability');
 const database = require('./database');
 const logger = require('../utils/logger');
+const summarizeErrorMessage = require('../utils/summarizeError');
 const { createError } = require('../utils/errorHandler');
 
 const READER_TIMEOUT = parseInt(process.env.READER_TIMEOUT || '12000', 10);
 const READER_CACHE_TTL_MS = parseInt(process.env.READER_CACHE_TTL_MS || String(24 * 60 * 60 * 1000), 10);
 const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'PRE']);
 const CONTAINER_TAGS = new Set(['ARTICLE', 'SECTION', 'DIV', 'MAIN']);
-
-function summarizeErrorMessage(error) {
-  const message = String(error?.message || 'Unknown error')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (message.length <= 220) {
-    return message;
-  }
-
-  return `${message.slice(0, 217)}...`;
-}
 
 function normalizeText(text) {
   return String(text || '')
