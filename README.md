@@ -36,7 +36,9 @@ Each published GitHub release builds and publishes two public GHCR images:
 - `ghcr.io/issogr/newsflow-backend:<release-tag>`
 - `ghcr.io/issogr/newsflow-frontend:<release-tag>`
 
-The workflow also publishes `latest` for non-prerelease releases.
+Every push to `main` also refreshes the rolling `latest` image for both containers.
+
+If the pushed commit message contains `Release`, use a format like `Release v3.1.3` and the workflow will also publish that version tag alongside `latest`.
 
 ## Configuration
 

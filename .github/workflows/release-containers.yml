@@ -4,6 +4,9 @@ on:
   release:
     types:
       - published
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -37,13 +40,56 @@ jobs:
       - name: Prepare image name
         id: prep
         env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          EVENT_NAME: ${{ github.event_name }}
+          GIT_SHA: ${{ github.sha }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
           SERVICE: ${{ matrix.service }}
         run: |
           owner=$(printf '%s' "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
           repo=$(printf '%s' "$REPO_NAME" | tr '[:upper:]' '[:lower:]')
+          short_sha=$(printf '%s' "$GIT_SHA" | cut -c1-7)
+          if [ "$EVENT_NAME" = "release" ]; then
+            raw_version="$RELEASE_TAG"
+            publish_version=true
+            if [ "$PRERELEASE" = "true" ]; then
+              publish_latest=false
+            else
+              publish_latest=true
+            fi
+          else
+            raw_version=""
+            publish_version=false
+            case "$COMMIT_MESSAGE" in
+              *"Release "*)
+                raw_version="${COMMIT_MESSAGE#*Release }"
+                raw_version="${raw_version%%$'\n'*}"
+                raw_version="${raw_version%% *}"
+                if [ -n "$raw_version" ]; then
+                  publish_version=true
+                fi
+                ;;
+            esac
+            publish_latest=true
+          fi
+          if [ "$publish_version" = "true" ]; then
+            case "$raw_version" in
+              v*) version="$raw_version" ;;
+              *) version="v$raw_version" ;;
+            esac
+            version_label="$version"
+          else
+            version=""
+            version_label="sha-$short_sha"
+          fi
           echo "image=ghcr.io/${owner}/${repo}-${SERVICE}" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version_label=$version_label" >> "$GITHUB_OUTPUT"
+          echo "publish_latest=$publish_latest" >> "$GITHUB_OUTPUT"
+          echo "publish_version=$publish_version" >> "$GITHUB_OUTPUT"
 
       - name: Extract Docker metadata
         id: meta
@@ -51,14 +97,14 @@ jobs:
         with:
           images: ${{ steps.prep.outputs.image }}
           tags: |
-            type=raw,value=${{ github.event.release.tag_name }}
+            type=raw,value=${{ steps.prep.outputs.version }},enable=${{ steps.prep.outputs.publish_version == 'true' }}
             type=sha
-            type=raw,value=latest,enable=${{ github.event.release.prerelease == false }}
+            type=raw,value=latest,enable=${{ steps.prep.outputs.publish_latest == 'true' }}
           labels: |
             org.opencontainers.image.title=${{ github.event.repository.name }} ${{ matrix.service }}
             org.opencontainers.image.description=Release image for the ${{ matrix.service }} service in ${{ github.repository }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.version=${{ github.event.release.tag_name }}
+            org.opencontainers.image.version=${{ steps.prep.outputs.version_label }}
             org.opencontainers.image.revision=${{ github.sha }}
 
       - name: Log in to GitHub Container Registry
