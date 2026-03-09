@@ -29,6 +29,15 @@ docker-compose up --build -d
 
 Open `http://localhost`.
 
+## Container Images
+
+Each published GitHub release builds and publishes two public GHCR images:
+
+- `ghcr.io/issogr/newsflow-backend:<release-tag>`
+- `ghcr.io/issogr/newsflow-frontend:<release-tag>`
+
+The workflow also publishes `latest` for non-prerelease releases.
+
 ## Configuration
 
 Common backend variables:
