@@ -98,6 +98,13 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     }));
   }, []);
 
+  const setReaderPanelPosition = useCallback((value) => {
+    setSettings((current) => ({
+      ...current,
+      readerPanelPosition: value
+    }));
+  }, []);
+
   const toggleExcludedSource = useCallback((sourceId) => {
     setSettings((current) => {
       const excludedSourceIds = current.excludedSourceIds || [];
@@ -244,6 +251,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     setEditingSourceForm,
     setDefaultLanguage,
     setAutoRefreshEnabled,
+    setReaderPanelPosition,
     updateNumericSetting,
     toggleExcludedSource,
     toggleExcludedSubFeed,

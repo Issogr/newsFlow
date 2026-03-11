@@ -20,10 +20,11 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
     excludedSourceCatalog,
     excludedSubFeedCatalog,
      setSourceForm,
-     setEditingSourceForm,
-     setDefaultLanguage,
-     setAutoRefreshEnabled,
-     updateNumericSetting,
+      setEditingSourceForm,
+      setDefaultLanguage,
+      setAutoRefreshEnabled,
+      setReaderPanelPosition,
+      updateNumericSetting,
     toggleExcludedSource,
     toggleExcludedSubFeed,
     handleSave,
@@ -74,6 +75,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
             settingsLimits={settingsLimits}
             onDefaultLanguageChange={setDefaultLanguage}
             onAutoRefreshChange={setAutoRefreshEnabled}
+            onReaderPanelPositionChange={setReaderPanelPosition}
             onNumericSettingChange={updateNumericSetting}
           />
 

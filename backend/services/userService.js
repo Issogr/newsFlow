@@ -14,6 +14,7 @@ const {
 const GLOBAL_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
 const MAX_RECENT_HOURS = 3;
 const SUPPORTED_LANGUAGES = new Set(['auto', 'it', 'en']);
+const SUPPORTED_READER_PANEL_POSITIONS = new Set(['left', 'center', 'right']);
 
 function createId() {
   return crypto.randomBytes(16).toString('hex');
@@ -28,6 +29,11 @@ function normalizeLanguage(language) {
   return SUPPORTED_LANGUAGES.has(value) ? value : 'auto';
 }
 
+function normalizeReaderPanelPosition(position) {
+  const value = String(position || 'right').trim().toLowerCase();
+  return SUPPORTED_READER_PANEL_POSITIONS.has(value) ? value : 'right';
+}
+
 function normalizeInt(value, fallback) {
   const normalized = Number(value);
   return Number.isFinite(normalized) ? Math.floor(normalized) : fallback;
@@ -39,6 +45,7 @@ function getDefaultSettings() {
     articleRetentionHours: GLOBAL_RETENTION_HOURS,
     recentHours: MAX_RECENT_HOURS,
     autoRefreshEnabled: true,
+    readerPanelPosition: 'right',
     excludedSourceIds: [],
     excludedSubSourceIds: []
   };
@@ -97,6 +104,7 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     autoRefreshEnabled: typeof payload.autoRefreshEnabled === 'boolean'
       ? payload.autoRefreshEnabled
       : currentSettings.autoRefreshEnabled !== false,
+    readerPanelPosition: normalizeReaderPanelPosition(payload.readerPanelPosition || currentSettings.readerPanelPosition),
     excludedSourceIds: Array.isArray(overrides.excludedSourceIds)
       ? overrides.excludedSourceIds
       : (Array.isArray(payload.excludedSourceIds)
@@ -316,13 +324,14 @@ function exportUserSettings(userId) {
   const customSourceIds = new Set(customSources.map((source) => source.id));
 
   return {
-    version: 4,
+    version: 5,
     exportedAt: new Date().toISOString(),
     settings: {
       defaultLanguage: settings.defaultLanguage,
       articleRetentionHours: settings.articleRetentionHours,
       recentHours: settings.recentHours,
       autoRefreshEnabled: settings.autoRefreshEnabled !== false,
+      readerPanelPosition: settings.readerPanelPosition || 'right',
       excludedSourceIds: settings.excludedSourceIds.filter((sourceId) => !customSourceIds.has(sourceId)),
       excludedSubSourceIds: settings.excludedSubSourceIds
     },

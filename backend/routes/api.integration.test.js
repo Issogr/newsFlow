@@ -86,6 +86,7 @@ describe('API auth and user flows', () => {
         articleRetentionHours: 24,
         recentHours: 3,
         autoRefreshEnabled: true,
+        readerPanelPosition: 'right',
         excludedSourceIds: [],
         excludedSubSourceIds: []
       },
@@ -121,6 +122,7 @@ describe('API auth and user flows', () => {
         articleRetentionHours: 999,
         recentHours: 999,
         autoRefreshEnabled: false,
+        readerPanelPosition: 'left',
         excludedSourceIds: [ansaSourceId],
         excludedSubSourceIds: ['ansa_mondo']
       })
@@ -133,6 +135,7 @@ describe('API auth and user flows', () => {
         articleRetentionHours: 24,
         recentHours: 3,
         autoRefreshEnabled: false,
+        readerPanelPosition: 'left',
         excludedSourceIds: [ansaSourceId],
         excludedSubSourceIds: ['ansa_mondo']
       }
@@ -244,6 +247,7 @@ describe('API auth and user flows', () => {
           articleRetentionHours: 12,
           recentHours: 2,
           autoRefreshEnabled: false,
+          readerPanelPosition: 'center',
           excludedSourceIds: [ansaSourceId],
           excludedSubSourceIds: []
         },
@@ -265,6 +269,7 @@ describe('API auth and user flows', () => {
           articleRetentionHours: 12,
           recentHours: 2,
           autoRefreshEnabled: false,
+          readerPanelPosition: 'center',
           excludedSourceIds: expect.arrayContaining([ansaSourceId])
         }),
       customSources: [

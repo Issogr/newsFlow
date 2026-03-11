@@ -66,11 +66,12 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('7');
+    expect(migrationVersion).toBe('8');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
     expect(settingsColumns).toContain('auto_refresh_enabled');
+    expect(settingsColumns).toContain('reader_panel_position');
   });
 
   test('migrates legacy topic metadata without losing topics', () => {
@@ -311,6 +312,7 @@ describe('database queries and user data', () => {
       articleRetentionHours: 12,
       recentHours: 2,
       autoRefreshEnabled: false,
+      readerPanelPosition: 'left',
       excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
     });
@@ -321,6 +323,7 @@ describe('database queries and user data', () => {
       articleRetentionHours: 12,
       recentHours: 2,
       autoRefreshEnabled: false,
+      readerPanelPosition: 'left',
       excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
     });
@@ -522,6 +525,7 @@ describe('database queries and user data', () => {
       articleRetentionHours: 24,
       recentHours: 3,
       autoRefreshEnabled: false,
+      readerPanelPosition: 'center',
       excludedSourceIds: ['retired-source', primarySourceFamilyId, 'custom-1'],
       excludedSubSourceIds: ['retired-sub-source', groupedSource?.id || 'missing-sub-source']
     });
@@ -613,6 +617,7 @@ describe('database queries and user data', () => {
       articleRetentionHours: 12,
       recentHours: 2,
       autoRefreshEnabled: false,
+      readerPanelPosition: 'left',
       excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: []
     });
@@ -646,6 +651,7 @@ describe('database queries and user data', () => {
         articleRetentionHours: 24,
         recentHours: 3,
         autoRefreshEnabled: false,
+        readerPanelPosition: 'center',
         excludedSourceIds: ['bbc'],
         excludedSubSourceIds: [],
         updatedAt: now
@@ -664,6 +670,7 @@ describe('database queries and user data', () => {
       articleRetentionHours: 12,
       recentHours: 2,
       autoRefreshEnabled: false,
+      readerPanelPosition: 'left',
       excludedSourceIds: [primarySourceFamilyId]
     });
   });

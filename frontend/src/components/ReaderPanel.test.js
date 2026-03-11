@@ -79,6 +79,7 @@ describe('ReaderPanel', () => {
       <ReaderPanel
         group={group}
         initialArticleId="article-1"
+        readerPosition="right"
         locale="en"
         t={t}
         onClose={jest.fn()}
@@ -109,5 +110,23 @@ describe('ReaderPanel', () => {
       expect(screen.getByText('Latest reader title')).toBeInTheDocument();
       expect(screen.queryByText('Stale reader title')).not.toBeInTheDocument();
     });
+  });
+
+  test('applies centered desktop alignment when requested', () => {
+    fetchReaderArticle.mockImplementation(() => new Promise(() => {}));
+
+    const { container } = render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="center"
+        locale="en"
+        t={t}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(container.firstChild).toBeInTheDocument();
+    expect(container.querySelector('.lg\\:justify-center')).toBeInTheDocument();
   });
 });

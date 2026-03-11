@@ -52,6 +52,7 @@ describe('userService imports', () => {
         articleRetentionHours: 12,
         recentHours: 2,
         autoRefreshEnabled: false,
+        readerPanelPosition: 'left',
         excludedSourceIds: ['bbc'],
         excludedSubSourceIds: []
       },
@@ -70,6 +71,7 @@ describe('userService imports', () => {
         articleRetentionHours: 12,
         recentHours: 2,
         autoRefreshEnabled: false,
+        readerPanelPosition: 'left',
         excludedSourceIds: []
       }),
       customSources: [
@@ -86,6 +88,7 @@ describe('userService imports', () => {
       articleRetentionHours: 12,
       recentHours: 2,
       autoRefreshEnabled: false,
+      readerPanelPosition: 'left',
       excludedSourceIds: []
     });
   });

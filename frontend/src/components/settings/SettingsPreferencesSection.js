@@ -6,6 +6,7 @@ const SettingsPreferencesSection = ({
   settingsLimits,
   onDefaultLanguageChange,
   onAutoRefreshChange,
+  onReaderPanelPositionChange,
   onNumericSettingChange
 }) => {
   return (
@@ -47,6 +48,20 @@ const SettingsPreferencesSection = ({
             onChange={(event) => onNumericSettingChange('recentHours', event.target.value, settingsLimits.recentHours)}
             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
           />
+        </label>
+
+        <label className="block md:col-span-2">
+          <span className="mb-2 block text-sm font-medium text-slate-700">{t('readerPanelPositionSetting')}</span>
+          <select
+            value={settings.readerPanelPosition || 'right'}
+            onChange={(event) => onReaderPanelPositionChange(event.target.value)}
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+          >
+            <option value="left">{t('readerPanelPositionLeft')}</option>
+            <option value="center">{t('readerPanelPositionCenter')}</option>
+            <option value="right">{t('readerPanelPositionRight')}</option>
+          </select>
+          <span className="mt-2 block text-sm text-slate-500">{t('readerPanelPositionHelp')}</span>
         </label>
 
         <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 md:col-span-2">
