@@ -8,7 +8,9 @@ import {
   Clock3,
   ChevronDown,
   ChevronUp,
-  User
+  User,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { fetchNews, isRequestCanceled } from '../services/api';
 import ErrorMessage from './ErrorMessage';
@@ -325,13 +327,21 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{t('userMenu')}</p>
                       <p className="mt-1 text-sm font-medium text-slate-900">{currentUser?.user?.username}</p>
                     </div>
+                    <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-600">
+                      {isConnected ? (
+                        <Wifi className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+                      ) : (
+                        <WifiOff className="h-4 w-4 text-amber-600" aria-hidden="true" />
+                      )}
+                      <span>{isConnected ? t('liveActive') : t('liveOffline')}</span>
+                    </div>
                     <div className="p-2">
                       <button
-                        type="button"
-                        onClick={() => {
-                          setSettingsOpen(true);
-                          setUserMenuOpen(false);
-                        }}
+                         type="button"
+                         onClick={() => {
+                           setSettingsOpen(true);
+                           setUserMenuOpen(false);
+                         }}
                         className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                         role="menuitem"
                       >
