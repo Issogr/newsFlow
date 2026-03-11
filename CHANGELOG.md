@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.2.0
+
+- 🔄 replaced the notification center with a clearer refresh flow that combines live-update status and new-article counts in one top-bar action
+- 👤 cleaned up the header and user menu by moving connection status and the language switcher into the user menu and improving the mobile layout
+- 📚 added a per-user desktop reader panel position setting with left, center, and right options
+- 📰 simplified news cards and filters by reducing card metadata noise and keeping filters collapsed by default on first load
+- 🚫 temporarily disabled similar-article merging to reduce false positives in grouped news
+- ✅ improved live new-article counting stability and added a localized in-app release notes popup with changelog access from settings
+
 ## 3.1.2
 
 - replaced manual configured source-family grouping with registrable-domain grouping so feeds from the same publisher domain, such as ABC News, merge automatically
