@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import NewsAggregator from './components/NewsAggregator';
 import AuthScreen from './components/AuthScreen';
+import ReleaseNotesModal from './components/ReleaseNotesModal';
+import { CURRENT_CHANGELOG_ENTRY, getCurrentChangelog } from './config/changelog';
 import { createTranslator, resolvePreferredLocale } from './i18n';
 import {
   fetchCurrentUser,
@@ -8,7 +10,8 @@ import {
   loginUser,
   logoutUser,
   registerUser,
-  setAuthToken
+  setAuthToken,
+  updateUserSettings
 } from './services/api';
 
 function App() {
@@ -16,11 +19,26 @@ function App() {
   const [authError, setAuthError] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [loadingSession, setLoadingSession] = useState(Boolean(getAuthToken()));
+  const [releaseNotesState, setReleaseNotesState] = useState({
+    hiddenVersion: '',
+    saving: false,
+    manuallyOpened: false
+  });
 
   const locale = useMemo(() => {
     return resolvePreferredLocale(authData?.settings?.defaultLanguage);
   }, [authData?.settings?.defaultLanguage]);
   const t = useMemo(() => createTranslator(locale), [locale]);
+  const releaseNotes = useMemo(() => getCurrentChangelog(locale), [locale]);
+  const needsReleaseNotesAck = authData?.settings?.lastSeenReleaseNotesVersion !== releaseNotes.version;
+  const shouldShowReleaseNotes = Boolean(
+    authData
+    && releaseNotes.version
+    && (
+      releaseNotesState.manuallyOpened
+      || (needsReleaseNotesAck && releaseNotesState.hiddenVersion !== releaseNotes.version)
+    )
+  );
 
   const loadSession = useCallback(async () => {
     if (!getAuthToken()) {
@@ -44,11 +62,16 @@ function App() {
     loadSession();
   }, [loadSession]);
 
+  useEffect(() => {
+    setReleaseNotesState({ hiddenVersion: '', saving: false, manuallyOpened: false });
+  }, [authData?.user?.id]);
+
   const handleAuthSuccess = useCallback((payload) => {
     setAuthToken(payload.token);
     setAuthData({
       user: payload.user,
       settings: payload.settings,
+      limits: payload.limits,
       customSources: payload.customSources
     });
     setAuthError(null);
@@ -90,6 +113,44 @@ function App() {
     setAuthError(null);
   }, []);
 
+  const handleDismissReleaseNotes = useCallback(async () => {
+    const version = CURRENT_CHANGELOG_ENTRY.version;
+
+    setReleaseNotesState((current) => ({
+      ...current,
+      hiddenVersion: version,
+      manuallyOpened: false,
+      saving: needsReleaseNotesAck
+    }));
+
+    if (!needsReleaseNotesAck) {
+      return;
+    }
+
+    try {
+      const response = await updateUserSettings({ lastSeenReleaseNotesVersion: version });
+      setAuthData((current) => (current ? {
+        ...current,
+        settings: response.settings
+      } : current));
+    } catch {
+      // keep the popup dismissed for the current session; it will retry next login if persistence fails
+    } finally {
+      setReleaseNotesState((current) => ({
+        ...current,
+        saving: false
+      }));
+    }
+  }, [needsReleaseNotesAck]);
+
+  const handleOpenReleaseNotes = useCallback(() => {
+    setReleaseNotesState((current) => ({
+      ...current,
+      manuallyOpened: true,
+      hiddenVersion: ''
+    }));
+  }, []);
+
   if (loadingSession) {
     return <div className="App min-h-screen bg-slate-100" />;
   }
@@ -114,7 +175,17 @@ function App() {
         currentUser={authData}
         onLogout={handleLogout}
         onUserUpdate={setAuthData}
+        currentChangelogVersion={releaseNotes.version}
+        onOpenReleaseNotes={handleOpenReleaseNotes}
       />
+      {shouldShowReleaseNotes && (
+        <ReleaseNotesModal
+          t={t}
+          releaseNotes={releaseNotes}
+          saving={releaseNotesState.saving}
+          onDismiss={handleDismissReleaseNotes}
+        />
+      )}
     </div>
   );
 }

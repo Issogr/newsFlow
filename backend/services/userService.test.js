@@ -53,6 +53,7 @@ describe('userService imports', () => {
         recentHours: 2,
         autoRefreshEnabled: false,
         readerPanelPosition: 'left',
+        lastSeenReleaseNotesVersion: '3.2.0',
         excludedSourceIds: ['bbc'],
         excludedSubSourceIds: []
       },
@@ -72,6 +73,7 @@ describe('userService imports', () => {
         recentHours: 2,
         autoRefreshEnabled: false,
         readerPanelPosition: 'left',
+        lastSeenReleaseNotesVersion: '3.2.0',
         excludedSourceIds: []
       }),
       customSources: [
@@ -89,6 +91,7 @@ describe('userService imports', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       readerPanelPosition: 'left',
+      lastSeenReleaseNotesVersion: '3.2.0',
       excludedSourceIds: []
     });
   });

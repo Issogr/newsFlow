@@ -18,7 +18,7 @@ const {
 
 const DATA_DIR = path.join(__dirname, '../data');
 const DB_PATH = process.env.NEWS_DB_PATH || path.join(DATA_DIR, 'news.db');
-const LATEST_MIGRATION_VERSION = 8;
+const LATEST_MIGRATION_VERSION = 9;
 
 let db;
 let lastWriteCheckAt = null;
@@ -327,6 +327,7 @@ function initializeSchema(database) {
       recent_hours INTEGER NOT NULL DEFAULT 3,
       auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
       reader_panel_position TEXT NOT NULL DEFAULT 'right',
+      last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
       default_source_ids TEXT NOT NULL DEFAULT '[]',
       excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -444,6 +445,12 @@ function runMigrations(database) {
   if (currentVersion < 8) {
     migrateToV8(database);
     currentVersion = 8;
+    setCurrentMigrationVersion(database, currentVersion);
+  }
+
+  if (currentVersion < 9) {
+    migrateToV9(database);
+    currentVersion = 9;
     setCurrentMigrationVersion(database, currentVersion);
   }
 }
@@ -708,6 +715,20 @@ function migrateToV8(database) {
   `);
 
   logger.info('Applied DB migration v8: added reader panel position user setting');
+}
+
+function migrateToV9(database) {
+  if (columnExists(database, 'user_settings', 'last_seen_release_notes_version')) {
+    logger.info('DB migration v9 skipped: user_settings already has last_seen_release_notes_version');
+    return;
+  }
+
+  database.exec(`
+    ALTER TABLE user_settings
+    ADD COLUMN last_seen_release_notes_version TEXT NOT NULL DEFAULT ''
+  `);
+
+  logger.info('Applied DB migration v9: added last seen release notes version user setting');
 }
 
 function buildFilterState(filters = {}) {
@@ -1576,6 +1597,7 @@ function getUserSettings(userId) {
            recent_hours AS recentHours,
            auto_refresh_enabled AS autoRefreshEnabled,
            reader_panel_position AS readerPanelPosition,
+           last_seen_release_notes_version AS lastSeenReleaseNotesVersion,
            default_source_ids AS excludedSourceIds,
            excluded_sub_source_ids AS excludedSubSourceIds,
            updated_at AS updatedAt
@@ -1606,16 +1628,18 @@ function upsertUserSettings(userId, settings = {}) {
       recent_hours,
       auto_refresh_enabled,
       reader_panel_position,
+      last_seen_release_notes_version,
       default_source_ids,
       excluded_sub_source_ids,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       default_language = excluded.default_language,
       article_retention_hours = excluded.article_retention_hours,
       recent_hours = excluded.recent_hours,
       auto_refresh_enabled = excluded.auto_refresh_enabled,
       reader_panel_position = excluded.reader_panel_position,
+      last_seen_release_notes_version = excluded.last_seen_release_notes_version,
       default_source_ids = excluded.default_source_ids,
       excluded_sub_source_ids = excluded.excluded_sub_source_ids,
       updated_at = excluded.updated_at
@@ -1626,6 +1650,7 @@ function upsertUserSettings(userId, settings = {}) {
     settings.recentHours || 3,
     settings.autoRefreshEnabled === false ? 0 : 1,
     settings.readerPanelPosition || 'right',
+    settings.lastSeenReleaseNotesVersion || '',
     JSON.stringify(settings.excludedSourceIds || []),
     JSON.stringify(settings.excludedSubSourceIds || []),
     now
@@ -1828,16 +1853,18 @@ function importUserState(userId, sources = [], settings = {}) {
       recent_hours,
       auto_refresh_enabled,
       reader_panel_position,
+      last_seen_release_notes_version,
       default_source_ids,
       excluded_sub_source_ids,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       default_language = excluded.default_language,
       article_retention_hours = excluded.article_retention_hours,
       recent_hours = excluded.recent_hours,
       auto_refresh_enabled = excluded.auto_refresh_enabled,
       reader_panel_position = excluded.reader_panel_position,
+      last_seen_release_notes_version = excluded.last_seen_release_notes_version,
       default_source_ids = excluded.default_source_ids,
       excluded_sub_source_ids = excluded.excluded_sub_source_ids,
       updated_at = excluded.updated_at
@@ -1882,6 +1909,7 @@ function importUserState(userId, sources = [], settings = {}) {
       nextSettings.recentHours || 3,
       nextSettings.autoRefreshEnabled === false ? 0 : 1,
       nextSettings.readerPanelPosition || 'right',
+      nextSettings.lastSeenReleaseNotesVersion || '',
       JSON.stringify(nextSettings.excludedSourceIds || []),
       JSON.stringify(nextSettings.excludedSubSourceIds || []),
       nextSettings.updatedAt || now

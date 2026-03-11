@@ -34,6 +34,10 @@ function normalizeReaderPanelPosition(position) {
   return SUPPORTED_READER_PANEL_POSITIONS.has(value) ? value : 'right';
 }
 
+function normalizeReleaseNotesVersion(version) {
+  return String(version || '').trim().slice(0, 40);
+}
+
 function normalizeInt(value, fallback) {
   const normalized = Number(value);
   return Number.isFinite(normalized) ? Math.floor(normalized) : fallback;
@@ -46,6 +50,7 @@ function getDefaultSettings() {
     recentHours: MAX_RECENT_HOURS,
     autoRefreshEnabled: true,
     readerPanelPosition: 'right',
+    lastSeenReleaseNotesVersion: '',
     excludedSourceIds: [],
     excludedSubSourceIds: []
   };
@@ -105,6 +110,9 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
       ? payload.autoRefreshEnabled
       : currentSettings.autoRefreshEnabled !== false,
     readerPanelPosition: normalizeReaderPanelPosition(payload.readerPanelPosition || currentSettings.readerPanelPosition),
+    lastSeenReleaseNotesVersion: Object.prototype.hasOwnProperty.call(payload, 'lastSeenReleaseNotesVersion')
+      ? normalizeReleaseNotesVersion(payload.lastSeenReleaseNotesVersion)
+      : normalizeReleaseNotesVersion(currentSettings.lastSeenReleaseNotesVersion),
     excludedSourceIds: Array.isArray(overrides.excludedSourceIds)
       ? overrides.excludedSourceIds
       : (Array.isArray(payload.excludedSourceIds)
@@ -324,7 +332,7 @@ function exportUserSettings(userId) {
   const customSourceIds = new Set(customSources.map((source) => source.id));
 
   return {
-    version: 5,
+    version: 6,
     exportedAt: new Date().toISOString(),
     settings: {
       defaultLanguage: settings.defaultLanguage,
@@ -332,6 +340,7 @@ function exportUserSettings(userId) {
       recentHours: settings.recentHours,
       autoRefreshEnabled: settings.autoRefreshEnabled !== false,
       readerPanelPosition: settings.readerPanelPosition || 'right',
+      lastSeenReleaseNotesVersion: settings.lastSeenReleaseNotesVersion || '',
       excludedSourceIds: settings.excludedSourceIds.filter((sourceId) => !customSourceIds.has(sourceId)),
       excludedSubSourceIds: settings.excludedSubSourceIds
     },

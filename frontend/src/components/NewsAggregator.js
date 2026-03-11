@@ -50,7 +50,7 @@ const getSourceReloadSignature = (excludedSourceIds, excludedSubSourceIds, custo
   customSources: (customSources || []).map((source) => [source.id, source.url])
 });
 
-const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
+const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogVersion, onOpenReleaseNotes }) => {
   const preferredLanguage = currentUser?.settings?.defaultLanguage;
   const autoRefreshEnabled = currentUser?.settings?.autoRefreshEnabled !== false;
   const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
@@ -576,7 +576,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
           t={t}
           currentUser={currentUser}
           availableSources={sourceCatalog}
+          currentChangelogVersion={currentChangelogVersion}
           onClose={() => setSettingsOpen(false)}
+          onOpenReleaseNotes={onOpenReleaseNotes}
           onUserUpdate={onUserUpdate}
         />
       )}
