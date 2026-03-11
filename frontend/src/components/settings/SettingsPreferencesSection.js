@@ -1,6 +1,13 @@
 import React from 'react';
 
-const SettingsPreferencesSection = ({ t, settings, settingsLimits, onDefaultLanguageChange, onNumericSettingChange }) => {
+const SettingsPreferencesSection = ({
+  t,
+  settings,
+  settingsLimits,
+  onDefaultLanguageChange,
+  onAutoRefreshChange,
+  onNumericSettingChange
+}) => {
   return (
     <section className="space-y-4">
       <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t('preferences')}</h3>
@@ -40,6 +47,19 @@ const SettingsPreferencesSection = ({ t, settings, settingsLimits, onDefaultLang
             onChange={(event) => onNumericSettingChange('recentHours', event.target.value, settingsLimits.recentHours)}
             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
           />
+        </label>
+
+        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 md:col-span-2">
+          <input
+            type="checkbox"
+            checked={settings.autoRefreshEnabled !== false}
+            onChange={(event) => onAutoRefreshChange(event.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+          />
+          <span>
+            <span className="block text-sm font-medium text-slate-700">{t('autoRefreshSetting')}</span>
+            <span className="mt-1 block text-sm text-slate-500">{t('autoRefreshHelp')}</span>
+          </span>
         </label>
       </div>
     </section>

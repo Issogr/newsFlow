@@ -38,6 +38,7 @@ function getDefaultSettings() {
     defaultLanguage: 'auto',
     articleRetentionHours: GLOBAL_RETENTION_HOURS,
     recentHours: MAX_RECENT_HOURS,
+    autoRefreshEnabled: true,
     excludedSourceIds: [],
     excludedSubSourceIds: []
   };
@@ -93,6 +94,9 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     defaultLanguage: normalizeLanguage(payload.defaultLanguage || currentSettings.defaultLanguage),
     articleRetentionHours,
     recentHours,
+    autoRefreshEnabled: typeof payload.autoRefreshEnabled === 'boolean'
+      ? payload.autoRefreshEnabled
+      : currentSettings.autoRefreshEnabled !== false,
     excludedSourceIds: Array.isArray(overrides.excludedSourceIds)
       ? overrides.excludedSourceIds
       : (Array.isArray(payload.excludedSourceIds)
@@ -312,12 +316,13 @@ function exportUserSettings(userId) {
   const customSourceIds = new Set(customSources.map((source) => source.id));
 
   return {
-    version: 3,
+    version: 4,
     exportedAt: new Date().toISOString(),
     settings: {
       defaultLanguage: settings.defaultLanguage,
       articleRetentionHours: settings.articleRetentionHours,
       recentHours: settings.recentHours,
+      autoRefreshEnabled: settings.autoRefreshEnabled !== false,
       excludedSourceIds: settings.excludedSourceIds.filter((sourceId) => !customSourceIds.has(sourceId)),
       excludedSubSourceIds: settings.excludedSubSourceIds
     },

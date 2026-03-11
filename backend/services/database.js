@@ -18,7 +18,7 @@ const {
 
 const DATA_DIR = path.join(__dirname, '../data');
 const DB_PATH = process.env.NEWS_DB_PATH || path.join(DATA_DIR, 'news.db');
-const LATEST_MIGRATION_VERSION = 6;
+const LATEST_MIGRATION_VERSION = 7;
 
 let db;
 let lastWriteCheckAt = null;
@@ -325,6 +325,7 @@ function initializeSchema(database) {
       default_language TEXT NOT NULL DEFAULT 'auto',
       article_retention_hours INTEGER NOT NULL DEFAULT 24,
       recent_hours INTEGER NOT NULL DEFAULT 3,
+      auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
       default_source_ids TEXT NOT NULL DEFAULT '[]',
       excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -430,6 +431,12 @@ function runMigrations(database) {
   if (currentVersion < 6) {
     migrateToV6(database);
     currentVersion = 6;
+    setCurrentMigrationVersion(database, currentVersion);
+  }
+
+  if (currentVersion < 7) {
+    migrateToV7(database);
+    currentVersion = 7;
     setCurrentMigrationVersion(database, currentVersion);
   }
 }
@@ -550,6 +557,7 @@ function migrateToV3(database) {
       default_language TEXT NOT NULL DEFAULT 'auto',
       article_retention_hours INTEGER NOT NULL DEFAULT 24,
       recent_hours INTEGER NOT NULL DEFAULT 3,
+      auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
       default_source_ids TEXT NOT NULL DEFAULT '[]',
       excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -665,6 +673,20 @@ function migrateToV6(database) {
 
   const updatedSettings = migrate();
   logger.info(`Applied DB migration v6: normalized ${updatedSettings} saved source preference sets to registrable-domain source families`);
+}
+
+function migrateToV7(database) {
+  if (columnExists(database, 'user_settings', 'auto_refresh_enabled')) {
+    logger.info('DB migration v7 skipped: user_settings already has auto_refresh_enabled');
+    return;
+  }
+
+  database.exec(`
+    ALTER TABLE user_settings
+    ADD COLUMN auto_refresh_enabled INTEGER NOT NULL DEFAULT 1
+  `);
+
+  logger.info('Applied DB migration v7: added auto refresh user setting');
 }
 
 function buildFilterState(filters = {}) {
@@ -1531,6 +1553,7 @@ function getUserSettings(userId) {
     SELECT user_id AS userId, default_language AS defaultLanguage,
            article_retention_hours AS articleRetentionHours,
            recent_hours AS recentHours,
+           auto_refresh_enabled AS autoRefreshEnabled,
            default_source_ids AS excludedSourceIds,
            excluded_sub_source_ids AS excludedSubSourceIds,
            updated_at AS updatedAt
@@ -1544,6 +1567,7 @@ function getUserSettings(userId) {
 
   return {
     ...row,
+    autoRefreshEnabled: Boolean(row.autoRefreshEnabled),
     excludedSourceIds: row.excludedSourceIds ? JSON.parse(row.excludedSourceIds) : [],
     excludedSubSourceIds: row.excludedSubSourceIds ? JSON.parse(row.excludedSubSourceIds) : []
   };
@@ -1558,14 +1582,16 @@ function upsertUserSettings(userId, settings = {}) {
       default_language,
       article_retention_hours,
       recent_hours,
+      auto_refresh_enabled,
       default_source_ids,
       excluded_sub_source_ids,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       default_language = excluded.default_language,
       article_retention_hours = excluded.article_retention_hours,
       recent_hours = excluded.recent_hours,
+      auto_refresh_enabled = excluded.auto_refresh_enabled,
       default_source_ids = excluded.default_source_ids,
       excluded_sub_source_ids = excluded.excluded_sub_source_ids,
       updated_at = excluded.updated_at
@@ -1574,6 +1600,7 @@ function upsertUserSettings(userId, settings = {}) {
     settings.defaultLanguage || 'auto',
     settings.articleRetentionHours || 24,
     settings.recentHours || 3,
+    settings.autoRefreshEnabled === false ? 0 : 1,
     JSON.stringify(settings.excludedSourceIds || []),
     JSON.stringify(settings.excludedSubSourceIds || []),
     now
@@ -1774,14 +1801,16 @@ function importUserState(userId, sources = [], settings = {}) {
       default_language,
       article_retention_hours,
       recent_hours,
+      auto_refresh_enabled,
       default_source_ids,
       excluded_sub_source_ids,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       default_language = excluded.default_language,
       article_retention_hours = excluded.article_retention_hours,
       recent_hours = excluded.recent_hours,
+      auto_refresh_enabled = excluded.auto_refresh_enabled,
       default_source_ids = excluded.default_source_ids,
       excluded_sub_source_ids = excluded.excluded_sub_source_ids,
       updated_at = excluded.updated_at
@@ -1824,6 +1853,7 @@ function importUserState(userId, sources = [], settings = {}) {
       nextSettings.defaultLanguage || 'auto',
       nextSettings.articleRetentionHours || 24,
       nextSettings.recentHours || 3,
+      nextSettings.autoRefreshEnabled === false ? 0 : 1,
       JSON.stringify(nextSettings.excludedSourceIds || []),
       JSON.stringify(nextSettings.excludedSubSourceIds || []),
       nextSettings.updatedAt || now

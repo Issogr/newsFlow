@@ -51,6 +51,7 @@ describe('userService imports', () => {
         defaultLanguage: 'it',
         articleRetentionHours: 12,
         recentHours: 2,
+        autoRefreshEnabled: false,
         excludedSourceIds: ['bbc'],
         excludedSubSourceIds: []
       },
@@ -68,6 +69,7 @@ describe('userService imports', () => {
         defaultLanguage: 'it',
         articleRetentionHours: 12,
         recentHours: 2,
+        autoRefreshEnabled: false,
         excludedSourceIds: []
       }),
       customSources: [
@@ -83,6 +85,7 @@ describe('userService imports', () => {
       defaultLanguage: 'it',
       articleRetentionHours: 12,
       recentHours: 2,
+      autoRefreshEnabled: false,
       excludedSourceIds: []
     });
   });

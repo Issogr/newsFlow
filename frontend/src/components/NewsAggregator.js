@@ -15,7 +15,6 @@ import {
 import { fetchNews, isRequestCanceled } from '../services/api';
 import ErrorMessage from './ErrorMessage';
 import NewsCard from './NewsCard';
-import NotificationCenter from './NotificationCenter';
 import ReaderPanel from './ReaderPanel';
 import BrandMark from './BrandMark';
 import SettingsPanel from './SettingsPanel';
@@ -53,6 +52,7 @@ const getSourceReloadSignature = (excludedSourceIds, excludedSubSourceIds, custo
 
 const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
   const preferredLanguage = currentUser?.settings?.defaultLanguage;
+  const autoRefreshEnabled = currentUser?.settings?.autoRefreshEnabled !== false;
   const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
   const t = useMemo(() => createTranslator(locale), [locale]);
   const dateLocale = useMemo(() => getDateLocale(locale), [locale]);
@@ -65,13 +65,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
   }), [t]);
   const {
     isConnected,
-    notifications,
     lastNewsUpdate,
     newArticlesCount,
     updateSubscriptionFilters,
-    resetNewArticlesCount,
-    removeNotification
+    resetNewArticlesCount
   } = useWebSocket('', websocketMessages);
+  const liveStatusLabel = autoRefreshEnabled
+    ? (isConnected ? t('liveActive') : t('liveOffline'))
+    : t('liveDisabled');
   const lastNewsUpdateRef = useRef(null);
   const { startLatestRequest } = useLatestRequest();
 
@@ -105,6 +106,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
   const visibleAvailableSources = useMemo(() => {
     return availableSources.filter((source) => !excludedSourceIds.includes(source.id));
   }, [availableSources, excludedSourceIds]);
+  const isLiveAutoRefreshWorking = autoRefreshEnabled && isConnected && !debouncedSearch && !showRecentOnly;
+  const refreshButtonLabel = isLiveAutoRefreshWorking
+    ? t('refreshHandledByLive')
+    : (newArticlesCount > 0 ? t('refreshNewArticles', { count: newArticlesCount }) : t('refresh'));
 
   useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
@@ -205,14 +210,21 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
 
     lastNewsUpdateRef.current = lastNewsUpdate.timestamp;
 
-    if (debouncedSearch || showRecentOnly) {
+    if (!isLiveAutoRefreshWorking) {
       return;
     }
 
     if (Array.isArray(lastNewsUpdate.data) && lastNewsUpdate.data.length > 0) {
       setNews((current) => mergeUniqueGroups(current, lastNewsUpdate.data));
+      resetNewArticlesCount();
     }
-  }, [debouncedSearch, lastNewsUpdate, showRecentOnly]);
+  }, [isLiveAutoRefreshWorking, lastNewsUpdate, resetNewArticlesCount]);
+
+  useEffect(() => {
+    if (isLiveAutoRefreshWorking && newArticlesCount > 0) {
+      resetNewArticlesCount();
+    }
+  }, [isLiveAutoRefreshWorking, newArticlesCount, resetNewArticlesCount]);
 
   const toggleFilter = useCallback((type, value) => {
     setActiveFilters((current) => {
@@ -299,15 +311,28 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
                 </button>
               </div>
 
-              <NotificationCenter
-                notifications={notifications}
-                onRemoveNotification={removeNotification}
-                newArticlesCount={newArticlesCount}
-                onRefresh={() => loadNews({ page: 1, append: false, resetRealtime: true })}
-                isConnected={isConnected}
-                locale={dateLocale}
-                t={t}
-              />
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => loadNews({ page: 1, append: false, resetRealtime: true })}
+                  disabled={isLiveAutoRefreshWorking || loading || loadingMore}
+                  className={`relative rounded-full p-2 shadow-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    isLiveAutoRefreshWorking
+                      ? 'cursor-not-allowed bg-slate-100 text-slate-300 shadow-none'
+                      : 'bg-white text-gray-600 hover:bg-gray-100'
+                  }`}
+                  aria-label={refreshButtonLabel}
+                  title={refreshButtonLabel}
+                >
+                  <RefreshCw className={`h-6 w-6 ${(loading || loadingMore) ? 'animate-spin' : ''}`} aria-hidden="true" />
+
+                  {!isLiveAutoRefreshWorking && newArticlesCount > 0 && (
+                    <span className="absolute right-0 top-0 inline-flex min-h-5 min-w-5 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white">
+                      {newArticlesCount}
+                    </span>
+                  )}
+                </button>
+              </div>
 
               <div className="relative" ref={userMenuRef}>
                 <button
@@ -333,7 +358,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
                       ) : (
                         <WifiOff className="h-4 w-4 text-amber-600" aria-hidden="true" />
                       )}
-                      <span>{isConnected ? t('liveActive') : t('liveOffline')}</span>
+                      <span>{liveStatusLabel}</span>
                     </div>
                     <div className="p-2">
                       <button

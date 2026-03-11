@@ -4,7 +4,7 @@ import { getAuthToken } from '../services/api';
 
 const MAX_NOTIFICATIONS = 10;
 
-const useWebSocket = (url = '', messages = {}) => {
+const useWebSocket = (url = '', messages = {}, enabled = true) => {
   const wsUrl = url || window.location.origin;
   const socketRef = useRef(null);
   const messagesRef = useRef(messages);
@@ -34,6 +34,13 @@ const useWebSocket = (url = '', messages = {}) => {
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      setIsConnected(false);
+      setLastNewsUpdate(null);
+      setNewArticlesCount(0);
+      return undefined;
+    }
+
     const socket = io(wsUrl, {
       auth: {
         token: getAuthToken()
@@ -125,7 +132,7 @@ const useWebSocket = (url = '', messages = {}) => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [createNotificationId, pushNotification, wsUrl]);
+  }, [createNotificationId, enabled, pushNotification, wsUrl]);
 
   const updateSubscriptionFilters = useCallback((filters) => {
     if (!socketRef.current || !isConnectedRef.current) {
