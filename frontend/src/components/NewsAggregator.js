@@ -263,12 +263,12 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <header className="border-b border-slate-200 bg-white shadow-sm">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 lg:px-6">
-          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-            <div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
               <button
                 type="button"
                 onClick={() => loadNews({ page: 1, append: false, resetRealtime: true })}
-                className="group flex items-start gap-3 rounded-2xl text-left transition-opacity hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
+                className="group flex items-center gap-3 rounded-2xl text-left transition-opacity hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
                 aria-label={t('refresh')}
                 disabled={loading}
               >
@@ -280,37 +280,13 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
                     </span>
                   )}
                 </div>
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight">{t('pageTitle')}</h1>
-                  <p className="text-sm text-slate-500">{t('pageSubtitle')}</p>
+                <div className="min-w-0">
+                  <h1 className="truncate text-2xl font-semibold tracking-tight">{t('pageTitle')}</h1>
                 </div>
               </button>
             </div>
 
-            <div className="flex items-center gap-3 self-start md:self-auto">
-              <div className="flex items-center rounded-full border border-slate-200 bg-white p-1 shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => setLocale('it')}
-                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                    locale === 'it' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                  aria-pressed={locale === 'it'}
-                >
-                  IT
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLocale('en')}
-                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                    locale === 'en' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                  aria-pressed={locale === 'en'}
-                >
-                  EN
-                </button>
-              </div>
-
+            <div className="flex shrink-0 items-center gap-3">
               <div className="relative">
                 <button
                   type="button"
@@ -359,6 +335,30 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
                         <WifiOff className="h-4 w-4 text-amber-600" aria-hidden="true" />
                       )}
                       <span>{liveStatusLabel}</span>
+                    </div>
+                    <div className="border-b border-slate-100 px-4 py-3">
+                      <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setLocale('it')}
+                          className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                            locale === 'it' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                          aria-pressed={locale === 'it'}
+                        >
+                          IT
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLocale('en')}
+                          className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                            locale === 'en' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                          aria-pressed={locale === 'en'}
+                        >
+                          EN
+                        </button>
+                      </div>
                     </div>
                     <div className="p-2">
                       <button
