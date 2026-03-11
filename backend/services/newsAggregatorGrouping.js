@@ -25,6 +25,8 @@ const TITLE_PREFIX_PATTERNS = [
   /^ultim ora\s*[:\-]\s*/i
 ];
 
+const SIMILAR_ARTICLE_GROUPING_ENABLED = false;
+
 const simHashProfileCache = new WeakMap();
 
 function simplifyText(text) {
@@ -224,6 +226,20 @@ function sortGroupsByPubDate(groups = []) {
   return groups.sort((left, right) => new Date(right.pubDate) - new Date(left.pubDate));
 }
 
+function createStandaloneGroup(item) {
+  return {
+    id: buildStableGroupId([item]),
+    items: [item],
+    ownerUserId: item.ownerUserId || null,
+    sources: [item.source],
+    title: item.title,
+    description: item.description,
+    pubDate: item.pubDate,
+    topics: [...(item.topics || [])],
+    url: item.url
+  };
+}
+
 function calculateSimilarity(itemA, itemB) {
   if (!itemA?.title || !itemB?.title) {
     return 0;
@@ -279,6 +295,11 @@ function insertArticleIntoGroups(groups, item) {
     return groups;
   }
 
+  if (!SIMILAR_ARTICLE_GROUPING_ENABLED) {
+    groups.push(createStandaloneGroup(item));
+    return groups;
+  }
+
   let bestGroup = null;
   let bestScore = 0;
 
@@ -294,17 +315,7 @@ function insertArticleIntoGroups(groups, item) {
   });
 
   if (!bestGroup) {
-    groups.push({
-      id: buildStableGroupId([item]),
-      items: [item],
-      ownerUserId: item.ownerUserId || null,
-      sources: [item.source],
-      title: item.title,
-      description: item.description,
-      pubDate: item.pubDate,
-      topics: [...(item.topics || [])],
-      url: item.url
-    });
+    groups.push(createStandaloneGroup(item));
     return groups;
   }
 
