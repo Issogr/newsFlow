@@ -314,7 +314,7 @@ describe('database queries and user data', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       readerPanelPosition: 'left',
-      lastSeenReleaseNotesVersion: '3.2.0',
+      lastSeenReleaseNotesVersion: '3.2.1',
       excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
     });
@@ -326,7 +326,7 @@ describe('database queries and user data', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       readerPanelPosition: 'left',
-      lastSeenReleaseNotesVersion: '3.2.0',
+      lastSeenReleaseNotesVersion: '3.2.1',
       excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
     });
@@ -529,7 +529,7 @@ describe('database queries and user data', () => {
       recentHours: 3,
       autoRefreshEnabled: false,
       readerPanelPosition: 'center',
-      lastSeenReleaseNotesVersion: '3.2.0',
+      lastSeenReleaseNotesVersion: '3.2.1',
       excludedSourceIds: ['retired-source', primarySourceFamilyId, 'custom-1'],
       excludedSubSourceIds: ['retired-sub-source', groupedSource?.id || 'missing-sub-source']
     });
@@ -622,7 +622,7 @@ describe('database queries and user data', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       readerPanelPosition: 'left',
-      lastSeenReleaseNotesVersion: '3.2.0',
+      lastSeenReleaseNotesVersion: '3.2.1',
       excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: []
     });
@@ -657,7 +657,7 @@ describe('database queries and user data', () => {
         recentHours: 3,
         autoRefreshEnabled: false,
         readerPanelPosition: 'center',
-        lastSeenReleaseNotesVersion: '3.2.0',
+        lastSeenReleaseNotesVersion: '3.2.1',
         excludedSourceIds: ['bbc'],
         excludedSubSourceIds: [],
         updatedAt: now
@@ -677,7 +677,7 @@ describe('database queries and user data', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       readerPanelPosition: 'left',
-      lastSeenReleaseNotesVersion: '3.2.0',
+      lastSeenReleaseNotesVersion: '3.2.1',
       excludedSourceIds: [primarySourceFamilyId]
     });
   });
