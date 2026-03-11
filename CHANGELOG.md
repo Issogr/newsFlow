@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.2.0
+## 3.2.1
 
 - 🔄 replaced the notification center with a clearer refresh flow that combines live-update status and new-article counts in one top-bar action
 - 👤 cleaned up the header and user menu by moving connection status and the language switcher into the user menu and improving the mobile layout
