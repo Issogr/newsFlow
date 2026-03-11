@@ -134,6 +134,34 @@ describe('websocketService', () => {
     }));
   });
 
+  test('deduplicates repeated group ids in a single broadcast payload', () => {
+    const socket = createSocket('socket-1', { auth: { token: 'token-1' }, headers: {} });
+    socket.data.userId = 'user-1';
+
+    ioMock.connectionHandler(socket);
+
+    websocketService.broadcastNewsUpdate([
+      {
+        id: 'group-1',
+        ownerUserId: 'user-1',
+        topics: ['Politics'],
+        items: [{ sourceId: 'ansa' }]
+      },
+      {
+        id: 'group-1',
+        ownerUserId: 'user-1',
+        topics: ['Politics'],
+        items: [{ sourceId: 'ansa' }]
+      }
+    ]);
+
+    expect(socket.emit).toHaveBeenCalledWith('news:update', expect.objectContaining({
+      count: 1,
+      groupIds: ['group-1'],
+      data: [expect.objectContaining({ id: 'group-1' })]
+    }));
+  });
+
   test('broadcasts notifications to all active sockets and tracks failed emits', () => {
     const healthySocket = createSocket('socket-1', { auth: { token: 'token-1' }, headers: {} });
     const failingSocket = createSocket('socket-2', { auth: { token: 'token-2' }, headers: {} });

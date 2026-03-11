@@ -10,6 +10,7 @@ const useWebSocket = (url = '', messages = {}, enabled = true) => {
   const messagesRef = useRef(messages);
   const isConnectedRef = useRef(false);
   const notificationIdRef = useRef(0);
+  const announcedGroupIdsRef = useRef(new Set());
 
   const [isConnected, setIsConnected] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -38,6 +39,7 @@ const useWebSocket = (url = '', messages = {}, enabled = true) => {
       setIsConnected(false);
       setLastNewsUpdate(null);
       setNewArticlesCount(0);
+      announcedGroupIdsRef.current = new Set();
       return undefined;
     }
 
@@ -92,14 +94,31 @@ const useWebSocket = (url = '', messages = {}, enabled = true) => {
         return;
       }
 
-      setLastNewsUpdate(payload);
-      setNewArticlesCount((current) => current + payload.count);
+      const incomingGroupIds = Array.isArray(payload.groupIds) && payload.groupIds.length > 0
+        ? payload.groupIds.filter(Boolean)
+        : (Array.isArray(payload.data) ? payload.data.map((group) => group?.id).filter(Boolean) : []);
+      const unseenGroupIds = incomingGroupIds.filter((groupId) => !announcedGroupIdsRef.current.has(groupId));
+      const nextCount = incomingGroupIds.length > 0 ? unseenGroupIds.length : payload.count;
+
+      if (nextCount <= 0) {
+        return;
+      }
+
+      unseenGroupIds.forEach((groupId) => {
+        announcedGroupIdsRef.current.add(groupId);
+      });
+
+      setLastNewsUpdate({
+        ...payload,
+        count: nextCount
+      });
+      setNewArticlesCount((current) => current + nextCount);
       pushNotification({
         id: createNotificationId(),
         type: 'info',
         message: typeof messagesRef.current.newGroups === 'function'
-          ? messagesRef.current.newGroups(payload.count)
-          : `${payload.count} new news groups available`,
+          ? messagesRef.current.newGroups(nextCount)
+          : `${nextCount} new news groups available`,
         timestamp: payload.timestamp || new Date().toISOString()
       });
     };

@@ -128,14 +128,25 @@ function normalizeDate(value) {
   return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
 }
 
+function normalizeOptionalDate(value) {
+  if (!value) {
+    return '';
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
 function buildArticleId(source, item) {
-  const uniqueInput = [
-    source.id,
-    item.guid || item.id || '',
-    item.link || '',
-    item.title || '',
-    normalizeDate(item.pubDate || item.dcdate || item.isoDate)
-  ].join('|');
+  const stableSourceId = source?.id || '';
+  const stableGuid = String(item?.guid || item?.id || '').trim();
+  const stableLink = String(item?.link || '').trim();
+  const stableTitle = String(item?.title || '').trim();
+  const stablePubDate = normalizeOptionalDate(item?.pubDate || item?.dcdate || item?.isoDate);
+  const stableIdentity = stableGuid || stableLink;
+  const uniqueInput = stableIdentity
+    ? [stableSourceId, stableIdentity].join('|')
+    : [stableSourceId, stableTitle, stablePubDate].join('|');
 
   return crypto.createHash('sha1').update(uniqueInput).digest('hex');
 }
@@ -259,6 +270,7 @@ module.exports = {
   },
   _buildArticleId: buildArticleId,
   _normalizeDate: normalizeDate,
+  _normalizeOptionalDate: normalizeOptionalDate,
   _pruneResponseCache: pruneResponseCache,
   _responseCache: responseCache
 };

@@ -131,6 +131,22 @@ function emitToSocket(socket, event, payload) {
   }
 }
 
+function dedupeGroupsById(groups = []) {
+  const uniqueGroups = new Map();
+
+  groups.forEach((group) => {
+    if (!group?.id) {
+      return;
+    }
+
+    if (!uniqueGroups.has(group.id)) {
+      uniqueGroups.set(group.id, group);
+    }
+  });
+
+  return [...uniqueGroups.values()];
+}
+
 function broadcastNewsUpdate(newsGroups = []) {
   if (!io || !Array.isArray(newsGroups) || newsGroups.length === 0) {
     return;
@@ -160,9 +176,9 @@ function broadcastNewsUpdate(newsGroups = []) {
       ...globalGroups,
       ...(privateGroupsByUserId.get(socket.data?.userId) || [])
     ];
-    const matchingGroups = candidateGroups.filter((group) => {
+    const matchingGroups = dedupeGroupsById(candidateGroups.filter((group) => {
       return groupMatchesFilters(group, socket.data.filterSets || socket.data.filters);
-    });
+    }));
 
     if (matchingGroups.length === 0) {
       return;
@@ -170,6 +186,7 @@ function broadcastNewsUpdate(newsGroups = []) {
 
     const payload = {
       count: matchingGroups.length,
+      groupIds: matchingGroups.map((group) => group.id),
       data: matchingGroups.slice(0, 10),
       timestamp: new Date().toISOString()
     };
