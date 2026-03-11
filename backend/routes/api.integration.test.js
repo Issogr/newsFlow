@@ -85,6 +85,9 @@ describe('API auth and user flows', () => {
         defaultLanguage: 'auto',
         articleRetentionHours: 24,
         recentHours: 3,
+        autoRefreshEnabled: true,
+        readerPanelPosition: 'right',
+        lastSeenReleaseNotesVersion: '',
         excludedSourceIds: [],
         excludedSubSourceIds: []
       },
@@ -119,6 +122,9 @@ describe('API auth and user flows', () => {
         defaultLanguage: 'en',
         articleRetentionHours: 999,
         recentHours: 999,
+        autoRefreshEnabled: false,
+        readerPanelPosition: 'left',
+        lastSeenReleaseNotesVersion: '3.2.0',
         excludedSourceIds: [ansaSourceId],
         excludedSubSourceIds: ['ansa_mondo']
       })
@@ -130,6 +136,9 @@ describe('API auth and user flows', () => {
         defaultLanguage: 'en',
         articleRetentionHours: 24,
         recentHours: 3,
+        autoRefreshEnabled: false,
+        readerPanelPosition: 'left',
+        lastSeenReleaseNotesVersion: '3.2.0',
         excludedSourceIds: [ansaSourceId],
         excludedSubSourceIds: ['ansa_mondo']
       }
@@ -240,6 +249,9 @@ describe('API auth and user flows', () => {
           defaultLanguage: 'en',
           articleRetentionHours: 12,
           recentHours: 2,
+          autoRefreshEnabled: false,
+          readerPanelPosition: 'center',
+          lastSeenReleaseNotesVersion: '3.2.0',
           excludedSourceIds: [ansaSourceId],
           excludedSubSourceIds: []
         },
@@ -256,12 +268,15 @@ describe('API auth and user flows', () => {
 
     expect(importResponse.body).toMatchObject({
       success: true,
-      settings: expect.objectContaining({
-        defaultLanguage: 'en',
-        articleRetentionHours: 12,
-        recentHours: 2,
+        settings: expect.objectContaining({
+          defaultLanguage: 'en',
+          articleRetentionHours: 12,
+          recentHours: 2,
+          autoRefreshEnabled: false,
+          readerPanelPosition: 'center',
+          lastSeenReleaseNotesVersion: '3.2.0',
           excludedSourceIds: expect.arrayContaining([ansaSourceId])
-      }),
+        }),
       customSources: [
         expect.objectContaining({
           name: 'Imported Feed',

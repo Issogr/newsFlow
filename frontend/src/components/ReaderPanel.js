@@ -67,7 +67,7 @@ function renderReaderBlock(block, index) {
   return <p key={`${block.type}-${index}`} className={blockClassName.paragraph}>{block.text}</p>;
 }
 
-const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
+const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale, t, onClose }) => {
   const dateLocale = getDateLocale(locale);
   const [selectedArticleId, setSelectedArticleId] = useState(initialArticleId || group?.items?.[0]?.id || null);
   const [readerByArticleId, setReaderByArticleId] = useState({});
@@ -185,157 +185,162 @@ const ReaderPanel = ({ group, initialArticleId, locale, t, onClose }) => {
   };
 
   const languageMeta = getLanguageMeta(selectedReader?.language || selectedArticle?.language, locale);
+  const desktopPositionClassName = readerPosition === 'left'
+    ? 'lg:justify-start'
+    : (readerPosition === 'center' ? 'lg:justify-center' : 'lg:justify-end');
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-slate-950/45 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-sm">
       <button
         type="button"
-        className="hidden flex-1 cursor-default lg:block"
+        className="absolute inset-0 hidden cursor-default lg:block"
         aria-label={t('closeReader')}
         onClick={onClose}
       />
 
-      <section className="ml-auto flex h-full w-full max-w-4xl flex-col bg-stone-50 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-stone-200 bg-white px-5 py-4">
-          <div>
-            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">
-              <BookOpenText className="h-4 w-4" />
-              {t('cleanReadingView')}
-            </p>
-            <h2 className="mt-2 max-w-2xl text-xl font-semibold leading-tight text-stone-900 md:text-2xl">
-              {selectedReader?.title || selectedArticle?.title || t('readerMode')}
-            </h2>
-          </div>
+      <div className={`relative flex h-full w-full ${desktopPositionClassName}`}>
+        <section className="flex h-full w-full flex-col bg-stone-50 shadow-2xl lg:max-w-4xl">
+          <div className="flex items-center justify-between border-b border-stone-200 bg-white px-5 py-4">
+            <div>
+              <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">
+                <BookOpenText className="h-4 w-4" />
+                {t('cleanReadingView')}
+              </p>
+              <h2 className="mt-2 max-w-2xl text-xl font-semibold leading-tight text-stone-900 md:text-2xl">
+                {selectedReader?.title || selectedArticle?.title || t('readerMode')}
+              </h2>
+            </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-full p-2 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800"
-              aria-label={t('closeReader')}
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-
-        {sourceVersionItems.length > 1 && (
-          <div className="border-b border-stone-200 bg-white px-5 py-3">
-            <p className="mb-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
-              <Newspaper className="h-4 w-4" />
-              {t('sourceVersions')}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {sourceVersionItems.map((item) => {
-                const isActive = item.sourceId === selectedArticle?.sourceId;
-                return (
-                  <button
-                    key={item.sourceId}
-                    type="button"
-                    onClick={() => setSelectedArticleId(item.id)}
-                    className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                      isActive ? 'bg-slate-900 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-                    }`}
-                  >
-                    {getArticleSourceLabel(item)}
-                  </button>
-                );
-              })}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full p-2 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800"
+                aria-label={t('closeReader')}
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
           </div>
-        )}
 
-        <div className="flex-1 overflow-y-auto px-5 py-6 md:px-8">
-          {selectedArticle && (
-            <div className="mx-auto max-w-[46rem]">
-              <div className="mb-6 flex flex-wrap items-center gap-3 text-sm text-stone-500">
-                <span className={metaChipClassName}>
-                  <Newspaper className="h-4 w-4 text-stone-400" />
-                  {getArticleSourceLabel(selectedArticle)}
-                </span>
-                <span className={metaChipClassName}>
-                  <CalendarDays className="h-4 w-4 text-stone-400" />
-                  {formatDate(selectedArticle.pubDate)}
-                </span>
-                <span
-                  className={metaChipClassName}
-                  title={t('newsLanguage', { language: languageMeta.label })}
-                >
-                  <Languages className="h-4 w-4 text-stone-400" />
-                  {languageMeta.emoji}
-                </span>
-                {selectedReader?.minutesToRead && (
-                  <span className={metaChipClassName}>
-                    <Clock3 className="h-4 w-4 text-stone-400" />
-                    {t('readTime', { minutes: selectedReader.minutesToRead })}
-                  </span>
-                )}
+          {sourceVersionItems.length > 1 && (
+            <div className="border-b border-stone-200 bg-white px-5 py-3">
+              <p className="mb-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
+                <Newspaper className="h-4 w-4" />
+                {t('sourceVersions')}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {sourceVersionItems.map((item) => {
+                  const isActive = item.sourceId === selectedArticle?.sourceId;
+                  return (
+                    <button
+                      key={item.sourceId}
+                      type="button"
+                      onClick={() => setSelectedArticleId(item.id)}
+                      className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                        isActive ? 'bg-slate-900 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                      }`}
+                    >
+                      {getArticleSourceLabel(item)}
+                    </button>
+                  );
+                })}
               </div>
-
-              <div className="mb-5 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => loadReader(selectedArticleId, true)}
-                  disabled={refreshing || !selectedArticleId}
-                  className="inline-flex items-center gap-2 rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                  {t('refreshReader')}
-                </button>
-                <a
-                  href={selectedArticle.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  {t('openOriginalSource')}
-                </a>
-              </div>
-
-              {loading && !selectedReader ? (
-                <div className="rounded-3xl border border-stone-200 bg-white px-6 py-10 text-center shadow-sm">
-                  <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-stone-200 border-t-slate-900" />
-                  <p className="mt-4 inline-flex items-center gap-2 text-sm text-stone-500">
-                    <BookOpenText className="h-4 w-4" />
-                    {t('loadingReader')}
-                  </p>
-                </div>
-              ) : error ? (
-                <div className="rounded-3xl border border-red-200 bg-red-50 px-6 py-8 text-center text-red-700 shadow-sm">
-                  <p className="inline-flex items-center gap-2 font-medium">
-                    <AlertCircle className="h-4 w-4" />
-                    {t('readerUnavailable')}
-                  </p>
-                </div>
-                ) : selectedReader ? (
-                <article className="rounded-[2rem] border border-stone-200 bg-white px-6 py-8 shadow-sm md:px-10">
-                  {selectedReader.excerpt && (
-                    <p className="mb-7 border-l-4 border-stone-200 pl-4 text-lg leading-8 text-stone-600 md:text-[1.18rem]">
-                      {selectedReader.excerpt}
-                    </p>
-                  )}
-
-                  {selectedReader.fallback && (
-                    <div className="mb-6 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                      <AlertTriangle className="h-4 w-4 shrink-0" />
-                      {t('readerFallback')}
-                    </div>
-                  )}
-
-                  {selectedReader.byline && (
-                    <p className="mb-6 text-sm font-medium uppercase tracking-[0.16em] text-stone-400">{selectedReader.byline}</p>
-                  )}
-
-                  <div className="space-y-6 tracking-[0.01em]">
-                    {(selectedReader.contentBlocks || []).map((block, index) => renderReaderBlock(block, index))}
-                  </div>
-                </article>
-              ) : null}
             </div>
           )}
-        </div>
-      </section>
+
+          <div className="flex-1 overflow-y-auto px-5 py-6 md:px-8">
+            {selectedArticle && (
+              <div className="mx-auto max-w-[46rem]">
+                <div className="mb-6 flex flex-wrap items-center gap-3 text-sm text-stone-500">
+                  <span className={metaChipClassName}>
+                    <Newspaper className="h-4 w-4 text-stone-400" />
+                    {getArticleSourceLabel(selectedArticle)}
+                  </span>
+                  <span className={metaChipClassName}>
+                    <CalendarDays className="h-4 w-4 text-stone-400" />
+                    {formatDate(selectedArticle.pubDate)}
+                  </span>
+                  <span
+                    className={metaChipClassName}
+                    title={t('newsLanguage', { language: languageMeta.label })}
+                  >
+                    <Languages className="h-4 w-4 text-stone-400" />
+                    {languageMeta.emoji}
+                  </span>
+                  {selectedReader?.minutesToRead && (
+                    <span className={metaChipClassName}>
+                      <Clock3 className="h-4 w-4 text-stone-400" />
+                      {t('readTime', { minutes: selectedReader.minutesToRead })}
+                    </span>
+                  )}
+                </div>
+
+                <div className="mb-5 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => loadReader(selectedArticleId, true)}
+                    disabled={refreshing || !selectedArticleId}
+                    className="inline-flex items-center gap-2 rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    {t('refreshReader')}
+                  </button>
+                  <a
+                    href={selectedArticle.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    {t('openOriginalSource')}
+                  </a>
+                </div>
+
+                {loading && !selectedReader ? (
+                  <div className="rounded-3xl border border-stone-200 bg-white px-6 py-10 text-center shadow-sm">
+                    <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-stone-200 border-t-slate-900" />
+                    <p className="mt-4 inline-flex items-center gap-2 text-sm text-stone-500">
+                      <BookOpenText className="h-4 w-4" />
+                      {t('loadingReader')}
+                    </p>
+                  </div>
+                ) : error ? (
+                  <div className="rounded-3xl border border-red-200 bg-red-50 px-6 py-8 text-center text-red-700 shadow-sm">
+                    <p className="inline-flex items-center gap-2 font-medium">
+                      <AlertCircle className="h-4 w-4" />
+                      {t('readerUnavailable')}
+                    </p>
+                  </div>
+                ) : selectedReader ? (
+                  <article className="rounded-[2rem] border border-stone-200 bg-white px-6 py-8 shadow-sm md:px-10">
+                    {selectedReader.excerpt && (
+                      <p className="mb-7 border-l-4 border-stone-200 pl-4 text-lg leading-8 text-stone-600 md:text-[1.18rem]">
+                        {selectedReader.excerpt}
+                      </p>
+                    )}
+
+                    {selectedReader.fallback && (
+                      <div className="mb-6 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        {t('readerFallback')}
+                      </div>
+                    )}
+
+                    {selectedReader.byline && (
+                      <p className="mb-6 text-sm font-medium uppercase tracking-[0.16em] text-stone-400">{selectedReader.byline}</p>
+                    )}
+
+                    <div className="space-y-6 tracking-[0.01em]">
+                      {(selectedReader.contentBlocks || []).map((block, index) => renderReaderBlock(block, index))}
+                    </div>
+                  </article>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   );
 };

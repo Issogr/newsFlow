@@ -16,7 +16,6 @@ jest.mock('../hooks/useOnClickOutside', () => ({
 }));
 
 jest.mock('./NewsCard', () => ({ group }) => <div>{group.title}</div>);
-jest.mock('./NotificationCenter', () => () => <div />);
 jest.mock('./ReaderPanel', () => () => null);
 jest.mock('./BrandMark', () => () => <div />);
 jest.mock('./SettingsPanel', () => () => null);
@@ -46,6 +45,8 @@ const currentUser = {
     defaultLanguage: 'en',
     articleRetentionHours: 24,
     recentHours: 3,
+    autoRefreshEnabled: true,
+    readerPanelPosition: 'right',
     excludedSourceIds: [],
     excludedSubSourceIds: []
   },
@@ -72,7 +73,9 @@ describe('NewsAggregator', () => {
   });
 
   afterEach(() => {
-    jest.runOnlyPendingTimers();
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     jest.useRealTimers();
   });
 
@@ -132,5 +135,45 @@ describe('NewsAggregator', () => {
       expect(screen.queryByText('Old headline')).not.toBeInTheDocument();
     });
     expect(isRequestCanceled).not.toHaveBeenCalled();
+  });
+
+  test('keeps live detection active and enables manual refresh when auto refresh is off', async () => {
+    fetchNews.mockResolvedValue({
+      items: [],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 0 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    useWebSocket.mockReturnValue({
+      isConnected: true,
+      notifications: [],
+      lastNewsUpdate: null,
+      newArticlesCount: 3,
+      updateSubscriptionFilters: jest.fn(),
+      resetNewArticlesCount: jest.fn(),
+      removeNotification: jest.fn()
+    });
+
+    await act(async () => {
+      render(
+        <NewsAggregator
+          currentUser={{
+            ...currentUser,
+            settings: {
+              ...currentUser.settings,
+              autoRefreshEnabled: false
+            }
+          }}
+          onLogout={jest.fn()}
+          onUserUpdate={jest.fn()}
+        />
+      );
+    });
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenCalled();
+    });
+
+    expect(useWebSocket).toHaveBeenCalledWith('', expect.any(Object));
+    expect(screen.getByRole('button', { name: 'Load 3 new articles' })).toBeEnabled();
   });
 });

@@ -75,12 +75,12 @@ describe('newsAggregator stable grouping', () => {
     const firstGrouping = newsAggregator._groupSimilarNews([itemA, itemB]);
     const secondGrouping = newsAggregator._groupSimilarNews([itemA, itemB]);
 
-    expect(firstGrouping).toHaveLength(1);
-    expect(secondGrouping).toHaveLength(1);
-    expect(firstGrouping[0].id).toBe(secondGrouping[0].id);
+    expect(firstGrouping).toHaveLength(2);
+    expect(secondGrouping).toHaveLength(2);
+    expect(firstGrouping.map((group) => group.id)).toEqual(secondGrouping.map((group) => group.id));
   });
 
-  test('groupSimilarNews merges paraphrased titles when entities, topics, and time are aligned', () => {
+  test('groupSimilarNews keeps paraphrased titles separate while similar-article merging is disabled', () => {
     const groupedItems = newsAggregator._groupSimilarNews([
       {
         id: 'ansa-1',
@@ -104,11 +104,11 @@ describe('newsAggregator stable grouping', () => {
       }
     ]);
 
-    expect(groupedItems).toHaveLength(1);
-    expect(groupedItems[0].items).toHaveLength(2);
+    expect(groupedItems).toHaveLength(2);
+    expect(groupedItems.every((group) => group.items.length === 1)).toBe(true);
   });
 
-  test('groupSimilarNews can match against later items already in a group', () => {
+  test('groupSimilarNews keeps later similar items separate while merging is disabled', () => {
     const firstItem = {
       id: 'article-1',
       title: 'Trump e Meloni discutono i dazi a Washington',
@@ -142,8 +142,8 @@ describe('newsAggregator stable grouping', () => {
 
     const groupedItems = newsAggregator._groupSimilarNews([firstItem, bridgeItem, laterMatch]);
 
-    expect(groupedItems).toHaveLength(1);
-    expect(groupedItems[0].items).toHaveLength(3);
+    expect(groupedItems).toHaveLength(3);
+    expect(groupedItems.every((group) => group.items.length === 1)).toBe(true);
   });
 
   test('calculateSimilarity rewards time proximity and shared entities', () => {

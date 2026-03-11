@@ -6,7 +6,7 @@ import SettingsPreferencesSection from './settings/SettingsPreferencesSection';
 import SettingsTransferSection from './settings/SettingsTransferSection';
 import useSettingsPanelState from './settings/useSettingsPanelState';
 
-const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate }) => {
+const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, onUserUpdate }) => {
   const {
     saving,
     error,
@@ -19,10 +19,12 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
     settingsLimits,
     excludedSourceCatalog,
     excludedSubFeedCatalog,
-    setSourceForm,
-    setEditingSourceForm,
-    setDefaultLanguage,
-    updateNumericSetting,
+     setSourceForm,
+      setEditingSourceForm,
+      setDefaultLanguage,
+      setAutoRefreshEnabled,
+      setReaderPanelPosition,
+      updateNumericSetting,
     toggleExcludedSource,
     toggleExcludedSubFeed,
     handleSave,
@@ -72,6 +74,8 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
             settings={settings}
             settingsLimits={settingsLimits}
             onDefaultLanguageChange={setDefaultLanguage}
+            onAutoRefreshChange={setAutoRefreshEnabled}
+            onReaderPanelPositionChange={setReaderPanelPosition}
             onNumericSettingChange={updateNumericSetting}
           />
 
@@ -107,7 +111,14 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onUserUpdate
           )}
         </div>
 
-        <div className="flex items-center justify-end border-t border-slate-200 px-6 py-5">
+        <div className="flex items-center justify-between gap-4 border-t border-slate-200 px-6 py-5">
+          <button
+            type="button"
+            onClick={onOpenReleaseNotes}
+            className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
+          >
+            {t('changelogVersionLabel', { version: currentChangelogVersion })}
+          </button>
           <button type="button" onClick={handleSave} disabled={saving} className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
             {saving ? t('saving') : t('saveSettings')}
           </button>
