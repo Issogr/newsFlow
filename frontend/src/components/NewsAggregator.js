@@ -402,9 +402,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
             </label>
 
             <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-              <span className="rounded-full bg-slate-100 px-3 py-1.5">
-                {meta?.totalGroups ? t('totalGroups', { count: meta.totalGroups }) : t('visibleGroups', { count: news.length })}
-              </span>
               {meta?.lastRefreshAt && (
                 <span className="rounded-full bg-slate-100 px-3 py-1.5">
                   {t('updatedAt', {
