@@ -88,7 +88,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate }) => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeFilters, setActiveFilters] = useState(EMPTY_FILTERS);
   const [showRecentOnly, setShowRecentOnly] = useState(false);
-  const [filtersExpanded, setFiltersExpanded] = useState(true);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [readerState, setReaderState] = useState({ isOpen: false, group: null, articleId: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
