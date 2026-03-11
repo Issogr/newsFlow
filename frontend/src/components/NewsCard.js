@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { BookOpenText, ExternalLink } from 'lucide-react';
-import { getDateLocale, getLanguageMeta } from '../i18n';
+import { getDateLocale } from '../i18n';
 
 function getSourceEntries(group) {
   const sourceMap = new Map();
@@ -44,28 +44,17 @@ const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenRe
 
   const isTopicActive = (topic) => activeFilters.topics.includes(topic);
   const isSourceActive = (sourceId) => activeFilters.sourceIds.includes(sourceId);
-  const languageMeta = getLanguageMeta(group.items[0]?.language, locale);
 
   return (
     <article className="flex h-full min-h-[19rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-lg">
       <div className="flex flex-1 flex-col border-b border-slate-100 p-5">
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">
-            {sourceEntries.length > 1 ? t('sourceCount', { count: sourceEntries.length }) : t('singleSource')}
-          </span>
-          <span
-            className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
-            title={t('newsLanguage', { language: languageMeta.label })}
-            aria-label={t('newsLanguage', { language: languageMeta.label })}
-          >
-            {languageMeta.emoji}
-          </span>
-          <span>{formatPublicationDate(group.pubDate, locale)}</span>
-        </div>
-
         <h2 className="min-h-[3.5rem] text-lg font-semibold leading-tight text-slate-900">
           {group.title}
         </h2>
+
+        <div className="mt-3 text-xs text-slate-500">
+          <span>{formatPublicationDate(group.pubDate, locale)}</span>
+        </div>
 
         <div className="mt-4 min-h-6 flex flex-wrap content-start gap-2">
           {sourceEntries.map((source) => (
