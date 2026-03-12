@@ -53,7 +53,7 @@ describe('userService imports', () => {
         recentHours: 2,
         autoRefreshEnabled: false,
         readerPanelPosition: 'left',
-        lastSeenReleaseNotesVersion: '3.2.1',
+        lastSeenReleaseNotesVersion: '3.2.2',
         excludedSourceIds: ['bbc'],
         excludedSubSourceIds: []
       },
@@ -73,7 +73,7 @@ describe('userService imports', () => {
         recentHours: 2,
         autoRefreshEnabled: false,
         readerPanelPosition: 'left',
-        lastSeenReleaseNotesVersion: '3.2.1',
+        lastSeenReleaseNotesVersion: '3.2.2',
         excludedSourceIds: []
       }),
       customSources: [
@@ -91,7 +91,7 @@ describe('userService imports', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       readerPanelPosition: 'left',
-      lastSeenReleaseNotesVersion: '3.2.1',
+      lastSeenReleaseNotesVersion: '3.2.2',
       excludedSourceIds: []
     });
   });

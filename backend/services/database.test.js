@@ -63,10 +63,12 @@ describe('database migrations', () => {
     `).get()?.value;
     const topicColumns = sqlite.prepare('PRAGMA table_info(article_topics)').all().map((column) => column.name);
     const settingsColumns = sqlite.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
+    const articleColumns = sqlite.prepare('PRAGMA table_info(articles)').all().map((column) => column.name);
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('9');
+    expect(migrationVersion).toBe('10');
+    expect(articleColumns).toContain('canonical_url');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
@@ -185,6 +187,75 @@ describe('database migrations', () => {
       excludedSourceIds: ['ansa.it', 'example.com']
     }));
   });
+
+  test('migrates legacy articles to canonical URLs and removes same-source duplicates', () => {
+    const sqlite = new SqliteDatabase(dbPath);
+
+    sqlite.exec(`
+      CREATE TABLE app_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      CREATE TABLE articles (
+        id TEXT PRIMARY KEY,
+        source_id TEXT NOT NULL,
+        source_name TEXT NOT NULL,
+        owner_user_id TEXT,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        content TEXT NOT NULL DEFAULT '',
+        url TEXT NOT NULL DEFAULT '',
+        image TEXT,
+        author TEXT,
+        language TEXT NOT NULL DEFAULT 'it',
+        published_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE article_topics (
+        article_id TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (article_id, topic)
+      );
+
+      INSERT INTO app_meta (key, value) VALUES ('migration_version', '9');
+      INSERT INTO articles (id, source_id, source_name, title, url, published_at, created_at, updated_at)
+      VALUES
+        ('article-a', 'ansa', 'ANSA', 'Story', 'https://example.com/story?utm_source=rss', '2026-03-11T10:00:00.000Z', '2026-03-11T10:00:00.000Z', '2026-03-11T10:00:00.000Z'),
+        ('article-b', 'ansa', 'ANSA', 'Story', 'https://example.com/story?utm_source=app', '2026-03-11T11:00:00.000Z', '2026-03-11T11:00:00.000Z', '2026-03-11T11:00:00.000Z');
+      INSERT INTO article_topics (article_id, topic) VALUES ('article-a', 'Economy');
+      INSERT INTO article_topics (article_id, topic) VALUES ('article-b', 'Markets');
+    `);
+
+    sqlite.close();
+
+    database = require('./database');
+    database.getDb();
+
+    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const articles = migratedDb.prepare(`
+      SELECT id, canonical_url AS canonicalUrl
+      FROM articles
+      ORDER BY id ASC
+    `).all();
+    const topics = migratedDb.prepare(`
+      SELECT article_id AS articleId, topic
+      FROM article_topics
+      ORDER BY article_id ASC, topic ASC
+    `).all();
+
+    migratedDb.close();
+
+    expect(articles).toHaveLength(1);
+    expect(articles[0].canonicalUrl).toBe('https://example.com/story');
+    expect(topics).toEqual([
+      { articleId: 'article-b', topic: 'Economy' },
+      { articleId: 'article-b', topic: 'Markets' }
+    ]);
+  });
 });
 
 describe('database queries and user data', () => {
@@ -297,6 +368,48 @@ describe('database queries and user data', () => {
     expect(recentFiltered.map((article) => article.id)).toEqual(['private-1', 'global-2', 'global-1']);
   });
 
+  test('updates an existing same-source article when the canonical URL matches a new id', () => {
+    const now = new Date().toISOString();
+
+    const firstResult = database.upsertArticles([
+      {
+        id: 'article-1',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Canonical story',
+        description: 'First version',
+        content: 'First body',
+        url: 'https://example.com/story?utm_source=rss',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+    const secondResult = database.upsertArticles([
+      {
+        id: 'article-2',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Canonical story updated',
+        description: 'Second version',
+        content: 'Second body',
+        url: 'https://example.com/story?utm_source=homepage',
+        language: 'en',
+        pubDate: new Date(Date.now() + 60 * 1000).toISOString()
+      }
+    ]);
+
+    const articles = database.getArticles({}, { maxArticleAgeHours: 9999 });
+
+    expect(firstResult).toMatchObject({ insertedCount: 1, updatedCount: 0 });
+    expect(secondResult).toMatchObject({ insertedCount: 0, updatedCount: 1, updatedIds: ['article-1'] });
+    expect(articles).toHaveLength(1);
+    expect(articles[0]).toEqual(expect.objectContaining({
+      id: 'article-1',
+      title: 'Canonical story updated',
+      url: 'https://example.com/story?utm_source=homepage'
+    }));
+  });
+
   test('persists settings and removes user-source articles when the source is deleted', () => {
     const now = new Date().toISOString();
 
@@ -314,7 +427,7 @@ describe('database queries and user data', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       readerPanelPosition: 'left',
-      lastSeenReleaseNotesVersion: '3.2.1',
+      lastSeenReleaseNotesVersion: '3.2.2',
       excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
     });
@@ -326,7 +439,7 @@ describe('database queries and user data', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       readerPanelPosition: 'left',
-      lastSeenReleaseNotesVersion: '3.2.1',
+      lastSeenReleaseNotesVersion: '3.2.2',
       excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
     });
@@ -529,7 +642,7 @@ describe('database queries and user data', () => {
       recentHours: 3,
       autoRefreshEnabled: false,
       readerPanelPosition: 'center',
-      lastSeenReleaseNotesVersion: '3.2.1',
+      lastSeenReleaseNotesVersion: '3.2.2',
       excludedSourceIds: ['retired-source', primarySourceFamilyId, 'custom-1'],
       excludedSubSourceIds: ['retired-sub-source', groupedSource?.id || 'missing-sub-source']
     });
@@ -622,7 +735,7 @@ describe('database queries and user data', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       readerPanelPosition: 'left',
-      lastSeenReleaseNotesVersion: '3.2.1',
+      lastSeenReleaseNotesVersion: '3.2.2',
       excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: []
     });
@@ -657,7 +770,7 @@ describe('database queries and user data', () => {
         recentHours: 3,
         autoRefreshEnabled: false,
         readerPanelPosition: 'center',
-        lastSeenReleaseNotesVersion: '3.2.1',
+        lastSeenReleaseNotesVersion: '3.2.2',
         excludedSourceIds: ['bbc'],
         excludedSubSourceIds: [],
         updatedAt: now
@@ -677,7 +790,7 @@ describe('database queries and user data', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       readerPanelPosition: 'left',
-      lastSeenReleaseNotesVersion: '3.2.1',
+      lastSeenReleaseNotesVersion: '3.2.2',
       excludedSourceIds: [primarySourceFamilyId]
     });
   });

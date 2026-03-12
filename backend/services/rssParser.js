@@ -4,6 +4,7 @@ const RSSParser = require('rss-parser');
 const logger = require('../utils/logger');
 const summarizeErrorMessage = require('../utils/summarizeError');
 const { sanitizeHtml } = require('../utils/inputValidator');
+const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
 
 const MAX_ARTICLES_PER_SOURCE = parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '25', 10);
 const RSS_MAX_RETRIES = parseInt(process.env.RSS_MAX_RETRIES || '4', 10);
@@ -137,16 +138,21 @@ function normalizeOptionalDate(value) {
   return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
 }
 
-function buildArticleId(source, item) {
+function buildArticleId(source, item, precomputedCanonicalUrl = '') {
   const stableSourceId = source?.id || '';
-  const stableGuid = String(item?.guid || item?.id || '').trim();
-  const stableLink = String(item?.link || '').trim();
-  const stableTitle = String(item?.title || '').trim();
+  const canonicalUrl = precomputedCanonicalUrl || normalizeArticleUrl(item?.link || '');
+  const stableGuid = normalizeIdentityText(item?.guid || item?.id || '');
+  const stableTitle = normalizeIdentityText(sanitizeHtml(item?.title || ''), { lowercase: true });
+  const stableSummary = normalizeIdentityText(
+    sanitizeHtml(item?.contentSnippet || item?.description || item?.contentEncoded || item?.content || ''),
+    { lowercase: true }
+  ).slice(0, 280);
   const stablePubDate = normalizeOptionalDate(item?.pubDate || item?.dcdate || item?.isoDate);
-  const stableIdentity = stableGuid || stableLink;
-  const uniqueInput = stableIdentity
-    ? [stableSourceId, stableIdentity].join('|')
-    : [stableSourceId, stableTitle, stablePubDate].join('|');
+  const uniqueInput = canonicalUrl
+    ? ['url', stableSourceId, canonicalUrl].join('|')
+    : stableGuid
+      ? ['guid', stableSourceId, stableGuid].join('|')
+      : ['fallback', stableSourceId, stableTitle, stableSummary || stablePubDate].join('|');
 
   return crypto.createHash('sha1').update(uniqueInput).digest('hex');
 }
@@ -233,23 +239,28 @@ async function parseFeed(source) {
 
     return items
       .filter((item) => item?.title)
-      .map((item) => ({
-        id: buildArticleId(source, item),
-        title: sanitizeHtml(item.title),
-        description: sanitizeHtml(item.description || ''),
-        content: sanitizeHtml(item.contentEncoded || item.content || ''),
-        pubDate: normalizeDate(item.pubDate || item.dcdate || item.isoDate),
-        source: source.name,
-        sourceId: source.id,
-        url: item.link || '',
-        image: getImageUrl(item),
-        author: sanitizeHtml(item.creator || item.author || ''),
-        language: source.language || 'it',
-        ownerUserId: source.ownerUserId || null,
-        rawTopics: Array.isArray(item.categories)
-          ? item.categories.map((topic) => sanitizeHtml(topic)).filter(Boolean)
-          : []
-      }));
+      .map((item) => {
+        const canonicalUrl = normalizeArticleUrl(item.link || '');
+
+        return {
+          id: buildArticleId(source, item, canonicalUrl),
+          title: sanitizeHtml(item.title),
+          description: sanitizeHtml(item.description || ''),
+          content: sanitizeHtml(item.contentEncoded || item.content || ''),
+          pubDate: normalizeDate(item.pubDate || item.dcdate || item.isoDate),
+          source: source.name,
+          sourceId: source.id,
+          url: item.link || '',
+          canonicalUrl,
+          image: getImageUrl(item),
+          author: sanitizeHtml(item.creator || item.author || ''),
+          language: source.language || 'it',
+          ownerUserId: source.ownerUserId || null,
+          rawTopics: Array.isArray(item.categories)
+            ? item.categories.map((topic) => sanitizeHtml(topic)).filter(Boolean)
+            : []
+        };
+      });
   } catch (error) {
     logger.error(`Failed to parse RSS feed ${source.name} (${url}): ${summarizeErrorMessage(error)}`);
     return [];
@@ -269,6 +280,7 @@ module.exports = {
     };
   },
   _buildArticleId: buildArticleId,
+  _normalizeArticleUrl: normalizeArticleUrl,
   _normalizeDate: normalizeDate,
   _normalizeOptionalDate: normalizeOptionalDate,
   _pruneResponseCache: pruneResponseCache,

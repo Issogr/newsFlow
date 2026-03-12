@@ -5,6 +5,7 @@ const {
   getCanonicalSourceName,
   getSourceVariantLabel
 } = require('../utils/sourceCatalog');
+const { normalizeArticleUrl } = require('../utils/articleIdentity');
 
 const TITLE_STOP_WORDS = new Set([
   'a', 'ad', 'agli', 'ai', 'al', 'alla', 'alle', 'allo', 'anche', 'che', 'con', 'da', 'dal', 'dalla', 'dalle', 'dei', 'del', 'della',
@@ -347,6 +348,41 @@ function groupSimilarNews(newsItems) {
   return sortGroupsByPubDate(groups);
 }
 
+function getArticleQualityScore(article = {}) {
+  return String(article.content || '').length
+    + String(article.description || '').length
+    + (article.image ? 120 : 0)
+    + (article.author ? 20 : 0);
+}
+
+function shouldPreferIncomingArticle(candidate, current) {
+  if (!current) {
+    return true;
+  }
+
+  const candidateScore = getArticleQualityScore(candidate);
+  const currentScore = getArticleQualityScore(current);
+  if (candidateScore !== currentScore) {
+    return candidateScore > currentScore;
+  }
+
+  const candidateTimestamp = Date.parse(candidate?.pubDate || '');
+  const currentTimestamp = Date.parse(current?.pubDate || '');
+  if (!Number.isNaN(candidateTimestamp) || !Number.isNaN(currentTimestamp)) {
+    return (candidateTimestamp || 0) >= (currentTimestamp || 0);
+  }
+
+  return String(candidate?.id || '') > String(current?.id || '');
+}
+
+function buildIncomingArticleDeduplicationKey(article = {}) {
+  if (article.canonicalUrl) {
+    return [article.ownerUserId || '', article.rawSourceId || article.sourceId || '', article.canonicalUrl].join('|');
+  }
+
+  return article.id;
+}
+
 function normalizeIncomingArticles(articles = []) {
   const dedupedArticles = new Map();
 
@@ -358,12 +394,18 @@ function normalizeIncomingArticles(articles = []) {
       ...article,
       rawSourceId: article.sourceId,
       rawSource: article.source,
+      canonicalUrl: normalizeArticleUrl(article.canonicalUrl || article.url || ''),
       sourceId: canonicalSourceId,
       source: canonicalSourceName,
       subSource: getSourceVariantLabel(article.sourceId, article.source),
       topics: baseTopics
     };
-    dedupedArticles.set(article.id, normalizedArticle);
+    const dedupeKey = buildIncomingArticleDeduplicationKey(normalizedArticle);
+    const existingArticle = dedupedArticles.get(dedupeKey);
+
+    if (shouldPreferIncomingArticle(normalizedArticle, existingArticle)) {
+      dedupedArticles.set(dedupeKey, normalizedArticle);
+    }
   });
 
   return [...dedupedArticles.values()];

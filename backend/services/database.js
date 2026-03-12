@@ -15,10 +15,11 @@ const {
   getSourceAliases,
   getSourceVariantLabel
 } = require('../utils/sourceCatalog');
+const { normalizeArticleUrl } = require('../utils/articleIdentity');
 
 const DATA_DIR = path.join(__dirname, '../data');
 const DB_PATH = process.env.NEWS_DB_PATH || path.join(DATA_DIR, 'news.db');
-const LATEST_MIGRATION_VERSION = 9;
+const LATEST_MIGRATION_VERSION = 10;
 
 let db;
 let lastWriteCheckAt = null;
@@ -263,6 +264,7 @@ function initializeSchema(database) {
       description TEXT NOT NULL DEFAULT '',
       content TEXT NOT NULL DEFAULT '',
       url TEXT NOT NULL DEFAULT '',
+      canonical_url TEXT NOT NULL DEFAULT '',
       image TEXT,
       author TEXT,
       language TEXT NOT NULL DEFAULT 'it',
@@ -453,11 +455,30 @@ function runMigrations(database) {
     currentVersion = 9;
     setCurrentMigrationVersion(database, currentVersion);
   }
+
+  if (currentVersion < 10) {
+    migrateToV10(database);
+    currentVersion = 10;
+    setCurrentMigrationVersion(database, currentVersion);
+  }
 }
 
 function columnExists(database, tableName, columnName) {
   const columns = database.prepare(`PRAGMA table_info(${tableName})`).all();
   return columns.some((column) => column.name === columnName);
+}
+
+function getArticleScopeValue(ownerUserId) {
+  return ownerUserId || '';
+}
+
+function buildCanonicalArticleKey(sourceId, ownerUserId, canonicalUrl) {
+  const normalizedCanonicalUrl = normalizeArticleUrl(canonicalUrl);
+  if (!sourceId || !normalizedCanonicalUrl) {
+    return '';
+  }
+
+  return [getArticleScopeValue(ownerUserId), sourceId, normalizedCanonicalUrl].join('|');
 }
 
 function migrateToV1(database) {
@@ -731,6 +752,171 @@ function migrateToV9(database) {
   logger.info('Applied DB migration v9: added last seen release notes version user setting');
 }
 
+function migrateToV10(database) {
+  if (!columnExists(database, 'articles', 'canonical_url')) {
+    database.exec(`
+      ALTER TABLE articles
+      ADD COLUMN canonical_url TEXT NOT NULL DEFAULT ''
+    `);
+  }
+
+  const selectArticles = database.prepare(`
+    SELECT
+      id,
+      source_id AS sourceId,
+      owner_user_id AS ownerUserId,
+      url,
+      canonical_url AS canonicalUrl,
+      published_at AS pubDate,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM articles
+    ORDER BY datetime(updated_at) DESC, datetime(published_at) DESC, datetime(created_at) DESC, id DESC
+  `);
+  const updateCanonicalUrl = database.prepare(`
+    UPDATE articles
+    SET canonical_url = ?
+    WHERE id = ?
+  `);
+  const selectTopics = database.prepare(`
+    SELECT topic
+    FROM article_topics
+    WHERE article_id = ?
+    ORDER BY topic ASC
+  `);
+  const insertTopic = database.prepare(`
+    INSERT OR IGNORE INTO article_topics (article_id, topic)
+    VALUES (?, ?)
+  `);
+  const deleteTopics = database.prepare(`
+    DELETE FROM article_topics
+    WHERE article_id = ?
+  `);
+  const selectReaderCache = database.prepare(`
+    SELECT
+      url,
+      title,
+      site_name AS siteName,
+      byline,
+      language,
+      excerpt,
+      content_text AS contentText,
+      content_blocks AS contentBlocks,
+      minutes_to_read AS minutesToRead,
+      fetched_at AS fetchedAt
+    FROM reader_cache
+    WHERE article_id = ?
+  `);
+  const upsertReaderCacheStmt = database.prepare(`
+    INSERT INTO reader_cache (
+      article_id,
+      url,
+      title,
+      site_name,
+      byline,
+      language,
+      excerpt,
+      content_text,
+      content_blocks,
+      minutes_to_read,
+      fetched_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(article_id) DO UPDATE SET
+      url = excluded.url,
+      title = excluded.title,
+      site_name = excluded.site_name,
+      byline = excluded.byline,
+      language = excluded.language,
+      excerpt = excluded.excerpt,
+      content_text = excluded.content_text,
+      content_blocks = excluded.content_blocks,
+      minutes_to_read = excluded.minutes_to_read,
+      fetched_at = excluded.fetched_at
+  `);
+  const deleteSearchEntry = database.prepare(`
+    DELETE FROM article_search
+    WHERE article_id = ?
+  `);
+  const deleteReaderCacheEntry = database.prepare(`
+    DELETE FROM reader_cache
+    WHERE article_id = ?
+  `);
+  const deleteArticle = database.prepare(`
+    DELETE FROM articles
+    WHERE id = ?
+  `);
+
+  const migrationResult = database.transaction(() => {
+    let normalizedUrlCount = 0;
+    let deduplicatedArticleCount = 0;
+    const retainedArticlesByKey = new Map();
+
+    selectArticles.all().forEach((article) => {
+      const canonicalUrl = normalizeArticleUrl(article.canonicalUrl || article.url || '');
+      if (canonicalUrl !== (article.canonicalUrl || '')) {
+        updateCanonicalUrl.run(canonicalUrl, article.id);
+        normalizedUrlCount += 1;
+      }
+
+      const canonicalKey = buildCanonicalArticleKey(article.sourceId, article.ownerUserId, canonicalUrl);
+      if (!canonicalKey) {
+        return;
+      }
+
+      const retainedArticle = retainedArticlesByKey.get(canonicalKey);
+      if (!retainedArticle) {
+        retainedArticlesByKey.set(canonicalKey, {
+          ...article,
+          canonicalUrl
+        });
+        return;
+      }
+
+      selectTopics.all(article.id).forEach((row) => {
+        insertTopic.run(retainedArticle.id, row.topic);
+      });
+
+      const retainedReaderCache = selectReaderCache.get(retainedArticle.id);
+      const duplicateReaderCache = selectReaderCache.get(article.id);
+      if (!retainedReaderCache && duplicateReaderCache?.contentText) {
+        upsertReaderCacheStmt.run(
+          retainedArticle.id,
+          duplicateReaderCache.url || '',
+          duplicateReaderCache.title || '',
+          duplicateReaderCache.siteName || null,
+          duplicateReaderCache.byline || null,
+          duplicateReaderCache.language || null,
+          duplicateReaderCache.excerpt || null,
+          duplicateReaderCache.contentText,
+          duplicateReaderCache.contentBlocks || null,
+          duplicateReaderCache.minutesToRead || 1,
+          duplicateReaderCache.fetchedAt || new Date().toISOString()
+        );
+      }
+
+      deleteSearchEntry.run(article.id);
+      deleteReaderCacheEntry.run(article.id);
+      deleteTopics.run(article.id);
+      deleteArticle.run(article.id);
+      deduplicatedArticleCount += 1;
+    });
+
+    database.exec(`
+      CREATE INDEX IF NOT EXISTS idx_articles_canonical_url ON articles (canonical_url);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_owner_source_canonical_url
+      ON articles (COALESCE(owner_user_id, ''), source_id, canonical_url)
+      WHERE canonical_url != '';
+    `);
+
+    return {
+      normalizedUrlCount,
+      deduplicatedArticleCount
+    };
+  })();
+
+  logger.info(`Applied DB migration v10: normalized ${migrationResult.normalizedUrlCount} canonical article URLs and removed ${migrationResult.deduplicatedArticleCount} duplicate article rows`);
+}
+
 function buildFilterState(filters = {}) {
   return {
     search: typeof filters.search === 'string' ? filters.search.trim() : '',
@@ -903,13 +1089,14 @@ function upsertArticles(articles = []) {
       description,
       content,
       url,
+      canonical_url,
       image,
       author,
       language,
       published_at,
       created_at,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       source_id = excluded.source_id,
       source_name = excluded.source_name,
@@ -918,6 +1105,7 @@ function upsertArticles(articles = []) {
       description = excluded.description,
       content = excluded.content,
       url = excluded.url,
+      canonical_url = excluded.canonical_url,
       image = excluded.image,
       author = excluded.author,
       language = excluded.language,
@@ -928,6 +1116,15 @@ function upsertArticles(articles = []) {
   const insertSearchStmt = database.prepare(`
     INSERT INTO article_search (article_id, title, description, content)
     VALUES (?, ?, ?, ?)
+  `);
+  const selectArticleByCanonicalUrlStmt = database.prepare(`
+    SELECT id
+    FROM articles
+    WHERE source_id = ?
+      AND canonical_url = ?
+      AND COALESCE(owner_user_id, '') = ?
+    ORDER BY datetime(updated_at) DESC, datetime(published_at) DESC, datetime(created_at) DESC, id DESC
+    LIMIT 1
   `);
   const existingIdSet = new Set(
     chunkValues(articles.map((article) => article.id).filter(Boolean)).flatMap((articleIds) => {
@@ -944,17 +1141,28 @@ function upsertArticles(articles = []) {
     const updatedIds = [];
 
     items.forEach((article) => {
-      const exists = existingIdSet.has(article.id);
+      const storedSourceId = article.rawSourceId || article.sourceId;
+      const storedSourceName = article.rawSource || article.source;
+      const canonicalUrl = normalizeArticleUrl(article.canonicalUrl || article.url || '');
+      const canonicalMatch = !existingIdSet.has(article.id) && canonicalUrl
+        ? selectArticleByCanonicalUrlStmt.get(storedSourceId, canonicalUrl, getArticleScopeValue(article.ownerUserId))
+        : null;
+      const persistedArticleId = canonicalMatch?.id || article.id;
+      const exists = existingIdSet.has(persistedArticleId) || Boolean(canonicalMatch);
+
+      article.id = persistedArticleId;
+      article.canonicalUrl = canonicalUrl;
 
       upsertStmt.run(
-        article.id,
-        article.rawSourceId || article.sourceId,
-        article.rawSource || article.source,
+        persistedArticleId,
+        storedSourceId,
+        storedSourceName,
         article.ownerUserId || null,
         article.title,
         article.description || '',
         article.content || '',
         article.url || '',
+        canonicalUrl,
         article.image || null,
         article.author || null,
         article.language || 'it',
@@ -963,13 +1171,14 @@ function upsertArticles(articles = []) {
         now
       );
 
-      deleteSearchStmt.run(article.id);
-      insertSearchStmt.run(article.id, article.title, article.description || '', article.content || '');
+      deleteSearchStmt.run(persistedArticleId);
+      insertSearchStmt.run(persistedArticleId, article.title, article.description || '', article.content || '');
 
       if (exists) {
-        updatedIds.push(article.id);
+        updatedIds.push(persistedArticleId);
       } else {
-        insertedIds.push(article.id);
+        insertedIds.push(persistedArticleId);
+        existingIdSet.add(persistedArticleId);
       }
     });
 

@@ -48,6 +48,25 @@ describe('rssParser article ids', () => {
     expect(firstId).toBe(secondId);
   });
 
+  test('keeps the same id when guid changes but the canonical link stays the same', () => {
+    const source = { id: 'ansa' };
+    const firstId = rssParser._buildArticleId(source, {
+      guid: 'guid-v1',
+      link: 'https://example.com/story?utm_source=rss',
+      title: 'Stable story',
+      pubDate: '2026-03-11T10:00:00.000Z'
+    });
+    const secondId = rssParser._buildArticleId(source, {
+      guid: 'guid-v2',
+      link: 'https://example.com/story?utm_source=homepage',
+      title: 'Stable story',
+      pubDate: '2026-03-11T12:00:00.000Z'
+    });
+
+    expect(firstId).toBe(secondId);
+    expect(rssParser._normalizeArticleUrl('https://example.com/story?utm_source=rss')).toBe('https://example.com/story');
+  });
+
   test('falls back to title and published date when guid and link are missing', () => {
     const source = { id: 'custom' };
     const firstId = rssParser._buildArticleId(source, {
@@ -65,5 +84,21 @@ describe('rssParser article ids', () => {
 
     expect(firstId).toBe(secondId);
     expect(firstId).not.toBe(thirdId);
+  });
+
+  test('keeps the same id when guid and link are missing but title and summary are stable', () => {
+    const source = { id: 'custom' };
+    const firstId = rssParser._buildArticleId(source, {
+      title: 'Fallback story',
+      description: 'A stable description for the same article',
+      pubDate: '2026-03-11T10:00:00.000Z'
+    });
+    const secondId = rssParser._buildArticleId(source, {
+      title: 'Fallback story',
+      description: 'A stable description for the same article',
+      pubDate: '2026-03-11T11:00:00.000Z'
+    });
+
+    expect(firstId).toBe(secondId);
   });
 });

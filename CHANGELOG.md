@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.2
+
+- fixed same-source duplicate articles during refreshes by switching article identity to stable canonical URLs before falling back to feed GUIDs or content metadata
+- added canonical URL normalization and a database migration that stores canonical article URLs, merges existing same-source duplicates, and enforces per-source uniqueness for future ingestions
+- strengthened ingestion deduplication and regression coverage for feeds that change GUIDs, tracking parameters, or publish timestamps across refreshes
+
 ## 3.2.1
 
 - 🔄 replaced the notification center with a clearer refresh flow that combines live-update status and new-article counts in one top-bar action
