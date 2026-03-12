@@ -67,6 +67,12 @@ describe('rssParser article ids', () => {
     expect(rssParser._normalizeArticleUrl('https://example.com/story?utm_source=rss')).toBe('https://example.com/story');
   });
 
+  test('normalizes article links by removing fragments and tracking params while keeping stable query params', () => {
+    expect(
+      rssParser._normalizeArticleUrl('https://example.com/story/?b=2&utm_source=rss&a=1#top')
+    ).toBe('https://example.com/story?a=1&b=2');
+  });
+
   test('falls back to title and published date when guid and link are missing', () => {
     const source = { id: 'custom' };
     const firstId = rssParser._buildArticleId(source, {
