@@ -1,4 +1,6 @@
 import React from 'react';
+import { Ban, FilterX } from 'lucide-react';
+import SettingsSectionCard from './SettingsSectionCard';
 
 const SettingsExclusionsSection = ({
   t,
@@ -8,11 +10,22 @@ const SettingsExclusionsSection = ({
   onToggleSource,
   onToggleSubFeed
 }) => {
+  const excludedSourcesCount = (settings.excludedSourceIds || []).length;
+  const excludedSubFeedsCount = (settings.excludedSubSourceIds || []).length;
+
   return (
-    <>
-      <section className="space-y-4">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t('excludedSources')}</h3>
-        <p className="text-sm text-slate-500">{t('excludedSourcesHelp')}</p>
+    <SettingsSectionCard
+      icon={FilterX}
+      title={t('excludedSources')}
+      description={t('excludedSourcesHelp')}
+    >
+      <div>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-slate-800">{t('excludedSources')}</p>
+          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
+            {excludedSourcesCount}
+          </span>
+        </div>
         <div className="flex flex-wrap gap-2">
           {excludedSourceCatalog.map((source) => {
             const isSelected = (settings.excludedSourceIds || []).includes(source.id);
@@ -28,11 +41,22 @@ const SettingsExclusionsSection = ({
             );
           })}
         </div>
-      </section>
+      </div>
 
-      <section className="space-y-4">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t('excludedSubFeeds')}</h3>
-        <p className="text-sm text-slate-500">{t('excludedSubFeedsHelp')}</p>
+      <div className="border-t border-slate-200 pt-4">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2">
+            <Ban className="mt-0.5 h-4 w-4 text-slate-400" />
+            <div>
+              <p className="text-sm font-medium text-slate-800">{t('excludedSubFeeds')}</p>
+              <p className="mt-1 text-sm text-slate-500">{t('excludedSubFeedsHelp')}</p>
+            </div>
+          </div>
+          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
+            {excludedSubFeedsCount}
+          </span>
+        </div>
+
         {excludedSubFeedCatalog.length === 0 ? (
           <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">{t('noExcludedSubFeeds')}</div>
         ) : (
@@ -41,7 +65,7 @@ const SettingsExclusionsSection = ({
               const isParentExcluded = (settings.excludedSourceIds || []).includes(source.id);
 
               return (
-                <div key={source.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div key={source.id} className="rounded-2xl bg-slate-50 px-4 py-3">
                   <p className="text-sm font-medium text-slate-800">{source.name}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {source.subSources.map((subSource) => {
@@ -65,8 +89,8 @@ const SettingsExclusionsSection = ({
             })}
           </div>
         )}
-      </section>
-    </>
+      </div>
+    </SettingsSectionCard>
   );
 };
 

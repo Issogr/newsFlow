@@ -52,6 +52,11 @@ describe('App', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     window.localStorage.clear();
+    document.body.style.overflow = '';
+  });
+
+  afterEach(() => {
+    document.body.style.overflow = '';
   });
 
   test('renders the authentication screen when there is no saved session', () => {
@@ -102,6 +107,26 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open release notes' }));
 
     expect(await screen.findByText('What is new')).toBeInTheDocument();
+  });
+
+  test('locks body scroll while release notes are open', async () => {
+    getAuthToken.mockReturnValue('session-token');
+    fetchCurrentUser.mockResolvedValue(createCurrentUser());
+    updateUserSettings.mockResolvedValue({
+      success: true,
+      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.2' }).settings
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('What is new')).toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
+
+    await waitFor(() => {
+      expect(document.body.style.overflow).toBe('');
+    });
   });
 
   test('falls back to the authentication screen when loading the session fails', async () => {
