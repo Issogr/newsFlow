@@ -1,12 +1,20 @@
 import React from 'react';
 
-const SettingsSectionCard = ({ icon: Icon, title, description, badge, children, className = '' }) => {
+const SettingsSectionCard = ({
+  icon: Icon,
+  title,
+  description,
+  badge,
+  children,
+  className = '',
+  iconToneClassName = 'bg-sky-100 text-sky-700'
+}) => {
   return (
     <section className={`rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm ${className}`.trim()}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           {Icon && (
-            <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
+            <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-sm ${iconToneClassName}`}>
               <Icon className="h-5 w-5" />
             </span>
           )}

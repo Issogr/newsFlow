@@ -20,11 +20,11 @@ const SettingsPreferencesSection = ({
   const recentHoursRange = `${settingsLimits.recentHours.min}-${settingsLimits.recentHours.max}h`;
 
   return (
-    <SettingsSectionCard icon={Radio} title={t('preferences')}>
+    <SettingsSectionCard icon={Radio} title={t('preferences')} iconToneClassName="bg-sky-100 text-sky-700">
       <div className="grid gap-5 md:grid-cols-2">
         <label className="block">
           <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
-            <Globe2 className="h-4 w-4 text-slate-400" />
+            <Globe2 className="h-4 w-4 text-sky-600" />
             {t('defaultLanguageSetting')}
           </span>
           <select
@@ -40,7 +40,7 @@ const SettingsPreferencesSection = ({
 
         <label className="block">
           <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
-            <TimerReset className="h-4 w-4 text-slate-400" />
+            <TimerReset className="h-4 w-4 text-amber-600" />
             {t('articleRetention')}
           </span>
           <input
@@ -58,7 +58,7 @@ const SettingsPreferencesSection = ({
 
         <label className="block">
           <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
-            <Clock3 className="h-4 w-4 text-slate-400" />
+            <Clock3 className="h-4 w-4 text-teal-600" />
             {t('quickFilterHours')}
           </span>
           <input
@@ -76,7 +76,7 @@ const SettingsPreferencesSection = ({
 
         <label className="block">
           <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
-            <PanelRightOpen className="h-4 w-4 text-slate-400" />
+            <PanelRightOpen className="h-4 w-4 text-indigo-600" />
             {t('readerPanelPositionSetting')}
           </span>
           <select
@@ -113,7 +113,7 @@ const SettingsPreferencesSection = ({
               className="flex items-center gap-3 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-60"
             >
               <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm">
-                <Download className="h-4 w-4" />
+                <Download className="h-4 w-4 text-sky-700" />
               </span>
               <span>{t('exportSettings')}</span>
             </button>
@@ -125,7 +125,7 @@ const SettingsPreferencesSection = ({
               className="flex items-center gap-3 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-60"
             >
               <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm">
-                <Upload className="h-4 w-4" />
+                <Upload className="h-4 w-4 text-emerald-700" />
               </span>
               <span>{t('importSettings')}</span>
             </button>

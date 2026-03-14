@@ -18,6 +18,7 @@ const SettingsExclusionsSection = ({
       icon={FilterX}
       title={t('excludedSources')}
       description={t('excludedSourcesHelp')}
+      iconToneClassName="bg-rose-100 text-rose-700"
     >
       <div>
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -46,7 +47,7 @@ const SettingsExclusionsSection = ({
       <div className="border-t border-slate-200 pt-4">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="flex items-start gap-2">
-            <Ban className="mt-0.5 h-4 w-4 text-slate-400" />
+            <Ban className="mt-0.5 h-4 w-4 text-amber-600" />
             <div>
               <p className="text-sm font-medium text-slate-800">{t('excludedSubFeeds')}</p>
               <p className="mt-1 text-sm text-slate-500">{t('excludedSubFeedsHelp')}</p>

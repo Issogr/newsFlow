@@ -23,6 +23,7 @@ const SettingsCustomSourcesSection = ({
       title={t('customSources')}
       description={t('addSourceHelp')}
       badge={t('sourceCount', { count: customSources.length })}
+      iconToneClassName="bg-emerald-100 text-emerald-700"
     >
       <div>
         <form onSubmit={onAddSource} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
