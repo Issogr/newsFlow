@@ -85,13 +85,23 @@ const SettingsCustomSourcesSection = ({
                       <p className="text-sm text-slate-500">{source.url}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => onStartEditSource(source)} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => onStartEditSource(source)}
+                        className="inline-flex items-center justify-center rounded-full border border-slate-200 p-2 text-slate-700 hover:bg-slate-100"
+                        aria-label={t('editSource')}
+                        title={t('editSource')}
+                      >
                         <Pencil className="h-4 w-4" />
-                        {t('editSource')}
                       </button>
-                      <button type="button" onClick={() => onDeleteSource(source.id)} className="inline-flex items-center gap-2 rounded-full border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
+                      <button
+                        type="button"
+                        onClick={() => onDeleteSource(source.id)}
+                        className="inline-flex items-center justify-center rounded-full border border-red-200 p-2 text-red-700 hover:bg-red-50"
+                        aria-label={t('remove')}
+                        title={t('remove')}
+                      >
                         <Trash2 className="h-4 w-4" />
-                        {t('remove')}
                       </button>
                     </div>
                   </div>
