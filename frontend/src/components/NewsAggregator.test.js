@@ -68,6 +68,7 @@ describe('NewsAggregator', () => {
       newArticlesCount: 0,
       updateSubscriptionFilters: jest.fn(),
       resetNewArticlesCount: jest.fn(),
+      markGroupsSeen: jest.fn(),
       removeNotification: jest.fn()
     });
   });
@@ -150,6 +151,7 @@ describe('NewsAggregator', () => {
       newArticlesCount: 3,
       updateSubscriptionFilters: jest.fn(),
       resetNewArticlesCount: jest.fn(),
+      markGroupsSeen: jest.fn(),
       removeNotification: jest.fn()
     });
 
@@ -175,5 +177,44 @@ describe('NewsAggregator', () => {
 
     expect(useWebSocket).toHaveBeenCalledWith('', expect.any(Object));
     expect(screen.getByRole('button', { name: 'Load 3 new articles' })).toBeEnabled();
+  });
+
+  test('marks already visible groups as seen after loading news', async () => {
+    const markGroupsSeen = jest.fn();
+
+    fetchNews.mockResolvedValue({
+      items: [
+        { id: 'group-1', title: 'First headline' },
+        { id: 'group-2', title: 'Second headline' }
+      ],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 2 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    useWebSocket.mockReturnValue({
+      isConnected: true,
+      notifications: [],
+      lastNewsUpdate: {
+        timestamp: '2026-03-14T10:00:00.000Z',
+        count: 1,
+        groupIds: ['group-1']
+      },
+      newArticlesCount: 1,
+      updateSubscriptionFilters: jest.fn(),
+      resetNewArticlesCount: jest.fn(),
+      markGroupsSeen,
+      removeNotification: jest.fn()
+    });
+
+    render(
+      <NewsAggregator
+        currentUser={currentUser}
+        onLogout={jest.fn()}
+        onUserUpdate={jest.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(markGroupsSeen).toHaveBeenCalledWith(['group-1', 'group-2']);
+    });
   });
 });

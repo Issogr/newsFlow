@@ -68,7 +68,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     lastNewsUpdate,
     newArticlesCount,
     updateSubscriptionFilters,
-    resetNewArticlesCount
+    resetNewArticlesCount,
+    markGroupsSeen
   } = useWebSocket('', websocketMessages);
   const liveStatusLabel = autoRefreshEnabled
     ? (isConnected ? t('liveActive') : t('liveOffline'))
@@ -93,6 +94,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
+  const visibleGroupIds = useMemo(() => news.map((group) => group?.id).filter(Boolean), [news]);
   const recentHours = Math.max(
     settingsLimits.recentHours.min,
     Math.min(Number(currentUser?.settings?.recentHours) || settingsLimits.recentHours.max, settingsLimits.recentHours.max)
@@ -202,6 +204,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       sourceIds: activeFilters.sourceIds
     });
   }, [activeFilters.sourceIds, activeFilters.topics, isConnected, updateSubscriptionFilters]);
+
+  useEffect(() => {
+    if (visibleGroupIds.length === 0) {
+      return;
+    }
+
+    markGroupsSeen(visibleGroupIds);
+  }, [lastNewsUpdate?.timestamp, markGroupsSeen, visibleGroupIds]);
 
   useEffect(() => {
     if (!lastNewsUpdate?.timestamp || lastNewsUpdate.timestamp === lastNewsUpdateRef.current) {
