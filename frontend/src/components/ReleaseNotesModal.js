@@ -1,7 +1,16 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Sparkles, X } from 'lucide-react';
 
 const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss }) => {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 z-[60] flex items-stretch justify-center overflow-y-auto bg-slate-950/45 px-0 py-0 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6">
       <div className="flex min-h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl sm:min-h-0 sm:max-h-[calc(100dvh-3rem)] sm:rounded-[2rem] sm:border sm:border-slate-200">

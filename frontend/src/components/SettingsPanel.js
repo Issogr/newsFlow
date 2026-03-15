@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Settings, X } from 'lucide-react';
 import SettingsCustomSourcesSection from './settings/SettingsCustomSourcesSection';
 import SettingsExclusionsSection from './settings/SettingsExclusionsSection';
 import SettingsPreferencesSection from './settings/SettingsPreferencesSection';
-import SettingsTransferSection from './settings/SettingsTransferSection';
 import useSettingsPanelState from './settings/useSettingsPanelState';
 
 const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, onUserUpdate }) => {
@@ -19,12 +18,12 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     settingsLimits,
     excludedSourceCatalog,
     excludedSubFeedCatalog,
-     setSourceForm,
-      setEditingSourceForm,
-      setDefaultLanguage,
-      setAutoRefreshEnabled,
-      setReaderPanelPosition,
-      updateNumericSetting,
+    setSourceForm,
+    setEditingSourceForm,
+    setDefaultLanguage,
+    setAutoRefreshEnabled,
+    setReaderPanelPosition,
+    updateNumericSetting,
     toggleExcludedSource,
     toggleExcludedSubFeed,
     handleSave,
@@ -43,75 +42,85 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     onUserUpdate
   });
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 flex bg-slate-950/35 px-4 py-6 backdrop-blur-sm">
-      <div className="ml-auto flex h-full w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-          <div>
-            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-              <Settings className="h-4 w-4" />
-              {t('settings')}
-            </p>
-            <h2 className="mt-2 text-xl font-semibold text-slate-900">{currentUser.user.username}</h2>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-500 hover:bg-slate-100">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="flex-1 space-y-8 overflow-y-auto px-6 py-6">
-          <SettingsTransferSection
-            t={t}
-            saving={saving}
-            importInputRef={importInputRef}
-            onExport={handleExport}
-            onImportClick={handleImportClick}
-            onImport={handleImport}
-          />
-
-          <SettingsPreferencesSection
-            t={t}
-            settings={settings}
-            settingsLimits={settingsLimits}
-            onDefaultLanguageChange={setDefaultLanguage}
-            onAutoRefreshChange={setAutoRefreshEnabled}
-            onReaderPanelPositionChange={setReaderPanelPosition}
-            onNumericSettingChange={updateNumericSetting}
-          />
-
-          <SettingsExclusionsSection
-            t={t}
-            settings={settings}
-            excludedSourceCatalog={excludedSourceCatalog}
-            excludedSubFeedCatalog={excludedSubFeedCatalog}
-            onToggleSource={toggleExcludedSource}
-            onToggleSubFeed={toggleExcludedSubFeed}
-          />
-
-          <SettingsCustomSourcesSection
-            t={t}
-            saving={saving}
-            customSources={customSources}
-            sourceForm={sourceForm}
-            editingSourceId={editingSourceId}
-            editingSourceForm={editingSourceForm}
-            onSourceFormChange={setSourceForm}
-            onEditingSourceFormChange={setEditingSourceForm}
-            onAddSource={handleAddSource}
-            onStartEditSource={startEditSource}
-            onCancelEditSource={cancelEditSource}
-            onUpdateSource={handleUpdateSource}
-            onDeleteSource={handleDeleteSource}
-          />
-
-          {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error.message}
+    <div className="fixed inset-0 z-50 flex bg-slate-950/35 backdrop-blur-sm sm:px-4 sm:py-6">
+      <div className="ml-auto flex h-full w-full flex-col overflow-hidden bg-slate-50 shadow-2xl sm:max-w-2xl sm:rounded-[2rem] sm:border sm:border-slate-200">
+        <div className="border-b border-slate-200 bg-white px-5 py-5 sm:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <Settings className="h-4 w-4" />
+                {t('settings')}
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-slate-900">{currentUser.user.username}</h2>
             </div>
-          )}
+            <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label={t('cancel')}>
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-t border-slate-200 px-6 py-5">
+        <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
+          <div className="space-y-5">
+            <SettingsPreferencesSection
+              t={t}
+              saving={saving}
+              importInputRef={importInputRef}
+              settings={settings}
+              settingsLimits={settingsLimits}
+              onDefaultLanguageChange={setDefaultLanguage}
+              onAutoRefreshChange={setAutoRefreshEnabled}
+              onReaderPanelPositionChange={setReaderPanelPosition}
+              onNumericSettingChange={updateNumericSetting}
+              onExport={handleExport}
+              onImportClick={handleImportClick}
+              onImport={handleImport}
+            />
+
+            <SettingsExclusionsSection
+              t={t}
+              settings={settings}
+              excludedSourceCatalog={excludedSourceCatalog}
+              excludedSubFeedCatalog={excludedSubFeedCatalog}
+              onToggleSource={toggleExcludedSource}
+              onToggleSubFeed={toggleExcludedSubFeed}
+            />
+
+            <SettingsCustomSourcesSection
+              t={t}
+              saving={saving}
+              customSources={customSources}
+              sourceForm={sourceForm}
+              editingSourceId={editingSourceId}
+              editingSourceForm={editingSourceForm}
+              onSourceFormChange={setSourceForm}
+              onEditingSourceFormChange={setEditingSourceForm}
+              onAddSource={handleAddSource}
+              onStartEditSource={startEditSource}
+              onCancelEditSource={cancelEditSource}
+              onUpdateSource={handleUpdateSource}
+              onDeleteSource={handleDeleteSource}
+            />
+
+            {error && (
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error.message}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 border-t border-slate-200 px-5 py-5 sm:px-6">
           <button
             type="button"
             onClick={onOpenReleaseNotes}

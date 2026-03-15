@@ -5,9 +5,10 @@ export const translations = {
   en: {
     pageTitle: 'News Flow',
     pageSubtitle: 'News collection with scheduled updates, server-side filters, and persistent tagging.',
-    liveActive: 'Live active',
-    liveOffline: 'Live offline',
-    liveDisabled: 'Auto refresh off',
+    autoRefreshStatus: 'Auto refresh',
+    liveActive: 'On',
+    liveOffline: 'Reconnecting',
+    liveDisabled: 'Off',
     refresh: 'Refresh',
     refreshHandledByLive: 'Live auto refresh is handling updates',
     searchPlaceholder: 'Search by title, content, or topic...',
@@ -17,6 +18,9 @@ export const translations = {
     filtersTitle: 'Filters',
     filtersSubtitle: 'Source, topic, and time window.',
     latestHours: ({ hours }) => `Last ${hours} hours`,
+    filterActiveCount: ({ count }) => `${count} active`,
+    filterAvailableCount: ({ count }) => `${count} available`,
+    filterSelectedCount: ({ count }) => `${count} selected`,
     resetFilters: 'Reset filters',
     sources: 'Sources',
     topics: 'Topics',
@@ -29,6 +33,10 @@ export const translations = {
     saveSettings: 'Save settings',
     saving: 'Saving...',
     cancel: 'Cancel',
+    importExport: 'Import and export',
+    importExportHelp: 'Export a backup of your current setup or import one to replace your custom sources and exclusion preferences.',
+    export: 'Export',
+    import: 'Import',
     exportSettings: 'Export settings',
     importSettings: 'Import settings',
     importSettingsHelp: 'Import replaces your current custom sources and excluded-source preferences.',
@@ -109,7 +117,7 @@ export const translations = {
     singleSource: 'Single source',
     sourceCount: ({ count }) => `${count} sources`,
     noExcerpt: 'No excerpt available for this article.',
-    openOriginalSource: 'Open original source',
+    openOriginalSource: 'Open article',
     readerMode: 'Reader mode',
     closeReader: 'Close reader',
     loadingReader: 'Loading reader view...',
@@ -128,9 +136,10 @@ export const translations = {
   it: {
     pageTitle: 'News Flow',
     pageSubtitle: 'Raccolta notizie con aggiornamenti schedulati, filtri server-side e tagging persistente.',
-    liveActive: 'Live attivo',
-    liveOffline: 'Live offline',
-    liveDisabled: 'Auto refresh disattivato',
+    autoRefreshStatus: 'Auto refresh',
+    liveActive: 'Attivo',
+    liveOffline: 'Riconnessione',
+    liveDisabled: 'Spento',
     refresh: 'Aggiorna',
     refreshHandledByLive: 'L\'auto refresh live sta gestendo gli aggiornamenti',
     searchPlaceholder: 'Cerca su titolo, contenuto o topic...',
@@ -140,6 +149,9 @@ export const translations = {
     filtersTitle: 'Filtri',
     filtersSubtitle: 'Fonte, topic e finestra temporale.',
     latestHours: ({ hours }) => `Ultime ${hours} ore`,
+    filterActiveCount: ({ count }) => `${count} attivi`,
+    filterAvailableCount: ({ count }) => `${count} disponibili`,
+    filterSelectedCount: ({ count }) => `${count} selezionati`,
     resetFilters: 'Reset filtri',
     sources: 'Fonti',
     topics: 'Topic',
@@ -152,6 +164,10 @@ export const translations = {
     saveSettings: 'Salva impostazioni',
     saving: 'Salvataggio...',
     cancel: 'Annulla',
+    importExport: 'Importa ed esporta',
+    importExportHelp: 'Esporta un backup della configurazione corrente oppure importane uno per sostituire fonti personali e preferenze di esclusione.',
+    export: 'Esporta',
+    import: 'Importa',
     exportSettings: 'Esporta impostazioni',
     importSettings: 'Importa impostazioni',
     importSettingsHelp: 'L\'import sostituisce le tue fonti personali correnti e le preferenze sulle fonti escluse.',
@@ -232,7 +248,7 @@ export const translations = {
     singleSource: 'Fonte singola',
     sourceCount: ({ count }) => `${count} fonti`,
     noExcerpt: 'Nessun estratto disponibile per questo articolo.',
-    openOriginalSource: 'Apri la fonte originale',
+    openOriginalSource: 'Apri articolo',
     readerMode: 'Modalita lettura',
     closeReader: 'Chiudi lettura',
     loadingReader: 'Caricamento modalita lettura...',
@@ -289,6 +305,49 @@ export function createTranslator(locale) {
 
 export function getDateLocale(locale) {
   return locale === 'it' ? 'it-IT' : 'en-US';
+}
+
+const topicTranslations = {
+  politica: { en: 'Politics', it: 'Politica' },
+  politics: { en: 'Politics', it: 'Politica' },
+  economia: { en: 'Economy', it: 'Economia' },
+  economy: { en: 'Economy', it: 'Economia' },
+  mercati: { en: 'Markets', it: 'Mercati' },
+  markets: { en: 'Markets', it: 'Mercati' },
+  tecnologia: { en: 'Technology', it: 'Tecnologia' },
+  technology: { en: 'Technology', it: 'Tecnologia' },
+  tech: { en: 'Technology', it: 'Tecnologia' },
+  scienza: { en: 'Science', it: 'Scienza' },
+  science: { en: 'Science', it: 'Scienza' },
+  cronaca: { en: 'Local news', it: 'Cronaca' },
+  esteri: { en: 'World', it: 'Esteri' },
+  world: { en: 'World', it: 'Esteri' },
+  international: { en: 'World', it: 'Esteri' },
+  salute: { en: 'Health', it: 'Salute' },
+  health: { en: 'Health', it: 'Salute' },
+  sport: { en: 'Sport', it: 'Sport' },
+  sports: { en: 'Sport', it: 'Sport' },
+  cultura: { en: 'Culture', it: 'Cultura' },
+  culture: { en: 'Culture', it: 'Cultura' },
+  spettacolo: { en: 'Entertainment', it: 'Spettacolo' },
+  entertainment: { en: 'Entertainment', it: 'Spettacolo' },
+  ambiente: { en: 'Environment', it: 'Ambiente' },
+  environment: { en: 'Environment', it: 'Ambiente' },
+  clima: { en: 'Climate', it: 'Clima' },
+  climate: { en: 'Climate', it: 'Clima' },
+  sicurezza: { en: 'Security', it: 'Sicurezza' },
+  security: { en: 'Security', it: 'Sicurezza' }
+};
+
+export function getLocalizedTopic(topic, locale = 'en') {
+  const normalized = String(topic || '').trim().toLowerCase();
+  const translation = topicTranslations[normalized];
+
+  if (translation) {
+    return translation[locale] || translation.en;
+  }
+
+  return topic;
 }
 
 const languageMeta = {

@@ -3,13 +3,15 @@ import {
   Cog,
   Filter,
   LogOut,
+  PauseCircle,
   RefreshCw,
+  Rss,
   Search,
+  Tags,
   Clock3,
   ChevronDown,
   ChevronUp,
   User,
-  Wifi,
   WifiOff
 } from 'lucide-react';
 import { fetchNews, isRequestCanceled } from '../services/api';
@@ -20,9 +22,10 @@ import BrandMark from './BrandMark';
 import SettingsPanel from './SettingsPanel';
 import useLatestRequest from '../hooks/useLatestRequest';
 import useWebSocket from '../hooks/useWebSocket';
-import { createTranslator, getDateLocale, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
+import { createTranslator, getDateLocale, getLocalizedTopic, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
 import { getSettingsLimits } from '../config/settingsLimits';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
+import { getTopicPresentation } from '../topicPresentation';
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -68,7 +71,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     lastNewsUpdate,
     newArticlesCount,
     updateSubscriptionFilters,
-    resetNewArticlesCount
+    resetNewArticlesCount,
+    markGroupsSeen
   } = useWebSocket('', websocketMessages);
   const liveStatusLabel = autoRefreshEnabled
     ? (isConnected ? t('liveActive') : t('liveOffline'))
@@ -93,6 +97,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
+  const visibleGroupIds = useMemo(() => news.map((group) => group?.id).filter(Boolean), [news]);
   const recentHours = Math.max(
     settingsLimits.recentHours.min,
     Math.min(Number(currentUser?.settings?.recentHours) || settingsLimits.recentHours.max, settingsLimits.recentHours.max)
@@ -107,9 +112,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     return availableSources.filter((source) => !excludedSourceIds.includes(source.id));
   }, [availableSources, excludedSourceIds]);
   const isLiveAutoRefreshWorking = autoRefreshEnabled && isConnected && !debouncedSearch && !showRecentOnly;
-  const refreshButtonLabel = isLiveAutoRefreshWorking
-    ? t('refreshHandledByLive')
-    : (newArticlesCount > 0 ? t('refreshNewArticles', { count: newArticlesCount }) : t('refresh'));
+  const refreshButtonLabel = isLiveAutoRefreshWorking ? t('refreshHandledByLive') : t('refresh');
 
   useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
@@ -202,6 +205,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       sourceIds: activeFilters.sourceIds
     });
   }, [activeFilters.sourceIds, activeFilters.topics, isConnected, updateSubscriptionFilters]);
+
+  useEffect(() => {
+    if (visibleGroupIds.length === 0) {
+      return;
+    }
+
+    markGroupsSeen(visibleGroupIds);
+  }, [lastNewsUpdate?.timestamp, markGroupsSeen, visibleGroupIds]);
 
   useEffect(() => {
     if (!lastNewsUpdate?.timestamp || lastNewsUpdate.timestamp === lastNewsUpdateRef.current) {
@@ -298,13 +309,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                       : 'bg-white text-gray-600 hover:bg-gray-100'
                   }`}
                   aria-label={refreshButtonLabel}
-                  title={refreshButtonLabel}
                 >
                   <RefreshCw className={`h-6 w-6 ${(loading || loadingMore) ? 'animate-spin' : ''}`} aria-hidden="true" />
 
                   {!isLiveAutoRefreshWorking && newArticlesCount > 0 && (
-                    <span className="absolute right-0 top-0 inline-flex min-h-5 min-w-5 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white">
-                      {newArticlesCount}
+                    <span className="absolute right-0 top-0 inline-flex h-3.5 w-3.5 -translate-y-1/3 translate-x-1/3 rounded-full border-2 border-white bg-red-500 shadow-sm" aria-hidden="true">
                     </span>
                   )}
                 </button>
@@ -323,65 +332,63 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 </button>
 
                 {userMenuOpen && (
-                  <div className="absolute right-0 top-14 z-30 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl" role="menu">
-                    <div className="border-b border-slate-100 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{t('userMenu')}</p>
-                      <p className="mt-1 text-sm font-medium text-slate-900">{currentUser?.user?.username}</p>
-                    </div>
-                    <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-600">
-                      {isConnected ? (
-                        <Wifi className="h-4 w-4 text-emerald-600" aria-hidden="true" />
-                      ) : (
-                        <WifiOff className="h-4 w-4 text-amber-600" aria-hidden="true" />
-                      )}
-                      <span>{liveStatusLabel}</span>
-                    </div>
-                    <div className="border-b border-slate-100 px-4 py-3">
-                      <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 p-1">
-                        <button
-                          type="button"
-                          onClick={() => setLocale('it')}
-                          className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                            locale === 'it' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-                          }`}
-                          aria-pressed={locale === 'it'}
-                        >
-                          IT
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setLocale('en')}
-                          className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                            locale === 'en' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-                          }`}
-                          aria-pressed={locale === 'en'}
-                        >
-                          EN
-                        </button>
+                  <div className="absolute right-0 top-14 z-30 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur" role="menu">
+                    <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-4">
+                      <div className="flex items-start gap-3">
+                        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-sm">
+                          <User className="h-5 w-5" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{t('userMenu')}</p>
+                          <p className="mt-1 truncate text-sm font-semibold text-slate-900">{currentUser?.user?.username}</p>
+                        </div>
                       </div>
                     </div>
-                    <div className="p-2">
-                      <button
-                         type="button"
-                         onClick={() => {
-                           setSettingsOpen(true);
-                           setUserMenuOpen(false);
-                         }}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+
+                    <div className="space-y-3 p-3">
+                      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm text-slate-700">
+                        <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${!autoRefreshEnabled ? 'bg-slate-200 text-slate-700' : (isConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}`}>
+                          {!autoRefreshEnabled ? (
+                            <PauseCircle className="h-4 w-4" aria-hidden="true" />
+                          ) : (isConnected ? <RefreshCw className="h-4 w-4" aria-hidden="true" /> : <WifiOff className="h-4 w-4" aria-hidden="true" />)}
+                        </span>
+                        <div className="min-w-0 leading-5">
+                          <p className="font-medium text-slate-800">{t('autoRefreshStatus')}</p>
+                          <p className="text-slate-500">{liveStatusLabel}</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 pt-1">
+                        <button
+                          type="button"
+                        onClick={() => {
+                          setSettingsOpen(true);
+                          setUserMenuOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
                         role="menuitem"
                       >
-                        <Cog className="h-4 w-4" />
-                        {t('settings')}
+                        <span className="flex items-center gap-3">
+                          <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                            <Cog className="h-4 w-4" />
+                          </span>
+                          {t('settings')}
+                        </span>
                       </button>
                       <button
                         type="button"
                         onClick={onLogout}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-left text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100"
                         role="menuitem"
                       >
-                        <LogOut className="h-4 w-4" />
-                        {t('logout')}
+                        <span className="flex items-center gap-3">
+                          <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-rose-700">
+                            <LogOut className="h-4 w-4" />
+                          </span>
+                          {t('logout')}
+                        </span>
                       </button>
+                    </div>
                     </div>
                   </div>
                 )}
@@ -397,7 +404,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={t('searchPlaceholder')}
-                className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+                className="w-full bg-transparent text-base outline-none placeholder:text-slate-400 sm:text-sm"
               />
             </label>
 
@@ -443,7 +450,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   type="button"
                   onClick={() => setShowRecentOnly((value) => !value)}
                   className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                    showRecentOnly ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
+                    showRecentOnly ? 'bg-amber-500 text-white shadow-sm' : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
                   }`}
                 >
                   <Clock3 className="h-4 w-4" aria-hidden="true" />
@@ -454,7 +461,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   <button
                     type="button"
                     onClick={resetFilters}
-                    className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                    className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200"
                   >
                     {t('resetFilters')}
                   </button>
@@ -463,7 +470,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
               <div className="grid gap-6 lg:grid-cols-2">
                 <div>
-                  <h3 className="mb-3 text-sm font-semibold text-slate-700">{t('sources')}</h3>
+                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-sky-700">
+                    <Rss className="h-4 w-4" aria-hidden="true" />
+                    <span>{t('sources')}</span>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {visibleAvailableSources.map((source) => {
                       const isActive = activeFilters.sourceIds.includes(source.id);
@@ -472,13 +482,18 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                           key={source.id}
                           type="button"
                           onClick={() => toggleFilter('sourceIds', source.id)}
-                          className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                          className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
                             isActive
-                              ? 'bg-sky-600 text-white'
+                              ? 'bg-sky-600 text-white shadow-sm'
                               : 'bg-sky-100 text-sky-900 hover:bg-sky-200'
                           }`}
                         >
-                          {source.name} {source.count > 0 ? `(${source.count})` : ''}
+                          <span>{source.name}</span>
+                          {source.count > 0 && (
+                            <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-sky-700'}`}>
+                              {source.count}
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -486,22 +501,30 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 </div>
 
                 <div>
-                  <h3 className="mb-3 text-sm font-semibold text-slate-700">{t('topics')}</h3>
+                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                    <Tags className="h-4 w-4" aria-hidden="true" />
+                    <span>{t('topics')}</span>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {availableTopics.map((topic) => {
                       const isActive = activeFilters.topics.includes(topic.topic);
+                      const { Icon } = getTopicPresentation(topic.topic);
                       return (
                         <button
                           key={topic.topic}
                           type="button"
                           onClick={() => toggleFilter('topics', topic.topic)}
-                          className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                          className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
                             isActive
-                              ? 'bg-emerald-600 text-white'
+                              ? 'bg-emerald-600 text-white shadow-sm'
                               : 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200'
                           }`}
                         >
-                          {topic.topic} ({topic.count})
+                          <Icon className={`h-4 w-4 ${isActive ? 'text-white' : 'text-current'}`} aria-hidden="true" />
+                          <span>{getLocalizedTopic(topic.topic, locale)}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-emerald-700'}`}>
+                            {topic.count}
+                          </span>
                         </button>
                       );
                     })}
@@ -532,8 +555,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 <NewsCard
                   key={group.id}
                   group={group}
-                  activeFilters={activeFilters}
-                  toggleFilter={toggleFilter}
                   locale={locale}
                   t={t}
                   onOpenReader={openReader}

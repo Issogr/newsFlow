@@ -11,6 +11,7 @@ const useWebSocket = (url = '', messages = {}, enabled = true) => {
   const isConnectedRef = useRef(false);
   const notificationIdRef = useRef(0);
   const announcedGroupIdsRef = useRef(new Set());
+  const pendingGroupIdsRef = useRef(new Set());
 
   const [isConnected, setIsConnected] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -40,6 +41,7 @@ const useWebSocket = (url = '', messages = {}, enabled = true) => {
       setLastNewsUpdate(null);
       setNewArticlesCount(0);
       announcedGroupIdsRef.current = new Set();
+      pendingGroupIdsRef.current = new Set();
       return undefined;
     }
 
@@ -108,11 +110,21 @@ const useWebSocket = (url = '', messages = {}, enabled = true) => {
         announcedGroupIdsRef.current.add(groupId);
       });
 
+      if (incomingGroupIds.length > 0) {
+        unseenGroupIds.forEach((groupId) => {
+          pendingGroupIdsRef.current.add(groupId);
+        });
+      }
+
       setLastNewsUpdate({
         ...payload,
         count: nextCount
       });
-      setNewArticlesCount((current) => current + nextCount);
+      if (incomingGroupIds.length > 0) {
+        setNewArticlesCount(pendingGroupIdsRef.current.size);
+      } else {
+        setNewArticlesCount((current) => current + nextCount);
+      }
       pushNotification({
         id: createNotificationId(),
         type: 'info',
@@ -162,7 +174,26 @@ const useWebSocket = (url = '', messages = {}, enabled = true) => {
   }, []);
 
   const resetNewArticlesCount = useCallback(() => {
+    pendingGroupIdsRef.current = new Set();
     setNewArticlesCount(0);
+  }, []);
+
+  const markGroupsSeen = useCallback((groupIds = []) => {
+    if (!Array.isArray(groupIds) || groupIds.length === 0 || pendingGroupIdsRef.current.size === 0) {
+      return;
+    }
+
+    let removedAny = false;
+
+    groupIds.filter(Boolean).forEach((groupId) => {
+      if (pendingGroupIdsRef.current.delete(groupId)) {
+        removedAny = true;
+      }
+    });
+
+    if (removedAny) {
+      setNewArticlesCount(pendingGroupIdsRef.current.size);
+    }
   }, []);
 
   const removeNotification = useCallback((id) => {
@@ -176,6 +207,7 @@ const useWebSocket = (url = '', messages = {}, enabled = true) => {
     newArticlesCount,
     updateSubscriptionFilters,
     resetNewArticlesCount,
+    markGroupsSeen,
     removeNotification
   };
 };

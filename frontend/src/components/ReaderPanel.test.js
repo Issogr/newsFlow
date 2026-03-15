@@ -65,6 +65,11 @@ const t = (key, params = {}) => {
 describe('ReaderPanel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    document.body.style.overflow = '';
+  });
+
+  afterEach(() => {
+    document.body.style.overflow = '';
   });
 
   test('keeps the latest article payload when an older reader request resolves later', async () => {
@@ -128,5 +133,26 @@ describe('ReaderPanel', () => {
 
     expect(container.firstChild).toBeInTheDocument();
     expect(container.querySelector('.lg\\:justify-center')).toBeInTheDocument();
+  });
+
+  test('locks body scroll while the reader is open', () => {
+    fetchReaderArticle.mockImplementation(() => new Promise(() => {}));
+
+    const { unmount } = render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="right"
+        locale="en"
+        t={t}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(document.body.style.overflow).toBe('hidden');
+
+    unmount();
+
+    expect(document.body.style.overflow).toBe('');
   });
 });
