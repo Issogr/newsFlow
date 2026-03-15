@@ -491,6 +491,96 @@ describe('database queries and user data', () => {
     expect(database.getArticles({}, { userId: 'user-1' })).toEqual([]);
   });
 
+  test('falls back safely when stored user settings JSON is malformed', () => {
+    const now = new Date().toISOString();
+
+    database.createUser({
+      id: 'user-1',
+      username: 'alice',
+      passwordHash: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    database.getDb().prepare(`
+      INSERT INTO user_settings (
+        user_id,
+        default_language,
+        article_retention_hours,
+        recent_hours,
+        auto_refresh_enabled,
+        reader_panel_position,
+        last_seen_release_notes_version,
+        default_source_ids,
+        excluded_sub_source_ids,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'user-1',
+      'en',
+      12,
+      2,
+      1,
+      'right',
+      '3.2.3',
+      '{bad json',
+      '"oops"',
+      now
+    );
+
+    expect(database.getUserSettings('user-1')).toEqual(expect.objectContaining({
+      userId: 'user-1',
+      defaultLanguage: 'en',
+      excludedSourceIds: [],
+      excludedSubSourceIds: []
+    }));
+  });
+
+  test('falls back safely when cached reader blocks are malformed JSON', () => {
+    const now = new Date().toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'article-1',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Readable story',
+        description: 'Reader description',
+        content: 'Reader content',
+        url: 'https://example.com/readable-story',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+
+    database.getDb().prepare(`
+      INSERT INTO reader_cache (
+        article_id,
+        url,
+        title,
+        content_text,
+        content_blocks,
+        minutes_to_read,
+        fetched_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'article-1',
+      'https://example.com/readable-story',
+      'Readable story',
+      'Reader content',
+      '{bad json',
+      2,
+      now
+    );
+
+    expect(database.getReaderCache('article-1')).toEqual(expect.objectContaining({
+      articleId: 'article-1',
+      title: 'Readable story',
+      contentBlocks: null,
+      minutesToRead: 2
+    }));
+  });
+
   test('builds source and topic stats with canonical source ids and search filters', () => {
     const now = Date.now();
     const recentIso = new Date(now - (30 * 60 * 1000)).toISOString();
