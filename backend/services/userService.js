@@ -56,14 +56,6 @@ function getDefaultSettings() {
   };
 }
 
-function getGlobalSourceIds() {
-  return getConfiguredSourceGroupIds();
-}
-
-function getGroupedSubSourceIds() {
-  return getGroupedConfiguredSourceIds();
-}
-
 function getUserSettings(userId) {
   return database.getUserSettings(userId) || getDefaultSettings();
 }
@@ -356,8 +348,8 @@ function exportUserSettings(userId) {
 async function importUserSettings(userId, payload = {}) {
   const importedSettings = payload.settings || {};
   const importedCustomSources = Array.isArray(payload.customSources) ? payload.customSources : [];
-  const globalSourceIds = getGlobalSourceIds();
-  const groupedSubSourceIds = getGroupedSubSourceIds();
+  const globalSourceIds = getConfiguredSourceGroupIds();
+  const groupedSubSourceIds = getGroupedConfiguredSourceIds();
 
   await mapWithConcurrency(importedCustomSources, 4, async (source) => {
     const name = String(source?.name || '').trim();

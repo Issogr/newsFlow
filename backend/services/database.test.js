@@ -19,7 +19,6 @@ const groupedSourceFamily = groupedSource
 const groupedSourceFamilyId = groupedSourceFamily?.id || groupedSource?.id || 'grouped-source';
 const groupedSourceFamilyName = groupedSourceFamily?.name || groupedSource?.name || 'Grouped Source';
 const primarySourceFamilyId = getCanonicalSourceId(primarySource.id, primarySource.name);
-const primarySourceFamilyName = getCanonicalSourceName(primarySource.id, primarySource.name);
 const secondarySourceFamilyId = getCanonicalSourceId(secondarySource.id, secondarySource.name);
 const secondarySourceFamilyName = getCanonicalSourceName(secondarySource.id, secondarySource.name);
 
