@@ -2,7 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 const logger = require('../utils/logger');
-const configuredSources = require('../config/newsSources');
 const topicNormalizer = require('./topicNormalizer');
 const createArticleRepository = require('./databaseArticles');
 const createAuthRepository = require('./databaseAuth');
@@ -124,14 +123,7 @@ const authRepository = createAuthRepository({ getDb });
 const readerCacheRepository = createReaderCacheRepository({ getDb });
 const userStateRepository = createUserStateRepository({ getDb });
 const dbSchema = createDatabaseSchema({
-  logger,
-  configuredSources,
-  topicNormalizer,
-  normalizeArticleUrl,
-  getConfiguredSourceGroupIds,
-  getLegacyConfiguredSourceGroupIds,
-  getCustomSourceGroups,
-  getResolvedSourceMetadata
+  logger
 });
 
 function ensureDatabaseDirectory() {
@@ -151,7 +143,7 @@ function getDb() {
   db.pragma('temp_store = MEMORY');
 
   dbSchema.initializeSchema(db);
-  dbSchema.runMigrations(db);
+  dbSchema.ensureSupportedSchema(db);
   logger.info(`SQLite database ready at ${DB_PATH}`);
 
   return db;
