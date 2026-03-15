@@ -176,7 +176,7 @@ describe('NewsAggregator', () => {
     });
 
     expect(useWebSocket).toHaveBeenCalledWith('', expect.any(Object));
-    expect(screen.getByRole('button', { name: 'Load 3 new articles' })).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Refresh' })[1]).toBeEnabled();
   });
 
   test('marks already visible groups as seen after loading news', async () => {

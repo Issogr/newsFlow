@@ -112,9 +112,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     return availableSources.filter((source) => !excludedSourceIds.includes(source.id));
   }, [availableSources, excludedSourceIds]);
   const isLiveAutoRefreshWorking = autoRefreshEnabled && isConnected && !debouncedSearch && !showRecentOnly;
-  const refreshButtonLabel = isLiveAutoRefreshWorking
-    ? t('refreshHandledByLive')
-    : (newArticlesCount > 0 ? t('refreshNewArticles', { count: newArticlesCount }) : t('refresh'));
+  const refreshButtonLabel = isLiveAutoRefreshWorking ? t('refreshHandledByLive') : t('refresh');
 
   useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
@@ -311,13 +309,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                       : 'bg-white text-gray-600 hover:bg-gray-100'
                   }`}
                   aria-label={refreshButtonLabel}
-                  title={refreshButtonLabel}
                 >
                   <RefreshCw className={`h-6 w-6 ${(loading || loadingMore) ? 'animate-spin' : ''}`} aria-hidden="true" />
 
                   {!isLiveAutoRefreshWorking && newArticlesCount > 0 && (
-                    <span className="absolute right-0 top-0 inline-flex min-h-5 min-w-5 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white">
-                      {newArticlesCount}
+                    <span className="absolute right-0 top-0 inline-flex h-3.5 w-3.5 -translate-y-1/3 translate-x-1/3 rounded-full border-2 border-white bg-red-500 shadow-sm" aria-hidden="true">
                     </span>
                   )}
                 </button>
