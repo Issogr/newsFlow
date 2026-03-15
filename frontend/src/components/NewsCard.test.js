@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import NewsCard from './NewsCard';
 
 const t = (key) => key;
@@ -30,6 +30,76 @@ describe('NewsCard', () => {
     );
 
     expect(screen.getByRole('link', { name: 'openOriginalSource' })).toHaveAttribute('href', 'https://example.com/story');
+  });
+
+  test('renders the first safe article image in the card', () => {
+    render(
+      <NewsCard
+        group={{
+          ...group,
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              image: 'https://example.com/image.jpg'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByRole('img', { name: 'Headline' })).toHaveAttribute('src', 'https://example.com/image.jpg');
+  });
+
+  test('hides unsafe or broken article images', () => {
+    const { rerender } = render(
+      <NewsCard
+        group={{
+          ...group,
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              image: 'javascript:alert(1)'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('img', { name: 'Headline' })).not.toBeInTheDocument();
+
+    rerender(
+      <NewsCard
+        group={{
+          ...group,
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              image: 'https://example.com/broken.jpg'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    const image = screen.getByRole('img', { name: 'Headline' });
+    fireEvent.error(image);
+
+    expect(screen.queryByRole('img', { name: 'Headline' })).not.toBeInTheDocument();
   });
 
   test('disables unsafe external links', () => {
