@@ -49,6 +49,7 @@ function getDefaultSettings() {
     articleRetentionHours: GLOBAL_RETENTION_HOURS,
     recentHours: MAX_RECENT_HOURS,
     autoRefreshEnabled: true,
+    showNewsImages: true,
     readerPanelPosition: 'right',
     lastSeenReleaseNotesVersion: '',
     excludedSourceIds: [],
@@ -101,6 +102,9 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     autoRefreshEnabled: typeof payload.autoRefreshEnabled === 'boolean'
       ? payload.autoRefreshEnabled
       : currentSettings.autoRefreshEnabled !== false,
+    showNewsImages: typeof payload.showNewsImages === 'boolean'
+      ? payload.showNewsImages
+      : currentSettings.showNewsImages !== false,
     readerPanelPosition: normalizeReaderPanelPosition(payload.readerPanelPosition || currentSettings.readerPanelPosition),
     lastSeenReleaseNotesVersion: Object.prototype.hasOwnProperty.call(payload, 'lastSeenReleaseNotesVersion')
       ? normalizeReleaseNotesVersion(payload.lastSeenReleaseNotesVersion)

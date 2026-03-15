@@ -55,6 +55,30 @@ describe('NewsCard', () => {
     expect(screen.getByRole('img', { name: 'Headline' })).toHaveAttribute('src', 'https://example.com/image.jpg');
   });
 
+  test('does not render images when card images are disabled', () => {
+    render(
+      <NewsCard
+        group={{
+          ...group,
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              image: 'https://example.com/image.jpg'
+            }
+          ]
+        }}
+        showImages={false}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('img', { name: 'Headline' })).not.toBeInTheDocument();
+  });
+
   test('hides unsafe or broken article images', () => {
     const { rerender } = render(
       <NewsCard

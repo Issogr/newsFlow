@@ -47,12 +47,12 @@ function formatPublicationDate(dateString, locale) {
   }
 }
 
-const NewsCard = memo(({ group, locale, t, onOpenReader }) => {
+const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) => {
   const hasItems = Boolean(group?.items?.length);
 
   const sourceEntries = getSourceEntries(group);
   const safeOriginalUrl = getSafeExternalUrl(group?.url);
-  const safeImageUrl = getGroupImageUrl(group);
+  const safeImageUrl = showImages ? getGroupImageUrl(group) : '';
   const [imageVisible, setImageVisible] = useState(Boolean(safeImageUrl));
 
   useEffect(() => {

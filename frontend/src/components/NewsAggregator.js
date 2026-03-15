@@ -56,6 +56,7 @@ const getSourceReloadSignature = (excludedSourceIds, excludedSubSourceIds, custo
 const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogVersion, onOpenReleaseNotes }) => {
   const preferredLanguage = currentUser?.settings?.defaultLanguage;
   const autoRefreshEnabled = currentUser?.settings?.autoRefreshEnabled !== false;
+  const showNewsImages = currentUser?.settings?.showNewsImages !== false;
   const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
   const t = useMemo(() => createTranslator(locale), [locale]);
   const dateLocale = useMemo(() => getDateLocale(locale), [locale]);
@@ -563,6 +564,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 <NewsCard
                   key={group.id}
                   group={group}
+                  showImages={showNewsImages}
                   locale={locale}
                   t={t}
                   onOpenReader={openReader}

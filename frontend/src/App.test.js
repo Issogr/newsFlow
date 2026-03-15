@@ -34,6 +34,7 @@ function createCurrentUser(settings = {}) {
       articleRetentionHours: 24,
       recentHours: 3,
       autoRefreshEnabled: true,
+      showNewsImages: true,
       readerPanelPosition: 'right',
       lastSeenReleaseNotesVersion: '',
       excludedSourceIds: [],

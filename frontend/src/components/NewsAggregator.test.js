@@ -46,6 +46,7 @@ const currentUser = {
     articleRetentionHours: 24,
     recentHours: 3,
     autoRefreshEnabled: true,
+    showNewsImages: true,
     readerPanelPosition: 'right',
     excludedSourceIds: [],
     excludedSubSourceIds: []
