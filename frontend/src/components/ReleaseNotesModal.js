@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { Sparkles, X } from 'lucide-react';
+import { Github, Sparkles, X } from 'lucide-react';
+import { PROJECT_GITHUB_URL } from '../config/projectLinks';
 
 const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss }) => {
   useEffect(() => {
@@ -49,7 +50,16 @@ const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss }) => {
           </ul>
         </div>
 
-        <div className="flex shrink-0 justify-end border-t border-slate-200 px-6 py-5">
+        <div className="flex shrink-0 items-center justify-between border-t border-slate-200 px-6 py-5">
+          <a
+            href={PROJECT_GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="GitHub"
+            className="inline-flex items-center justify-center rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+          >
+            <Github className="h-5 w-5" />
+          </a>
           <button
             type="button"
             onClick={onDismiss}

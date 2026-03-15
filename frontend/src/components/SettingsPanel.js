@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
-import { Settings, X } from 'lucide-react';
+import { Github, Settings, X } from 'lucide-react';
 import SettingsCustomSourcesSection from './settings/SettingsCustomSourcesSection';
 import SettingsExclusionsSection from './settings/SettingsExclusionsSection';
 import SettingsPreferencesSection from './settings/SettingsPreferencesSection';
 import useSettingsPanelState from './settings/useSettingsPanelState';
+import { PROJECT_GITHUB_URL } from '../config/projectLinks';
 
 const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, onUserUpdate }) => {
   const {
@@ -123,13 +124,24 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
         </div>
 
         <div className="flex items-center justify-between gap-4 border-t border-slate-200 px-5 py-5 sm:px-6">
-          <button
-            type="button"
-            onClick={onOpenReleaseNotes}
-            className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
-          >
-            {t('changelogVersionLabel', { version: currentChangelogVersion })}
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href={PROJECT_GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="GitHub"
+              className="inline-flex items-center justify-center rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            >
+              <Github className="h-5 w-5" />
+            </a>
+            <button
+              type="button"
+              onClick={onOpenReleaseNotes}
+              className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
+            >
+              {t('changelogVersionLabel', { version: currentChangelogVersion })}
+            </button>
+          </div>
           <button type="button" onClick={handleSave} disabled={saving} className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
             {saving ? t('saving') : t('saveSettings')}
           </button>

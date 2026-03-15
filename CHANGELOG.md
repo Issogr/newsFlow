@@ -6,6 +6,7 @@
 - intentionally limited that image fallback to a small number of recent imageless articles per feed to keep refresh latency and source-site load under control
 - refreshed topic filter chips to use the new outlined style with matching topic-icon badges while keeping their sizing aligned with source filters
 - added a user setting to hide images from news cards for a more compact feed layout
+- added a GitHub project shortcut to the settings panel and release-notes popup
 
 ## 3.2.4
 

@@ -9,7 +9,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '⚡ To keep refreshes fast and avoid slowing down the whole app, this extra image recovery is used only for a small number of recent articles instead of every story.',
       '📰 If a publisher already provides a valid image in the feed, News Flow still uses it right away as before.',
       '🎛️ Topic filters now match the cleaner chip style used elsewhere, with outlined pills and topic icons that are easier to scan.',
-      '⚙️ You can now turn card images on or off from Settings if you prefer a more compact news list.'
+      '⚙️ You can now turn card images on or off from Settings if you prefer a more compact news list.',
+      '🔗 A GitHub shortcut is now available in Settings and release notes, so opening the project page takes one click.'
     ]
   },
   it: {
@@ -21,7 +22,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '⚡ Per mantenere gli aggiornamenti veloci e non rallentare tutta l\'app, questo recupero extra delle immagini viene usato solo su un piccolo numero di articoli recenti e non su tutte le notizie.',
       '📰 Se una fonte fornisce gia un\'immagine valida nel feed, News Flow continua a usarla subito come sempre.',
       '🎛️ I filtri dei topic ora seguono uno stile piu pulito e coerente, con chip outline e icone dei topic piu facili da leggere.',
-      '⚙️ Ora puoi attivare o disattivare le immagini nelle card dalle Impostazioni se preferisci una lista notizie piu compatta.'
+      '⚙️ Ora puoi attivare o disattivare le immagini nelle card dalle Impostazioni se preferisci una lista notizie piu compatta.',
+      '🔗 Ora trovi un collegamento rapido a GitHub nelle Impostazioni e nelle note di rilascio, cosi puoi aprire la pagina del progetto con un solo clic.'
     ]
   }
 };
