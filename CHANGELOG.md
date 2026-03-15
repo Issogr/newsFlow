@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.3
+
+- refreshed the frontend experience with clearer settings, a simpler top bar and user menu, more readable filters, easier-to-scan news cards, and tighter mobile behavior including full-screen settings and iPhone input zoom fixes
+- made refresh behavior easier to understand by keeping new-article availability aligned with already loaded content and replacing the numeric badge with a simple dot
+- locked background scrolling consistently for settings, changelog, and reader mode overlays
+- localized canonical topic labels across the UI, added shared topic icons, and simplified article actions with the new `Open article` wording
+
 ## 3.2.2
 
 - fixed same-source duplicate articles during refreshes by switching article identity to stable canonical URLs before falling back to feed GUIDs or content metadata
