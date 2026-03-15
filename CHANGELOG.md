@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.2.5
+
+- improved article image coverage in news cards by falling back to article-page metadata when feeds omit image data
+- intentionally limited that image fallback to a small number of recent imageless articles per feed to keep refresh latency and source-site load under control
+
 ## 3.2.4
 
 - corrected future-dated articles during ingestion so a bad source timestamp no longer leaves one story pinned at the top of the feed

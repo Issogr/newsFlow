@@ -1,15 +1,13 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.2.4',
+  version: '3.2.5',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'Here is a quick overview of the latest changes in News Flow.',
     items: [
-      '🕒 Articles with a wrong future date are now corrected automatically, so a typo from a source can no longer leave one story stuck at the top.',
-      '🧹 Existing stories already saved with a future date are cleaned up automatically during refreshes, so the feed returns to the right order without manual fixes.',
-      '🔒 Opening articles is now safer and more reliable, including better handling of unusual or broken source links.',
-      '🔄 Live updates now respect your source exclusions more consistently, so hidden sources stay out of your feed.',
-      '⚙️ Personal settings and custom source changes now behave more predictably, especially while editing and saving your setup.'
+      '🖼️ News cards can now show article images more often, even when some publishers leave the picture out of the feed itself.',
+      '⚡ To keep refreshes fast and avoid slowing down the whole app, this extra image recovery is used only for a small number of recent articles instead of every story.',
+      '📰 If a publisher already provides a valid image in the feed, News Flow still uses it right away as before.'
     ]
   },
   it: {
@@ -17,11 +15,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Ecco una panoramica rapida delle ultime novita di News Flow.',
     items: [
-      '🕒 Gli articoli con una data impostata per errore nel futuro vengono ora corretti automaticamente, cosi una svista della fonte non puo piu lasciare una notizia bloccata in cima.',
-      '🧹 Le notizie gia salvate con una data futura vengono sistemate automaticamente durante gli aggiornamenti, cosi il feed torna nel giusto ordine senza interventi manuali.',
-      '🔒 L\'apertura degli articoli e ora piu sicura e affidabile, anche quando una fonte usa link insoliti o difettosi.',
-      '🔄 Gli aggiornamenti live rispettano meglio le fonti escluse, cosi le fonti nascoste restano fuori dal tuo feed.',
-      '⚙️ Le impostazioni personali e le modifiche alle fonti custom ora si comportano in modo piu prevedibile, soprattutto durante modifica e salvataggio.'
+      '🖼️ Le news card ora riescono a mostrare piu spesso l\'immagine dell\'articolo, anche quando alcuni giornali non la includono direttamente nel feed.',
+      '⚡ Per mantenere gli aggiornamenti veloci e non rallentare tutta l\'app, questo recupero extra delle immagini viene usato solo su un piccolo numero di articoli recenti e non su tutte le notizie.',
+      '📰 Se una fonte fornisce gia un\'immagine valida nel feed, News Flow continua a usarla subito come sempre.'
     ]
   }
 };
