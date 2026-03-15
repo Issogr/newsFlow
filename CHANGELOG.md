@@ -4,6 +4,7 @@
 
 - improved article image coverage in news cards by falling back to article-page metadata when feeds omit image data
 - intentionally limited that image fallback to a small number of recent imageless articles per feed to keep refresh latency and source-site load under control
+- refreshed topic filter chips to use the new outlined style with matching topic-icon badges while keeping their sizing aligned with source filters
 
 ## 3.2.4
 

@@ -7,7 +7,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     items: [
       '🖼️ News cards can now show article images more often, even when some publishers leave the picture out of the feed itself.',
       '⚡ To keep refreshes fast and avoid slowing down the whole app, this extra image recovery is used only for a small number of recent articles instead of every story.',
-      '📰 If a publisher already provides a valid image in the feed, News Flow still uses it right away as before.'
+      '📰 If a publisher already provides a valid image in the feed, News Flow still uses it right away as before.',
+      '🎛️ Topic filters now match the cleaner chip style used elsewhere, with outlined pills and topic icons that are easier to scan.'
     ]
   },
   it: {
@@ -17,7 +18,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     items: [
       '🖼️ Le news card ora riescono a mostrare piu spesso l\'immagine dell\'articolo, anche quando alcuni giornali non la includono direttamente nel feed.',
       '⚡ Per mantenere gli aggiornamenti veloci e non rallentare tutta l\'app, questo recupero extra delle immagini viene usato solo su un piccolo numero di articoli recenti e non su tutte le notizie.',
-      '📰 Se una fonte fornisce gia un\'immagine valida nel feed, News Flow continua a usarla subito come sempre.'
+      '📰 Se una fonte fornisce gia un\'immagine valida nel feed, News Flow continua a usarla subito come sempre.',
+      '🎛️ I filtri dei topic ora seguono uno stile piu pulito e coerente, con chip outline e icone dei topic piu facili da leggere.'
     ]
   }
 };
