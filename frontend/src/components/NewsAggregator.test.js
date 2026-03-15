@@ -175,8 +175,54 @@ describe('NewsAggregator', () => {
       expect(fetchNews).toHaveBeenCalled();
     });
 
-    expect(useWebSocket).toHaveBeenCalledWith('', expect.any(Object));
+    expect(useWebSocket).toHaveBeenCalledWith('', expect.any(Object), false);
     expect(screen.getAllByRole('button', { name: 'Refresh' })[1]).toBeEnabled();
+  });
+
+  test('subscribes realtime updates with source exclusions', async () => {
+    const updateSubscriptionFilters = jest.fn();
+
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'First headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    useWebSocket.mockReturnValue({
+      isConnected: true,
+      notifications: [],
+      lastNewsUpdate: null,
+      newArticlesCount: 0,
+      updateSubscriptionFilters,
+      resetNewArticlesCount: jest.fn(),
+      markGroupsSeen: jest.fn(),
+      removeNotification: jest.fn()
+    });
+
+    await act(async () => {
+      render(
+        <NewsAggregator
+          currentUser={{
+            ...currentUser,
+            settings: {
+              ...currentUser.settings,
+              excludedSourceIds: ['ansa'],
+              excludedSubSourceIds: ['ansa_world']
+            }
+          }}
+          onLogout={jest.fn()}
+          onUserUpdate={jest.fn()}
+        />
+      );
+    });
+
+    await waitFor(() => {
+      expect(updateSubscriptionFilters).toHaveBeenCalledWith({
+        topics: [],
+        sourceIds: [],
+        excludedSourceIds: ['ansa'],
+        excludedSubSourceIds: ['ansa_world']
+      });
+    });
   });
 
   test('marks already visible groups as seen after loading news', async () => {
@@ -205,13 +251,15 @@ describe('NewsAggregator', () => {
       removeNotification: jest.fn()
     });
 
-    render(
-      <NewsAggregator
-        currentUser={currentUser}
-        onLogout={jest.fn()}
-        onUserUpdate={jest.fn()}
-      />
-    );
+    await act(async () => {
+      render(
+        <NewsAggregator
+          currentUser={currentUser}
+          onLogout={jest.fn()}
+          onUserUpdate={jest.fn()}
+        />
+      );
+    });
 
     await waitFor(() => {
       expect(markGroupsSeen).toHaveBeenCalledWith(['group-1', 'group-2']);

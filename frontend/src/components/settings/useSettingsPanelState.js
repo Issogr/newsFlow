@@ -53,12 +53,20 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     setEditingSourceForm(createInitialEditingSourceForm());
   }, [currentUser]);
 
-  const syncUserState = useCallback((nextSettings, nextCustomSources) => {
+  const syncPersistedUserState = useCallback((nextSettings, nextCustomSources) => {
     setSettings(nextSettings);
     setCustomSources(nextCustomSources);
     onUserUpdate({
       ...currentUser,
       settings: nextSettings,
+      customSources: nextCustomSources
+    });
+  }, [currentUser, onUserUpdate]);
+
+  const syncCustomSourcesState = useCallback((nextCustomSources) => {
+    setCustomSources(nextCustomSources);
+    onUserUpdate({
+      ...currentUser,
       customSources: nextCustomSources
     });
   }, [currentUser, onUserUpdate]);
@@ -140,10 +148,10 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   const handleSave = useCallback(async () => {
     await runSavingAction(async () => {
       const response = await updateUserSettings(settings);
-      syncUserState(response.settings, customSources);
+      syncPersistedUserState(response.settings, customSources);
       onClose();
     });
-  }, [customSources, onClose, runSavingAction, settings, syncUserState]);
+  }, [customSources, onClose, runSavingAction, settings, syncPersistedUserState]);
 
   const handleExport = useCallback(async () => {
     await runSavingAction(async () => {
@@ -176,7 +184,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
 
       await runSavingAction(async () => {
         const response = await importUserSettings(payload);
-        syncUserState(response.settings, response.customSources);
+        syncPersistedUserState(response.settings, response.customSources);
       });
     } catch (requestError) {
       setError(requestError instanceof SyntaxError ? new Error('Invalid settings file format') : requestError);
@@ -185,7 +193,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
         event.target.value = '';
       }
     }
-  }, [runSavingAction, syncUserState]);
+  }, [runSavingAction, syncPersistedUserState]);
 
   const handleAddSource = useCallback(async (event) => {
     event.preventDefault();
@@ -194,9 +202,9 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
       const response = await addUserSource(sourceForm);
       const nextCustomSources = [response.source, ...customSources];
       setSourceForm(createInitialSourceForm());
-      syncUserState(settings, nextCustomSources);
+      syncCustomSourcesState(nextCustomSources);
     });
-  }, [customSources, runSavingAction, settings, sourceForm, syncUserState]);
+  }, [customSources, runSavingAction, sourceForm, syncCustomSourcesState]);
 
   const startEditSource = useCallback((source) => {
     setEditingSourceId(source.id);
@@ -218,10 +226,10 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
       const nextCustomSources = customSources.map((source) => (
         source.id === sourceId ? response.source : source
       ));
-      syncUserState(settings, nextCustomSources);
+      syncCustomSourcesState(nextCustomSources);
       cancelEditSource();
     });
-  }, [cancelEditSource, customSources, editingSourceForm, runSavingAction, settings, syncUserState]);
+  }, [cancelEditSource, customSources, editingSourceForm, runSavingAction, syncCustomSourcesState]);
 
   const handleDeleteSource = useCallback(async (sourceId) => {
     await runSavingAction(async () => {
@@ -231,9 +239,10 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
         ...settings,
         excludedSourceIds: (settings.excludedSourceIds || []).filter((item) => item !== sourceId)
       };
-      syncUserState(nextSettings, nextCustomSources);
+      setSettings(nextSettings);
+      syncCustomSourcesState(nextCustomSources);
     });
-  }, [customSources, runSavingAction, settings, syncUserState]);
+  }, [customSources, runSavingAction, settings, syncCustomSourcesState]);
 
   return {
     saving,

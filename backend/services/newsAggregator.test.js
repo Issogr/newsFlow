@@ -7,6 +7,7 @@ jest.mock('./database', () => ({
   completeIngestionRun: jest.fn(),
   countArticles: jest.fn(() => 1),
   deleteArticlesOlderThan: jest.fn(() => 0),
+  normalizeFuturePublicationDates: jest.fn(() => 0),
   cleanupRemovedConfiguredSourceData: jest.fn(() => ({ removedArticles: 0, updatedSettings: 0 })),
   upsertArticles: jest.fn(() => ({ insertedIds: [], insertedCount: 0, updatedCount: 0 })),
   mergeTopicsForArticles: jest.fn(() => 0),
@@ -198,6 +199,7 @@ describe('newsAggregator service flows', () => {
     jest.clearAllMocks();
     database.countArticles.mockReturnValue(1);
     database.deleteArticlesOlderThan.mockReturnValue(0);
+    database.normalizeFuturePublicationDates.mockReturnValue(0);
     database.cleanupRemovedConfiguredSourceData.mockReturnValue({ removedArticles: 0, updatedSettings: 0 });
     database.getArticles.mockReturnValue([]);
     database.getLatestIngestionRun.mockReturnValue(null);
@@ -303,9 +305,11 @@ describe('newsAggregator service flows', () => {
 
   test('ingestAllNews cleans stale default-source data before fetching feeds', async () => {
     database.cleanupRemovedConfiguredSourceData.mockReturnValue({ removedArticles: 2, updatedSettings: 1 });
+    database.normalizeFuturePublicationDates.mockReturnValue(1);
 
     await newsAggregator.ingestAllNews({ broadcast: false });
 
+    expect(database.normalizeFuturePublicationDates).toHaveBeenCalledTimes(1);
     expect(database.deleteArticlesOlderThan).toHaveBeenCalledTimes(1);
     expect(database.cleanupRemovedConfiguredSourceData).toHaveBeenCalledTimes(1);
     expect(rssParser.parseFeed).toHaveBeenCalled();

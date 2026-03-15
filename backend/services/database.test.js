@@ -19,7 +19,6 @@ const groupedSourceFamily = groupedSource
 const groupedSourceFamilyId = groupedSourceFamily?.id || groupedSource?.id || 'grouped-source';
 const groupedSourceFamilyName = groupedSourceFamily?.name || groupedSource?.name || 'Grouped Source';
 const primarySourceFamilyId = getCanonicalSourceId(primarySource.id, primarySource.name);
-const primarySourceFamilyName = getCanonicalSourceName(primarySource.id, primarySource.name);
 const secondarySourceFamilyId = getCanonicalSourceId(secondarySource.id, secondarySource.name);
 const secondarySourceFamilyName = getCanonicalSourceName(secondarySource.id, secondarySource.name);
 
@@ -77,118 +76,7 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('last_seen_release_notes_version');
   });
 
-  test('migrates legacy topic metadata without losing topics', () => {
-    const sqlite = new SqliteDatabase(dbPath);
-
-    sqlite.exec(`
-      CREATE TABLE app_meta (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      );
-
-      CREATE TABLE articles (
-        id TEXT PRIMARY KEY,
-        source_id TEXT NOT NULL DEFAULT 'legacy-source',
-        source_name TEXT NOT NULL DEFAULT 'Legacy Source',
-        owner_user_id TEXT,
-        title TEXT NOT NULL DEFAULT 'Legacy title',
-        description TEXT NOT NULL DEFAULT '',
-        content TEXT NOT NULL DEFAULT '',
-        url TEXT NOT NULL DEFAULT '',
-        image TEXT,
-        author TEXT,
-        language TEXT NOT NULL DEFAULT 'it',
-        published_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE article_topics (
-        article_id TEXT NOT NULL,
-        topic TEXT NOT NULL,
-        is_ai_generated INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (article_id, topic)
-      );
-
-      INSERT INTO app_meta (key, value) VALUES ('migration_version', '3');
-      INSERT INTO articles (id) VALUES ('article-1');
-      INSERT INTO article_topics (article_id, topic, is_ai_generated) VALUES ('article-1', 'economy', 1);
-    `);
-
-    sqlite.close();
-
-    database = require('./database');
-    database.getDb();
-
-    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
-    const topicColumns = migratedDb.prepare('PRAGMA table_info(article_topics)').all().map((column) => column.name);
-    const topicRows = migratedDb.prepare(`
-      SELECT article_id AS articleId, topic
-      FROM article_topics
-    `).all();
-
-    migratedDb.close();
-
-    expect(topicColumns).toEqual(['article_id', 'topic', 'created_at']);
-    expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
-  });
-
-  test('migrates saved source preferences to registrable-domain ids', () => {
-    const sqlite = new SqliteDatabase(dbPath);
-
-    sqlite.exec(`
-      CREATE TABLE app_meta (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      );
-
-      CREATE TABLE users (
-        id TEXT PRIMARY KEY,
-        username TEXT NOT NULL UNIQUE,
-        password_hash TEXT,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE user_settings (
-        user_id TEXT PRIMARY KEY,
-        default_language TEXT NOT NULL DEFAULT 'auto',
-        article_retention_hours INTEGER NOT NULL DEFAULT 24,
-        recent_hours INTEGER NOT NULL DEFAULT 3,
-        default_source_ids TEXT NOT NULL DEFAULT '[]',
-        excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE user_sources (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        url TEXT NOT NULL,
-        language TEXT NOT NULL DEFAULT 'it',
-        is_active INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        validated_at TEXT,
-        UNIQUE(user_id, url)
-      );
-
-      INSERT INTO app_meta (key, value) VALUES ('migration_version', '5');
-      INSERT INTO users (id, username) VALUES ('user-1', 'alice');
-      INSERT INTO user_settings (user_id, default_source_ids) VALUES ('user-1', '["ansa","custom-1"]');
-      INSERT INTO user_sources (id, user_id, name, url, language) VALUES ('custom-1', 'user-1', 'Example Feed', 'https://feeds.example.com/one.xml', 'en');
-    `);
-
-    sqlite.close();
-
-    database = require('./database');
-    expect(database.getUserSettings('user-1')).toEqual(expect.objectContaining({
-      excludedSourceIds: ['ansa.it', 'example.com']
-    }));
-  });
-
-  test('migrates legacy articles to canonical URLs and removes same-source duplicates', () => {
+  test('opens an existing database already on the current schema version', () => {
     const sqlite = new SqliteDatabase(dbPath);
 
     sqlite.exec(`
@@ -206,10 +94,11 @@ describe('database migrations', () => {
         description TEXT NOT NULL DEFAULT '',
         content TEXT NOT NULL DEFAULT '',
         url TEXT NOT NULL DEFAULT '',
+        canonical_url TEXT NOT NULL DEFAULT '',
         image TEXT,
         author TEXT,
         language TEXT NOT NULL DEFAULT 'it',
-        published_at TEXT NOT NULL,
+        published_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -221,40 +110,47 @@ describe('database migrations', () => {
         PRIMARY KEY (article_id, topic)
       );
 
+       INSERT INTO app_meta (key, value) VALUES ('migration_version', '10');
+       INSERT INTO articles (id, source_id, source_name, title, canonical_url) VALUES ('article-1', 'ansa', 'ANSA', 'Headline', 'https://example.com/story');
+       INSERT INTO article_topics (article_id, topic) VALUES ('article-1', 'economy');
+     `);
+
+     sqlite.close();
+
+     database = require('./database');
+     database.getDb();
+
+     const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+     const topicRows = migratedDb.prepare(`
+       SELECT article_id AS articleId, topic
+       FROM article_topics
+     `).all();
+     const articleRows = migratedDb.prepare(`
+       SELECT id, canonical_url AS canonicalUrl
+       FROM articles
+     `).all();
+
+     migratedDb.close();
+
+     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
+     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
+   });
+
+  test('rejects databases on an older schema version', () => {
+    const sqlite = new SqliteDatabase(dbPath);
+
+    sqlite.exec(`
+      CREATE TABLE app_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
       INSERT INTO app_meta (key, value) VALUES ('migration_version', '9');
-      INSERT INTO articles (id, source_id, source_name, title, url, published_at, created_at, updated_at)
-      VALUES
-        ('article-a', 'ansa', 'ANSA', 'Story', 'https://example.com/story?utm_source=rss', '2026-03-11T10:00:00.000Z', '2026-03-11T10:00:00.000Z', '2026-03-11T10:00:00.000Z'),
-        ('article-b', 'ansa', 'ANSA', 'Story', 'https://example.com/story?utm_source=app', '2026-03-11T11:00:00.000Z', '2026-03-11T11:00:00.000Z', '2026-03-11T11:00:00.000Z');
-      INSERT INTO article_topics (article_id, topic) VALUES ('article-a', 'Economy');
-      INSERT INTO article_topics (article_id, topic) VALUES ('article-b', 'Markets');
     `);
 
     sqlite.close();
 
     database = require('./database');
-    database.getDb();
-
-    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
-    const articles = migratedDb.prepare(`
-      SELECT id, canonical_url AS canonicalUrl
-      FROM articles
-      ORDER BY id ASC
-    `).all();
-    const topics = migratedDb.prepare(`
-      SELECT article_id AS articleId, topic
-      FROM article_topics
-      ORDER BY article_id ASC, topic ASC
-    `).all();
-
-    migratedDb.close();
-
-    expect(articles).toHaveLength(1);
-    expect(articles[0].canonicalUrl).toBe('https://example.com/story');
-    expect(topics).toEqual([
-      { articleId: 'article-b', topic: 'Economy' },
-      { articleId: 'article-b', topic: 'Markets' }
-    ]);
+    expect(() => database.getDb()).toThrow('Unsupported database schema version 9');
   });
 });
 
@@ -410,6 +306,52 @@ describe('database queries and user data', () => {
     }));
   });
 
+  test('normalizes future publication dates on insert and during cleanup', () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-03-15T14:30:00.000Z'));
+
+    try {
+      database.upsertArticles([
+        {
+          id: 'future-article',
+          sourceId: primarySource.id,
+          source: primarySource.name,
+          title: 'Future story',
+          description: 'Future description',
+          content: 'Future content',
+          url: 'https://example.com/future-story',
+          language: 'en',
+          pubDate: '2030-04-01T12:45:00.000Z'
+        }
+      ]);
+
+      let storedArticle = database.getDb().prepare(`
+        SELECT published_at AS pubDate
+        FROM articles
+        WHERE id = ?
+      `).get('future-article');
+
+      expect(storedArticle.pubDate).toBe('2026-03-15T00:00:00.000Z');
+
+      database.getDb().prepare(`
+        UPDATE articles
+        SET published_at = ?, updated_at = ?
+        WHERE id = ?
+      `).run('2031-01-01T09:00:00.000Z', '2026-03-15T14:30:00.000Z', 'future-article');
+
+      expect(database.normalizeFuturePublicationDates('2026-03-15T14:30:00.000Z')).toBe(1);
+
+      storedArticle = database.getDb().prepare(`
+        SELECT published_at AS pubDate
+        FROM articles
+        WHERE id = ?
+      `).get('future-article');
+
+      expect(storedArticle.pubDate).toBe('2026-03-15T00:00:00.000Z');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('persists settings and removes user-source articles when the source is deleted', () => {
     const now = new Date().toISOString();
 
@@ -489,6 +431,96 @@ describe('database queries and user data', () => {
     expect(database.deleteUserSource('user-1', 'custom-1')).toBe(1);
     expect(database.listUserSources('user-1')).toEqual([]);
     expect(database.getArticles({}, { userId: 'user-1' })).toEqual([]);
+  });
+
+  test('falls back safely when stored user settings JSON is malformed', () => {
+    const now = new Date().toISOString();
+
+    database.createUser({
+      id: 'user-1',
+      username: 'alice',
+      passwordHash: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    database.getDb().prepare(`
+      INSERT INTO user_settings (
+        user_id,
+        default_language,
+        article_retention_hours,
+        recent_hours,
+        auto_refresh_enabled,
+        reader_panel_position,
+        last_seen_release_notes_version,
+        default_source_ids,
+        excluded_sub_source_ids,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'user-1',
+      'en',
+      12,
+      2,
+      1,
+      'right',
+      '3.2.3',
+      '{bad json',
+      '"oops"',
+      now
+    );
+
+    expect(database.getUserSettings('user-1')).toEqual(expect.objectContaining({
+      userId: 'user-1',
+      defaultLanguage: 'en',
+      excludedSourceIds: [],
+      excludedSubSourceIds: []
+    }));
+  });
+
+  test('falls back safely when cached reader blocks are malformed JSON', () => {
+    const now = new Date().toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'article-1',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Readable story',
+        description: 'Reader description',
+        content: 'Reader content',
+        url: 'https://example.com/readable-story',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+
+    database.getDb().prepare(`
+      INSERT INTO reader_cache (
+        article_id,
+        url,
+        title,
+        content_text,
+        content_blocks,
+        minutes_to_read,
+        fetched_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'article-1',
+      'https://example.com/readable-story',
+      'Readable story',
+      'Reader content',
+      '{bad json',
+      2,
+      now
+    );
+
+    expect(database.getReaderCache('article-1')).toEqual(expect.objectContaining({
+      articleId: 'article-1',
+      title: 'Readable story',
+      contentBlocks: null,
+      minutesToRead: 2
+    }));
   });
 
   test('builds source and topic stats with canonical source ids and search filters', () => {

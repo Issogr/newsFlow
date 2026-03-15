@@ -18,6 +18,8 @@ const PORT = process.env.PORT || 5000;
 const SERVER_TIMEOUT = parseInt(process.env.SERVER_TIMEOUT || '60000', 10);
 const allowedOrigins = getAllowedOrigins();
 
+logger.setupGlobalErrorHandlers();
+
 if (process.env.TRUST_PROXY === 'true') {
   app.set('trust proxy', true);
 } else if (process.env.TRUST_PROXY === 'false') {

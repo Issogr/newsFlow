@@ -1,7 +1,3 @@
-jest.mock('axios', () => ({
-  get: jest.fn()
-}));
-
 jest.mock('@mozilla/readability', () => ({
   Readability: jest.fn()
 }));
@@ -19,10 +15,14 @@ jest.mock('../utils/logger', () => ({
   debug: jest.fn()
 }));
 
-const axios = require('axios');
+jest.mock('../utils/urlSafety', () => ({
+  fetchSafeTextUrl: jest.fn()
+}));
+
 const { Readability } = require('@mozilla/readability');
 const database = require('./database');
 const logger = require('../utils/logger');
+const { fetchSafeTextUrl } = require('../utils/urlSafety');
 const readerService = require('./readerService');
 
 describe('readerService', () => {
@@ -67,12 +67,12 @@ describe('readerService', () => {
       cached: true,
       paragraphs: ['Cached paragraph one', 'Cached paragraph two']
     });
-    expect(axios.get).not.toHaveBeenCalled();
+    expect(fetchSafeTextUrl).not.toHaveBeenCalled();
     expect(database.upsertReaderCache).not.toHaveBeenCalled();
   });
 
   test('fetches readable content and stores it in cache', async () => {
-    axios.get.mockResolvedValue({
+    fetchSafeTextUrl.mockResolvedValue({
       data: '<html><body><article><h1>Readable headline</h1><p>First paragraph.</p><p>Second paragraph.</p></article></body></html>'
     });
     Readability.mockImplementation(() => ({
@@ -111,7 +111,7 @@ describe('readerService', () => {
   });
 
   test('falls back to feed content when extraction fails', async () => {
-    axios.get.mockRejectedValue(new Error('Network failed'));
+    fetchSafeTextUrl.mockRejectedValue(new Error('Network failed'));
 
     const payload = await readerService.getReaderArticle(article.id, { userId: 'user-1' });
 
@@ -128,6 +128,22 @@ describe('readerService', () => {
       contentText: expect.stringContaining('Fallback body paragraph.')
     }));
     expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('Reader mode extraction fell back'));
+  });
+
+  test('falls back without fetching unsafe article destinations', async () => {
+    fetchSafeTextUrl.mockRejectedValue(Object.assign(new Error('blocked'), {
+      status: 403,
+      code: 'FORBIDDEN_URL'
+    }));
+
+    const payload = await readerService.getReaderArticle(article.id, { userId: 'user-1' });
+
+    expect(fetchSafeTextUrl).toHaveBeenCalledWith(article.url, expect.any(Object));
+    expect(payload).toMatchObject({
+      articleId: article.id,
+      fallback: true,
+      cached: false
+    });
   });
 
   test('throws when the article is missing', async () => {

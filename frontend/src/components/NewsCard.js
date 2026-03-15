@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { getDateLocale, getLocalizedTopic } from '../i18n';
 import { getTopicPresentation } from '../topicPresentation';
+import { getSafeExternalUrl } from '../utils/urlSafety';
 
 function getSourceEntries(group) {
   const sourceMap = new Map();
@@ -47,6 +48,7 @@ const NewsCard = memo(({ group, locale, t, onOpenReader }) => {
   }
 
   const sourceEntries = getSourceEntries(group);
+  const safeOriginalUrl = getSafeExternalUrl(group.url);
 
   return (
     <article className="flex h-full min-h-[20rem] flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-xl">
@@ -107,15 +109,26 @@ const NewsCard = memo(({ group, locale, t, onOpenReader }) => {
             <BookOpenText className="mr-2 h-4 w-4" />
             {t('readerMode')}
           </button>
-          <a
-            href={group.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-700"
-          >
-            <ExternalLink className="mr-2 h-4 w-4" />
-            {t('openOriginalSource')}
-          </a>
+          {safeOriginalUrl ? (
+            <a
+              href={safeOriginalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              {t('openOriginalSource')}
+            </a>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="inline-flex w-full cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-4 py-3 text-sm font-medium text-slate-600"
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              {t('openOriginalSource')}
+            </button>
+          )}
         </div>
       </div>
     </article>

@@ -155,4 +155,36 @@ describe('ReaderPanel', () => {
 
     expect(document.body.style.overflow).toBe('');
   });
+
+  test('disables unsafe original-source links', async () => {
+    fetchReaderArticle.mockResolvedValue({
+      title: 'Unsafe reader title',
+      language: 'en',
+      excerpt: 'Unsafe excerpt',
+      contentBlocks: [{ type: 'paragraph', text: 'Unsafe body' }],
+      minutesToRead: 1
+    });
+
+    render(
+      <ReaderPanel
+        group={{
+          ...group,
+          items: [{
+            ...group.items[0],
+            url: 'javascript:alert(1)'
+          }]
+        }}
+        initialArticleId="article-1"
+        readerPosition="right"
+        locale="en"
+        t={t}
+        onClose={jest.fn()}
+      />
+    );
+
+    await screen.findByText('Unsafe reader title');
+
+    expect(screen.queryByRole('link', { name: 'openOriginalSource' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'openOriginalSource' })).toBeDisabled();
+  });
 });

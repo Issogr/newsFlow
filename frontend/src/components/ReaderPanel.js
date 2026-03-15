@@ -14,6 +14,7 @@ import {
 import { fetchReaderArticle, isRequestCanceled } from '../services/api';
 import useLatestRequest from '../hooks/useLatestRequest';
 import { getDateLocale, getLanguageMeta } from '../i18n';
+import { getSafeExternalUrl } from '../utils/urlSafety';
 
 const blockClassName = {
   paragraph: 'text-[1.08rem] leading-8 text-stone-800',
@@ -186,6 +187,7 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
   };
 
   const languageMeta = getLanguageMeta(selectedReader?.language || selectedArticle?.language, locale);
+  const safeOriginalUrl = getSafeExternalUrl(selectedArticle?.url);
   const desktopPositionClassName = readerPosition === 'left'
     ? 'lg:justify-start'
     : (readerPosition === 'center' ? 'lg:justify-center' : 'lg:justify-end');
@@ -287,15 +289,26 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
                     <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                     {t('refreshReader')}
                   </button>
-                  <a
-                    href={selectedArticle.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    {t('openOriginalSource')}
-                  </a>
+                  {safeOriginalUrl ? (
+                    <a
+                      href={safeOriginalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      {t('openOriginalSource')}
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      className="inline-flex cursor-not-allowed items-center gap-2 rounded-full bg-slate-300 px-4 py-2 text-sm font-medium text-slate-600"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      {t('openOriginalSource')}
+                    </button>
+                  )}
                 </div>
 
                 {loading && !selectedReader ? (

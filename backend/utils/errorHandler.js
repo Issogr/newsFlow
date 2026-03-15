@@ -25,7 +25,9 @@ const ERROR_MESSAGES = {
   'VALIDATION_ERROR': 'I dati forniti non sono validi',
   'UNAUTHORIZED': 'Non sei autorizzato ad accedere a questa risorsa',
   'FORBIDDEN': 'Accesso negato a questa risorsa',
-  'ADMIN_TOKEN_NOT_CONFIGURED': 'Il token amministrativo non è configurato sul server'
+  'ADMIN_TOKEN_NOT_CONFIGURED': 'Il token amministrativo non è configurato sul server',
+  'INVALID_URL': 'L\'URL fornito non è valido',
+  'FORBIDDEN_URL': 'L\'URL fornito non può essere raggiunto dal server'
 };
 
 /**

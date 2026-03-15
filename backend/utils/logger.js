@@ -11,6 +11,19 @@ const consoleFormat = format.printf(({ level, message, timestamp, ...meta }) => 
 const LOG_LEVEL = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
 const isTestEnvironment = process.env.NODE_ENV === 'test';
 
+function createConsoleTransport({ silent = false } = {}) {
+  return new winston.transports.Console({
+    silent,
+    format: winston.format.combine(
+      winston.format.colorize(),
+      winston.format.timestamp({
+        format: 'HH:mm:ss'
+      }),
+      consoleFormat
+    )
+  });
+}
+
 // Winston logger configuration.
 const logger = winston.createLogger({
   level: LOG_LEVEL,
@@ -23,44 +36,48 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   defaultMeta: { service: 'news-aggregator' },
-  transports: [new winston.transports.Console({
-    silent: isTestEnvironment,
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.timestamp({
-        format: 'HH:mm:ss'
-      }),
-      consoleFormat
-    )
-  })],
-  // Handle uncaught exceptions and unhandled promise rejections.
-  exceptionHandlers: !isTestEnvironment ? [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.timestamp({
-          format: 'HH:mm:ss'
-        }),
-        consoleFormat
-      )
-    })
-  ] : [],
-  rejectionHandlers: !isTestEnvironment ? [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.timestamp({
-          format: 'HH:mm:ss'
-        }),
-        consoleFormat
-      )
-    })
-  ] : []
+  transports: [createConsoleTransport({ silent: isTestEnvironment })]
 });
+
+let globalErrorHandlersConfigured = false;
+
+function formatUnhandledRejection(reason) {
+  if (reason instanceof Error) {
+    return {
+      message: reason.message,
+      stack: reason.stack
+    };
+  }
+
+  return {
+    message: String(reason)
+  };
+}
+
+function setupGlobalErrorHandlers() {
+  if (isTestEnvironment || globalErrorHandlersConfigured) {
+    return;
+  }
+
+  process.on('uncaughtException', (error) => {
+    logger.error('Uncaught exception', {
+      message: error?.message || 'Unknown uncaught exception',
+      stack: error?.stack
+    });
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled promise rejection', formatUnhandledRejection(reason));
+  });
+
+  globalErrorHandlersConfigured = true;
+}
 
 // Log logger startup once transports are ready.
 if (!isTestEnvironment) {
   logger.info('Logger initialized with level: ' + LOG_LEVEL);
 }
+
+logger.setupGlobalErrorHandlers = setupGlobalErrorHandlers;
 
 module.exports = logger;

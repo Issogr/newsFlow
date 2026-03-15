@@ -1,10 +1,10 @@
-const axios = require('axios');
 const { JSDOM } = require('jsdom');
 const { Readability } = require('@mozilla/readability');
 const database = require('./database');
 const logger = require('../utils/logger');
 const summarizeErrorMessage = require('../utils/summarizeError');
 const { createError } = require('../utils/errorHandler');
+const { fetchSafeTextUrl } = require('../utils/urlSafety');
 
 const READER_TIMEOUT = parseInt(process.env.READER_TIMEOUT || '12000', 10);
 const READER_CACHE_TTL_MS = parseInt(process.env.READER_CACHE_TTL_MS || String(24 * 60 * 60 * 1000), 10);
@@ -248,14 +248,12 @@ function buildFallbackPayload(article) {
 }
 
 async function fetchReaderPayload(article) {
-  const response = await axios.get(article.url, {
+  const response = await fetchSafeTextUrl(article.url, {
     timeout: READER_TIMEOUT,
-    responseType: 'text',
     headers: {
       'User-Agent': 'news-aggregator-reader/1.0 (+https://localhost)',
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-    },
-    transformResponse: [(data) => data]
+    }
   });
 
   const dom = new JSDOM(response.data, { url: article.url });

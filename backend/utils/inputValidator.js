@@ -1,4 +1,5 @@
 const { decode } = require('html-entities');
+const { createError } = require('./errorHandler');
 
 function sanitizeString(input) {
   if (typeof input !== 'string') {
