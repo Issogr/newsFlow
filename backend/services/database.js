@@ -206,6 +206,7 @@ module.exports = {
   upsertArticles: articleRepository.upsertArticles,
   countArticles: articleRepository.countArticles,
   deleteArticlesOlderThan: articleRepository.deleteArticlesOlderThan,
+  normalizeFuturePublicationDates: articleRepository.normalizeFuturePublicationDates,
   cleanupRemovedConfiguredSourceData: articleRepository.cleanupRemovedConfiguredSourceData,
   getSourceStats: articleRepository.getSourceStats,
   getTopicStatsByFilters: articleRepository.getTopicStatsByFilters,

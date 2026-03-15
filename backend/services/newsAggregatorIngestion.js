@@ -11,6 +11,12 @@ const {
 const ARTICLE_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
 
 function purgeExpiredArticles() {
+  const normalizedFutureCount = database.normalizeFuturePublicationDates();
+
+  if (normalizedFutureCount > 0) {
+    logger.info(`Normalized ${normalizedFutureCount} future-dated articles to the current day`);
+  }
+
   if (!Number.isFinite(ARTICLE_RETENTION_HOURS) || ARTICLE_RETENTION_HOURS <= 0) {
     return 0;
   }

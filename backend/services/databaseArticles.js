@@ -1,3 +1,5 @@
+const { getCurrentPublicationDay, normalizePublicationDate } = require('../utils/publicationDate');
+
 function parseJsonArray(value) {
   if (!value) {
     return [];
@@ -104,6 +106,13 @@ function createArticleRepository({
     };
   }
 
+  function buildPublishedBeforeNowFilter(alias = 'a') {
+    return {
+      clause: `${alias}.published_at <= ?`,
+      params: [new Date().toISOString()]
+    };
+  }
+
   function buildFilterState(filters = {}) {
     return {
       search: typeof filters.search === 'string' ? filters.search.trim() : '',
@@ -139,11 +148,14 @@ function createArticleRepository({
     const searchQuery = buildSearchQuery(state.search);
     const scopeFilter = buildScopeFilter(options, 'a');
     const retentionFilter = buildRetentionFilter(options, 'a');
+    const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
     const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
 
     where.push(scopeFilter.clause);
     params.push(...scopeFilter.params);
+    where.push(publishedBeforeNowFilter.clause);
+    params.push(...publishedBeforeNowFilter.params);
 
     if (retentionFilter) {
       where.push(retentionFilter.clause);
@@ -335,9 +347,11 @@ function createArticleRepository({
           : null;
         const persistedArticleId = canonicalMatch?.id || article.id;
         const exists = existingIdSet.has(persistedArticleId) || Boolean(canonicalMatch);
+        const normalizedPubDate = normalizePublicationDate(article.pubDate, now);
 
         article.id = persistedArticleId;
         article.canonicalUrl = canonicalUrl;
+        article.pubDate = normalizedPubDate;
 
         upsertStmt.run(
           persistedArticleId,
@@ -352,7 +366,7 @@ function createArticleRepository({
           article.image || null,
           article.author || null,
           article.language || 'it',
-          article.pubDate,
+          normalizedPubDate,
           article.createdAt || now,
           now
         );
@@ -464,11 +478,14 @@ function createArticleRepository({
     const where = [`a.id IN (${articleIds.map(() => '?').join(', ')})`];
     const scopeFilter = buildScopeFilter(options, 'a');
     const retentionFilter = buildRetentionFilter(options, 'a');
+    const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
     const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
 
     where.push(scopeFilter.clause);
     params.push(...scopeFilter.params);
+    where.push(publishedBeforeNowFilter.clause);
+    params.push(...publishedBeforeNowFilter.params);
 
     if (retentionFilter) {
       where.push(retentionFilter.clause);
@@ -509,10 +526,13 @@ function createArticleRepository({
   function countArticles(options = {}) {
     const scopeFilter = buildScopeFilter(options, 'articles');
     const retentionFilter = buildRetentionFilter(options, 'articles');
+    const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('articles');
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
     const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
     const where = [scopeFilter.clause];
     const params = [...scopeFilter.params];
+    where.push(publishedBeforeNowFilter.clause);
+    params.push(...publishedBeforeNowFilter.params);
 
     if (retentionFilter) {
       where.push(retentionFilter.clause);
@@ -568,6 +588,17 @@ function createArticleRepository({
     });
 
     return transaction(isoTimestamp);
+  }
+
+  function normalizeFuturePublicationDates(referenceTimestamp = new Date().toISOString()) {
+    const normalizedReferenceTimestamp = new Date(referenceTimestamp).toISOString();
+    const normalizedPublicationDate = getCurrentPublicationDay(normalizedReferenceTimestamp).toISOString();
+
+    return getDb().prepare(`
+      UPDATE articles
+      SET published_at = ?, updated_at = ?
+      WHERE published_at > ?
+    `).run(normalizedPublicationDate, normalizedReferenceTimestamp, normalizedReferenceTimestamp).changes;
   }
 
   function cleanupRemovedConfiguredSourceData() {
@@ -660,10 +691,13 @@ function createArticleRepository({
   function getSourceStats(configuredSources = [], options = {}) {
     const scopeFilter = buildScopeFilter(options, 'articles');
     const retentionFilter = buildRetentionFilter(options, 'articles');
+    const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('articles');
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
     const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
     const where = [scopeFilter.clause];
     const params = [...scopeFilter.params];
+    where.push(publishedBeforeNowFilter.clause);
+    params.push(...publishedBeforeNowFilter.params);
 
     if (retentionFilter) {
       where.push(retentionFilter.clause);
@@ -726,11 +760,14 @@ function createArticleRepository({
     const searchQuery = buildSearchQuery(state.search);
     const scopeFilter = buildScopeFilter(options, 'a');
     const retentionFilter = buildRetentionFilter(options, 'a');
+    const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
     const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
 
     where.push(scopeFilter.clause);
     params.push(...scopeFilter.params);
+    where.push(publishedBeforeNowFilter.clause);
+    params.push(...publishedBeforeNowFilter.params);
 
     if (retentionFilter) {
       where.push(retentionFilter.clause);
@@ -837,6 +874,7 @@ function createArticleRepository({
     upsertArticles,
     countArticles,
     deleteArticlesOlderThan,
+    normalizeFuturePublicationDates,
     cleanupRemovedConfiguredSourceData,
     getSourceStats,
     getTopicStatsByFilters,

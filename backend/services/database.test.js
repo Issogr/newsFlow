@@ -306,6 +306,52 @@ describe('database queries and user data', () => {
     }));
   });
 
+  test('normalizes future publication dates on insert and during cleanup', () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-03-15T14:30:00.000Z'));
+
+    try {
+      database.upsertArticles([
+        {
+          id: 'future-article',
+          sourceId: primarySource.id,
+          source: primarySource.name,
+          title: 'Future story',
+          description: 'Future description',
+          content: 'Future content',
+          url: 'https://example.com/future-story',
+          language: 'en',
+          pubDate: '2030-04-01T12:45:00.000Z'
+        }
+      ]);
+
+      let storedArticle = database.getDb().prepare(`
+        SELECT published_at AS pubDate
+        FROM articles
+        WHERE id = ?
+      `).get('future-article');
+
+      expect(storedArticle.pubDate).toBe('2026-03-15T00:00:00.000Z');
+
+      database.getDb().prepare(`
+        UPDATE articles
+        SET published_at = ?, updated_at = ?
+        WHERE id = ?
+      `).run('2031-01-01T09:00:00.000Z', '2026-03-15T14:30:00.000Z', 'future-article');
+
+      expect(database.normalizeFuturePublicationDates('2026-03-15T14:30:00.000Z')).toBe(1);
+
+      storedArticle = database.getDb().prepare(`
+        SELECT published_at AS pubDate
+        FROM articles
+        WHERE id = ?
+      `).get('future-article');
+
+      expect(storedArticle.pubDate).toBe('2026-03-15T00:00:00.000Z');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('persists settings and removes user-source articles when the source is deleted', () => {
     const now = new Date().toISOString();
 

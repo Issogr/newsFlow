@@ -4,6 +4,7 @@ const logger = require('../utils/logger');
 const summarizeErrorMessage = require('../utils/summarizeError');
 const { sanitizeHtml } = require('../utils/inputValidator');
 const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
+const { normalizePublicationDate } = require('../utils/publicationDate');
 const { fetchSafeTextUrl } = require('../utils/urlSafety');
 
 const MAX_ARTICLES_PER_SOURCE = parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '25', 10);
@@ -124,9 +125,8 @@ function detectFeedLanguage(feed) {
   return scoredLanguages[0]?.score > 0 ? scoredLanguages[0].language : 'it';
 }
 
-function normalizeDate(value) {
-  const parsed = new Date(value || Date.now());
-  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+function normalizeDate(value, referenceDate = new Date()) {
+  return normalizePublicationDate(value, referenceDate);
 }
 
 function normalizeOptionalDate(value) {
