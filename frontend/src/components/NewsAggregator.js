@@ -5,7 +5,9 @@ import {
   LogOut,
   PauseCircle,
   RefreshCw,
+  Rss,
   Search,
+  Tags,
   Clock3,
   ChevronDown,
   ChevronUp,
@@ -452,7 +454,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   type="button"
                   onClick={() => setShowRecentOnly((value) => !value)}
                   className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                    showRecentOnly ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
+                    showRecentOnly ? 'bg-amber-500 text-white shadow-sm' : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
                   }`}
                 >
                   <Clock3 className="h-4 w-4" aria-hidden="true" />
@@ -463,7 +465,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   <button
                     type="button"
                     onClick={resetFilters}
-                    className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                    className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200"
                   >
                     {t('resetFilters')}
                   </button>
@@ -472,7 +474,12 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
               <div className="grid gap-6 lg:grid-cols-2">
                 <div>
-                  <h3 className="mb-3 text-sm font-semibold text-slate-700">{t('sources')}</h3>
+                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-sky-700">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                      <Rss className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <span>{t('sources')}</span>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {visibleAvailableSources.map((source) => {
                       const isActive = activeFilters.sourceIds.includes(source.id);
@@ -481,13 +488,18 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                           key={source.id}
                           type="button"
                           onClick={() => toggleFilter('sourceIds', source.id)}
-                          className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                          className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
                             isActive
-                              ? 'bg-sky-600 text-white'
+                              ? 'bg-sky-600 text-white shadow-sm'
                               : 'bg-sky-100 text-sky-900 hover:bg-sky-200'
                           }`}
                         >
-                          {source.name} {source.count > 0 ? `(${source.count})` : ''}
+                          <span>{source.name}</span>
+                          {source.count > 0 && (
+                            <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-sky-700'}`}>
+                              {source.count}
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -495,7 +507,12 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 </div>
 
                 <div>
-                  <h3 className="mb-3 text-sm font-semibold text-slate-700">{t('topics')}</h3>
+                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                      <Tags className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <span>{t('topics')}</span>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {availableTopics.map((topic) => {
                       const isActive = activeFilters.topics.includes(topic.topic);
@@ -504,13 +521,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                           key={topic.topic}
                           type="button"
                           onClick={() => toggleFilter('topics', topic.topic)}
-                          className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                          className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
                             isActive
-                              ? 'bg-emerald-600 text-white'
+                              ? 'bg-emerald-600 text-white shadow-sm'
                               : 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200'
                           }`}
                         >
-                          {topic.topic} ({topic.count})
+                          <span>{topic.topic}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-emerald-700'}`}>
+                            {topic.count}
+                          </span>
                         </button>
                       );
                     })}
