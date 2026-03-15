@@ -22,9 +22,10 @@ import BrandMark from './BrandMark';
 import SettingsPanel from './SettingsPanel';
 import useLatestRequest from '../hooks/useLatestRequest';
 import useWebSocket from '../hooks/useWebSocket';
-import { createTranslator, getDateLocale, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
+import { createTranslator, getDateLocale, getLocalizedTopic, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
 import { getSettingsLimits } from '../config/settingsLimits';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
+import { getTopicPresentation } from '../topicPresentation';
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -507,6 +508,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   <div className="flex flex-wrap gap-2">
                     {availableTopics.map((topic) => {
                       const isActive = activeFilters.topics.includes(topic.topic);
+                      const { Icon } = getTopicPresentation(topic.topic);
                       return (
                         <button
                           key={topic.topic}
@@ -518,7 +520,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                               : 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200'
                           }`}
                         >
-                          <span>{topic.topic}</span>
+                          <Icon className={`h-4 w-4 ${isActive ? 'text-white' : 'text-current'}`} aria-hidden="true" />
+                          <span>{getLocalizedTopic(topic.topic, locale)}</span>
                           <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-emerald-700'}`}>
                             {topic.count}
                           </span>
@@ -552,8 +555,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 <NewsCard
                   key={group.id}
                   group={group}
-                  activeFilters={activeFilters}
-                  toggleFilter={toggleFilter}
                   locale={locale}
                   t={t}
                   onOpenReader={openReader}

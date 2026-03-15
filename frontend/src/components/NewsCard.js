@@ -1,6 +1,12 @@
 import React, { memo } from 'react';
-import { BookOpenText, CalendarDays, ExternalLink, Rss, Tags } from 'lucide-react';
-import { getDateLocale } from '../i18n';
+import {
+  BookOpenText,
+  CalendarDays,
+  ExternalLink,
+  Rss,
+} from 'lucide-react';
+import { getDateLocale, getLocalizedTopic } from '../i18n';
+import { getTopicPresentation } from '../topicPresentation';
 
 function getSourceEntries(group) {
   const sourceMap = new Map();
@@ -35,15 +41,12 @@ function formatPublicationDate(dateString, locale) {
   }
 }
 
-const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenReader }) => {
+const NewsCard = memo(({ group, locale, t, onOpenReader }) => {
   if (!group?.items?.length) {
     return null;
   }
 
   const sourceEntries = getSourceEntries(group);
-
-  const isTopicActive = (topic) => activeFilters.topics.includes(topic);
-  const isSourceActive = (sourceId) => activeFilters.sourceIds.includes(sourceId);
 
   return (
     <article className="flex h-full min-h-[20rem] flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-xl">
@@ -57,6 +60,22 @@ const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenRe
             <CalendarDays className="h-3.5 w-3.5 text-sky-600" aria-hidden="true" />
             {formatPublicationDate(group.pubDate, locale)}
           </span>
+
+          {group.topics?.map((topic) => {
+            const { Icon, className } = getTopicPresentation(topic);
+            const localizedTopic = getLocalizedTopic(topic, locale);
+
+            return (
+              <span
+                key={topic}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors ${className}`}
+                aria-label={localizedTopic}
+                title={localizedTopic}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+              </span>
+            );
+          })}
         </div>
 
         <div className="mt-5">
@@ -66,46 +85,16 @@ const NewsCard = memo(({ group, activeFilters, toggleFilter, locale, t, onOpenRe
           </div>
           <div className="flex min-h-7 flex-wrap content-start gap-2">
             {sourceEntries.map((source) => (
-              <button
+              <span
                 key={source.id}
-                type="button"
-                onClick={() => toggleFilter('sourceIds', source.id)}
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  isSourceActive(source.id)
-                    ? 'bg-sky-600 text-white shadow-sm'
-                    : 'bg-sky-100 text-sky-900 hover:bg-sky-200'
-                }`}
-                aria-pressed={isSourceActive(source.id)}
+                className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-900"
               >
                 {source.name}
-              </button>
+              </span>
             ))}
           </div>
         </div>
 
-        <div className="mt-4">
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
-            <Tags className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{t('topics')}</span>
-          </div>
-          <div className="flex min-h-7 flex-wrap content-start gap-2">
-            {group.topics?.map((topic) => (
-              <button
-                key={topic}
-                type="button"
-                onClick={() => toggleFilter('topics', topic)}
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  isTopicActive(topic)
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200'
-                }`}
-                aria-pressed={isTopicActive(topic)}
-              >
-                {topic}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-4">

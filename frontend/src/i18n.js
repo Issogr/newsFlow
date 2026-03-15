@@ -307,6 +307,49 @@ export function getDateLocale(locale) {
   return locale === 'it' ? 'it-IT' : 'en-US';
 }
 
+const topicTranslations = {
+  politica: { en: 'Politics', it: 'Politica' },
+  politics: { en: 'Politics', it: 'Politica' },
+  economia: { en: 'Economy', it: 'Economia' },
+  economy: { en: 'Economy', it: 'Economia' },
+  mercati: { en: 'Markets', it: 'Mercati' },
+  markets: { en: 'Markets', it: 'Mercati' },
+  tecnologia: { en: 'Technology', it: 'Tecnologia' },
+  technology: { en: 'Technology', it: 'Tecnologia' },
+  tech: { en: 'Technology', it: 'Tecnologia' },
+  scienza: { en: 'Science', it: 'Scienza' },
+  science: { en: 'Science', it: 'Scienza' },
+  cronaca: { en: 'Local news', it: 'Cronaca' },
+  esteri: { en: 'World', it: 'Esteri' },
+  world: { en: 'World', it: 'Esteri' },
+  international: { en: 'World', it: 'Esteri' },
+  salute: { en: 'Health', it: 'Salute' },
+  health: { en: 'Health', it: 'Salute' },
+  sport: { en: 'Sport', it: 'Sport' },
+  sports: { en: 'Sport', it: 'Sport' },
+  cultura: { en: 'Culture', it: 'Cultura' },
+  culture: { en: 'Culture', it: 'Cultura' },
+  spettacolo: { en: 'Entertainment', it: 'Spettacolo' },
+  entertainment: { en: 'Entertainment', it: 'Spettacolo' },
+  ambiente: { en: 'Environment', it: 'Ambiente' },
+  environment: { en: 'Environment', it: 'Ambiente' },
+  clima: { en: 'Climate', it: 'Clima' },
+  climate: { en: 'Climate', it: 'Clima' },
+  sicurezza: { en: 'Security', it: 'Sicurezza' },
+  security: { en: 'Security', it: 'Sicurezza' }
+};
+
+export function getLocalizedTopic(topic, locale = 'en') {
+  const normalized = String(topic || '').trim().toLowerCase();
+  const translation = topicTranslations[normalized];
+
+  if (translation) {
+    return translation[locale] || translation.en;
+  }
+
+  return topic;
+}
+
 const languageMeta = {
   it: { flag: 'IT', emoji: '🇮🇹', labels: { en: 'Italian', it: 'Italiano' } },
   en: { flag: 'EN', emoji: '🇬🇧', labels: { en: 'English', it: 'Inglese' } },
