@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.2.4
+
+- corrected future-dated articles during ingestion so a bad source timestamp no longer leaves one story pinned at the top of the feed
+- added cleanup for already-saved future-dated articles so hosted instances recover automatically after the update
+- hardened article and feed URL handling to block unsafe links and server-side fetch targets
+- made live updates respect excluded sources and excluded sub-feeds more consistently
+- fixed settings-panel state drift so editing custom sources no longer leaks unsaved preference changes into the active app state
+- split the backend database layer into focused modules, simplified logger startup hooks, and squashed legacy SQLite migrations into the current supported schema baseline
+
 ## 3.2.3
 
 - refreshed the frontend experience with clearer settings, a simpler top bar and user menu, more readable filters, easier-to-scan news cards, and tighter mobile behavior including full-screen settings and iPhone input zoom fixes
