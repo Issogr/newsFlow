@@ -29,6 +29,7 @@ function createUserStateRepository({ getDb }) {
              article_retention_hours AS articleRetentionHours,
              recent_hours AS recentHours,
              auto_refresh_enabled AS autoRefreshEnabled,
+             show_news_images AS showNewsImages,
              reader_panel_position AS readerPanelPosition,
              last_seen_release_notes_version AS lastSeenReleaseNotesVersion,
              default_source_ids AS excludedSourceIds,
@@ -42,12 +43,13 @@ function createUserStateRepository({ getDb }) {
       return null;
     }
 
-    return {
-      ...row,
-      autoRefreshEnabled: Boolean(row.autoRefreshEnabled),
-      excludedSourceIds: parseJsonArray(row.excludedSourceIds),
-      excludedSubSourceIds: parseJsonArray(row.excludedSubSourceIds)
-    };
+      return {
+        ...row,
+        autoRefreshEnabled: Boolean(row.autoRefreshEnabled),
+        showNewsImages: row.showNewsImages !== false && row.showNewsImages !== 0,
+        excludedSourceIds: parseJsonArray(row.excludedSourceIds),
+        excludedSubSourceIds: parseJsonArray(row.excludedSubSourceIds)
+      };
   }
 
   function upsertUserSettings(userId, settings = {}) {
@@ -60,17 +62,19 @@ function createUserStateRepository({ getDb }) {
         article_retention_hours,
         recent_hours,
         auto_refresh_enabled,
+        show_news_images,
         reader_panel_position,
         last_seen_release_notes_version,
         default_source_ids,
         excluded_sub_source_ids,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         default_language = excluded.default_language,
         article_retention_hours = excluded.article_retention_hours,
         recent_hours = excluded.recent_hours,
         auto_refresh_enabled = excluded.auto_refresh_enabled,
+        show_news_images = excluded.show_news_images,
         reader_panel_position = excluded.reader_panel_position,
         last_seen_release_notes_version = excluded.last_seen_release_notes_version,
         default_source_ids = excluded.default_source_ids,
@@ -82,6 +86,7 @@ function createUserStateRepository({ getDb }) {
       settings.articleRetentionHours || 24,
       settings.recentHours || 3,
       settings.autoRefreshEnabled === false ? 0 : 1,
+      settings.showNewsImages === false ? 0 : 1,
       settings.readerPanelPosition || 'right',
       settings.lastSeenReleaseNotesVersion || '',
       JSON.stringify(settings.excludedSourceIds || []),
@@ -279,17 +284,19 @@ function createUserStateRepository({ getDb }) {
         article_retention_hours,
         recent_hours,
         auto_refresh_enabled,
+        show_news_images,
         reader_panel_position,
         last_seen_release_notes_version,
         default_source_ids,
         excluded_sub_source_ids,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         default_language = excluded.default_language,
         article_retention_hours = excluded.article_retention_hours,
         recent_hours = excluded.recent_hours,
         auto_refresh_enabled = excluded.auto_refresh_enabled,
+        show_news_images = excluded.show_news_images,
         reader_panel_position = excluded.reader_panel_position,
         last_seen_release_notes_version = excluded.last_seen_release_notes_version,
         default_source_ids = excluded.default_source_ids,
@@ -335,6 +342,7 @@ function createUserStateRepository({ getDb }) {
         nextSettings.articleRetentionHours || 24,
         nextSettings.recentHours || 3,
         nextSettings.autoRefreshEnabled === false ? 0 : 1,
+        nextSettings.showNewsImages === false ? 0 : 1,
         nextSettings.readerPanelPosition || 'right',
         nextSettings.lastSeenReleaseNotesVersion || '',
         JSON.stringify(nextSettings.excludedSourceIds || []),

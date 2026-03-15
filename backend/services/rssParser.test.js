@@ -73,6 +73,26 @@ describe('rssParser article ids', () => {
     ).toBe('https://example.com/story?a=1&b=2');
   });
 
+  test('extracts an image from media arrays and lazy html fallbacks', () => {
+    expect(rssParser._getImageUrl({
+      media: [
+        { $: { url: 'https://example.com/image-one.jpg' } },
+        { $: { url: 'https://example.com/image-two.jpg' } }
+      ]
+    })).toBe('https://example.com/image-one.jpg');
+
+    expect(rssParser._extractImageFromHtml(
+      '<figure><img data-lazy-src="/images/story.jpg" src="/placeholder.jpg" /></figure>',
+      'https://www.example.com/article'
+    )).toBe('https://www.example.com/images/story.jpg');
+  });
+
+  test('extracts article images from og:image metadata', () => {
+    const html = '<html><head><meta property="og:image" content="/media/story.jpg" /></head></html>';
+
+    expect(rssParser._extractImageFromArticleHtml(html, 'https://www.example.com/article')).toBe('https://www.example.com/media/story.jpg');
+  });
+
   test('falls back to title and published date when guid and link are missing', () => {
     const source = { id: 'custom' };
     const firstId = rssParser._buildArticleId(source, {

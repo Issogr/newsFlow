@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import {
   BookOpenText,
   CalendarDays,
@@ -24,6 +24,11 @@ function getSourceEntries(group) {
   return [...sourceMap.values()];
 }
 
+function getGroupImageUrl(group) {
+  const rawImageUrl = (group?.items || []).map((item) => item?.image).find(Boolean);
+  return getSafeExternalUrl(rawImageUrl);
+}
+
 function formatPublicationDate(dateString, locale) {
   if (!dateString) {
     return '';
@@ -42,16 +47,35 @@ function formatPublicationDate(dateString, locale) {
   }
 }
 
-const NewsCard = memo(({ group, locale, t, onOpenReader }) => {
-  if (!group?.items?.length) {
+const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) => {
+  const hasItems = Boolean(group?.items?.length);
+
+  const sourceEntries = getSourceEntries(group);
+  const safeOriginalUrl = getSafeExternalUrl(group?.url);
+  const safeImageUrl = showImages ? getGroupImageUrl(group) : '';
+  const [imageVisible, setImageVisible] = useState(Boolean(safeImageUrl));
+
+  useEffect(() => {
+    setImageVisible(Boolean(safeImageUrl));
+  }, [safeImageUrl]);
+
+  if (!hasItems) {
     return null;
   }
 
-  const sourceEntries = getSourceEntries(group);
-  const safeOriginalUrl = getSafeExternalUrl(group.url);
-
   return (
     <article className="flex h-full min-h-[20rem] flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-xl">
+      {imageVisible ? (
+        <div className="aspect-[16/9] w-full overflow-hidden bg-slate-100">
+          <img
+            src={safeImageUrl}
+            alt={group.title}
+            loading="lazy"
+            className="h-full w-full object-cover"
+            onError={() => setImageVisible(false)}
+          />
+        </div>
+      ) : null}
       <div className="flex flex-1 flex-col p-5">
         <h2 className="text-xl font-semibold leading-snug text-slate-900">
           {group.title}

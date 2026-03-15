@@ -66,12 +66,13 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('10');
+    expect(migrationVersion).toBe('11');
     expect(articleColumns).toContain('canonical_url');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
     expect(settingsColumns).toContain('auto_refresh_enabled');
+    expect(settingsColumns).toContain('show_news_images');
     expect(settingsColumns).toContain('reader_panel_position');
     expect(settingsColumns).toContain('last_seen_release_notes_version');
   });
@@ -110,6 +111,19 @@ describe('database migrations', () => {
         PRIMARY KEY (article_id, topic)
       );
 
+      CREATE TABLE user_settings (
+        user_id TEXT PRIMARY KEY,
+        default_language TEXT NOT NULL DEFAULT 'auto',
+        article_retention_hours INTEGER NOT NULL DEFAULT 24,
+        recent_hours INTEGER NOT NULL DEFAULT 3,
+        auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
+        reader_panel_position TEXT NOT NULL DEFAULT 'right',
+        last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
+        default_source_ids TEXT NOT NULL DEFAULT '[]',
+        excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
        INSERT INTO app_meta (key, value) VALUES ('migration_version', '10');
        INSERT INTO articles (id, source_id, source_name, title, canonical_url) VALUES ('article-1', 'ansa', 'ANSA', 'Headline', 'https://example.com/story');
        INSERT INTO article_topics (article_id, topic) VALUES ('article-1', 'economy');
@@ -125,16 +139,24 @@ describe('database migrations', () => {
        SELECT article_id AS articleId, topic
        FROM article_topics
      `).all();
-     const articleRows = migratedDb.prepare(`
-       SELECT id, canonical_url AS canonicalUrl
-       FROM articles
-     `).all();
+      const articleRows = migratedDb.prepare(`
+        SELECT id, canonical_url AS canonicalUrl
+        FROM articles
+      `).all();
+      const migratedVersion = migratedDb.prepare(`
+        SELECT value
+        FROM app_meta
+        WHERE key = 'migration_version'
+      `).get()?.value;
+      const settingsColumns = migratedDb.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
 
-     migratedDb.close();
+      migratedDb.close();
 
-     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
-     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-   });
+      expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
+      expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
+      expect(migratedVersion).toBe('11');
+      expect(settingsColumns).toContain('show_news_images');
+    });
 
   test('rejects databases on an older schema version', () => {
     const sqlite = new SqliteDatabase(dbPath);

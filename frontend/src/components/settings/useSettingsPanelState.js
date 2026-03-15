@@ -106,6 +106,13 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     }));
   }, []);
 
+  const setShowNewsImages = useCallback((value) => {
+    setSettings((current) => ({
+      ...current,
+      showNewsImages: Boolean(value)
+    }));
+  }, []);
+
   const setReaderPanelPosition = useCallback((value) => {
     setSettings((current) => ({
       ...current,
@@ -260,6 +267,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     setEditingSourceForm,
     setDefaultLanguage,
     setAutoRefreshEnabled,
+    setShowNewsImages,
     setReaderPanelPosition,
     updateNumericSetting,
     toggleExcludedSource,

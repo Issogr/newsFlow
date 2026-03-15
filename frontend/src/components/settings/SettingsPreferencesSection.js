@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock3, Download, Globe2, PanelRightOpen, Radio, TimerReset, Upload } from 'lucide-react';
+import { Clock3, Download, Globe2, Image as ImageIcon, PanelRightOpen, Radio, RefreshCw, TimerReset, Upload } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 
 const SettingsPreferencesSection = ({
@@ -10,6 +10,7 @@ const SettingsPreferencesSection = ({
   settingsLimits,
   onDefaultLanguageChange,
   onAutoRefreshChange,
+  onShowNewsImagesChange,
   onReaderPanelPositionChange,
   onNumericSettingChange,
   onExport,
@@ -88,10 +89,9 @@ const SettingsPreferencesSection = ({
             <option value="center">{t('readerPanelPositionCenter')}</option>
             <option value="right">{t('readerPanelPositionRight')}</option>
           </select>
-          <span className="mt-2 block text-sm text-slate-500">{t('readerPanelPositionHelp')}</span>
         </label>
 
-        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 md:col-span-2">
+        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
           <input
             type="checkbox"
             checked={settings.autoRefreshEnabled !== false}
@@ -99,8 +99,25 @@ const SettingsPreferencesSection = ({
             className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
           />
           <span>
-            <span className="block text-sm font-medium text-slate-800">{t('autoRefreshSetting')}</span>
-            <span className="mt-1 block text-sm text-slate-500">{t('autoRefreshHelp')}</span>
+            <span className="flex items-center gap-2 text-sm font-medium text-slate-800">
+              <RefreshCw className="h-4 w-4 text-emerald-600" />
+              {t('autoRefreshSetting')}
+            </span>
+          </span>
+        </label>
+
+        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <input
+            type="checkbox"
+            checked={settings.showNewsImages !== false}
+            onChange={(event) => onShowNewsImagesChange(event.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+          />
+          <span>
+            <span className="flex items-center gap-2 text-sm font-medium text-slate-800">
+              <ImageIcon className="h-4 w-4 text-violet-600" />
+              {t('showNewsImagesSetting')}
+            </span>
           </span>
         </label>
 

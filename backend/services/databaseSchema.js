@@ -1,5 +1,5 @@
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 10;
+  const CURRENT_SCHEMA_VERSION = 11;
 
   function initializeSchema(database) {
     database.exec(`
@@ -81,6 +81,7 @@ function createDatabaseSchema({ logger }) {
         article_retention_hours INTEGER NOT NULL DEFAULT 24,
         recent_hours INTEGER NOT NULL DEFAULT 3,
         auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
+        show_news_images INTEGER NOT NULL DEFAULT 1,
         reader_panel_position TEXT NOT NULL DEFAULT 'right',
         last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
         default_source_ids TEXT NOT NULL DEFAULT '[]',
@@ -140,6 +141,10 @@ function createDatabaseSchema({ logger }) {
     return row ? Number(row.value) : null;
   }
 
+  function columnExists(database, tableName, columnName) {
+    return database.prepare(`PRAGMA table_info(${tableName})`).all().some((column) => column.name === columnName);
+  }
+
   function setCurrentSchemaVersion(database) {
     database.prepare(`
       INSERT INTO app_meta (key, value)
@@ -154,6 +159,18 @@ function createDatabaseSchema({ logger }) {
     if (currentVersion === null) {
       setCurrentSchemaVersion(database);
       logger.info(`Initialized DB schema version ${CURRENT_SCHEMA_VERSION}`);
+      return;
+    }
+
+    if (currentVersion === 10) {
+      if (!columnExists(database, 'user_settings', 'show_news_images')) {
+        database.exec(`
+          ALTER TABLE user_settings
+          ADD COLUMN show_news_images INTEGER NOT NULL DEFAULT 1
+        `);
+      }
+      setCurrentSchemaVersion(database);
+      logger.info('Migrated DB schema from version 10 to 11: added show_news_images user setting');
       return;
     }
 

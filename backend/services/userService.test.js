@@ -52,6 +52,7 @@ describe('userService imports', () => {
         articleRetentionHours: 12,
         recentHours: 2,
         autoRefreshEnabled: false,
+        showNewsImages: false,
         readerPanelPosition: 'left',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: ['bbc'],
@@ -72,6 +73,7 @@ describe('userService imports', () => {
         articleRetentionHours: 12,
         recentHours: 2,
         autoRefreshEnabled: false,
+        showNewsImages: false,
         readerPanelPosition: 'left',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: []
@@ -90,6 +92,7 @@ describe('userService imports', () => {
       articleRetentionHours: 12,
       recentHours: 2,
       autoRefreshEnabled: false,
+      showNewsImages: false,
       readerPanelPosition: 'left',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: []
