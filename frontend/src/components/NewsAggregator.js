@@ -12,7 +12,6 @@ import {
   ChevronDown,
   ChevronUp,
   User,
-  Wifi,
   WifiOff
 } from 'lucide-react';
 import { fetchNews, isRequestCanceled } from '../services/api';
@@ -471,9 +470,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
               <div className="grid gap-6 lg:grid-cols-2">
                 <div>
                   <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-sky-700">
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
-                      <Rss className="h-4 w-4" aria-hidden="true" />
-                    </span>
+                    <Rss className="h-4 w-4" aria-hidden="true" />
                     <span>{t('sources')}</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -504,9 +501,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
                 <div>
                   <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-emerald-700">
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-                      <Tags className="h-4 w-4" aria-hidden="true" />
-                    </span>
+                    <Tags className="h-4 w-4" aria-hidden="true" />
                     <span>{t('topics')}</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
