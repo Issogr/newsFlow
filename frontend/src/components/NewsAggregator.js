@@ -407,7 +407,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={t('searchPlaceholder')}
-                className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+                className="w-full bg-transparent text-base outline-none placeholder:text-slate-400 sm:text-sm"
               />
             </label>
 
