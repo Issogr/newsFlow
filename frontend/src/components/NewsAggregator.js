@@ -73,7 +73,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     updateSubscriptionFilters,
     resetNewArticlesCount,
     markGroupsSeen
-  } = useWebSocket('', websocketMessages);
+  } = useWebSocket('', websocketMessages, autoRefreshEnabled);
   const liveStatusLabel = autoRefreshEnabled
     ? (isConnected ? t('liveActive') : t('liveOffline'))
     : t('liveDisabled');
@@ -202,9 +202,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
     updateSubscriptionFilters({
       topics: activeFilters.topics,
-      sourceIds: activeFilters.sourceIds
+      sourceIds: activeFilters.sourceIds,
+      excludedSourceIds,
+      excludedSubSourceIds
     });
-  }, [activeFilters.sourceIds, activeFilters.topics, isConnected, updateSubscriptionFilters]);
+  }, [activeFilters.sourceIds, activeFilters.topics, excludedSourceIds, excludedSubSourceIds, isConnected, updateSubscriptionFilters]);
 
   useEffect(() => {
     if (visibleGroupIds.length === 0) {

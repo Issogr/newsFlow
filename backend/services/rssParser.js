@@ -1,10 +1,10 @@
 const crypto = require('crypto');
-const axios = require('axios');
 const RSSParser = require('rss-parser');
 const logger = require('../utils/logger');
 const summarizeErrorMessage = require('../utils/summarizeError');
 const { sanitizeHtml } = require('../utils/inputValidator');
 const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
+const { fetchSafeTextUrl } = require('../utils/urlSafety');
 
 const MAX_ARTICLES_PER_SOURCE = parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '25', 10);
 const RSS_MAX_RETRIES = parseInt(process.env.RSS_MAX_RETRIES || '4', 10);
@@ -194,14 +194,12 @@ async function fetchFeedXml(url) {
 
   for (let attempt = 1; attempt <= RSS_MAX_RETRIES; attempt += 1) {
     try {
-      const response = await axios.get(url, {
+      const response = await fetchSafeTextUrl(url, {
         timeout: RSS_TIMEOUT,
-        responseType: 'text',
         headers: {
           'User-Agent': 'news-aggregator/2.0 (+https://localhost)',
           Accept: 'application/rss+xml, application/xml, text/xml, */*'
-        },
-        transformResponse: [(data) => data]
+        }
       });
 
       responseCache.set(url, {

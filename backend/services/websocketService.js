@@ -70,17 +70,31 @@ function initialize(server) {
     statistics.totalConnections += 1;
     statistics.activeConnectionsCount += 1;
     activeConnections.set(socket.id, socket);
-    socket.data.filters = { topics: [], sourceIds: [] };
-    socket.data.filterSets = { topics: new Set(), sourceIds: new Set() };
+    socket.data.filters = {
+      topics: [],
+      sourceIds: [],
+      excludedSourceIds: [],
+      excludedSubSourceIds: []
+    };
+    socket.data.filterSets = {
+      topics: new Set(),
+      sourceIds: new Set(),
+      excludedSourceIds: new Set(),
+      excludedSubSourceIds: new Set()
+    };
 
     socket.on('subscribe:filters', (filters = {}) => {
       socket.data.filters = {
         topics: Array.isArray(filters.topics) ? filters.topics.filter(Boolean) : [],
-        sourceIds: Array.isArray(filters.sourceIds) ? filters.sourceIds.filter(Boolean) : []
+        sourceIds: Array.isArray(filters.sourceIds) ? filters.sourceIds.filter(Boolean) : [],
+        excludedSourceIds: Array.isArray(filters.excludedSourceIds) ? filters.excludedSourceIds.filter(Boolean) : [],
+        excludedSubSourceIds: Array.isArray(filters.excludedSubSourceIds) ? filters.excludedSubSourceIds.filter(Boolean) : []
       };
       socket.data.filterSets = {
         topics: new Set(socket.data.filters.topics),
-        sourceIds: new Set(socket.data.filters.sourceIds)
+        sourceIds: new Set(socket.data.filters.sourceIds),
+        excludedSourceIds: new Set(socket.data.filters.excludedSourceIds),
+        excludedSubSourceIds: new Set(socket.data.filters.excludedSubSourceIds)
       };
     });
 
@@ -103,8 +117,14 @@ function groupMatchesFilters(group, filters = {}) {
   const sourceFilters = filters.sourceIds instanceof Set
     ? filters.sourceIds
     : new Set(Array.isArray(filters.sourceIds) ? filters.sourceIds : []);
+  const excludedSourceFilters = filters.excludedSourceIds instanceof Set
+    ? filters.excludedSourceIds
+    : new Set(Array.isArray(filters.excludedSourceIds) ? filters.excludedSourceIds : []);
+  const excludedSubSourceFilters = filters.excludedSubSourceIds instanceof Set
+    ? filters.excludedSubSourceIds
+    : new Set(Array.isArray(filters.excludedSubSourceIds) ? filters.excludedSubSourceIds : []);
 
-  if (topicFilters.size === 0 && sourceFilters.size === 0) {
+  if (topicFilters.size === 0 && sourceFilters.size === 0 && excludedSourceFilters.size === 0 && excludedSubSourceFilters.size === 0) {
     return true;
   }
 
@@ -112,12 +132,20 @@ function groupMatchesFilters(group, filters = {}) {
   const groupSourceIds = group.sourceIdSet || new Set(
     Array.isArray(group.items) ? group.items.map((item) => item.sourceId).filter(Boolean) : []
   );
+  const groupRawSourceIds = group.rawSourceIdSet || new Set(
+    Array.isArray(group.items) ? group.items.map((item) => item.rawSourceId || item.sourceId).filter(Boolean) : []
+  );
 
   const hasTopicMatch = topicFilters.size === 0 || [...topicFilters].some((topic) => groupTopics.has(topic));
 
   const hasSourceMatch = sourceFilters.size === 0 || [...sourceFilters].some((sourceId) => groupSourceIds.has(sourceId));
 
-  return hasTopicMatch && hasSourceMatch;
+  const hasExcludedSource = excludedSourceFilters.size > 0 && [...excludedSourceFilters].some((sourceId) => groupSourceIds.has(sourceId));
+
+  const hasExcludedSubSource = excludedSubSourceFilters.size > 0
+    && [...excludedSubSourceFilters].some((sourceId) => groupRawSourceIds.has(sourceId));
+
+  return hasTopicMatch && hasSourceMatch && !hasExcludedSource && !hasExcludedSubSource;
 }
 
 function emitToSocket(socket, event, payload) {
@@ -156,7 +184,8 @@ function broadcastNewsUpdate(newsGroups = []) {
   const preparedGroups = newsGroups.map((group) => ({
     ...group,
     topicSet: new Set(Array.isArray(group.topics) ? group.topics : []),
-    sourceIdSet: new Set(Array.isArray(group.items) ? group.items.map((item) => item.sourceId).filter(Boolean) : [])
+    sourceIdSet: new Set(Array.isArray(group.items) ? group.items.map((item) => item.sourceId).filter(Boolean) : []),
+    rawSourceIdSet: new Set(Array.isArray(group.items) ? group.items.map((item) => item.rawSourceId || item.sourceId).filter(Boolean) : [])
   }));
   const globalGroups = preparedGroups.filter((group) => !group.ownerUserId);
   const privateGroupsByUserId = new Map();

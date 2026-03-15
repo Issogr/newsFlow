@@ -134,6 +134,35 @@ describe('websocketService', () => {
     }));
   });
 
+  test('does not broadcast groups from excluded sources or sub-sources', () => {
+    const socket = createSocket('socket-1', { auth: { token: 'token-1' }, headers: {} });
+    socket.data.userId = 'user-1';
+
+    ioMock.connectionHandler(socket);
+
+    socket.handlers['subscribe:filters']({
+      excludedSourceIds: ['ansa'],
+      excludedSubSourceIds: ['ansa_world']
+    });
+
+    websocketService.broadcastNewsUpdate([
+      {
+        id: 'group-1',
+        ownerUserId: 'user-1',
+        topics: ['Politics'],
+        items: [{ sourceId: 'ansa', rawSourceId: 'ansa_politics' }]
+      },
+      {
+        id: 'group-2',
+        ownerUserId: 'user-1',
+        topics: ['Politics'],
+        items: [{ sourceId: 'reuters', rawSourceId: 'ansa_world' }]
+      }
+    ]);
+
+    expect(socket.emit).not.toHaveBeenCalled();
+  });
+
   test('deduplicates repeated group ids in a single broadcast payload', () => {
     const socket = createSocket('socket-1', { auth: { token: 'token-1' }, headers: {} });
     socket.data.userId = 'user-1';
