@@ -60,6 +60,7 @@ function initialize(server) {
 
       socket.data.userId = session.userId;
       socket.data.username = session.username;
+      database.touchUserActivity(session.userId, new Date().toISOString(), 60);
       next();
     } catch (error) {
       next(new Error(`WebSocket auth failed: ${error.message}`));
@@ -84,6 +85,7 @@ function initialize(server) {
     };
 
     socket.on('subscribe:filters', (filters = {}) => {
+      database.touchUserActivity(socket.data.userId, new Date().toISOString(), 60);
       socket.data.filters = {
         topics: Array.isArray(filters.topics) ? filters.topics.filter(Boolean) : [],
         sourceIds: Array.isArray(filters.sourceIds) ? filters.sourceIds.filter(Boolean) : [],

@@ -1,16 +1,16 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.2.5',
+  version: '3.2.6',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'Here is a quick overview of the latest changes in News Flow.',
     items: [
-      '🖼️ News cards can now show article images more often, even when some publishers leave the picture out of the feed itself.',
-      '⚡ To keep refreshes fast and avoid slowing down the whole app, this extra image recovery is used only for a small number of recent articles instead of every story.',
-      '📰 If a publisher already provides a valid image in the feed, News Flow still uses it right away as before.',
-      '🎛️ Topic filters now match the cleaner chip style used elsewhere, with outlined pills and topic icons that are easier to scan.',
-      '⚙️ You can now turn card images on or off from Settings if you prefer a more compact news list.',
-      '🔗 A GitHub shortcut is now available in Settings and release notes, so opening the project page takes one click.'
+      '🔐 New accounts now require a real password, with stronger validation on both the frontend and backend.',
+      '🧳 Settings export and import now preserve the card image preference correctly during account migrations.',
+      '🛡️ News Flow now creates a reserved admin account automatically and logs a one-time setup link when admin access has not been configured yet.',
+      '🔗 The admin can now generate one-time password setup links for users, making password resets safer and easier to manage.',
+      '📊 The admin account now opens directly into a dedicated dashboard with account management tools instead of the normal news home.',
+      '🟢 The admin dashboard now shows online users plus each account\'s last login and latest activity.'
     ]
   },
   it: {
@@ -18,12 +18,12 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Ecco una panoramica rapida delle ultime novita di News Flow.',
     items: [
-      '🖼️ Le news card ora riescono a mostrare piu spesso l\'immagine dell\'articolo, anche quando alcuni giornali non la includono direttamente nel feed.',
-      '⚡ Per mantenere gli aggiornamenti veloci e non rallentare tutta l\'app, questo recupero extra delle immagini viene usato solo su un piccolo numero di articoli recenti e non su tutte le notizie.',
-      '📰 Se una fonte fornisce gia un\'immagine valida nel feed, News Flow continua a usarla subito come sempre.',
-      '🎛️ I filtri dei topic ora seguono uno stile piu pulito e coerente, con chip outline e icone dei topic piu facili da leggere.',
-      '⚙️ Ora puoi attivare o disattivare le immagini nelle card dalle Impostazioni se preferisci una lista notizie piu compatta.',
-      '🔗 Ora trovi un collegamento rapido a GitHub nelle Impostazioni e nelle note di rilascio, cosi puoi aprire la pagina del progetto con un solo clic.'
+      '🔐 I nuovi account richiedono ora una password reale, con validazione piu solida sia nel frontend sia nel backend.',
+      '🧳 L\'esportazione e importazione delle impostazioni ora conserva correttamente la preferenza delle immagini nelle card durante le migrazioni account.',
+      '🛡️ News Flow crea ora automaticamente l\'account admin riservato e scrive nei log un link monouso di configurazione quando l\'accesso admin non e ancora impostato.',
+      '🔗 L\'admin puo ora generare link monouso per permettere agli utenti di configurare una nuova password in modo piu sicuro e semplice.',
+      '📊 L\'account admin si apre ora direttamente in una dashboard dedicata alla gestione account invece della normale home con le notizie.',
+      '🟢 La dashboard admin ora mostra gli utenti online, l\'ultimo accesso e l\'ultima attivita di ogni account.'
     ]
   }
 };

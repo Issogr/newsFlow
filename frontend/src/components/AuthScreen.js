@@ -2,12 +2,19 @@ import React, { useState } from 'react';
 import { LogIn, UserPlus } from 'lucide-react';
 import BrandMark from './BrandMark';
 
+const MIN_PASSWORD_LENGTH = 8;
+
 const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
   const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [clientError, setClientError] = useState('');
 
   const getFriendlyError = () => {
+    if (clientError) {
+      return clientError;
+    }
+
     if (!error) {
       return '';
     }
@@ -28,7 +35,19 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
       return t('authErrorUsernameTaken');
     }
 
-    if (apiCode === 'INVALID_USERNAME' || status === 400 || apiMessage === 'Username must contain at least 3 characters') {
+    if (apiMessage === 'Password is required') {
+      return t('authErrorPasswordRequired');
+    }
+
+    if (apiMessage === `Password must contain at least ${MIN_PASSWORD_LENGTH} characters`) {
+      return t('authErrorPasswordMinLength', { count: MIN_PASSWORD_LENGTH });
+    }
+
+    if (apiCode === 'INVALID_PASSWORD') {
+      return apiMessage || t('authErrorPasswordRequired');
+    }
+
+    if (apiCode === 'INVALID_USERNAME' || apiMessage === 'Username must contain at least 3 characters') {
       return t('authErrorInvalidUsername');
     }
 
@@ -51,14 +70,25 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
     return apiMessage || t('authErrorGeneric');
   };
 
-  const rawErrorMessage = error?.message || '';
+  const rawErrorMessage = clientError ? '' : (error?.message || '');
   const friendlyError = getFriendlyError();
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    setClientError('');
 
     if (mode === 'login') {
       await onLogin({ username, password });
+      return;
+    }
+
+    if (!password) {
+      setClientError(t('authErrorPasswordRequired'));
+      return;
+    }
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setClientError(t('authErrorPasswordMinLength', { count: MIN_PASSWORD_LENGTH }));
       return;
     }
 
@@ -79,14 +109,20 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
         <div className="mb-6 grid grid-cols-2 rounded-2xl bg-slate-100 p-1 text-sm font-medium">
           <button
             type="button"
-            onClick={() => setMode('login')}
+            onClick={() => {
+              setMode('login');
+              setClientError('');
+            }}
             className={`rounded-2xl px-4 py-2.5 transition-colors ${mode === 'login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
           >
             {t('signIn')}
           </button>
           <button
             type="button"
-            onClick={() => setMode('register')}
+            onClick={() => {
+              setMode('register');
+              setClientError('');
+            }}
             className={`rounded-2xl px-4 py-2.5 transition-colors ${mode === 'register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
           >
             {t('createAccount')}
@@ -98,7 +134,10 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
             <span className="mb-2 block text-sm font-medium text-slate-700">{t('username')}</span>
             <input
               value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              onChange={(event) => {
+                setUsername(event.target.value);
+                setClientError('');
+              }}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition-colors focus:border-slate-400"
               required
               minLength={3}
@@ -106,18 +145,23 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
           </label>
 
           <label className="block">
-            <span className="mb-2 block text-sm font-medium text-slate-700">{t('passwordOptional')}</span>
+            <span className="mb-2 block text-sm font-medium text-slate-700">{t('password')}</span>
             <input
               type="password"
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setClientError('');
+              }}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition-colors focus:border-slate-400"
+              required={mode === 'register'}
+              minLength={mode === 'register' ? MIN_PASSWORD_LENGTH : undefined}
             />
           </label>
 
           <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">{t('passwordHelp')}</p>
 
-          {error && (
+          {(clientError || error) && (
             <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               <p className="font-medium">{friendlyError}</p>
               {rawErrorMessage && rawErrorMessage !== friendlyError && (

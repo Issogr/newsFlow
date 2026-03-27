@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.2.6
+
+- made passwords mandatory for new accounts, added minimum-length validation on backend and frontend, and blocked legacy passwordless logins from authenticating
+- fixed settings export/import so `showNewsImages` now survives account migrations correctly
+- added a dedicated admin bootstrap flow that creates the reserved admin account automatically, logs a one-time setup link on startup, and prevents normal users from registering the reserved admin username
+- added admin-managed password setup/reset links so the admin can issue one-time links for users to configure a new valid password
+- replaced the admin news home with a dedicated admin dashboard that focuses on account management instead of the reader/news feed
+- added admin visibility into total users, currently online users, last login time, and last activity time with automatic activity tracking for authenticated API and WebSocket usage
+
 ## 3.2.5
 
 - improved article image coverage in news cards by falling back to article-page metadata when feeds omit image data

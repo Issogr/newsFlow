@@ -4,7 +4,7 @@ const readerService = require('../services/readerService');
 const userService = require('../services/userService');
 const { asyncHandler, createError } = require('../utils/errorHandler');
 const { sanitizeParam, sanitizeQuery, validateParam, sanitizeBody } = require('../utils/inputValidator');
-const { requireAuthenticatedUser } = require('../utils/auth');
+const { requireAuthenticatedUser, requireAdminUser } = require('../utils/auth');
 
 const router = express.Router();
 
@@ -48,6 +48,16 @@ router.post('/auth/register', [sanitizeBody(['username'])], asyncHandler(async (
 
 router.post('/auth/login', [sanitizeBody(['username'])], asyncHandler(async (req, res) => {
   const result = userService.loginUser(req.body || {});
+  res.json(result);
+}));
+
+router.get('/auth/password-setup/validate', [sanitizeQuery('token')], asyncHandler(async (req, res) => {
+  const details = userService.getPasswordSetupTokenDetails(req.query.token);
+  res.json(details);
+}));
+
+router.post('/auth/password-setup/complete', asyncHandler(async (req, res) => {
+  const result = userService.completePasswordSetup(req.body || {});
   res.json(result);
 }));
 
@@ -98,6 +108,20 @@ router.delete('/me/sources/:sourceId', [
 ], asyncHandler(async (req, res) => {
   userService.removeUserSource(req.user.id, req.params.sourceId);
   res.json({ success: true });
+}));
+
+router.get('/admin/users', [requireAuthenticatedUser, requireAdminUser], asyncHandler(async (req, res) => {
+  res.json(userService.listUsersForAdmin());
+}));
+
+router.post('/admin/users/:userId/password-setup-link', [
+  requireAuthenticatedUser,
+  requireAdminUser,
+  validateParam('userId', 'Invalid user ID'),
+  sanitizeParam('userId')
+], asyncHandler(async (req, res) => {
+  const result = userService.createUserPasswordSetupLink(req.user.id, req.params.userId);
+  res.json({ success: true, ...result });
 }));
 
 router.get('/news', [requireAuthenticatedUser, sanitizeQuery('search')], asyncHandler(async (req, res) => {

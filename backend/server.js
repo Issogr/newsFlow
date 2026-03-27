@@ -10,6 +10,7 @@ const database = require('./services/database');
 const websocketService = require('./services/websocketService');
 const newsService = require('./services/newsAggregator');
 const rssParser = require('./services/rssParser');
+const userService = require('./services/userService');
 const { errorMiddleware, createError } = require('./utils/errorHandler');
 const { getAllowedOrigins, isOriginAllowed } = require('./utils/networkConfig');
 
@@ -113,8 +114,13 @@ const server = http.createServer(app);
 try {
   const dbWriteStatus = database.verifyWriteAccess();
   logger.info(`Database write check passed at ${dbWriteStatus.checkedAt}`);
+
+  const adminBootstrap = userService.ensureAdminBootstrap();
+  if (adminBootstrap.required) {
+    logger.warn(`Admin account "${adminBootstrap.user.username}" is not configured. Complete setup at ${adminBootstrap.setupLink} before expiry ${adminBootstrap.expiresAt}`);
+  }
 } catch (error) {
-  logger.error(`Database write check failed: ${error.message}`);
+  logger.error(`Startup check failed: ${error.message}`);
   process.exit(1);
 }
 

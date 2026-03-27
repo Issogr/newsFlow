@@ -19,7 +19,7 @@
 - It stays lightweight and self-hostable by using local SQLite storage, built-in full-text search, and a simple single-service architecture, so the project remains practical to deploy without extra infrastructure.
 - It gives each user control over relevance through source exclusions, recent-time filters, retention limits, and personal RSS feeds, making the product useful both as a shared instance and as a tailored private reader.
 - It keeps the reading experience focused with live updates, multilingual support, and an in-app reader mode that extracts cleaner article text from the original source instead of sending users straight into cluttered layouts.
-- It supports this goal with features designed around clarity rather than volume: grouped stories, source families by publisher domain, server-side search, reader caching, settings import/export, and optional passwordless accounts for frictionless access.
+- It supports this goal with features designed around clarity rather than volume: grouped stories, source families by publisher domain, server-side search, reader caching, settings import/export, and account-based access with persistent user preferences.
 
 ## Quick Start
 
@@ -49,6 +49,13 @@ Common backend variables:
 - `MAX_ARTICLES_PER_SOURCE` - max parsed items per feed
 - `NEWS_DB_PATH` - SQLite file path
 - `SESSION_TTL_DAYS` - session lifetime
+- `APP_BASE_URL` - public frontend base URL used when generating admin/bootstrap password setup links
+
+Admin access:
+
+- On startup, the backend ensures a reserved admin account exists.
+- If the admin password is not configured yet, the backend logs a single-use setup link for the admin bootstrap flow.
+- Set `APP_BASE_URL` so generated setup links point to the correct frontend origin in your environment.
 
 ## Project Layout
 

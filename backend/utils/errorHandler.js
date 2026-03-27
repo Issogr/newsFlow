@@ -69,7 +69,7 @@ const errorMiddleware = (err, req, res, next) => {
   
   // Usa messaggio personalizzato o cerca nella mappa errori
   let message = err.message;
-  if (!message || process.env.NODE_ENV === 'production') {
+  if (!message || (process.env.NODE_ENV === 'production' && status >= 500)) {
     message = ERROR_MESSAGES[code] || 'Si è verificato un errore interno.';
   }
   

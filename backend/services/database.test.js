@@ -63,10 +63,12 @@ describe('database migrations', () => {
     const topicColumns = sqlite.prepare('PRAGMA table_info(article_topics)').all().map((column) => column.name);
     const settingsColumns = sqlite.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
     const articleColumns = sqlite.prepare('PRAGMA table_info(articles)').all().map((column) => column.name);
+    const userColumns = sqlite.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
+    const passwordSetupTokenColumns = sqlite.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column) => column.name);
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('11');
+    expect(migrationVersion).toBe('13');
     expect(articleColumns).toContain('canonical_url');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
@@ -75,6 +77,10 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('show_news_images');
     expect(settingsColumns).toContain('reader_panel_position');
     expect(settingsColumns).toContain('last_seen_release_notes_version');
+    expect(userColumns).toContain('role');
+    expect(userColumns).toContain('last_login_at');
+    expect(userColumns).toContain('last_activity_at');
+    expect(passwordSetupTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'purpose', 'expires_at', 'used_at']));
   });
 
   test('opens an existing database already on the current schema version', () => {
@@ -149,13 +155,19 @@ describe('database migrations', () => {
         WHERE key = 'migration_version'
       `).get()?.value;
       const settingsColumns = migratedDb.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
+      const userColumns = migratedDb.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
+      const passwordSetupTokenColumns = migratedDb.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column) => column.name);
 
       migratedDb.close();
 
       expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
       expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-      expect(migratedVersion).toBe('11');
+      expect(migratedVersion).toBe('13');
       expect(settingsColumns).toContain('show_news_images');
+      expect(userColumns).toContain('role');
+      expect(userColumns).toContain('last_login_at');
+      expect(userColumns).toContain('last_activity_at');
+      expect(passwordSetupTokenColumns).toContain('token_hash');
     });
 
   test('rejects databases on an older schema version', () => {

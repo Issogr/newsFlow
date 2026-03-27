@@ -61,6 +61,18 @@ export const loginUser = async ({ username, password }) => {
   return response.data;
 };
 
+export const validatePasswordSetupToken = async (token) => {
+  const response = await api.get('/auth/password-setup/validate', {
+    params: { token }
+  });
+  return response.data;
+};
+
+export const completePasswordSetup = async ({ token, password }) => {
+  const response = await api.post('/auth/password-setup/complete', { token, password });
+  return response.data;
+};
+
 export const logoutUser = async () => {
   const response = await api.post('/auth/logout');
   return response.data;
@@ -98,6 +110,16 @@ export const updateUserSource = async (sourceId, payload) => {
 
 export const deleteUserSource = async (sourceId) => {
   const response = await api.delete(`/me/sources/${sourceId}`);
+  return response.data;
+};
+
+export const fetchAdminUsers = async () => {
+  const response = await api.get('/admin/users');
+  return response.data;
+};
+
+export const createAdminPasswordSetupLink = async (userId) => {
+  const response = await api.post(`/admin/users/${userId}/password-setup-link`);
   return response.data;
 };
 

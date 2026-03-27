@@ -4,6 +4,8 @@ const { createError } = require('./errorHandler');
 
 const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '30', 10);
 const SESSION_PURGE_INTERVAL_MS = parseInt(process.env.SESSION_PURGE_INTERVAL_MS || '300000', 10);
+const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase() || 'admin';
+const USER_ACTIVITY_TOUCH_INTERVAL_SECONDS = parseInt(process.env.USER_ACTIVITY_TOUCH_INTERVAL_SECONDS || '60', 10);
 
 let lastSessionPurgeAt = 0;
 
@@ -48,7 +50,7 @@ function hashPassword(password) {
 
 function verifyPassword(password, storedHash) {
   if (!storedHash) {
-    return true;
+    return false;
   }
 
   const normalized = String(password || '');
@@ -109,8 +111,23 @@ function requireAuthenticatedUser(req, res, next) {
   req.user = {
     id: session.userId,
     username: session.username,
+    isAdmin: String(session.username || '').toLowerCase() === ADMIN_USERNAME,
     sessionToken
   };
+
+  database.touchUserActivity(req.user.id, new Date().toISOString(), USER_ACTIVITY_TOUCH_INTERVAL_SECONDS);
+
+  return next();
+}
+
+function requireAdminUser(req, res, next) {
+  if (!req.user) {
+    return next(createError(401, 'Authentication required', 'UNAUTHORIZED'));
+  }
+
+  if (!req.user.isAdmin) {
+    return next(createError(403, 'Admin access required', 'FORBIDDEN'));
+  }
 
   return next();
 }
@@ -121,6 +138,7 @@ function resetSessionCleanupState() {
 
 module.exports = {
   requireAuthenticatedUser,
+  requireAdminUser,
   purgeExpiredSessionsIfNeeded,
   extractBearerToken,
   extractSessionToken,
