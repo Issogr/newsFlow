@@ -8,7 +8,6 @@ import {
   ExternalLink,
   Languages,
   Newspaper,
-  RefreshCw,
   X
 } from 'lucide-react';
 import { fetchReaderArticle, isRequestCanceled } from '../services/api';
@@ -280,15 +279,6 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
                 </div>
 
                 <div className="mb-5 flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => loadReader(selectedArticleId, true)}
-                    disabled={refreshing || !selectedArticleId}
-                    className="inline-flex items-center gap-2 rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                    {t('refreshReader')}
-                  </button>
                   {safeOriginalUrl ? (
                     <a
                       href={safeOriginalUrl}

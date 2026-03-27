@@ -318,4 +318,30 @@ describe('NewsAggregator', () => {
     });
     expect(await screen.findByText('Older headline')).toBeInTheDocument();
   });
+
+  test('shows a clear-search button and clears the search field', async () => {
+    fetchNews.mockResolvedValue({
+      items: [],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 0 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    render(
+      <NewsAggregator
+        currentUser={currentUser}
+        onLogout={jest.fn()}
+        onUserUpdate={jest.fn()}
+      />
+    );
+
+    const searchInput = screen.getByRole('searchbox');
+    fireEvent.change(searchInput, { target: { value: 'economy' } });
+
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+
+    expect(searchInput).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+  });
 });

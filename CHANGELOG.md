@@ -14,6 +14,8 @@
 - reduced feed-query overhead and improved pagination accuracy by avoiding repeated intermediate resorting in grouped queries and by returning `hasMore` only when another page is actually reachable
 - reduced WebSocket fanout work by batching sockets with identical subscriptions and bounded browser-side live-update dedupe tracking so long-running tabs no longer retain every seen group id forever
 - fixed manual-refresh mode so the app still listens for live updates with auto refresh disabled, allowing the refresh button indicator to signal newly available news again
+- added a clear-search control inside the main search field and removed the `Updated` status chip from the header area to simplify the top-bar UI
+- removed the manual `Refresh reader` action from reader mode so the reading toolbar stays focused on opening the original article
 
 ## 3.2.5
 

@@ -12,7 +12,8 @@ import {
   ChevronDown,
   ChevronUp,
   User,
-  WifiOff
+  WifiOff,
+  X
 } from 'lucide-react';
 import { fetchNews, isRequestCanceled } from '../services/api';
 import ErrorMessage from './ErrorMessage';
@@ -404,7 +405,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <div>
             <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
               <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
               <input
@@ -414,17 +415,20 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 placeholder={t('searchPlaceholder')}
                 className="w-full bg-transparent text-base outline-none placeholder:text-slate-400 sm:text-sm"
               />
-            </label>
-
-            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-              {meta?.lastRefreshAt && (
-                <span className="rounded-full bg-slate-100 px-3 py-1.5">
-                  {t('updatedAt', {
-                    time: new Date(meta.lastRefreshAt).toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })
-                  })}
-                </span>
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch('');
+                    setDebouncedSearch('');
+                  }}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                  aria-label={t('clearSearch')}
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
               )}
-            </div>
+            </label>
           </div>
         </div>
       </header>
