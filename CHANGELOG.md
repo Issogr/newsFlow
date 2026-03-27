@@ -13,6 +13,7 @@
 - fixed live-update pagination drift by adding cursor-based news loading so prepended real-time groups no longer break `Load more` ordering or cause duplicate-heavy paging
 - reduced feed-query overhead and improved pagination accuracy by avoiding repeated intermediate resorting in grouped queries and by returning `hasMore` only when another page is actually reachable
 - reduced WebSocket fanout work by batching sockets with identical subscriptions and bounded browser-side live-update dedupe tracking so long-running tabs no longer retain every seen group id forever
+- fixed manual-refresh mode so the app still listens for live updates with auto refresh disabled, allowing the refresh button indicator to signal newly available news again
 
 ## 3.2.5
 

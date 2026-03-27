@@ -74,7 +74,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     updateSubscriptionFilters,
     resetNewArticlesCount,
     markGroupsSeen
-  } = useWebSocket('', websocketMessages, autoRefreshEnabled);
+  } = useWebSocket('', websocketMessages, true);
   const liveStatusLabel = autoRefreshEnabled
     ? (isConnected ? t('liveActive') : t('liveOffline'))
     : t('liveDisabled');
@@ -114,6 +114,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [availableSources, excludedSourceIds]);
   const isLiveAutoRefreshWorking = autoRefreshEnabled && isConnected && !debouncedSearch && !showRecentOnly;
   const refreshButtonLabel = isLiveAutoRefreshWorking ? t('refreshHandledByLive') : t('refresh');
+  const refreshButtonAriaLabel = !isLiveAutoRefreshWorking && newArticlesCount > 0
+    ? t('refreshWithUpdates', { count: newArticlesCount })
+    : refreshButtonLabel;
 
   useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
@@ -313,7 +316,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                       ? 'cursor-not-allowed bg-slate-100 text-slate-300 shadow-none'
                       : 'bg-white text-gray-600 hover:bg-gray-100'
                   }`}
-                  aria-label={refreshButtonLabel}
+                  aria-label={refreshButtonAriaLabel}
                 >
                   <RefreshCw className={`h-6 w-6 ${(loading || loadingMore) ? 'animate-spin' : ''}`} aria-hidden="true" />
 

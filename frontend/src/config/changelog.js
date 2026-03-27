@@ -13,7 +13,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🟢 The admin dashboard now shows online users plus each account\'s last login and latest activity.',
       '🧱 Feed and reader fetches are now much stricter, so oversized or suspicious external responses get blocked earlier instead of dragging the app down.',
       '📚 Loading older news now behaves more reliably even when live updates are arriving at the same time.',
-      '⚡ Realtime updates and password checks were tuned to stay lighter during long sessions and busy usage.'
+      '⚡ Realtime updates and password checks were tuned to stay lighter during long sessions and busy usage.',
+      '🔴 If you keep auto refresh off, the refresh button can now warn you properly again when fresh news is waiting.'
     ]
   },
   it: {
@@ -29,7 +30,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🟢 La dashboard admin ora mostra gli utenti online, l\'ultimo accesso e l\'ultima attivita di ogni account.',
       '🧱 I recuperi esterni di feed e articoli sono ora molto piu rigidi, cosi risposte sospette o troppo grandi vengono bloccate prima di rallentare l\'app.',
       '📚 Il caricamento delle notizie piu vecchie ora si comporta in modo piu affidabile anche mentre arrivano aggiornamenti live.',
-      '⚡ Gli aggiornamenti realtime e i controlli sulle password sono stati alleggeriti per reggere meglio sessioni lunghe e utilizzo intenso.'
+      '⚡ Gli aggiornamenti realtime e i controlli sulle password sono stati alleggeriti per reggere meglio sessioni lunghe e utilizzo intenso.',
+      '🔴 Se tieni l\'auto refresh disattivato, il pulsante di aggiornamento torna ora a segnalare correttamente quando ci sono nuove notizie in attesa.'
     ]
   }
 };
