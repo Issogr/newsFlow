@@ -16,6 +16,9 @@
 - fixed manual-refresh mode so the app still listens for live updates with auto refresh disabled, allowing the refresh button indicator to signal newly available news again
 - added a clear-search control inside the main search field and removed the `Updated` status chip from the header area to simplify the top-bar UI
 - removed the manual `Refresh reader` action from reader mode so the reading toolbar stays focused on opening the original article
+- moved filters directly below the search bar, made the search-and-filter controls sticky for easier access while scrolling, and prevented the expanded filter panel from pushing page content down
+- softened the sticky search/filter surface with a lighter translucent treatment and aligned the dropdown styling with the main control bubble
+- fixed the user menu layering so it now opens above the sticky search/filter controls instead of behind them
 
 ## 3.2.5
 

@@ -16,7 +16,10 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '⚡ Realtime updates and password checks were tuned to stay lighter during long sessions and busy usage.',
       '🔴 If you keep auto refresh off, the refresh button can now warn you properly again when fresh news is waiting.',
       '🧹 The top bar is a bit cleaner now, with a quick clear button in search and less status clutter around it.',
-      '📖 Reader mode is simpler too, with the extra refresh action removed from the reading toolbar.'
+      '📖 Reader mode is simpler too, with the extra refresh action removed from the reading toolbar.',
+      '📌 Search and filters now stay handy while you scroll, and the filters open without nudging the page content around.',
+      '🫧 The search and filters area now has a softer glassy look, with matching styling between the main bar and the dropdown.',
+      '👤 The user menu now opens in front of the sticky controls instead of getting hidden behind them.'
     ]
   },
   it: {
@@ -35,7 +38,10 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '⚡ Gli aggiornamenti realtime e i controlli sulle password sono stati alleggeriti per reggere meglio sessioni lunghe e utilizzo intenso.',
       '🔴 Se tieni l\'auto refresh disattivato, il pulsante di aggiornamento torna ora a segnalare correttamente quando ci sono nuove notizie in attesa.',
       '🧹 La barra in alto e ora un po\' piu pulita, con un tasto rapido per svuotare la ricerca e meno elementi di stato intorno al campo.',
-      '📖 Anche la modalita lettura e piu semplice, con la rimozione del pulsante extra di refresh dalla barra degli strumenti.'
+      '📖 Anche la modalita lettura e piu semplice, con la rimozione del pulsante extra di refresh dalla barra degli strumenti.',
+      '📌 Ricerca e filtri ora restano comodi anche durante lo scroll, e il pannello filtri si apre senza spostare il contenuto della pagina.',
+      '🫧 L\'area di ricerca e filtri ha ora un effetto piu morbido e coerente, con lo stesso stile sia nella barra principale sia nel dropdown.',
+      '👤 Il menu utente ora si apre davanti ai controlli sticky invece di finire nascosto dietro.'
     ]
   }
 };
