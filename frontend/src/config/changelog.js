@@ -19,7 +19,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '📖 Reader mode is simpler too, with the extra refresh action removed from the reading toolbar.',
       '📌 Search and filters now stay handy while you scroll, and the filters open without nudging the page content around.',
       '🫧 The search and filters area now has a softer glassy look, with matching styling between the main bar and the dropdown.',
-      '👤 The user menu now opens in front of the sticky controls instead of getting hidden behind them.'
+      '👤 The user menu now opens in front of the sticky controls instead of getting hidden behind them.',
+      '🖼️ Articles without photos now get a cleaner neutral fallback cover instead of feeling visually unfinished.'
     ]
   },
   it: {
@@ -41,7 +42,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '📖 Anche la modalita lettura e piu semplice, con la rimozione del pulsante extra di refresh dalla barra degli strumenti.',
       '📌 Ricerca e filtri ora restano comodi anche durante lo scroll, e il pannello filtri si apre senza spostare il contenuto della pagina.',
       '🫧 L\'area di ricerca e filtri ha ora un effetto piu morbido e coerente, con lo stesso stile sia nella barra principale sia nel dropdown.',
-      '👤 Il menu utente ora si apre davanti ai controlli sticky invece di finire nascosto dietro.'
+      '👤 Il menu utente ora si apre davanti ai controlli sticky invece di finire nascosto dietro.',
+      '🖼️ Gli articoli senza foto hanno ora una cover generica piu pulita e neutra, cosi la card non resta spoglia.'
     ]
   }
 };

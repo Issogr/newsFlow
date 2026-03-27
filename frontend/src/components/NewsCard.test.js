@@ -79,7 +79,20 @@ describe('NewsCard', () => {
     expect(screen.queryByRole('img', { name: 'Headline' })).not.toBeInTheDocument();
   });
 
-  test('hides unsafe or broken article images', () => {
+  test('renders a generic fallback illustration when the article has no image', () => {
+    render(
+      <NewsCard
+        group={group}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringContaining('generic-news-cover'));
+  });
+
+  test('falls back to the generic illustration for unsafe or broken article images', () => {
     const { rerender } = render(
       <NewsCard
         group={{
@@ -99,7 +112,7 @@ describe('NewsCard', () => {
       />
     );
 
-    expect(screen.queryByRole('img', { name: 'Headline' })).not.toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringContaining('generic-news-cover'));
 
     rerender(
       <NewsCard
@@ -123,7 +136,7 @@ describe('NewsCard', () => {
     const image = screen.getByRole('img', { name: 'Headline' });
     fireEvent.error(image);
 
-    expect(screen.queryByRole('img', { name: 'Headline' })).not.toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringContaining('generic-news-cover'));
   });
 
   test('disables unsafe external links', () => {

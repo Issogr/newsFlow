@@ -19,6 +19,7 @@
 - moved filters directly below the search bar, made the search-and-filter controls sticky for easier access while scrolling, and prevented the expanded filter panel from pushing page content down
 - softened the sticky search/filter surface with a lighter translucent treatment and aligned the dropdown styling with the main control bubble
 - fixed the user menu layering so it now opens above the sticky search/filter controls instead of behind them
+- added a generic fallback cover illustration for articles without images and refined it into a cleaner neutral placeholder so imageless stories still render consistently without distracting artwork
 
 ## 3.2.5
 

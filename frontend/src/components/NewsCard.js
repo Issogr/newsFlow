@@ -8,6 +8,7 @@ import {
 import { getDateLocale, getLocalizedTopic } from '../i18n';
 import { getTopicPresentation } from '../topicPresentation';
 import { getSafeExternalUrl } from '../utils/urlSafety';
+import genericNewsCover from '../assets/generic-news-cover.svg';
 
 function getSourceEntries(group) {
   const sourceMap = new Map();
@@ -53,11 +54,12 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
   const sourceEntries = getSourceEntries(group);
   const safeOriginalUrl = getSafeExternalUrl(group?.url);
   const safeImageUrl = showImages ? getGroupImageUrl(group) : '';
-  const [imageVisible, setImageVisible] = useState(Boolean(safeImageUrl));
+  const [imageUrl, setImageUrl] = useState(showImages ? (safeImageUrl || genericNewsCover) : '');
+  const fallbackImageAlt = t('genericNewsCoverAlt');
 
   useEffect(() => {
-    setImageVisible(Boolean(safeImageUrl));
-  }, [safeImageUrl]);
+    setImageUrl(showImages ? (safeImageUrl || genericNewsCover) : '');
+  }, [safeImageUrl, showImages]);
 
   if (!hasItems) {
     return null;
@@ -65,14 +67,21 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
 
   return (
     <article className="flex h-full min-h-[20rem] flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-xl">
-      {imageVisible ? (
+      {imageUrl ? (
         <div className="aspect-[16/9] w-full overflow-hidden bg-slate-100">
           <img
-            src={safeImageUrl}
-            alt={group.title}
+            src={imageUrl}
+            alt={imageUrl === genericNewsCover ? fallbackImageAlt : group.title}
             loading="lazy"
             className="h-full w-full object-cover"
-            onError={() => setImageVisible(false)}
+            onError={() => {
+              if (!showImages) {
+                setImageUrl('');
+                return;
+              }
+
+              setImageUrl((current) => (current === genericNewsCover ? '' : genericNewsCover));
+            }}
           />
         </div>
       ) : null}
