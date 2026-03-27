@@ -8,6 +8,11 @@
 - added admin-managed password setup/reset links so the admin can issue one-time links for users to configure a new valid password
 - replaced the admin news home with a dedicated admin dashboard that focuses on account management instead of the reader/news feed
 - added admin visibility into total users, currently online users, last login time, and last activity time with automatic activity tracking for authenticated API and WebSocket usage
+- hardened outbound feed/article fetching against DNS rebinding and oversized response bodies by pinning validated DNS resolutions to the actual request and enforcing size limits for feeds, reader pages, and image-fallback fetches
+- moved password hashing and verification off the synchronous Node.js event loop path by switching authentication flows to async `scrypt` usage
+- fixed live-update pagination drift by adding cursor-based news loading so prepended real-time groups no longer break `Load more` ordering or cause duplicate-heavy paging
+- reduced feed-query overhead and improved pagination accuracy by avoiding repeated intermediate resorting in grouped queries and by returning `hasMore` only when another page is actually reachable
+- reduced WebSocket fanout work by batching sockets with identical subscriptions and bounded browser-side live-update dedupe tracking so long-running tabs no longer retain every seen group id forever
 
 ## 3.2.5
 

@@ -141,7 +141,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     return () => clearTimeout(timeoutId);
   }, [search]);
 
-  const loadNews = useCallback(async ({ page = 1, append = false, resetRealtime = true } = {}) => {
+  const loadNews = useCallback(async ({ page = 1, append = false, resetRealtime = true, cursor = null } = {}) => {
     const setBusyState = append ? setLoadingMore : setLoading;
     const request = startLatestRequest();
 
@@ -156,6 +156,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         sourceIds: activeFilters.sourceIds,
         topics: activeFilters.topics,
         recentHours: showRecentOnly ? recentHours : null,
+        beforePubDate: append ? cursor?.beforePubDate : '',
+        beforeId: append ? cursor?.beforeId : '',
         signal: request.signal
       });
 
@@ -576,7 +578,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
               {meta?.hasMore ? (
                 <button
                   type="button"
-                  onClick={() => loadNews({ page: (meta?.page || 1) + 1, append: true, resetRealtime: false })}
+                  onClick={() => loadNews(
+                    meta?.nextCursor
+                      ? { append: true, resetRealtime: false, cursor: meta.nextCursor }
+                      : { page: (meta?.page || 1) + 1, append: true, resetRealtime: false }
+                  )}
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={loadingMore}
                 >

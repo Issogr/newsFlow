@@ -251,7 +251,11 @@ describe('newsAggregator service flows', () => {
       page: 1,
       pageSize: 1,
       hasMore: true,
-      totalGroups: 2,
+      totalGroups: null,
+      nextCursor: {
+        beforePubDate: '2026-03-07T10:00:00.000Z',
+        beforeId: 'global-1'
+      },
       scannedArticles: 2,
       ingestion: { id: 7, status: 'completed' }
     });
@@ -259,7 +263,7 @@ describe('newsAggregator service flows', () => {
       expect.objectContaining({ id: ansaSourceId, name: ansaSourceName }),
       expect.objectContaining({ id: 'example.com', name: 'My Feed', language: 'en' })
     ]));
-    expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({ limit: 40, offset: 0 }), expect.objectContaining({ userId: 'user-1' }));
+    expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({ limit: 2, offset: 0 }), expect.objectContaining({ userId: 'user-1' }));
   });
 
   test('ingestAllNews stores topics and broadcasts global and private groups separately', async () => {

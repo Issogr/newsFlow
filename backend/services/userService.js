@@ -268,7 +268,7 @@ async function mapWithConcurrency(items = [], concurrency = 4, iteratee = async 
   return results;
 }
 
-function registerUser(payload = {}) {
+async function registerUser(payload = {}) {
   const username = sanitizeUsername(payload.username);
   const password = String(payload.password || '');
 
@@ -290,7 +290,7 @@ function registerUser(payload = {}) {
   const user = {
     id: createId(),
     username,
-    passwordHash: hashPassword(password),
+    passwordHash: await hashPassword(password),
     createdAt: now,
     updatedAt: now
   };
@@ -310,12 +310,12 @@ function registerUser(payload = {}) {
   return buildAuthResponse(user, sessionToken);
 }
 
-function loginUser(payload = {}) {
+async function loginUser(payload = {}) {
   const username = sanitizeUsername(payload.username);
   const password = String(payload.password || '');
 
   const user = database.findUserByUsername(username);
-  if (!user || !verifyPassword(password, user.passwordHash)) {
+  if (!user || !(await verifyPassword(password, user.passwordHash))) {
     throw createError(401, 'Invalid username or password', 'UNAUTHORIZED');
   }
 
@@ -526,7 +526,7 @@ function getPasswordSetupTokenDetails(rawToken) {
   };
 }
 
-function completePasswordSetup(payload = {}) {
+async function completePasswordSetup(payload = {}) {
   const rawToken = String(payload.token || '').trim();
   const password = String(payload.password || '');
 
@@ -536,7 +536,7 @@ function completePasswordSetup(payload = {}) {
   const sessionToken = generateSessionToken();
   const sessionTokenHash = hashSessionToken(sessionToken);
   const now = new Date().toISOString();
-  const nextPasswordHash = hashPassword(password);
+  const nextPasswordHash = await hashPassword(password);
   const user = database.getDb().transaction(() => {
     const tokenRecord = getPasswordSetupTokenRecord(rawToken);
 

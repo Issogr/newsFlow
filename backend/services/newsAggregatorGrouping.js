@@ -436,9 +436,11 @@ function buildInsertedGroupsByOwner(normalizedArticles = [], insertedIds = []) {
 }
 
 module.exports = {
+  SIMILAR_ARTICLE_GROUPING_ENABLED,
   buildStableGroupId,
   sortGroupsByPubDate,
   calculateSimilarity,
+  createStandaloneGroup,
   insertArticleIntoGroups,
   groupSimilarNews,
   normalizeIncomingArticles,

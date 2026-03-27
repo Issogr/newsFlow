@@ -3,6 +3,31 @@ import { io } from 'socket.io-client';
 import { getAuthToken } from '../services/api';
 
 const MAX_NOTIFICATIONS = 10;
+const MAX_TRACKED_GROUP_IDS = 1000;
+const TRACKED_GROUP_TTL_MS = 6 * 60 * 60 * 1000;
+
+function pruneTrackedGroupIds(trackedGroupIds, now = Date.now()) {
+  if (!(trackedGroupIds instanceof Map) || trackedGroupIds.size === 0) {
+    return trackedGroupIds;
+  }
+
+  trackedGroupIds.forEach((timestamp, groupId) => {
+    if (!Number.isFinite(timestamp) || (now - timestamp) > TRACKED_GROUP_TTL_MS) {
+      trackedGroupIds.delete(groupId);
+    }
+  });
+
+  while (trackedGroupIds.size > MAX_TRACKED_GROUP_IDS) {
+    const oldestGroupId = trackedGroupIds.keys().next().value;
+    if (!oldestGroupId) {
+      break;
+    }
+
+    trackedGroupIds.delete(oldestGroupId);
+  }
+
+  return trackedGroupIds;
+}
 
 const useWebSocket = (url = '', messages = {}, enabled = true) => {
   const wsUrl = url || window.location.origin;
@@ -10,7 +35,7 @@ const useWebSocket = (url = '', messages = {}, enabled = true) => {
   const messagesRef = useRef(messages);
   const isConnectedRef = useRef(false);
   const notificationIdRef = useRef(0);
-  const announcedGroupIdsRef = useRef(new Set());
+  const announcedGroupIdsRef = useRef(new Map());
   const pendingGroupIdsRef = useRef(new Set());
 
   const [isConnected, setIsConnected] = useState(false);
@@ -40,7 +65,7 @@ const useWebSocket = (url = '', messages = {}, enabled = true) => {
       setIsConnected(false);
       setLastNewsUpdate(null);
       setNewArticlesCount(0);
-      announcedGroupIdsRef.current = new Set();
+      announcedGroupIdsRef.current = new Map();
       pendingGroupIdsRef.current = new Set();
       return undefined;
     }
@@ -99,7 +124,13 @@ const useWebSocket = (url = '', messages = {}, enabled = true) => {
       const incomingGroupIds = Array.isArray(payload.groupIds) && payload.groupIds.length > 0
         ? payload.groupIds.filter(Boolean)
         : (Array.isArray(payload.data) ? payload.data.map((group) => group?.id).filter(Boolean) : []);
-      const unseenGroupIds = incomingGroupIds.filter((groupId) => !announcedGroupIdsRef.current.has(groupId));
+      const now = Date.now();
+
+      pruneTrackedGroupIds(announcedGroupIdsRef.current, now);
+
+      const unseenGroupIds = incomingGroupIds.filter((groupId) => {
+        return !announcedGroupIdsRef.current.has(groupId) && !pendingGroupIdsRef.current.has(groupId);
+      });
       const nextCount = incomingGroupIds.length > 0 ? unseenGroupIds.length : payload.count;
 
       if (nextCount <= 0) {
@@ -107,8 +138,10 @@ const useWebSocket = (url = '', messages = {}, enabled = true) => {
       }
 
       unseenGroupIds.forEach((groupId) => {
-        announcedGroupIdsRef.current.add(groupId);
+        announcedGroupIdsRef.current.delete(groupId);
+        announcedGroupIdsRef.current.set(groupId, now);
       });
+      pruneTrackedGroupIds(announcedGroupIdsRef.current, now);
 
       if (incomingGroupIds.length > 0) {
         unseenGroupIds.forEach((groupId) => {

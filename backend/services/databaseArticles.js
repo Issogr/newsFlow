@@ -119,6 +119,8 @@ function createArticleRepository({
       sourceIds: Array.isArray(filters.sourceIds) ? filters.sourceIds.filter(Boolean) : [],
       topics: Array.isArray(filters.topics) ? filters.topics.filter(Boolean) : [],
       recentHours: Number.isFinite(filters.recentHours) ? filters.recentHours : null,
+      beforePubDate: typeof filters.beforePubDate === 'string' && filters.beforePubDate.trim() ? filters.beforePubDate.trim() : '',
+      beforeId: typeof filters.beforeId === 'string' && filters.beforeId.trim() ? filters.beforeId.trim() : '',
       limit: Math.max(1, Math.min(Number(filters.limit) || 50, 250)),
       offset: Math.max(0, Number(filters.offset) || 0)
     };
@@ -197,6 +199,14 @@ function createArticleRepository({
       const recentThreshold = new Date(Date.now() - (state.recentHours * 60 * 60 * 1000)).toISOString();
       where.push('a.published_at >= ?');
       params.push(recentThreshold);
+    }
+
+    if (state.beforePubDate && state.beforeId) {
+      where.push('(a.published_at < ? OR (a.published_at = ? AND a.id < ?))');
+      params.push(state.beforePubDate, state.beforePubDate, state.beforeId);
+    } else if (state.beforePubDate) {
+      where.push('a.published_at < ?');
+      params.push(state.beforePubDate);
     }
 
     const sql = `

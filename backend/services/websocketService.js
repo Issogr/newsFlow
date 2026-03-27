@@ -14,6 +14,30 @@ const statistics = {
   failedBroadcasts: 0
 };
 
+function normalizeFilterValues(values = []) {
+  return [...new Set((Array.isArray(values) ? values : []).filter(Boolean))].sort();
+}
+
+function buildSocketFilters(filters = {}) {
+  const normalizedFilters = {
+    topics: normalizeFilterValues(filters.topics),
+    sourceIds: normalizeFilterValues(filters.sourceIds),
+    excludedSourceIds: normalizeFilterValues(filters.excludedSourceIds),
+    excludedSubSourceIds: normalizeFilterValues(filters.excludedSubSourceIds)
+  };
+
+  return {
+    filters: normalizedFilters,
+    filterSets: {
+      topics: new Set(normalizedFilters.topics),
+      sourceIds: new Set(normalizedFilters.sourceIds),
+      excludedSourceIds: new Set(normalizedFilters.excludedSourceIds),
+      excludedSubSourceIds: new Set(normalizedFilters.excludedSubSourceIds)
+    },
+    filterSignature: JSON.stringify(normalizedFilters)
+  };
+}
+
 function initialize(server) {
   const socketIo = require('socket.io');
   const allowedOrigins = getAllowedOrigins();
@@ -71,33 +95,11 @@ function initialize(server) {
     statistics.totalConnections += 1;
     statistics.activeConnectionsCount += 1;
     activeConnections.set(socket.id, socket);
-    socket.data.filters = {
-      topics: [],
-      sourceIds: [],
-      excludedSourceIds: [],
-      excludedSubSourceIds: []
-    };
-    socket.data.filterSets = {
-      topics: new Set(),
-      sourceIds: new Set(),
-      excludedSourceIds: new Set(),
-      excludedSubSourceIds: new Set()
-    };
+    Object.assign(socket.data, buildSocketFilters());
 
     socket.on('subscribe:filters', (filters = {}) => {
       database.touchUserActivity(socket.data.userId, new Date().toISOString(), 60);
-      socket.data.filters = {
-        topics: Array.isArray(filters.topics) ? filters.topics.filter(Boolean) : [],
-        sourceIds: Array.isArray(filters.sourceIds) ? filters.sourceIds.filter(Boolean) : [],
-        excludedSourceIds: Array.isArray(filters.excludedSourceIds) ? filters.excludedSourceIds.filter(Boolean) : [],
-        excludedSubSourceIds: Array.isArray(filters.excludedSubSourceIds) ? filters.excludedSubSourceIds.filter(Boolean) : []
-      };
-      socket.data.filterSets = {
-        topics: new Set(socket.data.filters.topics),
-        sourceIds: new Set(socket.data.filters.sourceIds),
-        excludedSourceIds: new Set(socket.data.filters.excludedSourceIds),
-        excludedSubSourceIds: new Set(socket.data.filters.excludedSubSourceIds)
-      };
+      Object.assign(socket.data, buildSocketFilters(filters));
     });
 
     socket.on('disconnect', () => {
@@ -177,6 +179,19 @@ function dedupeGroupsById(groups = []) {
   return [...uniqueGroups.values()];
 }
 
+function getBucketCandidateGroups(bucketUserId, globalGroups, privateGroupsByUserId, cache) {
+  if (cache.has(bucketUserId)) {
+    return cache.get(bucketUserId);
+  }
+
+  const candidateGroups = dedupeGroupsById([
+    ...globalGroups,
+    ...(privateGroupsByUserId.get(bucketUserId) || [])
+  ]);
+  cache.set(bucketUserId, candidateGroups);
+  return candidateGroups;
+}
+
 function broadcastNewsUpdate(newsGroups = []) {
   if (!io || !Array.isArray(newsGroups) || newsGroups.length === 0) {
     return;
@@ -191,6 +206,8 @@ function broadcastNewsUpdate(newsGroups = []) {
   }));
   const globalGroups = preparedGroups.filter((group) => !group.ownerUserId);
   const privateGroupsByUserId = new Map();
+  const socketBuckets = new Map();
+  const candidateGroupCache = new Map();
 
   preparedGroups.forEach((group) => {
     if (!group.ownerUserId) {
@@ -203,13 +220,21 @@ function broadcastNewsUpdate(newsGroups = []) {
   });
 
   activeConnections.forEach((socket) => {
-    const candidateGroups = [
-      ...globalGroups,
-      ...(privateGroupsByUserId.get(socket.data?.userId) || [])
-    ];
-    const matchingGroups = dedupeGroupsById(candidateGroups.filter((group) => {
-      return groupMatchesFilters(group, socket.data.filterSets || socket.data.filters);
-    }));
+    const bucketKey = `${socket.data?.userId || ''}:${socket.data?.filterSignature || ''}`;
+    const bucket = socketBuckets.get(bucketKey) || {
+      sockets: [],
+      userId: socket.data?.userId || '',
+      filters: socket.data.filterSets || socket.data.filters
+    };
+    bucket.sockets.push(socket);
+    socketBuckets.set(bucketKey, bucket);
+  });
+
+  socketBuckets.forEach((bucket) => {
+    const candidateGroups = getBucketCandidateGroups(bucket.userId, globalGroups, privateGroupsByUserId, candidateGroupCache);
+    const matchingGroups = candidateGroups.filter((group) => {
+      return groupMatchesFilters(group, bucket.filters);
+    });
 
     if (matchingGroups.length === 0) {
       return;
@@ -222,9 +247,11 @@ function broadcastNewsUpdate(newsGroups = []) {
       timestamp: new Date().toISOString()
     };
 
-    if (emitToSocket(socket, 'news:update', payload)) {
-      recipients += 1;
-    }
+    bucket.sockets.forEach((socket) => {
+      if (emitToSocket(socket, 'news:update', payload)) {
+        recipients += 1;
+      }
+    });
   });
 
   statistics.newsUpdatesSent += 1;

@@ -65,4 +65,32 @@ describe('urlSafety', () => {
       code: 'FORBIDDEN_URL'
     });
   });
+
+  test('pins outbound requests to the validated DNS result', async () => {
+    dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    axios.get.mockResolvedValue({ status: 200, data: 'ok', headers: {} });
+
+    await fetchSafeTextUrl('https://example.com/feed');
+
+    const lookup = axios.get.mock.calls[0][1].lookup;
+    const callback = jest.fn();
+
+    lookup('example.com', {}, callback);
+
+    expect(callback).toHaveBeenCalledWith(null, '93.184.216.34', 4);
+  });
+
+  test('rejects oversized outbound responses', async () => {
+    dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: 'x'.repeat(32),
+      headers: {}
+    });
+
+    await expect(fetchSafeTextUrl('https://example.com/feed', { maxResponseBytes: 16 })).rejects.toMatchObject({
+      status: 413,
+      code: 'PAYLOAD_TOO_LARGE'
+    });
+  });
 });

@@ -25,6 +25,8 @@ function parseNewsQuery(query = {}) {
     sourceIds: parseCsvParam(query.sources),
     topics: parseCsvParam(query.topics),
     recentHours: query.recentHours ? Number(query.recentHours) : null,
+    beforePubDate: query.beforePubDate || '',
+    beforeId: query.beforeId || '',
     page: query.page ? Number(query.page) : 1,
     pageSize: query.pageSize ? Number(query.pageSize) : 12
   };
@@ -42,12 +44,12 @@ function getUserContext(req) {
 }
 
 router.post('/auth/register', [sanitizeBody(['username'])], asyncHandler(async (req, res) => {
-  const result = userService.registerUser(req.body || {});
+  const result = await userService.registerUser(req.body || {});
   res.status(201).json(result);
 }));
 
 router.post('/auth/login', [sanitizeBody(['username'])], asyncHandler(async (req, res) => {
-  const result = userService.loginUser(req.body || {});
+  const result = await userService.loginUser(req.body || {});
   res.json(result);
 }));
 
@@ -57,7 +59,7 @@ router.get('/auth/password-setup/validate', [sanitizeQuery('token')], asyncHandl
 }));
 
 router.post('/auth/password-setup/complete', asyncHandler(async (req, res) => {
-  const result = userService.completePasswordSetup(req.body || {});
+  const result = await userService.completePasswordSetup(req.body || {});
   res.json(result);
 }));
 
@@ -124,7 +126,7 @@ router.post('/admin/users/:userId/password-setup-link', [
   res.json({ success: true, ...result });
 }));
 
-router.get('/news', [requireAuthenticatedUser, sanitizeQuery('search')], asyncHandler(async (req, res) => {
+router.get('/news', [requireAuthenticatedUser, sanitizeQuery('search'), sanitizeQuery('beforePubDate'), sanitizeQuery('beforeId')], asyncHandler(async (req, res) => {
   const filters = parseNewsQuery(req.query);
   const result = await newsService.getNewsFeed(filters, getUserContext(req));
   res.json(result);

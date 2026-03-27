@@ -266,4 +266,56 @@ describe('NewsAggregator', () => {
       expect(markGroupsSeen).toHaveBeenCalledWith(['group-1', 'group-2']);
     });
   });
+
+  test('uses the server cursor for load more requests', async () => {
+    fetchNews.mockImplementation(({ beforeId }) => {
+      if (beforeId === 'article-1') {
+        return Promise.resolve({
+          items: [{ id: 'group-older', title: 'Older headline', items: [{ id: 'article-0', pubDate: '2026-03-14T09:00:00.000Z' }] }],
+          meta: { page: 1, pageSize: 12, hasMore: false, nextCursor: null },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        });
+      }
+
+      return Promise.resolve({
+        items: [{ id: 'group-1', title: 'Current headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }],
+        meta: {
+          page: 1,
+          pageSize: 12,
+          hasMore: true,
+          nextCursor: {
+            beforePubDate: '2026-03-14T10:00:00.000Z',
+            beforeId: 'article-1'
+          }
+        },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+    });
+    render(
+      <NewsAggregator
+        currentUser={currentUser}
+        onLogout={jest.fn()}
+        onUserUpdate={jest.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenCalledWith(expect.objectContaining({
+        beforePubDate: '',
+        beforeId: ''
+      }));
+    });
+
+    expect(await screen.findByRole('button', { name: 'Load more groups' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more groups' }));
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
+        beforePubDate: '2026-03-14T10:00:00.000Z',
+        beforeId: 'article-1'
+      }));
+    });
+    expect(await screen.findByText('Older headline')).toBeInTheDocument();
+  });
 });

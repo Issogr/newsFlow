@@ -130,6 +130,8 @@ export const fetchNews = async ({
   sourceIds = [],
   topics = [],
   recentHours = null,
+  beforePubDate = '',
+  beforeId = '',
   signal
 } = {}) => {
   const params = { page, pageSize };
@@ -148,6 +150,14 @@ export const fetchNews = async ({
 
   if (recentHours) {
     params.recentHours = recentHours;
+  }
+
+  if (beforePubDate) {
+    params.beforePubDate = beforePubDate;
+  }
+
+  if (beforeId) {
+    params.beforeId = beforeId;
   }
 
   const response = await api.get('/news', { params, signal });
