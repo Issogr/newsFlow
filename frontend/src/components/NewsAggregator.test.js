@@ -39,6 +39,23 @@ async function resolveDeferred(deferred, value) {
   });
 }
 
+async function renderNewsAggregator(overrides = {}) {
+  let view;
+
+  await act(async () => {
+    view = render(
+      <NewsAggregator
+        currentUser={overrides.currentUser || currentUser}
+        onLogout={overrides.onLogout || jest.fn()}
+        onUserUpdate={overrides.onUserUpdate || jest.fn()}
+      />
+    );
+    await Promise.resolve();
+  });
+
+  return view;
+}
+
 const currentUser = {
   user: { username: 'alice' },
   settings: {
@@ -104,13 +121,7 @@ describe('NewsAggregator', () => {
       });
     });
 
-    render(
-      <NewsAggregator
-        currentUser={currentUser}
-        onLogout={jest.fn()}
-        onUserUpdate={jest.fn()}
-      />
-    );
+    await renderNewsAggregator();
 
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'economy' } });
 
@@ -156,20 +167,14 @@ describe('NewsAggregator', () => {
       removeNotification: jest.fn()
     });
 
-    await act(async () => {
-      render(
-        <NewsAggregator
-          currentUser={{
-            ...currentUser,
-            settings: {
-              ...currentUser.settings,
-              autoRefreshEnabled: false
-            }
-          }}
-          onLogout={jest.fn()}
-          onUserUpdate={jest.fn()}
-        />
-      );
+    await renderNewsAggregator({
+      currentUser: {
+        ...currentUser,
+        settings: {
+          ...currentUser.settings,
+          autoRefreshEnabled: false
+        }
+      }
     });
 
     await waitFor(() => {
@@ -199,21 +204,15 @@ describe('NewsAggregator', () => {
       removeNotification: jest.fn()
     });
 
-    await act(async () => {
-      render(
-        <NewsAggregator
-          currentUser={{
-            ...currentUser,
-            settings: {
-              ...currentUser.settings,
-              excludedSourceIds: ['ansa'],
-              excludedSubSourceIds: ['ansa_world']
-            }
-          }}
-          onLogout={jest.fn()}
-          onUserUpdate={jest.fn()}
-        />
-      );
+    await renderNewsAggregator({
+      currentUser: {
+        ...currentUser,
+        settings: {
+          ...currentUser.settings,
+          excludedSourceIds: ['ansa'],
+          excludedSubSourceIds: ['ansa_world']
+        }
+      }
     });
 
     await waitFor(() => {
@@ -252,15 +251,7 @@ describe('NewsAggregator', () => {
       removeNotification: jest.fn()
     });
 
-    await act(async () => {
-      render(
-        <NewsAggregator
-          currentUser={currentUser}
-          onLogout={jest.fn()}
-          onUserUpdate={jest.fn()}
-        />
-      );
-    });
+    await renderNewsAggregator();
 
     await waitFor(() => {
       expect(markGroupsSeen).toHaveBeenCalledWith(['group-1', 'group-2']);
@@ -291,13 +282,7 @@ describe('NewsAggregator', () => {
         filters: { sources: [], sourceCatalog: [], topics: [] }
       });
     });
-    render(
-      <NewsAggregator
-        currentUser={currentUser}
-        onLogout={jest.fn()}
-        onUserUpdate={jest.fn()}
-      />
-    );
+    await renderNewsAggregator();
 
     await waitFor(() => {
       expect(fetchNews).toHaveBeenCalledWith(expect.objectContaining({
@@ -326,13 +311,7 @@ describe('NewsAggregator', () => {
       filters: { sources: [], sourceCatalog: [], topics: [] }
     });
 
-    render(
-      <NewsAggregator
-        currentUser={currentUser}
-        onLogout={jest.fn()}
-        onUserUpdate={jest.fn()}
-      />
-    );
+    await renderNewsAggregator();
 
     const searchInput = screen.getByRole('searchbox');
     fireEvent.change(searchInput, { target: { value: 'economy' } });

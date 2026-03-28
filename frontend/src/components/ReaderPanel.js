@@ -3,17 +3,16 @@ import {
   AlertCircle,
   AlertTriangle,
   BookOpenText,
-  CalendarDays,
   Clock3,
   ExternalLink,
-  Languages,
   Newspaper,
+  Share2,
   X
 } from 'lucide-react';
 import { fetchReaderArticle, isRequestCanceled } from '../services/api';
 import useLatestRequest from '../hooks/useLatestRequest';
-import { getDateLocale, getLanguageMeta } from '../i18n';
 import { getSafeExternalUrl } from '../utils/urlSafety';
+import { shareArticleUrl } from '../utils/shareArticle';
 
 const blockClassName = {
   paragraph: 'text-[1.08rem] leading-8 text-stone-800',
@@ -21,7 +20,7 @@ const blockClassName = {
   preformatted: 'overflow-x-auto rounded-2xl bg-stone-900 px-4 py-4 text-sm leading-7 text-stone-100'
 };
 
-const metaChipClassName = 'inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 shadow-sm';
+const metaChipClassName = 'inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-stone-200 bg-white/90 px-2.5 py-1.5 text-xs shadow-sm sm:w-auto sm:justify-start sm:gap-2 sm:px-3 sm:text-sm';
 
 function getArticleSourceLabel(article) {
   if (!article) {
@@ -68,11 +67,11 @@ function renderReaderBlock(block, index) {
 }
 
 const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale, t, onClose }) => {
-  const dateLocale = getDateLocale(locale);
   const [selectedArticleId, setSelectedArticleId] = useState(initialArticleId || group?.items?.[0]?.id || null);
   const [readerByArticleId, setReaderByArticleId] = useState({});
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [shareState, setShareState] = useState('idle');
   const [error, setError] = useState(null);
   const readerCacheRef = useRef({});
   const { startLatestRequest, resetLatestRequest } = useLatestRequest();
@@ -84,6 +83,7 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
   useEffect(() => {
     setSelectedArticleId(initialArticleId || group?.items?.[0]?.id || null);
     setReaderByArticleId({});
+    setShareState('idle');
     setError(null);
     readerCacheRef.current = {};
     resetLatestRequest();
@@ -171,25 +171,31 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
     }
   }, [loadReader, selectedArticleId]);
 
-  const formatDate = (dateString) => {
-    if (!dateString) {
-      return '';
-    }
-
-    return new Date(dateString).toLocaleString(dateLocale, {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const languageMeta = getLanguageMeta(selectedReader?.language || selectedArticle?.language, locale);
   const safeOriginalUrl = getSafeExternalUrl(selectedArticle?.url);
   const desktopPositionClassName = readerPosition === 'left'
     ? 'lg:justify-start'
     : (readerPosition === 'center' ? 'lg:justify-center' : 'lg:justify-end');
+
+  useEffect(() => {
+    if (shareState !== 'copied') {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShareState('idle');
+    }, 1600);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [shareState]);
+
+  const handleShare = useCallback(async () => {
+    const result = await shareArticleUrl({
+      url: safeOriginalUrl,
+      title: selectedReader?.title || selectedArticle?.title || ''
+    });
+
+    setShareState(result || 'idle');
+  }, [safeOriginalUrl, selectedArticle?.title, selectedReader?.title]);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-sm">
@@ -202,16 +208,11 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
 
       <div className={`relative flex h-full w-full ${desktopPositionClassName}`}>
         <section className="flex h-full w-full flex-col bg-stone-50 shadow-2xl lg:max-w-4xl">
-          <div className="flex items-center justify-between border-b border-stone-200 bg-white px-5 py-4">
-            <div>
-              <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">
-                <BookOpenText className="h-4 w-4" />
-                {t('cleanReadingView')}
-              </p>
-              <h2 className="mt-2 max-w-2xl text-xl font-semibold leading-tight text-stone-900 md:text-2xl">
-                {selectedReader?.title || selectedArticle?.title || t('readerMode')}
-              </h2>
-            </div>
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-200 bg-white/95 px-5 py-4 backdrop-blur">
+            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">
+              <BookOpenText className="h-4 w-4" />
+              {t('cleanReadingView')}
+            </p>
 
             <div className="flex items-center gap-2">
               <button
@@ -254,21 +255,14 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
           <div className="flex-1 overflow-y-auto px-5 py-6 md:px-8">
             {selectedArticle && (
               <div className="mx-auto max-w-[46rem]">
-                <div className="mb-6 flex flex-wrap items-center gap-3 text-sm text-stone-500">
+                <h2 className="mb-6 text-xl font-semibold leading-tight text-stone-900 md:text-2xl">
+                  {selectedReader?.title || selectedArticle?.title || t('readerMode')}
+                </h2>
+
+                <div className="mb-6 flex flex-wrap items-center gap-2 text-stone-500 sm:gap-3">
                   <span className={metaChipClassName}>
                     <Newspaper className="h-4 w-4 text-stone-400" />
-                    {getArticleSourceLabel(selectedArticle)}
-                  </span>
-                  <span className={metaChipClassName}>
-                    <CalendarDays className="h-4 w-4 text-stone-400" />
-                    {formatDate(selectedArticle.pubDate)}
-                  </span>
-                  <span
-                    className={metaChipClassName}
-                    title={t('newsLanguage', { language: languageMeta.label })}
-                  >
-                    <Languages className="h-4 w-4 text-stone-400" />
-                    {languageMeta.emoji}
+                    <span className="truncate">{getArticleSourceLabel(selectedArticle)}</span>
                   </span>
                   {selectedReader?.minutesToRead && (
                     <span className={metaChipClassName}>
@@ -279,12 +273,22 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
                 </div>
 
                 <div className="mb-5 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    disabled={!safeOriginalUrl}
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-700 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60 sm:h-auto sm:w-auto sm:px-4 sm:py-2"
+                    aria-label={shareState === 'copied' ? t('copied') : t('shareArticle')}
+                  >
+                    <Share2 className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">{shareState === 'copied' ? t('copied') : t('shareArticle')}</span>
+                  </button>
                   {safeOriginalUrl ? (
                     <a
                       href={safeOriginalUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+                      className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 sm:flex-none"
                     >
                       <ExternalLink className="h-4 w-4" />
                       {t('openOriginalSource')}
@@ -293,7 +297,7 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
                     <button
                       type="button"
                       disabled
-                      className="inline-flex cursor-not-allowed items-center gap-2 rounded-full bg-slate-300 px-4 py-2 text-sm font-medium text-slate-600"
+                      className="inline-flex min-w-0 flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-full bg-slate-300 px-4 py-2.5 text-sm font-medium text-slate-600 sm:flex-none"
                     >
                       <ExternalLink className="h-4 w-4" />
                       {t('openOriginalSource')}

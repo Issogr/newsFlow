@@ -4,11 +4,13 @@ import {
   CalendarDays,
   ExternalLink,
   Rss,
+  Share2,
 } from 'lucide-react';
 import { getDateLocale, getLocalizedTopic } from '../i18n';
 import { getTopicPresentation } from '../topicPresentation';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import genericNewsCover from '../assets/generic-news-cover.svg';
+import { shareArticleUrl } from '../utils/shareArticle';
 
 function getSourceEntries(group) {
   const sourceMap = new Map();
@@ -55,15 +57,37 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
   const safeOriginalUrl = getSafeExternalUrl(group?.url);
   const safeImageUrl = showImages ? getGroupImageUrl(group) : '';
   const [imageUrl, setImageUrl] = useState(showImages ? (safeImageUrl || genericNewsCover) : '');
+  const [shareState, setShareState] = useState('idle');
   const fallbackImageAlt = t('genericNewsCoverAlt');
 
   useEffect(() => {
     setImageUrl(showImages ? (safeImageUrl || genericNewsCover) : '');
   }, [safeImageUrl, showImages]);
 
+  useEffect(() => {
+    if (shareState !== 'copied') {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShareState('idle');
+    }, 1600);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [shareState]);
+
   if (!hasItems) {
     return null;
   }
+
+  const handleShare = async () => {
+    const result = await shareArticleUrl({
+      url: safeOriginalUrl,
+      title: group.title
+    });
+
+    setShareState(result || 'idle');
+  };
 
   return (
     <article className="flex h-full min-h-[20rem] flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-xl">
@@ -133,21 +157,32 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
       </div>
 
       <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-4">
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex items-stretch gap-2.5">
           <button
             type="button"
             onClick={() => onOpenReader(group, group.items[0]?.id)}
-            className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition-colors hover:bg-slate-100 sm:h-auto sm:w-auto sm:px-4"
+            aria-label={t('readerMode')}
           >
-            <BookOpenText className="mr-2 h-4 w-4" />
-            {t('readerMode')}
+            <BookOpenText className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline text-sm font-medium">{t('readerMode')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleShare}
+            disabled={!safeOriginalUrl}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 sm:h-auto sm:w-auto sm:px-4"
+            aria-label={shareState === 'copied' ? t('copied') : t('shareArticle')}
+          >
+            <Share2 className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline text-sm font-medium">{shareState === 'copied' ? t('copied') : t('shareArticle')}</span>
           </button>
           {safeOriginalUrl ? (
             <a
               href={safeOriginalUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+              className="inline-flex min-w-0 flex-1 items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-700"
             >
               <ExternalLink className="mr-2 h-4 w-4" />
               {t('openOriginalSource')}
@@ -156,7 +191,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
             <button
               type="button"
               disabled
-              className="inline-flex w-full cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-4 py-3 text-sm font-medium text-slate-600"
+              className="inline-flex min-w-0 flex-1 cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-4 py-3 text-sm font-medium text-slate-600"
             >
               <ExternalLink className="mr-2 h-4 w-4" />
               {t('openOriginalSource')}

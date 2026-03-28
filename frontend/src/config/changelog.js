@@ -20,7 +20,10 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '📌 Search and filters now stay handy while you scroll, and the filters open without nudging the page content around.',
       '🫧 The search and filters area now has a softer glassy look, with matching styling between the main bar and the dropdown.',
       '👤 The user menu now opens in front of the sticky controls instead of getting hidden behind them.',
-      '🖼️ Articles without photos now get a cleaner neutral fallback cover instead of feeling visually unfinished.'
+      '🖼️ Articles without photos now get a cleaner neutral fallback cover instead of feeling visually unfinished.',
+      '📤 News cards and reader mode can now share the original article link, including the native share sheet on mobile when available.',
+      '📱 Card actions are more compact on mobile, so Reader, Share, and Open fit better without crowding the layout.',
+      '📚 Reader mode is calmer now too, with a lighter sticky top bar and simpler article details near the top of the story.'
     ]
   },
   it: {
@@ -43,7 +46,10 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '📌 Ricerca e filtri ora restano comodi anche durante lo scroll, e il pannello filtri si apre senza spostare il contenuto della pagina.',
       '🫧 L\'area di ricerca e filtri ha ora un effetto piu morbido e coerente, con lo stesso stile sia nella barra principale sia nel dropdown.',
       '👤 Il menu utente ora si apre davanti ai controlli sticky invece di finire nascosto dietro.',
-      '🖼️ Gli articoli senza foto hanno ora una cover generica piu pulita e neutra, cosi la card non resta spoglia.'
+      '🖼️ Gli articoli senza foto hanno ora una cover generica piu pulita e neutra, cosi la card non resta spoglia.',
+      '📤 Le news card e la modalita lettura possono ora condividere il link originale dell\'articolo, usando anche la condivisione nativa su mobile quando disponibile.',
+      '📱 Le azioni delle card sono piu compatte su mobile, cosi Reader, Share e Apri articolo occupano meno spazio senza affollare il layout.',
+      '📚 Anche la modalita lettura e ora piu calma, con una barra sticky piu leggera e dettagli articolo piu essenziali in testa al contenuto.'
     ]
   }
 };

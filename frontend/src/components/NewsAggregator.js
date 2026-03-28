@@ -408,18 +408,18 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       </header>
 
       <section className="sticky top-0 z-30 bg-transparent">
-        <div className="mx-auto max-w-7xl px-4 py-4 lg:px-6">
+        <div className="mx-auto max-w-7xl px-4 py-3 lg:px-6">
           <div className="relative">
             <div className="overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white/90 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md">
-              <div className="border-b border-slate-200/70 px-4 py-4 sm:px-5">
-                <label className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 shadow-sm backdrop-blur-sm">
+              <div className="border-b border-slate-200/70 px-4 py-3 sm:px-5">
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-2.5 shadow-sm backdrop-blur-sm">
                   <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
                   <input
                     type="search"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder={t('searchPlaceholder')}
-                    className="w-full bg-transparent text-base outline-none placeholder:text-slate-400 sm:text-sm"
+                    className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
                   />
                   {search && (
                     <button
@@ -440,13 +440,13 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
               <button
                 type="button"
                 onClick={() => setFiltersExpanded((value) => !value)}
-                className="flex w-full items-center justify-between px-4 py-4 text-left sm:px-5"
+                className="flex w-full items-center justify-between px-4 py-3 text-left sm:px-5"
               >
                 <div className="flex items-center gap-3">
                   <Filter className="h-5 w-5 text-slate-500" aria-hidden="true" />
                   <div>
                     <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t('filtersTitle')}</h2>
-                    <p className="text-sm text-slate-600">{t('filtersSubtitle')}</p>
+                    <p className="text-xs text-slate-600 sm:text-sm">{t('filtersSubtitle')}</p>
                   </div>
                   {activeFiltersCount > 0 && (
                     <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-medium text-white">

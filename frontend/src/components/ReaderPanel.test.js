@@ -63,6 +63,9 @@ const t = (key, params = {}) => {
 };
 
 describe('ReaderPanel', () => {
+  const originalShare = navigator.share;
+  const originalClipboard = navigator.clipboard;
+
   beforeEach(() => {
     jest.clearAllMocks();
     document.body.style.overflow = '';
@@ -70,6 +73,8 @@ describe('ReaderPanel', () => {
 
   afterEach(() => {
     document.body.style.overflow = '';
+    navigator.share = originalShare;
+    navigator.clipboard = originalClipboard;
   });
 
   test('keeps the latest article payload when an older reader request resolves later', async () => {
@@ -186,5 +191,37 @@ describe('ReaderPanel', () => {
 
     expect(screen.queryByRole('link', { name: 'openOriginalSource' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'openOriginalSource' })).toBeDisabled();
+  });
+
+  test('shares the original article url from reader mode', async () => {
+    navigator.share = jest.fn().mockResolvedValue(undefined);
+    fetchReaderArticle.mockResolvedValue({
+      title: 'Reader title',
+      language: 'en',
+      excerpt: 'Excerpt',
+      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
+      minutesToRead: 1
+    });
+
+    render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="right"
+        locale="en"
+        t={t}
+        onClose={jest.fn()}
+      />
+    );
+
+    await screen.findByText('Reader title');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
+    });
+
+    expect(navigator.share).toHaveBeenCalledWith({
+      title: 'Reader title',
+      url: 'https://example.com/one'
+    });
   });
 });

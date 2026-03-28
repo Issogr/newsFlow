@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import NewsCard from './NewsCard';
 
 const t = (key) => key;
@@ -19,6 +19,15 @@ const group = {
 };
 
 describe('NewsCard', () => {
+  const originalShare = navigator.share;
+  const originalClipboard = navigator.clipboard;
+
+  afterEach(() => {
+    navigator.share = originalShare;
+    navigator.clipboard = originalClipboard;
+    jest.restoreAllMocks();
+  });
+
   test('renders a safe external link for http urls', () => {
     render(
       <NewsCard
@@ -151,5 +160,27 @@ describe('NewsCard', () => {
 
     expect(screen.queryByRole('link', { name: 'openOriginalSource' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'openOriginalSource' })).toBeDisabled();
+  });
+
+  test('uses the native share action when available', async () => {
+    navigator.share = jest.fn().mockResolvedValue(undefined);
+
+    render(
+      <NewsCard
+        group={{ ...group, url: 'https://example.com/story' }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
+    });
+
+    expect(navigator.share).toHaveBeenCalledWith({
+      title: 'Headline',
+      url: 'https://example.com/story'
+    });
   });
 });

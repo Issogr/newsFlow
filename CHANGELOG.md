@@ -20,6 +20,9 @@
 - softened the sticky search/filter surface with a lighter translucent treatment and aligned the dropdown styling with the main control bubble
 - fixed the user menu layering so it now opens above the sticky search/filter controls instead of behind them
 - added a generic fallback cover illustration for articles without images and refined it into a cleaner neutral placeholder so imageless stories still render consistently without distracting artwork
+- added share actions to news cards and reader mode, using the original article URL and the native OS share sheet when available with safe browser fallbacks otherwise
+- compacted the news-card action bar on mobile so `Reader`, `Share`, and `Open article` use space more efficiently without losing desktop readability
+- simplified reader mode by keeping only the `Clean reading view` label and close action sticky, moving the article title into the scrolling content, and trimming metadata chips down to the source plus read-time info
 
 ## 3.2.5
 
