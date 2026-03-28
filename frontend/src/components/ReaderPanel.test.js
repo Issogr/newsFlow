@@ -1,10 +1,11 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ReaderPanel from './ReaderPanel';
-import { fetchReaderArticle } from '../services/api';
+import { fetchReaderArticle, updateUserSettings } from '../services/api';
 
 jest.mock('../services/api', () => ({
   fetchReaderArticle: jest.fn(),
+  updateUserSettings: jest.fn(),
   isRequestCanceled: jest.fn((error) => error?.code === 'ERR_CANCELED')
 }));
 
@@ -62,7 +63,17 @@ const t = (key, params = {}) => {
   return key;
 };
 
+const currentUser = {
+  user: { username: 'alice', isAdmin: false },
+  settings: {
+    readerTextSize: 'medium'
+  }
+};
+
 describe('ReaderPanel', () => {
+  const originalShare = navigator.share;
+  const originalClipboard = navigator.clipboard;
+
   beforeEach(() => {
     jest.clearAllMocks();
     document.body.style.overflow = '';
@@ -70,6 +81,8 @@ describe('ReaderPanel', () => {
 
   afterEach(() => {
     document.body.style.overflow = '';
+    navigator.share = originalShare;
+    navigator.clipboard = originalClipboard;
   });
 
   test('keeps the latest article payload when an older reader request resolves later', async () => {
@@ -87,6 +100,8 @@ describe('ReaderPanel', () => {
         readerPosition="right"
         locale="en"
         t={t}
+        currentUser={currentUser}
+        onUserUpdate={jest.fn()}
         onClose={jest.fn()}
       />
     );
@@ -127,6 +142,8 @@ describe('ReaderPanel', () => {
         readerPosition="center"
         locale="en"
         t={t}
+        currentUser={currentUser}
+        onUserUpdate={jest.fn()}
         onClose={jest.fn()}
       />
     );
@@ -145,6 +162,8 @@ describe('ReaderPanel', () => {
         readerPosition="right"
         locale="en"
         t={t}
+        currentUser={currentUser}
+        onUserUpdate={jest.fn()}
         onClose={jest.fn()}
       />
     );
@@ -178,6 +197,8 @@ describe('ReaderPanel', () => {
         readerPosition="right"
         locale="en"
         t={t}
+        currentUser={currentUser}
+        onUserUpdate={jest.fn()}
         onClose={jest.fn()}
       />
     );
@@ -186,5 +207,79 @@ describe('ReaderPanel', () => {
 
     expect(screen.queryByRole('link', { name: 'openOriginalSource' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'openOriginalSource' })).toBeDisabled();
+  });
+
+  test('shares the original article url from reader mode', async () => {
+    navigator.share = jest.fn().mockResolvedValue(undefined);
+    fetchReaderArticle.mockResolvedValue({
+      title: 'Reader title',
+      language: 'en',
+      excerpt: 'Excerpt',
+      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
+      minutesToRead: 1
+    });
+
+    render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="right"
+        locale="en"
+        t={t}
+        currentUser={currentUser}
+        onUserUpdate={jest.fn()}
+        onClose={jest.fn()}
+      />
+    );
+
+    await screen.findByText('Reader title');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
+    });
+
+    expect(navigator.share).toHaveBeenCalledWith({
+      title: 'Reader title',
+      url: 'https://example.com/one'
+    });
+  });
+
+  test('updates reader text size and persists it without reloading parent state', async () => {
+    fetchReaderArticle.mockResolvedValue({
+      title: 'Reader title',
+      language: 'en',
+      excerpt: 'Excerpt',
+      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
+      minutesToRead: 1
+    });
+    updateUserSettings.mockResolvedValue({
+      settings: {
+        ...currentUser.settings,
+        readerTextSize: 'large'
+      }
+    });
+
+    render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="right"
+        locale="en"
+        t={t}
+        currentUser={currentUser}
+        onUserUpdate={jest.fn()}
+        onClose={jest.fn()}
+      />
+    );
+
+    await screen.findByText('Reader title');
+
+    await act(async () => {
+      fireEvent.change(screen.getByRole('combobox', { name: 'readerTextSizeSetting' }), {
+        target: { value: 'large' }
+      });
+    });
+
+    expect(updateUserSettings).toHaveBeenCalledWith({ readerTextSize: 'large' });
+    expect(window.localStorage.getItem('news-flow-reader-text-size')).toBe('large');
   });
 });

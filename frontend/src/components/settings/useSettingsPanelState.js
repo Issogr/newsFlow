@@ -8,12 +8,17 @@ import {
   updateUserSettings
 } from '../../services/api';
 import { clampSettingValue, getSettingsLimits } from '../../config/settingsLimits';
+import { getStoredReaderTextSizePreference, setStoredReaderTextSizePreference } from '../../utils/readerTextSizePreference';
 
 const createInitialSourceForm = () => ({ url: '' });
 const createInitialEditingSourceForm = () => ({ name: '', url: '', language: 'it' });
+const getInitialSettings = (currentUser) => ({
+  ...currentUser.settings,
+  readerTextSize: getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize)
+});
 
 const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserUpdate }) => {
-  const [settings, setSettings] = useState(currentUser.settings);
+  const [settings, setSettings] = useState(() => getInitialSettings(currentUser));
   const [customSources, setCustomSources] = useState(currentUser.customSources || []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -46,7 +51,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   }, [excludedSubFeedCatalog]);
 
   useEffect(() => {
-    setSettings(currentUser.settings);
+    setSettings(getInitialSettings(currentUser));
     setCustomSources(currentUser.customSources || []);
     setSourceForm(createInitialSourceForm());
     setEditingSourceId('');
@@ -120,6 +125,13 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     }));
   }, []);
 
+  const setReaderTextSize = useCallback((value) => {
+    setSettings((current) => ({
+      ...current,
+      readerTextSize: value
+    }));
+  }, []);
+
   const toggleExcludedSource = useCallback((sourceId) => {
     setSettings((current) => {
       const excludedSourceIds = current.excludedSourceIds || [];
@@ -155,6 +167,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   const handleSave = useCallback(async () => {
     await runSavingAction(async () => {
       const response = await updateUserSettings(settings);
+      setStoredReaderTextSizePreference(response.settings.readerTextSize);
       syncPersistedUserState(response.settings, customSources);
       onClose();
     });
@@ -191,6 +204,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
 
       await runSavingAction(async () => {
         const response = await importUserSettings(payload);
+        setStoredReaderTextSizePreference(response.settings.readerTextSize);
         syncPersistedUserState(response.settings, response.customSources);
       });
     } catch (requestError) {
@@ -269,6 +283,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     setAutoRefreshEnabled,
     setShowNewsImages,
     setReaderPanelPosition,
+    setReaderTextSize,
     updateNumericSetting,
     toggleExcludedSource,
     toggleExcludedSubFeed,

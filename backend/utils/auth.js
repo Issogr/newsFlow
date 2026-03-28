@@ -1,9 +1,13 @@
 const crypto = require('crypto');
+const { promisify } = require('util');
 const database = require('../services/database');
 const { createError } = require('./errorHandler');
 
 const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '30', 10);
 const SESSION_PURGE_INTERVAL_MS = parseInt(process.env.SESSION_PURGE_INTERVAL_MS || '300000', 10);
+const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase() || 'admin';
+const USER_ACTIVITY_TOUCH_INTERVAL_SECONDS = parseInt(process.env.USER_ACTIVITY_TOUCH_INTERVAL_SECONDS || '60', 10);
+const scryptAsync = promisify(crypto.scrypt);
 
 let lastSessionPurgeAt = 0;
 
@@ -35,20 +39,20 @@ function safeTokenCompare(expectedToken, receivedToken) {
   return crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
 }
 
-function hashPassword(password) {
+async function hashPassword(password) {
   const normalized = String(password || '');
   if (!normalized) {
     return null;
   }
 
   const salt = crypto.randomBytes(16).toString('hex');
-  const derivedKey = crypto.scryptSync(normalized, salt, 64).toString('hex');
+  const derivedKey = (await scryptAsync(normalized, salt, 64)).toString('hex');
   return `${salt}:${derivedKey}`;
 }
 
-function verifyPassword(password, storedHash) {
+async function verifyPassword(password, storedHash) {
   if (!storedHash) {
-    return true;
+    return false;
   }
 
   const normalized = String(password || '');
@@ -58,7 +62,7 @@ function verifyPassword(password, storedHash) {
     return false;
   }
 
-  const candidate = crypto.scryptSync(normalized, salt, 64).toString('hex');
+  const candidate = (await scryptAsync(normalized, salt, 64)).toString('hex');
   return safeTokenCompare(derivedKey, candidate);
 }
 
@@ -109,8 +113,23 @@ function requireAuthenticatedUser(req, res, next) {
   req.user = {
     id: session.userId,
     username: session.username,
+    isAdmin: String(session.username || '').toLowerCase() === ADMIN_USERNAME,
     sessionToken
   };
+
+  database.touchUserActivity(req.user.id, new Date().toISOString(), USER_ACTIVITY_TOUCH_INTERVAL_SECONDS);
+
+  return next();
+}
+
+function requireAdminUser(req, res, next) {
+  if (!req.user) {
+    return next(createError(401, 'Authentication required', 'UNAUTHORIZED'));
+  }
+
+  if (!req.user.isAdmin) {
+    return next(createError(403, 'Admin access required', 'FORBIDDEN'));
+  }
 
   return next();
 }
@@ -121,6 +140,7 @@ function resetSessionCleanupState() {
 
 module.exports = {
   requireAuthenticatedUser,
+  requireAdminUser,
   purgeExpiredSessionsIfNeeded,
   extractBearerToken,
   extractSessionToken,

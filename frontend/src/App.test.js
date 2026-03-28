@@ -3,13 +3,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 
 jest.mock('./services/api', () => ({
+  completePasswordSetup: jest.fn(),
   fetchCurrentUser: jest.fn(),
+  fetchAdminUsers: jest.fn(),
   getAuthToken: jest.fn(),
   loginUser: jest.fn(),
   logoutUser: jest.fn(),
+  createAdminPasswordSetupLink: jest.fn(),
   registerUser: jest.fn(),
   setAuthToken: jest.fn(),
-  updateUserSettings: jest.fn()
+  updateUserSettings: jest.fn(),
+  validatePasswordSetupToken: jest.fn()
 }));
 
 jest.mock('./components/NewsAggregator', () => ({ onOpenReleaseNotes }) => (
@@ -19,8 +23,14 @@ jest.mock('./components/NewsAggregator', () => ({ onOpenReleaseNotes }) => (
   </div>
 ));
 
+jest.mock('./components/AdminDashboard', () => ({ currentUser }) => (
+  <div>Admin dashboard for {currentUser?.user?.username}</div>
+));
+
 const {
+  completePasswordSetup,
   fetchCurrentUser,
+  validatePasswordSetupToken,
   getAuthToken,
   setAuthToken,
   updateUserSettings
@@ -28,7 +38,7 @@ const {
 
 function createCurrentUser(settings = {}) {
   return {
-    user: { username: 'alice' },
+    user: { username: 'alice', isAdmin: false },
     settings: {
       defaultLanguage: 'en',
       articleRetentionHours: 24,
@@ -36,6 +46,7 @@ function createCurrentUser(settings = {}) {
       autoRefreshEnabled: true,
       showNewsImages: true,
       readerPanelPosition: 'right',
+      readerTextSize: 'medium',
       lastSeenReleaseNotesVersion: '',
       excludedSourceIds: [],
       excludedSubSourceIds: [],
@@ -54,6 +65,7 @@ describe('App', () => {
     jest.clearAllMocks();
     window.localStorage.clear();
     document.body.style.overflow = '';
+    window.history.replaceState({}, '', '/');
   });
 
   afterEach(() => {
@@ -71,11 +83,24 @@ describe('App', () => {
 
   test('renders the authenticated app when the current session loads', async () => {
     getAuthToken.mockReturnValue('session-token');
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.5' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.6' }));
 
     render(<App />);
 
     expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
+  });
+
+  test('renders the admin dashboard instead of the news home for admin sessions', async () => {
+    getAuthToken.mockReturnValue('admin-token');
+    fetchCurrentUser.mockResolvedValue({
+      ...createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.5' }),
+      user: { username: 'admin', isAdmin: true }
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('Admin dashboard for admin')).toBeInTheDocument();
+    expect(screen.queryByText('Authenticated app')).not.toBeInTheDocument();
   });
 
   test('shows release notes once after login for users who have not seen the current update', async () => {
@@ -83,7 +108,7 @@ describe('App', () => {
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.5' }).settings
+      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.6' }).settings
     });
 
     render(<App />);
@@ -93,13 +118,13 @@ describe('App', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
 
     await waitFor(() => {
-      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.5' });
+      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.6' });
     });
   });
 
   test('reopens release notes manually from the authenticated app', async () => {
     getAuthToken.mockReturnValue('session-token');
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.5' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.6' }));
 
     render(<App />);
 
@@ -115,7 +140,7 @@ describe('App', () => {
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.5' }).settings
+      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.6' }).settings
     });
 
     render(<App />);
@@ -141,5 +166,28 @@ describe('App', () => {
     });
 
     expect(setAuthToken).toHaveBeenCalledWith('');
+  });
+
+  test('renders the password setup screen on setup routes', async () => {
+    getAuthToken.mockReturnValue('');
+    validatePasswordSetupToken.mockResolvedValue({
+      username: 'admin',
+      isAdmin: true,
+      purpose: 'admin-bootstrap',
+      expiresAt: '2026-03-27T12:00:00.000Z'
+    });
+    completePasswordSetup.mockResolvedValue({
+      token: 'session-token',
+      user: { id: 'admin-id', username: 'admin', isAdmin: true },
+      settings: createCurrentUser().settings,
+      limits: createCurrentUser().limits,
+      customSources: []
+    });
+    window.history.replaceState({}, '', '/admin/setup?token=bootstrap-token');
+
+    render(<App />);
+
+    expect(await screen.findByText('Set up admin access')).toBeInTheDocument();
+    expect(fetchCurrentUser).not.toHaveBeenCalled();
   });
 });

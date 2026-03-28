@@ -12,7 +12,8 @@ import {
   ChevronDown,
   ChevronUp,
   User,
-  WifiOff
+  WifiOff,
+  X
 } from 'lucide-react';
 import { fetchNews, isRequestCanceled } from '../services/api';
 import ErrorMessage from './ErrorMessage';
@@ -22,10 +23,11 @@ import BrandMark from './BrandMark';
 import SettingsPanel from './SettingsPanel';
 import useLatestRequest from '../hooks/useLatestRequest';
 import useWebSocket from '../hooks/useWebSocket';
-import { createTranslator, getDateLocale, getLocalizedTopic, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
+import { createTranslator, getLocalizedTopic, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
 import { getSettingsLimits } from '../config/settingsLimits';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import { getTopicPresentation } from '../topicPresentation';
+import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -59,7 +61,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const showNewsImages = currentUser?.settings?.showNewsImages !== false;
   const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
   const t = useMemo(() => createTranslator(locale), [locale]);
-  const dateLocale = useMemo(() => getDateLocale(locale), [locale]);
   const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
   const websocketMessages = useMemo(() => ({
     connected: t('wsConnected'),
@@ -74,7 +75,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     updateSubscriptionFilters,
     resetNewArticlesCount,
     markGroupsSeen
-  } = useWebSocket('', websocketMessages, autoRefreshEnabled);
+  } = useWebSocket('', websocketMessages, true);
   const liveStatusLabel = autoRefreshEnabled
     ? (isConnected ? t('liveActive') : t('liveOffline'))
     : t('liveDisabled');
@@ -114,6 +115,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [availableSources, excludedSourceIds]);
   const isLiveAutoRefreshWorking = autoRefreshEnabled && isConnected && !debouncedSearch && !showRecentOnly;
   const refreshButtonLabel = isLiveAutoRefreshWorking ? t('refreshHandledByLive') : t('refresh');
+  const refreshButtonAriaLabel = !isLiveAutoRefreshWorking && newArticlesCount > 0
+    ? t('refreshWithUpdates', { count: newArticlesCount })
+    : refreshButtonLabel;
 
   useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
@@ -125,6 +129,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   useEffect(() => {
     setLocale(resolvePreferredLocale(preferredLanguage));
   }, [preferredLanguage]);
+
+  useEffect(() => {
+    setStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize || 'medium');
+  }, [currentUser?.settings?.readerTextSize]);
 
   useEffect(() => {
     setActiveFilters((current) => ({
@@ -141,7 +149,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     return () => clearTimeout(timeoutId);
   }, [search]);
 
-  const loadNews = useCallback(async ({ page = 1, append = false, resetRealtime = true } = {}) => {
+  const loadNews = useCallback(async ({ page = 1, append = false, resetRealtime = true, cursor = null } = {}) => {
     const setBusyState = append ? setLoadingMore : setLoading;
     const request = startLatestRequest();
 
@@ -156,6 +164,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         sourceIds: activeFilters.sourceIds,
         topics: activeFilters.topics,
         recentHours: showRecentOnly ? recentHours : null,
+        beforePubDate: append ? cursor?.beforePubDate : '',
+        beforeId: append ? cursor?.beforeId : '',
         signal: request.signal
       });
 
@@ -275,7 +285,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      <header className="border-b border-slate-200 bg-white shadow-sm">
+      <header className="relative z-40 border-b border-slate-200 bg-white shadow-sm">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 lg:px-6">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -311,7 +321,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                       ? 'cursor-not-allowed bg-slate-100 text-slate-300 shadow-none'
                       : 'bg-white text-gray-600 hover:bg-gray-100'
                   }`}
-                  aria-label={refreshButtonLabel}
+                  aria-label={refreshButtonAriaLabel}
                 >
                   <RefreshCw className={`h-6 w-6 ${(loading || loadingMore) ? 'animate-spin' : ''}`} aria-hidden="true" />
 
@@ -335,7 +345,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 </button>
 
                 {userMenuOpen && (
-                  <div className="absolute right-0 top-14 z-30 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur" role="menu">
+                  <div className="absolute right-0 top-14 z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur" role="menu">
                     <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-4">
                       <div className="flex items-start gap-3">
                         <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-sm">
@@ -399,153 +409,163 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
-              <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={t('searchPlaceholder')}
-                className="w-full bg-transparent text-base outline-none placeholder:text-slate-400 sm:text-sm"
-              />
-            </label>
-
-            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-              {meta?.lastRefreshAt && (
-                <span className="rounded-full bg-slate-100 px-3 py-1.5">
-                  {t('updatedAt', {
-                    time: new Date(meta.lastRefreshAt).toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })
-                  })}
-                </span>
-              )}
-            </div>
-          </div>
         </div>
       </header>
 
-      <section className="mx-auto max-w-7xl px-4 py-4 lg:px-6">
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <button
-            type="button"
-            onClick={() => setFiltersExpanded((value) => !value)}
-            className="flex w-full items-center justify-between px-5 py-4 text-left"
-          >
-            <div className="flex items-center gap-3">
-              <Filter className="h-5 w-5 text-slate-500" aria-hidden="true" />
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t('filtersTitle')}</h2>
-                <p className="text-sm text-slate-600">{t('filtersSubtitle')}</p>
-              </div>
-              {activeFiltersCount > 0 && (
-                <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-medium text-white">
-                  {activeFiltersCount}
-                </span>
-              )}
-            </div>
-            {filtersExpanded ? <ChevronUp className="h-5 w-5 text-slate-500" /> : <ChevronDown className="h-5 w-5 text-slate-500" />}
-          </button>
-
-          {filtersExpanded && (
-            <div className="border-t border-slate-100 px-5 py-5">
-              <div className="mb-5 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowRecentOnly((value) => !value)}
-                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                    showRecentOnly ? 'bg-amber-500 text-white shadow-sm' : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
-                  }`}
-                >
-                  <Clock3 className="h-4 w-4" aria-hidden="true" />
-                  {t('latestHours', { hours: recentHours })}
-                </button>
-
-                {hasActiveFilters && (
-                  <button
-                    type="button"
-                    onClick={resetFilters}
-                    className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200"
-                  >
-                    {t('resetFilters')}
-                  </button>
-                )}
+      <section className="sticky top-0 z-30 bg-transparent">
+        <div className="mx-auto max-w-7xl px-4 py-3 lg:px-6">
+          <div className="relative">
+            <div className="overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white/90 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md">
+              <div className="border-b border-slate-200/70 px-4 py-3 sm:px-5">
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-2.5 shadow-sm backdrop-blur-sm">
+                  <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder={t('searchPlaceholder')}
+                    className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+                  />
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearch('');
+                        setDebouncedSearch('');
+                      }}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                      aria-label={t('clearSearch')}
+                    >
+                      <X className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  )}
+                </label>
               </div>
 
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div>
-                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-sky-700">
-                    <Rss className="h-4 w-4" aria-hidden="true" />
-                    <span>{t('sources')}</span>
+              <button
+                type="button"
+                onClick={() => setFiltersExpanded((value) => !value)}
+                className="flex w-full items-center justify-between px-4 py-3 text-left sm:px-5"
+              >
+                <div className="flex items-center gap-3">
+                  <Filter className="h-5 w-5 text-slate-500" aria-hidden="true" />
+                  <div>
+                    <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t('filtersTitle')}</h2>
+                    <p className="text-xs text-slate-600 sm:text-sm">{t('filtersSubtitle')}</p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {visibleAvailableSources.map((source) => {
-                      const isActive = activeFilters.sourceIds.includes(source.id);
-                      return (
-                        <button
-                          key={source.id}
-                          type="button"
-                          onClick={() => toggleFilter('sourceIds', source.id)}
-                          className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
-                            isActive
-                              ? 'bg-sky-600 text-white shadow-sm'
-                              : 'bg-sky-100 text-sky-900 hover:bg-sky-200'
-                          }`}
-                        >
-                          <span>{source.name}</span>
-                          {source.count > 0 && (
-                            <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-sky-700'}`}>
-                              {source.count}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
+                  {activeFiltersCount > 0 && (
+                    <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-medium text-white">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                </div>
+                {filtersExpanded ? <ChevronUp className="h-5 w-5 text-slate-500" /> : <ChevronDown className="h-5 w-5 text-slate-500" />}
+              </button>
+            </div>
+
+            {filtersExpanded && (
+              <div className="absolute left-0 right-0 top-full z-20 mt-3 rounded-[1.75rem] border border-slate-200/80 bg-white/90 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md">
+                <div className="px-4 py-5 sm:px-5">
+                  <div className="mb-5 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowRecentOnly((value) => !value)}
+                      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                        showRecentOnly ? 'bg-amber-500 text-white shadow-sm' : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
+                      }`}
+                    >
+                      <Clock3 className="h-4 w-4" aria-hidden="true" />
+                      {t('latestHours', { hours: recentHours })}
+                    </button>
+
+                    {hasActiveFilters && (
+                      <button
+                        type="button"
+                        onClick={resetFilters}
+                        className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200"
+                      >
+                        {t('resetFilters')}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <div>
+                      <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-sky-700">
+                        <Rss className="h-4 w-4" aria-hidden="true" />
+                        <span>{t('sources')}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {visibleAvailableSources.map((source) => {
+                          const isActive = activeFilters.sourceIds.includes(source.id);
+                          return (
+                            <button
+                              key={source.id}
+                              type="button"
+                              onClick={() => toggleFilter('sourceIds', source.id)}
+                              className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
+                                isActive
+                                  ? 'bg-sky-600 text-white shadow-sm'
+                                  : 'bg-sky-100 text-sky-900 hover:bg-sky-200'
+                              }`}
+                            >
+                              <span>{source.name}</span>
+                              {source.count > 0 && (
+                                <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-sky-700'}`}>
+                                  {source.count}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                        <Tags className="h-4 w-4" aria-hidden="true" />
+                        <span>{t('topics')}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {availableTopics.map((topic) => {
+                          const isActive = activeFilters.topics.includes(topic.topic);
+                          const { Icon, iconBadgeClassName } = getTopicPresentation(topic.topic);
+                          return (
+                            <button
+                              key={topic.topic}
+                              type="button"
+                              onClick={() => toggleFilter('topics', topic.topic)}
+                              className={`inline-flex items-center gap-1.5 rounded-full border pl-1 pr-1 py-1 text-sm font-medium transition-colors ${
+                                isActive
+                                  ? 'border-slate-900 bg-white text-slate-950 shadow-sm'
+                                  : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50'
+                              }`}
+                            >
+                              <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors ${iconBadgeClassName}`}>
+                                <Icon className="h-3 w-3" aria-hidden="true" />
+                              </span>
+                              <span>{getLocalizedTopic(topic.topic, locale)}</span>
+                              <span className={`rounded-full px-2 py-0.5 text-xs ${
+                                isActive
+                                  ? 'bg-slate-100 text-slate-700'
+                                  : 'bg-slate-50 text-slate-600'
+                              }`}>
+                                {topic.count}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </div>
-
-                <div>
-                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-emerald-700">
-                    <Tags className="h-4 w-4" aria-hidden="true" />
-                    <span>{t('topics')}</span>
-                  </div>
-                    <div className="flex flex-wrap gap-2">
-                      {availableTopics.map((topic) => {
-                        const isActive = activeFilters.topics.includes(topic.topic);
-                        const { Icon, iconBadgeClassName } = getTopicPresentation(topic.topic);
-                        return (
-                          <button
-                            key={topic.topic}
-                            type="button"
-                            onClick={() => toggleFilter('topics', topic.topic)}
-                            className={`inline-flex items-center gap-1.5 rounded-full border pl-1 pr-1 py-1 text-sm font-medium transition-colors ${
-                              isActive
-                                ? 'border-slate-900 bg-white text-slate-950 shadow-sm'
-                                : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50'
-                            }`}
-                          >
-                            <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors ${iconBadgeClassName}`}>
-                              <Icon className="h-3 w-3" aria-hidden="true" />
-                            </span>
-                            <span>{getLocalizedTopic(topic.topic, locale)}</span>
-                            <span className={`rounded-full px-2 py-0.5 text-xs ${
-                              isActive
-                                ? 'bg-slate-100 text-slate-700'
-                                : 'bg-slate-50 text-slate-600'
-                            }`}>
-                              {topic.count}
-                            </span>
-                          </button>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </section>
 
-      <main className="mx-auto max-w-7xl px-4 pb-10 lg:px-6">
+      <main className="mx-auto max-w-7xl px-4 py-4 pb-10 lg:px-6">
         {loading && !loadingMore ? (
           <div className="flex h-64 items-center justify-center">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
@@ -576,7 +596,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
               {meta?.hasMore ? (
                 <button
                   type="button"
-                  onClick={() => loadNews({ page: (meta?.page || 1) + 1, append: true, resetRealtime: false })}
+                  onClick={() => loadNews(
+                    meta?.nextCursor
+                      ? { append: true, resetRealtime: false, cursor: meta.nextCursor }
+                      : { page: (meta?.page || 1) + 1, append: true, resetRealtime: false }
+                  )}
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={loadingMore}
                 >
@@ -598,6 +622,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           readerPosition={currentUser?.settings?.readerPanelPosition || 'right'}
           locale={locale}
           t={t}
+          currentUser={currentUser}
           onClose={closeReader}
         />
       )}

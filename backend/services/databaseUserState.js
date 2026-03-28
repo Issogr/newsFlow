@@ -31,6 +31,7 @@ function createUserStateRepository({ getDb }) {
              auto_refresh_enabled AS autoRefreshEnabled,
              show_news_images AS showNewsImages,
              reader_panel_position AS readerPanelPosition,
+             reader_text_size AS readerTextSize,
              last_seen_release_notes_version AS lastSeenReleaseNotesVersion,
              default_source_ids AS excludedSourceIds,
              excluded_sub_source_ids AS excludedSubSourceIds,
@@ -64,11 +65,12 @@ function createUserStateRepository({ getDb }) {
         auto_refresh_enabled,
         show_news_images,
         reader_panel_position,
+        reader_text_size,
         last_seen_release_notes_version,
         default_source_ids,
         excluded_sub_source_ids,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         default_language = excluded.default_language,
         article_retention_hours = excluded.article_retention_hours,
@@ -76,6 +78,7 @@ function createUserStateRepository({ getDb }) {
         auto_refresh_enabled = excluded.auto_refresh_enabled,
         show_news_images = excluded.show_news_images,
         reader_panel_position = excluded.reader_panel_position,
+        reader_text_size = excluded.reader_text_size,
         last_seen_release_notes_version = excluded.last_seen_release_notes_version,
         default_source_ids = excluded.default_source_ids,
         excluded_sub_source_ids = excluded.excluded_sub_source_ids,
@@ -88,6 +91,7 @@ function createUserStateRepository({ getDb }) {
       settings.autoRefreshEnabled === false ? 0 : 1,
       settings.showNewsImages === false ? 0 : 1,
       settings.readerPanelPosition || 'right',
+      settings.readerTextSize || 'medium',
       settings.lastSeenReleaseNotesVersion || '',
       JSON.stringify(settings.excludedSourceIds || []),
       JSON.stringify(settings.excludedSubSourceIds || []),
@@ -286,11 +290,12 @@ function createUserStateRepository({ getDb }) {
         auto_refresh_enabled,
         show_news_images,
         reader_panel_position,
+        reader_text_size,
         last_seen_release_notes_version,
         default_source_ids,
         excluded_sub_source_ids,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         default_language = excluded.default_language,
         article_retention_hours = excluded.article_retention_hours,
@@ -298,6 +303,7 @@ function createUserStateRepository({ getDb }) {
         auto_refresh_enabled = excluded.auto_refresh_enabled,
         show_news_images = excluded.show_news_images,
         reader_panel_position = excluded.reader_panel_position,
+        reader_text_size = excluded.reader_text_size,
         last_seen_release_notes_version = excluded.last_seen_release_notes_version,
         default_source_ids = excluded.default_source_ids,
         excluded_sub_source_ids = excluded.excluded_sub_source_ids,
@@ -344,6 +350,7 @@ function createUserStateRepository({ getDb }) {
         nextSettings.autoRefreshEnabled === false ? 0 : 1,
         nextSettings.showNewsImages === false ? 0 : 1,
         nextSettings.readerPanelPosition || 'right',
+        nextSettings.readerTextSize || 'medium',
         nextSettings.lastSeenReleaseNotesVersion || '',
         JSON.stringify(nextSettings.excludedSourceIds || []),
         JSON.stringify(nextSettings.excludedSubSourceIds || []),

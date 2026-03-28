@@ -39,6 +39,23 @@ async function resolveDeferred(deferred, value) {
   });
 }
 
+async function renderNewsAggregator(overrides = {}) {
+  let view;
+
+  await act(async () => {
+    view = render(
+      <NewsAggregator
+        currentUser={overrides.currentUser || currentUser}
+        onLogout={overrides.onLogout || jest.fn()}
+        onUserUpdate={overrides.onUserUpdate || jest.fn()}
+      />
+    );
+    await Promise.resolve();
+  });
+
+  return view;
+}
+
 const currentUser = {
   user: { username: 'alice' },
   settings: {
@@ -48,6 +65,7 @@ const currentUser = {
     autoRefreshEnabled: true,
     showNewsImages: true,
     readerPanelPosition: 'right',
+    readerTextSize: 'medium',
     excludedSourceIds: [],
     excludedSubSourceIds: []
   },
@@ -104,13 +122,7 @@ describe('NewsAggregator', () => {
       });
     });
 
-    render(
-      <NewsAggregator
-        currentUser={currentUser}
-        onLogout={jest.fn()}
-        onUserUpdate={jest.fn()}
-      />
-    );
+    await renderNewsAggregator();
 
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'economy' } });
 
@@ -139,7 +151,7 @@ describe('NewsAggregator', () => {
     expect(isRequestCanceled).not.toHaveBeenCalled();
   });
 
-  test('keeps live detection active and enables manual refresh when auto refresh is off', async () => {
+  test('keeps websocket listening and shows the refresh badge when auto refresh is off', async () => {
     fetchNews.mockResolvedValue({
       items: [],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 0 },
@@ -156,28 +168,22 @@ describe('NewsAggregator', () => {
       removeNotification: jest.fn()
     });
 
-    await act(async () => {
-      render(
-        <NewsAggregator
-          currentUser={{
-            ...currentUser,
-            settings: {
-              ...currentUser.settings,
-              autoRefreshEnabled: false
-            }
-          }}
-          onLogout={jest.fn()}
-          onUserUpdate={jest.fn()}
-        />
-      );
+    await renderNewsAggregator({
+      currentUser: {
+        ...currentUser,
+        settings: {
+          ...currentUser.settings,
+          autoRefreshEnabled: false
+        }
+      }
     });
 
     await waitFor(() => {
       expect(fetchNews).toHaveBeenCalled();
     });
 
-    expect(useWebSocket).toHaveBeenCalledWith('', expect.any(Object), false);
-    expect(screen.getAllByRole('button', { name: 'Refresh' })[1]).toBeEnabled();
+    expect(useWebSocket).toHaveBeenCalledWith('', expect.any(Object), true);
+    expect(screen.getByRole('button', { name: 'Refresh, 3 new groups available' })).toBeEnabled();
   });
 
   test('subscribes realtime updates with source exclusions', async () => {
@@ -199,21 +205,15 @@ describe('NewsAggregator', () => {
       removeNotification: jest.fn()
     });
 
-    await act(async () => {
-      render(
-        <NewsAggregator
-          currentUser={{
-            ...currentUser,
-            settings: {
-              ...currentUser.settings,
-              excludedSourceIds: ['ansa'],
-              excludedSubSourceIds: ['ansa_world']
-            }
-          }}
-          onLogout={jest.fn()}
-          onUserUpdate={jest.fn()}
-        />
-      );
+    await renderNewsAggregator({
+      currentUser: {
+        ...currentUser,
+        settings: {
+          ...currentUser.settings,
+          excludedSourceIds: ['ansa'],
+          excludedSubSourceIds: ['ansa_world']
+        }
+      }
     });
 
     await waitFor(() => {
@@ -252,18 +252,76 @@ describe('NewsAggregator', () => {
       removeNotification: jest.fn()
     });
 
-    await act(async () => {
-      render(
-        <NewsAggregator
-          currentUser={currentUser}
-          onLogout={jest.fn()}
-          onUserUpdate={jest.fn()}
-        />
-      );
-    });
+    await renderNewsAggregator();
 
     await waitFor(() => {
       expect(markGroupsSeen).toHaveBeenCalledWith(['group-1', 'group-2']);
     });
+  });
+
+  test('uses the server cursor for load more requests', async () => {
+    fetchNews.mockImplementation(({ beforeId }) => {
+      if (beforeId === 'article-1') {
+        return Promise.resolve({
+          items: [{ id: 'group-older', title: 'Older headline', items: [{ id: 'article-0', pubDate: '2026-03-14T09:00:00.000Z' }] }],
+          meta: { page: 1, pageSize: 12, hasMore: false, nextCursor: null },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        });
+      }
+
+      return Promise.resolve({
+        items: [{ id: 'group-1', title: 'Current headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }],
+        meta: {
+          page: 1,
+          pageSize: 12,
+          hasMore: true,
+          nextCursor: {
+            beforePubDate: '2026-03-14T10:00:00.000Z',
+            beforeId: 'article-1'
+          }
+        },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+    });
+    await renderNewsAggregator();
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenCalledWith(expect.objectContaining({
+        beforePubDate: '',
+        beforeId: ''
+      }));
+    });
+
+    expect(await screen.findByRole('button', { name: 'Load more groups' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more groups' }));
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
+        beforePubDate: '2026-03-14T10:00:00.000Z',
+        beforeId: 'article-1'
+      }));
+    });
+    expect(await screen.findByText('Older headline')).toBeInTheDocument();
+  });
+
+  test('shows a clear-search button and clears the search field', async () => {
+    fetchNews.mockResolvedValue({
+      items: [],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 0 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    await renderNewsAggregator();
+
+    const searchInput = screen.getByRole('searchbox');
+    fireEvent.change(searchInput, { target: { value: 'economy' } });
+
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+
+    expect(searchInput).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
   });
 });

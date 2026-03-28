@@ -1,0 +1,33 @@
+<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="720" rx="48" fill="url(#bg)"/>
+  <circle cx="214" cy="148" r="82" fill="#FDE68A" fill-opacity="0.65"/>
+  <circle cx="1102" cy="120" r="58" fill="#BFDBFE" fill-opacity="0.75"/>
+  <circle cx="1050" cy="590" r="96" fill="#F9A8D4" fill-opacity="0.35"/>
+  <path d="M183 540C234 450 343 411 437 441C511 464 564 529 627 537C710 548 764 455 844 431C957 397 1085 461 1127 570" stroke="#0F172A" stroke-opacity="0.08" stroke-width="22" stroke-linecap="round"/>
+
+  <g transform="translate(236 122)">
+    <rect x="166" y="78" width="476" height="342" rx="36" transform="rotate(-5 166 78)" fill="#FFF7ED"/>
+    <rect x="178" y="92" width="476" height="342" rx="36" transform="rotate(-5 178 92)" stroke="#FB923C" stroke-opacity="0.3" stroke-width="6"/>
+    <rect x="202" y="120" width="420" height="290" rx="30" fill="#FFFFFF"/>
+    <rect x="236" y="156" width="152" height="112" rx="22" fill="#DBEAFE"/>
+    <rect x="256" y="178" width="112" height="18" rx="9" fill="#2563EB" fill-opacity="0.22"/>
+    <rect x="256" y="210" width="84" height="14" rx="7" fill="#2563EB" fill-opacity="0.16"/>
+    <rect x="256" y="236" width="98" height="14" rx="7" fill="#2563EB" fill-opacity="0.14"/>
+    <rect x="416" y="162" width="166" height="20" rx="10" fill="#0F172A" fill-opacity="0.14"/>
+    <rect x="416" y="196" width="142" height="16" rx="8" fill="#0F172A" fill-opacity="0.08"/>
+    <rect x="236" y="300" width="346" height="18" rx="9" fill="#0F172A" fill-opacity="0.12"/>
+    <rect x="236" y="334" width="310" height="18" rx="9" fill="#0F172A" fill-opacity="0.09"/>
+    <rect x="236" y="368" width="252" height="18" rx="9" fill="#0F172A" fill-opacity="0.09"/>
+
+  </g>
+
+  <text x="640" y="615" text-anchor="middle" fill="#0F172A" fill-opacity="0.75" font-family="Verdana, Geneva, sans-serif" font-size="44" font-weight="700">No photo today. The news still dressed up.</text>
+
+  <defs>
+    <linearGradient id="bg" x1="68" y1="34" x2="1180" y2="686" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="0.5" stop-color="#E2E8F0"/>
+      <stop offset="1" stop-color="#FDE68A"/>
+    </linearGradient>
+  </defs>
+</svg>

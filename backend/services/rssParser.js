@@ -17,6 +17,8 @@ const ARTICLE_IMAGE_TIMEOUT = parseInt(process.env.ARTICLE_IMAGE_TIMEOUT || '800
 const ARTICLE_IMAGE_CACHE_TTL = parseInt(process.env.ARTICLE_IMAGE_CACHE_TTL || String(6 * 60 * 60 * 1000), 10);
 const ARTICLE_IMAGE_CACHE_MAX_ENTRIES = parseInt(process.env.ARTICLE_IMAGE_CACHE_MAX_ENTRIES || '500', 10);
 const ARTICLE_IMAGE_FALLBACK_LIMIT = parseInt(process.env.ARTICLE_IMAGE_FALLBACK_LIMIT || '4', 10);
+const RSS_MAX_RESPONSE_BYTES = parseInt(process.env.RSS_MAX_RESPONSE_BYTES || '1048576', 10);
+const ARTICLE_IMAGE_MAX_RESPONSE_BYTES = parseInt(process.env.ARTICLE_IMAGE_MAX_RESPONSE_BYTES || '524288', 10);
 
 const parser = new RSSParser({
   customFields: {
@@ -333,6 +335,7 @@ async function fetchArticleImage(url) {
   try {
     const response = await fetchSafeTextUrl(url, {
       timeout: ARTICLE_IMAGE_TIMEOUT,
+      maxResponseBytes: ARTICLE_IMAGE_MAX_RESPONSE_BYTES,
       headers: {
         'User-Agent': 'news-aggregator-image-fallback/1.0 (+https://localhost)',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
@@ -384,6 +387,7 @@ async function fetchFeedXml(url) {
     try {
       const response = await fetchSafeTextUrl(url, {
         timeout: RSS_TIMEOUT,
+        maxResponseBytes: RSS_MAX_RESPONSE_BYTES,
         headers: {
           'User-Agent': 'news-aggregator/2.0 (+https://localhost)',
           Accept: 'application/rss+xml, application/xml, text/xml, */*'

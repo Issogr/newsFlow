@@ -61,6 +61,18 @@ export const loginUser = async ({ username, password }) => {
   return response.data;
 };
 
+export const validatePasswordSetupToken = async (token) => {
+  const response = await api.get('/auth/password-setup/validate', {
+    params: { token }
+  });
+  return response.data;
+};
+
+export const completePasswordSetup = async ({ token, password }) => {
+  const response = await api.post('/auth/password-setup/complete', { token, password });
+  return response.data;
+};
+
 export const logoutUser = async () => {
   const response = await api.post('/auth/logout');
   return response.data;
@@ -101,6 +113,16 @@ export const deleteUserSource = async (sourceId) => {
   return response.data;
 };
 
+export const fetchAdminUsers = async () => {
+  const response = await api.get('/admin/users');
+  return response.data;
+};
+
+export const createAdminPasswordSetupLink = async (userId) => {
+  const response = await api.post(`/admin/users/${userId}/password-setup-link`);
+  return response.data;
+};
+
 export const fetchNews = async ({
   page = 1,
   pageSize = 12,
@@ -108,6 +130,8 @@ export const fetchNews = async ({
   sourceIds = [],
   topics = [],
   recentHours = null,
+  beforePubDate = '',
+  beforeId = '',
   signal
 } = {}) => {
   const params = { page, pageSize };
@@ -126,6 +150,14 @@ export const fetchNews = async ({
 
   if (recentHours) {
     params.recentHours = recentHours;
+  }
+
+  if (beforePubDate) {
+    params.beforePubDate = beforePubDate;
+  }
+
+  if (beforeId) {
+    params.beforeId = beforeId;
   }
 
   const response = await api.get('/news', { params, signal });

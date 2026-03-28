@@ -38,7 +38,8 @@ describe('websocketService', () => {
 
     socketFactory = jest.fn(() => ioMock);
     databaseMock = {
-      findSessionByTokenHash: jest.fn()
+      findSessionByTokenHash: jest.fn(),
+      touchUserActivity: jest.fn()
     };
     authMock = {
       extractBearerToken: jest.fn(() => ''),

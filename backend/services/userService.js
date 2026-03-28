@@ -13,8 +13,14 @@ const {
 
 const GLOBAL_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
 const MAX_RECENT_HOURS = 3;
+const MIN_PASSWORD_LENGTH = 8;
+const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().slice(0, 40) || 'admin';
+const PASSWORD_SETUP_TTL_MINUTES = parseInt(process.env.PASSWORD_SETUP_TTL_MINUTES || '60', 10);
+const ADMIN_BOOTSTRAP_TTL_MINUTES = parseInt(process.env.ADMIN_BOOTSTRAP_TTL_MINUTES || '30', 10);
+const ONLINE_ACTIVITY_WINDOW_MINUTES = parseInt(process.env.ONLINE_ACTIVITY_WINDOW_MINUTES || '5', 10);
 const SUPPORTED_LANGUAGES = new Set(['auto', 'it', 'en']);
 const SUPPORTED_READER_PANEL_POSITIONS = new Set(['left', 'center', 'right']);
+const SUPPORTED_READER_TEXT_SIZES = new Set(['small', 'medium', 'large']);
 
 function createId() {
   return crypto.randomBytes(16).toString('hex');
@@ -34,6 +40,11 @@ function normalizeReaderPanelPosition(position) {
   return SUPPORTED_READER_PANEL_POSITIONS.has(value) ? value : 'right';
 }
 
+function normalizeReaderTextSize(size) {
+  const value = String(size || 'medium').trim().toLowerCase();
+  return SUPPORTED_READER_TEXT_SIZES.has(value) ? value : 'medium';
+}
+
 function normalizeReleaseNotesVersion(version) {
   return String(version || '').trim().slice(0, 40);
 }
@@ -41,6 +52,129 @@ function normalizeReleaseNotesVersion(version) {
 function normalizeInt(value, fallback) {
   const normalized = Number(value);
   return Number.isFinite(normalized) ? Math.floor(normalized) : fallback;
+}
+
+function normalizePositiveInt(value, fallback) {
+  const normalized = Number(value);
+  return Number.isFinite(normalized) && normalized > 0 ? Math.floor(normalized) : fallback;
+}
+
+function getAppBaseUrl() {
+  return String(process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || 'http://localhost:3000')
+    .trim()
+    .replace(/\/+$/, '');
+}
+
+function buildSetupLink(pathName, token) {
+  return `${getAppBaseUrl()}${pathName}?token=${encodeURIComponent(token)}`;
+}
+
+function validatePassword(password) {
+  if (!password) {
+    throw createError(400, 'Password is required', 'INVALID_PASSWORD');
+  }
+
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    throw createError(400, `Password must contain at least ${MIN_PASSWORD_LENGTH} characters`, 'INVALID_PASSWORD');
+  }
+}
+
+function getPasswordSetupExpiryDate(ttlMinutes) {
+  const safeTtlMinutes = normalizePositiveInt(ttlMinutes, PASSWORD_SETUP_TTL_MINUTES);
+  return new Date(Date.now() + (safeTtlMinutes * 60 * 1000)).toISOString();
+}
+
+function isUserOnline(lastActivityAt) {
+  if (!lastActivityAt) {
+    return false;
+  }
+
+  const activityTime = new Date(lastActivityAt).getTime();
+  if (!Number.isFinite(activityTime)) {
+    return false;
+  }
+
+  return activityTime >= (Date.now() - (ONLINE_ACTIVITY_WINDOW_MINUTES * 60 * 1000));
+}
+
+function buildAdminUserSummary(user) {
+  return {
+    id: user.id,
+    username: user.username,
+    isAdmin: user.username.toLowerCase() === ADMIN_USERNAME.toLowerCase(),
+    passwordConfigured: Boolean(user.passwordConfigured),
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    lastLoginAt: user.lastLoginAt || null,
+    lastActivityAt: user.lastActivityAt || null,
+    isOnline: isUserOnline(user.lastActivityAt)
+  };
+}
+
+function createPasswordSetupToken({ userId, purpose, createdByUserId = null, ttlMinutes, pathName }) {
+  const rawToken = generateSessionToken();
+  const now = new Date().toISOString();
+  const expiresAt = getPasswordSetupExpiryDate(ttlMinutes);
+
+  database.createPasswordSetupToken({
+    userId,
+    tokenHash: hashSessionToken(rawToken),
+    purpose,
+    createdByUserId,
+    createdAt: now,
+    expiresAt,
+    usedAt: null
+  });
+
+  return {
+    token: rawToken,
+    expiresAt,
+    setupLink: buildSetupLink(pathName, rawToken)
+  };
+}
+
+function getPasswordSetupTokenRecord(rawToken) {
+  const token = String(rawToken || '').trim();
+
+  if (!token) {
+    throw createError(400, 'Password setup token is required', 'INVALID_PASSWORD_SETUP_TOKEN');
+  }
+
+  const tokenRecord = database.findPasswordSetupTokenByHash(hashSessionToken(token));
+  if (!tokenRecord) {
+    throw createError(404, 'Password setup link is invalid or expired', 'INVALID_PASSWORD_SETUP_TOKEN');
+  }
+
+  if (tokenRecord.usedAt) {
+    throw createError(410, 'Password setup link has already been used', 'INVALID_PASSWORD_SETUP_TOKEN');
+  }
+
+  if (new Date(tokenRecord.expiresAt) < new Date()) {
+    throw createError(410, 'Password setup link has expired', 'INVALID_PASSWORD_SETUP_TOKEN');
+  }
+
+  return tokenRecord;
+}
+
+function ensureAdminAccount() {
+  const existingAdmin = database.findUserByUsername(ADMIN_USERNAME);
+  if (existingAdmin) {
+    return existingAdmin;
+  }
+
+  const now = new Date().toISOString();
+  const adminUser = {
+    id: createId(),
+    username: ADMIN_USERNAME,
+    passwordHash: null,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  database.createUser(adminUser);
+  database.upsertUserSettings(adminUser.id, getDefaultSettings());
+
+  return database.findUserById(adminUser.id);
 }
 
 function getDefaultSettings() {
@@ -51,6 +185,7 @@ function getDefaultSettings() {
     autoRefreshEnabled: true,
     showNewsImages: true,
     readerPanelPosition: 'right',
+    readerTextSize: 'medium',
     lastSeenReleaseNotesVersion: '',
     excludedSourceIds: [],
     excludedSubSourceIds: []
@@ -64,7 +199,8 @@ function getUserSettings(userId) {
 function buildUserPayload(user) {
   return {
     id: user.id,
-    username: user.username
+    username: user.username,
+    isAdmin: String(user.username || '').toLowerCase() === ADMIN_USERNAME.toLowerCase()
   };
 }
 
@@ -106,6 +242,7 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
       ? payload.showNewsImages
       : currentSettings.showNewsImages !== false,
     readerPanelPosition: normalizeReaderPanelPosition(payload.readerPanelPosition || currentSettings.readerPanelPosition),
+    readerTextSize: normalizeReaderTextSize(payload.readerTextSize || currentSettings.readerTextSize),
     lastSeenReleaseNotesVersion: Object.prototype.hasOwnProperty.call(payload, 'lastSeenReleaseNotesVersion')
       ? normalizeReleaseNotesVersion(payload.lastSeenReleaseNotesVersion)
       : normalizeReleaseNotesVersion(currentSettings.lastSeenReleaseNotesVersion),
@@ -139,13 +276,19 @@ async function mapWithConcurrency(items = [], concurrency = 4, iteratee = async 
   return results;
 }
 
-function registerUser(payload = {}) {
+async function registerUser(payload = {}) {
   const username = sanitizeUsername(payload.username);
   const password = String(payload.password || '');
 
   if (username.length < 3) {
     throw createError(400, 'Username must contain at least 3 characters', 'INVALID_USERNAME');
   }
+
+  if (username.toLowerCase() === ADMIN_USERNAME.toLowerCase()) {
+    throw createError(403, 'This username is reserved', 'FORBIDDEN');
+  }
+
+  validatePassword(password);
 
   if (database.findUserByUsername(username)) {
     throw createError(409, 'Username already exists', 'USER_ALREADY_EXISTS');
@@ -155,13 +298,14 @@ function registerUser(payload = {}) {
   const user = {
     id: createId(),
     username,
-    passwordHash: hashPassword(password),
+    passwordHash: await hashPassword(password),
     createdAt: now,
     updatedAt: now
   };
 
   database.createUser(user);
   database.upsertUserSettings(user.id, getDefaultSettings());
+  database.updateUserLogin(user.id, now);
 
   const sessionToken = generateSessionToken();
   database.createUserSession({
@@ -174,22 +318,24 @@ function registerUser(payload = {}) {
   return buildAuthResponse(user, sessionToken);
 }
 
-function loginUser(payload = {}) {
+async function loginUser(payload = {}) {
   const username = sanitizeUsername(payload.username);
   const password = String(payload.password || '');
 
   const user = database.findUserByUsername(username);
-  if (!user || !verifyPassword(password, user.passwordHash)) {
+  if (!user || !(await verifyPassword(password, user.passwordHash))) {
     throw createError(401, 'Invalid username or password', 'UNAUTHORIZED');
   }
 
   const sessionToken = generateSessionToken();
+  const now = new Date().toISOString();
   database.createUserSession({
     tokenHash: hashSessionToken(sessionToken),
     userId: user.id,
-    createdAt: new Date().toISOString(),
+    createdAt: now,
     expiresAt: createSessionExpiryDate()
   });
+  database.updateUserLogin(user.id, now);
 
   return buildAuthResponse(user, sessionToken);
 }
@@ -328,14 +474,16 @@ function exportUserSettings(userId) {
   const customSourceIds = new Set(customSources.map((source) => source.id));
 
   return {
-    version: 6,
+    version: 7,
     exportedAt: new Date().toISOString(),
     settings: {
       defaultLanguage: settings.defaultLanguage,
       articleRetentionHours: settings.articleRetentionHours,
       recentHours: settings.recentHours,
       autoRefreshEnabled: settings.autoRefreshEnabled !== false,
+      showNewsImages: settings.showNewsImages !== false,
       readerPanelPosition: settings.readerPanelPosition || 'right',
+      readerTextSize: settings.readerTextSize || 'medium',
       lastSeenReleaseNotesVersion: settings.lastSeenReleaseNotesVersion || '',
       excludedSourceIds: settings.excludedSourceIds.filter((sourceId) => !customSourceIds.has(sourceId)),
       excludedSubSourceIds: settings.excludedSubSourceIds
@@ -346,6 +494,138 @@ function exportUserSettings(userId) {
       language: source.language,
       isExcluded: settings.excludedSourceIds.includes(source.id)
     }))
+  };
+}
+
+function ensureAdminBootstrap() {
+  const adminUser = ensureAdminAccount();
+
+  if (adminUser.passwordHash) {
+    return {
+      required: false,
+      user: buildUserPayload(adminUser),
+      setupLink: null,
+      expiresAt: null,
+      token: null
+    };
+  }
+
+  database.deleteUnusedPasswordSetupTokens({ userId: adminUser.id, purpose: 'admin-bootstrap' });
+
+  return {
+    required: true,
+    user: buildUserPayload(adminUser),
+    ...createPasswordSetupToken({
+      userId: adminUser.id,
+      purpose: 'admin-bootstrap',
+      ttlMinutes: ADMIN_BOOTSTRAP_TTL_MINUTES,
+      pathName: '/admin/setup'
+    })
+  };
+}
+
+function getPasswordSetupTokenDetails(rawToken) {
+  const tokenRecord = getPasswordSetupTokenRecord(rawToken);
+
+  return {
+    username: tokenRecord.username,
+    isAdmin: tokenRecord.username.toLowerCase() === ADMIN_USERNAME.toLowerCase(),
+    purpose: tokenRecord.purpose,
+    expiresAt: tokenRecord.expiresAt
+  };
+}
+
+async function completePasswordSetup(payload = {}) {
+  const rawToken = String(payload.token || '').trim();
+  const password = String(payload.password || '');
+
+  validatePassword(password);
+
+  const tokenHash = hashSessionToken(rawToken);
+  const sessionToken = generateSessionToken();
+  const sessionTokenHash = hashSessionToken(sessionToken);
+  const now = new Date().toISOString();
+  const nextPasswordHash = await hashPassword(password);
+  const user = database.getDb().transaction(() => {
+    const tokenRecord = getPasswordSetupTokenRecord(rawToken);
+
+    const markedUsed = database.markPasswordSetupTokenUsed(tokenHash, now);
+    if (!markedUsed) {
+      throw createError(410, 'Password setup link has already been used', 'INVALID_PASSWORD_SETUP_TOKEN');
+    }
+
+    database.deleteUnusedPasswordSetupTokens({
+      userId: tokenRecord.userId,
+      purpose: tokenRecord.purpose,
+      excludeTokenHash: tokenHash
+    });
+    database.updateUserPassword(tokenRecord.userId, nextPasswordHash, now);
+    database.deleteSessionsByUserId(tokenRecord.userId);
+    database.createUserSession({
+      tokenHash: sessionTokenHash,
+      userId: tokenRecord.userId,
+      createdAt: now,
+      expiresAt: createSessionExpiryDate()
+    });
+    database.updateUserLogin(tokenRecord.userId, now);
+
+    return database.findUserById(tokenRecord.userId);
+  })();
+
+  return buildAuthResponse(user, sessionToken);
+}
+
+function listUsersForAdmin() {
+  const users = database.listUsers()
+    .map(buildAdminUserSummary)
+    .sort((left, right) => {
+      if (left.isAdmin !== right.isAdmin) {
+        return left.isAdmin ? -1 : 1;
+      }
+
+      const rightActivity = right.lastActivityAt ? new Date(right.lastActivityAt).getTime() : 0;
+      const leftActivity = left.lastActivityAt ? new Date(left.lastActivityAt).getTime() : 0;
+      if (left.isOnline !== right.isOnline) {
+        return left.isOnline ? -1 : 1;
+      }
+      if (rightActivity !== leftActivity) {
+        return rightActivity - leftActivity;
+      }
+
+      return left.username.localeCompare(right.username);
+    });
+
+  return {
+    users,
+    summary: {
+      totalUsers: users.length,
+      onlineUsers: users.filter((user) => user.isOnline).length,
+      activeUsers: users.filter((user) => user.lastActivityAt).length,
+      onlineWindowMinutes: ONLINE_ACTIVITY_WINDOW_MINUTES
+    }
+  };
+}
+
+function createUserPasswordSetupLink(adminUserId, targetUserId) {
+  const targetUser = database.findUserById(targetUserId);
+  if (!targetUser) {
+    throw createError(404, 'User not found', 'RESOURCE_NOT_FOUND');
+  }
+
+  database.deleteUnusedPasswordSetupTokens({ userId: targetUser.id, purpose: 'password-setup' });
+
+  const setupToken = createPasswordSetupToken({
+    userId: targetUser.id,
+    createdByUserId: adminUserId,
+    purpose: 'password-setup',
+    ttlMinutes: PASSWORD_SETUP_TTL_MINUTES,
+    pathName: '/password/setup'
+  });
+
+  return {
+    user: buildUserPayload(targetUser),
+    expiresAt: setupToken.expiresAt,
+    setupLink: setupToken.setupLink
   };
 }
 
@@ -412,6 +692,11 @@ module.exports = {
   logoutUser,
   getCurrentUser,
   getUserSettings,
+  ensureAdminBootstrap,
+  getPasswordSetupTokenDetails,
+  completePasswordSetup,
+  listUsersForAdmin,
+  createUserPasswordSetupLink,
   updateUserSettings,
   addUserSource,
   updateUserSource,

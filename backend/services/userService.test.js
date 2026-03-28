@@ -41,8 +41,8 @@ describe('userService imports', () => {
     jest.clearAllMocks();
   });
 
-  test('imports settings for a passwordless user and returns the recreated sources', async () => {
-    const authPayload = userService.registerUser({ username: 'alice', password: '' });
+  test('imports settings for a user and returns the recreated sources', async () => {
+    const authPayload = await userService.registerUser({ username: 'alice', password: 'secret123' });
     const userId = authPayload.user.id;
 
     rssParser.validateFeedUrl.mockResolvedValue({ title: 'Imported Feed', language: 'it', itemCount: 4 });
@@ -54,6 +54,7 @@ describe('userService imports', () => {
         autoRefreshEnabled: false,
         showNewsImages: false,
         readerPanelPosition: 'left',
+        readerTextSize: 'large',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: ['bbc'],
         excludedSubSourceIds: []
@@ -75,6 +76,7 @@ describe('userService imports', () => {
         autoRefreshEnabled: false,
         showNewsImages: false,
         readerPanelPosition: 'left',
+        readerTextSize: 'large',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: []
       }),
@@ -94,8 +96,75 @@ describe('userService imports', () => {
       autoRefreshEnabled: false,
       showNewsImages: false,
       readerPanelPosition: 'left',
+      readerTextSize: 'large',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: []
+    });
+  });
+
+  test('exported settings preserve showNewsImages across import', async () => {
+    const sourceAuthPayload = await userService.registerUser({ username: 'source-user', password: 'secret123' });
+    const targetAuthPayload = await userService.registerUser({ username: 'target-user', password: 'secret123' });
+
+    userService.updateUserSettings(sourceAuthPayload.user.id, {
+      showNewsImages: false,
+      autoRefreshEnabled: false,
+      recentHours: 2,
+      readerTextSize: 'small'
+    });
+
+    const exportedSettings = userService.exportUserSettings(sourceAuthPayload.user.id);
+
+    expect(exportedSettings.settings).toMatchObject({
+      showNewsImages: false,
+      autoRefreshEnabled: false,
+      recentHours: 2,
+      readerTextSize: 'small'
+    });
+
+    const importedState = await userService.importUserSettings(targetAuthPayload.user.id, exportedSettings);
+
+    expect(importedState.settings).toMatchObject({
+      showNewsImages: false,
+      autoRefreshEnabled: false,
+      recentHours: 2,
+      readerTextSize: 'small'
+    });
+    expect(database.getUserSettings(targetAuthPayload.user.id)).toMatchObject({
+      showNewsImages: false,
+      autoRefreshEnabled: false,
+      recentHours: 2
+    });
+  });
+
+  test('requires a password during registration', async () => {
+    await expect(userService.registerUser({ username: 'bob', password: '' })).rejects.toMatchObject({
+      status: 400,
+      code: 'INVALID_PASSWORD'
+    });
+  });
+
+  test('requires a minimum password length during registration', async () => {
+    await expect(userService.registerUser({ username: 'carol', password: 'short' })).rejects.toMatchObject({
+      status: 400,
+      code: 'INVALID_PASSWORD'
+    });
+  });
+
+  test('does not authenticate users without a stored password hash', async () => {
+    const now = new Date().toISOString();
+
+    database.createUser({
+      id: 'legacy-user',
+      username: 'legacy-user',
+      passwordHash: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    await expect(userService.loginUser({ username: 'legacy-user', password: 'anything' })).rejects.toMatchObject({
+      status: 401,
+      code: 'UNAUTHORIZED'
     });
   });
 });

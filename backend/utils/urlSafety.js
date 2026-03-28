@@ -4,6 +4,7 @@ const axios = require('axios');
 const { createError } = require('./errorHandler');
 
 const MAX_REDIRECTS = parseInt(process.env.OUTBOUND_MAX_REDIRECTS || '5', 10);
+const MAX_RESPONSE_BYTES = parseInt(process.env.OUTBOUND_MAX_RESPONSE_BYTES || '2097152', 10);
 const PRIVATE_HOSTNAMES = new Set(['localhost', 'frontend', '::1', '[::1]']);
 
 function normalizeHostname(hostname) {
@@ -53,7 +54,17 @@ function createForbiddenUrlError(message = 'Outbound URL targets a private or un
   return createError(403, message, 'FORBIDDEN_URL');
 }
 
-async function assertSafeOutboundUrl(rawUrl) {
+function createOversizedResponseError(maxResponseBytes) {
+  return createError(413, `Outbound response exceeded the ${maxResponseBytes} byte limit`, 'PAYLOAD_TOO_LARGE');
+}
+
+function normalizeMaxResponseBytes(maxResponseBytes) {
+  return Number.isFinite(maxResponseBytes) && maxResponseBytes > 0
+    ? Math.floor(maxResponseBytes)
+    : MAX_RESPONSE_BYTES;
+}
+
+async function resolveSafeOutboundTarget(rawUrl) {
   let parsedUrl;
 
   try {
@@ -95,42 +106,158 @@ async function assertSafeOutboundUrl(rawUrl) {
     throw createForbiddenUrlError();
   }
 
-  return parsedUrl.toString();
+  const [{ address, family }] = resolvedAddresses;
+
+  return {
+    url: parsedUrl.toString(),
+    hostname,
+    address,
+    family
+  };
+}
+
+async function assertSafeOutboundUrl(rawUrl) {
+  const target = await resolveSafeOutboundTarget(rawUrl);
+  return target.url;
+}
+
+function createPinnedLookup(target) {
+  return (hostname, options, callback) => {
+    const done = typeof options === 'function' ? options : callback;
+    const normalizedHostname = normalizeHostname(hostname);
+    if (normalizedHostname !== target.hostname) {
+      done(new Error(`Unexpected outbound hostname lookup: ${hostname}`));
+      return;
+    }
+
+    done(null, target.address, target.family);
+  };
+}
+
+async function readResponseText(responseData, maxResponseBytes) {
+  if (typeof responseData === 'string') {
+    if (Buffer.byteLength(responseData, 'utf8') > maxResponseBytes) {
+      throw createOversizedResponseError(maxResponseBytes);
+    }
+
+    return responseData;
+  }
+
+  if (Buffer.isBuffer(responseData)) {
+    if (responseData.length > maxResponseBytes) {
+      throw createOversizedResponseError(maxResponseBytes);
+    }
+
+    return responseData.toString('utf8');
+  }
+
+  if (!responseData || typeof responseData.on !== 'function') {
+    return '';
+  }
+
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let totalLength = 0;
+    let settled = false;
+
+    const cleanup = () => {
+      responseData.off('data', onData);
+      responseData.off('end', onEnd);
+      responseData.off('error', onError);
+      responseData.off('aborted', onAborted);
+    };
+
+    const finish = (handler, value) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
+      handler(value);
+    };
+
+    const onData = (chunk) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalLength += buffer.length;
+
+      if (totalLength > maxResponseBytes) {
+        if (typeof responseData.destroy === 'function') {
+          responseData.destroy(createOversizedResponseError(maxResponseBytes));
+        }
+        finish(reject, createOversizedResponseError(maxResponseBytes));
+        return;
+      }
+
+      chunks.push(buffer);
+    };
+
+    const onEnd = () => finish(resolve, Buffer.concat(chunks).toString('utf8'));
+    const onError = (error) => finish(reject, error);
+    const onAborted = () => finish(reject, createError(502, 'Outbound response was aborted', 'CONNECTION_ERROR'));
+
+    responseData.on('data', onData);
+    responseData.on('end', onEnd);
+    responseData.on('error', onError);
+    responseData.on('aborted', onAborted);
+  });
+}
+
+function destroyResponseData(responseData) {
+  if (responseData && typeof responseData.destroy === 'function') {
+    responseData.destroy();
+  }
 }
 
 async function fetchSafeTextUrl(rawUrl, requestConfig = {}) {
   const maxRedirects = Number.isFinite(requestConfig.maxRedirects)
     ? requestConfig.maxRedirects
     : MAX_REDIRECTS;
+  const maxResponseBytes = normalizeMaxResponseBytes(requestConfig.maxResponseBytes);
+  const {
+    maxResponseBytes: ignoredMaxResponseBytes,
+    responseType: ignoredResponseType,
+    transformResponse: ignoredTransformResponse,
+    lookup: ignoredLookup,
+    ...baseRequestConfig
+  } = requestConfig;
   const axiosConfig = {
-    ...requestConfig,
+    ...baseRequestConfig,
     maxRedirects: 0,
-    responseType: requestConfig.responseType || 'text',
-    transformResponse: requestConfig.transformResponse || [(data) => data],
+    responseType: 'stream',
+    transformResponse: [(data) => data],
     validateStatus: () => true
   };
-  let currentUrl = await assertSafeOutboundUrl(rawUrl);
+  let currentTarget = await resolveSafeOutboundTarget(rawUrl);
 
   for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
-    const response = await axios.get(currentUrl, axiosConfig);
+    const response = await axios.get(currentTarget.url, {
+      ...axiosConfig,
+      lookup: createPinnedLookup(currentTarget)
+    });
 
     if (response.status >= 300 && response.status < 400) {
       const redirectLocation = response.headers?.location;
       if (!redirectLocation) {
+        destroyResponseData(response.data);
         throw createInvalidUrlError('Redirect response missing location');
       }
 
-      currentUrl = await assertSafeOutboundUrl(new URL(redirectLocation, currentUrl).toString());
+      destroyResponseData(response.data);
+      currentTarget = await resolveSafeOutboundTarget(new URL(redirectLocation, currentTarget.url).toString());
       continue;
     }
 
     if (response.status < 200 || response.status >= 300) {
+      destroyResponseData(response.data);
       throw createError(response.status || 502, `Outbound request failed with status ${response.status || 'unknown'}`, 'CONNECTION_ERROR');
     }
 
     return {
       ...response,
-      finalUrl: currentUrl
+      data: await readResponseText(response.data, maxResponseBytes),
+      finalUrl: currentTarget.url,
+      resolvedAddress: currentTarget.address
     };
   }
 
@@ -140,6 +267,7 @@ async function fetchSafeTextUrl(rawUrl, requestConfig = {}) {
 module.exports = {
   assertSafeOutboundUrl,
   fetchSafeTextUrl,
+  _resolveSafeOutboundTarget: resolveSafeOutboundTarget,
   _normalizeHostname: normalizeHostname,
   _isPrivateAddress: isPrivateAddress
 };

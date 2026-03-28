@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import NewsAggregator from './components/NewsAggregator';
+import AdminDashboard from './components/AdminDashboard';
 import AuthScreen from './components/AuthScreen';
+import PasswordSetupScreen from './components/PasswordSetupScreen';
 import ReleaseNotesModal from './components/ReleaseNotesModal';
 import { CURRENT_CHANGELOG_ENTRY, getCurrentChangelog } from './config/changelog';
 import { createTranslator, resolvePreferredLocale } from './i18n';
@@ -15,10 +17,17 @@ import {
 } from './services/api';
 
 function App() {
+  const [locationState, setLocationState] = useState(() => ({
+    pathname: window.location.pathname,
+    search: window.location.search
+  }));
   const [authData, setAuthData] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
-  const [loadingSession, setLoadingSession] = useState(Boolean(getAuthToken()));
+  const [loadingSession, setLoadingSession] = useState(() => {
+    const pathname = window.location.pathname;
+    return Boolean(getAuthToken()) && pathname !== '/password/setup' && pathname !== '/admin/setup';
+  });
   const [releaseNotesState, setReleaseNotesState] = useState({
     hiddenVersion: '',
     saving: false,
@@ -30,9 +39,12 @@ function App() {
   }, [authData?.settings?.defaultLanguage]);
   const t = useMemo(() => createTranslator(locale), [locale]);
   const releaseNotes = useMemo(() => getCurrentChangelog(locale), [locale]);
+  const setupToken = useMemo(() => new URLSearchParams(locationState.search).get('token') || '', [locationState.search]);
+  const isPasswordSetupRoute = locationState.pathname === '/password/setup' || locationState.pathname === '/admin/setup';
   const needsReleaseNotesAck = authData?.settings?.lastSeenReleaseNotesVersion !== releaseNotes.version;
   const shouldShowReleaseNotes = Boolean(
     authData
+    && !authData?.user?.isAdmin
     && releaseNotes.version
     && (
       releaseNotesState.manuallyOpened
@@ -41,7 +53,7 @@ function App() {
   );
 
   const loadSession = useCallback(async () => {
-    if (!getAuthToken()) {
+    if (isPasswordSetupRoute || !getAuthToken()) {
       setLoadingSession(false);
       return;
     }
@@ -56,7 +68,7 @@ function App() {
     } finally {
       setLoadingSession(false);
     }
-  }, []);
+  }, [isPasswordSetupRoute]);
 
   useEffect(() => {
     loadSession();
@@ -76,6 +88,12 @@ function App() {
     });
     setAuthError(null);
   }, []);
+
+  const handlePasswordSetupComplete = useCallback(async (payload) => {
+    window.history.replaceState({}, '', '/');
+    setLocationState({ pathname: window.location.pathname, search: window.location.search });
+    handleAuthSuccess(payload);
+  }, [handleAuthSuccess]);
 
   const handleLogin = useCallback(async (credentials) => {
     setAuthBusy(true);
@@ -155,6 +173,18 @@ function App() {
     return <div className="App min-h-screen bg-slate-100" />;
   }
 
+  if (isPasswordSetupRoute) {
+    return (
+      <div className="App">
+        <PasswordSetupScreen
+          t={t}
+          token={setupToken}
+          onComplete={handlePasswordSetupComplete}
+        />
+      </div>
+    );
+  }
+
   if (!authData) {
     return (
       <div className="App">
@@ -171,13 +201,21 @@ function App() {
 
   return (
     <div className="App">
-      <NewsAggregator
-        currentUser={authData}
-        onLogout={handleLogout}
-        onUserUpdate={setAuthData}
-        currentChangelogVersion={releaseNotes.version}
-        onOpenReleaseNotes={handleOpenReleaseNotes}
-      />
+      {authData?.user?.isAdmin ? (
+        <AdminDashboard
+          t={t}
+          currentUser={authData}
+          onLogout={handleLogout}
+        />
+      ) : (
+        <NewsAggregator
+          currentUser={authData}
+          onLogout={handleLogout}
+          onUserUpdate={setAuthData}
+          currentChangelogVersion={releaseNotes.version}
+          onOpenReleaseNotes={handleOpenReleaseNotes}
+        />
+      )}
       {shouldShowReleaseNotes && (
         <ReleaseNotesModal
           t={t}

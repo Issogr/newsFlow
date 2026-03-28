@@ -25,6 +25,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     setAutoRefreshEnabled,
     setShowNewsImages,
     setReaderPanelPosition,
+    setReaderTextSize,
     updateNumericSetting,
     toggleExcludedSource,
     toggleExcludedSubFeed,
@@ -84,6 +85,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               onAutoRefreshChange={setAutoRefreshEnabled}
               onShowNewsImagesChange={setShowNewsImages}
               onReaderPanelPositionChange={setReaderPanelPosition}
+              onReaderTextSizeChange={setReaderTextSize}
               onNumericSettingChange={updateNumericSetting}
               onExport={handleExport}
               onImportClick={handleImportClick}

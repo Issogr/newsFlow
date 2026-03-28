@@ -24,6 +24,7 @@ const baseCurrentUser = {
     autoRefreshEnabled: true,
     showNewsImages: true,
     readerPanelPosition: 'right',
+    readerTextSize: 'medium',
     lastSeenReleaseNotesVersion: '',
     excludedSourceIds: [],
     excludedSubSourceIds: []

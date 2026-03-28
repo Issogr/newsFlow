@@ -8,6 +8,7 @@ const { fetchSafeTextUrl } = require('../utils/urlSafety');
 
 const READER_TIMEOUT = parseInt(process.env.READER_TIMEOUT || '12000', 10);
 const READER_CACHE_TTL_MS = parseInt(process.env.READER_CACHE_TTL_MS || String(24 * 60 * 60 * 1000), 10);
+const READER_MAX_RESPONSE_BYTES = parseInt(process.env.READER_MAX_RESPONSE_BYTES || '2097152', 10);
 const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'PRE']);
 const CONTAINER_TAGS = new Set(['ARTICLE', 'SECTION', 'DIV', 'MAIN']);
 
@@ -250,6 +251,7 @@ function buildFallbackPayload(article) {
 async function fetchReaderPayload(article) {
   const response = await fetchSafeTextUrl(article.url, {
     timeout: READER_TIMEOUT,
+    maxResponseBytes: READER_MAX_RESPONSE_BYTES,
     headers: {
       'User-Agent': 'news-aggregator-reader/1.0 (+https://localhost)',
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'

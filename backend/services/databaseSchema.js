@@ -1,5 +1,28 @@
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 11;
+  const CURRENT_SCHEMA_VERSION = 14;
+
+  function createPasswordSetupTokenTable(database) {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS password_setup_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        purpose TEXT NOT NULL,
+        created_by_user_id TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_password_setup_tokens_user_purpose
+      ON password_setup_tokens (user_id, purpose, used_at);
+
+      CREATE INDEX IF NOT EXISTS idx_password_setup_tokens_expires_at
+      ON password_setup_tokens (expires_at);
+    `);
+  }
 
   function initializeSchema(database) {
     database.exec(`
@@ -60,6 +83,9 @@ function createDatabaseSchema({ logger }) {
         id TEXT PRIMARY KEY,
         username TEXT NOT NULL UNIQUE,
         password_hash TEXT,
+        role TEXT NOT NULL DEFAULT 'user',
+        last_login_at TEXT,
+        last_activity_at TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -75,6 +101,25 @@ function createDatabaseSchema({ logger }) {
       CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions (user_id);
       CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions (expires_at);
 
+      CREATE TABLE IF NOT EXISTS password_setup_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        purpose TEXT NOT NULL,
+        created_by_user_id TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_password_setup_tokens_user_purpose
+      ON password_setup_tokens (user_id, purpose, used_at);
+
+      CREATE INDEX IF NOT EXISTS idx_password_setup_tokens_expires_at
+      ON password_setup_tokens (expires_at);
+
       CREATE TABLE IF NOT EXISTS user_settings (
         user_id TEXT PRIMARY KEY,
         default_language TEXT NOT NULL DEFAULT 'auto',
@@ -83,6 +128,7 @@ function createDatabaseSchema({ logger }) {
         auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
         show_news_images INTEGER NOT NULL DEFAULT 1,
         reader_panel_position TEXT NOT NULL DEFAULT 'right',
+        reader_text_size TEXT NOT NULL DEFAULT 'medium',
         last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
         default_source_ids TEXT NOT NULL DEFAULT '[]',
         excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
@@ -162,22 +208,71 @@ function createDatabaseSchema({ logger }) {
       return;
     }
 
-    if (currentVersion === 10) {
+    let nextVersion = currentVersion;
+
+    if (nextVersion === 10) {
       if (!columnExists(database, 'user_settings', 'show_news_images')) {
         database.exec(`
           ALTER TABLE user_settings
           ADD COLUMN show_news_images INTEGER NOT NULL DEFAULT 1
         `);
       }
-      setCurrentSchemaVersion(database);
       logger.info('Migrated DB schema from version 10 to 11: added show_news_images user setting');
-      return;
+      nextVersion = 11;
     }
 
-    if (currentVersion !== CURRENT_SCHEMA_VERSION) {
+    if (nextVersion === 11) {
+      if (!columnExists(database, 'users', 'role')) {
+        database.exec(`
+          ALTER TABLE users
+          ADD COLUMN role TEXT NOT NULL DEFAULT 'user'
+        `);
+      }
+
+      createPasswordSetupTokenTable(database);
+      logger.info('Migrated DB schema from version 11 to 12: added user roles and password setup tokens');
+      nextVersion = 12;
+    }
+
+    if (nextVersion === 12) {
+      if (!columnExists(database, 'users', 'last_login_at')) {
+        database.exec(`
+          ALTER TABLE users
+          ADD COLUMN last_login_at TEXT
+        `);
+      }
+
+      if (!columnExists(database, 'users', 'last_activity_at')) {
+        database.exec(`
+          ALTER TABLE users
+          ADD COLUMN last_activity_at TEXT
+        `);
+      }
+
+      logger.info('Migrated DB schema from version 12 to 13: added user activity tracking');
+      nextVersion = 13;
+    }
+
+    if (nextVersion === 13) {
+      if (!columnExists(database, 'user_settings', 'reader_text_size')) {
+        database.exec(`
+          ALTER TABLE user_settings
+          ADD COLUMN reader_text_size TEXT NOT NULL DEFAULT 'medium'
+        `);
+      }
+
+      logger.info('Migrated DB schema from version 13 to 14: added reader text size user setting');
+      nextVersion = 14;
+    }
+
+    if (nextVersion !== CURRENT_SCHEMA_VERSION) {
       throw new Error(
         `Unsupported database schema version ${currentVersion}. Expected ${CURRENT_SCHEMA_VERSION}. Recreate the database file before starting this version of the app.`
       );
+    }
+
+    if (nextVersion !== currentVersion) {
+      setCurrentSchemaVersion(database);
     }
   }
 

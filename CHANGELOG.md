@@ -1,5 +1,31 @@
 # Changelog
 
+## 3.2.6
+
+- made passwords mandatory for new accounts, added minimum-length validation on backend and frontend, and blocked legacy passwordless logins from authenticating
+- fixed settings export/import so `showNewsImages` now survives account migrations correctly
+- added a dedicated admin bootstrap flow that creates the reserved admin account automatically, logs a one-time setup link on startup, and prevents normal users from registering the reserved admin username
+- added admin-managed password setup/reset links so the admin can issue one-time links for users to configure a new valid password
+- replaced the admin news home with a dedicated admin dashboard that focuses on account management instead of the reader/news feed
+- added admin visibility into total users, currently online users, last login time, and last activity time with automatic activity tracking for authenticated API and WebSocket usage
+- hardened outbound feed/article fetching against DNS rebinding and oversized response bodies by pinning validated DNS resolutions to the actual request and enforcing size limits for feeds, reader pages, and image-fallback fetches
+- moved password hashing and verification off the synchronous Node.js event loop path by switching authentication flows to async `scrypt` usage
+- fixed live-update pagination drift by adding cursor-based news loading so prepended real-time groups no longer break `Load more` ordering or cause duplicate-heavy paging
+- reduced feed-query overhead and improved pagination accuracy by avoiding repeated intermediate resorting in grouped queries and by returning `hasMore` only when another page is actually reachable
+- reduced WebSocket fanout work by batching sockets with identical subscriptions and bounded browser-side live-update dedupe tracking so long-running tabs no longer retain every seen group id forever
+- fixed manual-refresh mode so the app still listens for live updates with auto refresh disabled, allowing the refresh button indicator to signal newly available news again
+- added a clear-search control inside the main search field and removed the `Updated` status chip from the header area to simplify the top-bar UI
+- removed the manual `Refresh reader` action from reader mode so the reading toolbar stays focused on opening the original article
+- moved filters directly below the search bar, made the search-and-filter controls sticky for easier access while scrolling, and prevented the expanded filter panel from pushing page content down
+- softened the sticky search/filter surface with a lighter translucent treatment and aligned the dropdown styling with the main control bubble
+- fixed the user menu layering so it now opens above the sticky search/filter controls instead of behind them
+- added a generic fallback cover illustration for articles without images and refined it into a cleaner neutral placeholder so imageless stories still render consistently without distracting artwork
+- added share actions to news cards and reader mode, using the original article URL and the native OS share sheet when available with safe browser fallbacks otherwise
+- compacted the news-card action bar on mobile so `Reader`, `Share`, and `Open article` use space more efficiently without losing desktop readability
+- simplified reader mode by keeping only the `Clean reading view` label and close action sticky, moving the article title into the scrolling content, and trimming metadata chips down to the source plus read-time info
+- added a persistent `readerTextSize` user setting with DB migration, settings-panel support, and an in-reader selector so text size stays consistent across sessions without reloading the page behind the reader
+- removed the reader-mode top excerpt/summary block so articles open directly into the main content instead of showing a citation-style intro panel above the body
+
 ## 3.2.5
 
 - improved article image coverage in news cards by falling back to article-page metadata when feeds omit image data
