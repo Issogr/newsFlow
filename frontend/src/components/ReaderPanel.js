@@ -9,16 +9,17 @@ import {
   Share2,
   X
 } from 'lucide-react';
-import { fetchReaderArticle, isRequestCanceled } from '../services/api';
+import { fetchReaderArticle, isRequestCanceled, updateUserSettings } from '../services/api';
 import useLatestRequest from '../hooks/useLatestRequest';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { shareArticleUrl } from '../utils/shareArticle';
-
-const blockClassName = {
-  paragraph: 'text-[1.08rem] leading-8 text-stone-800',
-  blockquote: 'border-l-4 border-stone-300 bg-stone-50/80 pl-5 pr-2 italic text-stone-700',
-  preformatted: 'overflow-x-auto rounded-2xl bg-stone-900 px-4 py-4 text-sm leading-7 text-stone-100'
-};
+import {
+  DEFAULT_READER_TEXT_SIZE,
+  READER_TEXT_SIZE_LABELS,
+  READER_TEXT_SIZE_ORDER,
+  READER_TEXT_SIZE_STYLES
+} from '../config/readerTextSize';
+import { getStoredReaderTextSizePreference, setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
 
 const metaChipClassName = 'inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-stone-200 bg-white/90 px-2.5 py-1.5 text-xs shadow-sm sm:w-auto sm:justify-start sm:gap-2 sm:px-3 sm:text-sm';
 
@@ -30,14 +31,18 @@ function getArticleSourceLabel(article) {
   return article.source || article.rawSource || '';
 }
 
-function renderReaderBlock(block, index) {
+function renderReaderBlock(block, index, readerTextStyles) {
   if (!block) {
     return null;
   }
 
   if (block.type === 'heading') {
     const TagName = `h${Math.min(Math.max(block.level || 2, 1), 6)}`;
-    const sizeClass = block.level <= 2 ? 'text-2xl md:text-3xl' : block.level === 3 ? 'text-xl md:text-2xl' : 'text-lg';
+    const sizeClass = block.level <= 2
+      ? readerTextStyles.headingLevel1
+      : block.level === 3
+        ? readerTextStyles.headingLevel3
+        : readerTextStyles.headingOther;
     return <TagName key={`${block.type}-${index}`} className={`font-semibold leading-tight tracking-tight text-stone-900 ${sizeClass}`}>{block.text}</TagName>;
   }
 
@@ -46,7 +51,7 @@ function renderReaderBlock(block, index) {
     return (
       <ListTag
         key={`${block.type}-${index}`}
-        className={`space-y-3 pl-6 text-[1.04rem] leading-8 text-stone-800 ${block.type === 'ordered-list' ? 'list-decimal' : 'list-disc'}`}
+        className={`space-y-3 pl-6 ${readerTextStyles.list} ${block.type === 'ordered-list' ? 'list-decimal' : 'list-disc'}`}
       >
         {block.items.map((item, itemIndex) => (
           <li key={`${block.type}-${index}-${itemIndex}`}>{item}</li>
@@ -56,24 +61,26 @@ function renderReaderBlock(block, index) {
   }
 
   if (block.type === 'preformatted') {
-    return <pre key={`${block.type}-${index}`} className={blockClassName.preformatted}>{block.text}</pre>;
+    return <pre key={`${block.type}-${index}`} className={readerTextStyles.preformatted}>{block.text}</pre>;
   }
 
   if (block.type === 'blockquote') {
-    return <blockquote key={`${block.type}-${index}`} className={blockClassName.blockquote}>{block.text}</blockquote>;
+    return <blockquote key={`${block.type}-${index}`} className={readerTextStyles.blockquote}>{block.text}</blockquote>;
   }
 
-  return <p key={`${block.type}-${index}`} className={blockClassName.paragraph}>{block.text}</p>;
+  return <p key={`${block.type}-${index}`} className={readerTextStyles.paragraph}>{block.text}</p>;
 }
 
-const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale, t, onClose }) => {
+const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale, t, onClose, currentUser }) => {
   const [selectedArticleId, setSelectedArticleId] = useState(initialArticleId || group?.items?.[0]?.id || null);
   const [readerByArticleId, setReaderByArticleId] = useState({});
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [shareState, setShareState] = useState('idle');
+  const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   const [error, setError] = useState(null);
   const readerCacheRef = useRef({});
+  const readerTextSizeRequestIdRef = useRef(0);
   const { startLatestRequest, resetLatestRequest } = useLatestRequest();
 
   useEffect(() => {
@@ -88,6 +95,10 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
     readerCacheRef.current = {};
     resetLatestRequest();
   }, [group, initialArticleId, resetLatestRequest]);
+
+  useEffect(() => {
+    setReaderTextSize(getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
+  }, [currentUser?.settings?.readerTextSize]);
 
   useEffect(() => {
     const handleEscape = (event) => {
@@ -175,7 +186,7 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
   const desktopPositionClassName = readerPosition === 'left'
     ? 'lg:justify-start'
     : (readerPosition === 'center' ? 'lg:justify-center' : 'lg:justify-end');
-
+  const readerTextStyles = READER_TEXT_SIZE_STYLES[readerTextSize] || READER_TEXT_SIZE_STYLES[DEFAULT_READER_TEXT_SIZE];
   useEffect(() => {
     if (shareState !== 'copied') {
       return undefined;
@@ -197,6 +208,36 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
     setShareState(result || 'idle');
   }, [safeOriginalUrl, selectedArticle?.title, selectedReader?.title]);
 
+  const updateReaderTextSize = useCallback(async (nextValue) => {
+    const normalizedNextValue = READER_TEXT_SIZE_ORDER.includes(nextValue) ? nextValue : DEFAULT_READER_TEXT_SIZE;
+    if (normalizedNextValue === readerTextSize) {
+      return;
+    }
+
+    const previousValue = readerTextSize;
+    const persistedValue = setStoredReaderTextSizePreference(normalizedNextValue);
+    setReaderTextSize(persistedValue);
+
+    if (!currentUser?.settings) {
+      return;
+    }
+
+    const requestId = readerTextSizeRequestIdRef.current + 1;
+    readerTextSizeRequestIdRef.current = requestId;
+
+    try {
+      const response = await updateUserSettings({ readerTextSize: persistedValue });
+      if (readerTextSizeRequestIdRef.current !== requestId) {
+        return;
+      }
+    } catch {
+      if (readerTextSizeRequestIdRef.current === requestId) {
+        setStoredReaderTextSizePreference(previousValue);
+        setReaderTextSize(previousValue);
+      }
+    }
+  }, [currentUser?.settings, readerTextSize]);
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-sm">
       <button
@@ -215,6 +256,26 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
             </p>
 
             <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-full border border-stone-200 bg-white px-2 py-1.5 shadow-sm">
+                <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-stone-100 px-2 text-xs font-semibold tracking-[0.08em] text-stone-500">
+                  Aa
+                </span>
+                <label className="hidden text-xs font-semibold uppercase tracking-[0.16em] text-stone-400 md:inline" htmlFor="reader-text-size-select">
+                  {t('readerTextSizeSetting')}
+                </label>
+                <select
+                  id="reader-text-size-select"
+                  value={readerTextSize}
+                  onChange={(event) => updateReaderTextSize(event.target.value)}
+                  className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium text-stone-600 outline-none transition-colors focus:border-stone-300"
+                  aria-label={t('readerTextSizeSetting')}
+                  title={t('readerTextSizeSetting')}
+                >
+                  {READER_TEXT_SIZE_ORDER.map((size) => (
+                    <option key={size} value={size}>{t(READER_TEXT_SIZE_LABELS[size])}</option>
+                  ))}
+                </select>
+              </div>
               <button
                 type="button"
                 onClick={onClose}
@@ -340,7 +401,7 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
                     )}
 
                     <div className="space-y-6 tracking-[0.01em]">
-                      {(selectedReader.contentBlocks || []).map((block, index) => renderReaderBlock(block, index))}
+                      {(selectedReader.contentBlocks || []).map((block, index) => renderReaderBlock(block, index, readerTextStyles))}
                     </div>
                   </article>
                 ) : null}

@@ -1,5 +1,5 @@
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 13;
+  const CURRENT_SCHEMA_VERSION = 14;
 
   function createPasswordSetupTokenTable(database) {
     database.exec(`
@@ -128,6 +128,7 @@ function createDatabaseSchema({ logger }) {
         auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
         show_news_images INTEGER NOT NULL DEFAULT 1,
         reader_panel_position TEXT NOT NULL DEFAULT 'right',
+        reader_text_size TEXT NOT NULL DEFAULT 'medium',
         last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
         default_source_ids TEXT NOT NULL DEFAULT '[]',
         excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
@@ -250,6 +251,18 @@ function createDatabaseSchema({ logger }) {
 
       logger.info('Migrated DB schema from version 12 to 13: added user activity tracking');
       nextVersion = 13;
+    }
+
+    if (nextVersion === 13) {
+      if (!columnExists(database, 'user_settings', 'reader_text_size')) {
+        database.exec(`
+          ALTER TABLE user_settings
+          ADD COLUMN reader_text_size TEXT NOT NULL DEFAULT 'medium'
+        `);
+      }
+
+      logger.info('Migrated DB schema from version 13 to 14: added reader text size user setting');
+      nextVersion = 14;
     }
 
     if (nextVersion !== CURRENT_SCHEMA_VERSION) {

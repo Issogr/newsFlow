@@ -65,6 +65,7 @@ const currentUser = {
     autoRefreshEnabled: true,
     showNewsImages: true,
     readerPanelPosition: 'right',
+    readerTextSize: 'medium',
     excludedSourceIds: [],
     excludedSubSourceIds: []
   },

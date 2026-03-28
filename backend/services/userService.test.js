@@ -54,6 +54,7 @@ describe('userService imports', () => {
         autoRefreshEnabled: false,
         showNewsImages: false,
         readerPanelPosition: 'left',
+        readerTextSize: 'large',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: ['bbc'],
         excludedSubSourceIds: []
@@ -75,6 +76,7 @@ describe('userService imports', () => {
         autoRefreshEnabled: false,
         showNewsImages: false,
         readerPanelPosition: 'left',
+        readerTextSize: 'large',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: []
       }),
@@ -94,6 +96,7 @@ describe('userService imports', () => {
       autoRefreshEnabled: false,
       showNewsImages: false,
       readerPanelPosition: 'left',
+      readerTextSize: 'large',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: []
     });
@@ -106,7 +109,8 @@ describe('userService imports', () => {
     userService.updateUserSettings(sourceAuthPayload.user.id, {
       showNewsImages: false,
       autoRefreshEnabled: false,
-      recentHours: 2
+      recentHours: 2,
+      readerTextSize: 'small'
     });
 
     const exportedSettings = userService.exportUserSettings(sourceAuthPayload.user.id);
@@ -114,7 +118,8 @@ describe('userService imports', () => {
     expect(exportedSettings.settings).toMatchObject({
       showNewsImages: false,
       autoRefreshEnabled: false,
-      recentHours: 2
+      recentHours: 2,
+      readerTextSize: 'small'
     });
 
     const importedState = await userService.importUserSettings(targetAuthPayload.user.id, exportedSettings);
@@ -122,7 +127,8 @@ describe('userService imports', () => {
     expect(importedState.settings).toMatchObject({
       showNewsImages: false,
       autoRefreshEnabled: false,
-      recentHours: 2
+      recentHours: 2,
+      readerTextSize: 'small'
     });
     expect(database.getUserSettings(targetAuthPayload.user.id)).toMatchObject({
       showNewsImages: false,

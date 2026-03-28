@@ -27,6 +27,7 @@ import { createTranslator, getLocalizedTopic, LOCALE_STORAGE_KEY, resolvePreferr
 import { getSettingsLimits } from '../config/settingsLimits';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import { getTopicPresentation } from '../topicPresentation';
+import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -128,6 +129,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   useEffect(() => {
     setLocale(resolvePreferredLocale(preferredLanguage));
   }, [preferredLanguage]);
+
+  useEffect(() => {
+    setStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize || 'medium');
+  }, [currentUser?.settings?.readerTextSize]);
 
   useEffect(() => {
     setActiveFilters((current) => ({
@@ -617,6 +622,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           readerPosition={currentUser?.settings?.readerPanelPosition || 'right'}
           locale={locale}
           t={t}
+          currentUser={currentUser}
           onClose={closeReader}
         />
       )}

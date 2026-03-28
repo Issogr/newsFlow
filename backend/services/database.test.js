@@ -68,13 +68,14 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('13');
+    expect(migrationVersion).toBe('14');
     expect(articleColumns).toContain('canonical_url');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
     expect(settingsColumns).toContain('auto_refresh_enabled');
     expect(settingsColumns).toContain('show_news_images');
+    expect(settingsColumns).toContain('reader_text_size');
     expect(settingsColumns).toContain('reader_panel_position');
     expect(settingsColumns).toContain('last_seen_release_notes_version');
     expect(userColumns).toContain('role');
@@ -162,8 +163,9 @@ describe('database migrations', () => {
 
       expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
       expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-      expect(migratedVersion).toBe('13');
+      expect(migratedVersion).toBe('14');
       expect(settingsColumns).toContain('show_news_images');
+      expect(settingsColumns).toContain('reader_text_size');
       expect(userColumns).toContain('role');
       expect(userColumns).toContain('last_login_at');
       expect(userColumns).toContain('last_activity_at');
@@ -403,6 +405,7 @@ describe('database queries and user data', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       readerPanelPosition: 'left',
+      readerTextSize: 'large',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
@@ -415,6 +418,7 @@ describe('database queries and user data', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       readerPanelPosition: 'left',
+      readerTextSize: 'large',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []

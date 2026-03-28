@@ -20,6 +20,7 @@ const ADMIN_BOOTSTRAP_TTL_MINUTES = parseInt(process.env.ADMIN_BOOTSTRAP_TTL_MIN
 const ONLINE_ACTIVITY_WINDOW_MINUTES = parseInt(process.env.ONLINE_ACTIVITY_WINDOW_MINUTES || '5', 10);
 const SUPPORTED_LANGUAGES = new Set(['auto', 'it', 'en']);
 const SUPPORTED_READER_PANEL_POSITIONS = new Set(['left', 'center', 'right']);
+const SUPPORTED_READER_TEXT_SIZES = new Set(['small', 'medium', 'large']);
 
 function createId() {
   return crypto.randomBytes(16).toString('hex');
@@ -37,6 +38,11 @@ function normalizeLanguage(language) {
 function normalizeReaderPanelPosition(position) {
   const value = String(position || 'right').trim().toLowerCase();
   return SUPPORTED_READER_PANEL_POSITIONS.has(value) ? value : 'right';
+}
+
+function normalizeReaderTextSize(size) {
+  const value = String(size || 'medium').trim().toLowerCase();
+  return SUPPORTED_READER_TEXT_SIZES.has(value) ? value : 'medium';
 }
 
 function normalizeReleaseNotesVersion(version) {
@@ -179,6 +185,7 @@ function getDefaultSettings() {
     autoRefreshEnabled: true,
     showNewsImages: true,
     readerPanelPosition: 'right',
+    readerTextSize: 'medium',
     lastSeenReleaseNotesVersion: '',
     excludedSourceIds: [],
     excludedSubSourceIds: []
@@ -235,6 +242,7 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
       ? payload.showNewsImages
       : currentSettings.showNewsImages !== false,
     readerPanelPosition: normalizeReaderPanelPosition(payload.readerPanelPosition || currentSettings.readerPanelPosition),
+    readerTextSize: normalizeReaderTextSize(payload.readerTextSize || currentSettings.readerTextSize),
     lastSeenReleaseNotesVersion: Object.prototype.hasOwnProperty.call(payload, 'lastSeenReleaseNotesVersion')
       ? normalizeReleaseNotesVersion(payload.lastSeenReleaseNotesVersion)
       : normalizeReleaseNotesVersion(currentSettings.lastSeenReleaseNotesVersion),
@@ -466,7 +474,7 @@ function exportUserSettings(userId) {
   const customSourceIds = new Set(customSources.map((source) => source.id));
 
   return {
-    version: 6,
+    version: 7,
     exportedAt: new Date().toISOString(),
     settings: {
       defaultLanguage: settings.defaultLanguage,
@@ -475,6 +483,7 @@ function exportUserSettings(userId) {
       autoRefreshEnabled: settings.autoRefreshEnabled !== false,
       showNewsImages: settings.showNewsImages !== false,
       readerPanelPosition: settings.readerPanelPosition || 'right',
+      readerTextSize: settings.readerTextSize || 'medium',
       lastSeenReleaseNotesVersion: settings.lastSeenReleaseNotesVersion || '',
       excludedSourceIds: settings.excludedSourceIds.filter((sourceId) => !customSourceIds.has(sourceId)),
       excludedSubSourceIds: settings.excludedSubSourceIds

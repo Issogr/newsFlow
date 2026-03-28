@@ -91,6 +91,7 @@ describe('API auth and user flows', () => {
         autoRefreshEnabled: true,
         showNewsImages: true,
         readerPanelPosition: 'right',
+        readerTextSize: 'medium',
         lastSeenReleaseNotesVersion: '',
         excludedSourceIds: [],
         excludedSubSourceIds: []
@@ -275,6 +276,7 @@ describe('API auth and user flows', () => {
         autoRefreshEnabled: false,
         showNewsImages: false,
         readerPanelPosition: 'left',
+        readerTextSize: 'large',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: [ansaSourceId],
         excludedSubSourceIds: ['ansa_mondo']
@@ -290,6 +292,7 @@ describe('API auth and user flows', () => {
         autoRefreshEnabled: false,
         showNewsImages: false,
         readerPanelPosition: 'left',
+        readerTextSize: 'large',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: [ansaSourceId],
         excludedSubSourceIds: ['ansa_mondo']
@@ -404,6 +407,7 @@ describe('API auth and user flows', () => {
           autoRefreshEnabled: false,
           showNewsImages: false,
           readerPanelPosition: 'center',
+          readerTextSize: 'small',
           lastSeenReleaseNotesVersion: '3.2.3',
           excludedSourceIds: [ansaSourceId],
           excludedSubSourceIds: []
@@ -428,6 +432,7 @@ describe('API auth and user flows', () => {
           autoRefreshEnabled: false,
           showNewsImages: false,
           readerPanelPosition: 'center',
+          readerTextSize: 'small',
           lastSeenReleaseNotesVersion: '3.2.3',
           excludedSourceIds: expect.arrayContaining([ansaSourceId])
         }),

@@ -1,6 +1,7 @@
 import React from 'react';
-import { Clock3, Download, Globe2, Image as ImageIcon, PanelRightOpen, Radio, RefreshCw, TimerReset, Upload } from 'lucide-react';
+import { Clock3, Download, Globe2, Image as ImageIcon, PanelRightOpen, Radio, RefreshCw, TimerReset, Type, Upload } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
+import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORDER } from '../../config/readerTextSize';
 
 const SettingsPreferencesSection = ({
   t,
@@ -12,6 +13,7 @@ const SettingsPreferencesSection = ({
   onAutoRefreshChange,
   onShowNewsImagesChange,
   onReaderPanelPositionChange,
+  onReaderTextSizeChange,
   onNumericSettingChange,
   onExport,
   onImportClick,
@@ -88,6 +90,22 @@ const SettingsPreferencesSection = ({
             <option value="left">{t('readerPanelPositionLeft')}</option>
             <option value="center">{t('readerPanelPositionCenter')}</option>
             <option value="right">{t('readerPanelPositionRight')}</option>
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <Type className="h-4 w-4 text-rose-600" />
+            {t('readerTextSizeSetting')}
+          </span>
+          <select
+            value={settings.readerTextSize || DEFAULT_READER_TEXT_SIZE}
+            onChange={(event) => onReaderTextSizeChange(event.target.value)}
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+          >
+            {READER_TEXT_SIZE_ORDER.map((size) => (
+              <option key={size} value={size}>{t(READER_TEXT_SIZE_LABELS[size])}</option>
+            ))}
           </select>
         </label>
 

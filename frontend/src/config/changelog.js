@@ -9,21 +9,15 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🧳 Settings export and import now preserve the card image preference correctly during account migrations.',
       '🛡️ News Flow now creates a reserved admin account automatically and logs a one-time setup link when admin access has not been configured yet.',
       '🔗 The admin can now generate one-time password setup links for users, making password resets safer and easier to manage.',
-      '📊 The admin account now opens directly into a dedicated dashboard with account management tools instead of the normal news home.',
-      '🟢 The admin dashboard now shows online users plus each account\'s last login and latest activity.',
       '🧱 Feed and reader fetches are now much stricter, so oversized or suspicious external responses get blocked earlier instead of dragging the app down.',
       '📚 Loading older news now behaves more reliably even when live updates are arriving at the same time.',
-      '⚡ Realtime updates and password checks were tuned to stay lighter during long sessions and busy usage.',
       '🔴 If you keep auto refresh off, the refresh button can now warn you properly again when fresh news is waiting.',
-      '🧹 The top bar is a bit cleaner now, with a quick clear button in search and less status clutter around it.',
-      '📖 Reader mode is simpler too, with the extra refresh action removed from the reading toolbar.',
-      '📌 Search and filters now stay handy while you scroll, and the filters open without nudging the page content around.',
-      '🫧 The search and filters area now has a softer glassy look, with matching styling between the main bar and the dropdown.',
-      '👤 The user menu now opens in front of the sticky controls instead of getting hidden behind them.',
+      '📌 Search and filters now stay handy while you scroll.',
       '🖼️ Articles without photos now get a cleaner neutral fallback cover instead of feeling visually unfinished.',
       '📤 News cards and reader mode can now share the original article link, including the native share sheet on mobile when available.',
       '📱 Card actions are more compact on mobile, so Reader, Share, and Open fit better without crowding the layout.',
-      '📚 Reader mode is calmer now too, with a lighter sticky top bar and simpler article details near the top of the story.'
+      '📚 Reader mode is calmer now too, with a lighter sticky top bar and simpler article details near the top of the story.',
+      '🔠 You can now choose small, medium, or large reader text size, and News Flow remembers the choice for the next time you open reader mode.'
     ]
   },
   it: {
@@ -35,21 +29,15 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🧳 L\'esportazione e importazione delle impostazioni ora conserva correttamente la preferenza delle immagini nelle card durante le migrazioni account.',
       '🛡️ News Flow crea ora automaticamente l\'account admin riservato e scrive nei log un link monouso di configurazione quando l\'accesso admin non e ancora impostato.',
       '🔗 L\'admin puo ora generare link monouso per permettere agli utenti di configurare una nuova password in modo piu sicuro e semplice.',
-      '📊 L\'account admin si apre ora direttamente in una dashboard dedicata alla gestione account invece della normale home con le notizie.',
-      '🟢 La dashboard admin ora mostra gli utenti online, l\'ultimo accesso e l\'ultima attivita di ogni account.',
       '🧱 I recuperi esterni di feed e articoli sono ora molto piu rigidi, cosi risposte sospette o troppo grandi vengono bloccate prima di rallentare l\'app.',
       '📚 Il caricamento delle notizie piu vecchie ora si comporta in modo piu affidabile anche mentre arrivano aggiornamenti live.',
-      '⚡ Gli aggiornamenti realtime e i controlli sulle password sono stati alleggeriti per reggere meglio sessioni lunghe e utilizzo intenso.',
       '🔴 Se tieni l\'auto refresh disattivato, il pulsante di aggiornamento torna ora a segnalare correttamente quando ci sono nuove notizie in attesa.',
-      '🧹 La barra in alto e ora un po\' piu pulita, con un tasto rapido per svuotare la ricerca e meno elementi di stato intorno al campo.',
-      '📖 Anche la modalita lettura e piu semplice, con la rimozione del pulsante extra di refresh dalla barra degli strumenti.',
-      '📌 Ricerca e filtri ora restano comodi anche durante lo scroll, e il pannello filtri si apre senza spostare il contenuto della pagina.',
-      '🫧 L\'area di ricerca e filtri ha ora un effetto piu morbido e coerente, con lo stesso stile sia nella barra principale sia nel dropdown.',
-      '👤 Il menu utente ora si apre davanti ai controlli sticky invece di finire nascosto dietro.',
+      '📌 Ricerca e filtri ora restano comodi anche durante lo scroll.',
       '🖼️ Gli articoli senza foto hanno ora una cover generica piu pulita e neutra, cosi la card non resta spoglia.',
       '📤 Le news card e la modalita lettura possono ora condividere il link originale dell\'articolo, usando anche la condivisione nativa su mobile quando disponibile.',
       '📱 Le azioni delle card sono piu compatte su mobile, cosi Reader, Share e Apri articolo occupano meno spazio senza affollare il layout.',
-      '📚 Anche la modalita lettura e ora piu calma, con una barra sticky piu leggera e dettagli articolo piu essenziali in testa al contenuto.'
+      '📚 Anche la modalita lettura e ora piu calma, con una barra sticky piu leggera e dettagli articolo piu essenziali in testa al contenuto.',
+      '🔠 Ora puoi scegliere testo piccolo, medio o grande nella modalita lettura, e News Flow si ricorda la preferenza anche alla prossima apertura.'
     ]
   }
 };

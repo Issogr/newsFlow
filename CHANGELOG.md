@@ -23,6 +23,7 @@
 - added share actions to news cards and reader mode, using the original article URL and the native OS share sheet when available with safe browser fallbacks otherwise
 - compacted the news-card action bar on mobile so `Reader`, `Share`, and `Open article` use space more efficiently without losing desktop readability
 - simplified reader mode by keeping only the `Clean reading view` label and close action sticky, moving the article title into the scrolling content, and trimming metadata chips down to the source plus read-time info
+- added a persistent `readerTextSize` user setting with DB migration, settings-panel support, and an in-reader selector so text size stays consistent across sessions without reloading the page behind the reader
 
 ## 3.2.5
 
