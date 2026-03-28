@@ -383,12 +383,6 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
                   </div>
                 ) : selectedReader ? (
                   <article className="rounded-[2rem] border border-stone-200 bg-white px-6 py-8 shadow-sm md:px-10">
-                    {selectedReader.excerpt && (
-                      <p className="mb-7 border-l-4 border-stone-200 pl-4 text-lg leading-8 text-stone-600 md:text-[1.18rem]">
-                        {selectedReader.excerpt}
-                      </p>
-                    )}
-
                     {selectedReader.fallback && (
                       <div className="mb-6 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                         <AlertTriangle className="h-4 w-4 shrink-0" />

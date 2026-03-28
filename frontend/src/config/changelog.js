@@ -17,7 +17,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '📤 News cards and reader mode can now share the original article link, including the native share sheet on mobile when available.',
       '📱 Card actions are more compact on mobile, so Reader, Share, and Open fit better without crowding the layout.',
       '📚 Reader mode is calmer now too, with a lighter sticky top bar and simpler article details near the top of the story.',
-      '🔠 You can now choose small, medium, or large reader text size, and News Flow remembers the choice for the next time you open reader mode.'
+      '🔠 You can now choose small, medium, or large reader text size, and News Flow remembers the choice for the next time you open reader mode.',
+      '📝 Reader mode also drops the quote-like summary block at the top, so you get into the actual article faster.'
     ]
   },
   it: {
@@ -37,7 +38,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '📤 Le news card e la modalita lettura possono ora condividere il link originale dell\'articolo, usando anche la condivisione nativa su mobile quando disponibile.',
       '📱 Le azioni delle card sono piu compatte su mobile, cosi Reader, Share e Apri articolo occupano meno spazio senza affollare il layout.',
       '📚 Anche la modalita lettura e ora piu calma, con una barra sticky piu leggera e dettagli articolo piu essenziali in testa al contenuto.',
-      '🔠 Ora puoi scegliere testo piccolo, medio o grande nella modalita lettura, e News Flow si ricorda la preferenza anche alla prossima apertura.'
+      '🔠 Ora puoi scegliere testo piccolo, medio o grande nella modalita lettura, e News Flow si ricorda la preferenza anche alla prossima apertura.',
+      '📝 La modalita lettura elimina anche il blocco riassuntivo in stile citazione all\'inizio, cosi entri piu in fretta nel contenuto reale dell\'articolo.'
     ]
   }
 };

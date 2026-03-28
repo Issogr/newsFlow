@@ -24,6 +24,7 @@
 - compacted the news-card action bar on mobile so `Reader`, `Share`, and `Open article` use space more efficiently without losing desktop readability
 - simplified reader mode by keeping only the `Clean reading view` label and close action sticky, moving the article title into the scrolling content, and trimming metadata chips down to the source plus read-time info
 - added a persistent `readerTextSize` user setting with DB migration, settings-panel support, and an in-reader selector so text size stays consistent across sessions without reloading the page behind the reader
+- removed the reader-mode top excerpt/summary block so articles open directly into the main content instead of showing a citation-style intro panel above the body
 
 ## 3.2.5
 
