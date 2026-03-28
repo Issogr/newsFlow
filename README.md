@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  A focused RSS news reader that groups overlapping stories, keeps data local, and gives each user a personalized feed with real-time updates.
+  A calm, personal RSS news hub that cuts through the noise with smart grouping, clean reader mode, live updates, and full control over your sources.
 </p>
 
 ## Why It Stands Out
