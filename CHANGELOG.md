@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.6.1
+
+- simplified manual refresh behavior again by removing the refresh-button pending-update hint and keeping the button as a straightforward reload action when auto refresh is off
+- refined the sticky search-and-filter surface so the dropdown now feels like a connected extension of the main bubble, animates open more smoothly, and can scroll internally when filters exceed the viewport height
+- adjusted news-card action buttons so `Reader` and `Share` use the same compact icon treatment on both desktop and mobile, while `Open article` remains the primary action
+
 ## 3.2.6
 
 - made passwords mandatory for new accounts, added minimum-length validation on backend and frontend, and blocked legacy passwordless logins from authenticating
