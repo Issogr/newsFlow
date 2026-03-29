@@ -151,7 +151,7 @@ describe('NewsAggregator', () => {
     expect(isRequestCanceled).not.toHaveBeenCalled();
   });
 
-  test('keeps websocket listening and shows the refresh badge when auto refresh is off', async () => {
+  test('disables websocket listening when auto refresh is off', async () => {
     fetchNews.mockResolvedValue({
       items: [],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 0 },
@@ -182,8 +182,8 @@ describe('NewsAggregator', () => {
       expect(fetchNews).toHaveBeenCalled();
     });
 
-    expect(useWebSocket).toHaveBeenCalledWith('', expect.any(Object), true);
-    expect(screen.getByRole('button', { name: 'Refresh, 3 new groups available' })).toBeEnabled();
+    expect(useWebSocket).toHaveBeenCalledWith('', expect.any(Object), false);
+    expect(screen.getAllByRole('button', { name: 'Refresh' })[1]).toBeEnabled();
   });
 
   test('subscribes realtime updates with source exclusions', async () => {

@@ -71,11 +71,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const {
     isConnected,
     lastNewsUpdate,
-    newArticlesCount,
     updateSubscriptionFilters,
     resetNewArticlesCount,
     markGroupsSeen
-  } = useWebSocket('', websocketMessages, true);
+  } = useWebSocket('', websocketMessages, autoRefreshEnabled);
   const liveStatusLabel = autoRefreshEnabled
     ? (isConnected ? t('liveActive') : t('liveOffline'))
     : t('liveDisabled');
@@ -115,9 +114,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [availableSources, excludedSourceIds]);
   const isLiveAutoRefreshWorking = autoRefreshEnabled && isConnected && !debouncedSearch && !showRecentOnly;
   const refreshButtonLabel = isLiveAutoRefreshWorking ? t('refreshHandledByLive') : t('refresh');
-  const refreshButtonAriaLabel = !isLiveAutoRefreshWorking && newArticlesCount > 0
-    ? t('refreshWithUpdates', { count: newArticlesCount })
-    : refreshButtonLabel;
 
   useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
@@ -244,12 +240,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     }
   }, [isLiveAutoRefreshWorking, lastNewsUpdate, resetNewArticlesCount]);
 
-  useEffect(() => {
-    if (isLiveAutoRefreshWorking && newArticlesCount > 0) {
-      resetNewArticlesCount();
-    }
-  }, [isLiveAutoRefreshWorking, newArticlesCount, resetNewArticlesCount]);
-
   const toggleFilter = useCallback((type, value) => {
     setActiveFilters((current) => {
       const values = current[type] || [];
@@ -321,14 +311,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                       ? 'cursor-not-allowed bg-slate-100 text-slate-300 shadow-none'
                       : 'bg-white text-gray-600 hover:bg-gray-100'
                   }`}
-                  aria-label={refreshButtonAriaLabel}
+                  aria-label={refreshButtonLabel}
                 >
                   <RefreshCw className={`h-6 w-6 ${(loading || loadingMore) ? 'animate-spin' : ''}`} aria-hidden="true" />
-
-                  {!isLiveAutoRefreshWorking && newArticlesCount > 0 && (
-                    <span className="absolute right-0 top-0 inline-flex h-3.5 w-3.5 -translate-y-1/3 translate-x-1/3 rounded-full border-2 border-white bg-red-500 shadow-sm" aria-hidden="true">
-                    </span>
-                  )}
                 </button>
               </div>
 
@@ -415,7 +400,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       <section className="sticky top-0 z-30 bg-transparent">
         <div className="mx-auto max-w-7xl px-4 py-3 lg:px-6">
           <div className="relative">
-            <div className="overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white/90 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md">
+            <div className={`overflow-hidden border border-slate-200/80 bg-white/90 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md transition-[border-radius] ${filtersExpanded ? 'rounded-t-[1.75rem] rounded-b-none' : 'rounded-[1.75rem]'}`}>
               <div className="border-b border-slate-200/70 px-4 py-3 sm:px-5">
                 <label className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-2.5 shadow-sm backdrop-blur-sm">
                   <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
@@ -463,8 +448,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
               </button>
             </div>
 
-            {filtersExpanded && (
-              <div className="absolute left-0 right-0 top-full z-20 mt-3 rounded-[1.75rem] border border-slate-200/80 bg-white/90 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md">
+            <div
+              className={`absolute left-0 right-0 top-full z-20 -mt-px max-h-[calc(100vh-8.5rem)] origin-top overflow-y-auto overscroll-contain rounded-b-[1.75rem] border border-slate-200/80 border-t-0 bg-white/90 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md transition-all duration-200 ease-out ${
+                filtersExpanded
+                  ? 'pointer-events-auto translate-y-0 scale-y-100 opacity-100'
+                  : 'pointer-events-none -translate-y-2 scale-y-95 opacity-0'
+              }`}
+              aria-hidden={!filtersExpanded}
+            >
                 <div className="px-4 py-5 sm:px-5">
                   <div className="mb-5 flex flex-wrap items-center gap-3">
                     <button
@@ -560,7 +551,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   </div>
                 </div>
               </div>
-            )}
           </div>
         </div>
       </section>

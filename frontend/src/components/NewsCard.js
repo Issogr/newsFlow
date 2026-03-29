@@ -161,21 +161,19 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
           <button
             type="button"
             onClick={() => onOpenReader(group, group.items[0]?.id)}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition-colors hover:bg-slate-100 sm:h-auto sm:w-auto sm:px-4"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition-colors hover:bg-slate-100"
             aria-label={t('readerMode')}
           >
-            <BookOpenText className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline text-sm font-medium">{t('readerMode')}</span>
+            <BookOpenText className="h-4 w-4" />
           </button>
           <button
             type="button"
             onClick={handleShare}
             disabled={!safeOriginalUrl}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 sm:h-auto sm:w-auto sm:px-4"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
             aria-label={shareState === 'copied' ? t('copied') : t('shareArticle')}
           >
-            <Share2 className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline text-sm font-medium">{shareState === 'copied' ? t('copied') : t('shareArticle')}</span>
+            <Share2 className="h-4 w-4" />
           </button>
           {safeOriginalUrl ? (
             <a
