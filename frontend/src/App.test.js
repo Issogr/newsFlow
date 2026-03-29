@@ -83,7 +83,7 @@ describe('App', () => {
 
   test('renders the authenticated app when the current session loads', async () => {
     getAuthToken.mockReturnValue('session-token');
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.6' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.7' }));
 
     render(<App />);
 
@@ -108,7 +108,7 @@ describe('App', () => {
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.6' }).settings
+      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.7' }).settings
     });
 
     render(<App />);
@@ -118,13 +118,13 @@ describe('App', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
 
     await waitFor(() => {
-      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.6' });
+      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.7' });
     });
   });
 
   test('reopens release notes manually from the authenticated app', async () => {
     getAuthToken.mockReturnValue('session-token');
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.6' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.7' }));
 
     render(<App />);
 
@@ -140,7 +140,7 @@ describe('App', () => {
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.6' }).settings
+      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.7' }).settings
     });
 
     render(<App />);

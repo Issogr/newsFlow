@@ -19,7 +19,7 @@
 - It stays lightweight and self-hostable by using local SQLite storage, built-in full-text search, and a simple single-service architecture, so the project remains practical to deploy without extra infrastructure.
 - It gives each user control over relevance through source exclusions, recent-time filters, retention limits, and personal RSS feeds, making the product useful both as a shared instance and as a tailored private reader.
 - It keeps the reading experience focused with live updates, multilingual support, and an in-app reader mode that extracts cleaner article text from the original source instead of sending users straight into cluttered layouts.
-- It supports this goal with features designed around clarity rather than volume: grouped stories, source families by publisher domain, server-side search, reader caching, settings import/export, and account-based access with persistent user preferences.
+- It supports this goal with features designed around clarity rather than volume: grouped stories, source families by publisher domain, server-side search, reader caching, settings import/export, account-based access with persistent user preferences, and an in-app feedback flow that can forward bug reports to Telegram.
 
 ## Quick Start
 
@@ -110,12 +110,29 @@ WebSocket:
 | `WS_PING_TIMEOUT` | `60000` | Socket.IO ping timeout in ms |
 | `WS_PING_INTERVAL` | `25000` | Socket.IO ping interval in ms |
 
+Feedback and Telegram delivery:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `TELEGRAM_BOT_TOKEN` | unset | Bot token used to forward feedback submissions to Telegram |
+| `TELEGRAM_CHAT_ID` | unset | Target chat or channel id that receives forwarded feedback |
+| `TELEGRAM_MESSAGE_THREAD_ID` | unset | Optional Telegram forum topic id when feedback should be sent into a specific topic inside a forum-enabled supergroup |
+| `TELEGRAM_API_BASE_URL` | `https://api.telegram.org` | Optional Telegram API base URL override |
+
 Admin access:
 
 - On startup, the backend ensures a reserved admin account exists.
 - If the admin password is not configured yet, the backend logs a single-use setup link for the admin bootstrap flow.
 - Set `APP_BASE_URL` so generated setup links point to the correct frontend origin in your environment.
 - The outbound response-size limits above are optional; if unset, News Flow uses the listed safe defaults.
+
+Feedback flow:
+
+- Authenticated users can open `Send feedback` from the user menu.
+- Each feedback submission includes a category, title, description, and the authenticated username automatically.
+- Users can optionally attach one image up to 5 MB or one short video up to 12 MB.
+- Attachments and feedback text are forwarded to the configured Telegram chat through the backend so the bot token never reaches the browser.
+- If you use a Telegram forum-enabled supergroup, set `TELEGRAM_CHAT_ID` to the supergroup id like `-100...` and `TELEGRAM_MESSAGE_THREAD_ID` to the numeric topic id, instead of combining both values into a single string.
 
 ## Project Layout
 
