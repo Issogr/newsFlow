@@ -49,6 +49,7 @@ describe('userService imports', () => {
     const result = await userService.importUserSettings(userId, {
       settings: {
         defaultLanguage: 'it',
+        themeMode: 'dark',
         articleRetentionHours: 12,
         recentHours: 2,
         autoRefreshEnabled: false,
@@ -71,6 +72,7 @@ describe('userService imports', () => {
     expect(result).toMatchObject({
       settings: expect.objectContaining({
         defaultLanguage: 'it',
+        themeMode: 'dark',
         articleRetentionHours: 12,
         recentHours: 2,
         autoRefreshEnabled: false,
@@ -91,6 +93,7 @@ describe('userService imports', () => {
     });
     expect(database.getUserSettings(userId)).toMatchObject({
       defaultLanguage: 'it',
+      themeMode: 'dark',
       articleRetentionHours: 12,
       recentHours: 2,
       autoRefreshEnabled: false,
@@ -107,6 +110,7 @@ describe('userService imports', () => {
     const targetAuthPayload = await userService.registerUser({ username: 'target-user', password: 'secret123' });
 
     userService.updateUserSettings(sourceAuthPayload.user.id, {
+      themeMode: 'dark',
       showNewsImages: false,
       autoRefreshEnabled: false,
       recentHours: 2,
@@ -116,6 +120,7 @@ describe('userService imports', () => {
     const exportedSettings = userService.exportUserSettings(sourceAuthPayload.user.id);
 
     expect(exportedSettings.settings).toMatchObject({
+      themeMode: 'dark',
       showNewsImages: false,
       autoRefreshEnabled: false,
       recentHours: 2,
@@ -125,12 +130,14 @@ describe('userService imports', () => {
     const importedState = await userService.importUserSettings(targetAuthPayload.user.id, exportedSettings);
 
     expect(importedState.settings).toMatchObject({
+      themeMode: 'dark',
       showNewsImages: false,
       autoRefreshEnabled: false,
       recentHours: 2,
       readerTextSize: 'small'
     });
     expect(database.getUserSettings(targetAuthPayload.user.id)).toMatchObject({
+      themeMode: 'dark',
       showNewsImages: false,
       autoRefreshEnabled: false,
       recentHours: 2

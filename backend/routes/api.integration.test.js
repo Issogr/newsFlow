@@ -37,6 +37,7 @@ describe('API auth and user flows', () => {
   let newsService;
   let rssParser;
   let userService;
+  let feedbackService;
 
   beforeEach(() => {
     jest.resetModules();
@@ -54,11 +55,16 @@ describe('API auth and user flows', () => {
       validateFeedUrl: jest.fn()
     }));
 
+    jest.doMock('../services/feedbackService', () => ({
+      sendFeedback: jest.fn().mockResolvedValue({ messageId: 1 })
+    }));
+
     app = buildApiTestApp();
     database = require('../services/database');
     newsService = require('../services/newsAggregator');
     rssParser = require('../services/rssParser');
     userService = require('../services/userService');
+    feedbackService = require('../services/feedbackService');
   });
 
   afterEach(() => {
@@ -271,6 +277,7 @@ describe('API auth and user flows', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         defaultLanguage: 'en',
+        themeMode: 'dark',
         articleRetentionHours: 999,
         recentHours: 999,
         autoRefreshEnabled: false,
@@ -287,6 +294,7 @@ describe('API auth and user flows', () => {
       success: true,
       settings: {
         defaultLanguage: 'en',
+        themeMode: 'dark',
         articleRetentionHours: 24,
         recentHours: 3,
         autoRefreshEnabled: false,
@@ -376,6 +384,101 @@ describe('API auth and user flows', () => {
     expect(newsService.refreshUserSources).toHaveBeenCalledTimes(2);
     expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(1, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: false }));
     expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(2, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: false }));
+  });
+
+  test('submits authenticated feedback with an optional screenshot', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'feedback-user', password: 'secret123' })
+      .expect(201);
+
+    const imageBuffer = Buffer.from('fake-image-content');
+
+    const response = await request(app)
+      .post('/api/me/feedback')
+      .set('Authorization', `Bearer ${registerResponse.body.token}`)
+      .field('category', 'bug')
+      .field('title', 'Reader overlap on mobile')
+      .field('description', 'The reader panel overlaps the sticky header on a narrow mobile viewport.')
+      .attach('attachment', imageBuffer, {
+        filename: 'reader-mobile.png',
+        contentType: 'image/png'
+      })
+      .expect(201);
+
+    expect(response.body).toEqual({ success: true });
+    expect(feedbackService.sendFeedback).toHaveBeenCalledWith(expect.objectContaining({
+      user: expect.objectContaining({
+        id: registerResponse.body.user.id,
+        username: 'feedback-user'
+      }),
+      category: 'bug',
+      title: 'Reader overlap on mobile',
+      description: 'The reader panel overlaps the sticky header on a narrow mobile viewport.',
+      attachment: expect.objectContaining({
+        originalname: 'reader-mobile.png',
+        mimetype: 'image/png',
+        size: imageBuffer.length
+      })
+    }));
+  });
+
+  test('submits authenticated feedback with a small video attachment', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'feedback-video-user', password: 'secret123' })
+      .expect(201);
+
+    const videoBuffer = Buffer.from('fake-video-content');
+
+    const response = await request(app)
+      .post('/api/me/feedback')
+      .set('Authorization', `Bearer ${registerResponse.body.token}`)
+      .field('category', 'feedback')
+      .field('title', 'Animation feels abrupt')
+      .field('description', 'Short clip showing the abrupt transition in the filter drawer.')
+      .attach('attachment', videoBuffer, {
+        filename: 'filters-transition.mp4',
+        contentType: 'video/mp4'
+      })
+      .expect(201);
+
+    expect(response.body).toEqual({ success: true });
+    expect(feedbackService.sendFeedback).toHaveBeenLastCalledWith(expect.objectContaining({
+      user: expect.objectContaining({
+        id: registerResponse.body.user.id,
+        username: 'feedback-video-user'
+      }),
+      category: 'feedback',
+      title: 'Animation feels abrupt',
+      description: 'Short clip showing the abrupt transition in the filter drawer.',
+      attachment: expect.objectContaining({
+        originalname: 'filters-transition.mp4',
+        mimetype: 'video/mp4',
+        size: videoBuffer.length
+      })
+    }));
+  });
+
+  test('rejects feedback submission with an invalid category', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'feedback-invalid', password: 'secret123' })
+      .expect(201);
+
+    const response = await request(app)
+      .post('/api/me/feedback')
+      .set('Authorization', `Bearer ${registerResponse.body.token}`)
+      .field('category', 'question')
+      .field('title', 'Bad category')
+      .field('description', 'This should not be accepted.')
+      .expect(400);
+
+    expect(response.body.error).toMatchObject({
+      code: 'INVALID_FEEDBACK_PAYLOAD',
+      message: 'Please choose a valid feedback category.'
+    });
+    expect(feedbackService.sendFeedback).not.toHaveBeenCalled();
   });
 
   test('imports settings atomically and refreshes only the current user sources', async () => {

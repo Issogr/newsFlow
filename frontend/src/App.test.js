@@ -41,6 +41,7 @@ function createCurrentUser(settings = {}) {
     user: { username: 'alice', isAdmin: false },
     settings: {
       defaultLanguage: 'en',
+      themeMode: 'system',
       articleRetentionHours: 24,
       recentHours: 3,
       autoRefreshEnabled: true,
@@ -65,11 +66,20 @@ describe('App', () => {
     jest.clearAllMocks();
     window.localStorage.clear();
     document.body.style.overflow = '';
+    document.documentElement.dataset.theme = '';
+    document.documentElement.style.colorScheme = '';
     window.history.replaceState({}, '', '/');
+    window.matchMedia = jest.fn().mockImplementation(() => ({
+      matches: false,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn()
+    }));
   });
 
   afterEach(() => {
     document.body.style.overflow = '';
+    document.documentElement.dataset.theme = '';
+    document.documentElement.style.colorScheme = '';
   });
 
   test('renders the authentication screen when there is no saved session', () => {
@@ -83,7 +93,7 @@ describe('App', () => {
 
   test('renders the authenticated app when the current session loads', async () => {
     getAuthToken.mockReturnValue('session-token');
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.6' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.7' }));
 
     render(<App />);
 
@@ -103,12 +113,23 @@ describe('App', () => {
     expect(screen.queryByText('Authenticated app')).not.toBeInTheDocument();
   });
 
+  test('applies the selected dark theme to the document root after session load', async () => {
+    getAuthToken.mockReturnValue('session-token');
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ themeMode: 'dark', lastSeenReleaseNotesVersion: '3.2.7' }));
+
+    render(<App />);
+
+    expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.style.colorScheme).toBe('dark');
+  });
+
   test('shows release notes once after login for users who have not seen the current update', async () => {
     getAuthToken.mockReturnValue('session-token');
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.6' }).settings
+      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.7' }).settings
     });
 
     render(<App />);
@@ -118,13 +139,13 @@ describe('App', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
 
     await waitFor(() => {
-      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.6' });
+      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.7' });
     });
   });
 
   test('reopens release notes manually from the authenticated app', async () => {
     getAuthToken.mockReturnValue('session-token');
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.6' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.7' }));
 
     render(<App />);
 
@@ -140,7 +161,7 @@ describe('App', () => {
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.6' }).settings
+      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.7' }).settings
     });
 
     render(<App />);

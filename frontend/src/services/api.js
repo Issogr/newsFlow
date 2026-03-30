@@ -88,6 +88,24 @@ export const updateUserSettings = async (payload) => {
   return response.data;
 };
 
+export const submitFeedback = async ({ category, title, description, attachment = null }) => {
+  const formData = new FormData();
+  formData.append('category', category);
+  formData.append('title', title);
+  formData.append('description', description);
+
+  if (attachment) {
+    formData.append('attachment', attachment);
+  }
+
+  const response = await api.post('/me/feedback', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+  return response.data;
+};
+
 export const exportUserSettings = async () => {
   const response = await api.get('/me/settings/export');
   return response.data;

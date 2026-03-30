@@ -60,6 +60,7 @@ const currentUser = {
   user: { username: 'alice' },
   settings: {
     defaultLanguage: 'en',
+    themeMode: 'system',
     articleRetentionHours: 24,
     recentHours: 3,
     autoRefreshEnabled: true,

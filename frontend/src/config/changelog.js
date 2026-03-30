@@ -1,13 +1,14 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.2.6.1',
+  version: '3.2.7',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'Here is a quick overview of the latest changes in News Flow.',
     items: [
-      '🧼 Manual refresh is simple again: the button is back to being just a refresh button, without extra “new articles waiting” hints.',
-      '📌 Search and filters now feel more connected, with a smoother dropdown that opens as a natural extension of the top bubble and can scroll on its own when needed.',
-      '📱 Card actions are now more consistent across desktop and mobile, with compact Reader and Share buttons and a clearer primary Open action.',
+      '🌙 You can now switch the app theme from Settings and choose between light, dark, or your device preference.',
+      '💬 You can now send feedback directly from the user menu, with a dedicated form for bugs, ideas, and rough edges.',
+      '🏷️ Feedback can now be classified as a bug report, general feedback, or an improvement idea, and your username is included automatically with each submission.',
+      '📸 Feedback reports can include an optional screenshot or short video with an inline preview before sending, and oversized uploads now surface a clear size error instead of a generic failure.',
     ]
   },
   it: {
@@ -15,9 +16,10 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Ecco una panoramica rapida delle ultime novita di News Flow.',
     items: [
-      '🧼 Il refresh manuale e di nuovo semplice: il pulsante torna a essere solo un refresh, senza altri avvisi su nuove notizie in attesa.',
-      '📌 Ricerca e filtri ora sembrano piu uniti, con un dropdown piu fluido che si apre come continuazione naturale della barra in alto e puo scorrere da solo quando serve.',
-      '📱 Le azioni delle card sono ora piu coerenti tra desktop e mobile, con pulsanti Reader e Share compatti e un Apri articolo piu chiaro come azione principale.',
+      '🌙 Ora puoi cambiare il tema dell\'app dalle Impostazioni e scegliere tra chiaro, scuro o preferenza del dispositivo.',
+      '💬 Ora puoi inviare feedback direttamente dal menu utente, con un form dedicato per bug, idee e piccoli problemi trovati nell\'app.',
+      '🏷️ I feedback possono ora essere classificati come bug, feedback generale o idea di miglioramento, e lo username viene incluso automaticamente in ogni invio.',
+      '📸 Le segnalazioni possono includere uno screenshot o un breve video con anteprima prima dell\'invio, e gli upload troppo grandi mostrano ora un errore chiaro invece di un fallimento generico.',
     ]
   }
 };

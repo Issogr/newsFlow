@@ -19,6 +19,7 @@ const PASSWORD_SETUP_TTL_MINUTES = parseInt(process.env.PASSWORD_SETUP_TTL_MINUT
 const ADMIN_BOOTSTRAP_TTL_MINUTES = parseInt(process.env.ADMIN_BOOTSTRAP_TTL_MINUTES || '30', 10);
 const ONLINE_ACTIVITY_WINDOW_MINUTES = parseInt(process.env.ONLINE_ACTIVITY_WINDOW_MINUTES || '5', 10);
 const SUPPORTED_LANGUAGES = new Set(['auto', 'it', 'en']);
+const SUPPORTED_THEME_MODES = new Set(['system', 'light', 'dark']);
 const SUPPORTED_READER_PANEL_POSITIONS = new Set(['left', 'center', 'right']);
 const SUPPORTED_READER_TEXT_SIZES = new Set(['small', 'medium', 'large']);
 
@@ -33,6 +34,11 @@ function sanitizeUsername(username) {
 function normalizeLanguage(language) {
   const value = String(language || 'auto').trim().toLowerCase();
   return SUPPORTED_LANGUAGES.has(value) ? value : 'auto';
+}
+
+function normalizeThemeMode(mode) {
+  const value = String(mode || 'system').trim().toLowerCase();
+  return SUPPORTED_THEME_MODES.has(value) ? value : 'system';
 }
 
 function normalizeReaderPanelPosition(position) {
@@ -180,6 +186,7 @@ function ensureAdminAccount() {
 function getDefaultSettings() {
   return {
     defaultLanguage: 'auto',
+    themeMode: 'system',
     articleRetentionHours: GLOBAL_RETENTION_HOURS,
     recentHours: MAX_RECENT_HOURS,
     autoRefreshEnabled: true,
@@ -233,6 +240,7 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
 
   return {
     defaultLanguage: normalizeLanguage(payload.defaultLanguage || currentSettings.defaultLanguage),
+    themeMode: normalizeThemeMode(payload.themeMode || currentSettings.themeMode),
     articleRetentionHours,
     recentHours,
     autoRefreshEnabled: typeof payload.autoRefreshEnabled === 'boolean'
@@ -478,6 +486,7 @@ function exportUserSettings(userId) {
     exportedAt: new Date().toISOString(),
     settings: {
       defaultLanguage: settings.defaultLanguage,
+      themeMode: settings.themeMode || 'system',
       articleRetentionHours: settings.articleRetentionHours,
       recentHours: settings.recentHours,
       autoRefreshEnabled: settings.autoRefreshEnabled !== false,

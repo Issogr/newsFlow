@@ -180,7 +180,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
               href={safeOriginalUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-w-0 flex-1 items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+              className="inline-flex min-w-0 flex-1 items-center justify-center rounded-xl border border-slate-900 bg-slate-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-700"
             >
               <ExternalLink className="mr-2 h-4 w-4" />
               {t('openOriginalSource')}

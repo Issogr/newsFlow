@@ -75,7 +75,7 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
   const [selectedArticleId, setSelectedArticleId] = useState(initialArticleId || group?.items?.[0]?.id || null);
   const [readerByArticleId, setReaderByArticleId] = useState({});
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [, setRefreshing] = useState(false);
   const [shareState, setShareState] = useState('idle');
   const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   const [error, setError] = useState(null);
@@ -226,7 +226,7 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
     readerTextSizeRequestIdRef.current = requestId;
 
     try {
-      const response = await updateUserSettings({ readerTextSize: persistedValue });
+      await updateUserSettings({ readerTextSize: persistedValue });
       if (readerTextSizeRequestIdRef.current !== requestId) {
         return;
       }

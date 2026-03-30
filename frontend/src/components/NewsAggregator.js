@@ -3,6 +3,7 @@ import {
   Cog,
   Filter,
   LogOut,
+  MessageSquare,
   PauseCircle,
   RefreshCw,
   Rss,
@@ -20,6 +21,7 @@ import ErrorMessage from './ErrorMessage';
 import NewsCard from './NewsCard';
 import ReaderPanel from './ReaderPanel';
 import BrandMark from './BrandMark';
+import FeedbackModal from './FeedbackModal';
 import SettingsPanel from './SettingsPanel';
 import useLatestRequest from '../hooks/useLatestRequest';
 import useWebSocket from '../hooks/useWebSocket';
@@ -96,6 +98,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [readerState, setReaderState] = useState({ isOpen: false, group: null, articleId: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
   const visibleGroupIds = useMemo(() => news.map((group) => group?.id).filter(Boolean), [news]);
@@ -357,22 +360,38 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                       </div>
 
                       <div className="space-y-2 pt-1">
+                      <button
+                        type="button"
+                          onClick={() => {
+                            setSettingsOpen(true);
+                            setUserMenuOpen(false);
+                          }}
+                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+                          role="menuitem"
+                        >
+                          <span className="flex items-center gap-3">
+                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                              <Cog className="h-4 w-4" />
+                            </span>
+                            {t('settings')}
+                          </span>
+                        </button>
                         <button
                           type="button"
-                        onClick={() => {
-                          setSettingsOpen(true);
-                          setUserMenuOpen(false);
-                        }}
-                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
-                        role="menuitem"
-                      >
-                        <span className="flex items-center gap-3">
-                          <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
-                            <Cog className="h-4 w-4" />
+                          onClick={() => {
+                            setFeedbackOpen(true);
+                            setUserMenuOpen(false);
+                          }}
+                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+                          role="menuitem"
+                        >
+                          <span className="flex items-center gap-3">
+                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                              <MessageSquare className="h-4 w-4" />
+                            </span>
+                            {t('feedbackMenuItem')}
                           </span>
-                          {t('settings')}
-                        </span>
-                      </button>
+                        </button>
                       <button
                         type="button"
                         onClick={onLogout}
@@ -626,6 +645,13 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           onClose={() => setSettingsOpen(false)}
           onOpenReleaseNotes={onOpenReleaseNotes}
           onUserUpdate={onUserUpdate}
+        />
+      )}
+
+      {feedbackOpen && (
+        <FeedbackModal
+          t={t}
+          onClose={() => setFeedbackOpen(false)}
         />
       )}
     </div>

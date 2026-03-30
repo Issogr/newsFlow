@@ -16,6 +16,18 @@ import {
   updateUserSettings
 } from './services/api';
 
+function resolveAppliedTheme(themeMode, mediaQuery) {
+  if (themeMode === 'dark') {
+    return 'dark';
+  }
+
+  if (themeMode === 'light') {
+    return 'light';
+  }
+
+  return mediaQuery?.matches ? 'dark' : 'light';
+}
+
 function App() {
   const [locationState, setLocationState] = useState(() => ({
     pathname: window.location.pathname,
@@ -37,6 +49,7 @@ function App() {
   const locale = useMemo(() => {
     return resolvePreferredLocale(authData?.settings?.defaultLanguage);
   }, [authData?.settings?.defaultLanguage]);
+  const themeMode = authData?.settings?.themeMode || 'system';
   const t = useMemo(() => createTranslator(locale), [locale]);
   const releaseNotes = useMemo(() => getCurrentChangelog(locale), [locale]);
   const setupToken = useMemo(() => new URLSearchParams(locationState.search).get('token') || '', [locationState.search]);
@@ -73,6 +86,38 @@ function App() {
   useEffect(() => {
     loadSession();
   }, [loadSession]);
+
+  useEffect(() => {
+    const mediaQuery = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-color-scheme: dark)')
+      : null;
+
+    const applyTheme = () => {
+      const nextTheme = resolveAppliedTheme(themeMode, mediaQuery);
+      document.documentElement.dataset.theme = nextTheme;
+      document.documentElement.style.colorScheme = nextTheme;
+    };
+
+    applyTheme();
+
+    if (themeMode !== 'system' || !mediaQuery) {
+      return undefined;
+    }
+
+    const handleChange = () => applyTheme();
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+
+    if (typeof mediaQuery.addListener === 'function') {
+      mediaQuery.addListener(handleChange);
+      return () => mediaQuery.removeListener(handleChange);
+    }
+
+    return undefined;
+  }, [themeMode]);
 
   useEffect(() => {
     setReleaseNotesState({ hiddenVersion: '', saving: false, manuallyOpened: false });

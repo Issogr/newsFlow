@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.2.7
+
+- added an authenticated in-app feedback flow reachable from the user menu, with a dedicated modal for sending bug reports, ideas, and general product feedback
+- added optional screenshot and short-video uploads for feedback submissions, including frontend file handling plus backend multipart validation and upload size/type limits
+- added backend Telegram delivery for feedback submissions so reports can be forwarded directly to a configured bot chat without exposing bot credentials to the browser
+- extended the feedback flow with explicit `bug`, `general feedback`, and `improvement idea` categories and validated the chosen category on the backend before Telegram delivery
+- made the sender identity explicit by surfacing the authenticated username in the feedback modal and including it automatically in forwarded feedback payloads
+- added inline attachment preview support in the feedback form so users can confirm the selected image or short video before submitting
+- raised the frontend nginx request-body limit so feedback submissions with screenshots or short videos can pass through the Docker proxy instead of failing before they reach the backend
+- added a structured nginx `413` JSON response for oversized feedback uploads so the UI can show a clear attachment-size error instead of a generic delivery failure
+- added a persisted theme preference with `light`, `dark`, and `use device setting` modes so users can switch the app appearance from Settings
+
 ## 3.2.6.1
 
 - simplified manual refresh behavior again by removing the refresh-button pending-update hint and keeping the button as a straightforward reload action when auto refresh is off
