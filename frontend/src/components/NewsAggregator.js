@@ -651,7 +651,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       {feedbackOpen && (
         <FeedbackModal
           t={t}
-          currentUser={currentUser}
           onClose={() => setFeedbackOpen(false)}
         />
       )}

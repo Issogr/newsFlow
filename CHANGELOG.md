@@ -10,6 +10,7 @@
 - added inline attachment preview support in the feedback form so users can confirm the selected image or short video before submitting
 - raised the frontend nginx request-body limit so feedback submissions with screenshots or short videos can pass through the Docker proxy instead of failing before they reach the backend
 - added a structured nginx `413` JSON response for oversized feedback uploads so the UI can show a clear attachment-size error instead of a generic delivery failure
+- added a persisted theme preference with `light`, `dark`, and `use device setting` modes so users can switch the app appearance from Settings
 
 ## 3.2.6.1
 

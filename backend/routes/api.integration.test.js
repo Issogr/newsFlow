@@ -277,6 +277,7 @@ describe('API auth and user flows', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         defaultLanguage: 'en',
+        themeMode: 'dark',
         articleRetentionHours: 999,
         recentHours: 999,
         autoRefreshEnabled: false,
@@ -293,6 +294,7 @@ describe('API auth and user flows', () => {
       success: true,
       settings: {
         defaultLanguage: 'en',
+        themeMode: 'dark',
         articleRetentionHours: 24,
         recentHours: 3,
         autoRefreshEnabled: false,

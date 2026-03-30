@@ -1,5 +1,5 @@
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 14;
+  const CURRENT_SCHEMA_VERSION = 15;
 
   function createPasswordSetupTokenTable(database) {
     database.exec(`
@@ -123,6 +123,7 @@ function createDatabaseSchema({ logger }) {
       CREATE TABLE IF NOT EXISTS user_settings (
         user_id TEXT PRIMARY KEY,
         default_language TEXT NOT NULL DEFAULT 'auto',
+        theme_mode TEXT NOT NULL DEFAULT 'system',
         article_retention_hours INTEGER NOT NULL DEFAULT 24,
         recent_hours INTEGER NOT NULL DEFAULT 3,
         auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
@@ -263,6 +264,18 @@ function createDatabaseSchema({ logger }) {
 
       logger.info('Migrated DB schema from version 13 to 14: added reader text size user setting');
       nextVersion = 14;
+    }
+
+    if (nextVersion === 14) {
+      if (!columnExists(database, 'user_settings', 'theme_mode')) {
+        database.exec(`
+          ALTER TABLE user_settings
+          ADD COLUMN theme_mode TEXT NOT NULL DEFAULT 'system'
+        `);
+      }
+
+      logger.info('Migrated DB schema from version 14 to 15: added theme mode user setting');
+      nextVersion = 15;
     }
 
     if (nextVersion !== CURRENT_SCHEMA_VERSION) {

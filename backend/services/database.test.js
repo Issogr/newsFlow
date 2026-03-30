@@ -68,7 +68,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('14');
+    expect(migrationVersion).toBe('15');
     expect(articleColumns).toContain('canonical_url');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
@@ -163,9 +163,10 @@ describe('database migrations', () => {
 
       expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
       expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-      expect(migratedVersion).toBe('14');
+      expect(migratedVersion).toBe('15');
       expect(settingsColumns).toContain('show_news_images');
       expect(settingsColumns).toContain('reader_text_size');
+      expect(settingsColumns).toContain('theme_mode');
       expect(userColumns).toContain('role');
       expect(userColumns).toContain('last_login_at');
       expect(userColumns).toContain('last_activity_at');

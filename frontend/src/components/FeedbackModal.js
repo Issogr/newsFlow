@@ -57,7 +57,7 @@ function getAttachmentValidationError(nextAttachment, t) {
   return t('feedbackErrorAttachmentType');
 }
 
-const FeedbackModal = ({ currentUser, t, onClose }) => {
+const FeedbackModal = ({ t, onClose }) => {
   const [category, setCategory] = useState('bug');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');

@@ -41,6 +41,7 @@ function createCurrentUser(settings = {}) {
     user: { username: 'alice', isAdmin: false },
     settings: {
       defaultLanguage: 'en',
+      themeMode: 'system',
       articleRetentionHours: 24,
       recentHours: 3,
       autoRefreshEnabled: true,
@@ -65,11 +66,20 @@ describe('App', () => {
     jest.clearAllMocks();
     window.localStorage.clear();
     document.body.style.overflow = '';
+    document.documentElement.dataset.theme = '';
+    document.documentElement.style.colorScheme = '';
     window.history.replaceState({}, '', '/');
+    window.matchMedia = jest.fn().mockImplementation(() => ({
+      matches: false,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn()
+    }));
   });
 
   afterEach(() => {
     document.body.style.overflow = '';
+    document.documentElement.dataset.theme = '';
+    document.documentElement.style.colorScheme = '';
   });
 
   test('renders the authentication screen when there is no saved session', () => {
@@ -101,6 +111,17 @@ describe('App', () => {
 
     expect(await screen.findByText('Admin dashboard for admin')).toBeInTheDocument();
     expect(screen.queryByText('Authenticated app')).not.toBeInTheDocument();
+  });
+
+  test('applies the selected dark theme to the document root after session load', async () => {
+    getAuthToken.mockReturnValue('session-token');
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ themeMode: 'dark', lastSeenReleaseNotesVersion: '3.2.7' }));
+
+    render(<App />);
+
+    expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.style.colorScheme).toBe('dark');
   });
 
   test('shows release notes once after login for users who have not seen the current update', async () => {

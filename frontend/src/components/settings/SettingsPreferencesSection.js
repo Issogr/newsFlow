@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock3, Download, Globe2, Image as ImageIcon, PanelRightOpen, Radio, RefreshCw, TimerReset, Type, Upload } from 'lucide-react';
+import { Clock3, Download, Globe2, Image as ImageIcon, MonitorSmartphone, PanelRightOpen, Radio, RefreshCw, TimerReset, Type, Upload } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORDER } from '../../config/readerTextSize';
 
@@ -10,6 +10,7 @@ const SettingsPreferencesSection = ({
   settings,
   settingsLimits,
   onDefaultLanguageChange,
+  onThemeModeChange,
   onAutoRefreshChange,
   onShowNewsImagesChange,
   onReaderPanelPositionChange,
@@ -57,6 +58,22 @@ const SettingsPreferencesSection = ({
           <span className="mt-2 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
             {articleRetentionRange}
           </span>
+        </label>
+
+        <label className="block">
+          <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <MonitorSmartphone className="h-4 w-4 text-violet-600" />
+            {t('themeModeSetting')}
+          </span>
+          <select
+            value={settings.themeMode || 'system'}
+            onChange={(event) => onThemeModeChange(event.target.value)}
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+          >
+            <option value="system">{t('themeModeSystem')}</option>
+            <option value="light">{t('themeModeLight')}</option>
+            <option value="dark">{t('themeModeDark')}</option>
+          </select>
         </label>
 
         <label className="block">

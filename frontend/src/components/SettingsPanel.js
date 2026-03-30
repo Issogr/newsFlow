@@ -22,6 +22,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     setSourceForm,
     setEditingSourceForm,
     setDefaultLanguage,
+    setThemeMode,
     setAutoRefreshEnabled,
     setShowNewsImages,
     setReaderPanelPosition,
@@ -82,6 +83,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               settings={settings}
               settingsLimits={settingsLimits}
               onDefaultLanguageChange={setDefaultLanguage}
+              onThemeModeChange={setThemeMode}
               onAutoRefreshChange={setAutoRefreshEnabled}
               onShowNewsImagesChange={setShowNewsImages}
               onReaderPanelPositionChange={setReaderPanelPosition}

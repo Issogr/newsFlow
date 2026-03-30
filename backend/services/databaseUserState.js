@@ -26,6 +26,7 @@ function createUserStateRepository({ getDb }) {
 
     const row = getDb().prepare(`
       SELECT user_id AS userId, default_language AS defaultLanguage,
+             theme_mode AS themeMode,
              article_retention_hours AS articleRetentionHours,
              recent_hours AS recentHours,
              auto_refresh_enabled AS autoRefreshEnabled,
@@ -60,6 +61,7 @@ function createUserStateRepository({ getDb }) {
       INSERT INTO user_settings (
         user_id,
         default_language,
+        theme_mode,
         article_retention_hours,
         recent_hours,
         auto_refresh_enabled,
@@ -70,9 +72,10 @@ function createUserStateRepository({ getDb }) {
         default_source_ids,
         excluded_sub_source_ids,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         default_language = excluded.default_language,
+        theme_mode = excluded.theme_mode,
         article_retention_hours = excluded.article_retention_hours,
         recent_hours = excluded.recent_hours,
         auto_refresh_enabled = excluded.auto_refresh_enabled,
@@ -86,6 +89,7 @@ function createUserStateRepository({ getDb }) {
     `).run(
       userId,
       settings.defaultLanguage || 'auto',
+      settings.themeMode || 'system',
       settings.articleRetentionHours || 24,
       settings.recentHours || 3,
       settings.autoRefreshEnabled === false ? 0 : 1,
@@ -285,6 +289,7 @@ function createUserStateRepository({ getDb }) {
       INSERT INTO user_settings (
         user_id,
         default_language,
+        theme_mode,
         article_retention_hours,
         recent_hours,
         auto_refresh_enabled,
@@ -295,9 +300,10 @@ function createUserStateRepository({ getDb }) {
         default_source_ids,
         excluded_sub_source_ids,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         default_language = excluded.default_language,
+        theme_mode = excluded.theme_mode,
         article_retention_hours = excluded.article_retention_hours,
         recent_hours = excluded.recent_hours,
         auto_refresh_enabled = excluded.auto_refresh_enabled,
@@ -345,6 +351,7 @@ function createUserStateRepository({ getDb }) {
       upsertSettingsStmt.run(
         ownerId,
         nextSettings.defaultLanguage || 'auto',
+        nextSettings.themeMode || 'system',
         nextSettings.articleRetentionHours || 24,
         nextSettings.recentHours || 3,
         nextSettings.autoRefreshEnabled === false ? 0 : 1,
