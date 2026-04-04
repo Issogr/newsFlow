@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 let authToken = window.localStorage.getItem('news-aggregator-token') || '';
+const READER_REQUEST_TIMEOUT_MS = 30000;
 
 const api = axios.create({
   baseURL: '/api',
@@ -185,7 +186,8 @@ export const fetchNews = async ({
 export const fetchReaderArticle = async (articleId, { refresh = false, signal } = {}) => {
   const response = await api.get(`/articles/${articleId}/reader`, {
     params: refresh ? { refresh: 'true' } : undefined,
-    signal
+    signal,
+    timeout: READER_REQUEST_TIMEOUT_MS
   });
 
   return response.data;
