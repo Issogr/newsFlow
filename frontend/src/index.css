@@ -40,6 +40,7 @@ body {
   background-color: rgb(15 23 42 / 0.95) !important;
 }
 
+:root[data-theme='dark'] .bg-white\/85,
 :root[data-theme='dark'] .bg-white\/90,
 :root[data-theme='dark'] .bg-white\/80,
 :root[data-theme='dark'] .bg-white\/70 {

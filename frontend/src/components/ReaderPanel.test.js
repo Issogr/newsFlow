@@ -206,7 +206,7 @@ describe('ReaderPanel', () => {
     await screen.findByText('Unsafe reader title');
 
     expect(screen.queryByRole('link', { name: 'openOriginalSource' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'openOriginalSource' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'shareArticle' })).toBeDisabled();
   });
 
   test('shares the original article url from reader mode', async () => {
@@ -309,9 +309,7 @@ describe('ReaderPanel', () => {
     await screen.findByText('Reader title');
 
     await act(async () => {
-      fireEvent.change(screen.getByRole('combobox', { name: 'readerTextSizeSetting' }), {
-        target: { value: 'large' }
-      });
+      fireEvent.click(screen.getByRole('button', { name: 'increaseReaderTextSize' }));
     });
 
     expect(updateUserSettings).toHaveBeenCalledWith({ readerTextSize: 'large' });

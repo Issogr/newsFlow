@@ -9,6 +9,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🪟 The confirmation now grows directly out of the Share button and slides to the left, so it feels attached to the action instead of appearing as a separate toast.',
       '📰 News cards now place Share in a floating top-right action, while Reader mode and Open article fill the footer row more cleanly.',
       '⬆️ While you scroll down the feed, a small circular button now appears in the bottom-left corner so you can jump back to the top instantly.',
+      '📖 Reader mode now feels more in line with the rest of News Flow, with calmer cards, cleaner spacing, and a layout that gives more room to the article itself.',
+      '🎛️ The reader toolbar is simpler too: Share lives in the top-left as a compact icon, and text size now uses a quick `- aA +` control instead of a dropdown.',
     ]
   },
   it: {
@@ -20,6 +22,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🪟 La conferma ora nasce direttamente dal pulsante Share e si apre verso sinistra, cosi resta visivamente collegata all\'azione invece di sembrare un toast separato.',
       '📰 Le news card ora spostano Share in un\'azione flottante in alto a destra, mentre Reader mode e Open article riempiono meglio la riga dei pulsanti in basso.',
       '⬆️ Mentre scorri il feed, ora compare un piccolo pulsante circolare in basso a sinistra per tornare subito all\'inizio della pagina.',
+      '📖 La modalita lettura ora e piu coerente con il resto di News Flow, con card piu calme, spaziatura piu pulita e piu spazio dedicato davvero all\'articolo.',
+      '🎛️ Anche la barra del reader e piu semplice: Share sta in alto a sinistra come icona compatta e la dimensione del testo usa ora un controllo rapido `- aA +` invece del menu a tendina.',
     ]
   }
 };
