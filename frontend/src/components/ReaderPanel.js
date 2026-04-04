@@ -13,6 +13,7 @@ import { fetchReaderArticle, isRequestCanceled, updateUserSettings } from '../se
 import useLatestRequest from '../hooks/useLatestRequest';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { shareArticleUrl } from '../utils/shareArticle';
+import ShareStatusBubble from './ShareStatusBubble';
 import {
   DEFAULT_READER_TEXT_SIZE,
   READER_TEXT_SIZE_LABELS,
@@ -188,7 +189,7 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
     : (readerPosition === 'center' ? 'lg:justify-center' : 'lg:justify-end');
   const readerTextStyles = READER_TEXT_SIZE_STYLES[readerTextSize] || READER_TEXT_SIZE_STYLES[DEFAULT_READER_TEXT_SIZE];
   useEffect(() => {
-    if (shareState !== 'copied') {
+    if (shareState === 'idle') {
       return undefined;
     }
 
@@ -333,37 +334,43 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
                   )}
                 </div>
 
-                <div className="mb-5 flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleShare}
-                    disabled={!safeOriginalUrl}
-                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-700 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60 sm:h-auto sm:w-auto sm:px-4 sm:py-2"
-                    aria-label={shareState === 'copied' ? t('copied') : t('shareArticle')}
-                  >
-                    <Share2 className="h-4 w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">{shareState === 'copied' ? t('copied') : t('shareArticle')}</span>
-                  </button>
-                  {safeOriginalUrl ? (
-                    <a
-                      href={safeOriginalUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 sm:flex-none"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      {t('openOriginalSource')}
-                    </a>
-                  ) : (
+                <div className="mb-5">
+                  <div className="mb-3 min-h-8">
+                    <ShareStatusBubble shareState={shareState} t={t} />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
                     <button
                       type="button"
-                      disabled
-                      className="inline-flex min-w-0 flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-full bg-slate-300 px-4 py-2.5 text-sm font-medium text-slate-600 sm:flex-none"
+                      onClick={handleShare}
+                      disabled={!safeOriginalUrl}
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-700 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60 sm:h-auto sm:w-auto sm:px-4 sm:py-2"
+                      aria-label={t('shareArticle')}
                     >
-                      <ExternalLink className="h-4 w-4" />
-                      {t('openOriginalSource')}
+                      <Share2 className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">{t('shareArticle')}</span>
                     </button>
-                  )}
+                    {safeOriginalUrl ? (
+                      <a
+                        href={safeOriginalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 sm:flex-none"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        {t('openOriginalSource')}
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        className="inline-flex min-w-0 flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-full bg-slate-300 px-4 py-2.5 text-sm font-medium text-slate-600 sm:flex-none"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        {t('openOriginalSource')}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {loading && !selectedReader ? (

@@ -11,6 +11,7 @@ import { getTopicPresentation } from '../topicPresentation';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import genericNewsCover from '../assets/generic-news-cover.svg';
 import { shareArticleUrl } from '../utils/shareArticle';
+import ShareStatusBubble from './ShareStatusBubble';
 
 function getSourceEntries(group) {
   const sourceMap = new Map();
@@ -65,7 +66,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
   }, [safeImageUrl, showImages]);
 
   useEffect(() => {
-    if (shareState !== 'copied') {
+    if (shareState === 'idle') {
       return undefined;
     }
 
@@ -157,6 +158,10 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
       </div>
 
       <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-4">
+        <div className="mb-3 min-h-8">
+          <ShareStatusBubble shareState={shareState} t={t} />
+        </div>
+
         <div className="flex items-stretch gap-2.5">
           <button
             type="button"
@@ -171,7 +176,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
             onClick={handleShare}
             disabled={!safeOriginalUrl}
             className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-            aria-label={shareState === 'copied' ? t('copied') : t('shareArticle')}
+            aria-label={t('shareArticle')}
           >
             <Share2 className="h-4 w-4" />
           </button>

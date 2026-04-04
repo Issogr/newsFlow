@@ -183,4 +183,27 @@ describe('NewsCard', () => {
       url: 'https://example.com/story'
     });
   });
+
+  test('shows a share status bubble when clipboard fallback is used', async () => {
+    navigator.share = undefined;
+    navigator.clipboard = {
+      writeText: jest.fn().mockResolvedValue(undefined)
+    };
+
+    render(
+      <NewsCard
+        group={{ ...group, url: 'https://example.com/story' }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
+    });
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.com/story');
+    expect(screen.getByText('shareCopiedMessage')).toBeInTheDocument();
+  });
 });

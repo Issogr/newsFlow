@@ -93,7 +93,7 @@ describe('App', () => {
 
   test('renders the authenticated app when the current session loads', async () => {
     getAuthToken.mockReturnValue('session-token');
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.7' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.8' }));
 
     render(<App />);
 
@@ -115,7 +115,7 @@ describe('App', () => {
 
   test('applies the selected dark theme to the document root after session load', async () => {
     getAuthToken.mockReturnValue('session-token');
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ themeMode: 'dark', lastSeenReleaseNotesVersion: '3.2.7' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ themeMode: 'dark', lastSeenReleaseNotesVersion: '3.2.8' }));
 
     render(<App />);
 
@@ -129,7 +129,7 @@ describe('App', () => {
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.7' }).settings
+      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.8' }).settings
     });
 
     render(<App />);
@@ -139,13 +139,13 @@ describe('App', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
 
     await waitFor(() => {
-      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.7' });
+      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.8' });
     });
   });
 
   test('reopens release notes manually from the authenticated app', async () => {
     getAuthToken.mockReturnValue('session-token');
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.7' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.8' }));
 
     render(<App />);
 
@@ -161,7 +161,7 @@ describe('App', () => {
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.7' }).settings
+      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.8' }).settings
     });
 
     render(<App />);

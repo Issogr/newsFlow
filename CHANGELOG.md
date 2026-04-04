@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.2.8
+
+- added a lightweight share feedback bubble for clipboard fallback flows so desktop users now get a clear confirmation when an article link is copied
+
 ## 3.2.7
 
 - added an authenticated in-app feedback flow reachable from the user menu, with a dedicated modal for sending bug reports, ideas, and general product feedback

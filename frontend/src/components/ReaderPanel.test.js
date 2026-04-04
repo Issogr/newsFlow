@@ -243,6 +243,41 @@ describe('ReaderPanel', () => {
     });
   });
 
+  test('shows a share status bubble in reader mode when clipboard fallback is used', async () => {
+    navigator.share = undefined;
+    navigator.clipboard = {
+      writeText: jest.fn().mockResolvedValue(undefined)
+    };
+    fetchReaderArticle.mockResolvedValue({
+      title: 'Reader title',
+      language: 'en',
+      excerpt: 'Excerpt',
+      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
+      minutesToRead: 1
+    });
+
+    render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="right"
+        locale="en"
+        t={t}
+        currentUser={currentUser}
+        onUserUpdate={jest.fn()}
+        onClose={jest.fn()}
+      />
+    );
+
+    await screen.findByText('Reader title');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
+    });
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.com/one');
+    expect(screen.getByText('shareCopiedMessage')).toBeInTheDocument();
+  });
+
   test('updates reader text size and persists it without reloading parent state', async () => {
     fetchReaderArticle.mockResolvedValue({
       title: 'Reader title',
