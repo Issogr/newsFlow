@@ -32,7 +32,7 @@ const parser = new RSSParser({
   },
   timeout: RSS_TIMEOUT,
   headers: {
-    'User-Agent': 'news-aggregator/2.0 (+https://localhost)'
+    'User-Agent': 'newsflow/2.0 (+https://localhost)'
   }
 });
 
@@ -337,7 +337,7 @@ async function fetchArticleImage(url) {
       timeout: ARTICLE_IMAGE_TIMEOUT,
       maxResponseBytes: ARTICLE_IMAGE_MAX_RESPONSE_BYTES,
       headers: {
-        'User-Agent': 'news-aggregator-image-fallback/1.0 (+https://localhost)',
+        'User-Agent': 'newsflow-image-fallback/1.0 (+https://localhost)',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       }
     });
@@ -389,7 +389,7 @@ async function fetchFeedXml(url) {
         timeout: RSS_TIMEOUT,
         maxResponseBytes: RSS_MAX_RESPONSE_BYTES,
         headers: {
-          'User-Agent': 'news-aggregator/2.0 (+https://localhost)',
+          'User-Agent': 'newsflow/2.0 (+https://localhost)',
           Accept: 'application/rss+xml, application/xml, text/xml, */*'
         }
       });

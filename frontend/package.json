@@ -1,5 +1,5 @@
 {
-  "name": "news-aggregator-frontend",
+  "name": "newsflow-frontend",
   "version": "0.1.0",
   "private": true,
   "dependencies": {

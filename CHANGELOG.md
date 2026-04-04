@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.2.8
+
+- added a lightweight share feedback bubble for clipboard fallback flows so desktop users now get a clear confirmation when an article link is copied
+- moved the news-card share action into a floating top-right translucent button and rebalanced the footer actions so `Reader mode` and `Open article` fill the row more cleanly
+- refined the clipboard confirmation into a share-button-attached animated pill that expands outward from the trigger toward the left instead of taking dedicated layout space
+- added a floating bottom-left back-to-top button on the news screen that appears after scrolling so long feed sessions can jump back to the start quickly
+- refreshed reader mode so the header controls, source/read-time metadata, and content cards now align more closely with the main News Flow visual language while keeping the article body as the primary focus
+- simplified the reader toolbar by moving `Share` into a compact top-left icon action, replacing the text-size dropdown with a `- aA +` stepper, and removing extra header actions that competed with the reading flow
+- widened the reader content column and tightened the side gutters so article title and body cards use more of the available panel width without becoming edge-to-edge
+
 ## 3.2.7
 
 - added an authenticated in-app feedback flow reachable from the user menu, with a dedicated modal for sending bug reports, ideas, and general product feedback

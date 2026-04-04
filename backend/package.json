@@ -1,5 +1,5 @@
 {
-  "name": "news-aggregator-backend",
+  "name": "newsflow-backend",
   "version": "1.0.0",
   "description": "Backend for news aggregator app with real-time updates",
   "main": "server.js",

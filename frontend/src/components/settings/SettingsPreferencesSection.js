@@ -126,33 +126,37 @@ const SettingsPreferencesSection = ({
           </select>
         </label>
 
-        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-          <input
-            type="checkbox"
-            checked={settings.autoRefreshEnabled !== false}
-            onChange={(event) => onAutoRefreshChange(event.target.checked)}
-            className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
-          />
-          <span>
-            <span className="flex items-center gap-2 text-sm font-medium text-slate-800">
-              <RefreshCw className="h-4 w-4 text-emerald-600" />
-              {t('autoRefreshSetting')}
-            </span>
+        <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-700">
+            <RefreshCw className="h-4 w-4 shrink-0 text-emerald-600" />
+            <span>{t('autoRefreshSetting')}</span>
+          </span>
+          <span className="relative inline-flex shrink-0 items-center">
+            <input
+              type="checkbox"
+              checked={settings.autoRefreshEnabled !== false}
+              onChange={(event) => onAutoRefreshChange(event.target.checked)}
+              className="peer sr-only"
+            />
+            <span className="relative h-6 w-11 rounded-full bg-slate-300 transition-colors peer-checked:bg-slate-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-slate-400" />
+            <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
           </span>
         </label>
 
-        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-          <input
-            type="checkbox"
-            checked={settings.showNewsImages !== false}
-            onChange={(event) => onShowNewsImagesChange(event.target.checked)}
-            className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
-          />
-          <span>
-            <span className="flex items-center gap-2 text-sm font-medium text-slate-800">
-              <ImageIcon className="h-4 w-4 text-violet-600" />
-              {t('showNewsImagesSetting')}
-            </span>
+        <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-700">
+            <ImageIcon className="h-4 w-4 shrink-0 text-violet-600" />
+            <span>{t('showNewsImagesSetting')}</span>
+          </span>
+          <span className="relative inline-flex shrink-0 items-center">
+            <input
+              type="checkbox"
+              checked={settings.showNewsImages !== false}
+              onChange={(event) => onShowNewsImagesChange(event.target.checked)}
+              className="peer sr-only"
+            />
+            <span className="relative h-6 w-11 rounded-full bg-slate-300 transition-colors peer-checked:bg-slate-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-slate-400" />
+            <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
           </span>
         </label>
 

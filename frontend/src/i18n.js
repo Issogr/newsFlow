@@ -1,5 +1,6 @@
 export const SUPPORTED_LOCALES = ['en', 'it'];
-export const LOCALE_STORAGE_KEY = 'news-aggregator-locale';
+export const LOCALE_STORAGE_KEY = 'newsflow-locale';
+const LEGACY_LOCALE_STORAGE_KEYS = ['news-aggregator-locale'];
 
 export const translations = {
   en: {
@@ -13,6 +14,7 @@ export const translations = {
     refreshHandledByLive: 'Live auto refresh is handling updates',
     searchPlaceholder: 'Search by title, content, or topic...',
     clearSearch: 'Clear search',
+    backToTop: 'Back to top',
     visibleGroups: ({ count }) => `${count} visible groups`,
     totalGroups: ({ count }) => `${count} groups`,
     updatedAt: ({ time }) => `Updated ${time}`,
@@ -29,9 +31,10 @@ export const translations = {
     noNewsTitle: 'No news found',
     noNewsText: 'Try widening the filters or refresh the feed.',
     loadingMore: 'Loading...',
-    loadMore: 'Load more groups',
+    loadMore: 'Load more',
     noMoreResults: 'You reached the end of the available results.',
     settings: 'Settings',
+    close: 'Close',
     saveSettings: 'Save settings',
     saving: 'Saving...',
     cancel: 'Cancel',
@@ -77,6 +80,7 @@ export const translations = {
     feedbackErrorImageTooLarge: 'Images must be 5 MB or smaller.',
     feedbackErrorVideoTooLarge: 'Videos must be 12 MB or smaller.',
     feedbackErrorAttachmentType: 'Please attach an image or a short video.',
+    shareCopiedMessage: 'Link copied to clipboard.',
     preferences: 'Preferences',
     customSources: 'Custom sources',
     noCustomSources: 'No custom sources yet.',
@@ -104,7 +108,7 @@ export const translations = {
     quickFilterHours: 'Quick filter hours',
     autoRefreshSetting: 'Auto refresh news',
     autoRefreshHelp: 'Keep live updates and automatically refresh new groups as they arrive.',
-    showNewsImagesSetting: 'Show images in news cards',
+    showNewsImagesSetting: 'Show card images',
     showNewsImagesHelp: 'Display article cover images directly in the news list.',
     readerPanelPositionSetting: 'Reader panel position',
     readerPanelPositionHelp: 'Choose where reader mode opens on desktop. Mobile stays full screen.',
@@ -112,6 +116,8 @@ export const translations = {
     readerPanelPositionCenter: 'Center',
     readerPanelPositionRight: 'Right',
     readerTextSizeSetting: 'Reader text size',
+    decreaseReaderTextSize: 'Decrease reader text size',
+    increaseReaderTextSize: 'Increase reader text size',
     readerTextSizeSmall: 'Small',
     readerTextSizeMedium: 'Medium',
     readerTextSizeLarge: 'Large',
@@ -228,6 +234,7 @@ export const translations = {
     refreshHandledByLive: 'L\'auto refresh live sta gestendo gli aggiornamenti',
     searchPlaceholder: 'Cerca su titolo, contenuto o topic...',
     clearSearch: 'Cancella ricerca',
+    backToTop: 'Torna in cima',
     visibleGroups: ({ count }) => `${count} gruppi visibili`,
     totalGroups: ({ count }) => `${count} gruppi`,
     updatedAt: ({ time }) => `Aggiornato ${time}`,
@@ -244,9 +251,10 @@ export const translations = {
     noNewsTitle: 'Nessuna notizia trovata',
     noNewsText: 'Prova ad allargare i filtri oppure aggiorna il feed.',
     loadingMore: 'Caricamento...',
-    loadMore: 'Carica altri gruppi',
+    loadMore: 'Carica altro',
     noMoreResults: 'Hai raggiunto la fine dei risultati disponibili.',
     settings: 'Impostazioni',
+    close: 'Chiudi',
     saveSettings: 'Salva impostazioni',
     saving: 'Salvataggio...',
     cancel: 'Annulla',
@@ -292,6 +300,7 @@ export const translations = {
     feedbackErrorImageTooLarge: 'Le immagini devono essere di 5 MB o meno.',
     feedbackErrorVideoTooLarge: 'I video devono essere di 12 MB o meno.',
     feedbackErrorAttachmentType: 'Allega un\'immagine o un breve video.',
+    shareCopiedMessage: 'Link copiato negli appunti.',
     preferences: 'Preferenze',
     customSources: 'Fonti personali',
     noCustomSources: 'Nessuna fonte personale per ora.',
@@ -319,7 +328,7 @@ export const translations = {
     quickFilterHours: 'Ore filtro rapido',
     autoRefreshSetting: 'Auto refresh notizie',
     autoRefreshHelp: 'Mantieni gli aggiornamenti live e aggiorna automaticamente i nuovi gruppi quando arrivano.',
-    showNewsImagesSetting: 'Mostra immagini nelle news card',
+    showNewsImagesSetting: 'Mostra immagini card',
     showNewsImagesHelp: 'Mostra l\'immagine di copertina dell\'articolo direttamente nella lista notizie.',
     readerPanelPositionSetting: 'Posizione pannello lettura',
     readerPanelPositionHelp: 'Scegli dove si apre la modalita lettura su desktop. Su mobile resta a schermo intero.',
@@ -327,6 +336,8 @@ export const translations = {
     readerPanelPositionCenter: 'Centro',
     readerPanelPositionRight: 'Destra',
     readerTextSizeSetting: 'Dimensione testo lettura',
+    decreaseReaderTextSize: 'Riduci dimensione testo lettura',
+    increaseReaderTextSize: 'Aumenta dimensione testo lettura',
     readerTextSizeSmall: 'Piccolo',
     readerTextSizeMedium: 'Medio',
     readerTextSizeLarge: 'Grande',
@@ -450,7 +461,31 @@ export function isSupportedLocale(locale) {
   return SUPPORTED_LOCALES.includes(locale);
 }
 
-export function resolvePreferredLocale(preferredLocale, storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY)) {
+export function readStoredLocale() {
+  try {
+    const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (isSupportedLocale(storedLocale)) {
+      return storedLocale;
+    }
+
+    for (const legacyKey of LEGACY_LOCALE_STORAGE_KEYS) {
+      const legacyLocale = window.localStorage.getItem(legacyKey);
+      if (!isSupportedLocale(legacyLocale)) {
+        continue;
+      }
+
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, legacyLocale);
+      window.localStorage.removeItem(legacyKey);
+      return legacyLocale;
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+}
+
+export function resolvePreferredLocale(preferredLocale, storedLocale = readStoredLocale()) {
   if (isSupportedLocale(preferredLocale)) {
     return preferredLocale;
   }

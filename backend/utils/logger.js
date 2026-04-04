@@ -35,7 +35,7 @@ const logger = winston.createLogger({
     winston.format.splat(),
     winston.format.json()
   ),
-  defaultMeta: { service: 'news-aggregator' },
+  defaultMeta: { service: 'newsflow' },
   transports: [createConsoleTransport({ silent: isTestEnvironment })]
 });
 

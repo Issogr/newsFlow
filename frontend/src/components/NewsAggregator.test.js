@@ -81,6 +81,12 @@ describe('NewsAggregator', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+    Object.defineProperty(window, 'scrollY', {
+      value: 0,
+      writable: true,
+      configurable: true
+    });
+    window.scrollTo = jest.fn();
     useWebSocket.mockReturnValue({
       isConnected: true,
       notifications: [],
@@ -293,9 +299,9 @@ describe('NewsAggregator', () => {
       }));
     });
 
-    expect(await screen.findByRole('button', { name: 'Load more groups' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Load more' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Load more groups' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
 
     await waitFor(() => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -324,5 +330,33 @@ describe('NewsAggregator', () => {
 
     expect(searchInput).toHaveValue('');
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+  });
+
+  test('shows a back-to-top button after scrolling and scrolls smoothly to the top', async () => {
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'First headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    await renderNewsAggregator();
+
+    const backToTopButton = screen.getByRole('button', { name: 'Back to top' });
+    expect(backToTopButton).toHaveClass('pointer-events-none');
+
+    await act(async () => {
+      Object.defineProperty(window, 'scrollY', {
+        value: 360,
+        writable: true,
+        configurable: true
+      });
+      fireEvent.scroll(window);
+    });
+
+    expect(backToTopButton).toHaveClass('opacity-100');
+
+    fireEvent.click(backToTopButton);
+
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
   });
 });
