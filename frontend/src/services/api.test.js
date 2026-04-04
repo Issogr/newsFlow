@@ -18,14 +18,16 @@ jest.mock('axios', () => ({
   isCancel: jest.fn()
 }));
 
-import { fetchReaderArticle } from './api';
-
 describe('api service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.resetModules();
+    window.localStorage.clear();
   });
 
   test('uses a longer timeout budget for reader article requests', async () => {
+    const { fetchReaderArticle } = require('./api');
+
     mockApi.get.mockResolvedValue({
       data: { articleId: 'article-1' }
     });
@@ -40,5 +42,25 @@ describe('api service', () => {
       signal: 'reader-signal',
       timeout: 30000
     });
+  });
+
+  test('migrates legacy auth tokens to the newsflow storage key', () => {
+    window.localStorage.setItem('news-aggregator-token', 'legacy-token');
+
+    const { getAuthToken } = require('./api');
+
+    expect(getAuthToken()).toBe('legacy-token');
+    expect(window.localStorage.getItem('newsflow-token')).toBe('legacy-token');
+    expect(window.localStorage.getItem('news-aggregator-token')).toBeNull();
+  });
+
+  test('stores auth tokens only under the newsflow storage key', () => {
+    const { setAuthToken } = require('./api');
+
+    window.localStorage.setItem('news-aggregator-token', 'stale-token');
+    setAuthToken('fresh-token');
+
+    expect(window.localStorage.getItem('newsflow-token')).toBe('fresh-token');
+    expect(window.localStorage.getItem('news-aggregator-token')).toBeNull();
   });
 });

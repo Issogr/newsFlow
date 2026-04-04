@@ -171,7 +171,47 @@ describe('database migrations', () => {
       expect(userColumns).toContain('last_login_at');
       expect(userColumns).toContain('last_activity_at');
       expect(passwordSetupTokenColumns).toContain('token_hash');
+     });
+
+  test('migrates sqlite data from a legacy news_aggregator path to a newsflow path', () => {
+    const migrationRoot = path.join(tempDir, 'migration-root');
+    const currentDbPath = path.join(migrationRoot, 'newsflow', 'backend', 'data', 'news.db');
+    const legacyDbDir = path.join(migrationRoot, 'news_aggregator', 'backend', 'data');
+    const legacyDbPath = path.join(legacyDbDir, 'news.db');
+
+    jest.resetModules();
+    process.env.NEWS_DB_PATH = currentDbPath;
+    database = require('./database');
+    database.getDb();
+    database.closeDb();
+
+    fs.mkdirSync(legacyDbDir, { recursive: true });
+    fs.readdirSync(path.dirname(currentDbPath)).forEach((entryName) => {
+      fs.renameSync(
+        path.join(path.dirname(currentDbPath), entryName),
+        path.join(legacyDbDir, entryName)
+      );
     });
+    fs.rmSync(path.dirname(currentDbPath), { recursive: true, force: true });
+
+    jest.resetModules();
+    process.env.NEWS_DB_PATH = currentDbPath;
+    database = require('./database');
+    database.getDb();
+
+    const migratedDb = new SqliteDatabase(currentDbPath, { readonly: true });
+    const migratedVersion = migratedDb.prepare(`
+      SELECT value
+      FROM app_meta
+      WHERE key = 'migration_version'
+    `).get()?.value;
+
+    migratedDb.close();
+
+    expect(migratedVersion).toBe('15');
+    expect(fs.existsSync(currentDbPath)).toBe(true);
+    expect(fs.existsSync(legacyDbPath)).toBe(false);
+  });
 
   test('rejects databases on an older schema version', () => {
     const sqlite = new SqliteDatabase(dbPath);

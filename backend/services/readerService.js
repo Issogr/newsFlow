@@ -253,7 +253,7 @@ async function fetchReaderPayload(article) {
     timeout: READER_TIMEOUT,
     maxResponseBytes: READER_MAX_RESPONSE_BYTES,
     headers: {
-      'User-Agent': 'news-aggregator-reader/1.0 (+https://localhost)',
+      'User-Agent': 'newsflow-reader/1.0 (+https://localhost)',
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
     }
   });
