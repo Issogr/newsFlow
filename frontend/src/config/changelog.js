@@ -8,6 +8,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🔗 When sharing falls back to clipboard copy on desktop, you now get a small confirmation pill instead of guessing what happened.',
       '🪟 The confirmation now grows directly out of the Share button and slides to the left, so it feels attached to the action instead of appearing as a separate toast.',
       '📰 News cards now place Share in a floating top-right action, while Reader mode and Open article fill the footer row more cleanly.',
+      '⬆️ While you scroll down the feed, a small circular button now appears in the bottom-left corner so you can jump back to the top instantly.',
     ]
   },
   it: {
@@ -18,6 +19,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🔗 Quando la condivisione su desktop usa la copia negli appunti come fallback, ora compare una piccola pill di conferma invece di lasciare il risultato implicito.',
       '🪟 La conferma ora nasce direttamente dal pulsante Share e si apre verso sinistra, cosi resta visivamente collegata all\'azione invece di sembrare un toast separato.',
       '📰 Le news card ora spostano Share in un\'azione flottante in alto a destra, mentre Reader mode e Open article riempiono meglio la riga dei pulsanti in basso.',
+      '⬆️ Mentre scorri il feed, ora compare un piccolo pulsante circolare in basso a sinistra per tornare subito all\'inizio della pagina.',
     ]
   }
 };

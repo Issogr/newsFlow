@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowUp,
   Cog,
   Filter,
   LogOut,
@@ -34,6 +35,7 @@ import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePrefer
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_FILTERS = { sourceIds: [], topics: [] };
+const BACK_TO_TOP_THRESHOLD = 280;
 
 const mergeGroups = (primaryGroups, secondaryGroups) => {
   const merged = new Map();
@@ -100,6 +102,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const userMenuRef = useRef(null);
   const visibleGroupIds = useMemo(() => news.map((group) => group?.id).filter(Boolean), [news]);
   const recentHours = Math.max(
@@ -132,6 +135,17 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   useEffect(() => {
     setStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize || 'medium');
   }, [currentUser?.settings?.readerTextSize]);
+
+  useEffect(() => {
+    const updateBackToTopVisibility = () => {
+      setShowBackToTop(window.scrollY > BACK_TO_TOP_THRESHOLD);
+    };
+
+    updateBackToTopVisibility();
+    window.addEventListener('scroll', updateBackToTopVisibility, { passive: true });
+
+    return () => window.removeEventListener('scroll', updateBackToTopVisibility);
+  }, []);
 
   useEffect(() => {
     setActiveFilters((current) => ({
@@ -274,6 +288,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
   const closeReader = useCallback(() => {
     setReaderState({ isOpen: false, group: null, articleId: null });
+  }, []);
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   return (
@@ -654,6 +672,19 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           onClose={() => setFeedbackOpen(false)}
         />
       )}
+
+      <button
+        type="button"
+        onClick={scrollToTop}
+        className={`fixed bottom-5 left-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-700 shadow-lg backdrop-blur transition-all duration-200 hover:bg-white hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 sm:bottom-6 sm:left-6 ${
+          showBackToTop
+            ? 'translate-y-0 opacity-100'
+            : 'pointer-events-none translate-y-3 opacity-0'
+        }`}
+        aria-label={t('backToTop')}
+      >
+        <ArrowUp className="h-5 w-5" aria-hidden="true" />
+      </button>
     </div>
   );
 };
