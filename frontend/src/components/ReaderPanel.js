@@ -335,21 +335,24 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
                 </div>
 
                 <div className="mb-5">
-                  <div className="mb-3 min-h-8">
-                    <ShareStatusBubble shareState={shareState} t={t} />
-                  </div>
-
                   <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={handleShare}
-                      disabled={!safeOriginalUrl}
-                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-700 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60 sm:h-auto sm:w-auto sm:px-4 sm:py-2"
-                      aria-label={t('shareArticle')}
-                    >
-                      <Share2 className="h-4 w-4 sm:mr-2" />
-                      <span className="hidden sm:inline">{t('shareArticle')}</span>
-                    </button>
+                    <div className="relative inline-flex items-center">
+                      <ShareStatusBubble
+                        shareState={shareState}
+                        t={t}
+                        className="share-status-pill-from-button mr-2 max-w-[min(18rem,calc(100vw-6rem))]"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleShare}
+                        disabled={!safeOriginalUrl}
+                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-700 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60 sm:h-auto sm:w-auto sm:px-4 sm:py-2"
+                        aria-label={t('shareArticle')}
+                      >
+                        <Share2 className="h-4 w-4 sm:mr-2" />
+                        <span className="hidden sm:inline">{t('shareArticle')}</span>
+                      </button>
+                    </div>
                     {safeOriginalUrl ? (
                       <a
                         href={safeOriginalUrl}

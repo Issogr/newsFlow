@@ -207,6 +207,41 @@ body {
   color: rgb(248 250 252) !important;
 }
 
+.share-status-pill {
+  white-space: nowrap;
+}
+
+.share-status-pill-from-button {
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  transform-origin: right center;
+  animation: share-status-pill-from-button 1.6s ease-in-out both;
+}
+
+@keyframes share-status-pill-from-button {
+  0% {
+    opacity: 0;
+    transform: translateY(-50%) translateX(0.5rem) scaleX(0.82);
+  }
+
+  12% {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0) scaleX(1);
+  }
+
+  82% {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0) scaleX(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-50%) translateX(0.5rem) scaleX(0.82);
+  }
+}
+
 button,
 input,
 textarea,

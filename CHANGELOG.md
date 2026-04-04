@@ -3,6 +3,8 @@
 ## 3.2.8
 
 - added a lightweight share feedback bubble for clipboard fallback flows so desktop users now get a clear confirmation when an article link is copied
+- moved the news-card share action into a floating top-right translucent button and rebalanced the footer actions so `Reader mode` and `Open article` fill the row more cleanly
+- refined the clipboard confirmation into a share-button-attached animated pill that expands outward from the trigger toward the left instead of taking dedicated layout space
 
 ## 3.2.7
 
