@@ -206,4 +206,44 @@ describe('NewsCard', () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.com/story');
     expect(screen.getByText('shareCopiedMessage')).toBeInTheDocument();
   });
+
+  test('opens reader mode on title double click and image double tap', () => {
+    const onOpenReader = jest.fn();
+
+    render(
+      <NewsCard
+        group={{
+          ...group,
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              image: 'https://example.com/image.jpg'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={onOpenReader}
+      />
+    );
+
+    fireEvent.doubleClick(screen.getByText('Headline'));
+
+    expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
+
+    onOpenReader.mockClear();
+    jest.spyOn(Date, 'now')
+      .mockReturnValueOnce(1000)
+      .mockReturnValueOnce(1200)
+      .mockReturnValueOnce(2000);
+
+    const image = screen.getByRole('img', { name: 'Headline' });
+
+    fireEvent.touchEnd(image);
+    fireEvent.touchEnd(image);
+
+    expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
+  });
 });

@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import {
   BookOpenText,
   CalendarDays,
@@ -60,6 +60,8 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
   const [imageUrl, setImageUrl] = useState(showImages ? (safeImageUrl || genericNewsCover) : '');
   const [shareState, setShareState] = useState('idle');
   const fallbackImageAlt = t('genericNewsCoverAlt');
+  const lastTouchGestureRef = useRef({ area: '', timestamp: 0 });
+  const lastReaderOpenAtRef = useRef(0);
 
   useEffect(() => {
     setImageUrl(showImages ? (safeImageUrl || genericNewsCover) : '');
@@ -90,6 +92,29 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
     setShareState(result || 'idle');
   };
 
+  const openReader = () => {
+    const now = Date.now();
+    if (lastReaderOpenAtRef.current && now >= lastReaderOpenAtRef.current && now - lastReaderOpenAtRef.current < 400) {
+      return;
+    }
+
+    lastReaderOpenAtRef.current = now;
+    onOpenReader(group, group.items[0]?.id);
+  };
+
+  const handleReaderTouchEnd = (area) => {
+    const now = Date.now();
+    const lastTouchGesture = lastTouchGestureRef.current;
+
+    if (lastTouchGesture.area === area && now - lastTouchGesture.timestamp < 320) {
+      lastTouchGestureRef.current = { area: '', timestamp: 0 };
+      openReader();
+      return;
+    }
+
+    lastTouchGestureRef.current = { area, timestamp: now };
+  };
+
   return (
     <article className="relative flex h-full min-h-[20rem] flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-xl">
       <div className="absolute right-4 top-4 z-10 flex items-center justify-end">
@@ -110,12 +135,18 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
       </div>
 
       {imageUrl ? (
-        <div className="aspect-[16/9] w-full overflow-hidden bg-slate-100">
+        <div
+          className="aspect-[16/9] w-full overflow-hidden bg-slate-100"
+          onDoubleClick={openReader}
+          onTouchEnd={() => handleReaderTouchEnd('image')}
+        >
           <img
             src={imageUrl}
             alt={imageUrl === genericNewsCover ? fallbackImageAlt : group.title}
             loading="lazy"
             className="h-full w-full object-cover"
+            onDoubleClick={openReader}
+            onTouchEnd={() => handleReaderTouchEnd('image')}
             onError={() => {
               if (!showImages) {
                 setImageUrl('');
@@ -128,7 +159,11 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
         </div>
       ) : null}
       <div className="flex flex-1 flex-col p-5 pr-20">
-        <h2 className="text-xl font-semibold leading-snug text-slate-900">
+        <h2
+          className="text-xl font-semibold leading-snug text-slate-900"
+          onDoubleClick={openReader}
+          onTouchEnd={() => handleReaderTouchEnd('title')}
+        >
           {group.title}
         </h2>
 
@@ -175,12 +210,12 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
       </div>
       <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-4">
         <div className="grid grid-cols-2 gap-2.5">
-          <button
-            type="button"
-            onClick={() => onOpenReader(group, group.items[0]?.id)}
-            className="inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
-            aria-label={t('readerMode')}
-          >
+            <button
+              type="button"
+              onClick={openReader}
+              className="inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+              aria-label={t('readerMode')}
+            >
             <BookOpenText className="h-4 w-4" />
             <span>{t('readerMode')}</span>
           </button>
