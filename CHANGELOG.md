@@ -6,7 +6,7 @@
 - simplified the reader toolbar by moving `Share` into a compact top-left icon action, replacing the text-size dropdown with a `- aA +` stepper, and removing extra header actions that competed with the reading flow
 - widened the reader content column, tightened the side gutters, and fixed dark-mode header/title surfaces so the reading panel uses more space without losing its calm layout
 - added a direct reader shortcut on news cards so a double click on desktop or double tap on mobile over the image or title now opens reader mode without needing the footer button
-- aligned the `Auto refresh news` and `Show card images` settings rows with the rest of the preferences UI and fixed their custom switches so the thumb now slides correctly
+- aligned the `Auto refresh news` and `Show card images` settings rows with the rest of the preferences UI and replaced the plain checkboxes with compact state pills that fit the refreshed settings visual language better
 - removed the temporary `news_aggregator` rename migration code and the legacy DB schema upgrade ladder so startup and persistence handling now target only the current `newsflow` naming and schema baseline
 - changed the default scheduled ingestion interval from 5 minutes to 15 minutes to reduce upstream request pressure while keeping news reasonably fresh by default
 

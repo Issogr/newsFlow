@@ -126,39 +126,55 @@ const SettingsPreferencesSection = ({
           </select>
         </label>
 
-        <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
           <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-700">
             <RefreshCw className="h-4 w-4 shrink-0 text-emerald-600" />
             <span>{t('autoRefreshSetting')}</span>
           </span>
-          <span className="relative inline-flex shrink-0 items-center">
-            <input
-              type="checkbox"
-              checked={settings.autoRefreshEnabled !== false}
-              onChange={(event) => onAutoRefreshChange(event.target.checked)}
-              className="peer sr-only"
+          <button
+            type="button"
+            onClick={() => onAutoRefreshChange(settings.autoRefreshEnabled === false)}
+            aria-pressed={settings.autoRefreshEnabled !== false}
+            className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${
+              settings.autoRefreshEnabled !== false
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                settings.autoRefreshEnabled !== false ? 'bg-emerald-500' : 'bg-slate-300'
+              }`}
+              aria-hidden="true"
             />
-            <span className="relative h-6 w-11 rounded-full bg-slate-300 transition-colors peer-checked:bg-slate-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-slate-400" />
-            <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
-          </span>
-        </label>
+            <span>{settings.autoRefreshEnabled !== false ? t('liveActive') : t('liveDisabled')}</span>
+          </button>
+        </div>
 
-        <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
           <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-700">
             <ImageIcon className="h-4 w-4 shrink-0 text-violet-600" />
             <span>{t('showNewsImagesSetting')}</span>
           </span>
-          <span className="relative inline-flex shrink-0 items-center">
-            <input
-              type="checkbox"
-              checked={settings.showNewsImages !== false}
-              onChange={(event) => onShowNewsImagesChange(event.target.checked)}
-              className="peer sr-only"
+          <button
+            type="button"
+            onClick={() => onShowNewsImagesChange(settings.showNewsImages === false)}
+            aria-pressed={settings.showNewsImages !== false}
+            className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${
+              settings.showNewsImages !== false
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                settings.showNewsImages !== false ? 'bg-emerald-500' : 'bg-slate-300'
+              }`}
+              aria-hidden="true"
             />
-            <span className="relative h-6 w-11 rounded-full bg-slate-300 transition-colors peer-checked:bg-slate-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-slate-400" />
-            <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
-          </span>
-        </label>
+            <span>{settings.showNewsImages !== false ? t('liveActive') : t('liveDisabled')}</span>
+          </button>
+        </div>
 
         <div className="border-t border-slate-200 pt-5 md:col-span-2">
           <div className="grid gap-3 md:grid-cols-2">
