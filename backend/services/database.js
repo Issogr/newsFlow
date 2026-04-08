@@ -23,62 +23,9 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 
 const DATA_DIR = path.join(__dirname, '../data');
 const DB_PATH = process.env.NEWS_DB_PATH || path.join(DATA_DIR, 'news.db');
-const SQLITE_FILE_SUFFIXES = ['', '-wal', '-shm'];
 
 let db;
 let lastWriteCheckAt = null;
-
-function replacePathSegment(targetPath, currentSegment, legacySegment) {
-  return targetPath.split(path.sep).map((segment) => {
-    return segment === currentSegment ? legacySegment : segment;
-  }).join(path.sep);
-}
-
-function getLegacyDbPathCandidates(dbPath) {
-  const candidates = new Set();
-  const segmentPairs = [
-    ['newsflow', 'news_aggregator'],
-    ['newsFlow', 'news_aggregator']
-  ];
-
-  segmentPairs.forEach(([currentSegment, legacySegment]) => {
-    const migratedPath = replacePathSegment(dbPath, currentSegment, legacySegment);
-    if (migratedPath !== dbPath) {
-      candidates.add(migratedPath);
-    }
-  });
-
-  return [...candidates];
-}
-
-function hasSqliteArtifacts(dbPath) {
-  return SQLITE_FILE_SUFFIXES.some((suffix) => fs.existsSync(`${dbPath}${suffix}`));
-}
-
-function migrateLegacyDatabaseFiles(dbPath) {
-  if (hasSqliteArtifacts(dbPath)) {
-    return null;
-  }
-
-  const legacyDbPath = getLegacyDbPathCandidates(dbPath).find((candidatePath) => hasSqliteArtifacts(candidatePath));
-  if (!legacyDbPath) {
-    return null;
-  }
-
-  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-
-  SQLITE_FILE_SUFFIXES.forEach((suffix) => {
-    const legacyFilePath = `${legacyDbPath}${suffix}`;
-    const nextFilePath = `${dbPath}${suffix}`;
-
-    if (fs.existsSync(legacyFilePath) && !fs.existsSync(nextFilePath)) {
-      fs.renameSync(legacyFilePath, nextFilePath);
-    }
-  });
-
-  logger.info(`Migrated SQLite data from legacy path ${legacyDbPath} to ${dbPath}`);
-  return legacyDbPath;
-}
 
 function chunkValues(values = [], size = 200) {
   const chunks = [];
@@ -180,7 +127,6 @@ const dbSchema = createDatabaseSchema({
 });
 
 function ensureDatabaseDirectory() {
-  migrateLegacyDatabaseFiles(DB_PATH);
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 }
 
@@ -298,7 +244,5 @@ module.exports = {
   importUserState: userStateRepository.importUserState,
   verifyWriteAccess,
   getWriteAccessStatus,
-  buildSearchQuery: articleRepository.buildSearchQuery,
-  _getLegacyDbPathCandidates: getLegacyDbPathCandidates,
-  _migrateLegacyDatabaseFiles: migrateLegacyDatabaseFiles
+  buildSearchQuery: articleRepository.buildSearchQuery
 };

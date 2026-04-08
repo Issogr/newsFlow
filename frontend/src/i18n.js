@@ -1,6 +1,5 @@
 export const SUPPORTED_LOCALES = ['en', 'it'];
 export const LOCALE_STORAGE_KEY = 'newsflow-locale';
-const LEGACY_LOCALE_STORAGE_KEYS = ['news-aggregator-locale'];
 
 export const translations = {
   en: {
@@ -464,25 +463,10 @@ export function isSupportedLocale(locale) {
 export function readStoredLocale() {
   try {
     const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-    if (isSupportedLocale(storedLocale)) {
-      return storedLocale;
-    }
-
-    for (const legacyKey of LEGACY_LOCALE_STORAGE_KEYS) {
-      const legacyLocale = window.localStorage.getItem(legacyKey);
-      if (!isSupportedLocale(legacyLocale)) {
-        continue;
-      }
-
-      window.localStorage.setItem(LOCALE_STORAGE_KEY, legacyLocale);
-      window.localStorage.removeItem(legacyKey);
-      return legacyLocale;
-    }
+    return isSupportedLocale(storedLocale) ? storedLocale : '';
   } catch {
     return '';
   }
-
-  return '';
 }
 
 export function resolvePreferredLocale(preferredLocale, storedLocale = readStoredLocale()) {

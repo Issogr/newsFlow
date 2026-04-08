@@ -43,24 +43,4 @@ describe('api service', () => {
       timeout: 30000
     });
   });
-
-  test('migrates legacy auth tokens to the newsflow storage key', () => {
-    window.localStorage.setItem('news-aggregator-token', 'legacy-token');
-
-    const { getAuthToken } = require('./api');
-
-    expect(getAuthToken()).toBe('legacy-token');
-    expect(window.localStorage.getItem('newsflow-token')).toBe('legacy-token');
-    expect(window.localStorage.getItem('news-aggregator-token')).toBeNull();
-  });
-
-  test('stores auth tokens only under the newsflow storage key', () => {
-    const { setAuthToken } = require('./api');
-
-    window.localStorage.setItem('news-aggregator-token', 'stale-token');
-    setAuthToken('fresh-token');
-
-    expect(window.localStorage.getItem('newsflow-token')).toBe('fresh-token');
-    expect(window.localStorage.getItem('news-aggregator-token')).toBeNull();
-  });
 });

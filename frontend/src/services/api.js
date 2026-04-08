@@ -1,31 +1,14 @@
 import axios from 'axios';
 
 const AUTH_TOKEN_STORAGE_KEY = 'newsflow-token';
-const LEGACY_AUTH_TOKEN_STORAGE_KEYS = ['news-aggregator-token'];
 const READER_REQUEST_TIMEOUT_MS = 30000;
 
 function readStoredAuthToken() {
   try {
-    const storedToken = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-    if (storedToken) {
-      return storedToken;
-    }
-
-    for (const legacyKey of LEGACY_AUTH_TOKEN_STORAGE_KEYS) {
-      const legacyToken = window.localStorage.getItem(legacyKey);
-      if (!legacyToken) {
-        continue;
-      }
-
-      window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, legacyToken);
-      window.localStorage.removeItem(legacyKey);
-      return legacyToken;
-    }
+    return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '';
   } catch {
     return '';
   }
-
-  return '';
 }
 
 let authToken = readStoredAuthToken();
@@ -73,10 +56,6 @@ export const setAuthToken = (token) => {
     } else {
       window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
     }
-
-    LEGACY_AUTH_TOKEN_STORAGE_KEYS.forEach((legacyKey) => {
-      window.localStorage.removeItem(legacyKey);
-    });
   } catch {
     // ignore storage failures and keep runtime state only
   }
