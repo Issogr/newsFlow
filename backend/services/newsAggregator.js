@@ -19,7 +19,7 @@ const {
   ingestSourceConfigs
 } = require('./newsAggregatorIngestion');
 
-const SCRAPE_INTERVAL_MS = parseInt(process.env.SCRAPE_INTERVAL_MS || '300000', 10);
+const SCRAPE_INTERVAL_MS = parseInt(process.env.SCRAPE_INTERVAL_MS || '900000', 10);
 
 let refreshPromise = null;
 let lastRefreshAt = null;

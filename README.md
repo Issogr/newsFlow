@@ -72,7 +72,7 @@ Feed ingestion and querying:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `SCRAPE_INTERVAL_MS` | `300000` | Scheduled ingestion interval in ms |
+| `SCRAPE_INTERVAL_MS` | `900000` | Scheduled ingestion interval in ms |
 | `ARTICLE_RETENTION_HOURS` | `24` | Article and reader-cache retention window in hours |
 | `MAX_ARTICLES_PER_SOURCE` | `25` | Max parsed items per feed |
 | `MAX_SCAN_ARTICLES` | `600` | Max scanned articles for grouped-query mode |
