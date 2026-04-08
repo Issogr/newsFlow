@@ -28,12 +28,13 @@ describe('auth session cleanup throttling', () => {
 
     jest.doMock('../services/database', () => databaseMock);
 
-    const auth = require('./auth');
+    jest.isolateModules(() => {
+      const auth = require('./auth');
 
-    auth._resetSessionCleanupState();
-    expect(auth.purgeExpiredSessionsIfNeeded(5 * 60 * 1000)).toBe(2);
-    expect(auth.purgeExpiredSessionsIfNeeded((5 * 60 * 1000) + 1_000)).toBe(0);
-    expect(auth.purgeExpiredSessionsIfNeeded(10 * 60 * 1000)).toBe(2);
-    expect(databaseMock.purgeExpiredSessions).toHaveBeenCalledTimes(2);
+      expect(auth.purgeExpiredSessionsIfNeeded(5 * 60 * 1000)).toBe(2);
+      expect(auth.purgeExpiredSessionsIfNeeded((5 * 60 * 1000) + 1_000)).toBe(0);
+      expect(auth.purgeExpiredSessionsIfNeeded(10 * 60 * 1000)).toBe(2);
+      expect(databaseMock.purgeExpiredSessions).toHaveBeenCalledTimes(2);
+    });
   });
 });

@@ -190,7 +190,6 @@ function createDatabaseSchema({ logger }) {
   }
 
   return {
-    CURRENT_SCHEMA_VERSION,
     initializeSchema,
     ensureSupportedSchema
   };

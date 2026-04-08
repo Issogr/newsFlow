@@ -78,9 +78,36 @@ function createSessionExpiryDate() {
   return new Date(Date.now() + (SESSION_TTL_DAYS * 24 * 60 * 60 * 1000)).toISOString();
 }
 
-function extractSessionToken(req) {
-  const headers = req.headers || {};
-  return extractBearerToken(headers.authorization) || headers['x-session-token'] || '';
+function resolveAuthenticatedSession({ headers = {}, authToken = '', touchActivitySeconds = USER_ACTIVITY_TOUCH_INTERVAL_SECONDS } = {}) {
+  purgeExpiredSessionsIfNeeded();
+
+  const sessionToken = String(authToken || '').trim()
+    || extractBearerToken(headers.authorization)
+    || String(headers['x-session-token'] || '').trim();
+
+  if (!sessionToken) {
+    throw createError(401, 'Authentication required', 'UNAUTHORIZED');
+  }
+
+  const session = database.findSessionByTokenHash(hashSessionToken(sessionToken));
+  if (!session || new Date(session.expiresAt) < new Date()) {
+    throw createError(401, 'Session expired or invalid', 'UNAUTHORIZED');
+  }
+
+  const user = {
+    id: session.userId,
+    username: session.username,
+    isAdmin: String(session.username || '').toLowerCase() === ADMIN_USERNAME,
+    sessionToken
+  };
+
+  database.touchUserActivity(user.id, new Date().toISOString(), touchActivitySeconds);
+
+  return {
+    sessionToken,
+    session,
+    user
+  };
 }
 
 function purgeExpiredSessionsIfNeeded(now = Date.now()) {
@@ -98,28 +125,16 @@ function purgeExpiredSessionsIfNeeded(now = Date.now()) {
 }
 
 function requireAuthenticatedUser(req, res, next) {
-  purgeExpiredSessionsIfNeeded();
-  const sessionToken = extractSessionToken(req);
+  try {
+    req.user = resolveAuthenticatedSession({
+      headers: req.headers || {},
+      touchActivitySeconds: USER_ACTIVITY_TOUCH_INTERVAL_SECONDS
+    }).user;
 
-  if (!sessionToken) {
-    return next(createError(401, 'Authentication required', 'UNAUTHORIZED'));
+    return next();
+  } catch (error) {
+    return next(error);
   }
-
-  const session = database.findSessionByTokenHash(hashSessionToken(sessionToken));
-  if (!session || new Date(session.expiresAt) < new Date()) {
-    return next(createError(401, 'Session expired or invalid', 'UNAUTHORIZED'));
-  }
-
-  req.user = {
-    id: session.userId,
-    username: session.username,
-    isAdmin: String(session.username || '').toLowerCase() === ADMIN_USERNAME,
-    sessionToken
-  };
-
-  database.touchUserActivity(req.user.id, new Date().toISOString(), USER_ACTIVITY_TOUCH_INTERVAL_SECONDS);
-
-  return next();
 }
 
 function requireAdminUser(req, res, next) {
@@ -134,21 +149,16 @@ function requireAdminUser(req, res, next) {
   return next();
 }
 
-function resetSessionCleanupState() {
-  lastSessionPurgeAt = 0;
-}
-
 module.exports = {
   requireAuthenticatedUser,
   requireAdminUser,
+  resolveAuthenticatedSession,
   purgeExpiredSessionsIfNeeded,
   extractBearerToken,
-  extractSessionToken,
   safeTokenCompare,
   hashPassword,
   verifyPassword,
   generateSessionToken,
   hashSessionToken,
-  createSessionExpiryDate,
-  _resetSessionCleanupState: resetSessionCleanupState
+  createSessionExpiryDate
 };

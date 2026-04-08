@@ -38,13 +38,15 @@ describe('websocketService', () => {
 
     socketFactory = jest.fn(() => ioMock);
     databaseMock = {
-      findSessionByTokenHash: jest.fn(),
       touchUserActivity: jest.fn()
     };
     authMock = {
-      extractBearerToken: jest.fn(() => ''),
-      hashSessionToken: jest.fn((token) => `hashed:${token}`),
-      purgeExpiredSessionsIfNeeded: jest.fn()
+      resolveAuthenticatedSession: jest.fn(() => ({
+        user: {
+          id: 'user-1',
+          username: 'alice'
+        }
+      }))
     };
 
     jest.doMock('socket.io', () => socketFactory);
@@ -72,16 +74,12 @@ describe('websocketService', () => {
     });
     const next = jest.fn();
 
-    databaseMock.findSessionByTokenHash.mockReturnValue({
-      userId: 'user-1',
-      username: 'alice',
-      expiresAt: '2999-01-01T00:00:00.000Z'
-    });
-
     ioMock.middleware(socket, next);
 
-    expect(authMock.purgeExpiredSessionsIfNeeded).toHaveBeenCalled();
-    expect(authMock.hashSessionToken).toHaveBeenCalledWith('session-token');
+    expect(authMock.resolveAuthenticatedSession).toHaveBeenCalledWith(expect.objectContaining({
+      authToken: 'session-token',
+      touchActivitySeconds: 60
+    }));
     expect(socket.data).toMatchObject({ userId: 'user-1', username: 'alice' });
     expect(next).toHaveBeenCalledWith();
   });
@@ -93,9 +91,13 @@ describe('websocketService', () => {
     });
     const next = jest.fn();
 
+    authMock.resolveAuthenticatedSession.mockImplementation(() => {
+      throw new Error('Authentication required');
+    });
+
     ioMock.middleware(socket, next);
 
-    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Authentication required' }));
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'WebSocket auth failed: Authentication required' }));
   });
 
   test('broadcasts news only to matching sockets', () => {

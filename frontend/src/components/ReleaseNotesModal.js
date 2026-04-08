@@ -1,16 +1,10 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Github, Sparkles, X } from 'lucide-react';
 import { PROJECT_GITHUB_URL } from '../config/projectLinks';
+import useLockBodyScroll from '../hooks/useLockBodyScroll';
 
 const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss }) => {
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, []);
+  useLockBodyScroll();
 
   return (
     <div className="fixed inset-0 z-[60] flex items-stretch justify-center overflow-y-auto bg-slate-950/45 px-0 py-0 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6">

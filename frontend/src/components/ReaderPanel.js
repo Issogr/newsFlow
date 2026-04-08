@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { fetchReaderArticle, isRequestCanceled, updateUserSettings } from '../services/api';
 import useLatestRequest from '../hooks/useLatestRequest';
+import useLockBodyScroll from '../hooks/useLockBodyScroll';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { shareArticleUrl } from '../utils/shareArticle';
 import ShareStatusBubble from './ShareStatusBubble';
@@ -100,6 +101,8 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
     setReaderTextSize(getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   }, [currentUser?.settings?.readerTextSize]);
 
+  useLockBodyScroll();
+
   useEffect(() => {
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
@@ -107,12 +110,9 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
       }
     };
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', handleEscape);
 
     return () => {
-      document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', handleEscape);
     };
   }, [onClose]);

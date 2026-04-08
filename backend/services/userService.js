@@ -2,6 +2,12 @@ const crypto = require('crypto');
 const database = require('./database');
 const rssParser = require('./rssParser');
 const { createError } = require('../utils/errorHandler');
+const {
+  MAX_FEEDBACK_DESCRIPTION_LENGTH,
+  MAX_FEEDBACK_IMAGE_BYTES,
+  MAX_FEEDBACK_TITLE_LENGTH,
+  MAX_FEEDBACK_VIDEO_BYTES,
+} = require('../utils/feedback');
 const { getConfiguredSourceGroupIds, getGroupedConfiguredSourceIds } = require('../utils/sourceCatalog');
 const {
   hashPassword,
@@ -224,7 +230,11 @@ function buildAuthResponse(user, sessionToken) {
 function getUserLimits() {
   return {
     articleRetentionHoursMax: GLOBAL_RETENTION_HOURS,
-    recentHoursMax: MAX_RECENT_HOURS
+    recentHoursMax: MAX_RECENT_HOURS,
+    feedbackTitleMaxLength: MAX_FEEDBACK_TITLE_LENGTH,
+    feedbackDescriptionMaxLength: MAX_FEEDBACK_DESCRIPTION_LENGTH,
+    feedbackImageMaxBytes: MAX_FEEDBACK_IMAGE_BYTES,
+    feedbackVideoMaxBytes: MAX_FEEDBACK_VIDEO_BYTES
   };
 }
 

@@ -1,7 +1,7 @@
 const logger = require('../utils/logger');
 const { getAllowedOrigins, isOriginAllowed } = require('../utils/networkConfig');
 const database = require('./database');
-const { extractBearerToken, hashSessionToken, purgeExpiredSessionsIfNeeded } = require('../utils/auth');
+const { resolveAuthenticatedSession } = require('../utils/auth');
 
 let io;
 let websocketStartTime = Date.now();
@@ -62,29 +62,15 @@ function initialize(server) {
 
   io.use((socket, next) => {
     try {
-      purgeExpiredSessionsIfNeeded();
-
       const auth = socket.handshake?.auth || {};
-      const headers = socket.handshake?.headers || {};
-      const tokenFromAuth = typeof auth.token === 'string' ? auth.token.trim() : '';
-      const tokenFromBearer = extractBearerToken(headers.authorization);
-      const tokenFromHeader = typeof headers['x-session-token'] === 'string' ? headers['x-session-token'].trim() : '';
-      const sessionToken = tokenFromAuth || tokenFromBearer || tokenFromHeader;
+      const { user } = resolveAuthenticatedSession({
+        headers: socket.handshake?.headers || {},
+        authToken: auth.token,
+        touchActivitySeconds: 60
+      });
 
-      if (!sessionToken) {
-        next(new Error('Authentication required'));
-        return;
-      }
-
-      const session = database.findSessionByTokenHash(hashSessionToken(sessionToken));
-      if (!session || new Date(session.expiresAt) < new Date()) {
-        next(new Error('Invalid session'));
-        return;
-      }
-
-      socket.data.userId = session.userId;
-      socket.data.username = session.username;
-      database.touchUserActivity(session.userId, new Date().toISOString(), 60);
+      socket.data.userId = user.id;
+      socket.data.username = user.username;
       next();
     } catch (error) {
       next(new Error(`WebSocket auth failed: ${error.message}`));

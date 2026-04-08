@@ -104,7 +104,11 @@ describe('API auth and user flows', () => {
       },
       limits: {
         articleRetentionHoursMax: 24,
-        recentHoursMax: 3
+        recentHoursMax: 3,
+        feedbackTitleMaxLength: 120,
+        feedbackDescriptionMaxLength: 2800,
+        feedbackImageMaxBytes: 5242880,
+        feedbackVideoMaxBytes: 12582912
       },
       customSources: []
     });
@@ -319,7 +323,11 @@ describe('API auth and user flows', () => {
     expect(currentUserResponse.body.settings).toEqual(updateResponse.body.settings);
     expect(currentUserResponse.body.limits).toEqual({
       articleRetentionHoursMax: 24,
-      recentHoursMax: 3
+      recentHoursMax: 3,
+      feedbackTitleMaxLength: 120,
+      feedbackDescriptionMaxLength: 2800,
+      feedbackImageMaxBytes: 5242880,
+      feedbackVideoMaxBytes: 12582912
     });
   });
 

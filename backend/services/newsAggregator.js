@@ -8,12 +8,6 @@ const {
   getNewsFeed: buildNewsFeed
 } = require('./newsAggregatorQuery');
 const {
-  buildStableGroupId,
-  calculateSimilarity,
-  groupSimilarNews,
-  insertArticleIntoGroups
-} = require('./newsAggregatorGrouping');
-const {
   purgeExpiredArticles,
   createEmptyRefreshPayload,
   ingestSourceConfigs
@@ -159,9 +153,5 @@ module.exports = {
   getNewsFeed,
   startScheduler,
   stopScheduler,
-  newsSources,
-  _groupSimilarNews: groupSimilarNews,
-  _buildStableGroupId: buildStableGroupId,
-  _calculateSimilarity: calculateSimilarity,
-  _insertArticleIntoGroups: insertArticleIntoGroups
+  newsSources
 };
