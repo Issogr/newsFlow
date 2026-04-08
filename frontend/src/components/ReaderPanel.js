@@ -261,24 +261,24 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
       <div className={`relative flex h-full w-full ${desktopPositionClassName}`}>
         <section className="flex h-full w-full flex-col bg-slate-50 shadow-2xl lg:my-4 lg:w-[min(72rem,calc(100vw-2.5rem))] lg:overflow-hidden lg:rounded-[2rem] lg:border lg:border-slate-200/80">
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-200/80 bg-white/85 px-5 py-4 backdrop-blur-md md:px-6">
-            <div className="relative inline-flex items-center">
-              <ShareStatusBubble
-                shareState={shareState}
-                t={t}
-                className="share-status-pill-from-button mr-2 max-w-[min(18rem,calc(100vw-6rem))]"
-              />
-              <button
-                type="button"
-                onClick={handleShare}
-                disabled={!safeOriginalUrl}
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
-                aria-label={t('shareArticle')}
-              >
-                <Share2 className="h-4 w-4" />
-              </button>
-            </div>
-
             <div className="flex items-center gap-2">
+              <div className="relative inline-flex items-center">
+                <ShareStatusBubble
+                  shareState={shareState}
+                  t={t}
+                  className="share-status-pill-from-button mr-2 max-w-[min(18rem,calc(100vw-6rem))]"
+                />
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  disabled={!safeOriginalUrl}
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-label={t('shareArticle')}
+                >
+                  <Share2 className="h-4 w-4" />
+                </button>
+              </div>
+
               <div className="flex h-11 items-center gap-1 rounded-full border border-stone-300 bg-white px-1.5 shadow-sm">
                 <button
                   type="button"
@@ -307,6 +307,9 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
                   +
                 </button>
               </div>
+            </div>
+
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={onClose}
