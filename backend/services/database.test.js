@@ -69,7 +69,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('17');
+    expect(migrationVersion).toBe('18');
     expect(articleColumns).toContain('canonical_url');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
@@ -77,6 +77,7 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('auto_refresh_enabled');
     expect(settingsColumns).toContain('show_news_images');
     expect(settingsColumns).toContain('compact_news_cards');
+    expect(settingsColumns).toContain('compact_news_cards_mode');
     expect(settingsColumns).toContain('reader_text_size');
     expect(settingsColumns).toContain('reader_panel_position');
     expect(settingsColumns).toContain('last_seen_release_notes_version');
@@ -129,6 +130,7 @@ describe('database migrations', () => {
         recent_hours INTEGER NOT NULL DEFAULT 3,
         auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
         show_news_images INTEGER NOT NULL DEFAULT 1,
+        compact_news_cards INTEGER NOT NULL DEFAULT 0,
         reader_panel_position TEXT NOT NULL DEFAULT 'right',
         reader_text_size TEXT NOT NULL DEFAULT 'medium',
         last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
@@ -159,7 +161,7 @@ describe('database migrations', () => {
         used_at TEXT
       );
 
-       INSERT INTO app_meta (key, value) VALUES ('migration_version', '16');
+       INSERT INTO app_meta (key, value) VALUES ('migration_version', '17');
        INSERT INTO articles (id, source_id, source_name, title, canonical_url) VALUES ('article-1', 'ansa', 'ANSA', 'Headline', 'https://example.com/story');
        INSERT INTO article_topics (article_id, topic) VALUES ('article-1', 'economy');
     `);
@@ -192,9 +194,10 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('17');
+    expect(migratedVersion).toBe('18');
     expect(settingsColumns).toContain('show_news_images');
     expect(settingsColumns).toContain('compact_news_cards');
+    expect(settingsColumns).toContain('compact_news_cards_mode');
     expect(settingsColumns).toContain('reader_text_size');
     expect(settingsColumns).toContain('theme_mode');
     expect(userColumns).toContain('role');
@@ -437,6 +440,7 @@ describe('database queries and user data', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       compactNewsCards: true,
+      compactNewsCardsMode: 'everywhere',
       readerPanelPosition: 'left',
       readerTextSize: 'large',
       lastSeenReleaseNotesVersion: '3.2.3',
@@ -451,6 +455,7 @@ describe('database queries and user data', () => {
       recentHours: 2,
       autoRefreshEnabled: false,
       compactNewsCards: true,
+      compactNewsCardsMode: 'everywhere',
       readerPanelPosition: 'left',
       readerTextSize: 'large',
       lastSeenReleaseNotesVersion: '3.2.3',

@@ -36,6 +36,20 @@ const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 const BACK_TO_TOP_THRESHOLD = 280;
+const COMPACT_CARD_DESKTOP_QUERY = '(min-width: 768px)';
+
+function resolveCompactNewsCardsEnabled(mode, isDesktop) {
+  switch (mode) {
+    case 'mobile':
+      return !isDesktop;
+    case 'desktop':
+      return isDesktop;
+    case 'everywhere':
+      return true;
+    default:
+      return false;
+  }
+}
 
 const mergeGroups = (primaryGroups, secondaryGroups) => {
   const merged = new Map();
@@ -63,7 +77,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const preferredLanguage = currentUser?.settings?.defaultLanguage;
   const autoRefreshEnabled = currentUser?.settings?.autoRefreshEnabled !== false;
   const showNewsImages = currentUser?.settings?.showNewsImages !== false;
-  const compactNewsCards = currentUser?.settings?.compactNewsCards === true;
+  const compactNewsCardsMode = currentUser?.settings?.compactNewsCardsMode
+    || (currentUser?.settings?.compactNewsCards ? 'everywhere' : 'off');
+  const [isDesktopViewport, setIsDesktopViewport] = useState(() => {
+    if (typeof window.matchMedia !== 'function') {
+      return true;
+    }
+
+    return window.matchMedia(COMPACT_CARD_DESKTOP_QUERY).matches;
+  });
+  const compactNewsCards = resolveCompactNewsCardsEnabled(compactNewsCardsMode, isDesktopViewport);
   const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
   const t = useMemo(() => createTranslator(locale), [locale]);
   const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
@@ -116,6 +139,24 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     return getSourceReloadSignature(excludedSourceIds, excludedSubSourceIds, currentUser?.customSources || []);
   }, [currentUser?.customSources, excludedSourceIds, excludedSubSourceIds]);
   const sourceReloadSignatureRef = useRef(sourceReloadSignature);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia(COMPACT_CARD_DESKTOP_QUERY);
+    const handleChange = (event) => {
+      setIsDesktopViewport(event.matches);
+    };
+
+    setIsDesktopViewport(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleChange);
+
+    return () => {
+      mediaQuery.removeEventListener('change', handleChange);
+    };
+  }, []);
   const visibleAvailableSources = useMemo(() => {
     return availableSources.filter((source) => !excludedSourceIds.includes(source.id));
   }, [availableSources, excludedSourceIds]);

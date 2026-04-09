@@ -15,7 +15,7 @@ const SettingsPreferencesSection = ({
   onThemeModeChange,
   onAutoRefreshChange,
   onShowNewsImagesChange,
-  onCompactNewsCardsChange,
+  onCompactNewsCardsModeChange,
   onReaderPanelPositionChange,
   onReaderTextSizeChange,
   onNumericSettingChange,
@@ -196,36 +196,22 @@ const SettingsPreferencesSection = ({
           </button>
         </div>
 
-        <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-700">
-            <RectangleHorizontal className="h-4 w-4 shrink-0 text-cyan-600" />
-            <span>{t('compactNewsCardsSetting')}</span>
+        <label className="block">
+          <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <RectangleHorizontal className="h-4 w-4 text-cyan-600" />
+            {t('compactNewsCardsSetting')}
           </span>
-          <button
-            type="button"
-            onClick={() => onCompactNewsCardsChange(settings.compactNewsCards !== true)}
-            aria-pressed={settings.compactNewsCards === true}
-            className={`inline-grid shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${
-              settings.compactNewsCards === true
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
-            }`}
+          <select
+            value={settings.compactNewsCardsMode || 'off'}
+            onChange={(event) => onCompactNewsCardsModeChange(event.target.value)}
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
           >
-            <span className="invisible col-start-1 row-start-1 flex items-center justify-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full" aria-hidden="true" />
-              <span>{toggleWidthLabel}</span>
-            </span>
-            <span className="col-start-1 row-start-1 flex items-center justify-center gap-2">
-              <span
-                className={`h-2.5 w-2.5 rounded-full ${
-                  settings.compactNewsCards === true ? 'bg-emerald-500' : 'bg-slate-300'
-                }`}
-                aria-hidden="true"
-              />
-              <span>{settings.compactNewsCards === true ? activeLabel : disabledLabel}</span>
-            </span>
-          </button>
-        </div>
+            <option value="off">{t('compactNewsCardsModeOff')}</option>
+            <option value="mobile">{t('compactNewsCardsModeMobile')}</option>
+            <option value="desktop">{t('compactNewsCardsModeDesktop')}</option>
+            <option value="everywhere">{t('compactNewsCardsModeEverywhere')}</option>
+          </select>
+        </label>
 
         <div className="border-t border-slate-200 pt-5 md:col-span-2">
           <div className="mb-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">

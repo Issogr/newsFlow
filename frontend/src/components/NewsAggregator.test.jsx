@@ -78,6 +78,7 @@ const currentUser = {
     autoRefreshEnabled: true,
     showNewsImages: true,
     compactNewsCards: false,
+    compactNewsCardsMode: 'off',
     readerPanelPosition: 'right',
     readerTextSize: 'medium',
     excludedSourceIds: [],
@@ -93,6 +94,8 @@ const currentUser = {
 };
 
 describe('NewsAggregator', () => {
+  let desktopMediaQuery;
+
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
@@ -102,6 +105,12 @@ describe('NewsAggregator', () => {
       configurable: true
     });
     window.scrollTo = jest.fn();
+    desktopMediaQuery = {
+      matches: true,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn()
+    };
+    window.matchMedia = jest.fn().mockImplementation(() => desktopMediaQuery);
     useWebSocket.mockReturnValue({
       isConnected: true,
       notifications: [],
@@ -260,12 +269,34 @@ describe('NewsAggregator', () => {
         ...currentUser,
         settings: {
           ...currentUser.settings,
-          compactNewsCards: true
+          compactNewsCards: true,
+          compactNewsCardsMode: 'desktop'
         }
       }
     });
 
     expect(await screen.findByText('First headline compact')).toBeInTheDocument();
+  });
+
+  test('keeps standard cards when compact mode is mobile-only on desktop', async () => {
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'First headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    await renderNewsAggregator({
+      currentUser: {
+        ...currentUser,
+        settings: {
+          ...currentUser.settings,
+          compactNewsCardsMode: 'mobile'
+        }
+      }
+    });
+
+    expect(await screen.findByText('First headline')).toBeInTheDocument();
+    expect(screen.queryByText('First headline compact')).not.toBeInTheDocument();
   });
 
   test('marks already visible groups as seen after loading news', async () => {

@@ -14,8 +14,15 @@ import { getStoredReaderTextSizePreference, setStoredReaderTextSizePreference } 
 
 const createInitialSourceForm = () => ({ url: '' });
 const createInitialEditingSourceForm = () => ({ name: '', url: '', language: 'it' });
+const normalizeCompactNewsCardsMode = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return ['off', 'mobile', 'desktop', 'everywhere'].includes(normalized) ? normalized : 'off';
+};
 const getInitialSettings = (currentUser) => ({
   ...currentUser.settings,
+  compactNewsCardsMode: normalizeCompactNewsCardsMode(
+    currentUser?.settings?.compactNewsCardsMode || (currentUser?.settings?.compactNewsCards ? 'everywhere' : 'off')
+  ),
   readerTextSize: getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize)
 });
 
@@ -131,10 +138,11 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     }));
   }, []);
 
-  const setCompactNewsCards = useCallback((value) => {
+  const setCompactNewsCardsMode = useCallback((value) => {
     setSettings((current) => ({
       ...current,
-      compactNewsCards: Boolean(value)
+      compactNewsCardsMode: normalizeCompactNewsCardsMode(value),
+      compactNewsCards: normalizeCompactNewsCardsMode(value) !== 'off'
     }));
   }, []);
 
@@ -329,7 +337,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     setThemeMode,
     setAutoRefreshEnabled,
     setShowNewsImages,
-    setCompactNewsCards,
+    setCompactNewsCardsMode,
     setReaderPanelPosition,
     setReaderTextSize,
     updateNumericSetting,

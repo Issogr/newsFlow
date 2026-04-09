@@ -32,6 +32,7 @@ function createUserStateRepository({ getDb }) {
              auto_refresh_enabled AS autoRefreshEnabled,
              show_news_images AS showNewsImages,
              compact_news_cards AS compactNewsCards,
+             compact_news_cards_mode AS compactNewsCardsMode,
              reader_panel_position AS readerPanelPosition,
              reader_text_size AS readerTextSize,
              last_seen_release_notes_version AS lastSeenReleaseNotesVersion,
@@ -51,6 +52,7 @@ function createUserStateRepository({ getDb }) {
         autoRefreshEnabled: Boolean(row.autoRefreshEnabled),
         showNewsImages: row.showNewsImages !== false && row.showNewsImages !== 0,
         compactNewsCards: Boolean(row.compactNewsCards),
+        compactNewsCardsMode: row.compactNewsCardsMode || (row.compactNewsCards ? 'everywhere' : 'off'),
         excludedSourceIds: parseJsonArray(row.excludedSourceIds),
         excludedSubSourceIds: parseJsonArray(row.excludedSubSourceIds)
       };
@@ -69,13 +71,14 @@ function createUserStateRepository({ getDb }) {
         auto_refresh_enabled,
         show_news_images,
         compact_news_cards,
+        compact_news_cards_mode,
         reader_panel_position,
         reader_text_size,
         last_seen_release_notes_version,
         default_source_ids,
         excluded_sub_source_ids,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         default_language = excluded.default_language,
         theme_mode = excluded.theme_mode,
@@ -84,6 +87,7 @@ function createUserStateRepository({ getDb }) {
         auto_refresh_enabled = excluded.auto_refresh_enabled,
         show_news_images = excluded.show_news_images,
         compact_news_cards = excluded.compact_news_cards,
+        compact_news_cards_mode = excluded.compact_news_cards_mode,
         reader_panel_position = excluded.reader_panel_position,
         reader_text_size = excluded.reader_text_size,
         last_seen_release_notes_version = excluded.last_seen_release_notes_version,
@@ -98,7 +102,8 @@ function createUserStateRepository({ getDb }) {
       settings.recentHours || 3,
       settings.autoRefreshEnabled === false ? 0 : 1,
       settings.showNewsImages === false ? 0 : 1,
-      settings.compactNewsCards ? 1 : 0,
+      settings.compactNewsCardsMode && settings.compactNewsCardsMode !== 'off' ? 1 : 0,
+      settings.compactNewsCardsMode || 'off',
       settings.readerPanelPosition || 'right',
       settings.readerTextSize || 'medium',
       settings.lastSeenReleaseNotesVersion || '',
@@ -300,13 +305,14 @@ function createUserStateRepository({ getDb }) {
         auto_refresh_enabled,
         show_news_images,
         compact_news_cards,
+        compact_news_cards_mode,
         reader_panel_position,
         reader_text_size,
         last_seen_release_notes_version,
         default_source_ids,
         excluded_sub_source_ids,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         default_language = excluded.default_language,
         theme_mode = excluded.theme_mode,
@@ -315,6 +321,7 @@ function createUserStateRepository({ getDb }) {
         auto_refresh_enabled = excluded.auto_refresh_enabled,
         show_news_images = excluded.show_news_images,
         compact_news_cards = excluded.compact_news_cards,
+        compact_news_cards_mode = excluded.compact_news_cards_mode,
         reader_panel_position = excluded.reader_panel_position,
         reader_text_size = excluded.reader_text_size,
         last_seen_release_notes_version = excluded.last_seen_release_notes_version,
@@ -363,7 +370,8 @@ function createUserStateRepository({ getDb }) {
         nextSettings.recentHours || 3,
         nextSettings.autoRefreshEnabled === false ? 0 : 1,
         nextSettings.showNewsImages === false ? 0 : 1,
-        nextSettings.compactNewsCards ? 1 : 0,
+        nextSettings.compactNewsCardsMode && nextSettings.compactNewsCardsMode !== 'off' ? 1 : 0,
+        nextSettings.compactNewsCardsMode || 'off',
         nextSettings.readerPanelPosition || 'right',
         nextSettings.readerTextSize || 'medium',
         nextSettings.lastSeenReleaseNotesVersion || '',

@@ -29,6 +29,7 @@ const baseCurrentUser = {
     autoRefreshEnabled: true,
     showNewsImages: true,
     compactNewsCards: false,
+    compactNewsCardsMode: 'off',
     readerPanelPosition: 'right',
     readerTextSize: 'medium',
     lastSeenReleaseNotesVersion: '',
