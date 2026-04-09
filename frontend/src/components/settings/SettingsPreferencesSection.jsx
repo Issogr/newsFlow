@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock3, Download, Globe2, Image as ImageIcon, KeyRound, MonitorSmartphone, PanelRightOpen, Radio, RefreshCw, TimerReset, Type, Upload } from 'lucide-react';
+import { Clock3, Download, ExternalLink, Globe2, Image as ImageIcon, KeyRound, MonitorSmartphone, PanelRightOpen, Radio, RefreshCw, TimerReset, Type, Upload } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORDER } from '../../config/readerTextSize';
 
@@ -189,6 +189,15 @@ const SettingsPreferencesSection = ({
                   {t('apiTokenTitle')}
                 </p>
                 <p className="text-sm text-slate-600">{t('apiTokenHelp')}</p>
+                <a
+                  href="/api"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-sky-700 transition-colors hover:text-sky-800"
+                >
+                  <span>{t('apiTokenDocsLink')}</span>
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                </a>
                 <p className="text-xs text-slate-500">{t('apiTokenExpiryHelp', { days: settingsLimits.apiTokenTtlDays || 30 })}</p>
                 {apiToken ? (
                   <div className="space-y-1 text-xs text-slate-500">
