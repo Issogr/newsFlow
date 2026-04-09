@@ -5,17 +5,20 @@ const newsService = require('../services/newsAggregator');
 const readerService = require('../services/readerService');
 const userService = require('../services/userService');
 const feedbackService = require('../services/feedbackService');
+const {
+  FEEDBACK_CATEGORIES,
+  MAX_FEEDBACK_ATTACHMENT_BYTES,
+  MAX_FEEDBACK_DESCRIPTION_LENGTH,
+  MAX_FEEDBACK_IMAGE_BYTES,
+  MAX_FEEDBACK_TITLE_LENGTH,
+  MAX_FEEDBACK_VIDEO_BYTES,
+  getFeedbackAttachmentType,
+} = require('../utils/feedback');
 const { asyncHandler, createError } = require('../utils/errorHandler');
 const { sanitizeParam, sanitizeQuery, validateParam, sanitizeBody } = require('../utils/inputValidator');
 const { requireAuthenticatedUser, requireAdminUser } = require('../utils/auth');
 
 const router = express.Router();
-const MAX_FEEDBACK_IMAGE_BYTES = 5 * 1024 * 1024;
-const MAX_FEEDBACK_VIDEO_BYTES = 12 * 1024 * 1024;
-const MAX_FEEDBACK_ATTACHMENT_BYTES = MAX_FEEDBACK_VIDEO_BYTES;
-const MAX_FEEDBACK_TITLE_LENGTH = 120;
-const MAX_FEEDBACK_DESCRIPTION_LENGTH = 2800;
-const ALLOWED_FEEDBACK_CATEGORIES = new Set(['bug', 'feedback', 'idea']);
 
 const feedbackRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -47,20 +50,6 @@ const feedbackUpload = multer({
     callback(createError(400, 'Please attach an image or a small video.', 'INVALID_FEEDBACK_IMAGE'));
   },
 });
-
-function getFeedbackAttachmentType(file) {
-  const mimeType = String(file?.mimetype || '');
-
-  if (mimeType.startsWith('image/')) {
-    return 'image';
-  }
-
-  if (mimeType.startsWith('video/')) {
-    return 'video';
-  }
-
-  return null;
-}
 
 function validateFeedbackAttachment(file) {
   if (!file) {
@@ -180,6 +169,23 @@ router.get('/me', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   res.json(userService.getCurrentUser(req.user.id));
 }));
 
+router.get('/me/api-token', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+  res.json({ apiToken: userService.getUserApiToken(req.user.id) });
+}));
+
+router.post('/me/api-token', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+  const result = userService.createUserApiToken(req.user.id, {
+    label: req.body?.label,
+    createdByIp: req.ip
+  });
+  res.status(201).json(result);
+}));
+
+router.delete('/me/api-token', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+  userService.revokeUserApiToken(req.user.id);
+  res.json({ success: true, apiToken: null });
+}));
+
 router.patch('/me/settings', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   const settings = userService.updateUserSettings(req.user.id, req.body || {});
   res.json({ success: true, settings });
@@ -190,7 +196,7 @@ router.post('/me/feedback', [requireAuthenticatedUser, feedbackRateLimit, handle
   const title = String(req.body?.title || '').trim();
   const description = String(req.body?.description || '').trim();
 
-  if (!ALLOWED_FEEDBACK_CATEGORIES.has(category)) {
+  if (!FEEDBACK_CATEGORIES.has(category)) {
     throw createError(400, 'Please choose a valid feedback category.', 'INVALID_FEEDBACK_PAYLOAD');
   }
 

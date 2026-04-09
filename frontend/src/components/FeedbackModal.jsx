@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Bug, CheckCircle2, ImagePlus, Lightbulb, MessageSquare, Paperclip, Send, Trash2, X } from 'lucide-react';
 import { submitFeedback } from '../services/api';
+import useLockBodyScroll from '../hooks/useLockBodyScroll';
 
-const MAX_TITLE_LENGTH = 120;
-const MAX_DESCRIPTION_LENGTH = 2800;
-const MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024;
-const MAX_VIDEO_ATTACHMENT_BYTES = 12 * 1024 * 1024;
+const DEFAULT_MAX_TITLE_LENGTH = 120;
+const DEFAULT_MAX_DESCRIPTION_LENGTH = 2800;
+const DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const DEFAULT_MAX_VIDEO_ATTACHMENT_BYTES = 12 * 1024 * 1024;
 const FEEDBACK_FORM_ID = 'feedback-form';
 const FEEDBACK_CATEGORIES = [
   { id: 'bug', icon: Bug, badgeClassName: 'bg-rose-100 text-rose-700', ringClassName: 'border-rose-200 bg-rose-50' },
@@ -35,11 +36,11 @@ function formatAttachmentSize(bytes) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-function getAttachmentValidationError(nextAttachment, t) {
+function getAttachmentValidationError(nextAttachment, t, limits) {
   const mimeType = String(nextAttachment?.type || '');
 
   if (mimeType.startsWith('image/')) {
-    if (nextAttachment.size > MAX_IMAGE_ATTACHMENT_BYTES) {
+    if (nextAttachment.size > limits.feedbackImageMaxBytes) {
       return t('feedbackErrorImageTooLarge');
     }
 
@@ -47,7 +48,7 @@ function getAttachmentValidationError(nextAttachment, t) {
   }
 
   if (mimeType.startsWith('video/')) {
-    if (nextAttachment.size > MAX_VIDEO_ATTACHMENT_BYTES) {
+    if (nextAttachment.size > limits.feedbackVideoMaxBytes) {
       return t('feedbackErrorVideoTooLarge');
     }
 
@@ -57,7 +58,13 @@ function getAttachmentValidationError(nextAttachment, t) {
   return t('feedbackErrorAttachmentType');
 }
 
-const FeedbackModal = ({ t, onClose }) => {
+const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
+  const limits = {
+    feedbackTitleMaxLength: feedbackLimits?.feedbackTitleMaxLength || DEFAULT_MAX_TITLE_LENGTH,
+    feedbackDescriptionMaxLength: feedbackLimits?.feedbackDescriptionMaxLength || DEFAULT_MAX_DESCRIPTION_LENGTH,
+    feedbackImageMaxBytes: feedbackLimits?.feedbackImageMaxBytes || DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES,
+    feedbackVideoMaxBytes: feedbackLimits?.feedbackVideoMaxBytes || DEFAULT_MAX_VIDEO_ATTACHMENT_BYTES,
+  };
   const [category, setCategory] = useState('bug');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -88,7 +95,7 @@ const FeedbackModal = ({ t, onClose }) => {
       return {
         text: t('feedbackAttachmentStatusImage', {
           size: formatAttachmentSize(attachment.size),
-          limit: formatAttachmentSize(MAX_IMAGE_ATTACHMENT_BYTES),
+          limit: formatAttachmentSize(limits.feedbackImageMaxBytes),
         }),
         className: 'text-emerald-600',
       };
@@ -98,7 +105,7 @@ const FeedbackModal = ({ t, onClose }) => {
       return {
         text: t('feedbackAttachmentStatusVideo', {
           size: formatAttachmentSize(attachment.size),
-          limit: formatAttachmentSize(MAX_VIDEO_ATTACHMENT_BYTES),
+          limit: formatAttachmentSize(limits.feedbackVideoMaxBytes),
         }),
         className: 'text-emerald-600',
       };
@@ -108,16 +115,9 @@ const FeedbackModal = ({ t, onClose }) => {
       text: t('feedbackImageHelp'),
       className: 'text-slate-500',
     };
-  }, [attachment, attachmentType, t]);
+  }, [attachment, attachmentType, limits.feedbackImageMaxBytes, limits.feedbackVideoMaxBytes, t]);
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, []);
+  useLockBodyScroll();
 
   useEffect(() => {
     if (!attachment) {
@@ -151,7 +151,7 @@ const FeedbackModal = ({ t, onClose }) => {
     }
 
     if (attachment) {
-      const attachmentError = getAttachmentValidationError(attachment, t);
+      const attachmentError = getAttachmentValidationError(attachment, t, limits);
       if (attachmentError) {
         setError(attachmentError);
         return;
@@ -249,38 +249,38 @@ const FeedbackModal = ({ t, onClose }) => {
               <label className="block">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <span className="text-sm font-medium text-slate-700">{t('feedbackFieldTitle')}</span>
-                  <span className="text-xs text-slate-400">{title.trim().length}/{MAX_TITLE_LENGTH}</span>
+                  <span className="text-xs text-slate-400">{title.trim().length}/{limits.feedbackTitleMaxLength}</span>
                 </div>
                 <input
                   type="text"
                   value={title}
                   onChange={(event) => {
-                    setTitle(event.target.value.slice(0, MAX_TITLE_LENGTH));
+                    setTitle(event.target.value.slice(0, limits.feedbackTitleMaxLength));
                     setError('');
                   }}
                   placeholder={t('feedbackTitlePlaceholder')}
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition-colors focus:border-slate-400"
                   required
                   minLength={3}
-                  maxLength={MAX_TITLE_LENGTH}
+                  maxLength={limits.feedbackTitleMaxLength}
                 />
               </label>
 
               <label className="block">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <span className="text-sm font-medium text-slate-700">{t('feedbackFieldDescription')}</span>
-                  <span className="text-xs text-slate-400">{description.trim().length}/{MAX_DESCRIPTION_LENGTH}</span>
+                  <span className="text-xs text-slate-400">{description.trim().length}/{limits.feedbackDescriptionMaxLength}</span>
                 </div>
                 <textarea
                   value={description}
                   onChange={(event) => {
-                    setDescription(event.target.value.slice(0, MAX_DESCRIPTION_LENGTH));
+                    setDescription(event.target.value.slice(0, limits.feedbackDescriptionMaxLength));
                     setError('');
                   }}
                   placeholder={t('feedbackDescriptionPlaceholder')}
                   className="min-h-44 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition-colors focus:border-slate-400"
                   required
-                  maxLength={MAX_DESCRIPTION_LENGTH}
+                  maxLength={limits.feedbackDescriptionMaxLength}
                 />
               </label>
 
@@ -300,7 +300,7 @@ const FeedbackModal = ({ t, onClose }) => {
                       className="hidden"
                       onChange={(event) => {
                         const nextAttachment = event.target.files?.[0] || null;
-                        const attachmentError = nextAttachment ? getAttachmentValidationError(nextAttachment, t) : '';
+                         const attachmentError = nextAttachment ? getAttachmentValidationError(nextAttachment, t, limits) : '';
 
                         if (attachmentError) {
                           setAttachment(null);

@@ -267,7 +267,6 @@ async function fetchSafeTextUrl(rawUrl, requestConfig = {}) {
 module.exports = {
   assertSafeOutboundUrl,
   fetchSafeTextUrl,
-  _resolveSafeOutboundTarget: resolveSafeOutboundTarget,
   _normalizeHostname: normalizeHostname,
   _isPrivateAddress: isPrivateAddress
 };

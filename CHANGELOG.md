@@ -1,5 +1,30 @@
 # Changelog
 
+## 3.2.9
+
+- removed permanently disabled grouping code, unused exports, stale translation keys, and generated frontend build artifacts so the repository and runtime paths are easier to maintain
+- consolidated duplicated feedback validation and attachment handling into shared helpers, and aligned frontend feedback limits with backend-defined settings payloads
+- unified authenticated session resolution across HTTP and WebSocket paths to reduce drift between token parsing, expiry checks, and activity tracking
+- migrated the frontend from `react-scripts` to a Vite + Vitest toolchain, renamed JSX-bearing files to `.jsx`, replaced CRA-specific entry handling, and updated tests to run on the new stack
+- upgraded backend `@mozilla/readability` to the current supported release and cleared the remaining backend audit advisory without changing reader-service behavior
+- upgraded the frontend Vite/Vitest stack to current compatible releases, added explicit `esbuild` support for the temporary JSX compatibility transform, then replaced the deprecated transform path with the native OXC-based flow
+- updated Docker frontend builds to use a Node 22 build image and the Vite `dist/` output, restoring successful `docker compose up --build` behavior after the frontend toolchain migration
+- split the HTTP surface into explicit app-private and public API paths, moving SPA/internal calls behind `/internal-api/*` while exposing only the external cached-news facade on `/api/public/*`
+- added a dedicated public external news endpoint with anonymous and user-token modes, where anonymous requests return only default-source news and token-authenticated requests apply that user settings and custom sources
+- enforced cached-only behavior for the public external news API so public requests never trigger seed ingestion, RSS refreshes, or reader-page upstream fetches
+- added hashed per-user API tokens with mandatory 30-day expiry, server-side expiration checks, revocation/regeneration support, and last-used tracking without reusing browser session tokens
+- added layered request protection only on the public external API, combining stricter anonymous limits, higher token-authenticated allowances, and nginx edge throttling without affecting internal app API flows
+- added a multilingual `/api` documentation page describing the public API surface, authentication modes, external usage limits, and the distinction between public read-only access and app-private internal APIs
+- tightened nginx exposure rules so `/api/public/*` is the only external API subtree, `/api` serves documentation, and generic public access to app-private API routes is rejected
+- added runtime and regression coverage for the new separation model, including public news access, token-based external access, internal app API protection, and container health verification
+- refreshed reader mode so the header controls, source/read-time metadata, and content cards now align more closely with the main News Flow visual language while keeping the article body as the primary focus
+- simplified the reader toolbar by moving `Share` into a compact top-left icon action, replacing the text-size dropdown with a `- aA +` stepper, and removing extra header actions that competed with the reading flow
+- widened the reader content column, tightened the side gutters, and fixed dark-mode header/title surfaces so the reading panel uses more space without losing its calm layout
+- added a direct reader shortcut on news cards so a double click on desktop or double tap on mobile over the image or title now opens reader mode without needing the footer button
+- aligned the `Auto refresh news` and `Show card images` settings rows with the rest of the preferences UI and replaced the plain checkboxes with compact state pills that fit the refreshed settings visual language better
+- removed the temporary `news_aggregator` rename migration code and the legacy DB schema upgrade ladder so startup and persistence handling now target only the current `newsflow` naming and schema baseline
+- changed the default scheduled ingestion interval from 5 minutes to 15 minutes to reduce upstream request pressure while keeping news reasonably fresh by default
+
 ## 3.2.8
 
 - added a lightweight share feedback bubble for clipboard fallback flows so desktop users now get a clear confirmation when an article link is copied

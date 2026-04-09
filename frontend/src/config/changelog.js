@@ -1,16 +1,20 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.2.8',
+  version: '3.2.9',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'Here is a quick overview of the latest changes in News Flow.',
     items: [
-      '🔗 When sharing falls back to clipboard copy on desktop, you now get a small confirmation pill instead of guessing what happened.',
-      '🪟 The confirmation now grows directly out of the Share button and slides to the left, so it feels attached to the action instead of appearing as a separate toast.',
-      '📰 News cards now place Share in a floating top-right action, while Reader mode and Open article fill the footer row more cleanly.',
-      '⬆️ While you scroll down the feed, a small circular button now appears in the bottom-left corner so you can jump back to the top instantly.',
-      '📖 Reader mode now feels more in line with the rest of News Flow, with calmer cards, cleaner spacing, and a layout that gives more room to the article itself.',
-      '🎛️ The reader toolbar is simpler too: Share lives in the top-left as a compact icon, and text size now uses a quick `- aA +` control instead of a dropdown.',
+      '🎛️ In reader mode, the text-size control now sits next to Share on the left side of the top bar, so the header actions feel more grouped and easier to use.',
+      '👆 On news cards, you can now open reader mode faster with a double click on desktop or a double tap on mobile directly on the image or title.',
+      '⚙️ Auto refresh and card images now use cleaner On/Off pills in Settings, so those quick preferences feel more aligned with the rest of the interface.',
+      '⏱️ Scheduled news checks are now slower by default, moving from 5 minutes to 15 minutes to stay fresh without being too aggressive with upstream sources.',
+      '⚡ The frontend now runs on a newer Vite-based stack behind the scenes, making the app easier to maintain and update safely over time.',
+      '🛠️ Reader mode, settings, feedback, and session handling also received internal cleanup to keep a few key parts of the app more consistent and reliable.',
+      '🔐 News Flow now has a clearer public API area for external news access, while the app keeps its private internal routes separated behind the scenes.',
+      '🪪 From Settings you can now generate a personal API token with automatic expiration, making external read-only integrations easier to manage safely.',
+      '📘 A new `/api` page now documents how public news access works in both anonymous and authenticated modes.',
+      '🚦 The public API now also has dedicated request protection, with tighter anonymous limits and a higher allowance for authenticated token usage.',
     ]
   },
   it: {
@@ -18,12 +22,16 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Ecco una panoramica rapida delle ultime novita di News Flow.',
     items: [
-      '🔗 Quando la condivisione su desktop usa la copia negli appunti come fallback, ora compare una piccola pill di conferma invece di lasciare il risultato implicito.',
-      '🪟 La conferma ora nasce direttamente dal pulsante Share e si apre verso sinistra, cosi resta visivamente collegata all\'azione invece di sembrare un toast separato.',
-      '📰 Le news card ora spostano Share in un\'azione flottante in alto a destra, mentre Reader mode e Open article riempiono meglio la riga dei pulsanti in basso.',
-      '⬆️ Mentre scorri il feed, ora compare un piccolo pulsante circolare in basso a sinistra per tornare subito all\'inizio della pagina.',
-      '📖 La modalita lettura ora e piu coerente con il resto di News Flow, con card piu calme, spaziatura piu pulita e piu spazio dedicato davvero all\'articolo.',
-      '🎛️ Anche la barra del reader e piu semplice: Share sta in alto a sinistra come icona compatta e la dimensione del testo usa ora un controllo rapido `- aA +` invece del menu a tendina.',
+      '🎛️ In modalita lettura, il controllo della dimensione del testo ora sta accanto a Share sul lato sinistro della barra in alto, cosi le azioni del reader risultano piu raccolte e comode da usare.',
+      '👆 Nelle news card ora puoi aprire piu in fretta la modalita lettura con un doppio click su desktop o un doppio tap su mobile direttamente su immagine o titolo.',
+      '⚙️ Auto refresh e immagini card ora usano pill On/Off piu pulite nelle impostazioni, cosi queste preferenze rapide risultano piu coerenti con il resto dell\'interfaccia.',
+      '⏱️ I controlli automatici delle notizie ora sono piu lenti di default: si passa da 5 minuti a 15 minuti per restare aggiornati senza essere troppo aggressivi verso le fonti.',
+      '⚡ Il frontend ora gira su una base piu moderna con Vite dietro le quinte, cosi manutenzione e aggiornamenti futuri risultano piu semplici e sicuri.',
+      '🛠️ Anche modalita lettura, impostazioni, feedback e gestione sessioni hanno ricevuto una pulizia interna per restare piu coerenti e affidabili nei punti chiave dell\'app.',
+      '🔐 News Flow ora ha un\'area API pubblica piu chiara per l\'accesso esterno alle notizie, mentre l\'app mantiene separati dietro le quinte i suoi percorsi interni privati.',
+      '🪪 Dalle Impostazioni puoi ora generare un token API personale con scadenza automatica, cosi le integrazioni esterne in sola lettura sono piu semplici da gestire in sicurezza.',
+      '📘 Una nuova pagina `/api` spiega come funziona l\'accesso pubblico alle notizie sia in modalita anonima sia autenticata.',
+      '🚦 L\'API pubblica ha ora anche una protezione dedicata sulle richieste, con limiti piu stretti in anonimo e una soglia piu alta quando usi un token autenticato.',
     ]
   }
 };

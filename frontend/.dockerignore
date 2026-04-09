@@ -1,5 +1,6 @@
 node_modules/
 build/
+dist/
 coverage/
 
 *.log
@@ -7,6 +8,7 @@ coverage/
 .env.*
 
 src/**/*.test.js
+src/**/*.test.jsx
 src/setupTests.js
 
 .git

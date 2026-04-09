@@ -1,30 +1,15 @@
 const { createError } = require('../utils/errorHandler');
+const { FEEDBACK_CATEGORIES, getFeedbackAttachmentType } = require('../utils/feedback');
 
 const TELEGRAM_API_BASE = String(process.env.TELEGRAM_API_BASE_URL || 'https://api.telegram.org').trim().replace(/\/+$/, '');
 const runtimeFetch = globalThis.fetch;
 const RuntimeURLSearchParams = globalThis.URLSearchParams;
 const RuntimeFormData = globalThis.FormData;
 const RuntimeBlob = globalThis.Blob;
-const FEEDBACK_CATEGORIES = new Set(['bug', 'feedback', 'idea']);
-
 function formatCategoryLabel(category) {
   if (category === 'bug') return 'Bug report';
   if (category === 'idea') return 'Improvement idea';
   return 'General feedback';
-}
-
-function getAttachmentType(attachment) {
-  const mimeType = String(attachment?.mimetype || '');
-
-  if (mimeType.startsWith('image/')) {
-    return 'image';
-  }
-
-  if (mimeType.startsWith('video/')) {
-    return 'video';
-  }
-
-  return null;
 }
 
 function formatAttachmentLabel(attachmentType) {
@@ -125,7 +110,7 @@ async function sendAttachment(config, user, attachment) {
     throw createError(500, 'Server runtime does not support feedback attachments.', 'SERVER_ERROR');
   }
 
-  const attachmentType = getAttachmentType(attachment);
+  const attachmentType = getFeedbackAttachmentType(attachment);
   const formData = new RuntimeFormData();
   const attachmentName = String(attachment?.originalname || 'feedback-attachment').trim() || 'feedback-attachment';
   const attachmentMimeType = String(attachment?.mimetype || 'application/octet-stream').trim() || 'application/octet-stream';
@@ -164,7 +149,7 @@ async function sendFeedback({ user, category, title, description, attachment = n
   }
 
   try {
-    const attachmentType = getAttachmentType(attachment);
+    const attachmentType = getFeedbackAttachmentType(attachment);
 
     if (attachment?.buffer?.length) {
       await sendAttachment(config, user, attachment);

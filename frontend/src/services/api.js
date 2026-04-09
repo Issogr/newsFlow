@@ -1,37 +1,20 @@
 import axios from 'axios';
 
 const AUTH_TOKEN_STORAGE_KEY = 'newsflow-token';
-const LEGACY_AUTH_TOKEN_STORAGE_KEYS = ['news-aggregator-token'];
 const READER_REQUEST_TIMEOUT_MS = 30000;
 
 function readStoredAuthToken() {
   try {
-    const storedToken = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-    if (storedToken) {
-      return storedToken;
-    }
-
-    for (const legacyKey of LEGACY_AUTH_TOKEN_STORAGE_KEYS) {
-      const legacyToken = window.localStorage.getItem(legacyKey);
-      if (!legacyToken) {
-        continue;
-      }
-
-      window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, legacyToken);
-      window.localStorage.removeItem(legacyKey);
-      return legacyToken;
-    }
+    return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '';
   } catch {
     return '';
   }
-
-  return '';
 }
 
 let authToken = readStoredAuthToken();
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: '/internal-api',
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json'
@@ -41,6 +24,7 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const nextConfig = { ...config };
   nextConfig.headers = nextConfig.headers || {};
+  nextConfig.headers['X-NewsFlow-App'] = 'web';
 
   if (authToken) {
     nextConfig.headers.Authorization = `Bearer ${authToken}`;
@@ -53,11 +37,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.code === 'ECONNABORTED') {
-      error.message = 'La richiesta è scaduta. Riprova tra qualche secondo.';
+      error.message = 'The request timed out. Please try again in a few seconds.';
     } else if (!error.response) {
-      error.message = 'Impossibile connettersi al server. Controlla la connessione.';
+      error.message = 'Unable to connect to the server. Check your connection.';
     } else if (error.response.status === 429) {
-      error.message = 'Troppe richieste. Attendi qualche momento prima di riprovare.';
+      error.message = 'Too many requests. Please wait a moment before trying again.';
     }
 
     return Promise.reject(error);
@@ -73,10 +57,6 @@ export const setAuthToken = (token) => {
     } else {
       window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
     }
-
-    LEGACY_AUTH_TOKEN_STORAGE_KEYS.forEach((legacyKey) => {
-      window.localStorage.removeItem(legacyKey);
-    });
   } catch {
     // ignore storage failures and keep runtime state only
   }
@@ -117,6 +97,21 @@ export const logoutUser = async () => {
 
 export const fetchCurrentUser = async () => {
   const response = await api.get('/me');
+  return response.data;
+};
+
+export const fetchApiTokenStatus = async () => {
+  const response = await api.get('/me/api-token');
+  return response.data;
+};
+
+export const createApiToken = async (payload = {}) => {
+  const response = await api.post('/me/api-token', payload);
+  return response.data;
+};
+
+export const revokeApiToken = async () => {
+  const response = await api.delete('/me/api-token');
   return response.data;
 };
 

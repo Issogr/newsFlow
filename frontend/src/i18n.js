@@ -1,11 +1,9 @@
 export const SUPPORTED_LOCALES = ['en', 'it'];
 export const LOCALE_STORAGE_KEY = 'newsflow-locale';
-const LEGACY_LOCALE_STORAGE_KEYS = ['news-aggregator-locale'];
 
 export const translations = {
   en: {
     pageTitle: 'News Flow',
-    pageSubtitle: 'News collection with scheduled updates, server-side filters, and persistent tagging.',
     autoRefreshStatus: 'Auto refresh',
     liveActive: 'On',
     liveOffline: 'Reconnecting',
@@ -38,8 +36,6 @@ export const translations = {
     saveSettings: 'Save settings',
     saving: 'Saving...',
     cancel: 'Cancel',
-    importExport: 'Import and export',
-    importExportHelp: 'Export a backup of your current setup or import one to replace your custom sources and exclusion preferences.',
     export: 'Export',
     import: 'Import',
     exportSettings: 'Export settings',
@@ -123,6 +119,18 @@ export const translations = {
     readerTextSizeLarge: 'Large',
     readerTextSizeDecrease: 'Decrease reader text size',
     readerTextSizeIncrease: 'Increase reader text size',
+    apiTokenTitle: 'External API token',
+    apiTokenHelp: 'Create a token for the public cached news API. It can be used for external integrations without exposing your password.',
+    apiTokenExpiryHelp: ({ days }) => `Each token expires automatically after ${days} days.`,
+    apiTokenActivePrefix: ({ prefix }) => `Active token: ${prefix}`,
+    apiTokenExpiresAt: ({ date }) => `Expires: ${date}`,
+    apiTokenLastUsedAt: ({ date }) => `Last used: ${date}`,
+    apiTokenInactive: 'No active API token.',
+    apiTokenGenerate: 'Generate token',
+    apiTokenRegenerate: 'Regenerate token',
+    apiTokenRevoke: 'Revoke token',
+    apiTokenGenerated: 'New API token created',
+    apiTokenGeneratedHelp: 'Copy it now. For security reasons it is shown only once.',
     changelogVersionLabel: ({ version }) => `Version ${version}`,
     releaseNotesDismiss: 'Got it',
     authSubtitle: 'Create a user or sign in to save your sources, defaults, and reading preferences.',
@@ -186,7 +194,6 @@ export const translations = {
     clickToRefresh: 'Click to refresh',
     removeNotification: 'Remove notification',
     clearAllNotifications: 'Clear all notifications',
-    notificationCount: ({ count }) => `${count} notifications`,
     errorTitle: 'Unable to load the news',
     unknownError: 'An unknown error occurred.',
     networkError: 'Unable to reach the server. Check your internet connection.',
@@ -214,7 +221,6 @@ export const translations = {
     readerUnavailable: 'Reader mode is not available for this article.',
     readerFallback: 'Showing fallback text extracted from the feed.',
     readTime: ({ minutes }) => `${minutes} min read`,
-    cleanReadingView: 'Clean reading view',
     sourceVersions: 'Source versions',
     refreshReader: 'Refresh reader copy',
     newsLanguage: ({ language }) => `News language: ${language}`,
@@ -225,7 +231,6 @@ export const translations = {
   },
   it: {
     pageTitle: 'News Flow',
-    pageSubtitle: 'Raccolta notizie con aggiornamenti schedulati, filtri server-side e tagging persistente.',
     autoRefreshStatus: 'Auto refresh',
     liveActive: 'Attivo',
     liveOffline: 'Riconnessione',
@@ -258,8 +263,6 @@ export const translations = {
     saveSettings: 'Salva impostazioni',
     saving: 'Salvataggio...',
     cancel: 'Annulla',
-    importExport: 'Importa ed esporta',
-    importExportHelp: 'Esporta un backup della configurazione corrente oppure importane uno per sostituire fonti personali e preferenze di esclusione.',
     export: 'Esporta',
     import: 'Importa',
     exportSettings: 'Esporta impostazioni',
@@ -343,6 +346,18 @@ export const translations = {
     readerTextSizeLarge: 'Grande',
     readerTextSizeDecrease: 'Riduci dimensione testo lettura',
     readerTextSizeIncrease: 'Aumenta dimensione testo lettura',
+    apiTokenTitle: 'Token API esterna',
+    apiTokenHelp: 'Crea un token per l\'API pubblica delle notizie in cache. Puoi usarlo per integrazioni esterne senza esporre la password.',
+    apiTokenExpiryHelp: ({ days }) => `Ogni token scade automaticamente dopo ${days} giorni.`,
+    apiTokenActivePrefix: ({ prefix }) => `Token attivo: ${prefix}`,
+    apiTokenExpiresAt: ({ date }) => `Scade: ${date}`,
+    apiTokenLastUsedAt: ({ date }) => `Ultimo uso: ${date}`,
+    apiTokenInactive: 'Nessun token API attivo.',
+    apiTokenGenerate: 'Genera token',
+    apiTokenRegenerate: 'Rigenera token',
+    apiTokenRevoke: 'Revoca token',
+    apiTokenGenerated: 'Nuovo token API creato',
+    apiTokenGeneratedHelp: 'Copialo ora. Per sicurezza viene mostrato una sola volta.',
     changelogVersionLabel: ({ version }) => `Versione ${version}`,
     releaseNotesDismiss: 'Ho capito',
     authSubtitle: 'Crea un utente o accedi per salvare fonti, preferenze e configurazione personale.',
@@ -406,7 +421,6 @@ export const translations = {
     clickToRefresh: 'Clicca per aggiornare',
     removeNotification: 'Elimina notifica',
     clearAllNotifications: 'Elimina tutte le notifiche',
-    notificationCount: ({ count }) => `${count} notifiche`,
     errorTitle: 'Impossibile caricare le notizie',
     unknownError: 'Si è verificato un errore sconosciuto.',
     networkError: 'Impossibile connettersi al server. Verifica la tua connessione internet.',
@@ -434,7 +448,6 @@ export const translations = {
     readerUnavailable: 'La modalita lettura non e disponibile per questo articolo.',
     readerFallback: 'Mostro il testo di fallback estratto dal feed.',
     readTime: ({ minutes }) => `${minutes} min di lettura`,
-    cleanReadingView: 'Vista lettura pulita',
     sourceVersions: 'Versioni fonte',
     refreshReader: 'Aggiorna copia lettura',
     newsLanguage: ({ language }) => `Lingua notizia: ${language}`,
@@ -464,25 +477,10 @@ export function isSupportedLocale(locale) {
 export function readStoredLocale() {
   try {
     const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-    if (isSupportedLocale(storedLocale)) {
-      return storedLocale;
-    }
-
-    for (const legacyKey of LEGACY_LOCALE_STORAGE_KEYS) {
-      const legacyLocale = window.localStorage.getItem(legacyKey);
-      if (!isSupportedLocale(legacyLocale)) {
-        continue;
-      }
-
-      window.localStorage.setItem(LOCALE_STORAGE_KEY, legacyLocale);
-      window.localStorage.removeItem(legacyKey);
-      return legacyLocale;
-    }
+    return isSupportedLocale(storedLocale) ? storedLocale : '';
   } catch {
     return '';
   }
-
-  return '';
 }
 
 export function resolvePreferredLocale(preferredLocale, storedLocale = readStoredLocale()) {

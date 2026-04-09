@@ -65,10 +65,11 @@ describe('database migrations', () => {
     const articleColumns = sqlite.prepare('PRAGMA table_info(articles)').all().map((column) => column.name);
     const userColumns = sqlite.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
     const passwordSetupTokenColumns = sqlite.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column) => column.name);
+    const apiTokenColumns = sqlite.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('15');
+    expect(migrationVersion).toBe('16');
     expect(articleColumns).toContain('canonical_url');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
@@ -82,6 +83,7 @@ describe('database migrations', () => {
     expect(userColumns).toContain('last_login_at');
     expect(userColumns).toContain('last_activity_at');
     expect(passwordSetupTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'purpose', 'expires_at', 'used_at']));
+    expect(apiTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'token_prefix', 'expires_at', 'revoked_at', 'last_used_at']));
   });
 
   test('opens an existing database already on the current schema version', () => {
@@ -121,96 +123,83 @@ describe('database migrations', () => {
       CREATE TABLE user_settings (
         user_id TEXT PRIMARY KEY,
         default_language TEXT NOT NULL DEFAULT 'auto',
+        theme_mode TEXT NOT NULL DEFAULT 'system',
         article_retention_hours INTEGER NOT NULL DEFAULT 24,
         recent_hours INTEGER NOT NULL DEFAULT 3,
         auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
+        show_news_images INTEGER NOT NULL DEFAULT 1,
         reader_panel_position TEXT NOT NULL DEFAULT 'right',
+        reader_text_size TEXT NOT NULL DEFAULT 'medium',
         last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
         default_source_ids TEXT NOT NULL DEFAULT '[]',
         excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
-       INSERT INTO app_meta (key, value) VALUES ('migration_version', '10');
-       INSERT INTO articles (id, source_id, source_name, title, canonical_url) VALUES ('article-1', 'ansa', 'ANSA', 'Headline', 'https://example.com/story');
-       INSERT INTO article_topics (article_id, topic) VALUES ('article-1', 'economy');
-     `);
-
-     sqlite.close();
-
-     database = require('./database');
-     database.getDb();
-
-     const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
-     const topicRows = migratedDb.prepare(`
-       SELECT article_id AS articleId, topic
-       FROM article_topics
-     `).all();
-      const articleRows = migratedDb.prepare(`
-        SELECT id, canonical_url AS canonicalUrl
-        FROM articles
-      `).all();
-      const migratedVersion = migratedDb.prepare(`
-        SELECT value
-        FROM app_meta
-        WHERE key = 'migration_version'
-      `).get()?.value;
-      const settingsColumns = migratedDb.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
-      const userColumns = migratedDb.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
-      const passwordSetupTokenColumns = migratedDb.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column) => column.name);
-
-      migratedDb.close();
-
-      expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
-      expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-      expect(migratedVersion).toBe('15');
-      expect(settingsColumns).toContain('show_news_images');
-      expect(settingsColumns).toContain('reader_text_size');
-      expect(settingsColumns).toContain('theme_mode');
-      expect(userColumns).toContain('role');
-      expect(userColumns).toContain('last_login_at');
-      expect(userColumns).toContain('last_activity_at');
-      expect(passwordSetupTokenColumns).toContain('token_hash');
-     });
-
-  test('migrates sqlite data from a legacy news_aggregator path to a newsflow path', () => {
-    const migrationRoot = path.join(tempDir, 'migration-root');
-    const currentDbPath = path.join(migrationRoot, 'newsflow', 'backend', 'data', 'news.db');
-    const legacyDbDir = path.join(migrationRoot, 'news_aggregator', 'backend', 'data');
-    const legacyDbPath = path.join(legacyDbDir, 'news.db');
-
-    jest.resetModules();
-    process.env.NEWS_DB_PATH = currentDbPath;
-    database = require('./database');
-    database.getDb();
-    database.closeDb();
-
-    fs.mkdirSync(legacyDbDir, { recursive: true });
-    fs.readdirSync(path.dirname(currentDbPath)).forEach((entryName) => {
-      fs.renameSync(
-        path.join(path.dirname(currentDbPath), entryName),
-        path.join(legacyDbDir, entryName)
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT,
+        role TEXT NOT NULL DEFAULT 'user',
+        last_login_at TEXT,
+        last_activity_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
-    });
-    fs.rmSync(path.dirname(currentDbPath), { recursive: true, force: true });
 
-    jest.resetModules();
-    process.env.NEWS_DB_PATH = currentDbPath;
+      CREATE TABLE password_setup_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        purpose TEXT NOT NULL,
+        created_by_user_id TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expires_at TEXT NOT NULL,
+        used_at TEXT
+      );
+
+      INSERT INTO app_meta (key, value) VALUES ('migration_version', '15');
+      INSERT INTO articles (id, source_id, source_name, title, canonical_url) VALUES ('article-1', 'ansa', 'ANSA', 'Headline', 'https://example.com/story');
+      INSERT INTO article_topics (article_id, topic) VALUES ('article-1', 'economy');
+    `);
+
+    sqlite.close();
+
     database = require('./database');
     database.getDb();
 
-    const migratedDb = new SqliteDatabase(currentDbPath, { readonly: true });
+    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const topicRows = migratedDb.prepare(`
+      SELECT article_id AS articleId, topic
+      FROM article_topics
+    `).all();
+    const articleRows = migratedDb.prepare(`
+      SELECT id, canonical_url AS canonicalUrl
+      FROM articles
+    `).all();
     const migratedVersion = migratedDb.prepare(`
       SELECT value
       FROM app_meta
       WHERE key = 'migration_version'
     `).get()?.value;
+    const settingsColumns = migratedDb.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
+    const userColumns = migratedDb.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
+    const passwordSetupTokenColumns = migratedDb.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column) => column.name);
+    const apiTokenColumns = migratedDb.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('15');
-    expect(fs.existsSync(currentDbPath)).toBe(true);
-    expect(fs.existsSync(legacyDbPath)).toBe(false);
+    expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
+    expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
+    expect(migratedVersion).toBe('16');
+    expect(settingsColumns).toContain('show_news_images');
+    expect(settingsColumns).toContain('reader_text_size');
+    expect(settingsColumns).toContain('theme_mode');
+    expect(userColumns).toContain('role');
+    expect(userColumns).toContain('last_login_at');
+    expect(userColumns).toContain('last_activity_at');
+    expect(passwordSetupTokenColumns).toContain('token_hash');
+    expect(apiTokenColumns).toContain('token_hash');
   });
 
   test('rejects databases on an older schema version', () => {
@@ -221,13 +210,13 @@ describe('database migrations', () => {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
-      INSERT INTO app_meta (key, value) VALUES ('migration_version', '9');
+      INSERT INTO app_meta (key, value) VALUES ('migration_version', '10');
     `);
 
     sqlite.close();
 
     database = require('./database');
-    expect(() => database.getDb()).toThrow('Unsupported database schema version 9');
+    expect(() => database.getDb()).toThrow('Unsupported database schema version 10');
   });
 });
 

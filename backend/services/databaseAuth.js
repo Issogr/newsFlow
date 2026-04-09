@@ -118,6 +118,117 @@ function createAuthRepository({ getDb }) {
     `).run(session.tokenHash, session.userId, session.createdAt, session.expiresAt);
   }
 
+  function createApiToken(token = {}) {
+    getDb().prepare(`
+      INSERT INTO api_tokens (
+        id, user_id, token_hash, token_prefix, label, created_at, expires_at, revoked_at, last_used_at, created_by_ip, last_used_ip
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      token.id,
+      token.userId,
+      token.tokenHash,
+      token.tokenPrefix,
+      token.label || null,
+      token.createdAt,
+      token.expiresAt,
+      token.revokedAt || null,
+      token.lastUsedAt || null,
+      token.createdByIp || null,
+      token.lastUsedIp || null
+    );
+  }
+
+  function mapApiTokenRow(row) {
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      userId: row.userId,
+      tokenHash: row.tokenHash,
+      tokenPrefix: row.tokenPrefix,
+      label: row.label || '',
+      createdAt: row.createdAt,
+      expiresAt: row.expiresAt,
+      revokedAt: row.revokedAt || null,
+      lastUsedAt: row.lastUsedAt || null,
+      createdByIp: row.createdByIp || null,
+      lastUsedIp: row.lastUsedIp || null,
+      username: row.username || null
+    };
+  }
+
+  function getLatestActiveApiTokenForUser(userId) {
+    if (!userId) {
+      return null;
+    }
+
+    return mapApiTokenRow(getDb().prepare(`
+      SELECT id, user_id AS userId, token_hash AS tokenHash, token_prefix AS tokenPrefix,
+             label, created_at AS createdAt, expires_at AS expiresAt, revoked_at AS revokedAt,
+             last_used_at AS lastUsedAt, created_by_ip AS createdByIp, last_used_ip AS lastUsedIp
+      FROM api_tokens
+      WHERE user_id = ?
+        AND revoked_at IS NULL
+        AND expires_at >= ?
+      ORDER BY datetime(created_at) DESC
+      LIMIT 1
+    `).get(userId, new Date().toISOString()));
+  }
+
+  function findActiveApiTokenByHash(tokenHash) {
+    if (!tokenHash) {
+      return null;
+    }
+
+    return mapApiTokenRow(getDb().prepare(`
+      SELECT api_tokens.id, api_tokens.user_id AS userId, api_tokens.token_hash AS tokenHash,
+             api_tokens.token_prefix AS tokenPrefix, api_tokens.label,
+             api_tokens.created_at AS createdAt, api_tokens.expires_at AS expiresAt,
+             api_tokens.revoked_at AS revokedAt, api_tokens.last_used_at AS lastUsedAt,
+             api_tokens.created_by_ip AS createdByIp, api_tokens.last_used_ip AS lastUsedIp,
+             users.username AS username
+      FROM api_tokens
+      JOIN users ON users.id = api_tokens.user_id
+      WHERE api_tokens.token_hash = ?
+        AND api_tokens.revoked_at IS NULL
+        AND api_tokens.expires_at >= ?
+      LIMIT 1
+    `).get(tokenHash, new Date().toISOString()));
+  }
+
+  function revokeApiTokensByUserId(userId, revokedAt) {
+    if (!userId) {
+      return 0;
+    }
+
+    return getDb().prepare(`
+      UPDATE api_tokens
+      SET revoked_at = ?, last_used_at = COALESCE(last_used_at, created_at)
+      WHERE user_id = ? AND revoked_at IS NULL
+    `).run(revokedAt, userId).changes;
+  }
+
+  function touchApiTokenUsage(tokenId, usedAt, usedIp = null) {
+    if (!tokenId) {
+      return 0;
+    }
+
+    return getDb().prepare(`
+      UPDATE api_tokens
+      SET last_used_at = ?, last_used_ip = ?
+      WHERE id = ?
+    `).run(usedAt, usedIp || null, tokenId).changes;
+  }
+
+  function purgeExpiredApiTokens() {
+    return getDb().prepare(`
+      DELETE FROM api_tokens
+      WHERE expires_at < ? OR revoked_at IS NOT NULL
+    `).run(new Date().toISOString()).changes;
+  }
+
   function findSessionByTokenHash(tokenHash) {
     if (!tokenHash) {
       return null;
@@ -255,14 +366,20 @@ function createAuthRepository({ getDb }) {
     touchUserActivity,
     updateUserPassword,
     createUserSession,
+    createApiToken,
     findSessionByTokenHash,
+    getLatestActiveApiTokenForUser,
+    findActiveApiTokenByHash,
     deleteSessionByTokenHash,
     deleteSessionsByUserId,
+    revokeApiTokensByUserId,
+    touchApiTokenUsage,
     createPasswordSetupToken,
     findPasswordSetupTokenByHash,
     markPasswordSetupTokenUsed,
     deleteUnusedPasswordSetupTokens,
-    purgeExpiredSessions
+    purgeExpiredSessions,
+    purgeExpiredApiTokens
   };
 }
 

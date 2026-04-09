@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Github, Settings, X } from 'lucide-react';
 import SettingsCustomSourcesSection from './settings/SettingsCustomSourcesSection';
 import SettingsExclusionsSection from './settings/SettingsExclusionsSection';
 import SettingsPreferencesSection from './settings/SettingsPreferencesSection';
 import useSettingsPanelState from './settings/useSettingsPanelState';
+import useLockBodyScroll from '../hooks/useLockBodyScroll';
 import { PROJECT_GITHUB_URL } from '../config/projectLinks';
 
 const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, onUserUpdate }) => {
@@ -11,6 +12,8 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     saving,
     error,
     settings,
+    apiToken,
+    newApiToken,
     customSources,
     sourceForm,
     editingSourceId,
@@ -34,6 +37,8 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     handleExport,
     handleImportClick,
     handleImport,
+    handleCreateApiToken,
+    handleRevokeApiToken,
     handleAddSource,
     startEditSource,
     cancelEditSource,
@@ -46,14 +51,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     onUserUpdate
   });
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, []);
+  useLockBodyScroll();
 
   return (
     <div className="fixed inset-0 z-50 flex bg-slate-950/35 backdrop-blur-sm sm:px-4 sm:py-6">
@@ -81,6 +79,8 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               saving={saving}
               importInputRef={importInputRef}
               settings={settings}
+              apiToken={apiToken}
+              newApiToken={newApiToken}
               settingsLimits={settingsLimits}
               onDefaultLanguageChange={setDefaultLanguage}
               onThemeModeChange={setThemeMode}
@@ -92,6 +92,8 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               onExport={handleExport}
               onImportClick={handleImportClick}
               onImport={handleImport}
+              onCreateApiToken={handleCreateApiToken}
+              onRevokeApiToken={handleRevokeApiToken}
             />
 
             <SettingsExclusionsSection

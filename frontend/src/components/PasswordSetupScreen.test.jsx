@@ -2,13 +2,12 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PasswordSetupScreen from './PasswordSetupScreen';
 import { createTranslator } from '../i18n';
+import { completePasswordSetup, validatePasswordSetupToken } from '../services/api';
 
-jest.mock('../services/api', () => ({
-  validatePasswordSetupToken: jest.fn(),
-  completePasswordSetup: jest.fn()
+vi.mock('../services/api', () => ({
+  validatePasswordSetupToken: vi.fn(),
+  completePasswordSetup: vi.fn()
 }));
-
-const { validatePasswordSetupToken, completePasswordSetup } = require('../services/api');
 
 describe('PasswordSetupScreen', () => {
   const t = createTranslator('en');

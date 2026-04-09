@@ -2,13 +2,12 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AdminDashboard from './AdminDashboard';
 import { createTranslator } from '../i18n';
+import { createAdminPasswordSetupLink, fetchAdminUsers } from '../services/api';
 
-jest.mock('../services/api', () => ({
-  fetchAdminUsers: jest.fn(),
-  createAdminPasswordSetupLink: jest.fn()
+vi.mock('../services/api', () => ({
+  fetchAdminUsers: vi.fn(),
+  createAdminPasswordSetupLink: vi.fn()
 }));
-
-const { fetchAdminUsers, createAdminPasswordSetupLink } = require('../services/api');
 
 describe('AdminDashboard', () => {
   const t = createTranslator('en');

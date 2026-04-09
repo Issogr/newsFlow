@@ -2,17 +2,21 @@ import { act, renderHook } from '@testing-library/react';
 import useSettingsPanelState from './useSettingsPanelState';
 import {
   addUserSource,
+  createApiToken,
   deleteUserSource,
+  revokeApiToken,
   updateUserSource
 } from '../../services/api';
 
-jest.mock('../../services/api', () => ({
-  addUserSource: jest.fn(),
-  deleteUserSource: jest.fn(),
-  exportUserSettings: jest.fn(),
-  importUserSettings: jest.fn(),
-  updateUserSource: jest.fn(),
-  updateUserSettings: jest.fn()
+vi.mock('../../services/api', () => ({
+  addUserSource: vi.fn(),
+  createApiToken: vi.fn(),
+  deleteUserSource: vi.fn(),
+  exportUserSettings: vi.fn(),
+  importUserSettings: vi.fn(),
+  revokeApiToken: vi.fn(),
+  updateUserSource: vi.fn(),
+  updateUserSettings: vi.fn()
 }));
 
 const baseCurrentUser = {
@@ -32,9 +36,11 @@ const baseCurrentUser = {
   },
   limits: {
     articleRetentionHoursMax: 24,
-    recentHoursMax: 3
+    recentHoursMax: 3,
+    apiTokenTtlDays: 30
   },
-  customSources: []
+  customSources: [],
+  apiToken: null
 };
 
 describe('useSettingsPanelState', () => {

@@ -4,22 +4,34 @@ import NewsAggregator from './NewsAggregator';
 import { fetchNews, isRequestCanceled } from '../services/api';
 import useWebSocket from '../hooks/useWebSocket';
 
-jest.mock('../services/api', () => ({
-  fetchNews: jest.fn(),
-  isRequestCanceled: jest.fn((error) => error?.code === 'ERR_CANCELED')
+vi.mock('../services/api', () => ({
+  fetchNews: vi.fn(),
+  isRequestCanceled: vi.fn((error) => error?.code === 'ERR_CANCELED')
 }));
 
-jest.mock('../hooks/useWebSocket');
-
-jest.mock('../hooks/useOnClickOutside', () => ({
-  useOnClickOutside: jest.fn()
+vi.mock('../hooks/useWebSocket', () => ({
+  default: vi.fn()
 }));
 
-jest.mock('./NewsCard', () => ({ group }) => <div>{group.title}</div>);
-jest.mock('./ReaderPanel', () => () => null);
-jest.mock('./BrandMark', () => () => <div />);
-jest.mock('./SettingsPanel', () => () => null);
-jest.mock('./ErrorMessage', () => ({ error }) => <div>{error?.message || 'error'}</div>);
+vi.mock('../hooks/useOnClickOutside', () => ({
+  useOnClickOutside: vi.fn()
+}));
+
+vi.mock('./NewsCard', () => ({
+  default: ({ group }) => <div>{group.title}</div>
+}));
+vi.mock('./ReaderPanel', () => ({
+  default: () => null
+}));
+vi.mock('./BrandMark', () => ({
+  default: () => <div />
+}));
+vi.mock('./SettingsPanel', () => ({
+  default: () => null
+}));
+vi.mock('./ErrorMessage', () => ({
+  default: ({ error }) => <div>{error?.message || 'error'}</div>
+}));
 
 function createDeferred() {
   let resolve;
@@ -72,9 +84,11 @@ const currentUser = {
   },
   limits: {
     articleRetentionHoursMax: 24,
-    recentHoursMax: 3
+    recentHoursMax: 3,
+    apiTokenTtlDays: 30
   },
-  customSources: []
+  customSources: [],
+  apiToken: null
 };
 
 describe('NewsAggregator', () => {

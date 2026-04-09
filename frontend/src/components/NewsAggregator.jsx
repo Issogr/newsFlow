@@ -669,6 +669,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       {feedbackOpen && (
         <FeedbackModal
           t={t}
+          feedbackLimits={currentUser?.limits}
           onClose={() => setFeedbackOpen(false)}
         />
       )}

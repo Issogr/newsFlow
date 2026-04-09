@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock3, Download, Globe2, Image as ImageIcon, MonitorSmartphone, PanelRightOpen, Radio, RefreshCw, TimerReset, Type, Upload } from 'lucide-react';
+import { Clock3, Download, Globe2, Image as ImageIcon, KeyRound, MonitorSmartphone, PanelRightOpen, Radio, RefreshCw, TimerReset, Type, Upload } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORDER } from '../../config/readerTextSize';
 
@@ -8,6 +8,8 @@ const SettingsPreferencesSection = ({
   saving,
   importInputRef,
   settings,
+  apiToken,
+  newApiToken,
   settingsLimits,
   onDefaultLanguageChange,
   onThemeModeChange,
@@ -18,7 +20,9 @@ const SettingsPreferencesSection = ({
   onNumericSettingChange,
   onExport,
   onImportClick,
-  onImport
+  onImport,
+  onCreateApiToken,
+  onRevokeApiToken
 }) => {
   const articleRetentionRange = `${settingsLimits.articleRetentionHours.min}-${settingsLimits.articleRetentionHours.max}h`;
   const recentHoursRange = `${settingsLimits.recentHours.min}-${settingsLimits.recentHours.max}h`;
@@ -126,41 +130,107 @@ const SettingsPreferencesSection = ({
           </select>
         </label>
 
-        <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
           <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-700">
             <RefreshCw className="h-4 w-4 shrink-0 text-emerald-600" />
             <span>{t('autoRefreshSetting')}</span>
           </span>
-          <span className="relative inline-flex shrink-0 items-center">
-            <input
-              type="checkbox"
-              checked={settings.autoRefreshEnabled !== false}
-              onChange={(event) => onAutoRefreshChange(event.target.checked)}
-              className="peer sr-only"
+          <button
+            type="button"
+            onClick={() => onAutoRefreshChange(settings.autoRefreshEnabled === false)}
+            aria-pressed={settings.autoRefreshEnabled !== false}
+            className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${
+              settings.autoRefreshEnabled !== false
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                settings.autoRefreshEnabled !== false ? 'bg-emerald-500' : 'bg-slate-300'
+              }`}
+              aria-hidden="true"
             />
-            <span className="relative h-6 w-11 rounded-full bg-slate-300 transition-colors peer-checked:bg-slate-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-slate-400" />
-            <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
-          </span>
-        </label>
+            <span>{settings.autoRefreshEnabled !== false ? t('liveActive') : t('liveDisabled')}</span>
+          </button>
+        </div>
 
-        <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
           <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-700">
             <ImageIcon className="h-4 w-4 shrink-0 text-violet-600" />
             <span>{t('showNewsImagesSetting')}</span>
           </span>
-          <span className="relative inline-flex shrink-0 items-center">
-            <input
-              type="checkbox"
-              checked={settings.showNewsImages !== false}
-              onChange={(event) => onShowNewsImagesChange(event.target.checked)}
-              className="peer sr-only"
+          <button
+            type="button"
+            onClick={() => onShowNewsImagesChange(settings.showNewsImages === false)}
+            aria-pressed={settings.showNewsImages !== false}
+            className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${
+              settings.showNewsImages !== false
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                settings.showNewsImages !== false ? 'bg-emerald-500' : 'bg-slate-300'
+              }`}
+              aria-hidden="true"
             />
-            <span className="relative h-6 w-11 rounded-full bg-slate-300 transition-colors peer-checked:bg-slate-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-slate-400" />
-            <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
-          </span>
-        </label>
+            <span>{settings.showNewsImages !== false ? t('liveActive') : t('liveDisabled')}</span>
+          </button>
+        </div>
 
         <div className="border-t border-slate-200 pt-5 md:col-span-2">
+          <div className="mb-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-2">
+                <p className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <KeyRound className="h-4 w-4 text-amber-600" />
+                  {t('apiTokenTitle')}
+                </p>
+                <p className="text-sm text-slate-600">{t('apiTokenHelp')}</p>
+                <p className="text-xs text-slate-500">{t('apiTokenExpiryHelp', { days: settingsLimits.apiTokenTtlDays || 30 })}</p>
+                {apiToken ? (
+                  <div className="space-y-1 text-xs text-slate-500">
+                    <p>{t('apiTokenActivePrefix', { prefix: apiToken.tokenPrefix })}</p>
+                    <p>{t('apiTokenExpiresAt', { date: new Date(apiToken.expiresAt).toLocaleString() })}</p>
+                    {apiToken.lastUsedAt ? <p>{t('apiTokenLastUsedAt', { date: new Date(apiToken.lastUsedAt).toLocaleString() })}</p> : null}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">{t('apiTokenInactive')}</p>
+                )}
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  onClick={onCreateApiToken}
+                  disabled={saving}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-60"
+                >
+                  {apiToken ? t('apiTokenRegenerate') : t('apiTokenGenerate')}
+                </button>
+                {apiToken ? (
+                  <button
+                    type="button"
+                    onClick={onRevokeApiToken}
+                    disabled={saving}
+                    className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-60"
+                  >
+                    {t('apiTokenRevoke')}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            {newApiToken ? (
+              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <p className="text-sm font-medium text-emerald-900">{t('apiTokenGenerated')}</p>
+                <p className="mt-1 break-all font-mono text-sm text-emerald-800">{newApiToken}</p>
+                <p className="mt-2 text-xs text-emerald-700">{t('apiTokenGeneratedHelp')}</p>
+              </div>
+            ) : null}
+          </div>
+
           <div className="grid gap-3 md:grid-cols-2">
             <button
               type="button"

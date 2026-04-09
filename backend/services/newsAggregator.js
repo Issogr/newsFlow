@@ -8,18 +8,12 @@ const {
   getNewsFeed: buildNewsFeed
 } = require('./newsAggregatorQuery');
 const {
-  buildStableGroupId,
-  calculateSimilarity,
-  groupSimilarNews,
-  insertArticleIntoGroups
-} = require('./newsAggregatorGrouping');
-const {
   purgeExpiredArticles,
   createEmptyRefreshPayload,
   ingestSourceConfigs
 } = require('./newsAggregatorIngestion');
 
-const SCRAPE_INTERVAL_MS = parseInt(process.env.SCRAPE_INTERVAL_MS || '300000', 10);
+const SCRAPE_INTERVAL_MS = parseInt(process.env.SCRAPE_INTERVAL_MS || '900000', 10);
 
 let refreshPromise = null;
 let lastRefreshAt = null;
@@ -75,7 +69,7 @@ async function ingestAllNews(options = {}) {
       return payload;
     } catch (error) {
       logger.error(`News ingestion failed: ${error.message}`);
-      throw error.status ? error : createError(500, 'Errore durante l\'aggiornamento delle notizie.', 'SERVER_ERROR', error);
+      throw error.status ? error : createError(500, 'An error occurred while refreshing news.', 'SERVER_ERROR', error);
     }
   }).finally(() => {
     refreshPromise = null;
@@ -128,6 +122,13 @@ async function getNewsFeed(filters = {}, userContext = {}) {
   });
 }
 
+async function getCachedNewsFeed(filters = {}, userContext = {}) {
+  return buildNewsFeed(filters, userContext, {
+    ensureSeedData: async () => {},
+    getLastRefreshAt
+  });
+}
+
 function startScheduler() {
   if (schedulerHandle) {
     return;
@@ -157,11 +158,8 @@ module.exports = {
   ingestAllNews,
   refreshUserSources,
   getNewsFeed,
+  getCachedNewsFeed,
   startScheduler,
   stopScheduler,
-  newsSources,
-  _groupSimilarNews: groupSimilarNews,
-  _buildStableGroupId: buildStableGroupId,
-  _calculateSimilarity: calculateSimilarity,
-  _insertArticleIntoGroups: insertArticleIntoGroups
+  newsSources
 };

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import NewsAggregator from './components/NewsAggregator';
 import AdminDashboard from './components/AdminDashboard';
+import ApiDocsPage from './components/ApiDocsPage';
 import AuthScreen from './components/AuthScreen';
 import PasswordSetupScreen from './components/PasswordSetupScreen';
 import ReleaseNotesModal from './components/ReleaseNotesModal';
@@ -38,7 +39,7 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [loadingSession, setLoadingSession] = useState(() => {
     const pathname = window.location.pathname;
-    return Boolean(getAuthToken()) && pathname !== '/password/setup' && pathname !== '/admin/setup';
+    return Boolean(getAuthToken()) && pathname !== '/password/setup' && pathname !== '/admin/setup' && pathname !== '/api' && pathname !== '/api/';
   });
   const [releaseNotesState, setReleaseNotesState] = useState({
     hiddenVersion: '',
@@ -54,6 +55,7 @@ function App() {
   const releaseNotes = useMemo(() => getCurrentChangelog(locale), [locale]);
   const setupToken = useMemo(() => new URLSearchParams(locationState.search).get('token') || '', [locationState.search]);
   const isPasswordSetupRoute = locationState.pathname === '/password/setup' || locationState.pathname === '/admin/setup';
+  const isApiDocsRoute = locationState.pathname === '/api' || locationState.pathname === '/api/';
   const needsReleaseNotesAck = authData?.settings?.lastSeenReleaseNotesVersion !== releaseNotes.version;
   const shouldShowReleaseNotes = Boolean(
     authData
@@ -66,7 +68,7 @@ function App() {
   );
 
   const loadSession = useCallback(async () => {
-    if (isPasswordSetupRoute || !getAuthToken()) {
+    if (isPasswordSetupRoute || isApiDocsRoute || !getAuthToken()) {
       setLoadingSession(false);
       return;
     }
@@ -81,7 +83,7 @@ function App() {
     } finally {
       setLoadingSession(false);
     }
-  }, [isPasswordSetupRoute]);
+  }, [isApiDocsRoute, isPasswordSetupRoute]);
 
   useEffect(() => {
     loadSession();
@@ -216,6 +218,10 @@ function App() {
 
   if (loadingSession) {
     return <div className="App min-h-screen bg-slate-100" />;
+  }
+
+  if (isApiDocsRoute) {
+    return <ApiDocsPage locale={locale} />;
   }
 
   if (isPasswordSetupRoute) {

@@ -99,7 +99,7 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
     const normalizedArticles = normalizeIncomingArticles(fetchedArticles);
 
     if (failWhenEmpty && normalizedArticles.length === 0 && database.countArticles() === 0) {
-      throw createError(503, 'Impossibile connettersi ai feed di notizie. Riprova più tardi.', 'CONNECTION_ERROR');
+      throw createError(503, 'Unable to connect to news feeds. Please try again later.', 'CONNECTION_ERROR');
     }
 
     const upsertResult = persistNormalizedArticles(normalizedArticles);

@@ -3,10 +3,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ReaderPanel from './ReaderPanel';
 import { fetchReaderArticle, updateUserSettings } from '../services/api';
 
-jest.mock('../services/api', () => ({
-  fetchReaderArticle: jest.fn(),
-  updateUserSettings: jest.fn(),
-  isRequestCanceled: jest.fn((error) => error?.code === 'ERR_CANCELED')
+vi.mock('../services/api', () => ({
+  fetchReaderArticle: vi.fn(),
+  updateUserSettings: vi.fn(),
+  isRequestCanceled: vi.fn((error) => error?.code === 'ERR_CANCELED')
 }));
 
 function createDeferred() {
