@@ -1,5 +1,5 @@
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 16;
+  const CURRENT_SCHEMA_VERSION = 17;
 
   function initializeSchema(database) {
     database.exec(`
@@ -124,6 +124,7 @@ function createDatabaseSchema({ logger }) {
         recent_hours INTEGER NOT NULL DEFAULT 3,
         auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
         show_news_images INTEGER NOT NULL DEFAULT 1,
+        compact_news_cards INTEGER NOT NULL DEFAULT 0,
         reader_panel_position TEXT NOT NULL DEFAULT 'right',
         reader_text_size TEXT NOT NULL DEFAULT 'medium',
         last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
@@ -215,8 +216,25 @@ function createDatabaseSchema({ logger }) {
         CREATE INDEX IF NOT EXISTS idx_api_tokens_revoked_at ON api_tokens (revoked_at);
       `);
 
-      setCurrentSchemaVersion(database);
+      database.prepare(`
+        INSERT INTO app_meta (key, value)
+        VALUES ('migration_version', '16')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `).run();
+
       logger.info('Migrated DB schema from version 15 to 16');
+      migrateSchema(database, 16);
+      return;
+    }
+
+    if (currentVersion === 16) {
+      database.exec(`
+        ALTER TABLE user_settings
+        ADD COLUMN compact_news_cards INTEGER NOT NULL DEFAULT 0
+      `);
+
+      setCurrentSchemaVersion(database);
+      logger.info('Migrated DB schema from version 16 to 17');
       return;
     }
 

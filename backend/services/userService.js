@@ -199,6 +199,7 @@ function getDefaultSettings() {
     recentHours: MAX_RECENT_HOURS,
     autoRefreshEnabled: true,
     showNewsImages: true,
+    compactNewsCards: false,
     readerPanelPosition: 'right',
     readerTextSize: 'medium',
     lastSeenReleaseNotesVersion: '',
@@ -281,6 +282,9 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     showNewsImages: typeof payload.showNewsImages === 'boolean'
       ? payload.showNewsImages
       : currentSettings.showNewsImages !== false,
+    compactNewsCards: typeof payload.compactNewsCards === 'boolean'
+      ? payload.compactNewsCards
+      : currentSettings.compactNewsCards === true,
     readerPanelPosition: normalizeReaderPanelPosition(payload.readerPanelPosition || currentSettings.readerPanelPosition),
     readerTextSize: normalizeReaderTextSize(payload.readerTextSize || currentSettings.readerTextSize),
     lastSeenReleaseNotesVersion: Object.prototype.hasOwnProperty.call(payload, 'lastSeenReleaseNotesVersion')
@@ -559,7 +563,7 @@ function exportUserSettings(userId) {
   const customSourceIds = new Set(customSources.map((source) => source.id));
 
   return {
-    version: 7,
+    version: 8,
     exportedAt: new Date().toISOString(),
     settings: {
       defaultLanguage: settings.defaultLanguage,
@@ -568,6 +572,7 @@ function exportUserSettings(userId) {
       recentHours: settings.recentHours,
       autoRefreshEnabled: settings.autoRefreshEnabled !== false,
       showNewsImages: settings.showNewsImages !== false,
+      compactNewsCards: settings.compactNewsCards === true,
       readerPanelPosition: settings.readerPanelPosition || 'right',
       readerTextSize: settings.readerTextSize || 'medium',
       lastSeenReleaseNotesVersion: settings.lastSeenReleaseNotesVersion || '',

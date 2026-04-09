@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock3, Download, ExternalLink, Globe2, Image as ImageIcon, KeyRound, MonitorSmartphone, PanelRightOpen, Radio, RefreshCw, TimerReset, Type, Upload } from 'lucide-react';
+import { Clock3, Download, ExternalLink, Globe2, Image as ImageIcon, KeyRound, MonitorSmartphone, PanelRightOpen, Radio, RectangleHorizontal, RefreshCw, TimerReset, Type, Upload } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORDER } from '../../config/readerTextSize';
 
@@ -15,6 +15,7 @@ const SettingsPreferencesSection = ({
   onThemeModeChange,
   onAutoRefreshChange,
   onShowNewsImagesChange,
+  onCompactNewsCardsChange,
   onReaderPanelPositionChange,
   onReaderTextSizeChange,
   onNumericSettingChange,
@@ -191,6 +192,37 @@ const SettingsPreferencesSection = ({
                 aria-hidden="true"
               />
               <span>{settings.showNewsImages !== false ? activeLabel : disabledLabel}</span>
+            </span>
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-700">
+            <RectangleHorizontal className="h-4 w-4 shrink-0 text-cyan-600" />
+            <span>{t('compactNewsCardsSetting')}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => onCompactNewsCardsChange(settings.compactNewsCards !== true)}
+            aria-pressed={settings.compactNewsCards === true}
+            className={`inline-grid shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${
+              settings.compactNewsCards === true
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <span className="invisible col-start-1 row-start-1 flex items-center justify-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full" aria-hidden="true" />
+              <span>{toggleWidthLabel}</span>
+            </span>
+            <span className="col-start-1 row-start-1 flex items-center justify-center gap-2">
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  settings.compactNewsCards === true ? 'bg-emerald-500' : 'bg-slate-300'
+                }`}
+                aria-hidden="true"
+              />
+              <span>{settings.compactNewsCards === true ? activeLabel : disabledLabel}</span>
             </span>
           </button>
         </div>

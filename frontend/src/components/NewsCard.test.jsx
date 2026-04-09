@@ -270,4 +270,32 @@ describe('NewsCard', () => {
     fireEvent.touchEnd(image);
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
   });
+
+  test('renders the compact horizontal layout while preserving actions', () => {
+    const { container } = render(
+      <NewsCard
+        group={{
+          ...group,
+          url: 'https://example.com/story',
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              image: 'https://example.com/image.jpg'
+            }
+          ]
+        }}
+        compact
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(container.firstChild).toHaveClass('flex-row');
+    expect(screen.getByRole('button', { name: 'shareArticle' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'readerMode' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'openOriginalSource' })).toHaveAttribute('href', 'https://example.com/story');
+  });
 });

@@ -5,6 +5,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'What is new',
     intro: 'Here is a quick overview of the latest changes in News Flow.',
     items: [
+      '📰 Settings now include a compact card view that turns news cards into denser horizontal tiles, so you can scan and fit more stories on screen at once.',
       '🎛️ In reader mode, the text-size control now sits next to Share on the left side of the top bar, so the header actions feel more grouped and easier to use.',
       '👆 On news cards, you can now open reader mode faster with a double click on desktop or a double tap on mobile directly on the image or title.',
       '⚙️ Auto refresh and card images now use cleaner On/Off pills in Settings, so those quick preferences feel more aligned with the rest of the interface.',
@@ -22,6 +23,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Ecco una panoramica rapida delle ultime novita di News Flow.',
     items: [
+      '📰 Nelle Impostazioni ora trovi una vista card compatta che trasforma le news card in riquadri orizzontali piu densi, cosi puoi scorrere e vedere piu notizie alla volta.',
       '🎛️ In modalita lettura, il controllo della dimensione del testo ora sta accanto a Share sul lato sinistro della barra in alto, cosi le azioni del reader risultano piu raccolte e comode da usare.',
       '👆 Nelle news card ora puoi aprire piu in fretta la modalita lettura con un doppio click su desktop o un doppio tap su mobile direttamente su immagine o titolo.',
       '⚙️ Auto refresh e immagini card ora usano pill On/Off piu pulite nelle impostazioni, cosi queste preferenze rapide risultano piu coerenti con il resto dell\'interfaccia.',

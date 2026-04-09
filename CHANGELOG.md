@@ -3,6 +3,7 @@
 ## 3.2.9.1
 
 - bumped the release version to `3.2.9.1` and started a new top-level changelog entry while preserving the existing in-app release notes content as history for the next update cycle
+- added a persisted compact news-card view that keeps the existing card actions and reader shortcuts while switching the feed cards to a denser horizontal layout with the image on the left
 
 ## 3.2.9
 

@@ -131,6 +131,13 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     }));
   }, []);
 
+  const setCompactNewsCards = useCallback((value) => {
+    setSettings((current) => ({
+      ...current,
+      compactNewsCards: Boolean(value)
+    }));
+  }, []);
+
   const setReaderPanelPosition = useCallback((value) => {
     setSettings((current) => ({
       ...current,
@@ -322,6 +329,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     setThemeMode,
     setAutoRefreshEnabled,
     setShowNewsImages,
+    setCompactNewsCards,
     setReaderPanelPosition,
     setReaderTextSize,
     updateNumericSetting,
