@@ -182,34 +182,30 @@ const SettingsPreferencesSection = ({
 
         <div className="border-t border-slate-200 pt-5 md:col-span-2">
           <div className="mb-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div className="space-y-2">
+            <div className="space-y-4">
+              <div className="space-y-3">
                 <p className="flex items-center gap-2 text-sm font-semibold text-slate-800">
                   <KeyRound className="h-4 w-4 text-amber-600" />
                   {t('apiTokenTitle')}
                 </p>
-                <p className="text-sm text-slate-600">{t('apiTokenHelp')}</p>
-                <a
-                  href="/api"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-sky-700 transition-colors hover:text-sky-800"
-                >
-                  <span>{t('apiTokenDocsLink')}</span>
-                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                </a>
-                <p className="text-xs text-slate-500">{t('apiTokenExpiryHelp', { days: settingsLimits.apiTokenTtlDays || 30 })}</p>
-                {apiToken ? (
-                  <div className="space-y-1 text-xs text-slate-500">
-                    <p>{t('apiTokenActivePrefix', { prefix: apiToken.tokenPrefix })}</p>
-                    <p>{t('apiTokenExpiresAt', { date: new Date(apiToken.expiresAt).toLocaleString() })}</p>
-                    {apiToken.lastUsedAt ? <p>{t('apiTokenLastUsedAt', { date: new Date(apiToken.lastUsedAt).toLocaleString() })}</p> : null}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500">{t('apiTokenInactive')}</p>
-                )}
+                <p className="max-w-2xl text-sm text-slate-600">{t('apiTokenHelp')}</p>
+                <div className="flex flex-wrap gap-2">
+                  <a
+                    href="/api"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex w-fit items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 transition-colors hover:bg-sky-100"
+                  >
+                    <span>{t('apiTokenDocsLink')}</span>
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                  </a>
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600">
+                    {t('apiTokenExpiryHelp', { days: settingsLimits.apiTokenTtlDays || 30 })}
+                  </span>
+                </div>
               </div>
-              <div className="flex shrink-0 gap-2">
+
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={onCreateApiToken}
@@ -229,6 +225,27 @@ const SettingsPreferencesSection = ({
                   </button>
                 ) : null}
               </div>
+
+              {apiToken ? (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="min-w-0 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">{t('apiTokenStatusLabel')}</p>
+                    <p className="mt-1 text-sm font-medium text-emerald-900 break-all">{apiToken.tokenPrefix}</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t('apiTokenExpiresLabel')}</p>
+                    <p className="mt-1 text-sm font-medium text-slate-800 break-words">{new Date(apiToken.expiresAt).toLocaleString()}</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t('apiTokenLastUsedLabel')}</p>
+                    <p className="mt-1 text-sm font-medium text-slate-800 break-words">{apiToken.lastUsedAt ? new Date(apiToken.lastUsedAt).toLocaleString() : t('apiTokenLastUsedEmpty')}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500">
+                  {t('apiTokenInactive')}
+                </div>
+              )}
             </div>
 
             {newApiToken ? (
