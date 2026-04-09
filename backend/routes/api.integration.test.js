@@ -388,6 +388,85 @@ describe('API auth and user flows', () => {
     });
   });
 
+  test('revokes api tokens immediately and removes their rows from the database', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'revoke-user', password: 'secret123' })
+      .expect(201);
+
+    const sessionToken = registerResponse.body.token;
+
+    const createResponse = await request(app)
+      .post('/api/me/api-token')
+      .set('Authorization', `Bearer ${sessionToken}`)
+      .send({})
+      .expect(201);
+
+    const apiToken = createResponse.body.token;
+    const userId = registerResponse.body.user.id;
+
+    expect(database.getDb().prepare('SELECT COUNT(*) AS count FROM api_tokens WHERE user_id = ?').get(userId).count).toBe(1);
+
+    await request(app)
+      .delete('/api/me/api-token')
+      .set('Authorization', `Bearer ${sessionToken}`)
+      .expect(200);
+
+    await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${apiToken}`)
+      .expect(401);
+
+    expect(database.getDb().prepare('SELECT COUNT(*) AS count FROM api_tokens WHERE user_id = ?').get(userId).count).toBe(0);
+  });
+
+  test('regenerates api tokens immediately and removes the previous token row', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'regen-user', password: 'secret123' })
+      .expect(201);
+
+    const sessionToken = registerResponse.body.token;
+    const userId = registerResponse.body.user.id;
+
+    const firstTokenResponse = await request(app)
+      .post('/api/me/api-token')
+      .set('Authorization', `Bearer ${sessionToken}`)
+      .send({})
+      .expect(201);
+
+    const firstToken = firstTokenResponse.body.token;
+
+    const secondTokenResponse = await request(app)
+      .post('/api/me/api-token')
+      .set('Authorization', `Bearer ${sessionToken}`)
+      .send({})
+      .expect(201);
+
+    const secondToken = secondTokenResponse.body.token;
+
+    expect(secondToken).not.toBe(firstToken);
+
+    await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${firstToken}`)
+      .expect(401);
+
+    await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${secondToken}`)
+      .expect(200);
+
+    const tokenRows = database.getDb().prepare(`
+      SELECT token_prefix AS tokenPrefix
+      FROM api_tokens
+      WHERE user_id = ?
+    `).all(userId);
+
+    expect(tokenRows).toHaveLength(1);
+    expect(tokenRows[0].tokenPrefix).toBe(secondToken.slice(0, 12));
+  });
+
   test('adds, updates, and removes a personal source after validation', async () => {
     rssParser.validateFeedUrl
       .mockResolvedValueOnce({ title: 'Example Feed', language: 'en', itemCount: 10 })

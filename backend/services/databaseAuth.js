@@ -204,10 +204,9 @@ function createAuthRepository({ getDb }) {
     }
 
     return getDb().prepare(`
-      UPDATE api_tokens
-      SET revoked_at = ?, last_used_at = COALESCE(last_used_at, created_at)
+      DELETE FROM api_tokens
       WHERE user_id = ? AND revoked_at IS NULL
-    `).run(revokedAt, userId).changes;
+    `).run(userId).changes;
   }
 
   function touchApiTokenUsage(tokenId, usedAt, usedIp = null) {
