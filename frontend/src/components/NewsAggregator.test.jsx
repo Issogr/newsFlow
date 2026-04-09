@@ -18,7 +18,7 @@ vi.mock('../hooks/useOnClickOutside', () => ({
 }));
 
 vi.mock('./NewsCard', () => ({
-  default: ({ group }) => <div>{group.title}</div>
+  default: ({ group, compact }) => <div>{group.title}{compact ? ' compact' : ''}</div>
 }));
 vi.mock('./ReaderPanel', () => ({
   default: () => null
@@ -77,6 +77,7 @@ const currentUser = {
     recentHours: 3,
     autoRefreshEnabled: true,
     showNewsImages: true,
+    compactNewsCards: false,
     readerPanelPosition: 'right',
     readerTextSize: 'medium',
     excludedSourceIds: [],
@@ -245,6 +246,26 @@ describe('NewsAggregator', () => {
         excludedSubSourceIds: ['ansa_world']
       });
     });
+  });
+
+  test('passes the compact card preference to news cards', async () => {
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'First headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    await renderNewsAggregator({
+      currentUser: {
+        ...currentUser,
+        settings: {
+          ...currentUser.settings,
+          compactNewsCards: true
+        }
+      }
+    });
+
+    expect(await screen.findByText('First headline compact')).toBeInTheDocument();
   });
 
   test('marks already visible groups as seen after loading news', async () => {

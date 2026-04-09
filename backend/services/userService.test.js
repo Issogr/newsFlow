@@ -54,6 +54,7 @@ describe('userService imports', () => {
         recentHours: 2,
         autoRefreshEnabled: false,
         showNewsImages: false,
+        compactNewsCards: true,
         readerPanelPosition: 'left',
         readerTextSize: 'large',
         lastSeenReleaseNotesVersion: '3.2.3',
@@ -77,6 +78,7 @@ describe('userService imports', () => {
         recentHours: 2,
         autoRefreshEnabled: false,
         showNewsImages: false,
+        compactNewsCards: true,
         readerPanelPosition: 'left',
         readerTextSize: 'large',
         lastSeenReleaseNotesVersion: '3.2.3',
@@ -112,6 +114,7 @@ describe('userService imports', () => {
     userService.updateUserSettings(sourceAuthPayload.user.id, {
       themeMode: 'dark',
       showNewsImages: false,
+      compactNewsCards: true,
       autoRefreshEnabled: false,
       recentHours: 2,
       readerTextSize: 'small'
@@ -122,6 +125,7 @@ describe('userService imports', () => {
     expect(exportedSettings.settings).toMatchObject({
       themeMode: 'dark',
       showNewsImages: false,
+      compactNewsCards: true,
       autoRefreshEnabled: false,
       recentHours: 2,
       readerTextSize: 'small'
@@ -139,6 +143,7 @@ describe('userService imports', () => {
     expect(database.getUserSettings(targetAuthPayload.user.id)).toMatchObject({
       themeMode: 'dark',
       showNewsImages: false,
+      compactNewsCards: true,
       autoRefreshEnabled: false,
       recentHours: 2
     });

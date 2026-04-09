@@ -69,13 +69,14 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('16');
+    expect(migrationVersion).toBe('17');
     expect(articleColumns).toContain('canonical_url');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
     expect(settingsColumns).toContain('auto_refresh_enabled');
     expect(settingsColumns).toContain('show_news_images');
+    expect(settingsColumns).toContain('compact_news_cards');
     expect(settingsColumns).toContain('reader_text_size');
     expect(settingsColumns).toContain('reader_panel_position');
     expect(settingsColumns).toContain('last_seen_release_notes_version');
@@ -158,9 +159,9 @@ describe('database migrations', () => {
         used_at TEXT
       );
 
-      INSERT INTO app_meta (key, value) VALUES ('migration_version', '15');
-      INSERT INTO articles (id, source_id, source_name, title, canonical_url) VALUES ('article-1', 'ansa', 'ANSA', 'Headline', 'https://example.com/story');
-      INSERT INTO article_topics (article_id, topic) VALUES ('article-1', 'economy');
+       INSERT INTO app_meta (key, value) VALUES ('migration_version', '16');
+       INSERT INTO articles (id, source_id, source_name, title, canonical_url) VALUES ('article-1', 'ansa', 'ANSA', 'Headline', 'https://example.com/story');
+       INSERT INTO article_topics (article_id, topic) VALUES ('article-1', 'economy');
     `);
 
     sqlite.close();
@@ -191,8 +192,9 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('16');
+    expect(migratedVersion).toBe('17');
     expect(settingsColumns).toContain('show_news_images');
+    expect(settingsColumns).toContain('compact_news_cards');
     expect(settingsColumns).toContain('reader_text_size');
     expect(settingsColumns).toContain('theme_mode');
     expect(userColumns).toContain('role');
@@ -434,6 +436,7 @@ describe('database queries and user data', () => {
       articleRetentionHours: 12,
       recentHours: 2,
       autoRefreshEnabled: false,
+      compactNewsCards: true,
       readerPanelPosition: 'left',
       readerTextSize: 'large',
       lastSeenReleaseNotesVersion: '3.2.3',
@@ -447,6 +450,7 @@ describe('database queries and user data', () => {
       articleRetentionHours: 12,
       recentHours: 2,
       autoRefreshEnabled: false,
+      compactNewsCards: true,
       readerPanelPosition: 'left',
       readerTextSize: 'large',
       lastSeenReleaseNotesVersion: '3.2.3',

@@ -1,6 +1,26 @@
 import React, { useMemo } from 'react';
 import BrandMark from './BrandMark';
 
+function renderTextWithInlineCode(text) {
+  const content = String(text || '');
+  const segments = content.split(/(`[^`]+`)/g).filter(Boolean);
+
+  return segments.map((segment, index) => {
+    if (segment.startsWith('`') && segment.endsWith('`')) {
+      return (
+        <code
+          key={`${segment}-${index}`}
+          className="rounded-md bg-slate-200 px-1.5 py-0.5 font-mono text-[0.92em] text-slate-900"
+        >
+          {segment.slice(1, -1)}
+        </code>
+      );
+    }
+
+    return <React.Fragment key={`${segment}-${index}`}>{segment}</React.Fragment>;
+  });
+}
+
 const docsContent = {
   en: {
     eyebrow: 'Public API',
@@ -108,10 +128,10 @@ const ApiDocsPage = ({ locale }) => {
         <div className="space-y-6">
           {content.sections.map((section) => (
             <section key={section.title} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-              <h2 className="text-lg font-semibold text-slate-900">{section.title}</h2>
-              <ul className="mt-3 space-y-2 text-sm text-slate-700">
-                {section.items.map((item) => (
-                  <li key={item} className="leading-6">{item}</li>
+                <h2 className="text-lg font-semibold text-slate-900">{section.title}</h2>
+                <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                  {section.items.map((item) => (
+                  <li key={item} className="leading-6">{renderTextWithInlineCode(item)}</li>
                 ))}
               </ul>
             </section>

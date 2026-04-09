@@ -63,6 +63,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const preferredLanguage = currentUser?.settings?.defaultLanguage;
   const autoRefreshEnabled = currentUser?.settings?.autoRefreshEnabled !== false;
   const showNewsImages = currentUser?.settings?.showNewsImages !== false;
+  const compactNewsCards = currentUser?.settings?.compactNewsCards === true;
   const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
   const t = useMemo(() => createTranslator(locale), [locale]);
   const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
@@ -612,6 +613,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   key={group.id}
                   group={group}
                   showImages={showNewsImages}
+                  compact={compactNewsCards}
                   locale={locale}
                   t={t}
                   onOpenReader={openReader}
