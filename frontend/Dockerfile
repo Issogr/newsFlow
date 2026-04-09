@@ -1,5 +1,7 @@
 # Build stage
-FROM node:22-alpine AS build
+# The frontend build output is static, so build on the native builder platform
+# to avoid qemu arm64 npm/esbuild crashes during multi-arch image builds.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS build
 
 # Imposta la directory di lavoro
 WORKDIR /app
