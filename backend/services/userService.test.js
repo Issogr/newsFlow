@@ -55,6 +55,7 @@ describe('userService imports', () => {
         autoRefreshEnabled: false,
         showNewsImages: false,
         compactNewsCards: true,
+        compactNewsCardsMode: 'everywhere',
         readerPanelPosition: 'left',
         readerTextSize: 'large',
         lastSeenReleaseNotesVersion: '3.2.3',
@@ -79,6 +80,7 @@ describe('userService imports', () => {
         autoRefreshEnabled: false,
         showNewsImages: false,
         compactNewsCards: true,
+        compactNewsCardsMode: 'everywhere',
         readerPanelPosition: 'left',
         readerTextSize: 'large',
         lastSeenReleaseNotesVersion: '3.2.3',
@@ -115,6 +117,7 @@ describe('userService imports', () => {
       themeMode: 'dark',
       showNewsImages: false,
       compactNewsCards: true,
+      compactNewsCardsMode: 'desktop',
       autoRefreshEnabled: false,
       recentHours: 2,
       readerTextSize: 'small'
@@ -126,6 +129,7 @@ describe('userService imports', () => {
       themeMode: 'dark',
       showNewsImages: false,
       compactNewsCards: true,
+      compactNewsCardsMode: 'desktop',
       autoRefreshEnabled: false,
       recentHours: 2,
       readerTextSize: 'small'
@@ -144,6 +148,7 @@ describe('userService imports', () => {
       themeMode: 'dark',
       showNewsImages: false,
       compactNewsCards: true,
+      compactNewsCardsMode: 'desktop',
       autoRefreshEnabled: false,
       recentHours: 2
     });

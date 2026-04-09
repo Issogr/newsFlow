@@ -162,24 +162,33 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
     </div>
   );
 
+  const compactWithoutImage = compact && !imageUrl;
+  const shareControls = (
+    <>
+      <ShareStatusBubble
+        shareState={shareState}
+        t={t}
+        className={`share-status-pill-from-button ${compact ? 'order-2 ml-2 max-w-[min(12rem,calc(100vw-9rem))]' : 'mr-2 max-w-[min(16rem,calc(100vw-7rem))]'}`}
+      />
+      <button
+        type="button"
+        onClick={handleShare}
+        disabled={!safeOriginalUrl}
+        className={`inline-flex shrink-0 items-center justify-center rounded-full border bg-white/80 text-slate-700 shadow-sm backdrop-blur-md transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 ${compact ? 'order-1 h-10 w-10 border-slate-200/80' : 'h-11 w-11 border-white/60'}`}
+        aria-label={t('shareArticle')}
+      >
+        <Share2 className="h-4 w-4" />
+      </button>
+    </>
+  );
+
   return (
     <article className={`relative flex overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-xl ${compact ? 'h-[12.5rem] max-h-[12.5rem] flex-row' : 'h-full min-h-[20rem] flex-col'}`}>
-      <div className={`absolute z-10 flex items-center ${compact ? 'left-3 top-3 justify-start' : 'right-4 top-4 justify-end'}`}>
-        <ShareStatusBubble
-          shareState={shareState}
-          t={t}
-          className={`share-status-pill-from-button ${compact ? 'order-2 ml-2 max-w-[min(12rem,calc(100vw-9rem))]' : 'mr-2 max-w-[min(16rem,calc(100vw-7rem))]'}`}
-        />
-        <button
-          type="button"
-          onClick={handleShare}
-          disabled={!safeOriginalUrl}
-          className={`inline-flex shrink-0 items-center justify-center rounded-full border bg-white/80 text-slate-700 shadow-sm backdrop-blur-md transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 ${compact ? 'order-1 h-10 w-10 border-white/70' : 'h-11 w-11 border-white/60'}`}
-          aria-label={t('shareArticle')}
-        >
-          <Share2 className="h-4 w-4" />
-        </button>
-      </div>
+      {compactWithoutImage ? null : (
+        <div className={`absolute z-10 flex items-center ${compact ? 'left-3 top-3 justify-start' : 'right-4 top-4 justify-end'}`}>
+          {shareControls}
+        </div>
+      )}
 
       {imageUrl ? (
         <div
@@ -204,12 +213,26 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
         </div>
       ) : null}
       <div className={`flex min-w-0 flex-1 flex-col ${compact ? 'p-3' : 'p-5 pr-20'}`}>
-        <h2
-          className={`${compact ? 'pr-1 text-[15px] leading-5' : 'text-xl'} font-semibold text-slate-900`}
-          {...interactionPropsByArea.title}
-        >
-          {group.title}
-        </h2>
+        {compactWithoutImage ? (
+          <div className="flex items-start gap-2">
+            <div className="flex shrink-0 items-center justify-start">
+              {shareControls}
+            </div>
+            <h2
+              className="min-w-0 flex-1 pt-1 text-[15px] font-semibold leading-5 text-slate-900"
+              {...interactionPropsByArea.title}
+            >
+              {group.title}
+            </h2>
+          </div>
+        ) : (
+          <h2
+            className={`${compact ? 'pr-1 text-[15px] leading-5' : 'text-xl'} font-semibold text-slate-900`}
+            {...interactionPropsByArea.title}
+          >
+            {group.title}
+          </h2>
+        )}
 
         {compact ? null : (
           <>

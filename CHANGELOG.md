@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.2.9.2
+
+- fixed compact no-image cards so the share action no longer overlaps the title and now sits beside it without changing the standard card layout
+- replaced the compact-card toggle with an explicit scope setting (`Off`, `Mobile only`, `Desktop only`, `Everywhere`) and migrated existing enabled compact-card preferences to the all-devices mode
+
 ## 3.2.9.1
 
 - bumped the release version to `3.2.9.1` and started a new top-level changelog entry while preserving the existing in-app release notes content as history for the next update cycle

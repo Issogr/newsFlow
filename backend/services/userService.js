@@ -200,12 +200,22 @@ function getDefaultSettings() {
     autoRefreshEnabled: true,
     showNewsImages: true,
     compactNewsCards: false,
+    compactNewsCardsMode: 'off',
     readerPanelPosition: 'right',
     readerTextSize: 'medium',
     lastSeenReleaseNotesVersion: '',
     excludedSourceIds: [],
     excludedSubSourceIds: []
   };
+}
+
+function normalizeCompactNewsCardsMode(value, fallback = 'off') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['off', 'mobile', 'desktop', 'everywhere'].includes(normalized)) {
+    return normalized;
+  }
+
+  return ['off', 'mobile', 'desktop', 'everywhere'].includes(fallback) ? fallback : 'off';
 }
 
 function getUserSettings(userId) {
@@ -272,6 +282,10 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
   );
 
   return {
+    compactNewsCardsMode: normalizeCompactNewsCardsMode(
+      payload.compactNewsCardsMode,
+      currentSettings.compactNewsCardsMode || (currentSettings.compactNewsCards === true ? 'everywhere' : 'off')
+    ),
     defaultLanguage: normalizeLanguage(payload.defaultLanguage || currentSettings.defaultLanguage),
     themeMode: normalizeThemeMode(payload.themeMode || currentSettings.themeMode),
     articleRetentionHours,
@@ -282,9 +296,20 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     showNewsImages: typeof payload.showNewsImages === 'boolean'
       ? payload.showNewsImages
       : currentSettings.showNewsImages !== false,
-    compactNewsCards: typeof payload.compactNewsCards === 'boolean'
-      ? payload.compactNewsCards
-      : currentSettings.compactNewsCards === true,
+    compactNewsCards: (() => {
+      if (typeof payload.compactNewsCardsMode === 'string') {
+        return normalizeCompactNewsCardsMode(payload.compactNewsCardsMode) !== 'off';
+      }
+
+      if (typeof payload.compactNewsCards === 'boolean') {
+        return payload.compactNewsCards;
+      }
+
+      return normalizeCompactNewsCardsMode(
+        currentSettings.compactNewsCardsMode,
+        currentSettings.compactNewsCards === true ? 'everywhere' : 'off'
+      ) !== 'off';
+    })(),
     readerPanelPosition: normalizeReaderPanelPosition(payload.readerPanelPosition || currentSettings.readerPanelPosition),
     readerTextSize: normalizeReaderTextSize(payload.readerTextSize || currentSettings.readerTextSize),
     lastSeenReleaseNotesVersion: Object.prototype.hasOwnProperty.call(payload, 'lastSeenReleaseNotesVersion')
@@ -563,7 +588,7 @@ function exportUserSettings(userId) {
   const customSourceIds = new Set(customSources.map((source) => source.id));
 
   return {
-    version: 8,
+    version: 9,
     exportedAt: new Date().toISOString(),
     settings: {
       defaultLanguage: settings.defaultLanguage,
@@ -573,6 +598,7 @@ function exportUserSettings(userId) {
       autoRefreshEnabled: settings.autoRefreshEnabled !== false,
       showNewsImages: settings.showNewsImages !== false,
       compactNewsCards: settings.compactNewsCards === true,
+      compactNewsCardsMode: normalizeCompactNewsCardsMode(settings.compactNewsCardsMode, settings.compactNewsCards === true ? 'everywhere' : 'off'),
       readerPanelPosition: settings.readerPanelPosition || 'right',
       readerTextSize: settings.readerTextSize || 'medium',
       lastSeenReleaseNotesVersion: settings.lastSeenReleaseNotesVersion || '',
