@@ -5,8 +5,10 @@ backend/coverage/
 backend/.eslintcache
 frontend/node_modules/
 frontend/build/
+frontend/dist/
 frontend/coverage/
 frontend/.eslintcache
+frontend/.vite/
 
 .DS_Store
 .idea/

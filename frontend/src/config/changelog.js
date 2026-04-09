@@ -9,6 +9,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '👆 On news cards, you can now open reader mode faster with a double click on desktop or a double tap on mobile directly on the image or title.',
       '⚙️ Auto refresh and card images now use cleaner On/Off pills in Settings, so those quick preferences feel more aligned with the rest of the interface.',
       '⏱️ Scheduled news checks are now slower by default, moving from 5 minutes to 15 minutes to stay fresh without being too aggressive with upstream sources.',
+      '⚡ The frontend now runs on a newer Vite-based stack behind the scenes, making the app easier to maintain and update safely over time.',
+      '🛠️ Reader mode, settings, feedback, and session handling also received internal cleanup to keep a few key parts of the app more consistent and reliable.',
     ]
   },
   it: {
@@ -20,6 +22,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '👆 Nelle news card ora puoi aprire piu in fretta la modalita lettura con un doppio click su desktop o un doppio tap su mobile direttamente su immagine o titolo.',
       '⚙️ Auto refresh e immagini card ora usano pill On/Off piu pulite nelle impostazioni, cosi queste preferenze rapide risultano piu coerenti con il resto dell\'interfaccia.',
       '⏱️ I controlli automatici delle notizie ora sono piu lenti di default: si passa da 5 minuti a 15 minuti per restare aggiornati senza essere troppo aggressivi verso le fonti.',
+      '⚡ Il frontend ora gira su una base piu moderna con Vite dietro le quinte, cosi manutenzione e aggiornamenti futuri risultano piu semplici e sicuri.',
+      '🛠️ Anche modalita lettura, impostazioni, feedback e gestione sessioni hanno ricevuto una pulizia interna per restare piu coerenti e affidabili nei punti chiave dell\'app.',
     ]
   }
 };

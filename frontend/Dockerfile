@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine AS build
+FROM node:22-alpine AS build
 
 # Imposta la directory di lavoro
 WORKDIR /app
@@ -25,8 +25,8 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Rimuovi i file predefiniti
 RUN rm -rf /usr/share/nginx/html/*
 
-# Copia i file buildati dall'app React
-COPY --from=build /app/build /usr/share/nginx/html
+# Copia i file buildati dall'app Vite
+COPY --from=build /app/dist /usr/share/nginx/html
 
 # Esponi la porta 80
 EXPOSE 80

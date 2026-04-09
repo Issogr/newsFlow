@@ -2,6 +2,13 @@
 
 ## 3.2.9
 
+- removed permanently disabled grouping code, unused exports, stale translation keys, and generated frontend build artifacts so the repository and runtime paths are easier to maintain
+- consolidated duplicated feedback validation and attachment handling into shared helpers, and aligned frontend feedback limits with backend-defined settings payloads
+- unified authenticated session resolution across HTTP and WebSocket paths to reduce drift between token parsing, expiry checks, and activity tracking
+- migrated the frontend from `react-scripts` to a Vite + Vitest toolchain, renamed JSX-bearing files to `.jsx`, replaced CRA-specific entry handling, and updated tests to run on the new stack
+- upgraded backend `@mozilla/readability` to the current supported release and cleared the remaining backend audit advisory without changing reader-service behavior
+- upgraded the frontend Vite/Vitest stack to current compatible releases, added explicit `esbuild` support for the temporary JSX compatibility transform, then replaced the deprecated transform path with the native OXC-based flow
+- updated Docker frontend builds to use a Node 22 build image and the Vite `dist/` output, restoring successful `docker compose up --build` behavior after the frontend toolchain migration
 - refreshed reader mode so the header controls, source/read-time metadata, and content cards now align more closely with the main News Flow visual language while keeping the article body as the primary focus
 - simplified the reader toolbar by moving `Share` into a compact top-left icon action, replacing the text-size dropdown with a `- aA +` stepper, and removing extra header actions that competed with the reading flow
 - widened the reader content column, tightened the side gutters, and fixed dark-mode header/title surfaces so the reading panel uses more space without losing its calm layout

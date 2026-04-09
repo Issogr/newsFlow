@@ -6,13 +6,13 @@ import {
   updateUserSource
 } from '../../services/api';
 
-jest.mock('../../services/api', () => ({
-  addUserSource: jest.fn(),
-  deleteUserSource: jest.fn(),
-  exportUserSettings: jest.fn(),
-  importUserSettings: jest.fn(),
-  updateUserSource: jest.fn(),
-  updateUserSettings: jest.fn()
+vi.mock('../../services/api', () => ({
+  addUserSource: vi.fn(),
+  deleteUserSource: vi.fn(),
+  exportUserSettings: vi.fn(),
+  importUserSettings: vi.fn(),
+  updateUserSource: vi.fn(),
+  updateUserSettings: vi.fn()
 }));
 
 const baseCurrentUser = {

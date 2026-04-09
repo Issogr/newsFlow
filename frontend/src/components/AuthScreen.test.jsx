@@ -21,7 +21,7 @@ describe('AuthScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'alice' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create user' }));
+    fireEvent.submit(screen.getByRole('button', { name: 'Create user' }).closest('form'));
 
     expect(onRegister).not.toHaveBeenCalled();
     expect(await screen.findByText('Password is required')).toBeInTheDocument();

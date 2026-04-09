@@ -2,12 +2,12 @@ import { act, renderHook } from '@testing-library/react';
 import { io } from 'socket.io-client';
 import useWebSocket from './useWebSocket';
 
-jest.mock('socket.io-client', () => ({
-  io: jest.fn()
+vi.mock('socket.io-client', () => ({
+  io: vi.fn()
 }));
 
-jest.mock('../services/api', () => ({
-  getAuthToken: jest.fn(() => 'session-token')
+vi.mock('../services/api', () => ({
+  getAuthToken: vi.fn(() => 'session-token')
 }));
 
 describe('useWebSocket', () => {

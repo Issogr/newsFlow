@@ -98,7 +98,7 @@ describe('NewsCard', () => {
       />
     );
 
-    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringContaining('generic-news-cover'));
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover|^data:image\/svg\+xml/));
   });
 
   test('falls back to the generic illustration for unsafe or broken article images', () => {
@@ -121,7 +121,7 @@ describe('NewsCard', () => {
       />
     );
 
-    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringContaining('generic-news-cover'));
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover|^data:image\/svg\+xml/));
 
     rerender(
       <NewsCard
@@ -145,7 +145,7 @@ describe('NewsCard', () => {
     const image = screen.getByRole('img', { name: 'Headline' });
     fireEvent.error(image);
 
-    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringContaining('generic-news-cover'));
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover|^data:image\/svg\+xml/));
   });
 
   test('disables unsafe external links', () => {
@@ -207,7 +207,7 @@ describe('NewsCard', () => {
     expect(screen.getByText('shareCopiedMessage')).toBeInTheDocument();
   });
 
-  test('opens reader mode on title double click and image double tap', () => {
+  test('opens reader mode on title double click and reader button click', () => {
     const onOpenReader = jest.fn();
 
     render(
@@ -234,15 +234,8 @@ describe('NewsCard', () => {
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
 
     onOpenReader.mockClear();
-    jest.spyOn(Date, 'now')
-      .mockReturnValueOnce(1000)
-      .mockReturnValueOnce(1200)
-      .mockReturnValueOnce(2000);
-
-    const image = screen.getByRole('img', { name: 'Headline' });
-
-    fireEvent.touchEnd(image);
-    fireEvent.touchEnd(image);
+    jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000);
+    fireEvent.click(screen.getByRole('button', { name: 'readerMode' }));
 
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
   });

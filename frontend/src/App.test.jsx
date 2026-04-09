@@ -1,40 +1,41 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
-
-jest.mock('./services/api', () => ({
-  completePasswordSetup: jest.fn(),
-  fetchCurrentUser: jest.fn(),
-  fetchAdminUsers: jest.fn(),
-  getAuthToken: jest.fn(),
-  loginUser: jest.fn(),
-  logoutUser: jest.fn(),
-  createAdminPasswordSetupLink: jest.fn(),
-  registerUser: jest.fn(),
-  setAuthToken: jest.fn(),
-  updateUserSettings: jest.fn(),
-  validatePasswordSetupToken: jest.fn()
-}));
-
-jest.mock('./components/NewsAggregator', () => ({ onOpenReleaseNotes }) => (
-  <div>
-    <div>Authenticated app</div>
-    <button type="button" onClick={onOpenReleaseNotes}>Open release notes</button>
-  </div>
-));
-
-jest.mock('./components/AdminDashboard', () => ({ currentUser }) => (
-  <div>Admin dashboard for {currentUser?.user?.username}</div>
-));
-
-const {
+import {
   completePasswordSetup,
   fetchCurrentUser,
-  validatePasswordSetupToken,
   getAuthToken,
   setAuthToken,
-  updateUserSettings
-} = require('./services/api');
+  updateUserSettings,
+  validatePasswordSetupToken
+} from './services/api';
+
+vi.mock('./services/api', () => ({
+  completePasswordSetup: vi.fn(),
+  fetchCurrentUser: vi.fn(),
+  fetchAdminUsers: vi.fn(),
+  getAuthToken: vi.fn(),
+  loginUser: vi.fn(),
+  logoutUser: vi.fn(),
+  createAdminPasswordSetupLink: vi.fn(),
+  registerUser: vi.fn(),
+  setAuthToken: vi.fn(),
+  updateUserSettings: vi.fn(),
+  validatePasswordSetupToken: vi.fn()
+}));
+
+vi.mock('./components/NewsAggregator', () => ({
+  default: ({ onOpenReleaseNotes }) => (
+    <div>
+      <div>Authenticated app</div>
+      <button type="button" onClick={onOpenReleaseNotes}>Open release notes</button>
+    </div>
+  )
+}));
+
+vi.mock('./components/AdminDashboard', () => ({
+  default: ({ currentUser }) => <div>Admin dashboard for {currentUser?.user?.username}</div>
+}));
 
 function createCurrentUser(settings = {}) {
   return {
