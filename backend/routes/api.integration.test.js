@@ -26,7 +26,7 @@ function buildApiTestApp() {
    app.use('/internal-api', apiRoutes);
    app.use('/api/public', publicApiRoutes);
   app.use((req, res, next) => {
-    next(createError(404, `Risorsa non trovata: ${req.originalUrl}`, 'RESOURCE_NOT_FOUND'));
+    next(createError(404, `Resource not found: ${req.originalUrl}`, 'RESOURCE_NOT_FOUND'));
   });
   app.use(errorMiddleware);
   return app;

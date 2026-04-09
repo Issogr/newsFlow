@@ -1,14 +1,14 @@
 import { useEffect } from 'react';
 
 /**
- * Hook personalizzato per rilevare i clic fuori da un elemento
- * @param {React.RefObject} ref - Riferimento all'elemento da monitorare
- * @param {Function} handler - Funzione da chiamare quando si clicca fuori
+ * Custom hook that detects clicks outside an element
+ * @param {React.RefObject} ref - Reference to the element to watch
+ * @param {Function} handler - Function to call when clicking outside
  */
 export function useOnClickOutside(ref, handler) {
   useEffect(() => {
     const listener = (event) => {
-      // Non fare nulla se il clic è all'interno dell'elemento
+      // Do nothing when the click is inside the element
       if (!ref.current || ref.current.contains(event.target)) {
         return;
       }

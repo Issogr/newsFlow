@@ -69,7 +69,7 @@ async function ingestAllNews(options = {}) {
       return payload;
     } catch (error) {
       logger.error(`News ingestion failed: ${error.message}`);
-      throw error.status ? error : createError(500, 'Errore durante l\'aggiornamento delle notizie.', 'SERVER_ERROR', error);
+      throw error.status ? error : createError(500, 'An error occurred while refreshing news.', 'SERVER_ERROR', error);
     }
   }).finally(() => {
     refreshPromise = null;

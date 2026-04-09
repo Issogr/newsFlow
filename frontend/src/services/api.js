@@ -37,11 +37,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.code === 'ECONNABORTED') {
-      error.message = 'La richiesta è scaduta. Riprova tra qualche secondo.';
+      error.message = 'The request timed out. Please try again in a few seconds.';
     } else if (!error.response) {
-      error.message = 'Impossibile connettersi al server. Controlla la connessione.';
+      error.message = 'Unable to connect to the server. Check your connection.';
     } else if (error.response.status === 429) {
-      error.message = 'Troppe richieste. Attendi qualche momento prima di riprovare.';
+      error.message = 'Too many requests. Please wait a moment before trying again.';
     }
 
     return Promise.reject(error);

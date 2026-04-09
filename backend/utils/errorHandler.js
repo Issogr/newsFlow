@@ -1,45 +1,45 @@
 /**
- * Utility per standardizzare la gestione degli errori nell'applicazione
+ * Utility for standardizing application error handling
  */
 
 const logger = require('./logger');
 
 /**
- * Mappa i codici di errore interni a messaggi di errore user-friendly
+ * Maps internal error codes to user-friendly error messages
  */
 const ERROR_MESSAGES = {
-  'SERVER_ERROR': 'Si è verificato un errore interno. Riprova più tardi.',
-  'CONNECTION_ERROR': 'Impossibile connettersi ai feed di notizie. Per favore riprova più tardi.',
-  'SEARCH_ERROR': 'Si è verificato un errore durante la ricerca. Riprova più tardi.',
-  'TOPICS_ERROR': 'Si è verificato un errore nel recupero dei topic. Riprova più tardi.',
-  'TOPIC_MAP_ERROR': 'Si è verificato un errore nel recupero delle mappature dei topic.',
-  'SOURCES_ERROR': 'Si è verificato un errore nel recupero delle fonti. Riprova più tardi.',
-  'MISSING_QUERY': 'È necessario specificare un termine di ricerca',
-  'INVALID_SEARCH_QUERY': 'Il termine di ricerca deve contenere almeno 2 caratteri',
-  'NO_NEWS_AVAILABLE': 'Nessuna notizia disponibile al momento',
-  'RESOURCE_NOT_FOUND': 'La risorsa richiesta non è stata trovata',
-  'INVALID_ARTICLE_ID': 'ID articolo non valido',
-  'RATE_LIMIT_EXCEEDED': 'Troppe richieste, riprova più tardi',
-  'REFRESH_RATE_LIMIT_EXCEEDED': 'Troppe richieste di aggiornamento, riprova più tardi',
-  'WS_RATE_LIMIT_EXCEEDED': 'Troppe richieste WebSocket, riprova più tardi',
-  'VALIDATION_ERROR': 'I dati forniti non sono validi',
-  'UNAUTHORIZED': 'Non sei autorizzato ad accedere a questa risorsa',
-  'FORBIDDEN': 'Accesso negato a questa risorsa',
-  'ADMIN_TOKEN_NOT_CONFIGURED': 'Il token amministrativo non è configurato sul server',
-  'INVALID_URL': 'L\'URL fornito non è valido',
-  'FORBIDDEN_URL': 'L\'URL fornito non può essere raggiunto dal server'
+  'SERVER_ERROR': 'An internal error occurred. Please try again later.',
+  'CONNECTION_ERROR': 'Unable to connect to news feeds. Please try again later.',
+  'SEARCH_ERROR': 'An error occurred while searching. Please try again later.',
+  'TOPICS_ERROR': 'An error occurred while loading topics. Please try again later.',
+  'TOPIC_MAP_ERROR': 'An error occurred while loading topic mappings.',
+  'SOURCES_ERROR': 'An error occurred while loading sources. Please try again later.',
+  'MISSING_QUERY': 'A search term is required',
+  'INVALID_SEARCH_QUERY': 'The search term must contain at least 2 characters',
+  'NO_NEWS_AVAILABLE': 'No news is currently available',
+  'RESOURCE_NOT_FOUND': 'The requested resource was not found',
+  'INVALID_ARTICLE_ID': 'Invalid article ID',
+  'RATE_LIMIT_EXCEEDED': 'Too many requests. Please try again later.',
+  'REFRESH_RATE_LIMIT_EXCEEDED': 'Too many refresh requests. Please try again later.',
+  'WS_RATE_LIMIT_EXCEEDED': 'Too many WebSocket requests. Please try again later.',
+  'VALIDATION_ERROR': 'The provided data is invalid',
+  'UNAUTHORIZED': 'You are not authorized to access this resource',
+  'FORBIDDEN': 'Access to this resource is denied',
+  'ADMIN_TOKEN_NOT_CONFIGURED': 'The admin token is not configured on the server',
+  'INVALID_URL': 'The provided URL is invalid',
+  'FORBIDDEN_URL': 'The provided URL cannot be reached by the server'
 };
 
 /**
- * Crea un oggetto errore standardizzato per l'API
- * @param {number} status - Codice di stato HTTP
- * @param {string} message - Messaggio di errore leggibile
- * @param {string} code - Codice errore per il frontend
- * @param {Error} originalError - Errore originale per il logging
- * @returns {Object} - Oggetto errore standardizzato
+ * Creates a standardized API error object
+ * @param {number} status - HTTP status code
+ * @param {string} message - Readable error message
+ * @param {string} code - Frontend-facing error code
+ * @param {Error} originalError - Original error for logging
+ * @returns {Object} - Standardized error object
  */
 const createError = (status, message, code, originalError = null) => {
-  // Log dell'errore originale se presente
+  // Log the original error when available
   if (originalError) {
     logger.error(`${code || 'ERROR'}: ${message} - Original error: ${originalError.message}`, {
       status,
@@ -48,10 +48,10 @@ const createError = (status, message, code, originalError = null) => {
     });
   }
 
-  // Usa il messaggio predefinito se disponibile per il codice
-  const userMessage = message || ERROR_MESSAGES[code] || 'Si è verificato un errore interno.';
+  // Use the default message when one exists for the code
+  const userMessage = message || ERROR_MESSAGES[code] || 'An internal error occurred.';
 
-  // Crea un oggetto Error con campi personalizzati
+  // Create an Error object with custom fields
   const error = new Error(userMessage);
   error.status = status || 500;
   error.code = code || 'SERVER_ERROR';
@@ -60,20 +60,20 @@ const createError = (status, message, code, originalError = null) => {
 };
 
 /**
- * Middleware per la gestione centralizzata degli errori
+ * Middleware for centralized error handling
  */
 const errorMiddleware = (err, req, res, next) => {
-  // Recupera informazioni sull'errore o usa default
+  // Read error details or fall back to defaults
   const status = err.status || 500;
   const code = err.code || 'SERVER_ERROR';
   
-  // Usa messaggio personalizzato o cerca nella mappa errori
+  // Use the custom message or look it up in the error map
   let message = err.message;
   if (!message || (process.env.NODE_ENV === 'production' && status >= 500)) {
-    message = ERROR_MESSAGES[code] || 'Si è verificato un errore interno.';
+    message = ERROR_MESSAGES[code] || 'An internal error occurred.';
   }
   
-  // Log dell'errore con dettagli della richiesta
+  // Log the error with request details
   const requestContext = {
     path: req.path,
     method: req.method,
@@ -94,7 +94,7 @@ const errorMiddleware = (err, req, res, next) => {
     });
   }
 
-  // Rispondi con formato errore standardizzato
+  // Respond using the standardized error format
   res.status(status).json({
     error: {
       message: message,
@@ -104,21 +104,21 @@ const errorMiddleware = (err, req, res, next) => {
 };
 
 /**
- * Wrapper per route handler che cattura automaticamente le eccezioni
- * e le passa al middleware di gestione degli errori
+ * Wrapper for route handlers that automatically catches exceptions
+ * and passes them to the error-handling middleware
  * @param {Function} fn - Route handler function
- * @returns {Function} - Route handler con gestione automatica delle eccezioni
+ * @returns {Function} - Route handler with automatic exception handling
  */
 const asyncHandler = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch((error) => {
-    // Se l'errore è già in formato API, passalo direttamente
+      // If the error is already in API format, pass it through directly
     if (error.status && error.code) {
       next(error);
     } else {
-      // Altrimenti crea un errore standard
+      // Otherwise create a standard error
       next(createError(
         500,
-        error.message || 'Si è verificato un errore interno',
+        error.message || 'An internal error occurred',
         'SERVER_ERROR',
         error
       ));

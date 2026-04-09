@@ -21,19 +21,19 @@ services:
       - APP_BASE_URL=http://localhost
       - NEWS_DB_PATH=/usr/src/app/data/news.db
       - ADMIN_USERNAME=admin
-      # Variabili di ottimizzazione
-      - MAX_ARTICLES_PER_SOURCE=25  # Numero massimo di articoli da elaborare per fonte
-      - RSS_MAX_RETRIES=5           # Tentativi di retry per problemi DNS
-      - RSS_RETRY_DELAY=2000        # Tempo iniziale tra retry in ms
-      - RSS_TIMEOUT=15000           # Timeout per le richieste RSS in ms
-      - SERVER_TIMEOUT=60000        # Timeout del server in ms
-      - LOG_LEVEL=info              # Livello di logging (debug, info, warn, error)
-      - SCRAPE_INTERVAL_MS=900000   # Intervallo scraping bilanciato (15 min)
-      - ARTICLE_RETENTION_HOURS=24  # Elimina articoli e cache piu vecchi di 24 ore
-      - MAX_SCAN_ARTICLES=600       # Massimo numero di articoli da scansionare per query raggruppata
-      # Configurazioni WebSocket 
-      - WS_PING_TIMEOUT=60000       # Timeout per ping WebSocket (ms)
-      - WS_PING_INTERVAL=25000      # Intervallo tra ping WebSocket (ms)
+      # Performance tuning variables
+      - MAX_ARTICLES_PER_SOURCE=25  # Maximum number of articles to process per source
+      - RSS_MAX_RETRIES=5           # Retry attempts for DNS-related issues
+      - RSS_RETRY_DELAY=2000        # Initial retry delay in ms
+      - RSS_TIMEOUT=15000           # Timeout for RSS requests in ms
+      - SERVER_TIMEOUT=60000        # Server timeout in ms
+      - LOG_LEVEL=info              # Logging level (debug, info, warn, error)
+      - SCRAPE_INTERVAL_MS=900000   # Balanced scraping interval (15 min)
+      - ARTICLE_RETENTION_HOURS=24  # Delete articles and cache entries older than 24 hours
+      - MAX_SCAN_ARTICLES=600       # Maximum number of articles to scan for grouped queries
+      # WebSocket configuration
+      - WS_PING_TIMEOUT=60000       # WebSocket ping timeout (ms)
+      - WS_PING_INTERVAL=25000      # Interval between WebSocket pings (ms)
     volumes:
       - ./backend/data:/usr/src/app/data:rw,z
     depends_on:
