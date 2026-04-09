@@ -26,7 +26,11 @@ export default defineConfig({
   plugins: [transformFrontendJsx(), react()],
   server: {
     proxy: {
-      '/api': {
+      '/internal-api': {
+        target: backendOrigin,
+        changeOrigin: true
+      },
+      '/api/public': {
         target: backendOrigin,
         changeOrigin: true
       },

@@ -14,7 +14,9 @@ const {
   verifyPassword,
   generateSessionToken,
   hashSessionToken,
-  createSessionExpiryDate
+  createSessionExpiryDate,
+  createApiTokenExpiryDate,
+  API_TOKEN_TTL_DAYS
 } = require('../utils/auth');
 
 const GLOBAL_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
@@ -223,7 +225,8 @@ function buildAuthResponse(user, sessionToken) {
     user: buildUserPayload(user),
     settings: getUserSettings(user.id),
     limits: getUserLimits(),
-    customSources: database.listUserSources(user.id)
+    customSources: database.listUserSources(user.id),
+    apiToken: getUserApiToken(user.id)
   };
 }
 
@@ -234,8 +237,27 @@ function getUserLimits() {
     feedbackTitleMaxLength: MAX_FEEDBACK_TITLE_LENGTH,
     feedbackDescriptionMaxLength: MAX_FEEDBACK_DESCRIPTION_LENGTH,
     feedbackImageMaxBytes: MAX_FEEDBACK_IMAGE_BYTES,
-    feedbackVideoMaxBytes: MAX_FEEDBACK_VIDEO_BYTES
+    feedbackVideoMaxBytes: MAX_FEEDBACK_VIDEO_BYTES,
+    apiTokenTtlDays: API_TOKEN_TTL_DAYS
   };
+}
+
+function mapApiTokenForUser(tokenRecord) {
+  if (!tokenRecord) {
+    return null;
+  }
+
+  return {
+    tokenPrefix: tokenRecord.tokenPrefix,
+    label: tokenRecord.label || '',
+    createdAt: tokenRecord.createdAt,
+    expiresAt: tokenRecord.expiresAt,
+    lastUsedAt: tokenRecord.lastUsedAt || null
+  };
+}
+
+function getUserApiToken(userId) {
+  return mapApiTokenForUser(database.getLatestActiveApiTokenForUser(userId));
 }
 
 function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overrides = {}) {
@@ -372,8 +394,53 @@ function getCurrentUser(userId) {
     user: buildUserPayload(user),
     settings: getUserSettings(userId),
     limits: getUserLimits(),
-    customSources: database.listUserSources(userId)
+    customSources: database.listUserSources(userId),
+    apiToken: getUserApiToken(userId)
   };
+}
+
+function createApiTokenLabel(label) {
+  return String(label || '').trim().slice(0, 80);
+}
+
+function createUserApiToken(userId, options = {}) {
+  const user = database.findUserById(userId);
+  if (!user) {
+    throw createError(404, 'User not found', 'RESOURCE_NOT_FOUND');
+  }
+
+  const rawSecret = generateSessionToken();
+  const rawToken = `nfapi_${rawSecret}`;
+  const tokenHash = hashSessionToken(rawToken);
+  const createdAt = new Date().toISOString();
+  const expiresAt = createApiTokenExpiryDate();
+  const tokenId = createId();
+  const label = createApiTokenLabel(options.label);
+  const createdByIp = String(options.createdByIp || '').trim() || null;
+  const revokedAt = createdAt;
+
+  database.getDb().transaction(() => {
+    database.revokeApiTokensByUserId(userId, revokedAt);
+    database.createApiToken({
+      id: tokenId,
+      userId,
+      tokenHash,
+      tokenPrefix: rawToken.slice(0, 12),
+      label,
+      createdAt,
+      expiresAt,
+      createdByIp
+    });
+  })();
+
+  return {
+    token: rawToken,
+    tokenInfo: mapApiTokenForUser(database.getLatestActiveApiTokenForUser(userId))
+  };
+}
+
+function revokeUserApiToken(userId) {
+  return database.revokeApiTokensByUserId(userId, new Date().toISOString()) > 0;
 }
 
 function updateUserSettings(userId, payload = {}) {
@@ -717,6 +784,9 @@ module.exports = {
   listUsersForAdmin,
   createUserPasswordSetupLink,
   updateUserSettings,
+  getUserApiToken,
+  createUserApiToken,
+  revokeUserApiToken,
   addUserSource,
   updateUserSource,
   removeUserSource,

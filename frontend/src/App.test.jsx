@@ -56,9 +56,11 @@ function createCurrentUser(settings = {}) {
     },
     limits: {
       articleRetentionHoursMax: 24,
-      recentHoursMax: 3
+      recentHoursMax: 3,
+      apiTokenTtlDays: 30
     },
-    customSources: []
+    customSources: [],
+    apiToken: null
   };
 }
 

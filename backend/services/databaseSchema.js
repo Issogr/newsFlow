@@ -1,5 +1,5 @@
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 15;
+  const CURRENT_SCHEMA_VERSION = 16;
 
   function initializeSchema(database) {
     database.exec(`
@@ -77,6 +77,25 @@ function createDatabaseSchema({ logger }) {
 
       CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions (user_id);
       CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions (expires_at);
+
+      CREATE TABLE IF NOT EXISTS api_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        token_prefix TEXT NOT NULL,
+        label TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT,
+        last_used_at TEXT,
+        created_by_ip TEXT,
+        last_used_ip TEXT,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_api_tokens_user_id ON api_tokens (user_id);
+      CREATE INDEX IF NOT EXISTS idx_api_tokens_expires_at ON api_tokens (expires_at);
+      CREATE INDEX IF NOT EXISTS idx_api_tokens_revoked_at ON api_tokens (revoked_at);
 
       CREATE TABLE IF NOT EXISTS password_setup_tokens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -173,6 +192,39 @@ function createDatabaseSchema({ logger }) {
     `).run(String(CURRENT_SCHEMA_VERSION));
   }
 
+  function migrateSchema(database, currentVersion) {
+    if (currentVersion === 15) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS api_tokens (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          token_hash TEXT NOT NULL UNIQUE,
+          token_prefix TEXT NOT NULL,
+          label TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          expires_at TEXT NOT NULL,
+          revoked_at TEXT,
+          last_used_at TEXT,
+          created_by_ip TEXT,
+          last_used_ip TEXT,
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_api_tokens_user_id ON api_tokens (user_id);
+        CREATE INDEX IF NOT EXISTS idx_api_tokens_expires_at ON api_tokens (expires_at);
+        CREATE INDEX IF NOT EXISTS idx_api_tokens_revoked_at ON api_tokens (revoked_at);
+      `);
+
+      setCurrentSchemaVersion(database);
+      logger.info('Migrated DB schema from version 15 to 16');
+      return;
+    }
+
+    throw new Error(
+      `Unsupported database schema version ${currentVersion}. Expected ${CURRENT_SCHEMA_VERSION}. Recreate the database file before starting this version of the app.`
+    );
+  }
+
   function ensureSupportedSchema(database) {
     const currentVersion = getCurrentSchemaVersion(database);
 
@@ -183,9 +235,7 @@ function createDatabaseSchema({ logger }) {
     }
 
     if (currentVersion !== CURRENT_SCHEMA_VERSION) {
-      throw new Error(
-        `Unsupported database schema version ${currentVersion}. Expected ${CURRENT_SCHEMA_VERSION}. Recreate the database file before starting this version of the app.`
-      );
+      migrateSchema(database, currentVersion);
     }
   }
 

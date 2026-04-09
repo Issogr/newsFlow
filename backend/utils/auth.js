@@ -4,12 +4,14 @@ const database = require('../services/database');
 const { createError } = require('./errorHandler');
 
 const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '30', 10);
+const API_TOKEN_TTL_DAYS = 30;
 const SESSION_PURGE_INTERVAL_MS = parseInt(process.env.SESSION_PURGE_INTERVAL_MS || '300000', 10);
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase() || 'admin';
 const USER_ACTIVITY_TOUCH_INTERVAL_SECONDS = parseInt(process.env.USER_ACTIVITY_TOUCH_INTERVAL_SECONDS || '60', 10);
 const scryptAsync = promisify(crypto.scrypt);
 
 let lastSessionPurgeAt = 0;
+let lastApiTokenPurgeAt = 0;
 
 function extractBearerToken(authorizationHeader) {
   if (!authorizationHeader || typeof authorizationHeader !== 'string') {
@@ -78,6 +80,10 @@ function createSessionExpiryDate() {
   return new Date(Date.now() + (SESSION_TTL_DAYS * 24 * 60 * 60 * 1000)).toISOString();
 }
 
+function createApiTokenExpiryDate() {
+  return new Date(Date.now() + (API_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000)).toISOString();
+}
+
 function resolveAuthenticatedSession({ headers = {}, authToken = '', touchActivitySeconds = USER_ACTIVITY_TOUCH_INTERVAL_SECONDS } = {}) {
   purgeExpiredSessionsIfNeeded();
 
@@ -124,6 +130,20 @@ function purgeExpiredSessionsIfNeeded(now = Date.now()) {
   return purgedCount;
 }
 
+function purgeExpiredApiTokensIfNeeded(now = Date.now()) {
+  if (!Number.isFinite(SESSION_PURGE_INTERVAL_MS) || SESSION_PURGE_INTERVAL_MS <= 0) {
+    return 0;
+  }
+
+  if ((now - lastApiTokenPurgeAt) < SESSION_PURGE_INTERVAL_MS) {
+    return 0;
+  }
+
+  const purgedCount = database.purgeExpiredApiTokens();
+  lastApiTokenPurgeAt = now;
+  return purgedCount;
+}
+
 function requireAuthenticatedUser(req, res, next) {
   try {
     req.user = resolveAuthenticatedSession({
@@ -149,16 +169,72 @@ function requireAdminUser(req, res, next) {
   return next();
 }
 
+function resolveAuthenticatedApiToken({ headers = {}, ip = '' } = {}) {
+  purgeExpiredApiTokensIfNeeded();
+
+  const rawToken = extractBearerToken(headers.authorization);
+  if (!rawToken) {
+    return null;
+  }
+
+  const tokenRecord = database.findActiveApiTokenByHash(hashSessionToken(rawToken));
+  if (!tokenRecord || new Date(tokenRecord.expiresAt) < new Date()) {
+    throw createError(401, 'API token expired or invalid', 'UNAUTHORIZED');
+  }
+
+  database.touchApiTokenUsage(tokenRecord.id, new Date().toISOString(), String(ip || '').trim() || null);
+
+  return {
+    token: rawToken,
+    tokenRecord,
+    user: {
+      id: tokenRecord.userId,
+      username: tokenRecord.username,
+      isAdmin: String(tokenRecord.username || '').toLowerCase() === ADMIN_USERNAME
+    }
+  };
+}
+
+function resolveOptionalExternalApiPrincipal(req, res, next) {
+  try {
+    const resolved = resolveAuthenticatedApiToken({
+      headers: req.headers || {},
+      ip: req.ip
+    });
+
+    req.externalApi = resolved ? {
+      authenticated: true,
+      token: resolved.token,
+      tokenInfo: resolved.tokenRecord,
+      user: resolved.user
+    } : {
+      authenticated: false,
+      token: null,
+      tokenInfo: null,
+      user: null
+    };
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   requireAuthenticatedUser,
   requireAdminUser,
+  resolveOptionalExternalApiPrincipal,
+  resolveAuthenticatedApiToken,
   resolveAuthenticatedSession,
   purgeExpiredSessionsIfNeeded,
+  purgeExpiredApiTokensIfNeeded,
   extractBearerToken,
   safeTokenCompare,
   hashPassword,
   verifyPassword,
   generateSessionToken,
   hashSessionToken,
-  createSessionExpiryDate
+  createSessionExpiryDate,
+  createApiTokenExpiryDate,
+  API_TOKEN_TTL_DAYS
 };

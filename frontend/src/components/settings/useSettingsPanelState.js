@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addUserSource,
+  createApiToken,
   deleteUserSource,
   exportUserSettings,
   importUserSettings,
+  revokeApiToken,
   updateUserSource,
   updateUserSettings
 } from '../../services/api';
@@ -22,6 +24,8 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   const [customSources, setCustomSources] = useState(currentUser.customSources || []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [apiToken, setApiToken] = useState(currentUser.apiToken || null);
+  const [newApiToken, setNewApiToken] = useState('');
   const [sourceForm, setSourceForm] = useState(createInitialSourceForm);
   const [editingSourceId, setEditingSourceId] = useState('');
   const [editingSourceForm, setEditingSourceForm] = useState(createInitialEditingSourceForm);
@@ -53,6 +57,8 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   useEffect(() => {
     setSettings(getInitialSettings(currentUser));
     setCustomSources(currentUser.customSources || []);
+    setApiToken(currentUser.apiToken || null);
+    setNewApiToken('');
     setSourceForm(createInitialSourceForm());
     setEditingSourceId('');
     setEditingSourceForm(createInitialEditingSourceForm());
@@ -180,6 +186,30 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     });
   }, [customSources, onClose, runSavingAction, settings, syncPersistedUserState]);
 
+  const handleCreateApiToken = useCallback(async () => {
+    await runSavingAction(async () => {
+      const response = await createApiToken();
+      setApiToken(response.tokenInfo || null);
+      setNewApiToken(response.token || '');
+      onUserUpdate({
+        ...currentUser,
+        apiToken: response.tokenInfo || null
+      });
+    });
+  }, [currentUser, onUserUpdate, runSavingAction]);
+
+  const handleRevokeApiToken = useCallback(async () => {
+    await runSavingAction(async () => {
+      await revokeApiToken();
+      setApiToken(null);
+      setNewApiToken('');
+      onUserUpdate({
+        ...currentUser,
+        apiToken: null
+      });
+    });
+  }, [currentUser, onUserUpdate, runSavingAction]);
+
   const handleExport = useCallback(async () => {
     await runSavingAction(async () => {
       const payload = await exportUserSettings();
@@ -276,6 +306,8 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     saving,
     error,
     settings,
+    apiToken,
+    newApiToken,
     customSources,
     sourceForm,
     editingSourceId,
@@ -299,6 +331,8 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     handleExport,
     handleImportClick,
     handleImport,
+    handleCreateApiToken,
+    handleRevokeApiToken,
     handleAddSource,
     startEditSource,
     cancelEditSource,

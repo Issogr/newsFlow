@@ -122,6 +122,13 @@ async function getNewsFeed(filters = {}, userContext = {}) {
   });
 }
 
+async function getCachedNewsFeed(filters = {}, userContext = {}) {
+  return buildNewsFeed(filters, userContext, {
+    ensureSeedData: async () => {},
+    getLastRefreshAt
+  });
+}
+
 function startScheduler() {
   if (schedulerHandle) {
     return;
@@ -151,6 +158,7 @@ module.exports = {
   ingestAllNews,
   refreshUserSources,
   getNewsFeed,
+  getCachedNewsFeed,
   startScheduler,
   stopScheduler,
   newsSources

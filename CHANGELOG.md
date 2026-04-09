@@ -9,6 +9,13 @@
 - upgraded backend `@mozilla/readability` to the current supported release and cleared the remaining backend audit advisory without changing reader-service behavior
 - upgraded the frontend Vite/Vitest stack to current compatible releases, added explicit `esbuild` support for the temporary JSX compatibility transform, then replaced the deprecated transform path with the native OXC-based flow
 - updated Docker frontend builds to use a Node 22 build image and the Vite `dist/` output, restoring successful `docker compose up --build` behavior after the frontend toolchain migration
+- split the HTTP surface into explicit app-private and public API paths, moving SPA/internal calls behind `/internal-api/*` while exposing only the external cached-news facade on `/api/public/*`
+- added a dedicated public external news endpoint with anonymous and user-token modes, where anonymous requests return only default-source news and token-authenticated requests apply that user settings and custom sources
+- enforced cached-only behavior for the public external news API so public requests never trigger seed ingestion, RSS refreshes, or reader-page upstream fetches
+- added hashed per-user API tokens with mandatory 30-day expiry, server-side expiration checks, revocation/regeneration support, and last-used tracking without reusing browser session tokens
+- added a multilingual `/api` documentation page describing the public API surface, authentication modes, external usage limits, and the distinction between public read-only access and app-private internal APIs
+- tightened nginx exposure rules so `/api/public/*` is the only external API subtree, `/api` serves documentation, and generic public access to app-private API routes is rejected
+- added runtime and regression coverage for the new separation model, including public news access, token-based external access, internal app API protection, and container health verification
 - refreshed reader mode so the header controls, source/read-time metadata, and content cards now align more closely with the main News Flow visual language while keeping the article body as the primary focus
 - simplified the reader toolbar by moving `Share` into a compact top-left icon action, replacing the text-size dropdown with a `- aA +` stepper, and removing extra header actions that competed with the reading flow
 - widened the reader content column, tightened the side gutters, and fixed dark-mode header/title surfaces so the reading panel uses more space without losing its calm layout

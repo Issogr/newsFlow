@@ -14,7 +14,7 @@ function readStoredAuthToken() {
 let authToken = readStoredAuthToken();
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: '/internal-api',
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json'
@@ -24,6 +24,7 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const nextConfig = { ...config };
   nextConfig.headers = nextConfig.headers || {};
+  nextConfig.headers['X-NewsFlow-App'] = 'web';
 
   if (authToken) {
     nextConfig.headers.Authorization = `Bearer ${authToken}`;
@@ -96,6 +97,21 @@ export const logoutUser = async () => {
 
 export const fetchCurrentUser = async () => {
   const response = await api.get('/me');
+  return response.data;
+};
+
+export const fetchApiTokenStatus = async () => {
+  const response = await api.get('/me/api-token');
+  return response.data;
+};
+
+export const createApiToken = async (payload = {}) => {
+  const response = await api.post('/me/api-token', payload);
+  return response.data;
+};
+
+export const revokeApiToken = async () => {
+  const response = await api.delete('/me/api-token');
   return response.data;
 };
 

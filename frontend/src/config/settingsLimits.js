@@ -18,7 +18,8 @@ export function getSettingsLimits(currentUser) {
     recentHours: {
       min: DEFAULT_SETTINGS_LIMITS.recentHours.min,
       max: resolveMaxValue(serverLimits.recentHoursMax, DEFAULT_SETTINGS_LIMITS.recentHours)
-    }
+    },
+    apiTokenTtlDays: Number.isFinite(serverLimits.apiTokenTtlDays) ? serverLimits.apiTokenTtlDays : 30
   };
 }
 

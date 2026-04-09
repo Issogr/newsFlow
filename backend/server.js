@@ -4,7 +4,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const apiRoutes = require('./routes/api');
+const internalApiRoutes = require('./routes/api');
+const publicApiRoutes = require('./routes/publicApi');
 const logger = require('./utils/logger');
 const database = require('./services/database');
 const websocketService = require('./services/websocketService');
@@ -81,8 +82,27 @@ const baseRateLimit = rateLimit({
   }
 });
 
-app.use('/api', baseRateLimit);
-app.use('/api', apiRoutes);
+function requireInternalAppRequest(req, res, next) {
+  const appHeader = String(req.get('x-newsflow-app') || '').trim().toLowerCase();
+  const fetchSite = String(req.get('sec-fetch-site') || '').trim().toLowerCase();
+
+  if (appHeader !== 'web') {
+    next(createError(404, `Risorsa non trovata: ${req.originalUrl}`, 'RESOURCE_NOT_FOUND'));
+    return;
+  }
+
+  if (fetchSite && fetchSite !== 'same-origin') {
+    next(createError(403, 'Origine non consentita', 'FORBIDDEN'));
+    return;
+  }
+
+  next();
+}
+
+app.use('/internal-api', baseRateLimit);
+app.use('/internal-api', requireInternalAppRequest);
+app.use('/internal-api', internalApiRoutes);
+app.use('/api/public', publicApiRoutes);
 
 app.get('/health', (req, res) => {
   const wsStats = websocketService.getStatistics();

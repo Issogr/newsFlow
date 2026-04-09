@@ -12,6 +12,8 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     saving,
     error,
     settings,
+    apiToken,
+    newApiToken,
     customSources,
     sourceForm,
     editingSourceId,
@@ -35,6 +37,8 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     handleExport,
     handleImportClick,
     handleImport,
+    handleCreateApiToken,
+    handleRevokeApiToken,
     handleAddSource,
     startEditSource,
     cancelEditSource,
@@ -75,6 +79,8 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               saving={saving}
               importInputRef={importInputRef}
               settings={settings}
+              apiToken={apiToken}
+              newApiToken={newApiToken}
               settingsLimits={settingsLimits}
               onDefaultLanguageChange={setDefaultLanguage}
               onThemeModeChange={setThemeMode}
@@ -86,6 +92,8 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               onExport={handleExport}
               onImportClick={handleImportClick}
               onImport={handleImport}
+              onCreateApiToken={handleCreateApiToken}
+              onRevokeApiToken={handleRevokeApiToken}
             />
 
             <SettingsExclusionsSection

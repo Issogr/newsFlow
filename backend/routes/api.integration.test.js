@@ -17,11 +17,14 @@ function createTempDbPath() {
 function buildApiTestApp() {
   const express = require('express');
   const apiRoutes = require('./api');
+  const publicApiRoutes = require('./publicApi');
   const { createError, errorMiddleware } = require('../utils/errorHandler');
 
   const app = express();
   app.use(express.json());
   app.use('/api', apiRoutes);
+   app.use('/internal-api', apiRoutes);
+   app.use('/api/public', publicApiRoutes);
   app.use((req, res, next) => {
     next(createError(404, `Risorsa non trovata: ${req.originalUrl}`, 'RESOURCE_NOT_FOUND'));
   });
@@ -46,6 +49,7 @@ describe('API auth and user flows', () => {
 
     jest.doMock('../services/newsAggregator', () => ({
       ingestAllNews: jest.fn().mockResolvedValue({ success: true }),
+      getCachedNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       refreshUserSources: jest.fn().mockResolvedValue({ success: true }),
       startScheduler: jest.fn(),
       stopScheduler: jest.fn()
@@ -108,7 +112,8 @@ describe('API auth and user flows', () => {
         feedbackTitleMaxLength: 120,
         feedbackDescriptionMaxLength: 2800,
         feedbackImageMaxBytes: 5242880,
-        feedbackVideoMaxBytes: 12582912
+        feedbackVideoMaxBytes: 12582912,
+        apiTokenTtlDays: 30
       },
       customSources: []
     });
@@ -327,7 +332,59 @@ describe('API auth and user flows', () => {
       feedbackTitleMaxLength: 120,
       feedbackDescriptionMaxLength: 2800,
       feedbackImageMaxBytes: 5242880,
-      feedbackVideoMaxBytes: 12582912
+      feedbackVideoMaxBytes: 12582912,
+      apiTokenTtlDays: 30
+    });
+  });
+
+  test('serves public cached news anonymously without user context', async () => {
+    newsService.getCachedNewsFeed.mockResolvedValueOnce({
+      items: [],
+      meta: { hasMore: false },
+      filters: { sources: [], topics: [] }
+    });
+
+    const response = await request(app)
+      .get('/api/public/news')
+      .expect(200);
+
+    expect(newsService.getCachedNewsFeed).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
+      userId: null,
+      excludedSourceIds: [],
+      excludedSubSourceIds: []
+    }));
+    expect(response.body.access).toEqual({
+      mode: 'anonymous',
+      cachedOnly: true
+    });
+  });
+
+  test('serves public cached news with user-scoped context for valid API tokens', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'api-user', password: 'secret123' })
+      .expect(201);
+
+    const tokenResult = userService.createUserApiToken(registerResponse.body.user.id);
+    newsService.getCachedNewsFeed.mockResolvedValueOnce({
+      items: [],
+      meta: { hasMore: false },
+      filters: { sources: [], topics: [] }
+    });
+
+    const response = await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${tokenResult.token}`)
+      .expect(200);
+
+    expect(newsService.getCachedNewsFeed).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
+      userId: registerResponse.body.user.id,
+      excludedSourceIds: [],
+      excludedSubSourceIds: []
+    }));
+    expect(response.body.access).toEqual({
+      mode: 'token',
+      cachedOnly: true
     });
   });
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock3, Download, Globe2, Image as ImageIcon, MonitorSmartphone, PanelRightOpen, Radio, RefreshCw, TimerReset, Type, Upload } from 'lucide-react';
+import { Clock3, Download, Globe2, Image as ImageIcon, KeyRound, MonitorSmartphone, PanelRightOpen, Radio, RefreshCw, TimerReset, Type, Upload } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORDER } from '../../config/readerTextSize';
 
@@ -8,6 +8,8 @@ const SettingsPreferencesSection = ({
   saving,
   importInputRef,
   settings,
+  apiToken,
+  newApiToken,
   settingsLimits,
   onDefaultLanguageChange,
   onThemeModeChange,
@@ -18,7 +20,9 @@ const SettingsPreferencesSection = ({
   onNumericSettingChange,
   onExport,
   onImportClick,
-  onImport
+  onImport,
+  onCreateApiToken,
+  onRevokeApiToken
 }) => {
   const articleRetentionRange = `${settingsLimits.articleRetentionHours.min}-${settingsLimits.articleRetentionHours.max}h`;
   const recentHoursRange = `${settingsLimits.recentHours.min}-${settingsLimits.recentHours.max}h`;
@@ -177,6 +181,56 @@ const SettingsPreferencesSection = ({
         </div>
 
         <div className="border-t border-slate-200 pt-5 md:col-span-2">
+          <div className="mb-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-2">
+                <p className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <KeyRound className="h-4 w-4 text-amber-600" />
+                  {t('apiTokenTitle')}
+                </p>
+                <p className="text-sm text-slate-600">{t('apiTokenHelp')}</p>
+                <p className="text-xs text-slate-500">{t('apiTokenExpiryHelp', { days: settingsLimits.apiTokenTtlDays || 30 })}</p>
+                {apiToken ? (
+                  <div className="space-y-1 text-xs text-slate-500">
+                    <p>{t('apiTokenActivePrefix', { prefix: apiToken.tokenPrefix })}</p>
+                    <p>{t('apiTokenExpiresAt', { date: new Date(apiToken.expiresAt).toLocaleString() })}</p>
+                    {apiToken.lastUsedAt ? <p>{t('apiTokenLastUsedAt', { date: new Date(apiToken.lastUsedAt).toLocaleString() })}</p> : null}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">{t('apiTokenInactive')}</p>
+                )}
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  onClick={onCreateApiToken}
+                  disabled={saving}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-60"
+                >
+                  {apiToken ? t('apiTokenRegenerate') : t('apiTokenGenerate')}
+                </button>
+                {apiToken ? (
+                  <button
+                    type="button"
+                    onClick={onRevokeApiToken}
+                    disabled={saving}
+                    className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-60"
+                  >
+                    {t('apiTokenRevoke')}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            {newApiToken ? (
+              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <p className="text-sm font-medium text-emerald-900">{t('apiTokenGenerated')}</p>
+                <p className="mt-1 break-all font-mono text-sm text-emerald-800">{newApiToken}</p>
+                <p className="mt-2 text-xs text-emerald-700">{t('apiTokenGeneratedHelp')}</p>
+              </div>
+            ) : null}
+          </div>
+
           <div className="grid gap-3 md:grid-cols-2">
             <button
               type="button"
