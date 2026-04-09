@@ -8,18 +8,52 @@ const { resolveOptionalExternalApiPrincipal } = require('../utils/auth');
 
 const router = express.Router();
 
-const publicNewsRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 120,
+const anonymousPublicNewsRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => Boolean(req.externalApi?.authenticated),
   keyGenerator: (req) => {
-    const apiTokenId = req.externalApi?.tokenInfo?.id || '';
-    return apiTokenId ? `token:${apiTokenId}` : `ip:${req.ip}`;
+    return `anon:${req.ip}`;
+  },
+  handler: (req, res) => {
+    res.status(429).json({
+      error: {
+        message: 'Too many anonymous public API requests. Please try again later.',
+        code: 'RATE_LIMIT_EXCEEDED'
+      }
+    });
   },
   message: {
     error: {
-      message: 'Too many public API requests. Please try again later.',
+      message: 'Too many anonymous public API requests. Please try again later.',
+      code: 'RATE_LIMIT_EXCEEDED'
+    }
+  }
+});
+
+const authenticatedPublicNewsRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => !req.externalApi?.authenticated,
+  keyGenerator: (req) => {
+    const apiTokenId = req.externalApi?.tokenInfo?.id || '';
+    return `token:${apiTokenId}`;
+  },
+  handler: (req, res) => {
+    res.status(429).json({
+      error: {
+        message: 'Too many authenticated public API requests. Please try again later.',
+        code: 'RATE_LIMIT_EXCEEDED'
+      }
+    });
+  },
+  message: {
+    error: {
+      message: 'Too many authenticated public API requests. Please try again later.',
       code: 'RATE_LIMIT_EXCEEDED'
     }
   }
@@ -72,7 +106,8 @@ function getExternalUserContext(req) {
 
 router.get('/news', [
   resolveOptionalExternalApiPrincipal,
-  publicNewsRateLimit,
+  anonymousPublicNewsRateLimit,
+  authenticatedPublicNewsRateLimit,
   sanitizeQuery('search'),
   sanitizeQuery('beforePubDate'),
   sanitizeQuery('beforeId')

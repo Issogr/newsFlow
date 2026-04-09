@@ -13,6 +13,7 @@
 - added a dedicated public external news endpoint with anonymous and user-token modes, where anonymous requests return only default-source news and token-authenticated requests apply that user settings and custom sources
 - enforced cached-only behavior for the public external news API so public requests never trigger seed ingestion, RSS refreshes, or reader-page upstream fetches
 - added hashed per-user API tokens with mandatory 30-day expiry, server-side expiration checks, revocation/regeneration support, and last-used tracking without reusing browser session tokens
+- added layered request protection only on the public external API, combining stricter anonymous limits, higher token-authenticated allowances, and nginx edge throttling without affecting internal app API flows
 - added a multilingual `/api` documentation page describing the public API surface, authentication modes, external usage limits, and the distinction between public read-only access and app-private internal APIs
 - tightened nginx exposure rules so `/api/public/*` is the only external API subtree, `/api` serves documentation, and generic public access to app-private API routes is rejected
 - added runtime and regression coverage for the new separation model, including public news access, token-based external access, internal app API protection, and container health verification

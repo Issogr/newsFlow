@@ -28,7 +28,8 @@ const docsContent = {
         items: [
           'The public API serves database-cached content only.',
           'Public API requests never trigger new RSS fetches or reader-page fetches.',
-          'Write, admin, feedback, reader, and settings endpoints are not part of the public API surface.'
+          'Write, admin, feedback, reader, and settings endpoints are not part of the public API surface.',
+          'Rate limits apply only to the public API: anonymous access is stricter, while authenticated token access has a higher allowance.'
         ]
       },
       {
@@ -70,7 +71,8 @@ const docsContent = {
         items: [
           'L\'API pubblica serve solo contenuti gia presenti nel database.',
           'Le richieste pubbliche non attivano nuovi fetch RSS o fetch della pagina reader.',
-          'Endpoint di scrittura, admin, feedback, reader e impostazioni non fanno parte della superficie pubblica dell\'API.'
+          'Endpoint di scrittura, admin, feedback, reader e impostazioni non fanno parte della superficie pubblica dell\'API.',
+          'I limiti di richiesta si applicano solo all\'API pubblica: l\'accesso anonimo e piu restrittivo, mentre l\'accesso con token autenticato ha una soglia piu alta.'
         ]
       },
       {

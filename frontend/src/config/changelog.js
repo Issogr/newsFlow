@@ -14,6 +14,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🔐 News Flow now has a clearer public API area for external news access, while the app keeps its private internal routes separated behind the scenes.',
       '🪪 From Settings you can now generate a personal API token with automatic expiration, making external read-only integrations easier to manage safely.',
       '📘 A new `/api` page now documents how public news access works in both anonymous and authenticated modes.',
+      '🚦 The public API now also has dedicated request protection, with tighter anonymous limits and a higher allowance for authenticated token usage.',
     ]
   },
   it: {
@@ -30,6 +31,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🔐 News Flow ora ha un\'area API pubblica piu chiara per l\'accesso esterno alle notizie, mentre l\'app mantiene separati dietro le quinte i suoi percorsi interni privati.',
       '🪪 Dalle Impostazioni puoi ora generare un token API personale con scadenza automatica, cosi le integrazioni esterne in sola lettura sono piu semplici da gestire in sicurezza.',
       '📘 Una nuova pagina `/api` spiega come funziona l\'accesso pubblico alle notizie sia in modalita anonima sia autenticata.',
+      '🚦 L\'API pubblica ha ora anche una protezione dedicata sulle richieste, con limiti piu stretti in anonimo e una soglia piu alta quando usi un token autenticato.',
     ]
   }
 };
