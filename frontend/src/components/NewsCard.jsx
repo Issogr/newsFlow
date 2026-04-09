@@ -146,7 +146,6 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
             loading="lazy"
             className="h-full w-full object-cover"
             onDoubleClick={openReader}
-            onTouchEnd={() => handleReaderTouchEnd('image')}
             onError={() => {
               if (!showImages) {
                 setImageUrl('');

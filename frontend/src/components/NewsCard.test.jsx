@@ -239,4 +239,35 @@ describe('NewsCard', () => {
 
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
   });
+
+  test('opens reader mode on image double tap but not single tap', () => {
+    const onOpenReader = jest.fn();
+
+    render(
+      <NewsCard
+        group={{
+          ...group,
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              image: 'https://example.com/image.jpg'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={onOpenReader}
+      />
+    );
+
+    const image = screen.getByRole('img', { name: 'Headline' });
+
+    fireEvent.touchEnd(image);
+    expect(onOpenReader).not.toHaveBeenCalled();
+
+    fireEvent.touchEnd(image);
+    expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
+  });
 });
