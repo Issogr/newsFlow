@@ -26,6 +26,9 @@ const SettingsPreferencesSection = ({
 }) => {
   const articleRetentionRange = `${settingsLimits.articleRetentionHours.min}-${settingsLimits.articleRetentionHours.max}h`;
   const recentHoursRange = `${settingsLimits.recentHours.min}-${settingsLimits.recentHours.max}h`;
+  const activeLabel = t('liveActive');
+  const disabledLabel = t('liveDisabled');
+  const toggleWidthLabel = activeLabel.length >= disabledLabel.length ? activeLabel : disabledLabel;
 
   return (
     <SettingsSectionCard icon={Radio} title={t('preferences')} iconToneClassName="bg-sky-100 text-sky-700">
@@ -139,19 +142,25 @@ const SettingsPreferencesSection = ({
             type="button"
             onClick={() => onAutoRefreshChange(settings.autoRefreshEnabled === false)}
             aria-pressed={settings.autoRefreshEnabled !== false}
-            className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${
+            className={`inline-grid shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${
               settings.autoRefreshEnabled !== false
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
                 : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${
-                settings.autoRefreshEnabled !== false ? 'bg-emerald-500' : 'bg-slate-300'
-              }`}
-              aria-hidden="true"
-            />
-            <span>{settings.autoRefreshEnabled !== false ? t('liveActive') : t('liveDisabled')}</span>
+            <span className="invisible col-start-1 row-start-1 flex items-center justify-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full" aria-hidden="true" />
+              <span>{toggleWidthLabel}</span>
+            </span>
+            <span className="col-start-1 row-start-1 flex items-center justify-center gap-2">
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  settings.autoRefreshEnabled !== false ? 'bg-emerald-500' : 'bg-slate-300'
+                }`}
+                aria-hidden="true"
+              />
+              <span>{settings.autoRefreshEnabled !== false ? activeLabel : disabledLabel}</span>
+            </span>
           </button>
         </div>
 
@@ -164,19 +173,25 @@ const SettingsPreferencesSection = ({
             type="button"
             onClick={() => onShowNewsImagesChange(settings.showNewsImages === false)}
             aria-pressed={settings.showNewsImages !== false}
-            className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${
+            className={`inline-grid shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${
               settings.showNewsImages !== false
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
                 : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${
-                settings.showNewsImages !== false ? 'bg-emerald-500' : 'bg-slate-300'
-              }`}
-              aria-hidden="true"
-            />
-            <span>{settings.showNewsImages !== false ? t('liveActive') : t('liveDisabled')}</span>
+            <span className="invisible col-start-1 row-start-1 flex items-center justify-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full" aria-hidden="true" />
+              <span>{toggleWidthLabel}</span>
+            </span>
+            <span className="col-start-1 row-start-1 flex items-center justify-center gap-2">
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  settings.showNewsImages !== false ? 'bg-emerald-500' : 'bg-slate-300'
+                }`}
+                aria-hidden="true"
+              />
+              <span>{settings.showNewsImages !== false ? activeLabel : disabledLabel}</span>
+            </span>
           </button>
         </div>
 
