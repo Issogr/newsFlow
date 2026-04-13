@@ -1,10 +1,13 @@
 var mockApi;
+var mockApiConfig;
 
+import axios from 'axios';
 import { fetchReaderArticle } from './api';
 
 vi.mock('axios', () => {
   const axios = {
-    create: vi.fn(() => {
+    create: vi.fn((config) => {
+      mockApiConfig = config;
       mockApi = {
         interceptors: {
           request: { use: vi.fn() },
@@ -48,5 +51,12 @@ describe('api service', () => {
       signal: 'reader-signal',
       timeout: 30000
     });
+  });
+
+  test('targets the browser-facing BFF API namespace', () => {
+    expect(mockApiConfig).toEqual(expect.objectContaining({
+      baseURL: '/api',
+      withCredentials: true
+    }));
   });
 });

@@ -224,7 +224,7 @@ const SettingsPreferencesSection = ({
                 <p className="max-w-2xl text-sm text-slate-600">{t('apiTokenHelp')}</p>
                 <div className="flex flex-wrap gap-2">
                   <a
-                    href="/api"
+                    href="/api/docs"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex w-fit items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 transition-colors hover:bg-sky-100"

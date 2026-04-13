@@ -20,9 +20,9 @@ jobs:
           - service: backend
             context: ./backend
             dockerfile: ./backend/Dockerfile
-          - service: frontend
-            context: ./frontend
-            dockerfile: ./frontend/Dockerfile
+          - service: bff
+            context: .
+            dockerfile: ./bff/Dockerfile
 
     steps:
       - name: Checkout repository

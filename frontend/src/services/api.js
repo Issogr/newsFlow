@@ -3,7 +3,7 @@ import axios from 'axios';
 const READER_REQUEST_TIMEOUT_MS = 30000;
 
 const api = axios.create({
-  baseURL: '/internal-api',
+  baseURL: '/api',
   timeout: 15000,
   withCredentials: true,
   headers: {
@@ -14,7 +14,6 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const nextConfig = { ...config };
   nextConfig.headers = nextConfig.headers || {};
-  nextConfig.headers['X-NewsFlow-App'] = 'web';
 
   return nextConfig;
 });

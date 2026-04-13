@@ -40,8 +40,8 @@ function App() {
     const pathname = window.location.pathname;
     return pathname !== '/password/setup'
       && pathname !== '/admin/setup'
-      && pathname !== '/api'
-      && pathname !== '/api/'
+      && pathname !== '/api/docs'
+      && pathname !== '/api/docs/'
       && pathname !== '/privacy-policy'
       && pathname !== '/cookie-policy';
   });
@@ -67,7 +67,7 @@ function App() {
     return new URLSearchParams(hash).get('token') || '';
   }, [locationState.search]);
   const isPasswordSetupRoute = locationState.pathname === '/password/setup' || locationState.pathname === '/admin/setup';
-  const isApiDocsRoute = locationState.pathname === '/api' || locationState.pathname === '/api/';
+  const isApiDocsRoute = locationState.pathname === '/api/docs' || locationState.pathname === '/api/docs/';
   const isPrivacyPolicyRoute = locationState.pathname === '/privacy-policy';
   const isCookiePolicyRoute = locationState.pathname === '/cookie-policy';
   const needsReleaseNotesAck = authData?.settings?.lastSeenReleaseNotesVersion !== releaseNotes.version;

@@ -14,6 +14,7 @@ const rssParser = require('./services/rssParser');
 const userService = require('./services/userService');
 const { errorMiddleware, createError } = require('./utils/errorHandler');
 const { getAllowedOrigins, isOriginAllowed } = require('./utils/networkConfig');
+const { hasTrustedInternalService } = require('./utils/internalRequestGate');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -87,16 +88,8 @@ const baseRateLimit = rateLimit({
 });
 
 function requireInternalAppRequest(req, res, next) {
-  const appHeader = String(req.get('x-newsflow-app') || '').trim().toLowerCase();
-  const fetchSite = String(req.get('sec-fetch-site') || '').trim().toLowerCase();
-
-  if (appHeader !== 'web') {
+  if (!hasTrustedInternalService(req.headers)) {
     next(createError(404, `Resource not found: ${req.originalUrl}`, 'RESOURCE_NOT_FOUND'));
-    return;
-  }
-
-  if (fetchSite && fetchSite !== 'same-origin') {
-    next(createError(403, 'Origin not allowed', 'FORBIDDEN'));
     return;
   }
 

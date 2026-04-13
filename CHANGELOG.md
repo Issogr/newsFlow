@@ -8,6 +8,9 @@
 - tightened the Content Security Policy by removing inline script execution while preserving the existing app shell and deployment behavior
 - added dedicated `/privacy-policy` and `/cookie-policy` pages tailored to the app technical-cookie-only login flow, including GDPR/ePrivacy-oriented wording and project-specific session-retention notes
 - surfaced the legal pages directly from both the authentication screen and Settings so users can review the technical-cookie and login-processing information without leaving the app flow
+- introduced a browser-facing BFF service that now serves the built frontend, owns public authenticated app routes under `/api/*`, proxies Socket.IO, and keeps the backend app API private on the internal Docker network
+- moved browser session ownership to the BFF by storing only a BFF session cookie in the browser while mapping it server-side to the backend session, so backend session semantics no longer travel directly through the public web surface
+- relocated the public API documentation page from `/api` to `/api/docs` so `/api/*` can be reserved for browser-facing app endpoints while `/api/public/*` remains the public external integration surface
 
 ## 3.2.9.2
 

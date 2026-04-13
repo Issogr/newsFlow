@@ -212,4 +212,13 @@ describe('App', () => {
     expect(await screen.findByText('Privacy Policy')).toBeInTheDocument();
     expect(fetchCurrentUser).not.toHaveBeenCalled();
   });
+
+  test('renders the API docs page on the moved docs route without loading a session', async () => {
+    window.history.replaceState({}, '', '/api/docs');
+
+    render(<App />);
+
+    expect(await screen.findByText('External News API')).toBeInTheDocument();
+    expect(fetchCurrentUser).not.toHaveBeenCalled();
+  });
 });

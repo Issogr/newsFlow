@@ -14,6 +14,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🍪 The cookie information now reflects the current session setup more explicitly, including the fact that authenticated sessions are configured with a 30-day default maximum duration unless changed by the host.',
       '🔗 Quick links to the legal pages are now visible both on the sign-in screen and inside Settings, making the privacy information easier to reach before and after login.',
       '🛡️ These legal pages are scoped only to necessary authentication cookies and login-related processing, without introducing consent-banner wording for analytics or marketing tools that are not part of News Flow.',
+      '🌐 The browser now talks to a dedicated BFF layer that serves the app, owns the authenticated `/api/*` surface, and keeps the backend app API off the direct public path.',
+      '🧭 Public API documentation moved to `/api/docs`, while `/api/public/*` stays reserved for external cached-news access and `/api/*` is now used by the signed-in web app.',
+      '🪪 The browser now keeps only a BFF session cookie, while the mapping to the backend session is handled server-side so backend session details no longer sit on the public browser-to-backend edge.',
     ]
   },
   it: {
@@ -30,6 +33,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🍪 Le informazioni sui cookie ora descrivono in modo piu esplicito la configurazione attuale delle sessioni, incluso il fatto che la sessione autenticata usa di default una durata massima di 30 giorni salvo modifiche dell\'host.',
       '🔗 I link rapidi alle pagine legali sono ora visibili sia nella schermata di accesso sia nelle Impostazioni, cosi le informazioni privacy sono facili da raggiungere prima e dopo il login.',
       '🛡️ Queste pagine legali restano limitate ai cookie necessari per autenticazione e trattamento legato al login, senza introdurre testo da banner consenso per analytics o marketing che News Flow non utilizza.',
+      '🌐 Il browser passa ora da un livello BFF dedicato che serve l\'app, gestisce la superficie autenticata `/api/*` e tiene l\'API interna del backend fuori dal percorso pubblico diretto.',
+      '🧭 La documentazione dell\'API pubblica si trova ora in `/api/docs`, mentre `/api/public/*` resta riservato all\'accesso esterno alle notizie in cache e `/api/*` viene usato dalla web app autenticata.',
+      '🪪 Nel browser resta ora solo un cookie di sessione del BFF, mentre la mappatura verso la sessione backend viene gestita lato server cosi i dettagli della sessione backend non stanno piu sul bordo pubblico browser-backend.',
     ]
   }
 };

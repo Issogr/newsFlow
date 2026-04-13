@@ -1,5 +1,6 @@
 const logger = require('../utils/logger');
 const { getAllowedOrigins, isOriginAllowed } = require('../utils/networkConfig');
+const { hasTrustedInternalService } = require('../utils/internalRequestGate');
 const database = require('./database');
 const { resolveAuthenticatedSession } = require('../utils/auth');
 
@@ -57,7 +58,15 @@ function initialize(server) {
     },
     pingTimeout: parseInt(process.env.WS_PING_TIMEOUT || '60000', 10),
     pingInterval: parseInt(process.env.WS_PING_INTERVAL || '25000', 10),
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    allowRequest: (req, callback) => {
+      if (!hasTrustedInternalService(req.headers)) {
+        callback('Origin not allowed', false);
+        return;
+      }
+
+      callback(null, true);
+    }
   });
 
   io.use((socket, next) => {
