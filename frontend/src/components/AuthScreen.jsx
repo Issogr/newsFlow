@@ -178,6 +178,18 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
             {mode === 'login' ? <LogIn className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
             {mode === 'login' ? t('loginAction') : t('registerAction')}
           </button>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-500">
+            <p>{t('technicalCookieNotice')}</p>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+              <a href="/privacy-policy" className="font-medium text-slate-700 underline underline-offset-2">
+                {t('privacyPolicyLink')}
+              </a>
+              <a href="/cookie-policy" className="font-medium text-slate-700 underline underline-offset-2">
+                {t('cookiePolicyLink')}
+              </a>
+            </div>
+          </div>
         </form>
       </div>
     </div>

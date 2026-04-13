@@ -203,4 +203,13 @@ describe('App', () => {
     expect(await screen.findByText('Set up admin access')).toBeInTheDocument();
     expect(fetchCurrentUser).not.toHaveBeenCalled();
   });
+
+  test('renders the privacy policy page without loading a session', async () => {
+    window.history.replaceState({}, '', '/privacy-policy');
+
+    render(<App />);
+
+    expect(await screen.findByText('Privacy Policy')).toBeInTheDocument();
+    expect(fetchCurrentUser).not.toHaveBeenCalled();
+  });
 });

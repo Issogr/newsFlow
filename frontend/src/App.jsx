@@ -3,6 +3,7 @@ import NewsAggregator from './components/NewsAggregator';
 import AdminDashboard from './components/AdminDashboard';
 import ApiDocsPage from './components/ApiDocsPage';
 import AuthScreen from './components/AuthScreen';
+import LegalPolicyPage from './components/LegalPolicyPage';
 import PasswordSetupScreen from './components/PasswordSetupScreen';
 import ReleaseNotesModal from './components/ReleaseNotesModal';
 import { CURRENT_CHANGELOG_ENTRY, getCurrentChangelog } from './config/changelog';
@@ -37,7 +38,12 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [loadingSession, setLoadingSession] = useState(() => {
     const pathname = window.location.pathname;
-    return pathname !== '/password/setup' && pathname !== '/admin/setup' && pathname !== '/api' && pathname !== '/api/';
+    return pathname !== '/password/setup'
+      && pathname !== '/admin/setup'
+      && pathname !== '/api'
+      && pathname !== '/api/'
+      && pathname !== '/privacy-policy'
+      && pathname !== '/cookie-policy';
   });
   const [releaseNotesState, setReleaseNotesState] = useState({
     hiddenVersion: '',
@@ -62,6 +68,8 @@ function App() {
   }, [locationState.search]);
   const isPasswordSetupRoute = locationState.pathname === '/password/setup' || locationState.pathname === '/admin/setup';
   const isApiDocsRoute = locationState.pathname === '/api' || locationState.pathname === '/api/';
+  const isPrivacyPolicyRoute = locationState.pathname === '/privacy-policy';
+  const isCookiePolicyRoute = locationState.pathname === '/cookie-policy';
   const needsReleaseNotesAck = authData?.settings?.lastSeenReleaseNotesVersion !== releaseNotes.version;
   const shouldShowReleaseNotes = Boolean(
     authData
@@ -74,7 +82,7 @@ function App() {
   );
 
   const loadSession = useCallback(async () => {
-    if (isPasswordSetupRoute || isApiDocsRoute) {
+    if (isPasswordSetupRoute || isApiDocsRoute || isPrivacyPolicyRoute || isCookiePolicyRoute) {
       setLoadingSession(false);
       return;
     }
@@ -88,7 +96,7 @@ function App() {
     } finally {
       setLoadingSession(false);
     }
-  }, [isApiDocsRoute, isPasswordSetupRoute]);
+  }, [isApiDocsRoute, isCookiePolicyRoute, isPasswordSetupRoute, isPrivacyPolicyRoute]);
 
   useEffect(() => {
     loadSession();
@@ -225,6 +233,14 @@ function App() {
 
   if (isApiDocsRoute) {
     return <ApiDocsPage locale={locale} />;
+  }
+
+  if (isPrivacyPolicyRoute) {
+    return <LegalPolicyPage policy="privacy" />;
+  }
+
+  if (isCookiePolicyRoute) {
+    return <LegalPolicyPage policy="cookie" />;
   }
 
   if (isPasswordSetupRoute) {

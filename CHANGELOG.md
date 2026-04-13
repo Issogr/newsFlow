@@ -6,6 +6,8 @@
 - stopped exposing password setup secrets in query strings and startup logs by switching setup links to fragment tokens, redacting sensitive request values from logs, and removing the logged admin bootstrap link
 - added dedicated rate limiting for login, registration, and password setup flows so auth endpoints are harder to brute-force than the general internal API surface
 - tightened the Content Security Policy by removing inline script execution while preserving the existing app shell and deployment behavior
+- added dedicated `/privacy-policy` and `/cookie-policy` pages tailored to the app technical-cookie-only login flow, including GDPR/ePrivacy-oriented wording and project-specific session-retention notes
+- surfaced the legal pages directly from both the authentication screen and Settings so users can review the technical-cookie and login-processing information without leaving the app flow
 
 ## 3.2.9.2
 

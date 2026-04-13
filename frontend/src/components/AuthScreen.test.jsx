@@ -69,4 +69,20 @@ describe('AuthScreen', () => {
     expect(onRegister).not.toHaveBeenCalled();
     expect(await screen.findByText('Password must be at least 8 characters long')).toBeInTheDocument();
   });
+
+  test('shows technical-cookie legal links on the auth screen', () => {
+    render(
+      <AuthScreen
+        t={t}
+        onLogin={jest.fn()}
+        onRegister={jest.fn()}
+        busy={false}
+        error={null}
+      />
+    );
+
+    expect(screen.getByText('This website uses only technical cookies strictly necessary for login, authentication, and secure access to reserved areas.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute('href', '/privacy-policy');
+    expect(screen.getByRole('link', { name: 'Cookie Policy' })).toHaveAttribute('href', '/cookie-policy');
+  });
 });
