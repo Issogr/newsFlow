@@ -16,7 +16,7 @@
 ## Why It Stands Out
 
 - News Flow is built to reduce the noise of modern RSS consumption: instead of showing the same story repeated across many feeds, it groups overlapping coverage into cleaner story clusters that are easier to scan.
-- It stays lightweight and self-hostable by using local SQLite storage, built-in full-text search, and a simple single-service architecture, so the project remains practical to deploy without extra infrastructure.
+- It stays lightweight and self-hostable by using local SQLite storage, built-in full-text search, and a small two-tier web architecture, so the project remains practical to deploy without extra infrastructure.
 - It gives each user control over relevance through source exclusions, recent-time filters, retention limits, and personal RSS feeds, making the product useful both as a shared instance and as a tailored private reader.
 - It keeps the reading experience focused with live updates, multilingual support, and an in-app reader mode that extracts cleaner article text from the original source instead of sending users straight into cluttered layouts.
 - It supports this goal with features designed around clarity rather than volume: grouped stories, source families by publisher domain, server-side search, reader caching, settings import/export, account-based access with persistent user preferences, and an in-app feedback flow that can forward bug reports to Telegram.
@@ -34,7 +34,7 @@ Open `http://localhost`.
 Each published GitHub release builds and publishes two public GHCR images:
 
 - `ghcr.io/issogr/newsflow-backend:<release-tag>`
-- `ghcr.io/issogr/newsflow-frontend:<release-tag>`
+- `ghcr.io/issogr/newsflow-bff:<release-tag>`
 
 Every push to `main` also refreshes the rolling `latest` image for both containers.
 
@@ -61,7 +61,9 @@ Auth and admin:
 | `SESSION_TTL_DAYS` | `30` | Session lifetime in days |
 | `SESSION_PURGE_INTERVAL_MS` | `300000` | Expired-session cleanup interval in ms |
 | `ADMIN_USERNAME` | `admin` | Reserved dedicated admin username |
-| `APP_BASE_URL` | `http://localhost:3000` | Public frontend base URL for generated setup links |
+| `INTERNAL_PROXY_TOKEN` | `development-only-change-me` | Shared token used by the BFF when calling the private backend app API and Socket.IO surface |
+| `INTERNAL_SERVICE_NAME` | `bff` | Expected internal caller name for backend app-private traffic |
+| `APP_BASE_URL` | `http://localhost` | Public BFF/base URL for generated setup links and secure-cookie decisions |
 | `FRONTEND_BASE_URL` | unset | Fallback alias for `APP_BASE_URL` |
 | `PASSWORD_SETUP_TTL_MINUTES` | `60` | User password setup/reset link lifetime |
 | `ADMIN_BOOTSTRAP_TTL_MINUTES` | `30` | Admin bootstrap link lifetime |
@@ -123,8 +125,54 @@ Admin access:
 
 - On startup, the backend ensures a reserved admin account exists.
 - If the admin password is not configured yet, the backend logs a single-use setup link for the admin bootstrap flow.
-- Set `APP_BASE_URL` so generated setup links point to the correct frontend origin in your environment.
+- Set `APP_BASE_URL` so generated setup links point to the correct public BFF/app origin in your environment.
 - The outbound response-size limits above are optional; if unset, News Flow uses the listed safe defaults.
+
+HTTP surface:
+
+- The browser-facing app now talks to the BFF on `/api/*`.
+- The backend app-private API remains on `/internal-api/*` but is intended to stay reachable only from the BFF on the private Docker network.
+- The external cached-news API remains public on `/api/public/*`.
+- Public API docs are available at `/api/docs`.
+
+Internal BFF-to-backend trust:
+
+- `INTERNAL_PROXY_TOKEN` is a shared secret used only between the BFF and the backend.
+- Set the same `INTERNAL_PROXY_TOKEN` value in both services.
+- Do not keep the development default in production.
+- Do not commit the production value to the repository.
+- `INTERNAL_SERVICE_NAME` is not a secret. It is an identifier the backend expects from the trusted internal caller.
+- Keep `INTERNAL_SERVICE_NAME=bff` unless you intentionally rename the BFF service and update both sides together.
+
+Recommended token generation:
+
+- Use a long random value, for example 32 bytes or more.
+- Example with OpenSSL:
+
+```bash
+openssl rand -hex 32
+```
+
+- Example with Node.js:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+- Example shell export before `docker compose up`:
+
+```bash
+export INTERNAL_PROXY_TOKEN="$(openssl rand -hex 32)"
+export INTERNAL_SERVICE_NAME="bff"
+docker compose up --build -d
+```
+
+Operational guidance:
+
+- Treat `INTERNAL_PROXY_TOKEN` like an application secret.
+- Store it in your shell environment, deployment secret manager, or an untracked local env file used only on your host.
+- If you rotate it, update the BFF and backend together and restart both services so they stay in sync.
+- If the values do not match, the backend will reject app-private HTTP and Socket.IO traffic from the BFF.
 
 Feedback flow:
 
@@ -139,6 +187,7 @@ Feedback flow:
 - `backend/server.js` - HTTP and WebSocket entrypoint
 - `backend/services/` - ingestion, grouping, querying, users, database, reader extraction
 - `backend/routes/api.js` - REST API
+- `bff/server.js` - browser-facing BFF, session bridge, and proxy layer
 - `frontend/src/components/` - UI screens and panels
 - `frontend/src/hooks/` - WebSocket and request helpers
 - `frontend/src/services/api.js` - frontend API client

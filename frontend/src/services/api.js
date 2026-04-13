@@ -1,21 +1,11 @@
 import axios from 'axios';
 
-const AUTH_TOKEN_STORAGE_KEY = 'newsflow-token';
 const READER_REQUEST_TIMEOUT_MS = 30000;
 
-function readStoredAuthToken() {
-  try {
-    return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '';
-  } catch {
-    return '';
-  }
-}
-
-let authToken = readStoredAuthToken();
-
 const api = axios.create({
-  baseURL: '/internal-api',
+  baseURL: '/api',
   timeout: 15000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -24,11 +14,6 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const nextConfig = { ...config };
   nextConfig.headers = nextConfig.headers || {};
-  nextConfig.headers['X-NewsFlow-App'] = 'web';
-
-  if (authToken) {
-    nextConfig.headers.Authorization = `Bearer ${authToken}`;
-  }
 
   return nextConfig;
 });
@@ -48,21 +33,9 @@ api.interceptors.response.use(
   }
 );
 
-export const setAuthToken = (token) => {
-  authToken = token || '';
+export const setAuthToken = () => {};
 
-  try {
-    if (authToken) {
-      window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
-    } else {
-      window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-    }
-  } catch {
-    // ignore storage failures and keep runtime state only
-  }
-};
-
-export const getAuthToken = () => authToken;
+export const getAuthToken = () => '';
 
 export const isRequestCanceled = (error) => {
   return axios.isCancel?.(error) || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';

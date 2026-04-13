@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.2.10
+
+- moved browser sessions from JavaScript-managed bearer tokens to secure HTTP-only cookies, reducing the impact of future frontend token theft and aligning HTTP and WebSocket authentication on the same server-managed session path
+- stopped exposing password setup secrets in query strings and startup logs by switching setup links to fragment tokens, redacting sensitive request values from logs, and removing the logged admin bootstrap link
+- added dedicated rate limiting for login, registration, and password setup flows so auth endpoints are harder to brute-force than the general internal API surface
+- tightened the Content Security Policy by removing inline script execution while preserving the existing app shell and deployment behavior
+- added dedicated `/privacy-policy` and `/cookie-policy` pages tailored to the app technical-cookie-only login flow, including GDPR/ePrivacy-oriented wording and project-specific session-retention notes
+- surfaced the legal pages directly from both the authentication screen and Settings so users can review the technical-cookie and login-processing information without leaving the app flow
+- introduced a browser-facing BFF service that now serves the built frontend, owns public authenticated app routes under `/api/*`, proxies Socket.IO, and keeps the backend app API private on the internal Docker network
+- moved browser session ownership to the BFF by storing only a BFF session cookie in the browser while mapping it server-side to the backend session, so backend session semantics no longer travel directly through the public web surface
+- relocated the public API documentation page from `/api` to `/api/docs` so `/api/*` can be reserved for browser-facing app endpoints while `/api/public/*` remains the public external integration surface
+
 ## 3.2.9.2
 
 - fixed compact no-image cards so the share action no longer overlaps the title and now sits beside it without changing the standard card layout

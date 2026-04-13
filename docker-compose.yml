@@ -16,6 +16,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5000
+      - INTERNAL_PROXY_TOKEN=${INTERNAL_PROXY_TOKEN:-development-only-change-me}
+      - INTERNAL_SERVICE_NAME=${INTERNAL_SERVICE_NAME:-bff}
       - ALLOWED_ORIGINS=http://localhost,http://localhost:80,http://127.0.0.1,http://127.0.0.1:80,@local-network
       - TRUST_PROXY=true
       - APP_BASE_URL=http://localhost
@@ -62,11 +64,19 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  frontend:
-    build: ./frontend
-    container_name: newsflow-frontend
+  bff:
+    build:
+      context: .
+      dockerfile: bff/Dockerfile
+    container_name: newsflow-bff
     ports:
       - "80:80"
+    environment:
+      - INTERNAL_PROXY_TOKEN=${INTERNAL_PROXY_TOKEN:-development-only-change-me}
+      - INTERNAL_SERVICE_NAME=${INTERNAL_SERVICE_NAME:-bff}
+      - BACKEND_BASE_URL=http://backend:5000
+      - APP_BASE_URL=http://localhost
+      - TRUST_PROXY=true
     depends_on:
       - backend
     networks:

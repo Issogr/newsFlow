@@ -3,12 +3,18 @@ backend/data/
 backend/node_modules/
 backend/coverage/
 backend/.eslintcache
+bff/node_modules/
+bff/coverage/
+bff/.eslintcache
 frontend/node_modules/
 frontend/build/
 frontend/dist/
 frontend/coverage/
 frontend/.eslintcache
 frontend/.vite/
+
+.nyc_output/
+coverage/
 
 .DS_Store
 .idea/

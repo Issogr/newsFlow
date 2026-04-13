@@ -100,6 +100,15 @@ describe('websocketService', () => {
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'WebSocket auth failed: Authentication required' }));
   });
 
+  test('rejects websocket handshakes that do not come through the trusted proxy', () => {
+    const allowRequest = socketFactory.mock.calls[0][1].allowRequest;
+    const callback = jest.fn();
+
+    allowRequest({ headers: { origin: 'http://localhost:3000' } }, callback);
+
+    expect(callback).toHaveBeenCalledWith('Origin not allowed', false);
+  });
+
   test('broadcasts news only to matching sockets', () => {
     const socketOne = createSocket('socket-1', { auth: { token: 'token-1' }, headers: {} });
     socketOne.data.userId = 'user-1';
