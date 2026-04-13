@@ -32,6 +32,10 @@ function buildApiTestApp() {
   return app;
 }
 
+function getSessionCookie(response) {
+  return response.headers['set-cookie']?.find((value) => value.startsWith('newsflow_session=')) || '';
+}
+
 describe('API auth and user flows', () => {
   let tempDir;
   let dbPath;
@@ -93,7 +97,6 @@ describe('API auth and user flows', () => {
       isAdmin: false
     });
     expect(registerResponse.body).toMatchObject({
-      token: expect.any(String),
       settings: {
         defaultLanguage: 'auto',
         articleRetentionHours: 24,
@@ -119,14 +122,16 @@ describe('API auth and user flows', () => {
       },
       customSources: []
     });
+    expect(registerResponse.body.token).toBeUndefined();
+    expect(getSessionCookie(registerResponse)).toContain('newsflow_session=');
 
     const loginResponse = await request(app)
       .post('/api/auth/login')
       .send({ username: 'alice', password: 'secret123' })
       .expect(200);
 
-    expect(loginResponse.body.token).toEqual(expect.any(String));
-    expect(loginResponse.body.token).not.toBe(registerResponse.body.token);
+    expect(loginResponse.body.token).toBeUndefined();
+    expect(getSessionCookie(loginResponse)).toContain('newsflow_session=');
   });
 
   test('bootstraps the admin account and allows creating password setup links', async () => {
@@ -150,6 +155,7 @@ describe('API auth and user flows', () => {
       .post('/api/auth/password-setup/complete')
       .send({ token: bootstrap.token, password: 'secret123' })
       .expect(200);
+    const adminSessionCookie = getSessionCookie(adminSetupResponse);
 
     expect(adminSetupResponse.body.user).toMatchObject({
       username: 'admin',
@@ -163,7 +169,7 @@ describe('API auth and user flows', () => {
 
     const usersResponse = await request(app)
       .get('/api/admin/users')
-      .set('Authorization', `Bearer ${adminSetupResponse.body.token}`)
+      .set('Cookie', adminSessionCookie)
       .expect(200);
 
     expect(usersResponse.body.summary).toEqual(expect.objectContaining({
@@ -193,7 +199,7 @@ describe('API auth and user flows', () => {
 
     const passwordLinkResponse = await request(app)
       .post(`/api/admin/users/${memberResponse.body.user.id}/password-setup-link`)
-      .set('Authorization', `Bearer ${adminSetupResponse.body.token}`)
+      .set('Cookie', adminSessionCookie)
       .expect(200);
 
     expect(passwordLinkResponse.body).toMatchObject({
@@ -203,7 +209,7 @@ describe('API auth and user flows', () => {
         username: 'member-user',
         isAdmin: false
       },
-      setupLink: expect.stringContaining('/password/setup?token='),
+      setupLink: expect.stringContaining('/password/setup#token='),
       expiresAt: expect.any(String)
     });
   });
@@ -238,6 +244,7 @@ describe('API auth and user flows', () => {
       .post('/api/auth/password-setup/complete')
       .send({ token: bootstrap.token, password: 'secret123' })
       .expect(200);
+    const adminSessionCookie = getSessionCookie(adminSetupResponse);
 
     const memberResponse = await request(app)
       .post('/api/auth/register')
@@ -248,10 +255,10 @@ describe('API auth and user flows', () => {
 
     const resetLinkResponse = await request(app)
       .post(`/api/admin/users/${memberResponse.body.user.id}/password-setup-link`)
-      .set('Authorization', `Bearer ${adminSetupResponse.body.token}`)
+      .set('Cookie', adminSessionCookie)
       .expect(200);
 
-    const resetToken = new URL(resetLinkResponse.body.setupLink).searchParams.get('token');
+    const resetToken = new URL(resetLinkResponse.body.setupLink).hash.replace(/^#/, '').replace(/^token=/, '');
 
     const completeResetResponse = await request(app)
       .post('/api/auth/password-setup/complete')
@@ -281,11 +288,11 @@ describe('API auth and user flows', () => {
       .send({ username: 'settings-user', password: 'secret123' })
       .expect(201);
 
-    const token = registerResponse.body.token;
+    const sessionCookie = getSessionCookie(registerResponse);
 
     const updateResponse = await request(app)
       .patch('/api/me/settings')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', sessionCookie)
       .send({
         defaultLanguage: 'en',
         themeMode: 'dark',
@@ -327,7 +334,7 @@ describe('API auth and user flows', () => {
 
     const currentUserResponse = await request(app)
       .get('/api/me')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', sessionCookie)
       .expect(200);
 
     expect(currentUserResponse.body.settings).toEqual(updateResponse.body.settings);
@@ -399,11 +406,11 @@ describe('API auth and user flows', () => {
       .send({ username: 'revoke-user', password: 'secret123' })
       .expect(201);
 
-    const sessionToken = registerResponse.body.token;
+    const sessionCookie = getSessionCookie(registerResponse);
 
     const createResponse = await request(app)
       .post('/api/me/api-token')
-      .set('Authorization', `Bearer ${sessionToken}`)
+      .set('Cookie', sessionCookie)
       .send({})
       .expect(201);
 
@@ -414,7 +421,7 @@ describe('API auth and user flows', () => {
 
     await request(app)
       .delete('/api/me/api-token')
-      .set('Authorization', `Bearer ${sessionToken}`)
+      .set('Cookie', sessionCookie)
       .expect(200);
 
     await request(app)
@@ -431,12 +438,12 @@ describe('API auth and user flows', () => {
       .send({ username: 'regen-user', password: 'secret123' })
       .expect(201);
 
-    const sessionToken = registerResponse.body.token;
+    const sessionCookie = getSessionCookie(registerResponse);
     const userId = registerResponse.body.user.id;
 
     const firstTokenResponse = await request(app)
       .post('/api/me/api-token')
-      .set('Authorization', `Bearer ${sessionToken}`)
+      .set('Cookie', sessionCookie)
       .send({})
       .expect(201);
 
@@ -444,7 +451,7 @@ describe('API auth and user flows', () => {
 
     const secondTokenResponse = await request(app)
       .post('/api/me/api-token')
-      .set('Authorization', `Bearer ${sessionToken}`)
+      .set('Cookie', sessionCookie)
       .send({})
       .expect(201);
 
@@ -482,11 +489,11 @@ describe('API auth and user flows', () => {
       .send({ username: 'source-user', password: 'secret123' })
       .expect(201);
 
-    const token = registerResponse.body.token;
+    const sessionCookie = getSessionCookie(registerResponse);
 
     const addResponse = await request(app)
       .post('/api/me/sources')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', sessionCookie)
       .send({ url: 'https://example.com/feed.xml' })
       .expect(201);
 
@@ -504,7 +511,7 @@ describe('API auth and user flows', () => {
 
     const updateResponse = await request(app)
       .patch(`/api/me/sources/${sourceId}`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', sessionCookie)
       .send({ url: 'https://example.com/updated.xml' })
       .expect(200);
 
@@ -520,12 +527,12 @@ describe('API auth and user flows', () => {
 
     await request(app)
       .delete(`/api/me/sources/${sourceId}`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', sessionCookie)
       .expect(200, { success: true });
 
     const currentUserResponse = await request(app)
       .get('/api/me')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', sessionCookie)
       .expect(200);
 
     expect(currentUserResponse.body.customSources).toEqual([]);
@@ -545,7 +552,7 @@ describe('API auth and user flows', () => {
 
     const response = await request(app)
       .post('/api/me/feedback')
-      .set('Authorization', `Bearer ${registerResponse.body.token}`)
+      .set('Cookie', getSessionCookie(registerResponse))
       .field('category', 'bug')
       .field('title', 'Reader overlap on mobile')
       .field('description', 'The reader panel overlaps the sticky header on a narrow mobile viewport.')
@@ -582,7 +589,7 @@ describe('API auth and user flows', () => {
 
     const response = await request(app)
       .post('/api/me/feedback')
-      .set('Authorization', `Bearer ${registerResponse.body.token}`)
+      .set('Cookie', getSessionCookie(registerResponse))
       .field('category', 'feedback')
       .field('title', 'Animation feels abrupt')
       .field('description', 'Short clip showing the abrupt transition in the filter drawer.')
@@ -617,7 +624,7 @@ describe('API auth and user flows', () => {
 
     const response = await request(app)
       .post('/api/me/feedback')
-      .set('Authorization', `Bearer ${registerResponse.body.token}`)
+      .set('Cookie', getSessionCookie(registerResponse))
       .field('category', 'question')
       .field('title', 'Bad category')
       .field('description', 'This should not be accepted.')
@@ -640,17 +647,17 @@ describe('API auth and user flows', () => {
       .send({ username: 'import-user', password: 'secret123' })
       .expect(201);
 
-    const token = registerResponse.body.token;
+    const sessionCookie = getSessionCookie(registerResponse);
 
     await request(app)
       .post('/api/me/sources')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', sessionCookie)
       .send({ url: 'https://example.com/existing.xml' })
       .expect(201);
 
     const importResponse = await request(app)
       .post('/api/me/settings/import')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', sessionCookie)
       .send({
         settings: {
           defaultLanguage: 'en',
@@ -709,16 +716,16 @@ describe('API auth and user flows', () => {
       .send({ username: 'logout-user', password: 'secret123' })
       .expect(201);
 
-    const token = registerResponse.body.token;
+    const sessionCookie = getSessionCookie(registerResponse);
 
     await request(app)
       .post('/api/auth/logout')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', sessionCookie)
       .expect(200, { success: true });
 
     const meResponse = await request(app)
       .get('/api/me')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', sessionCookie)
       .expect(401);
 
     expect(meResponse.body.error.code).toBe('UNAUTHORIZED');

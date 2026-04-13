@@ -4,6 +4,22 @@
 
 const logger = require('./logger');
 
+function redactSensitiveObject(value) {
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  return Object.entries(value).reduce((result, [key, entryValue]) => {
+    if (/token|authorization|cookie/i.test(key)) {
+      result[key] = '[REDACTED]';
+      return result;
+    }
+
+    result[key] = entryValue;
+    return result;
+  }, {});
+}
+
 /**
  * Maps internal error codes to user-friendly error messages
  */
@@ -78,8 +94,8 @@ const errorMiddleware = (err, req, res, next) => {
     path: req.path,
     method: req.method,
     ip: req.ip,
-    query: req.query,
-    params: req.params,
+    query: redactSensitiveObject(req.query),
+    params: redactSensitiveObject(req.params),
     userAgent: req.get('user-agent')
   };
 

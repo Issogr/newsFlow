@@ -26,7 +26,6 @@ describe('PasswordSetupScreen', () => {
       expiresAt: '2026-03-27T12:00:00.000Z'
     });
     completePasswordSetup.mockResolvedValue({
-      token: 'session-token',
       user: { id: 'user-1', username: 'alice', isAdmin: false },
       settings: {},
       limits: {},
@@ -43,7 +42,7 @@ describe('PasswordSetupScreen', () => {
     await waitFor(() => {
       expect(completePasswordSetup).toHaveBeenCalledWith({ token: 'setup-token', password: 'renewed123' });
     });
-    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ token: 'session-token' }));
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ user: expect.objectContaining({ username: 'alice' }) }));
   });
 
   test('blocks short passwords before submitting', async () => {

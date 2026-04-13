@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
-import { getAuthToken } from '../services/api';
 
 const MAX_NOTIFICATIONS = 10;
 const MAX_TRACKED_GROUP_IDS = 1000;
@@ -71,15 +70,13 @@ const useWebSocket = (url = '', messages = {}, enabled = true) => {
     }
 
     const socket = io(wsUrl, {
-      auth: {
-        token: getAuthToken()
-      },
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 20000,
       transports: ['websocket', 'polling'],
-      path: '/socket.io'
+      path: '/socket.io',
+      withCredentials: true,
     });
 
     socketRef.current = socket;

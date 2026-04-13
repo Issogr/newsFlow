@@ -16,7 +16,7 @@ const {
 } = require('../utils/feedback');
 const { asyncHandler, createError } = require('../utils/errorHandler');
 const { sanitizeParam, sanitizeQuery, validateParam, sanitizeBody } = require('../utils/inputValidator');
-const { requireAuthenticatedUser, requireAdminUser } = require('../utils/auth');
+const { requireAuthenticatedUser, requireAdminUser, SESSION_COOKIE_NAME } = require('../utils/auth');
 
 const router = express.Router();
 
@@ -32,6 +32,64 @@ const feedbackRateLimit = rateLimit({
     },
   },
 });
+
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const username = String(req.body?.username || '').trim().toLowerCase();
+    return `${req.ip}:${username}`;
+  },
+  message: {
+    error: {
+      message: 'Too many authentication attempts. Please try again later.',
+      code: 'RATE_LIMIT_EXCEEDED',
+    },
+  },
+});
+
+const passwordSetupRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const token = String(req.body?.token || req.query?.token || '').trim().slice(0, 24);
+    return `${req.ip}:${token}`;
+  },
+  message: {
+    error: {
+      message: 'Too many password setup attempts. Please try again later.',
+      code: 'RATE_LIMIT_EXCEEDED',
+    },
+  },
+});
+
+function getSessionCookieOptions() {
+  const ttlDays = parseInt(process.env.SESSION_TTL_DAYS || '30', 10);
+  const appBaseUrl = String(process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim();
+  const secure = process.env.COOKIE_SECURE === 'true'
+    || (process.env.COOKIE_SECURE !== 'false' && appBaseUrl.startsWith('https://'));
+
+  return {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure,
+    path: '/',
+    maxAge: ttlDays * 24 * 60 * 60 * 1000,
+  };
+}
+
+function setSessionCookie(res, sessionToken) {
+  res.cookie(SESSION_COOKIE_NAME, sessionToken, getSessionCookieOptions());
+}
+
+function clearSessionCookie(res) {
+  const { maxAge, ...cookieOptions } = getSessionCookieOptions();
+  res.clearCookie(SESSION_COOKIE_NAME, cookieOptions);
+}
 
 const feedbackUpload = multer({
   storage: multer.memoryStorage(),
@@ -140,28 +198,35 @@ function getUserContext(req) {
   };
 }
 
-router.post('/auth/register', [sanitizeBody(['username'])], asyncHandler(async (req, res) => {
+router.post('/auth/register', [authRateLimit, sanitizeBody(['username'])], asyncHandler(async (req, res) => {
   const result = await userService.registerUser(req.body || {});
-  res.status(201).json(result);
+  setSessionCookie(res, result.token);
+  const { token, ...safeResult } = result;
+  res.status(201).json(safeResult);
 }));
 
-router.post('/auth/login', [sanitizeBody(['username'])], asyncHandler(async (req, res) => {
+router.post('/auth/login', [authRateLimit, sanitizeBody(['username'])], asyncHandler(async (req, res) => {
   const result = await userService.loginUser(req.body || {});
-  res.json(result);
+  setSessionCookie(res, result.token);
+  const { token, ...safeResult } = result;
+  res.json(safeResult);
 }));
 
-router.get('/auth/password-setup/validate', [sanitizeQuery('token')], asyncHandler(async (req, res) => {
+router.get('/auth/password-setup/validate', [passwordSetupRateLimit, sanitizeQuery('token')], asyncHandler(async (req, res) => {
   const details = userService.getPasswordSetupTokenDetails(req.query.token);
   res.json(details);
 }));
 
-router.post('/auth/password-setup/complete', asyncHandler(async (req, res) => {
+router.post('/auth/password-setup/complete', passwordSetupRateLimit, asyncHandler(async (req, res) => {
   const result = await userService.completePasswordSetup(req.body || {});
-  res.json(result);
+  setSessionCookie(res, result.token);
+  const { token, ...safeResult } = result;
+  res.json(safeResult);
 }));
 
 router.post('/auth/logout', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   userService.logoutUser(req.user.sessionToken);
+  clearSessionCookie(res);
   res.json({ success: true });
 }));
 

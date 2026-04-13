@@ -4,8 +4,6 @@ import App from './App';
 import {
   completePasswordSetup,
   fetchCurrentUser,
-  getAuthToken,
-  setAuthToken,
   updateUserSettings,
   validatePasswordSetupToken
 } from './services/api';
@@ -14,12 +12,10 @@ vi.mock('./services/api', () => ({
   completePasswordSetup: vi.fn(),
   fetchCurrentUser: vi.fn(),
   fetchAdminUsers: vi.fn(),
-  getAuthToken: vi.fn(),
   loginUser: vi.fn(),
   logoutUser: vi.fn(),
   createAdminPasswordSetupLink: vi.fn(),
   registerUser: vi.fn(),
-  setAuthToken: vi.fn(),
   updateUserSettings: vi.fn(),
   validatePasswordSetupToken: vi.fn()
 }));
@@ -88,17 +84,17 @@ describe('App', () => {
   });
 
   test('renders the authentication screen when there is no saved session', () => {
-    getAuthToken.mockReturnValue('');
+    fetchCurrentUser.mockRejectedValue(new Error('Session missing'));
 
     render(<App />);
 
-    expect(screen.getByText('Sign in')).toBeInTheDocument();
-    expect(fetchCurrentUser).not.toHaveBeenCalled();
+    return waitFor(() => {
+      expect(screen.getByText('Sign in')).toBeInTheDocument();
+    });
   });
 
   test('renders the authenticated app when the current session loads', async () => {
-    getAuthToken.mockReturnValue('session-token');
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.9.2' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.9.3' }));
 
     render(<App />);
 
@@ -106,7 +102,6 @@ describe('App', () => {
   });
 
   test('renders the admin dashboard instead of the news home for admin sessions', async () => {
-    getAuthToken.mockReturnValue('admin-token');
     fetchCurrentUser.mockResolvedValue({
       ...createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.5' }),
       user: { username: 'admin', isAdmin: true }
@@ -119,8 +114,7 @@ describe('App', () => {
   });
 
   test('applies the selected dark theme to the document root after session load', async () => {
-    getAuthToken.mockReturnValue('session-token');
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ themeMode: 'dark', lastSeenReleaseNotesVersion: '3.2.9.2' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ themeMode: 'dark', lastSeenReleaseNotesVersion: '3.2.9.3' }));
 
     render(<App />);
 
@@ -130,11 +124,10 @@ describe('App', () => {
   });
 
   test('shows release notes once after login for users who have not seen the current update', async () => {
-    getAuthToken.mockReturnValue('session-token');
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-        settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.9.2' }).settings
+        settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.9.3' }).settings
     });
 
     render(<App />);
@@ -144,13 +137,12 @@ describe('App', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
 
     await waitFor(() => {
-      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.9.2' });
+      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.9.3' });
     });
   });
 
   test('reopens release notes manually from the authenticated app', async () => {
-    getAuthToken.mockReturnValue('session-token');
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.9.2' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.9.3' }));
 
     render(<App />);
 
@@ -162,11 +154,10 @@ describe('App', () => {
   });
 
   test('locks body scroll while release notes are open', async () => {
-    getAuthToken.mockReturnValue('session-token');
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-        settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.9.2' }).settings
+        settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.9.3' }).settings
     });
 
     render(<App />);
@@ -182,7 +173,6 @@ describe('App', () => {
   });
 
   test('falls back to the authentication screen when loading the session fails', async () => {
-    getAuthToken.mockReturnValue('stale-token');
     fetchCurrentUser.mockRejectedValue(new Error('Session expired'));
 
     render(<App />);
@@ -191,11 +181,9 @@ describe('App', () => {
       expect(screen.getByText('Sign in')).toBeInTheDocument();
     });
 
-    expect(setAuthToken).toHaveBeenCalledWith('');
   });
 
   test('renders the password setup screen on setup routes', async () => {
-    getAuthToken.mockReturnValue('');
     validatePasswordSetupToken.mockResolvedValue({
       username: 'admin',
       isAdmin: true,
@@ -203,13 +191,12 @@ describe('App', () => {
       expiresAt: '2026-03-27T12:00:00.000Z'
     });
     completePasswordSetup.mockResolvedValue({
-      token: 'session-token',
       user: { id: 'admin-id', username: 'admin', isAdmin: true },
       settings: createCurrentUser().settings,
       limits: createCurrentUser().limits,
       customSources: []
     });
-    window.history.replaceState({}, '', '/admin/setup?token=bootstrap-token');
+    window.history.replaceState({}, '', '/admin/setup#token=bootstrap-token');
 
     render(<App />);
 

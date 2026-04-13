@@ -8,6 +8,7 @@ const API_TOKEN_TTL_DAYS = 30;
 const SESSION_PURGE_INTERVAL_MS = parseInt(process.env.SESSION_PURGE_INTERVAL_MS || '300000', 10);
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase() || 'admin';
 const USER_ACTIVITY_TOUCH_INTERVAL_SECONDS = parseInt(process.env.USER_ACTIVITY_TOUCH_INTERVAL_SECONDS || '60', 10);
+const SESSION_COOKIE_NAME = 'newsflow_session';
 const scryptAsync = promisify(crypto.scrypt);
 
 let lastSessionPurgeAt = 0;
@@ -24,6 +25,37 @@ function extractBearerToken(authorizationHeader) {
   }
 
   return token.trim();
+}
+
+function parseCookieHeader(cookieHeader) {
+  if (!cookieHeader || typeof cookieHeader !== 'string') {
+    return {};
+  }
+
+  return cookieHeader
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((cookies, part) => {
+      const separatorIndex = part.indexOf('=');
+      if (separatorIndex <= 0) {
+        return cookies;
+      }
+
+      const key = part.slice(0, separatorIndex).trim();
+      const value = part.slice(separatorIndex + 1).trim();
+      if (!key) {
+        return cookies;
+      }
+
+      cookies[key] = decodeURIComponent(value);
+      return cookies;
+    }, {});
+}
+
+function extractSessionCookie(cookieHeader) {
+  const cookies = parseCookieHeader(cookieHeader);
+  return String(cookies[SESSION_COOKIE_NAME] || '').trim();
 }
 
 function safeTokenCompare(expectedToken, receivedToken) {
@@ -89,6 +121,7 @@ function resolveAuthenticatedSession({ headers = {}, authToken = '', touchActivi
 
   const sessionToken = String(authToken || '').trim()
     || extractBearerToken(headers.authorization)
+    || extractSessionCookie(headers.cookie)
     || String(headers['x-session-token'] || '').trim();
 
   if (!sessionToken) {
@@ -236,5 +269,8 @@ module.exports = {
   hashSessionToken,
   createSessionExpiryDate,
   createApiTokenExpiryDate,
-  API_TOKEN_TTL_DAYS
+  API_TOKEN_TTL_DAYS,
+  SESSION_COOKIE_NAME,
+  parseCookieHeader,
+  extractSessionCookie
 };

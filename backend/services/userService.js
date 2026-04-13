@@ -80,7 +80,7 @@ function getAppBaseUrl() {
 }
 
 function buildSetupLink(pathName, token) {
-  return `${getAppBaseUrl()}${pathName}?token=${encodeURIComponent(token)}`;
+  return `${getAppBaseUrl()}${pathName}#token=${encodeURIComponent(token)}`;
 }
 
 function validatePassword(password) {
