@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.2.9.3
+## 3.2.10
 
 - moved browser sessions from JavaScript-managed bearer tokens to secure HTTP-only cookies, reducing the impact of future frontend token theft and aligning HTTP and WebSocket authentication on the same server-managed session path
 - stopped exposing password setup secrets in query strings and startup logs by switching setup links to fragment tokens, redacting sensitive request values from logs, and removing the logged admin bootstrap link
