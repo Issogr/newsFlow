@@ -3,15 +3,18 @@ const {
   DEFAULT_INTERNAL_PROXY_TOKEN,
   getInternalServiceName,
   hasTrustedInternalService,
+  getInternalProxyToken,
 } = require('./internalRequestGate');
 
 describe('internalRequestGate', () => {
   const originalToken = process.env.INTERNAL_PROXY_TOKEN;
   const originalServiceName = process.env.INTERNAL_SERVICE_NAME;
+  const originalNodeEnv = process.env.NODE_ENV;
 
   beforeEach(() => {
     process.env.INTERNAL_PROXY_TOKEN = 'test-proxy-token';
     process.env.INTERNAL_SERVICE_NAME = 'bff';
+    delete process.env.NODE_ENV;
   });
 
   afterAll(() => {
@@ -23,10 +26,16 @@ describe('internalRequestGate', () => {
 
     if (originalServiceName === undefined) {
       delete process.env.INTERNAL_SERVICE_NAME;
+    } else {
+      process.env.INTERNAL_SERVICE_NAME = originalServiceName;
+    }
+
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
       return;
     }
 
-    process.env.INTERNAL_SERVICE_NAME = originalServiceName;
+    process.env.NODE_ENV = originalNodeEnv;
   });
 
   test('falls back to the default token and service when env is missing', () => {
@@ -45,6 +54,17 @@ describe('internalRequestGate', () => {
     process.env.INTERNAL_SERVICE_NAME = 'edge-proxy';
 
     expect(getInternalServiceName()).toBe('edge-proxy');
+  });
+
+  test('requires a non-default proxy token in production', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.INTERNAL_PROXY_TOKEN;
+
+    expect(() => getInternalProxyToken()).toThrow('INTERNAL_PROXY_TOKEN is required in production.');
+
+    process.env.INTERNAL_PROXY_TOKEN = DEFAULT_INTERNAL_PROXY_TOKEN;
+
+    expect(() => getInternalProxyToken()).toThrow('INTERNAL_PROXY_TOKEN must not use the development default in production.');
   });
 
   test('accepts only requests coming through the trusted proxy token and service name', () => {

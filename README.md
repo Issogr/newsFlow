@@ -62,7 +62,8 @@ Auth and admin:
 | `SESSION_PURGE_INTERVAL_MS` | `300000` | Expired-session cleanup interval in ms |
 | `ADMIN_USERNAME` | `admin` | Reserved dedicated admin username |
 | `INTERNAL_PROXY_TOKEN` | `development-only-change-me` | Shared token used by the BFF when calling the private backend app API and Socket.IO surface |
-| `BFF_SESSION_SECRET` | falls back to `INTERNAL_PROXY_TOKEN` | Secret used by the BFF to encrypt the browser session cookie that carries the backend-session mapping |
+| `BFF_SESSION_SECRET` | `development-only-change-me` | Secret used by the BFF to sign browser session cookies; must be set to a non-default value in production |
+| `BFF_SESSION_DB_PATH` | `bff/data/sessions.sqlite` | SQLite path used by the BFF persistent session store |
 | `INTERNAL_SERVICE_NAME` | `bff` | Expected internal caller name for backend app-private traffic |
 | `APP_BASE_URL` | `http://localhost` | Public BFF/base URL for generated setup links and secure-cookie decisions |
 | `FRONTEND_BASE_URL` | unset | Fallback alias for `APP_BASE_URL` |
@@ -142,9 +143,8 @@ Internal BFF-to-backend trust:
 - Set the same `INTERNAL_PROXY_TOKEN` value in both services.
 - Do not keep the development default in production.
 - Do not commit the production value to the repository.
-- `BFF_SESSION_SECRET` is the secret used to encrypt the browser-facing BFF session cookie.
-- Set a stable `BFF_SESSION_SECRET` value in production so browser sessions survive BFF restarts.
-- If `BFF_SESSION_SECRET` is not set, the BFF falls back to `INTERNAL_PROXY_TOKEN`.
+- `BFF_SESSION_SECRET` is the secret used by the BFF session middleware to sign the browser-facing session cookie.
+- Set a stable `BFF_SESSION_SECRET` value in production so browser sessions survive BFF restarts and browser reopen flows.
 - `INTERNAL_SERVICE_NAME` is not a secret. It is an identifier the backend expects from the trusted internal caller.
 - Keep `INTERNAL_SERVICE_NAME=bff` unless you intentionally rename the BFF service and update both sides together.
 
@@ -177,8 +177,8 @@ Operational guidance:
 - Treat `INTERNAL_PROXY_TOKEN` like an application secret.
 - Treat `BFF_SESSION_SECRET` like an application secret too.
 - Store it in your shell environment, deployment secret manager, or an untracked local env file used only on your host.
-- If you rotate it, update the BFF and backend together and restart both services so they stay in sync.
-- If you rotate `BFF_SESSION_SECRET`, existing browser sessions will be invalidated until users sign in again.
+- `docker compose` now expects `INTERNAL_PROXY_TOKEN` and `BFF_SESSION_SECRET` to be set explicitly before startup instead of falling back to insecure defaults.
+- If you change either secret, existing users may need to sign in again, but user data remains intact.
 - If the values do not match, the backend will reject app-private HTTP and Socket.IO traffic from the BFF.
 
 Feedback flow:

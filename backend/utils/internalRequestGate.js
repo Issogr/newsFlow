@@ -14,8 +14,27 @@ function safeCompare(left, right) {
   return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
+function getConfiguredSecret(name, developmentFallback) {
+  const configured = String(process.env[name] || '').trim();
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (configured) {
+    if (isProduction && configured === developmentFallback) {
+      throw new Error(`${name} must not use the development default in production.`);
+    }
+
+    return configured;
+  }
+
+  if (isProduction) {
+    throw new Error(`${name} is required in production.`);
+  }
+
+  return developmentFallback;
+}
+
 function getInternalProxyToken() {
-  return String(process.env.INTERNAL_PROXY_TOKEN || DEFAULT_INTERNAL_PROXY_TOKEN).trim() || DEFAULT_INTERNAL_PROXY_TOKEN;
+  return getConfiguredSecret('INTERNAL_PROXY_TOKEN', DEFAULT_INTERNAL_PROXY_TOKEN);
 }
 
 function getInternalServiceName() {

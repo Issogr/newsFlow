@@ -8,8 +8,13 @@
     "test": "jest"
   },
   "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "better-sqlite3-session-store": "^0.1.0",
     "axios": "^1.9.0",
+    "cookie": "^1.0.2",
+    "cookie-signature": "^1.2.2",
     "express": "^5.1.0",
+    "express-session": "^1.18.2",
     "http-proxy-middleware": "^3.0.5"
   },
   "devDependencies": {
