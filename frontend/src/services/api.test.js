@@ -1,8 +1,9 @@
 var mockApi;
 var mockApiConfig;
+var responseErrorHandler;
 
 import axios from 'axios';
-import { fetchReaderArticle } from './api';
+import { AUTH_EXPIRED_EVENT, fetchReaderArticle } from './api';
 
 vi.mock('axios', () => {
   const axios = {
@@ -11,7 +12,11 @@ vi.mock('axios', () => {
       mockApi = {
         interceptors: {
           request: { use: vi.fn() },
-          response: { use: vi.fn() }
+          response: {
+            use: vi.fn((successHandler, errorHandler) => {
+              responseErrorHandler = errorHandler;
+            })
+          }
         },
         get: vi.fn(),
         post: vi.fn(),
@@ -58,5 +63,35 @@ describe('api service', () => {
       baseURL: '/api',
       withCredentials: true
     }));
+  });
+
+  test('broadcasts auth expiry when a non-auth request returns 401', async () => {
+    const listener = vi.fn();
+    window.addEventListener(AUTH_EXPIRED_EVENT, listener);
+
+    const error = {
+      response: { status: 401 },
+      config: { url: '/me' }
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    window.removeEventListener(AUTH_EXPIRED_EVENT, listener);
+  });
+
+  test('does not broadcast auth expiry for auth-route 401 responses', async () => {
+    const listener = vi.fn();
+    window.addEventListener(AUTH_EXPIRED_EVENT, listener);
+
+    const error = {
+      response: { status: 401 },
+      config: { url: '/auth/login' }
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+    expect(listener).not.toHaveBeenCalled();
+
+    window.removeEventListener(AUTH_EXPIRED_EVENT, listener);
   });
 });

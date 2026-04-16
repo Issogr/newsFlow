@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import {
+  AUTH_EXPIRED_EVENT,
   completePasswordSetup,
   fetchCurrentUser,
   updateUserSettings,
@@ -9,6 +10,7 @@ import {
 } from './services/api';
 
 vi.mock('./services/api', () => ({
+  AUTH_EXPIRED_EVENT: 'newsflow:auth-expired',
   completePasswordSetup: vi.fn(),
   fetchCurrentUser: vi.fn(),
   fetchAdminUsers: vi.fn(),
@@ -94,7 +96,7 @@ describe('App', () => {
   });
 
   test('renders the authenticated app when the current session loads', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.1' }));
 
     render(<App />);
 
@@ -114,7 +116,7 @@ describe('App', () => {
   });
 
   test('applies the selected dark theme to the document root after session load', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ themeMode: 'dark', lastSeenReleaseNotesVersion: '3.2.10' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ themeMode: 'dark', lastSeenReleaseNotesVersion: '3.2.10.1' }));
 
     render(<App />);
 
@@ -127,7 +129,7 @@ describe('App', () => {
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-        settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10' }).settings
+        settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.1' }).settings
     });
 
     render(<App />);
@@ -137,12 +139,12 @@ describe('App', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
 
     await waitFor(() => {
-      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.10' });
+      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.10.1' });
     });
   });
 
   test('reopens release notes manually from the authenticated app', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.1' }));
 
     render(<App />);
 
@@ -157,7 +159,7 @@ describe('App', () => {
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-        settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10' }).settings
+        settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.1' }).settings
     });
 
     render(<App />);
@@ -181,6 +183,20 @@ describe('App', () => {
       expect(screen.getByText('Sign in')).toBeInTheDocument();
     });
 
+  });
+
+  test('returns to the authentication screen immediately after an auth-expired event', async () => {
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.1' }));
+
+    render(<App />);
+
+    expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
+
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+
+    await waitFor(() => {
+      expect(screen.getByText('Sign in')).toBeInTheDocument();
+    });
   });
 
   test('renders the password setup screen on setup routes', async () => {

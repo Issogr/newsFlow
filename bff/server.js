@@ -119,6 +119,22 @@ function createSessionStore() {
     return sessionId;
   }
 
+  function touch(sessionId) {
+    const session = sessions.get(sessionId);
+
+    if (!session) {
+      return null;
+    }
+
+    if (session.expiresAt <= Date.now()) {
+      sessions.delete(sessionId);
+      return null;
+    }
+
+    session.expiresAt = Date.now() + SESSION_TTL_MS;
+    return session;
+  }
+
   function get(sessionId) {
     if (!sessionId) {
       return null;
@@ -135,7 +151,7 @@ function createSessionStore() {
       return null;
     }
 
-    return session;
+    return touch(sessionId);
   }
 
   function remove(sessionId) {
@@ -150,6 +166,7 @@ function createSessionStore() {
   return {
     create,
     get,
+    touch,
     remove,
     pruneExpiredSessions,
   };
@@ -316,6 +333,12 @@ function createApp(options = {}) {
           const sessionId = readBffSessionId(req);
           sessionStore.remove(sessionId);
           clearBffSessionCookie(res, req);
+          return;
+        }
+
+        const sessionId = readBffSessionId(req);
+        if (sessionStore.get(sessionId)) {
+          setBffSessionCookie(res, req, sessionId);
         }
       },
     },

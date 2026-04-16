@@ -37,4 +37,37 @@ describe('auth session cleanup throttling', () => {
       expect(databaseMock.purgeExpiredSessions).toHaveBeenCalledTimes(2);
     });
   });
+
+  test('refreshes the backend session expiry during authenticated requests', () => {
+    jest.resetModules();
+
+    const databaseMock = {
+      findSessionByTokenHash: jest.fn(() => ({
+        tokenHash: 'hashed-token',
+        userId: 'user-1',
+        username: 'alice',
+        expiresAt: new Date(Date.now() + (24 * 60 * 60 * 1000)).toISOString()
+      })),
+      refreshSessionExpiry: jest.fn(() => 1),
+      touchUserActivity: jest.fn(() => 1),
+      purgeExpiredSessions: jest.fn(() => 0)
+    };
+
+    jest.doMock('../services/database', () => databaseMock);
+
+    jest.isolateModules(() => {
+      const auth = require('./auth');
+
+      const resolved = auth.resolveAuthenticatedSession({
+        headers: {
+          authorization: 'Bearer my-session-token'
+        }
+      });
+
+      expect(resolved.user).toEqual(expect.objectContaining({ username: 'alice' }));
+      expect(databaseMock.findSessionByTokenHash).toHaveBeenCalledWith(auth.hashSessionToken('my-session-token'));
+      expect(databaseMock.refreshSessionExpiry).toHaveBeenCalledWith('hashed-token', expect.any(String));
+      expect(databaseMock.touchUserActivity).toHaveBeenCalledWith('user-1', expect.any(String), expect.any(Number));
+    });
+  });
 });
