@@ -98,7 +98,7 @@ describe('NewsCard', () => {
       />
     );
 
-    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover|^data:image\/svg\+xml/));
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
   });
 
   test('falls back to the generic illustration for unsafe or broken article images', () => {
@@ -121,7 +121,7 @@ describe('NewsCard', () => {
       />
     );
 
-    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover|^data:image\/svg\+xml/));
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
 
     rerender(
       <NewsCard
@@ -145,7 +145,7 @@ describe('NewsCard', () => {
     const image = screen.getByRole('img', { name: 'Headline' });
     fireEvent.error(image);
 
-    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover|^data:image\/svg\+xml/));
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
   });
 
   test('disables unsafe external links', () => {
