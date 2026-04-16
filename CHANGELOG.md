@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.2.10.2
+
+- replaced the BFF in-memory session mapping with a persistent SQLite-backed `express-session` store so authenticated browser sessions survive browser close/reopen flows and BFF restarts instead of being dropped when ephemeral proxy state disappears
+- hardened the BFF and backend secret model by requiring non-default production secrets and separating browser-session signing from BFF-to-backend trust, while keeping the runtime setup simple enough that changing either secret only forces users to sign in again
+
 ## 3.2.10.1
 
 - switched authenticated browser sessions to sliding expiry on both the BFF and backend session records, preventing active sessions from expiring unexpectedly mid-use and renewing their lifetime on continued authenticated traffic

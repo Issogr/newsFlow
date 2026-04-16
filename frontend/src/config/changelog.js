@@ -1,13 +1,13 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.2.10.1',
+  version: '3.2.10.2',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '⏳ Signed-in sessions now stay more stable during normal use.',
-      '🚪 If a session expires, the app now returns to sign-in right away instead of staying stuck in a broken logged-in state.',
-      '📄 Privacy and cookie pages were updated to match the current session behavior.',
+      '🔐 Signed-in sessions now survive browser close and reopen more reliably.',
+      '⏳ Sessions no longer depend on temporary in-memory BFF state, so they stay more stable during normal use.',
+      '🚪 If a session still becomes invalid, the app returns to sign-in right away instead of staying stuck in a broken logged-in state.',
     ]
   },
   it: {
@@ -15,9 +15,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '⏳ Le sessioni restano piu stabili durante l\'uso normale dell\'app.',
-      '🚪 Se una sessione scade, l\'app torna subito alla schermata di accesso invece di restare in uno stato loggato non funzionante.',
-      '📄 Privacy Policy e Cookie Policy sono state aggiornate per riflettere il comportamento attuale delle sessioni.',
+      '🔐 Le sessioni ora sopravvivono in modo piu affidabile alla chiusura e riapertura del browser.',
+      '⏳ Le sessioni non dipendono piu da stato temporaneo in memoria nel BFF, quindi restano piu stabili durante l\'uso normale.',
+      '🚪 Se una sessione diventa comunque non valida, l\'app torna subito alla schermata di accesso invece di restare in uno stato loggato non funzionante.',
     ]
   }
 };

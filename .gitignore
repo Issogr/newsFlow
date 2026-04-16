@@ -4,6 +4,7 @@ backend/node_modules/
 backend/coverage/
 backend/.eslintcache
 bff/node_modules/
+bff/data/
 bff/coverage/
 bff/.eslintcache
 frontend/node_modules/
