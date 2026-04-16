@@ -10,6 +10,7 @@ const BFF_SESSION_COOKIE_NAME = 'newsflow_bff_session';
 const DEFAULT_FRONTEND_DIST_DIR = path.join(__dirname, 'public');
 const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '30', 10);
 const SESSION_TTL_MS = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+const DEFAULT_BFF_SESSION_SECRET = 'development-only-change-me';
 
 function parseCookieHeader(cookieHeader) {
   if (!cookieHeader || typeof cookieHeader !== 'string') {
@@ -65,6 +66,56 @@ function serializeCookie(name, value, options = {}) {
   return parts.join('; ');
 }
 
+function getBffSessionSecret() {
+  return String(
+    process.env.BFF_SESSION_SECRET
+    || process.env.INTERNAL_PROXY_TOKEN
+    || DEFAULT_BFF_SESSION_SECRET,
+  ).trim() || DEFAULT_BFF_SESSION_SECRET;
+}
+
+function encryptBffSession(backendSessionCookie) {
+  const normalized = String(backendSessionCookie || '').trim();
+
+  if (!normalized) {
+    return '';
+  }
+
+  const key = crypto.createHash('sha256').update(getBffSessionSecret()).digest();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(normalized, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+
+  return Buffer.concat([iv, authTag, encrypted]).toString('base64url');
+}
+
+function decryptBffSession(cookieValue) {
+  const normalized = String(cookieValue || '').trim();
+
+  if (!normalized) {
+    return '';
+  }
+
+  try {
+    const payload = Buffer.from(normalized, 'base64url');
+    if (payload.length <= 28) {
+      return '';
+    }
+
+    const iv = payload.subarray(0, 12);
+    const authTag = payload.subarray(12, 28);
+    const ciphertext = payload.subarray(28);
+    const key = crypto.createHash('sha256').update(getBffSessionSecret()).digest();
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
 function getCookieOptions(req) {
   const appBaseUrl = String(process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim();
   const forwardedProto = String(req.get('x-forwarded-proto') || '').trim().toLowerCase();
@@ -92,84 +143,6 @@ function extractBackendSessionCookie(setCookieHeader) {
   }
 
   return rawCookie.split(';')[0];
-}
-
-function createSessionStore() {
-  const sessions = new Map();
-
-  function pruneExpiredSessions() {
-    const now = Date.now();
-
-    sessions.forEach((session, sessionId) => {
-      if (!session || session.expiresAt <= now) {
-        sessions.delete(sessionId);
-      }
-    });
-  }
-
-  function create(backendSessionCookie) {
-    pruneExpiredSessions();
-
-    const sessionId = crypto.randomBytes(32).toString('base64url');
-    sessions.set(sessionId, {
-      backendSessionCookie,
-      expiresAt: Date.now() + SESSION_TTL_MS,
-    });
-
-    return sessionId;
-  }
-
-  function touch(sessionId) {
-    const session = sessions.get(sessionId);
-
-    if (!session) {
-      return null;
-    }
-
-    if (session.expiresAt <= Date.now()) {
-      sessions.delete(sessionId);
-      return null;
-    }
-
-    session.expiresAt = Date.now() + SESSION_TTL_MS;
-    return session;
-  }
-
-  function get(sessionId) {
-    if (!sessionId) {
-      return null;
-    }
-
-    const session = sessions.get(sessionId);
-
-    if (!session) {
-      return null;
-    }
-
-    if (session.expiresAt <= Date.now()) {
-      sessions.delete(sessionId);
-      return null;
-    }
-
-    return touch(sessionId);
-  }
-
-  function remove(sessionId) {
-    if (sessionId) {
-      sessions.delete(sessionId);
-    }
-  }
-
-  const pruneTimer = setInterval(pruneExpiredSessions, 5 * 60 * 1000);
-  pruneTimer.unref?.();
-
-  return {
-    create,
-    get,
-    touch,
-    remove,
-    pruneExpiredSessions,
-  };
 }
 
 function createInternalHeaders(req) {
@@ -201,13 +174,21 @@ function copyBackendResponseHeaders(res, headers = {}) {
   });
 }
 
-function readBffSessionId(req) {
+function readBffSessionCookie(req) {
   const cookies = parseCookieHeader(req.headers.cookie);
   return String(cookies[BFF_SESSION_COOKIE_NAME] || '').trim();
 }
 
-function setBffSessionCookie(res, req, sessionId) {
-  res.append('Set-Cookie', serializeCookie(BFF_SESSION_COOKIE_NAME, sessionId, getCookieOptions(req)));
+function readBffSession(req) {
+  const encryptedValue = readBffSessionCookie(req);
+  return {
+    encryptedValue,
+    backendSessionCookie: decryptBffSession(encryptedValue),
+  };
+}
+
+function setBffSessionCookie(res, req, encryptedValue) {
+  res.append('Set-Cookie', serializeCookie(BFF_SESSION_COOKIE_NAME, encryptedValue, getCookieOptions(req)));
 }
 
 function clearBffSessionCookie(res, req) {
@@ -225,7 +206,6 @@ function serveSpaIndex(frontendDistDir, res) {
 function createApp(options = {}) {
   const backendBaseUrl = String(options.backendBaseUrl || process.env.BACKEND_BASE_URL || 'http://backend:5000').trim().replace(/\/+$/, '');
   const frontendDistDir = options.frontendDistDir || process.env.FRONTEND_DIST_DIR || DEFAULT_FRONTEND_DIST_DIR;
-  const sessionStore = options.sessionStore || createSessionStore();
   const backendHttp = options.backendHttp || axios.create({
     baseURL: backendBaseUrl,
     validateStatus: () => true,
@@ -282,8 +262,8 @@ function createApp(options = {}) {
           return;
         }
 
-        const sessionId = sessionStore.create(backendSessionCookie);
-        setBffSessionCookie(res, req, sessionId);
+        const encryptedValue = encryptBffSession(backendSessionCookie);
+        setBffSessionCookie(res, req, encryptedValue);
       }
 
       copyBackendResponseHeaders(res, response.headers);
@@ -310,8 +290,7 @@ function createApp(options = {}) {
     xfwd: true,
     on: {
       proxyReq: (proxyReq, req) => {
-        const sessionId = readBffSessionId(req);
-        const session = sessionStore.get(sessionId);
+        const session = readBffSession(req);
 
         Object.entries(createInternalHeaders(req)).forEach(([name, value]) => {
           proxyReq.setHeader(name, value);
@@ -320,7 +299,7 @@ function createApp(options = {}) {
         proxyReq.removeHeader('authorization');
         proxyReq.removeHeader('x-newsflow-app');
 
-        if (session?.backendSessionCookie) {
+        if (session.backendSessionCookie) {
           proxyReq.setHeader('cookie', session.backendSessionCookie);
         } else {
           proxyReq.removeHeader('cookie');
@@ -330,15 +309,13 @@ function createApp(options = {}) {
         delete proxyRes.headers['set-cookie'];
 
         if (proxyRes.statusCode === 401) {
-          const sessionId = readBffSessionId(req);
-          sessionStore.remove(sessionId);
           clearBffSessionCookie(res, req);
           return;
         }
 
-        const sessionId = readBffSessionId(req);
-        if (sessionStore.get(sessionId)) {
-          setBffSessionCookie(res, req, sessionId);
+        const session = readBffSession(req);
+        if (session.encryptedValue && session.backendSessionCookie) {
+          setBffSessionCookie(res, req, session.encryptedValue);
         }
       },
     },
@@ -351,28 +328,26 @@ function createApp(options = {}) {
     ws: true,
     on: {
       proxyReq: (proxyReq, req) => {
-        const sessionId = readBffSessionId(req);
-        const session = sessionStore.get(sessionId);
+        const session = readBffSession(req);
 
         Object.entries(createInternalHeaders(req)).forEach(([name, value]) => {
           proxyReq.setHeader(name, value);
         });
 
-        if (session?.backendSessionCookie) {
+        if (session.backendSessionCookie) {
           proxyReq.setHeader('cookie', session.backendSessionCookie);
         } else {
           proxyReq.removeHeader('cookie');
         }
       },
       proxyReqWs: (proxyReq, req) => {
-        const sessionId = readBffSessionId(req);
-        const session = sessionStore.get(sessionId);
+        const session = readBffSession(req);
 
         Object.entries(createInternalHeaders(req)).forEach(([name, value]) => {
           proxyReq.setHeader(name, value);
         });
 
-        if (session?.backendSessionCookie) {
+        if (session.backendSessionCookie) {
           proxyReq.setHeader('cookie', session.backendSessionCookie);
         } else {
           proxyReq.removeHeader('cookie');
@@ -416,11 +391,10 @@ function createApp(options = {}) {
   });
 
   app.post('/api/auth/logout', async (req, res, next) => {
-    const sessionId = readBffSessionId(req);
-    const session = sessionStore.get(sessionId);
+    const session = readBffSession(req);
 
     try {
-      if (session?.backendSessionCookie) {
+      if (session.backendSessionCookie) {
         const response = await backendHttp.request({
           url: '/internal-api/auth/logout',
           method: 'POST',
@@ -431,12 +405,10 @@ function createApp(options = {}) {
           },
         });
 
-        sessionStore.remove(sessionId);
         clearBffSessionCookie(res, req);
         copyBackendResponseHeaders(res, response.headers);
         res.status(response.status).send(response.data);
       } else {
-        sessionStore.remove(sessionId);
         clearBffSessionCookie(res, req);
         res.status(200).json({ success: true });
       }
@@ -475,7 +447,6 @@ function createApp(options = {}) {
   return {
     app,
     socketProxy,
-    sessionStore,
   };
 }
 
@@ -506,8 +477,10 @@ module.exports = {
   BFF_SESSION_COOKIE_NAME,
   createApp,
   createServer,
-  createSessionStore,
+  decryptBffSession,
+  encryptBffSession,
   extractBackendSessionCookie,
   parseCookieHeader,
+  readBffSession,
   serializeCookie,
 };

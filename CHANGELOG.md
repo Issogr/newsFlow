@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.2.10.2
+
+- replaced the BFF in-memory session mapping with a stateless encrypted session cookie so authenticated browser sessions survive browser close/reopen flows and BFF restarts instead of being dropped when ephemeral proxy state disappears
+- kept the backend sliding session refresh and immediate frontend `401` logout handling from the previous fix, but removed the remaining dependency on process-local BFF session storage that could still force unexpected reauthentication after a short idle period
+
 ## 3.2.10.1
 
 - switched authenticated browser sessions to sliding expiry on both the BFF and backend session records, preventing active sessions from expiring unexpectedly mid-use and renewing their lifetime on continued authenticated traffic

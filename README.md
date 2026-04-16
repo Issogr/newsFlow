@@ -62,6 +62,7 @@ Auth and admin:
 | `SESSION_PURGE_INTERVAL_MS` | `300000` | Expired-session cleanup interval in ms |
 | `ADMIN_USERNAME` | `admin` | Reserved dedicated admin username |
 | `INTERNAL_PROXY_TOKEN` | `development-only-change-me` | Shared token used by the BFF when calling the private backend app API and Socket.IO surface |
+| `BFF_SESSION_SECRET` | falls back to `INTERNAL_PROXY_TOKEN` | Secret used by the BFF to encrypt the browser session cookie that carries the backend-session mapping |
 | `INTERNAL_SERVICE_NAME` | `bff` | Expected internal caller name for backend app-private traffic |
 | `APP_BASE_URL` | `http://localhost` | Public BFF/base URL for generated setup links and secure-cookie decisions |
 | `FRONTEND_BASE_URL` | unset | Fallback alias for `APP_BASE_URL` |
@@ -141,6 +142,9 @@ Internal BFF-to-backend trust:
 - Set the same `INTERNAL_PROXY_TOKEN` value in both services.
 - Do not keep the development default in production.
 - Do not commit the production value to the repository.
+- `BFF_SESSION_SECRET` is the secret used to encrypt the browser-facing BFF session cookie.
+- Set a stable `BFF_SESSION_SECRET` value in production so browser sessions survive BFF restarts.
+- If `BFF_SESSION_SECRET` is not set, the BFF falls back to `INTERNAL_PROXY_TOKEN`.
 - `INTERNAL_SERVICE_NAME` is not a secret. It is an identifier the backend expects from the trusted internal caller.
 - Keep `INTERNAL_SERVICE_NAME=bff` unless you intentionally rename the BFF service and update both sides together.
 
@@ -163,6 +167,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ```bash
 export INTERNAL_PROXY_TOKEN="$(openssl rand -hex 32)"
+export BFF_SESSION_SECRET="$(openssl rand -hex 32)"
 export INTERNAL_SERVICE_NAME="bff"
 docker compose up --build -d
 ```
@@ -170,8 +175,10 @@ docker compose up --build -d
 Operational guidance:
 
 - Treat `INTERNAL_PROXY_TOKEN` like an application secret.
+- Treat `BFF_SESSION_SECRET` like an application secret too.
 - Store it in your shell environment, deployment secret manager, or an untracked local env file used only on your host.
 - If you rotate it, update the BFF and backend together and restart both services so they stay in sync.
+- If you rotate `BFF_SESSION_SECRET`, existing browser sessions will be invalidated until users sign in again.
 - If the values do not match, the backend will reject app-private HTTP and Socket.IO traffic from the BFF.
 
 Feedback flow:

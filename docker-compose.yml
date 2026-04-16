@@ -75,6 +75,7 @@ services:
     environment:
       - SESSION_TTL_DAYS=${SESSION_TTL_DAYS:-30}
       - INTERNAL_PROXY_TOKEN=${INTERNAL_PROXY_TOKEN:-development-only-change-me}
+      - BFF_SESSION_SECRET=${BFF_SESSION_SECRET:-development-only-change-me}
       - INTERNAL_SERVICE_NAME=${INTERNAL_SERVICE_NAME:-bff}
       - BACKEND_BASE_URL=http://backend:5000
       - APP_BASE_URL=http://localhost

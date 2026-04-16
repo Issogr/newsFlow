@@ -22,12 +22,14 @@ describe('bff server', () => {
   beforeEach(async () => {
     frontendDistDir = createFrontendDist();
     lastBackendHeaders = {};
+    let backendSessionActive = true;
 
     const backendApp = express();
     backendApp.use(express.json());
 
     backendApp.post('/internal-api/auth/login', (req, res) => {
       lastBackendHeaders = req.headers;
+      backendSessionActive = true;
       res.cookie('newsflow_session', 'backend-session-1', {
         httpOnly: true,
         sameSite: 'strict',
@@ -38,13 +40,14 @@ describe('bff server', () => {
 
     backendApp.post('/internal-api/auth/logout', (req, res) => {
       lastBackendHeaders = req.headers;
+      backendSessionActive = false;
       res.json({ success: true });
     });
 
     backendApp.get('/internal-api/me', (req, res) => {
       lastBackendHeaders = req.headers;
 
-      if (req.headers.cookie !== 'newsflow_session=backend-session-1') {
+      if (!backendSessionActive || req.headers.cookie !== 'newsflow_session=backend-session-1') {
         res.status(401).json({ error: { message: 'Authentication required', code: 'UNAUTHORIZED' } });
         return;
       }
@@ -74,7 +77,7 @@ describe('bff server', () => {
     fs.rmSync(frontendDistDir, { recursive: true, force: true });
   });
 
-  test('creates a BFF session on login and uses it for proxied app requests', async () => {
+  test('creates an encrypted BFF session on login and uses it for proxied app requests', async () => {
     const loginResponse = await request(app)
       .post('/api/auth/login')
       .send({ username: 'alice', password: 'secret123' })
@@ -84,6 +87,7 @@ describe('bff server', () => {
 
     expect(bffSessionCookie).toContain('newsflow_bff_session=');
     expect(bffSessionCookie).not.toContain('newsflow_session=');
+    expect(bffSessionCookie).not.toContain('backend-session-1');
     expect(lastBackendHeaders['x-newsflow-service']).toBe('bff');
     expect(lastBackendHeaders['x-newsflow-proxy']).toBeTruthy();
 
@@ -95,6 +99,24 @@ describe('bff server', () => {
     expect(meResponse.body).toEqual({ user: { username: 'alice' } });
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-1');
     expect(meResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='))).toContain('Max-Age=2592000');
+  });
+
+  test('keeps the session valid after recreating the BFF app instance', async () => {
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'alice', password: 'secret123' })
+      .expect(200);
+
+    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+    const restartedApp = createApp({ backendBaseUrl, frontendDistDir }).app;
+
+    const meResponse = await request(restartedApp)
+      .get('/api/me')
+      .set('Cookie', bffSessionCookie)
+      .expect(200);
+
+    expect(meResponse.body).toEqual({ user: { username: 'alice' } });
+    expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-1');
   });
 
   test('clears the BFF session on logout', async () => {
