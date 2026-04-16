@@ -27,6 +27,24 @@ describe('AuthScreen', () => {
     expect(await screen.findByText('Password is required')).toBeInTheDocument();
   });
 
+  test('shows the password hint only in registration mode', () => {
+    render(
+      <AuthScreen
+        t={t}
+        onLogin={jest.fn()}
+        onRegister={jest.fn()}
+        busy={false}
+        error={null}
+      />
+    );
+
+    expect(screen.queryByText('Use at least 8 characters when creating a new account.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+
+    expect(screen.getByText('Use at least 8 characters when creating a new account.')).toBeInTheDocument();
+  });
+
   test('submits registration when a password is provided', () => {
     const onRegister = jest.fn();
 

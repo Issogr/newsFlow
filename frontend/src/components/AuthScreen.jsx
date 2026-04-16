@@ -159,7 +159,9 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
             />
           </label>
 
-          <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">{t('passwordHelp')}</p>
+          {mode === 'register' && (
+            <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">{t('passwordHelp')}</p>
+          )}
 
           {(clientError || error) && (
             <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
