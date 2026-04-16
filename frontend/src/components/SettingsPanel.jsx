@@ -151,7 +151,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
             </button>
           </div>
           <button type="button" onClick={handleSave} disabled={saving} className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
-            {saving ? t('saving') : t('saveSettings')}
+            {t('save')}
           </button>
         </div>
       </div>
