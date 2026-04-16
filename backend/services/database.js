@@ -225,6 +225,7 @@ module.exports = {
   createUserSession: authRepository.createUserSession,
   createApiToken: authRepository.createApiToken,
   findSessionByTokenHash: authRepository.findSessionByTokenHash,
+  refreshSessionExpiry: authRepository.refreshSessionExpiry,
   getLatestActiveApiTokenForUser: authRepository.getLatestActiveApiTokenForUser,
   findActiveApiTokenByHash: authRepository.findActiveApiTokenByHash,
   deleteSessionByTokenHash: authRepository.deleteSessionByTokenHash,

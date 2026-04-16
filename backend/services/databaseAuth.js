@@ -243,6 +243,18 @@ function createAuthRepository({ getDb }) {
     `).get(tokenHash);
   }
 
+  function refreshSessionExpiry(tokenHash, expiresAt) {
+    if (!tokenHash || !expiresAt) {
+      return 0;
+    }
+
+    return getDb().prepare(`
+      UPDATE user_sessions
+      SET expires_at = ?
+      WHERE token_hash = ?
+    `).run(expiresAt, tokenHash).changes;
+  }
+
   function deleteSessionByTokenHash(tokenHash) {
     if (!tokenHash) {
       return 0;
@@ -367,6 +379,7 @@ function createAuthRepository({ getDb }) {
     createUserSession,
     createApiToken,
     findSessionByTokenHash,
+    refreshSessionExpiry,
     getLatestActiveApiTokenForUser,
     findActiveApiTokenByHash,
     deleteSessionByTokenHash,

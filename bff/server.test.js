@@ -94,6 +94,7 @@ describe('bff server', () => {
 
     expect(meResponse.body).toEqual({ user: { username: 'alice' } });
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-1');
+    expect(meResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='))).toContain('Max-Age=2592000');
   });
 
   test('clears the BFF session on logout', async () => {

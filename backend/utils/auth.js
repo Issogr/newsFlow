@@ -140,11 +140,16 @@ function resolveAuthenticatedSession({ headers = {}, authToken = '', touchActivi
     sessionToken
   };
 
+  const refreshedExpiresAt = createSessionExpiryDate();
+  database.refreshSessionExpiry(session.tokenHash, refreshedExpiresAt);
   database.touchUserActivity(user.id, new Date().toISOString(), touchActivitySeconds);
 
   return {
     sessionToken,
-    session,
+    session: {
+      ...session,
+      expiresAt: refreshedExpiresAt,
+    },
     user
   };
 }

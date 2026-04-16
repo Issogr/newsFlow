@@ -1,6 +1,19 @@
 import axios from 'axios';
 
 const READER_REQUEST_TIMEOUT_MS = 30000;
+export const AUTH_EXPIRED_EVENT = 'newsflow:auth-expired';
+
+function isAuthRoute(url = '') {
+  return String(url || '').includes('/auth/');
+}
+
+function notifyAuthExpired() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+}
 
 const api = axios.create({
   baseURL: '/api',
@@ -25,6 +38,8 @@ api.interceptors.response.use(
       error.message = 'The request timed out. Please try again in a few seconds.';
     } else if (!error.response) {
       error.message = 'Unable to connect to the server. Check your connection.';
+    } else if (error.response.status === 401 && !isAuthRoute(error.config?.url)) {
+      notifyAuthExpired();
     } else if (error.response.status === 429) {
       error.message = 'Too many requests. Please wait a moment before trying again.';
     }

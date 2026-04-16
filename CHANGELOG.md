@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.10.1
+
+- switched authenticated browser sessions to sliding expiry on both the BFF and backend session records, preventing active sessions from expiring unexpectedly mid-use and renewing their lifetime on continued authenticated traffic
+- fixed the frontend auth-expiry path so a `401` from authenticated app APIs immediately clears stale logged-in UI state instead of letting actions fail repeatedly before the user is kicked out
+- kept the default authenticated session lifetime at 30 days while updating Docker defaults and legal/runtime documentation so the documented retention window still matches the actual app behavior
+
 ## 3.2.10
 
 - moved browser sessions from JavaScript-managed bearer tokens to secure HTTP-only cookies, reducing the impact of future frontend token theft and aligning HTTP and WebSocket authentication on the same server-managed session path

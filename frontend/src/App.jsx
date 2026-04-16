@@ -9,6 +9,7 @@ import ReleaseNotesModal from './components/ReleaseNotesModal';
 import { CURRENT_CHANGELOG_ENTRY, getCurrentChangelog } from './config/changelog';
 import { createTranslator, resolvePreferredLocale } from './i18n';
 import {
+  AUTH_EXPIRED_EVENT,
   fetchCurrentUser,
   loginUser,
   logoutUser,
@@ -101,6 +102,17 @@ function App() {
   useEffect(() => {
     loadSession();
   }, [loadSession]);
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setAuthData(null);
+      setAuthError(null);
+      setLoadingSession(false);
+    };
+
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+  }, []);
 
   useEffect(() => {
     const mediaQuery = typeof window.matchMedia === 'function'
