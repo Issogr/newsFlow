@@ -208,8 +208,8 @@ const LegalPolicyPage = ({ policy = 'privacy' }) => {
   const content = useMemo(() => policyContent[policy] || policyContent.privacy, [policy]);
 
   return (
-    <div className="min-h-screen bg-slate-100 px-4 py-10 text-slate-900">
-      <div className="mx-auto max-w-4xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl sm:p-8">
+    <div className="min-h-screen bg-white text-slate-900 sm:bg-slate-100 sm:px-4 sm:py-10">
+      <div className="min-h-screen w-full bg-white px-5 py-8 sm:mx-auto sm:min-h-0 sm:max-w-4xl sm:rounded-[2rem] sm:border sm:border-slate-200 sm:p-8 sm:shadow-xl">
         <div className="mb-8 flex items-center gap-4">
           <BrandMark className="h-12 w-12" />
           <div>

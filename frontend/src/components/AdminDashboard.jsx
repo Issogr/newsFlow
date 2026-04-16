@@ -116,8 +116,8 @@ const AdminDashboard = ({ t, currentUser, onLogout }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#f8fafc,_#e2e8f0_55%,_#cbd5e1)] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
-      <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur">
+    <div className="min-h-screen bg-white text-slate-900 sm:bg-[radial-gradient(circle_at_top,_#f8fafc,_#e2e8f0_55%,_#cbd5e1)] sm:px-6 sm:py-6 lg:px-8">
+      <div className="flex min-h-screen w-full flex-col overflow-hidden bg-white sm:mx-auto sm:min-h-[calc(100vh-3rem)] sm:max-w-6xl sm:rounded-[2rem] sm:border sm:border-slate-200 sm:bg-white/95 sm:shadow-2xl sm:backdrop-blur">
         <header className="border-b border-slate-200 bg-white/90 px-5 py-5 sm:px-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-4">
