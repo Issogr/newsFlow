@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogIn, UserPlus } from 'lucide-react';
+import { ExternalLink, LogIn, UserPlus } from 'lucide-react';
 import BrandMark from './BrandMark';
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -183,12 +183,20 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-500">
             <p>{t('technicalCookieNotice')}</p>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-              <a href="/privacy-policy" className="font-medium text-slate-700 underline underline-offset-2">
-                {t('privacyPolicyLink')}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a
+                href="/privacy-policy"
+                className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+              >
+                <span>{t('privacyPolicyLink')}</span>
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
               </a>
-              <a href="/cookie-policy" className="font-medium text-slate-700 underline underline-offset-2">
-                {t('cookiePolicyLink')}
+              <a
+                href="/cookie-policy"
+                className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+              >
+                <span>{t('cookiePolicyLink')}</span>
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
               </a>
             </div>
           </div>
