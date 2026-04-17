@@ -240,8 +240,7 @@ router.get('/me/api-token', requireAuthenticatedUser, asyncHandler(async (req, r
 
 router.post('/me/api-token', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   const result = userService.createUserApiToken(req.user.id, {
-    label: req.body?.label,
-    createdByIp: req.ip
+    label: req.body?.label
   });
   res.status(201).json(result);
 }));

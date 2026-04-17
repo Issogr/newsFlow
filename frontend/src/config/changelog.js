@@ -7,6 +7,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     items: [
       '🔔 New releases now appear as a small update pill at the top of the app instead of opening the changelog immediately after login.',
       '🧭 The update pill can open the full changelog on demand, can be closed manually, and fades away automatically with a visible countdown bar.',
+      '📊 The admin dashboard now shows per-user public API usage totals and the total number of anonymous public API requests received.',
     ]
   },
   it: {
@@ -16,6 +17,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     items: [
       '🔔 I nuovi rilasci ora compaiono come una piccola pill in alto nell\'app invece di aprire subito il changelog dopo il login.',
       '🧭 La pill di aggiornamento puo aprire il changelog completo su richiesta, si puo chiudere a mano e sparisce da sola con una barra di avanzamento visibile.',
+      '📊 La dashboard admin ora mostra il totale delle richieste API pubbliche per utente e quante richieste API anonime stanno arrivando.',
     ]
   }
 };

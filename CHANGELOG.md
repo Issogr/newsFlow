@@ -4,6 +4,8 @@
 
 - replaced the forced post-login release-notes modal with a lightweight top-center update notice that lets users keep working and open the full changelog on demand, while still persisting `lastSeenReleaseNotesVersion` only after they actually dismiss the full release-notes view
 - added a 30-second auto-dismiss flow for the new update notice, including a right-to-left shrinking progress bar and explicit close control so unseen updates can be quietly deferred for the current session without losing the next-login reminder
+- added minimal public API usage reporting for admins, including per-user authenticated request totals plus a global anonymous-request counter, so external API adoption is visible without introducing full analytics
+- stopped storing API-token creation and usage IP addresses, cleared any previously stored token IP metadata during migration, and kept only the usage timestamps and counters needed for lightweight operational visibility
 
 ## 3.2.10.3
 

@@ -26,6 +26,7 @@ describe('AdminDashboard', () => {
         totalUsers: 3,
         onlineUsers: 1,
         activeUsers: 2,
+        anonymousPublicApiRequests: 9,
         onlineWindowMinutes: 5
       },
       users: [
@@ -45,6 +46,8 @@ describe('AdminDashboard', () => {
           isAdmin: false,
           isOnline: true,
           passwordConfigured: true,
+          publicApiRequestCount: 3,
+          publicApiLastUsedAt: '2026-03-27T11:05:00.000Z',
           createdAt: '2026-03-27T10:00:00.000Z',
           lastLoginAt: '2026-03-27T11:00:00.000Z',
           lastActivityAt: '2026-03-27T11:02:00.000Z'
@@ -61,8 +64,10 @@ describe('AdminDashboard', () => {
     expect(screen.getAllByText('Online now').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Seen activity').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Total accounts').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Anonymous API requests').length).toBeGreaterThan(0);
     expect(screen.getByText('Users')).toBeInTheDocument();
     expect(screen.getByText('alice')).toBeInTheDocument();
+    expect(screen.getByText('3 public API requests')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '🔑 Reset' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
     expect(screen.queryByText('Online means active in the last 5 minutes.')).not.toBeInTheDocument();
@@ -75,6 +80,7 @@ describe('AdminDashboard', () => {
           totalUsers: 2,
           onlineUsers: 0,
           activeUsers: 1,
+          anonymousPublicApiRequests: 0,
           onlineWindowMinutes: 5
         },
         users: [
@@ -94,6 +100,8 @@ describe('AdminDashboard', () => {
             isAdmin: false,
             isOnline: false,
             passwordConfigured: true,
+            publicApiRequestCount: 0,
+            publicApiLastUsedAt: null,
             createdAt: '2026-03-27T10:00:00.000Z',
             lastLoginAt: '2026-03-27T11:00:00.000Z',
             lastActivityAt: '2026-03-27T11:02:00.000Z'
@@ -105,6 +113,7 @@ describe('AdminDashboard', () => {
           totalUsers: 2,
           onlineUsers: 0,
           activeUsers: 1,
+          anonymousPublicApiRequests: 0,
           onlineWindowMinutes: 5
         },
         users: [
@@ -124,6 +133,8 @@ describe('AdminDashboard', () => {
             isAdmin: false,
             isOnline: false,
             passwordConfigured: true,
+            publicApiRequestCount: 0,
+            publicApiLastUsedAt: null,
             createdAt: '2026-03-27T10:00:00.000Z',
             lastLoginAt: '2026-03-27T11:00:00.000Z',
             lastActivityAt: '2026-03-27T11:02:00.000Z'
@@ -135,6 +146,7 @@ describe('AdminDashboard', () => {
           totalUsers: 1,
           onlineUsers: 0,
           activeUsers: 1,
+          anonymousPublicApiRequests: 0,
           onlineWindowMinutes: 5
         },
         users: [
@@ -180,6 +192,7 @@ describe('AdminDashboard', () => {
         totalUsers: 1,
         onlineUsers: 0,
         activeUsers: 0,
+        anonymousPublicApiRequests: 0,
         onlineWindowMinutes: 5
       },
       users: [

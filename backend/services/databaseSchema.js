@@ -1,5 +1,5 @@
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 18;
+  const CURRENT_SCHEMA_VERSION = 19;
 
   function initializeSchema(database) {
     database.exec(`
@@ -63,6 +63,8 @@ function createDatabaseSchema({ logger }) {
         role TEXT NOT NULL DEFAULT 'user',
         last_login_at TEXT,
         last_activity_at TEXT,
+        public_api_request_count INTEGER NOT NULL DEFAULT 0,
+        public_api_last_used_at TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -252,8 +254,33 @@ function createDatabaseSchema({ logger }) {
         END
       `);
 
-      setCurrentSchemaVersion(database);
+      database.prepare(`
+        INSERT INTO app_meta (key, value)
+        VALUES ('migration_version', '18')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `).run();
       logger.info('Migrated DB schema from version 17 to 18');
+      migrateSchema(database, 18);
+      return;
+    }
+
+    if (currentVersion === 18) {
+      database.exec(`
+        ALTER TABLE users
+        ADD COLUMN public_api_request_count INTEGER NOT NULL DEFAULT 0
+      `);
+      database.exec(`
+        ALTER TABLE users
+        ADD COLUMN public_api_last_used_at TEXT
+      `);
+      database.exec(`
+        UPDATE api_tokens
+        SET created_by_ip = NULL,
+            last_used_ip = NULL
+      `);
+
+      setCurrentSchemaVersion(database);
+      logger.info('Migrated DB schema from version 18 to 19');
       return;
     }
 

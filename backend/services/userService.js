@@ -118,6 +118,8 @@ function buildAdminUserSummary(user) {
     username: user.username,
     isAdmin: user.username.toLowerCase() === ADMIN_USERNAME.toLowerCase(),
     passwordConfigured: Boolean(user.passwordConfigured),
+    publicApiLastUsedAt: user.publicApiLastUsedAt || null,
+    publicApiRequestCount: Number(user.publicApiRequestCount || 0),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     lastLoginAt: user.lastLoginAt || null,
@@ -446,7 +448,6 @@ function createUserApiToken(userId, options = {}) {
   const expiresAt = createApiTokenExpiryDate();
   const tokenId = createId();
   const label = createApiTokenLabel(options.label);
-  const createdByIp = String(options.createdByIp || '').trim() || null;
   const revokedAt = createdAt;
 
   database.getDb().transaction(() => {
@@ -458,8 +459,7 @@ function createUserApiToken(userId, options = {}) {
       tokenPrefix: rawToken.slice(0, 12),
       label,
       createdAt,
-      expiresAt,
-      createdByIp
+      expiresAt
     });
   })();
 
@@ -719,9 +719,19 @@ function listUsersForAdmin() {
       totalUsers: users.length,
       onlineUsers: users.filter((user) => user.isOnline).length,
       activeUsers: users.filter((user) => user.lastActivityAt).length,
+      anonymousPublicApiRequests: database.getAnonymousPublicApiRequestCount(),
       onlineWindowMinutes: ONLINE_ACTIVITY_WINDOW_MINUTES
     }
   };
+}
+
+function recordPublicApiRequestUsage({ authenticated = false, userId = null, usedAt = new Date().toISOString() } = {}) {
+  if (authenticated && userId) {
+    database.incrementUserPublicApiUsage(userId, usedAt);
+    return;
+  }
+
+  database.incrementAnonymousPublicApiRequestCount();
 }
 
 function createUserPasswordSetupLink(adminUserId, targetUserId) {
@@ -849,6 +859,7 @@ module.exports = {
   getPasswordSetupTokenDetails,
   completePasswordSetup,
   listUsersForAdmin,
+  recordPublicApiRequestUsage,
   createUserPasswordSetupLink,
   deleteUserAsAdmin,
   updateUserSettings,

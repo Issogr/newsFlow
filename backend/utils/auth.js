@@ -207,7 +207,7 @@ function requireAdminUser(req, res, next) {
   return next();
 }
 
-function resolveAuthenticatedApiToken({ headers = {}, ip = '' } = {}) {
+function resolveAuthenticatedApiToken({ headers = {} } = {}) {
   purgeExpiredApiTokensIfNeeded();
 
   const rawToken = extractBearerToken(headers.authorization);
@@ -220,7 +220,7 @@ function resolveAuthenticatedApiToken({ headers = {}, ip = '' } = {}) {
     throw createError(401, 'API token expired or invalid', 'UNAUTHORIZED');
   }
 
-  database.touchApiTokenUsage(tokenRecord.id, new Date().toISOString(), String(ip || '').trim() || null);
+  database.touchApiTokenUsage(tokenRecord.id, new Date().toISOString());
 
   return {
     token: rawToken,
@@ -236,8 +236,7 @@ function resolveAuthenticatedApiToken({ headers = {}, ip = '' } = {}) {
 function resolveOptionalExternalApiPrincipal(req, res, next) {
   try {
     const resolved = resolveAuthenticatedApiToken({
-      headers: req.headers || {},
-      ip: req.ip
+      headers: req.headers || {}
     });
 
     req.externalApi = resolved ? {

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Copy, LogOut, Moon, RefreshCw, Sun, Trash2, UserCheck, Users } from 'lucide-react';
+import { Activity, Copy, Globe, LogOut, Moon, RefreshCw, Sun, Trash2, UserCheck, Users } from 'lucide-react';
 import BrandMark from './BrandMark';
 import { createAdminPasswordSetupLink, deleteAdminUser, fetchAdminUsers, updateUserSettings } from '../services/api';
 
@@ -114,7 +114,14 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
       icon: Users,
       accent: 'bg-sky-100 text-sky-700',
     },
-  ]), [summary.activeUsers, summary.onlineUsers, summary.totalUsers, t]);
+    {
+      key: 'anonymous-api',
+      label: t('adminAnonymousApiRequests'),
+      value: summary.anonymousPublicApiRequests || 0,
+      icon: Globe,
+      accent: 'bg-violet-100 text-violet-700',
+    },
+  ]), [summary.activeUsers, summary.anonymousPublicApiRequests, summary.onlineUsers, summary.totalUsers, t]);
 
   const handleCreateLink = async (user) => {
     setCreatingForUserId(user.id);
@@ -231,7 +238,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
         </header>
 
         <main className="flex-1 px-5 py-5 sm:px-8 sm:py-6">
-          <section className="grid gap-4 sm:grid-cols-3">
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {summaryCards.map((card) => {
               const Icon = card.icon;
 
@@ -289,6 +296,17 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
                               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{t('lastActivityAt')}</p>
                               <p className="mt-2 font-medium text-slate-800">{formatDateTime(user.lastActivityAt)}</p>
                             </div>
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
+                              {t('adminPublicApiRequestsValue', { count: user.publicApiRequestCount || 0 })}
+                            </span>
+                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
+                              {t('adminPublicApiLastUsedValue', {
+                                time: user.publicApiLastUsedAt ? formatDateTime(user.publicApiLastUsedAt) : t('adminPublicApiNeverUsed')
+                              })}
+                            </span>
                           </div>
                         </div>
                       </div>
