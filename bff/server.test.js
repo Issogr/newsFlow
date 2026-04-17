@@ -37,7 +37,11 @@ describe('bff server', () => {
     frontendDistDir = createFrontendDist();
     ({ tempDir: sessionDir, sessionDbPath } = createSessionDbPath());
     lastBackendHeaders = {};
-    let backendSessionActive = true;
+    const backendSessions = new Map();
+    const usersById = new Map([
+      ['admin-id', { id: 'admin-id', username: 'admin' }],
+      ['user-1', { id: 'user-1', username: 'alice' }],
+    ]);
 
     process.env.BFF_SESSION_SECRET = 'test-bff-secret';
     process.env.INTERNAL_PROXY_TOKEN = 'test-proxy-token';
@@ -49,30 +53,52 @@ describe('bff server', () => {
 
     backendApp.post('/internal-api/auth/login', (req, res) => {
       lastBackendHeaders = req.headers;
-      backendSessionActive = true;
-      res.cookie('newsflow_session', 'backend-session-1', {
+      const requestedUsername = String(req.body?.username || '').trim().toLowerCase();
+      const user = requestedUsername === 'admin' ? usersById.get('admin-id') : usersById.get('user-1');
+      const sessionValue = `backend-session-${user.id}`;
+      backendSessions.set(`newsflow_session=${sessionValue}`, user);
+      res.cookie('newsflow_session', sessionValue, {
         httpOnly: true,
         sameSite: 'strict',
         path: '/',
       });
-      res.json({ user: { username: 'alice' } });
+      res.json({ user });
     });
 
     backendApp.post('/internal-api/auth/logout', (req, res) => {
       lastBackendHeaders = req.headers;
-      backendSessionActive = false;
+      backendSessions.delete(String(req.headers.cookie || ''));
       res.json({ success: true });
     });
 
     backendApp.get('/internal-api/me', (req, res) => {
       lastBackendHeaders = req.headers;
 
-      if (!backendSessionActive || req.headers.cookie !== 'newsflow_session=backend-session-1') {
+      const user = backendSessions.get(String(req.headers.cookie || ''));
+      if (!user) {
         res.status(401).json({ error: { message: 'Authentication required', code: 'UNAUTHORIZED' } });
         return;
       }
 
-      res.json({ user: { username: 'alice' } });
+      res.json({ user });
+    });
+
+    backendApp.delete('/internal-api/admin/users/:userId', (req, res) => {
+      lastBackendHeaders = req.headers;
+      const actingUser = backendSessions.get(String(req.headers.cookie || ''));
+
+      if (!actingUser || actingUser.id !== 'admin-id') {
+        res.status(401).json({ error: { message: 'Authentication required', code: 'UNAUTHORIZED' } });
+        return;
+      }
+
+      const targetUser = usersById.get(req.params.userId);
+      if (!targetUser) {
+        res.status(404).json({ error: { message: 'User not found', code: 'RESOURCE_NOT_FOUND' } });
+        return;
+      }
+
+      res.json({ success: true, user: targetUser });
     });
 
     backendApp.get('/api/public/ping', (req, res) => {
@@ -123,7 +149,7 @@ describe('bff server', () => {
 
     expect(bffSessionCookie).toContain('newsflow_bff_session=');
     expect(bffSessionCookie).not.toContain('newsflow_session=');
-    expect(bffSessionCookie).not.toContain('backend-session-1');
+    expect(bffSessionCookie).not.toContain('backend-session-user-1');
     expect(lastBackendHeaders['x-newsflow-service']).toBe('bff');
     expect(lastBackendHeaders['x-newsflow-proxy']).toBe('test-proxy-token');
 
@@ -132,8 +158,8 @@ describe('bff server', () => {
       .set('Cookie', bffSessionCookie)
       .expect(200);
 
-    expect(meResponse.body).toEqual({ user: { username: 'alice' } });
-    expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-1');
+    expect(meResponse.body).toEqual({ user: { id: 'user-1', username: 'alice' } });
+    expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
     expect(meResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='))).toContain('Expires=');
   });
 
@@ -155,8 +181,8 @@ describe('bff server', () => {
 
     restarted.sessionStore.stopCleanupInterval();
     restarted.sessionDb.close();
-    expect(meResponse.body).toEqual({ user: { username: 'alice' } });
-    expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-1');
+    expect(meResponse.body).toEqual({ user: { id: 'user-1', username: 'alice' } });
+    expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
   });
 
   test('clears the BFF session on logout', async () => {
@@ -178,6 +204,36 @@ describe('bff server', () => {
       .get('/api/me')
       .set('Cookie', bffSessionCookie)
       .expect(401);
+  });
+
+  test('removes persisted BFF sessions for a deleted user after an admin delete', async () => {
+    const aliceLoginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'alice', password: 'secret123' })
+      .expect(200);
+    const aliceBffSessionCookie = aliceLoginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+
+    const adminLoginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'secret123' })
+      .expect(200);
+    const adminBffSessionCookie = adminLoginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+
+    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(2);
+
+    await request(app)
+      .delete('/api/admin/users/user-1')
+      .set('Cookie', adminBffSessionCookie)
+      .expect(200);
+
+    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(1);
+
+    await request(app)
+      .get('/api/me')
+      .set('Cookie', aliceBffSessionCookie)
+      .expect(401);
+
+    expect(lastBackendHeaders.cookie).not.toBe('newsflow_session=backend-session-user-1');
   });
 
   test('proxies public API routes without requiring a BFF session', async () => {

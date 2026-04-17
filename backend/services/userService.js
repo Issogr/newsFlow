@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const database = require('./database');
 const rssParser = require('./rssParser');
+const websocketService = require('./websocketService');
 const { createError } = require('../utils/errorHandler');
 const {
   MAX_FEEDBACK_DESCRIPTION_LENGTH,
@@ -746,6 +747,41 @@ function createUserPasswordSetupLink(adminUserId, targetUserId) {
   };
 }
 
+function deleteUserAsAdmin(adminUserId, targetUserId) {
+  const adminUser = database.findUserById(adminUserId);
+  const targetUser = database.findUserById(targetUserId);
+
+  if (!adminUser) {
+    throw createError(401, 'Authentication required', 'UNAUTHORIZED');
+  }
+
+  if (!targetUser) {
+    throw createError(404, 'User not found', 'RESOURCE_NOT_FOUND');
+  }
+
+  if (String(targetUser.username || '').toLowerCase() === ADMIN_USERNAME.toLowerCase()) {
+    throw createError(403, 'The admin account cannot be deleted', 'FORBIDDEN');
+  }
+
+  if (targetUser.id === adminUser.id) {
+    throw createError(403, 'You cannot delete your own account', 'FORBIDDEN');
+  }
+
+  database.deleteAllUserSources(targetUser.id);
+  const deleted = database.deleteUser(targetUser.id);
+
+  if (!deleted) {
+    throw createError(500, 'Unable to delete user', 'DELETE_USER_FAILED');
+  }
+
+  websocketService.disconnectUserSockets(targetUser.id);
+
+  return {
+    success: true,
+    user: buildUserPayload(targetUser)
+  };
+}
+
 async function importUserSettings(userId, payload = {}) {
   const importedSettings = payload.settings || {};
   const importedCustomSources = Array.isArray(payload.customSources) ? payload.customSources : [];
@@ -814,6 +850,7 @@ module.exports = {
   completePasswordSetup,
   listUsersForAdmin,
   createUserPasswordSetupLink,
+  deleteUserAsAdmin,
   updateUserSettings,
   getUserApiToken,
   createUserApiToken,

@@ -161,6 +161,11 @@ export const createAdminPasswordSetupLink = async (userId) => {
   return response.data;
 };
 
+export const deleteAdminUser = async (userId) => {
+  const response = await api.delete(`/admin/users/${userId}`);
+  return response.data;
+};
+
 export const fetchNews = async ({
   page = 1,
   pageSize = 12,

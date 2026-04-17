@@ -9,7 +9,8 @@ function createSocket(id, handshake = {}) {
     on: jest.fn((event, handler) => {
       handlers[event] = handler;
     }),
-    emit: jest.fn()
+    emit: jest.fn(),
+    disconnect: jest.fn()
   };
 }
 
@@ -223,5 +224,22 @@ describe('websocketService', () => {
     const statistics = websocketService.getStatistics();
     expect(statistics.activeConnectionsCount).toBe(2);
     expect(statistics.failedBroadcasts).toBe(1);
+  });
+
+  test('disconnects active sockets for a deleted user immediately', () => {
+    const socketOne = createSocket('socket-1', { auth: { token: 'token-1' }, headers: {} });
+    socketOne.data.userId = 'user-1';
+    const socketTwo = createSocket('socket-2', { auth: { token: 'token-2' }, headers: {} });
+    socketTwo.data.userId = 'user-2';
+
+    ioMock.connectionHandler(socketOne);
+    ioMock.connectionHandler(socketTwo);
+
+    const disconnected = websocketService.disconnectUserSockets('user-1');
+
+    expect(disconnected).toBe(1);
+    expect(socketOne.disconnect).toHaveBeenCalledWith(true);
+    expect(socketTwo.disconnect).not.toHaveBeenCalled();
+    expect(websocketService.getStatistics().activeConnectionsCount).toBe(1);
   });
 });
