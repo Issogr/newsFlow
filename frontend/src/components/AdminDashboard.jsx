@@ -193,8 +193,8 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
   const ThemeIcon = activeTheme === 'dark' ? Sun : Moon;
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 sm:bg-slate-100 sm:px-6 sm:py-6 lg:px-8">
-      <div className="flex min-h-screen w-full flex-col bg-white sm:mx-auto sm:min-h-[calc(100vh-3rem)] sm:max-w-6xl sm:rounded-[2rem] sm:border sm:border-slate-200 sm:shadow-xl">
+    <div className="min-h-screen bg-white text-slate-900">
+      <div className="flex min-h-screen w-full flex-col bg-white">
         <header className="border-b border-slate-200 px-5 py-4 sm:px-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -238,19 +238,19 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
         </header>
 
         <main className="flex-1 px-5 py-5 sm:px-8 sm:py-6">
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
             {summaryCards.map((card) => {
               const Icon = card.icon;
 
               return (
-                <div key={card.key} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 px-5 py-4">
-                  <div className="flex items-start justify-between gap-4">
+                <div key={card.key} className="rounded-[1.2rem] border border-slate-200 bg-slate-50 px-3.5 py-3">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{card.label}</p>
-                      <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">{card.value}</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">{card.label}</p>
+                      <p className="mt-1.5 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{card.value}</p>
                     </div>
-                    <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${card.accent}`}>
-                      <Icon className="h-5 w-5" />
+                    <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.9rem] ${card.accent} sm:h-9 sm:w-9`}>
+                      <Icon className="h-4 w-4" />
                     </span>
                   </div>
                 </div>
@@ -258,12 +258,13 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
             })}
           </section>
 
-          <section className="mt-6 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 px-5 py-4 sm:px-6">
+          <section className="mt-6">
+            <div className="flex items-center gap-4">
               <h2 className="text-lg font-semibold text-slate-900">{t('adminUsersTitle')}</h2>
+              <div className="h-px flex-1 bg-slate-200" aria-hidden="true" />
             </div>
 
-            <div className="px-5 py-5 sm:px-6">
+            <div className="mt-5">
               {loading ? (
                 <div className="text-sm text-slate-500">{t('loadingMore')}</div>
               ) : managedUsers.length === 0 ? (
