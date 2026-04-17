@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Copy, LogOut, RefreshCw, Trash2, UserCheck, Users } from 'lucide-react';
+import { Activity, Copy, Globe, LogOut, Moon, RefreshCw, Sun, Trash2, UserCheck, Users } from 'lucide-react';
 import BrandMark from './BrandMark';
-import { createAdminPasswordSetupLink, deleteAdminUser, fetchAdminUsers } from '../services/api';
+import { createAdminPasswordSetupLink, deleteAdminUser, fetchAdminUsers, updateUserSettings } from '../services/api';
 
 const REFRESH_INTERVAL_MS = 30000;
 
@@ -18,9 +18,10 @@ function formatDateTime(value) {
   return parsed.toLocaleString();
 }
 
-const AdminDashboard = ({ t, currentUser, onLogout }) => {
+const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [themeSaving, setThemeSaving] = useState(false);
   const [error, setError] = useState('');
   const [users, setUsers] = useState([]);
   const [summary, setSummary] = useState({ totalUsers: 0, onlineUsers: 0, activeUsers: 0, onlineWindowMinutes: 5 });
@@ -81,6 +82,16 @@ const AdminDashboard = ({ t, currentUser, onLogout }) => {
   }, [loadUsers]);
 
   const managedUsers = useMemo(() => users.filter((user) => !user.isAdmin), [users]);
+  const activeTheme = useMemo(() => {
+    const themeMode = String(currentUser?.settings?.themeMode || '').trim();
+    if (themeMode === 'dark' || themeMode === 'light') {
+      return themeMode;
+    }
+
+    const appliedTheme = String(document.documentElement?.dataset?.theme || '').trim();
+    return appliedTheme === 'dark' ? 'dark' : 'light';
+  }, [currentUser?.settings?.themeMode]);
+  const nextThemeMode = activeTheme === 'dark' ? 'light' : 'dark';
   const summaryCards = useMemo(() => ([
     {
       key: 'online',
@@ -103,7 +114,14 @@ const AdminDashboard = ({ t, currentUser, onLogout }) => {
       icon: Users,
       accent: 'bg-sky-100 text-sky-700',
     },
-  ]), [summary.activeUsers, summary.onlineUsers, summary.totalUsers, t]);
+    {
+      key: 'anonymous-api',
+      label: t('adminAnonymousApiRequests'),
+      value: summary.anonymousPublicApiRequests || 0,
+      icon: Globe,
+      accent: 'bg-violet-100 text-violet-700',
+    },
+  ]), [summary.activeUsers, summary.anonymousPublicApiRequests, summary.onlineUsers, summary.totalUsers, t]);
 
   const handleCreateLink = async (user) => {
     setCreatingForUserId(user.id);
@@ -158,9 +176,25 @@ const AdminDashboard = ({ t, currentUser, onLogout }) => {
     }
   };
 
+  const handleToggleTheme = async () => {
+    setThemeSaving(true);
+    setError('');
+
+    try {
+      const response = await updateUserSettings({ themeMode: nextThemeMode });
+      onUserUpdate?.(response.settings);
+    } catch (requestError) {
+      setError(requestError.message || t('genericError'));
+    } finally {
+      setThemeSaving(false);
+    }
+  };
+
+  const ThemeIcon = activeTheme === 'dark' ? Sun : Moon;
+
   return (
-    <div className="min-h-screen bg-white text-slate-900 sm:bg-slate-100 sm:px-6 sm:py-6 lg:px-8">
-      <div className="flex min-h-screen w-full flex-col bg-white sm:mx-auto sm:min-h-[calc(100vh-3rem)] sm:max-w-6xl sm:rounded-[2rem] sm:border sm:border-slate-200 sm:shadow-xl">
+    <div className="min-h-screen bg-white text-slate-900">
+      <div className="flex min-h-screen w-full flex-col bg-white">
         <header className="border-b border-slate-200 px-5 py-4 sm:px-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -174,8 +208,18 @@ const AdminDashboard = ({ t, currentUser, onLogout }) => {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                onClick={handleToggleTheme}
+                disabled={themeSaving}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label={activeTheme === 'dark' ? t('switchToLightTheme') : t('switchToDarkTheme')}
+                title={activeTheme === 'dark' ? t('switchToLightTheme') : t('switchToDarkTheme')}
+              >
+                <ThemeIcon className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
                 onClick={() => loadUsers({ showRefreshingIndicator: true })}
-                disabled={refreshing}
+                disabled={refreshing || themeSaving}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
@@ -194,19 +238,19 @@ const AdminDashboard = ({ t, currentUser, onLogout }) => {
         </header>
 
         <main className="flex-1 px-5 py-5 sm:px-8 sm:py-6">
-          <section className="grid gap-4 sm:grid-cols-3">
+          <section className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
             {summaryCards.map((card) => {
               const Icon = card.icon;
 
               return (
-                <div key={card.key} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 px-5 py-4">
-                  <div className="flex items-start justify-between gap-4">
+                <div key={card.key} className="rounded-[1.2rem] border border-slate-200 bg-slate-50 px-3.5 py-3">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{card.label}</p>
-                      <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">{card.value}</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">{card.label}</p>
+                      <p className="mt-1.5 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{card.value}</p>
                     </div>
-                    <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${card.accent}`}>
-                      <Icon className="h-5 w-5" />
+                    <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.9rem] ${card.accent} sm:h-9 sm:w-9`}>
+                      <Icon className="h-4 w-4" />
                     </span>
                   </div>
                 </div>
@@ -214,12 +258,13 @@ const AdminDashboard = ({ t, currentUser, onLogout }) => {
             })}
           </section>
 
-          <section className="mt-6 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 px-5 py-4 sm:px-6">
+          <section className="mt-6">
+            <div className="flex items-center gap-4">
               <h2 className="text-lg font-semibold text-slate-900">{t('adminUsersTitle')}</h2>
+              <div className="h-px flex-1 bg-slate-200" aria-hidden="true" />
             </div>
 
-            <div className="px-5 py-5 sm:px-6">
+            <div className="mt-5">
               {loading ? (
                 <div className="text-sm text-slate-500">{t('loadingMore')}</div>
               ) : managedUsers.length === 0 ? (
@@ -239,19 +284,30 @@ const AdminDashboard = ({ t, currentUser, onLogout }) => {
                             <p className="truncate text-lg font-semibold text-slate-900">{user.username}</p>
                           </div>
 
-                          <div className="mt-4 flex flex-wrap gap-2.5 text-sm text-slate-600">
-                            <div className="rounded-2xl bg-slate-100/80 px-4 py-3">
+                          <div className="mt-4 grid grid-cols-3 gap-2.5 text-sm text-slate-600">
+                            <div className="h-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{t('createdAt')}</p>
                               <p className="mt-2 font-medium text-slate-800">{formatDateTime(user.createdAt)}</p>
                             </div>
-                            <div className="rounded-2xl bg-slate-100/80 px-4 py-3">
+                            <div className="h-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{t('lastLoginAt')}</p>
                               <p className="mt-2 font-medium text-slate-800">{formatDateTime(user.lastLoginAt)}</p>
                             </div>
-                            <div className="rounded-2xl bg-slate-100/80 px-4 py-3">
+                            <div className="h-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{t('lastActivityAt')}</p>
                               <p className="mt-2 font-medium text-slate-800">{formatDateTime(user.lastActivityAt)}</p>
                             </div>
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
+                              {t('adminPublicApiRequestsValue', { count: user.publicApiRequestCount || 0 })}
+                            </span>
+                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
+                              {t('adminPublicApiLastUsedValue', {
+                                time: user.publicApiLastUsedAt ? formatDateTime(user.publicApiLastUsedAt) : t('adminPublicApiNeverUsed')
+                              })}
+                            </span>
                           </div>
                         </div>
                       </div>

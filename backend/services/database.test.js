@@ -69,7 +69,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('18');
+    expect(migrationVersion).toBe('19');
     expect(articleColumns).toContain('canonical_url');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
@@ -84,6 +84,8 @@ describe('database migrations', () => {
     expect(userColumns).toContain('role');
     expect(userColumns).toContain('last_login_at');
     expect(userColumns).toContain('last_activity_at');
+    expect(userColumns).toContain('public_api_request_count');
+    expect(userColumns).toContain('public_api_last_used_at');
     expect(passwordSetupTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'purpose', 'expires_at', 'used_at']));
     expect(apiTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'token_prefix', 'expires_at', 'revoked_at', 'last_used_at']));
   });
@@ -194,7 +196,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('18');
+    expect(migratedVersion).toBe('19');
     expect(settingsColumns).toContain('show_news_images');
     expect(settingsColumns).toContain('compact_news_cards');
     expect(settingsColumns).toContain('compact_news_cards_mode');
@@ -203,6 +205,8 @@ describe('database migrations', () => {
     expect(userColumns).toContain('role');
     expect(userColumns).toContain('last_login_at');
     expect(userColumns).toContain('last_activity_at');
+    expect(userColumns).toContain('public_api_request_count');
+    expect(userColumns).toContain('public_api_last_used_at');
     expect(passwordSetupTokenColumns).toContain('token_hash');
     expect(apiTokenColumns).toContain('token_hash');
   });

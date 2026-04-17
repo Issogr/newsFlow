@@ -11,6 +11,8 @@ function createAuthRepository({ getDb }) {
 
     return {
       ...row,
+      publicApiLastUsedAt: row.publicApiLastUsedAt || null,
+      publicApiRequestCount: Number(row.publicApiRequestCount || 0),
       passwordConfigured: Boolean(row.passwordConfigured)
     };
   }
@@ -35,9 +37,11 @@ function createAuthRepository({ getDb }) {
 
     return mapUserRow(getDb().prepare(`
       SELECT id, username, password_hash AS passwordHash,
-             last_login_at AS lastLoginAt, last_activity_at AS lastActivityAt,
-             created_at AS createdAt, updated_at AS updatedAt,
-             CASE WHEN password_hash IS NOT NULL AND password_hash != '' THEN 1 ELSE 0 END AS passwordConfigured
+              last_login_at AS lastLoginAt, last_activity_at AS lastActivityAt,
+              public_api_request_count AS publicApiRequestCount,
+              public_api_last_used_at AS publicApiLastUsedAt,
+              created_at AS createdAt, updated_at AS updatedAt,
+              CASE WHEN password_hash IS NOT NULL AND password_hash != '' THEN 1 ELSE 0 END AS passwordConfigured
       FROM users
       WHERE lower(username) = lower(?)
     `).get(username));
@@ -50,9 +54,11 @@ function createAuthRepository({ getDb }) {
 
     return mapUserRow(getDb().prepare(`
       SELECT id, username, password_hash AS passwordHash,
-             last_login_at AS lastLoginAt, last_activity_at AS lastActivityAt,
-             created_at AS createdAt, updated_at AS updatedAt,
-             CASE WHEN password_hash IS NOT NULL AND password_hash != '' THEN 1 ELSE 0 END AS passwordConfigured
+              last_login_at AS lastLoginAt, last_activity_at AS lastActivityAt,
+              public_api_request_count AS publicApiRequestCount,
+              public_api_last_used_at AS publicApiLastUsedAt,
+              created_at AS createdAt, updated_at AS updatedAt,
+              CASE WHEN password_hash IS NOT NULL AND password_hash != '' THEN 1 ELSE 0 END AS passwordConfigured
       FROM users
       WHERE id = ?
     `).get(userId));
@@ -61,6 +67,8 @@ function createAuthRepository({ getDb }) {
   function listUsers() {
     return getDb().prepare(`
       SELECT id, username, last_login_at AS lastLoginAt, last_activity_at AS lastActivityAt,
+             public_api_request_count AS publicApiRequestCount,
+             public_api_last_used_at AS publicApiLastUsedAt,
              created_at AS createdAt, updated_at AS updatedAt,
              CASE WHEN password_hash IS NOT NULL AND password_hash != '' THEN 1 ELSE 0 END AS passwordConfigured
       FROM users
@@ -144,8 +152,8 @@ function createAuthRepository({ getDb }) {
       token.expiresAt,
       token.revokedAt || null,
       token.lastUsedAt || null,
-      token.createdByIp || null,
-      token.lastUsedIp || null
+      null,
+      null
     );
   }
 
@@ -164,8 +172,6 @@ function createAuthRepository({ getDb }) {
       expiresAt: row.expiresAt,
       revokedAt: row.revokedAt || null,
       lastUsedAt: row.lastUsedAt || null,
-      createdByIp: row.createdByIp || null,
-      lastUsedIp: row.lastUsedIp || null,
       username: row.username || null
     };
   }
@@ -178,7 +184,7 @@ function createAuthRepository({ getDb }) {
     return mapApiTokenRow(getDb().prepare(`
       SELECT id, user_id AS userId, token_hash AS tokenHash, token_prefix AS tokenPrefix,
              label, created_at AS createdAt, expires_at AS expiresAt, revoked_at AS revokedAt,
-             last_used_at AS lastUsedAt, created_by_ip AS createdByIp, last_used_ip AS lastUsedIp
+             last_used_at AS lastUsedAt
       FROM api_tokens
       WHERE user_id = ?
         AND revoked_at IS NULL
@@ -198,7 +204,6 @@ function createAuthRepository({ getDb }) {
              api_tokens.token_prefix AS tokenPrefix, api_tokens.label,
              api_tokens.created_at AS createdAt, api_tokens.expires_at AS expiresAt,
              api_tokens.revoked_at AS revokedAt, api_tokens.last_used_at AS lastUsedAt,
-             api_tokens.created_by_ip AS createdByIp, api_tokens.last_used_ip AS lastUsedIp,
              users.username AS username
       FROM api_tokens
       JOIN users ON users.id = api_tokens.user_id
@@ -220,16 +225,50 @@ function createAuthRepository({ getDb }) {
     `).run(userId).changes;
   }
 
-  function touchApiTokenUsage(tokenId, usedAt, usedIp = null) {
+  function touchApiTokenUsage(tokenId, usedAt) {
     if (!tokenId) {
       return 0;
     }
 
     return getDb().prepare(`
       UPDATE api_tokens
-      SET last_used_at = ?, last_used_ip = ?
+      SET last_used_at = ?, last_used_ip = NULL
       WHERE id = ?
-    `).run(usedAt, usedIp || null, tokenId).changes;
+    `).run(usedAt, tokenId).changes;
+  }
+
+  function incrementUserPublicApiUsage(userId, usedAt) {
+    if (!userId || !usedAt) {
+      return 0;
+    }
+
+    return getDb().prepare(`
+      UPDATE users
+      SET public_api_request_count = public_api_request_count + 1,
+          public_api_last_used_at = ?
+      WHERE id = ?
+    `).run(usedAt, userId).changes;
+  }
+
+  function getAnonymousPublicApiRequestCount() {
+    const row = getDb().prepare(`
+      SELECT value
+      FROM app_meta
+      WHERE key = 'anonymous_public_api_request_count'
+    `).get();
+
+    return Number(row?.value || 0);
+  }
+
+  function incrementAnonymousPublicApiRequestCount() {
+    getDb().prepare(`
+      INSERT INTO app_meta (key, value)
+      VALUES ('anonymous_public_api_request_count', '1')
+      ON CONFLICT(key) DO UPDATE
+      SET value = CAST(COALESCE(app_meta.value, '0') AS INTEGER) + 1
+    `).run();
+
+    return getAnonymousPublicApiRequestCount();
   }
 
   function purgeExpiredApiTokens() {
@@ -388,6 +427,9 @@ function createAuthRepository({ getDb }) {
     touchUserActivity,
     updateUserPassword,
     deleteUser,
+    incrementUserPublicApiUsage,
+    getAnonymousPublicApiRequestCount,
+    incrementAnonymousPublicApiRequestCount,
     createUserSession,
     createApiToken,
     findSessionByTokenHash,

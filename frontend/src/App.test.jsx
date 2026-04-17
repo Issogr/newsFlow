@@ -67,6 +67,7 @@ function createCurrentUser(settings = {}) {
 describe('App', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    vi.useRealTimers();
     window.localStorage.clear();
     document.body.style.overflow = '';
     document.documentElement.dataset.theme = '';
@@ -80,6 +81,7 @@ describe('App', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     document.body.style.overflow = '';
     document.documentElement.dataset.theme = '';
     document.documentElement.style.colorScheme = '';
@@ -96,7 +98,7 @@ describe('App', () => {
   });
 
   test('renders the authenticated app when the current session loads', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.3' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.4' }));
 
     render(<App />);
 
@@ -116,7 +118,7 @@ describe('App', () => {
   });
 
   test('applies the selected dark theme to the document root after session load', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ themeMode: 'dark', lastSeenReleaseNotesVersion: '3.2.10.3' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ themeMode: 'dark', lastSeenReleaseNotesVersion: '3.2.10.4' }));
 
     render(<App />);
 
@@ -125,26 +127,72 @@ describe('App', () => {
     expect(document.documentElement.style.colorScheme).toBe('dark');
   });
 
-  test('shows release notes once after login for users who have not seen the current update', async () => {
+  test('shows an update notice after login and persists the version only after the changelog modal is dismissed', async () => {
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-        settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.3' }).settings
+        settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.4' }).settings
     });
 
     render(<App />);
+
+    expect(await screen.findByText('Update released')).toBeInTheDocument();
+    expect(screen.queryByText('What is new')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Update released'));
 
     expect(await screen.findByText('What is new')).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
 
     await waitFor(() => {
-      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.10.3' });
+      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.10.4' });
     });
   });
 
+  test('auto-dismisses the update notice after 30 seconds and persists the current version', async () => {
+    vi.useFakeTimers();
+    fetchCurrentUser.mockResolvedValue(createCurrentUser());
+    updateUserSettings.mockResolvedValue({
+      success: true,
+      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.4' }).settings
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('Update released')).toBeInTheDocument();
+
+    vi.advanceTimersByTime(30000);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Update released')).not.toBeInTheDocument();
+    });
+
+    expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.10.4' });
+  });
+
+  test('persists the current version when the update notice is closed with the X button', async () => {
+    fetchCurrentUser.mockResolvedValue(createCurrentUser());
+    updateUserSettings.mockResolvedValue({
+      success: true,
+      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.4' }).settings
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('Update released')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close update notice' }));
+
+    await waitFor(() => {
+      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.10.4' });
+    });
+
+    expect(screen.queryByText('Update released')).not.toBeInTheDocument();
+  });
+
   test('reopens release notes manually from the authenticated app', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.3' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.4' }));
 
     render(<App />);
 
@@ -159,10 +207,15 @@ describe('App', () => {
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-        settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.3' }).settings
+        settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.4' }).settings
     });
 
     render(<App />);
+
+    expect(await screen.findByText('Update released')).toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('');
+
+    fireEvent.click(screen.getByText('Update released'));
 
     expect(await screen.findByText('What is new')).toBeInTheDocument();
     expect(document.body.style.overflow).toBe('hidden');
@@ -186,7 +239,7 @@ describe('App', () => {
   });
 
   test('returns to the authentication screen immediately after an auth-expired event', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.3' }));
+    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.10.4' }));
 
     render(<App />);
 

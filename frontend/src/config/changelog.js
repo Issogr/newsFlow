@@ -1,13 +1,13 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.2.10.3',
+  version: '3.2.10.4',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '📱 Privacy Policy, Cookie Policy, API docs, and the admin dashboard now feel cleaner on mobile with full-screen layouts.',
-      '🪄 Legal links now match the settings pill style, and the main settings action is simplified to `Save`.',
-      '🖼️ The generic news fallback cover is now much lighter, so placeholder images cost less to load.',
+      '🔔 New releases now appear as a small update pill at the top of the app instead of opening the changelog immediately after login.',
+      '🧭 The update pill can open the full changelog on demand, can be closed manually, and fades away automatically with a visible countdown bar.',
+      '📊 The admin dashboard now shows per-user public API usage totals and the total number of anonymous public API requests received.',
     ]
   },
   it: {
@@ -15,9 +15,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '📱 Privacy Policy, Cookie Policy, documentazione API e dashboard admin ora risultano piu pulite su mobile con layout a schermo intero.',
-      '🪄 I link ai documenti legali ora seguono lo stesso stile a pill delle impostazioni, e l\'azione principale delle impostazioni e stata semplificata in `Salva`.',
-      '🖼️ L\'immagine generica di fallback per le notizie ora e molto piu leggera, cosi i placeholder pesano meno da caricare.',
+      '🔔 I nuovi rilasci ora compaiono come una piccola pill in alto nell\'app invece di aprire subito il changelog dopo il login.',
+      '🧭 La pill di aggiornamento puo aprire il changelog completo su richiesta, si puo chiudere a mano e sparisce da sola con una barra di avanzamento visibile.',
+      '📊 La dashboard admin ora mostra il totale delle richieste API pubbliche per utente e quante richieste API anonime stanno arrivando.',
     ]
   }
 };

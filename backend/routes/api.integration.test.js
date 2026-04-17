@@ -440,6 +440,46 @@ describe('API auth and user flows', () => {
       mode: 'token',
       cachedOnly: true
     });
+
+    const usageRow = database.getDb().prepare(`
+      SELECT public_api_request_count AS publicApiRequestCount,
+             public_api_last_used_at AS publicApiLastUsedAt
+      FROM users
+      WHERE id = ?
+    `).get(registerResponse.body.user.id);
+
+    expect(usageRow.publicApiRequestCount).toBe(1);
+    expect(usageRow.publicApiLastUsedAt).toEqual(expect.any(String));
+
+    const tokenRow = database.getDb().prepare(`
+      SELECT created_by_ip AS createdByIp,
+             last_used_ip AS lastUsedIp,
+             last_used_at AS lastUsedAt
+      FROM api_tokens
+      WHERE user_id = ?
+    `).get(registerResponse.body.user.id);
+
+    expect(tokenRow.createdByIp).toBeNull();
+    expect(tokenRow.lastUsedIp).toBeNull();
+    expect(tokenRow.lastUsedAt).toEqual(expect.any(String));
+  });
+
+  test('counts anonymous public API requests globally', async () => {
+    await request(app)
+      .get('/api/public/news')
+      .expect(200);
+
+    await request(app)
+      .get('/api/public/news')
+      .expect(200);
+
+    const count = database.getDb().prepare(`
+      SELECT value
+      FROM app_meta
+      WHERE key = 'anonymous_public_api_request_count'
+    `).get()?.value;
+
+    expect(Number(count)).toBe(2);
   });
 
   test('revokes api tokens immediately and removes their rows from the database', async () => {

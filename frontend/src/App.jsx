@@ -6,6 +6,7 @@ import AuthScreen from './components/AuthScreen';
 import LegalPolicyPage from './components/LegalPolicyPage';
 import PasswordSetupScreen from './components/PasswordSetupScreen';
 import ReleaseNotesModal from './components/ReleaseNotesModal';
+import ReleaseUpdateNotice from './components/ReleaseUpdateNotice';
 import { CURRENT_CHANGELOG_ENTRY, getCurrentChangelog } from './config/changelog';
 import { createTranslator, resolvePreferredLocale } from './i18n';
 import {
@@ -48,8 +49,9 @@ function App() {
   });
   const [releaseNotesState, setReleaseNotesState] = useState({
     hiddenVersion: '',
+    noticeHiddenVersion: '',
     saving: false,
-    manuallyOpened: false
+    modalOpen: false
   });
 
   const locale = useMemo(() => {
@@ -72,14 +74,20 @@ function App() {
   const isPrivacyPolicyRoute = locationState.pathname === '/privacy-policy';
   const isCookiePolicyRoute = locationState.pathname === '/cookie-policy';
   const needsReleaseNotesAck = authData?.settings?.lastSeenReleaseNotesVersion !== releaseNotes.version;
-  const shouldShowReleaseNotes = Boolean(
+  const shouldShowReleaseNotesModal = Boolean(
     authData
     && !authData?.user?.isAdmin
     && releaseNotes.version
-    && (
-      releaseNotesState.manuallyOpened
-      || (needsReleaseNotesAck && releaseNotesState.hiddenVersion !== releaseNotes.version)
-    )
+    && releaseNotesState.modalOpen
+  );
+  const shouldShowReleaseNotice = Boolean(
+    authData
+    && !authData?.user?.isAdmin
+    && releaseNotes.version
+    && needsReleaseNotesAck
+    && releaseNotesState.hiddenVersion !== releaseNotes.version
+    && releaseNotesState.noticeHiddenVersion !== releaseNotes.version
+    && !releaseNotesState.modalOpen
   );
 
   const loadSession = useCallback(async () => {
@@ -147,7 +155,7 @@ function App() {
   }, [themeMode]);
 
   useEffect(() => {
-    setReleaseNotesState({ hiddenVersion: '', saving: false, manuallyOpened: false });
+    setReleaseNotesState({ hiddenVersion: '', noticeHiddenVersion: '', saving: false, modalOpen: false });
   }, [authData?.user?.id]);
 
   const handleAuthSuccess = useCallback((payload) => {
@@ -201,13 +209,21 @@ function App() {
     setAuthError(null);
   }, []);
 
+  const handleUserSettingsUpdate = useCallback((settings) => {
+    setAuthData((current) => (current ? {
+      ...current,
+      settings
+    } : current));
+  }, []);
+
   const handleDismissReleaseNotes = useCallback(async () => {
     const version = CURRENT_CHANGELOG_ENTRY.version;
 
     setReleaseNotesState((current) => ({
       ...current,
       hiddenVersion: version,
-      manuallyOpened: false,
+      noticeHiddenVersion: version,
+      modalOpen: false,
       saving: needsReleaseNotesAck
     }));
 
@@ -231,13 +247,44 @@ function App() {
     }
   }, [needsReleaseNotesAck]);
 
+  const handleDismissReleaseNotice = useCallback(async () => {
+    const version = CURRENT_CHANGELOG_ENTRY.version;
+
+    setReleaseNotesState((current) => ({
+      ...current,
+      hiddenVersion: version,
+      noticeHiddenVersion: version,
+      saving: needsReleaseNotesAck,
+      modalOpen: false
+    }));
+
+    if (!needsReleaseNotesAck) {
+      return;
+    }
+
+    try {
+      const response = await updateUserSettings({ lastSeenReleaseNotesVersion: version });
+      setAuthData((current) => (current ? {
+        ...current,
+        settings: response.settings
+      } : current));
+    } catch {
+      // keep the notice dismissed for the current session; it will retry next login if persistence fails
+    } finally {
+      setReleaseNotesState((current) => ({
+        ...current,
+        saving: false
+      }));
+    }
+  }, [needsReleaseNotesAck]);
+
   const handleOpenReleaseNotes = useCallback(() => {
     setReleaseNotesState((current) => ({
       ...current,
-      manuallyOpened: true,
-      hiddenVersion: ''
+      modalOpen: true,
+      noticeHiddenVersion: releaseNotes.version
     }));
-  }, []);
+  }, [releaseNotes.version]);
 
   if (loadingSession) {
     return <div className="App min-h-screen bg-slate-100" />;
@@ -288,6 +335,7 @@ function App() {
           t={t}
           currentUser={authData}
           onLogout={handleLogout}
+          onUserUpdate={handleUserSettingsUpdate}
         />
       ) : (
         <NewsAggregator
@@ -298,7 +346,16 @@ function App() {
           onOpenReleaseNotes={handleOpenReleaseNotes}
         />
       )}
-      {shouldShowReleaseNotes && (
+      {shouldShowReleaseNotice && (
+        <ReleaseUpdateNotice
+          t={t}
+          releaseNotes={releaseNotes}
+          onOpen={handleOpenReleaseNotes}
+          onExpire={handleDismissReleaseNotice}
+          onDismiss={handleDismissReleaseNotice}
+        />
+      )}
+      {shouldShowReleaseNotesModal && (
         <ReleaseNotesModal
           t={t}
           releaseNotes={releaseNotes}
