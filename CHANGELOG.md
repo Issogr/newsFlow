@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.2.10.4
+
+- replaced the forced post-login release-notes modal with a lightweight top-center update notice that lets users keep working and open the full changelog on demand, while still persisting `lastSeenReleaseNotesVersion` only after they actually dismiss the full release-notes view
+- added a 30-second auto-dismiss flow for the new update notice, including a right-to-left shrinking progress bar and explicit close control so unseen updates can be quietly deferred for the current session without losing the next-login reminder
+
 ## 3.2.10.3
 
 - refined several legal and admin surfaces on mobile so the privacy policy, cookie policy, API docs, and admin dashboard now use edge-to-edge full-screen layouts instead of rendering inside padded desktop-style cards
