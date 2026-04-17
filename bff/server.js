@@ -176,6 +176,45 @@ function createSessionStore(options = {}) {
   return { store, db };
 }
 
+function safeParseStoredSession(rawValue) {
+  if (!rawValue || typeof rawValue !== 'string') {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawValue);
+  } catch {
+    return null;
+  }
+}
+
+function destroyStoredSessionsByUserId(sessionStore, sessionDb, userId) {
+  if (!sessionStore || !sessionDb || !userId) {
+    return 0;
+  }
+
+  const storedSessions = sessionDb.prepare('SELECT sid, sess FROM sessions').all();
+  const matchingSessionIds = storedSessions
+    .filter((row) => safeParseStoredSession(row.sess)?.userId === userId)
+    .map((row) => row.sid);
+
+  matchingSessionIds.forEach((sid) => {
+    sessionStore.destroy(sid, () => {});
+  });
+
+  return matchingSessionIds.length;
+}
+
+function extractDeletedAdminUserId(req, statusCode) {
+  if (String(req.method || '').toUpperCase() !== 'DELETE' || statusCode < 200 || statusCode >= 300) {
+    return '';
+  }
+
+  const rawPath = String(req.originalUrl || req.url || '');
+  const match = rawPath.match(/^\/api\/admin\/users\/([^/?#]+)$/);
+  return match?.[1] || '';
+}
+
 function destroySession(req) {
   if (!req.session) {
     return Promise.resolve();
@@ -275,6 +314,17 @@ function getBackendSessionCookieFromRequest(req) {
   return String(req.session?.backendSessionCookie || '').trim();
 }
 
+async function persistSessionUserId(req, userId) {
+  if (!req.session || !userId || req.session.userId === userId) {
+    return;
+  }
+
+  req.session.userId = userId;
+  await new Promise((resolve, reject) => {
+    req.session.save((error) => (error ? reject(error) : resolve()));
+  });
+}
+
 function createApp(options = {}) {
   const backendBaseUrl = String(options.backendBaseUrl || process.env.BACKEND_BASE_URL || 'http://backend:5000').trim().replace(/\/+$/, '');
   const frontendDistDir = options.frontendDistDir || process.env.FRONTEND_DIST_DIR || DEFAULT_FRONTEND_DIST_DIR;
@@ -364,6 +414,7 @@ function createApp(options = {}) {
 
         req.session.version = SESSION_SCHEMA_VERSION;
         req.session.backendSessionCookie = backendSessionCookie;
+        req.session.userId = response.data?.user?.id || req.session.userId || '';
         req.session.createdAt = req.session.createdAt || new Date().toISOString();
         await new Promise((resolve, reject) => {
           req.session.save((error) => (error ? reject(error) : resolve()));
@@ -414,6 +465,12 @@ function createApp(options = {}) {
         if (proxyRes.statusCode === 401) {
           clearBffSessionCookie(res);
           req.session?.destroy?.(() => {});
+          return;
+        }
+
+        const deletedUserId = extractDeletedAdminUserId(req, proxyRes.statusCode || 0);
+        if (deletedUserId) {
+          destroyStoredSessionsByUserId(sessionStore, sessionDb, deletedUserId);
         }
       },
     },
@@ -484,6 +541,32 @@ function createApp(options = {}) {
 
   app.post('/api/auth/password-setup/complete', jsonParser, (req, res, next) => {
     handleSessionAuthRequest(req, res, next, '/auth/password-setup/complete');
+  });
+
+  app.get('/api/me', async (req, res, next) => {
+    try {
+      const backendSessionCookie = getBackendSessionCookieFromRequest(req);
+      const response = await backendHttp.request({
+        url: '/internal-api/me',
+        method: 'GET',
+        headers: {
+          ...buildInternalHeaders(req),
+          ...(backendSessionCookie ? { Cookie: backendSessionCookie } : {}),
+        },
+      });
+
+      if (response.status === 401) {
+        await destroySession(req);
+        clearBffSessionCookie(res);
+      } else {
+        await persistSessionUserId(req, response.data?.user?.id || '');
+      }
+
+      copyBackendResponseHeaders(res, response.headers);
+      res.status(response.status).send(response.data);
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.post('/api/auth/logout', async (req, res, next) => {
@@ -588,6 +671,7 @@ module.exports = {
   createApp,
   createServer,
   createSessionStore,
+  destroyStoredSessionsByUserId,
   getBffSessionSecret,
   getInternalProxyToken,
   isValidSessionPayload,

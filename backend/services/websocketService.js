@@ -98,8 +98,9 @@ function initialize(server) {
     });
 
     socket.on('disconnect', () => {
-      activeConnections.delete(socket.id);
-      statistics.activeConnectionsCount = Math.max(0, statistics.activeConnectionsCount - 1);
+      if (activeConnections.delete(socket.id)) {
+        statistics.activeConnectionsCount = Math.max(0, statistics.activeConnectionsCount - 1);
+      }
     });
   });
 
@@ -107,6 +108,38 @@ function initialize(server) {
   logger.info('WebSocket service initialized');
 
   return io;
+}
+
+function disconnectUserSockets(userId) {
+  if (!userId) {
+    return 0;
+  }
+
+  let disconnected = 0;
+
+  activeConnections.forEach((socket) => {
+    if (socket.data?.userId !== userId) {
+      return;
+    }
+
+    if (activeConnections.delete(socket.id)) {
+      statistics.activeConnectionsCount = Math.max(0, statistics.activeConnectionsCount - 1);
+    }
+
+    disconnected += 1;
+
+    try {
+      socket.disconnect?.(true);
+    } catch (error) {
+      logger.warn(`WebSocket disconnect failed for deleted user ${userId}: ${error.message}`);
+    }
+  });
+
+  if (disconnected > 0) {
+    logger.info(`Disconnected ${disconnected} active WebSocket connection(s) for deleted user ${userId}`);
+  }
+
+  return disconnected;
 }
 
 function groupMatchesFilters(group, filters = {}) {
@@ -279,6 +312,7 @@ function getStatistics() {
 
 module.exports = {
   initialize,
+  disconnectUserSockets,
   broadcastNewsUpdate,
   broadcastSystemNotification,
   getStatistics

@@ -341,6 +341,16 @@ router.post('/admin/users/:userId/password-setup-link', [
   res.json({ success: true, ...result });
 }));
 
+router.delete('/admin/users/:userId', [
+  requireAuthenticatedUser,
+  requireAdminUser,
+  validateParam('userId', 'Invalid user ID'),
+  sanitizeParam('userId')
+], asyncHandler(async (req, res) => {
+  const result = userService.deleteUserAsAdmin(req.user.id, req.params.userId);
+  res.json(result);
+}));
+
 router.get('/news', [requireAuthenticatedUser, sanitizeQuery('search'), sanitizeQuery('beforePubDate'), sanitizeQuery('beforeId')], asyncHandler(async (req, res) => {
   const filters = parseNewsQuery(req.query);
   const result = await newsService.getNewsFeed(filters, getUserContext(req));

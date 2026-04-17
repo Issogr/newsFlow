@@ -282,6 +282,48 @@ describe('API auth and user flows', () => {
       .expect(410);
   });
 
+  test('allows an admin to delete a non-admin user', async () => {
+    const bootstrap = userService.ensureAdminBootstrap();
+    const adminSetupResponse = await request(app)
+      .post('/api/auth/password-setup/complete')
+      .send({ token: bootstrap.token, password: 'secret123' })
+      .expect(200);
+    const adminSessionCookie = getSessionCookie(adminSetupResponse);
+
+    const memberResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'delete-me', password: 'secret123' })
+      .expect(201);
+
+    const deleteResponse = await request(app)
+      .delete(`/api/admin/users/${memberResponse.body.user.id}`)
+      .set('Cookie', adminSessionCookie)
+      .expect(200);
+
+    expect(deleteResponse.body).toMatchObject({
+      success: true,
+      user: {
+        id: memberResponse.body.user.id,
+        username: 'delete-me',
+        isAdmin: false
+      }
+    });
+
+    const usersResponse = await request(app)
+      .get('/api/admin/users')
+      .set('Cookie', adminSessionCookie)
+      .expect(200);
+
+    expect(usersResponse.body.users).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ username: 'delete-me' })
+    ]));
+
+    await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'delete-me', password: 'secret123' })
+      .expect(401);
+  });
+
   test('updates settings and persists them for the authenticated user', async () => {
     const registerResponse = await request(app)
       .post('/api/auth/register')

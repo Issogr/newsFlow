@@ -111,6 +111,17 @@ function createAuthRepository({ getDb }) {
     `).run(passwordHash || null, updatedAt, userId).changes;
   }
 
+  function deleteUser(userId) {
+    if (!userId) {
+      return 0;
+    }
+
+    return getDb().prepare(`
+      DELETE FROM users
+      WHERE id = ?
+    `).run(userId).changes;
+  }
+
   function createUserSession(session = {}) {
     getDb().prepare(`
       INSERT INTO user_sessions (token_hash, user_id, created_at, expires_at)
@@ -376,6 +387,7 @@ function createAuthRepository({ getDb }) {
     updateUserLogin,
     touchUserActivity,
     updateUserPassword,
+    deleteUser,
     createUserSession,
     createApiToken,
     findSessionByTokenHash,

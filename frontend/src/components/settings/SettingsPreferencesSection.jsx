@@ -291,34 +291,32 @@ const SettingsPreferencesSection = ({
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-4 md:col-span-2">
-              <div className="flex items-start gap-3">
-                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm">
+            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+              <div className="space-y-3">
+                <p className="flex items-center gap-2 text-sm font-semibold text-slate-800">
                   <ShieldCheck className="h-4 w-4 text-emerald-700" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-slate-800">{t('legalDocsTitle')}</p>
-                  <p className="mt-1 text-sm text-slate-600">{t('legalDocsHelp')}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <a
-                      href="/privacy-policy"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-                    >
-                      <span>{t('privacyPolicyLink')}</span>
-                      <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                    </a>
-                    <a
-                      href="/cookie-policy"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-                    >
-                      <span>{t('cookiePolicyLink')}</span>
-                      <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                    </a>
-                  </div>
+                  {t('legalDocsTitle')}
+                </p>
+                <p className="max-w-2xl text-sm text-slate-600">{t('legalDocsHelp')}</p>
+                <div className="flex flex-wrap gap-2">
+                  <a
+                    href="/privacy-policy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+                  >
+                    <span>{t('privacyPolicyLink')}</span>
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                  </a>
+                  <a
+                    href="/cookie-policy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+                  >
+                    <span>{t('cookiePolicyLink')}</span>
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                  </a>
                 </div>
               </div>
             </div>

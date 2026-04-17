@@ -126,7 +126,11 @@ Feedback and Telegram delivery:
 Admin access:
 
 - On startup, the backend ensures a reserved admin account exists.
-- If the admin password is not configured yet, the backend logs a single-use setup link for the admin bootstrap flow.
+- If the admin password is not configured yet, the backend logs only a warning with the bootstrap-link expiry time. The single-use setup link itself is no longer printed to logs.
+- Generate a fresh admin bootstrap link manually from `backend/` with:
+  `node -e "const userService=require('./services/userService'); const result=userService.ensureAdminBootstrap(); console.log(result);"`
+- The returned `setupLink` opens the admin password setup flow at `/admin/setup#token=...`.
+- Calling `ensureAdminBootstrap()` again invalidates any previous unused admin bootstrap token and returns a new one.
 - Set `APP_BASE_URL` so generated setup links point to the correct public BFF/app origin in your environment.
 - The outbound response-size limits above are optional; if unset, News Flow uses the listed safe defaults.
 

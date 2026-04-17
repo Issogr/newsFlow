@@ -222,6 +222,7 @@ module.exports = {
   updateUserLogin: authRepository.updateUserLogin,
   touchUserActivity: authRepository.touchUserActivity,
   updateUserPassword: authRepository.updateUserPassword,
+  deleteUser: authRepository.deleteUser,
   createUserSession: authRepository.createUserSession,
   createApiToken: authRepository.createApiToken,
   findSessionByTokenHash: authRepository.findSessionByTokenHash,

@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.10.3
+
+- refined several legal and admin surfaces on mobile so the privacy policy, cookie policy, API docs, and admin dashboard now use edge-to-edge full-screen layouts instead of rendering inside padded desktop-style cards
+- aligned the auth and settings legal-document links with the same pill treatment used elsewhere in Settings, simplified the settings primary action label to `Save`, and limited the account-creation password guidance to registration mode instead of showing it on sign-in
+- replaced the generic fallback news cover with a resized optimized `WebP` asset, cutting the placeholder image transfer cost substantially while preserving the existing card fallback behavior
+
 ## 3.2.10.2
 
 - replaced the BFF in-memory session mapping with a persistent SQLite-backed `express-session` store so authenticated browser sessions survive browser close/reopen flows and BFF restarts instead of being dropped when ephemeral proxy state disappears

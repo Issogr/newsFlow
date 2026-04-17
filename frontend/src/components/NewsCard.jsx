@@ -9,7 +9,7 @@ import {
 import { getDateLocale, getLocalizedTopic } from '../i18n';
 import { getTopicPresentation } from '../topicPresentation';
 import { getSafeExternalUrl } from '../utils/urlSafety';
-import genericNewsCover from '../assets/generic-news-cover.svg';
+import genericNewsCover from '../assets/generic-news-cover.webp';
 import { shareArticleUrl } from '../utils/shareArticle';
 import ShareStatusBubble from './ShareStatusBubble';
 
