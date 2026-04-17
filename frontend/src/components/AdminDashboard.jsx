@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Copy, LogOut, RefreshCw, Trash2, UserCheck, Users } from 'lucide-react';
+import { Activity, Copy, LogOut, Moon, RefreshCw, Sun, Trash2, UserCheck, Users } from 'lucide-react';
 import BrandMark from './BrandMark';
-import { createAdminPasswordSetupLink, deleteAdminUser, fetchAdminUsers } from '../services/api';
+import { createAdminPasswordSetupLink, deleteAdminUser, fetchAdminUsers, updateUserSettings } from '../services/api';
 
 const REFRESH_INTERVAL_MS = 30000;
 
@@ -18,9 +18,10 @@ function formatDateTime(value) {
   return parsed.toLocaleString();
 }
 
-const AdminDashboard = ({ t, currentUser, onLogout }) => {
+const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [themeSaving, setThemeSaving] = useState(false);
   const [error, setError] = useState('');
   const [users, setUsers] = useState([]);
   const [summary, setSummary] = useState({ totalUsers: 0, onlineUsers: 0, activeUsers: 0, onlineWindowMinutes: 5 });
@@ -81,6 +82,16 @@ const AdminDashboard = ({ t, currentUser, onLogout }) => {
   }, [loadUsers]);
 
   const managedUsers = useMemo(() => users.filter((user) => !user.isAdmin), [users]);
+  const activeTheme = useMemo(() => {
+    const themeMode = String(currentUser?.settings?.themeMode || '').trim();
+    if (themeMode === 'dark' || themeMode === 'light') {
+      return themeMode;
+    }
+
+    const appliedTheme = String(document.documentElement?.dataset?.theme || '').trim();
+    return appliedTheme === 'dark' ? 'dark' : 'light';
+  }, [currentUser?.settings?.themeMode]);
+  const nextThemeMode = activeTheme === 'dark' ? 'light' : 'dark';
   const summaryCards = useMemo(() => ([
     {
       key: 'online',
@@ -158,6 +169,22 @@ const AdminDashboard = ({ t, currentUser, onLogout }) => {
     }
   };
 
+  const handleToggleTheme = async () => {
+    setThemeSaving(true);
+    setError('');
+
+    try {
+      const response = await updateUserSettings({ themeMode: nextThemeMode });
+      onUserUpdate?.(response.settings);
+    } catch (requestError) {
+      setError(requestError.message || t('genericError'));
+    } finally {
+      setThemeSaving(false);
+    }
+  };
+
+  const ThemeIcon = activeTheme === 'dark' ? Sun : Moon;
+
   return (
     <div className="min-h-screen bg-white text-slate-900 sm:bg-slate-100 sm:px-6 sm:py-6 lg:px-8">
       <div className="flex min-h-screen w-full flex-col bg-white sm:mx-auto sm:min-h-[calc(100vh-3rem)] sm:max-w-6xl sm:rounded-[2rem] sm:border sm:border-slate-200 sm:shadow-xl">
@@ -174,8 +201,18 @@ const AdminDashboard = ({ t, currentUser, onLogout }) => {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                onClick={handleToggleTheme}
+                disabled={themeSaving}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label={activeTheme === 'dark' ? t('switchToLightTheme') : t('switchToDarkTheme')}
+                title={activeTheme === 'dark' ? t('switchToLightTheme') : t('switchToDarkTheme')}
+              >
+                <ThemeIcon className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
                 onClick={() => loadUsers({ showRefreshingIndicator: true })}
-                disabled={refreshing}
+                disabled={refreshing || themeSaving}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
@@ -239,16 +276,16 @@ const AdminDashboard = ({ t, currentUser, onLogout }) => {
                             <p className="truncate text-lg font-semibold text-slate-900">{user.username}</p>
                           </div>
 
-                          <div className="mt-4 flex flex-wrap gap-2.5 text-sm text-slate-600">
-                            <div className="rounded-2xl bg-slate-100/80 px-4 py-3">
+                          <div className="mt-4 grid grid-cols-3 gap-2.5 text-sm text-slate-600">
+                            <div className="h-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{t('createdAt')}</p>
                               <p className="mt-2 font-medium text-slate-800">{formatDateTime(user.createdAt)}</p>
                             </div>
-                            <div className="rounded-2xl bg-slate-100/80 px-4 py-3">
+                            <div className="h-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{t('lastLoginAt')}</p>
                               <p className="mt-2 font-medium text-slate-800">{formatDateTime(user.lastLoginAt)}</p>
                             </div>
-                            <div className="rounded-2xl bg-slate-100/80 px-4 py-3">
+                            <div className="h-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{t('lastActivityAt')}</p>
                               <p className="mt-2 font-medium text-slate-800">{formatDateTime(user.lastActivityAt)}</p>
                             </div>

@@ -209,6 +209,13 @@ function App() {
     setAuthError(null);
   }, []);
 
+  const handleUserSettingsUpdate = useCallback((settings) => {
+    setAuthData((current) => (current ? {
+      ...current,
+      settings
+    } : current));
+  }, []);
+
   const handleDismissReleaseNotes = useCallback(async () => {
     const version = CURRENT_CHANGELOG_ENTRY.version;
 
@@ -328,6 +335,7 @@ function App() {
           t={t}
           currentUser={authData}
           onLogout={handleLogout}
+          onUserUpdate={handleUserSettingsUpdate}
         />
       ) : (
         <NewsAggregator

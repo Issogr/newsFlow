@@ -2,17 +2,18 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AdminDashboard from './AdminDashboard';
 import { createTranslator } from '../i18n';
-import { createAdminPasswordSetupLink, deleteAdminUser, fetchAdminUsers } from '../services/api';
+import { createAdminPasswordSetupLink, deleteAdminUser, fetchAdminUsers, updateUserSettings } from '../services/api';
 
 vi.mock('../services/api', () => ({
   fetchAdminUsers: vi.fn(),
   createAdminPasswordSetupLink: vi.fn(),
-  deleteAdminUser: vi.fn()
+  deleteAdminUser: vi.fn(),
+  updateUserSettings: vi.fn()
 }));
 
 describe('AdminDashboard', () => {
   const t = createTranslator('en');
-  const currentUser = { user: { username: 'admin', isAdmin: true } };
+  const currentUser = { user: { username: 'admin', isAdmin: true }, settings: { themeMode: 'light' } };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -51,9 +52,10 @@ describe('AdminDashboard', () => {
       ]
     });
 
-    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={jest.fn()} />);
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={jest.fn()} onUserUpdate={jest.fn()} />);
 
     expect(await screen.findByText('Admin dashboard')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch to dark theme' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Logout' })).toBeInTheDocument();
     expect(screen.getAllByText('Online now').length).toBeGreaterThan(0);
@@ -155,7 +157,7 @@ describe('AdminDashboard', () => {
     });
     deleteAdminUser.mockResolvedValue({ success: true });
 
-    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={jest.fn()} />);
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={jest.fn()} onUserUpdate={jest.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: '🔑 Reset' }));
 
@@ -170,5 +172,60 @@ describe('AdminDashboard', () => {
       expect(deleteAdminUser).toHaveBeenCalledWith('user-1');
     });
     expect(window.confirm).toHaveBeenCalledWith('Delete alice? This cannot be undone.');
+  });
+
+  test('toggles the admin theme with the header button', async () => {
+    fetchAdminUsers.mockResolvedValue({
+      summary: {
+        totalUsers: 1,
+        onlineUsers: 0,
+        activeUsers: 0,
+        onlineWindowMinutes: 5
+      },
+      users: [
+        {
+          id: 'admin-id',
+          username: 'admin',
+          isAdmin: true,
+          isOnline: false,
+          passwordConfigured: true,
+          createdAt: '2026-03-27T10:00:00.000Z',
+          lastLoginAt: '2026-03-27T11:00:00.000Z',
+          lastActivityAt: '2026-03-27T11:02:00.000Z'
+        }
+      ]
+    });
+    updateUserSettings.mockResolvedValue({
+      settings: {
+        ...currentUser.settings,
+        themeMode: 'dark'
+      }
+    });
+    const ThemeHarness = () => {
+      const [userState, setUserState] = React.useState(currentUser);
+
+      return (
+        <AdminDashboard
+          t={t}
+          currentUser={userState}
+          onLogout={jest.fn()}
+          onUserUpdate={(settings) => {
+            setUserState((current) => ({
+              ...current,
+              settings,
+            }));
+          }}
+        />
+      );
+    };
+
+    render(<ThemeHarness />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Switch to dark theme' }));
+
+    await waitFor(() => {
+      expect(updateUserSettings).toHaveBeenCalledWith({ themeMode: 'dark' });
+    });
+    expect(await screen.findByRole('button', { name: 'Switch to light theme' })).toBeInTheDocument();
   });
 });
