@@ -69,8 +69,31 @@ describe('MobileBottomNav', () => {
     fireEvent.click(sourcesButton);
     expect(sourcesButton).toHaveAttribute('aria-expanded', 'true');
 
+    fireEvent.pointerDown(sourcesButton);
+    fireEvent.click(sourcesButton);
+    expect(sourcesButton).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('keeps sources open when a mobile tap emits follow-up mouse events', () => {
+    renderNav();
+    const sourcesButton = getNavButton('Sources');
+
+    fireEvent.pointerDown(sourcesButton);
     fireEvent.mouseDown(sourcesButton);
     fireEvent.click(sourcesButton);
+
+    expect(sourcesButton).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('closes an open bubble when the page scrolls', () => {
+    renderNav();
+    const sourcesButton = getNavButton('Sources');
+
+    fireEvent.pointerDown(sourcesButton);
+    fireEvent.click(sourcesButton);
+    expect(sourcesButton).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.scroll(window);
     expect(sourcesButton).toHaveAttribute('aria-expanded', 'false');
   });
 
@@ -88,7 +111,7 @@ describe('MobileBottomNav', () => {
     fireEvent.click(topicsButton);
     expect(topicsButton).toHaveAttribute('aria-expanded', 'true');
 
-    fireEvent.mouseDown(topicsButton);
+    fireEvent.pointerDown(topicsButton);
     fireEvent.click(topicsButton);
     expect(topicsButton).toHaveAttribute('aria-expanded', 'false');
   });
