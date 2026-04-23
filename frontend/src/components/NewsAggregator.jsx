@@ -37,6 +37,7 @@ const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 const BACK_TO_TOP_THRESHOLD = 280;
+const TOP_NAV_SHRINK_THRESHOLD = 28;
 const COMPACT_CARD_DESKTOP_QUERY = '(min-width: 768px)';
 
 function resolveCompactNewsCardsEnabled(mode, isDesktop) {
@@ -129,6 +130,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(true);
+  const [topNavCompact, setTopNavCompact] = useState(false);
   const lastScrollY = useRef(0);
   const userMenuRef = useRef(null);
   const visibleGroupIds = useMemo(() => news.map((group) => group?.id).filter(Boolean), [news]);
@@ -185,6 +187,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     const handleScroll = () => {
       const currentY = window.scrollY;
       setShowBackToTop(currentY > BACK_TO_TOP_THRESHOLD);
+      setTopNavCompact(currentY > TOP_NAV_SHRINK_THRESHOLD);
       if (currentY > lastScrollY.current && currentY > 50) {
         setShowMobileNav(false);
       } else {
@@ -348,8 +351,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      <header className="relative z-40 border-b border-slate-200 bg-white shadow-sm">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 lg:px-6">
+      <header className={`sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md transition-shadow duration-200 ${topNavCompact ? 'shadow-md' : 'shadow-sm'}`}>
+        <div className={`mx-auto flex max-w-7xl flex-col px-4 transition-all duration-200 lg:px-6 ${topNavCompact ? 'gap-2 py-2.5' : 'gap-4 py-5'}`}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <button
@@ -360,7 +363,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 disabled={loading}
               >
                 <div className="relative">
-                  <BrandMark className="h-11 w-11" />
+                  <BrandMark className={`transition-all duration-200 ${topNavCompact ? 'h-9 w-9' : 'h-11 w-11'}`} />
                   {loading && (
                     <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-sm">
                       <RefreshCw className="h-3.5 w-3.5 animate-spin text-slate-700" aria-hidden="true" />
@@ -368,7 +371,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   )}
                 </div>
                 <div className="min-w-0">
-                  <h1 className="truncate text-2xl font-semibold tracking-tight">{t('pageTitle')}</h1>
+                  <h1 className={`truncate font-semibold tracking-tight transition-all duration-200 ${topNavCompact ? 'text-xl' : 'text-2xl'}`}>{t('pageTitle')}</h1>
                 </div>
               </button>
             </div>
@@ -403,7 +406,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 </button>
 
                 {userMenuOpen && (
-                  <div className="absolute right-0 top-14 z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur" role="menu">
+                  <div className={`absolute right-0 z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur transition-all duration-200 ${topNavCompact ? 'top-12' : 'top-14'}`} role="menu">
                     <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-4">
                       <div className="flex items-start gap-3">
                         <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-sm">
@@ -486,7 +489,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         </div>
       </header>
 
-      <section className="sticky top-0 z-30 hidden bg-transparent md:block">
+      <section className={`sticky z-30 hidden bg-transparent transition-[top] duration-200 md:block ${topNavCompact ? 'top-[3.5rem]' : 'top-[5.25rem]'}`}>
         <div className="mx-auto max-w-7xl px-4 py-3 lg:px-6">
           <div className="relative">
             <div className={`overflow-hidden border border-slate-200/80 bg-white/90 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md transition-[border-radius] ${filtersExpanded ? 'rounded-t-[1.75rem] rounded-b-none' : 'rounded-[1.75rem]'}`}>

@@ -8,6 +8,8 @@
 - removed topic icon pills from the NewsCard content area to further declutter the card surface
 - added a mobile-only floating bottom navigation pill for Sources, Topics, recent-time filtering, and Search, replacing the sticky desktop filter panel on small screens while preserving the existing desktop/tablet controls
 - added mobile filter bubbles above the bottom navigation for source and topic selection, a smoother animated search expansion with an icon-only close control, and scroll-direction behavior so the mobile nav hides on downward scroll and returns on upward scroll
+- made the top navigation sticky and compact on scroll, with matching desktop filter-panel offsets so the sticky filter controls stay below the shrinking header
+- aligned the mobile bottom navigation surface with the sticky header treatment by using a translucent blurred white pill, softer border, and calmer shadow
 
 ## 3.2.10.4
 

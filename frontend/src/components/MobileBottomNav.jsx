@@ -193,7 +193,7 @@ const MobileBottomNav = ({
         </FilterBubble>
 
         {/* Nav bar */}
-        <div className="overflow-hidden rounded-full border border-slate-200/80 bg-white/95 shadow-[0_10px_35px_rgba(15,23,42,0.18)] ring-1 ring-white/70 backdrop-blur-md">
+        <div className="overflow-hidden rounded-full border border-slate-200 bg-white/95 shadow-md backdrop-blur-md">
         <div className="relative h-[3.95rem] overflow-hidden">
           <div
             className={`absolute inset-0 grid grid-cols-4 transition-all duration-300 ease-out ${
@@ -281,6 +281,7 @@ const MobileBottomNav = ({
                 ? 'translate-x-0 scale-100 opacity-100 blur-0'
                 : 'pointer-events-none translate-x-8 scale-95 opacity-0 blur-sm'
             }`}
+            aria-hidden={!searchMode}
           >
             <label className="group flex h-full flex-1 items-center gap-2 rounded-full border border-slate-200/80 bg-gradient-to-r from-slate-50 to-white px-3.5 shadow-inner shadow-slate-200/60 transition-colors focus-within:border-sky-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100">
               <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm transition-colors group-focus-within:text-sky-600">
@@ -292,6 +293,7 @@ const MobileBottomNav = ({
                 value={search}
                 onChange={(event) => onSearchChange(event.target.value)}
                 placeholder={t('searchPlaceholder')}
+                tabIndex={searchMode ? 0 : -1}
                 className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:font-normal placeholder:text-slate-400"
               />
               {search && (
