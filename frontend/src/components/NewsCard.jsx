@@ -5,8 +5,7 @@ import {
   ExternalLink,
   Share2,
 } from 'lucide-react';
-import { getDateLocale, getLocalizedTopic } from '../i18n';
-import { getTopicPresentation } from '../topicPresentation';
+import { getDateLocale } from '../i18n';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import genericNewsCover from '../assets/generic-news-cover.webp';
 import { shareArticleUrl } from '../utils/shareArticle';
@@ -265,21 +264,7 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
                 {formatPublicationDate(group.pubDate, locale)}
               </span>
 
-              {group.topics?.map((topic) => {
-                const { Icon, className } = getTopicPresentation(topic);
-                const localizedTopic = getLocalizedTopic(topic, locale);
 
-                return (
-                  <span
-                    key={topic}
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors ${className}`}
-                    aria-label={localizedTopic}
-                    title={localizedTopic}
-                  >
-                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                  </span>
-                );
-              })}
             </div>
           </>
         )}

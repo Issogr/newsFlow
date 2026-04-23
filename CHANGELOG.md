@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.11
+
+- moved the share button into the image container for non-compact NewsCard layouts so the title and content below it no longer need asymmetric right padding reserved for a floating control
+- removed the SOURCES section from the NewsCard content area and repositioned source pills as an absolute overlay at the bottom of the article image, backed by a bottom-to-transparent gradient so pills remain readable across varying image content
+- cleaned up the unused `Rss` import from NewsCard after removing the sources heading
+- removed topic icon pills from the NewsCard content area to further declutter the card surface
+
 ## 3.2.10.4
 
 - replaced the forced post-login release-notes modal with a lightweight top-center update notice that lets users keep working and open the full changelog on demand, while still persisting `lastSeenReleaseNotesVersion` only after they actually dismiss the full release-notes view
