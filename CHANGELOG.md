@@ -6,6 +6,8 @@
 - removed the SOURCES section from the NewsCard content area and repositioned source pills as an absolute overlay at the bottom of the article image, backed by a bottom-to-transparent gradient so pills remain readable across varying image content
 - cleaned up the unused `Rss` import from NewsCard after removing the sources heading
 - removed topic icon pills from the NewsCard content area to further declutter the card surface
+- added a mobile-only floating bottom navigation pill for Sources, Topics, recent-time filtering, and Search, replacing the sticky desktop filter panel on small screens while preserving the existing desktop/tablet controls
+- added mobile filter bubbles above the bottom navigation for source and topic selection, a smoother animated search expansion with an icon-only close control, and scroll-direction behavior so the mobile nav hides on downward scroll and returns on upward scroll
 
 ## 3.2.10.4
 

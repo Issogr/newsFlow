@@ -31,6 +31,7 @@ import { getSettingsLimits } from '../config/settingsLimits';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import { getTopicPresentation } from '../topicPresentation';
 import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
+import MobileBottomNav from './MobileBottomNav';
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -127,6 +128,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(true);
+  const lastScrollY = useRef(0);
   const userMenuRef = useRef(null);
   const visibleGroupIds = useMemo(() => news.map((group) => group?.id).filter(Boolean), [news]);
   const recentHours = Math.max(
@@ -179,14 +182,21 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [currentUser?.settings?.readerTextSize]);
 
   useEffect(() => {
-    const updateBackToTopVisibility = () => {
-      setShowBackToTop(window.scrollY > BACK_TO_TOP_THRESHOLD);
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      setShowBackToTop(currentY > BACK_TO_TOP_THRESHOLD);
+      if (currentY > lastScrollY.current && currentY > 50) {
+        setShowMobileNav(false);
+      } else {
+        setShowMobileNav(true);
+      }
+      lastScrollY.current = currentY;
     };
 
-    updateBackToTopVisibility();
-    window.addEventListener('scroll', updateBackToTopVisibility, { passive: true });
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
-    return () => window.removeEventListener('scroll', updateBackToTopVisibility);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   useEffect(() => {
@@ -476,7 +486,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         </div>
       </header>
 
-      <section className="sticky top-0 z-30 bg-transparent">
+      <section className="sticky top-0 z-30 hidden bg-transparent md:block">
         <div className="mx-auto max-w-7xl px-4 py-3 lg:px-6">
           <div className="relative">
             <div className={`overflow-hidden border border-slate-200/80 bg-white/90 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md transition-[border-radius] ${filtersExpanded ? 'rounded-t-[1.75rem] rounded-b-none' : 'rounded-[1.75rem]'}`}>
@@ -634,7 +644,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         </div>
       </section>
 
-      <main className="mx-auto max-w-7xl px-4 py-4 pb-10 lg:px-6">
+      <main className="mx-auto max-w-7xl px-4 py-4 pb-24 md:pb-10 lg:px-6">
         {loading && !loadingMore ? (
           <div className="flex h-64 items-center justify-center">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
@@ -720,7 +730,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       <button
         type="button"
         onClick={scrollToTop}
-        className={`fixed bottom-5 left-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-700 shadow-lg backdrop-blur transition-all duration-200 hover:bg-white hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 sm:bottom-6 sm:left-6 ${
+        className={`fixed bottom-20 left-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-700 shadow-lg backdrop-blur transition-all duration-200 hover:bg-white hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 sm:bottom-6 sm:left-6 ${
           showBackToTop
             ? 'translate-y-0 opacity-100'
             : 'pointer-events-none translate-y-3 opacity-0'
@@ -729,6 +739,28 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       >
         <ArrowUp className="h-5 w-5" aria-hidden="true" />
       </button>
+
+      {!readerState.isOpen && !settingsOpen && !feedbackOpen ? (
+        <MobileBottomNav
+          visibleSources={visibleAvailableSources}
+          availableTopics={availableTopics}
+          activeFilters={activeFilters}
+          showRecentOnly={showRecentOnly}
+          search={search}
+          recentHours={recentHours}
+          t={t}
+          locale={locale}
+          onToggleFilter={toggleFilter}
+          onToggleRecent={() => setShowRecentOnly((v) => !v)}
+          onSearchChange={setSearch}
+          onSearchClear={() => {
+            setSearch('');
+            setDebouncedSearch('');
+          }}
+          activeFiltersCount={activeFiltersCount}
+          visible={showMobileNav}
+        />
+      ) : null}
     </div>
   );
 };
