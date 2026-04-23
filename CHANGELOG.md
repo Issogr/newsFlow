@@ -10,6 +10,8 @@
 - added mobile filter bubbles above the bottom navigation for source and topic selection, a smoother animated search expansion with an icon-only close control, and scroll-direction behavior so the mobile nav hides on downward scroll and returns on upward scroll
 - made the top navigation sticky and compact on scroll, with matching desktop filter-panel offsets so the sticky filter controls stay below the shrinking header
 - aligned the mobile bottom navigation surface with the sticky header treatment by using a translucent blurred white pill, softer border, and calmer shadow
+- replaced the legacy desktop filter pill with flat labeled top-navigation controls beside refresh, matching the mobile four-action Sources, Topics, recent-time, and Search flow with source/topic bubbles
+- aligned the desktop refresh and user-menu buttons with the same flat labeled top-navigation style used by the filter controls
 
 ## 3.2.10.4
 

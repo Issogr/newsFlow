@@ -10,6 +10,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🧹 Removed topic icons from cards for a calmer, less cluttered layout.',
       '📱 Mobile now has a floating bottom navigation for sources, topics, time filters, and search.',
       '✨ The top bar now stays visible and gently shrinks while scrolling.',
+      '🔎 Desktop now has flat quick controls for sources, topics, time, search, refresh, and user actions in the top bar.',
     ]
   },
   it: {
@@ -22,6 +23,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🧹 Rimosse le icone dei topic dalle card per un layout piu pulito e ordinato.',
       '📱 Su mobile c\'e una nuova navigazione flottante in basso per fonti, topic, filtro orario e ricerca.',
       '✨ La barra superiore resta visibile e si compatta leggermente durante lo scroll.',
+      '🔎 Su desktop fonti, topic, filtro orario, ricerca, aggiornamento e utente sono ora piu comodi e leggeri nella barra superiore.',
     ]
   }
 };

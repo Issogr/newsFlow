@@ -42,7 +42,6 @@ const MobileBottomNav = ({
   onToggleRecent,
   onSearchChange,
   onSearchClear,
-  activeFiltersCount,
   visible = true,
 }) => {
   const [openBubble, setOpenBubble] = useState(null);

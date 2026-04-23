@@ -36,7 +36,6 @@ function renderNav(overrides = {}) {
     onToggleRecent: vi.fn(),
     onSearchChange: vi.fn(),
     onSearchClear: vi.fn(),
-    activeFiltersCount: 0,
     visible: true,
   };
   return render(<MobileBottomNav {...defaults} {...overrides} />);
