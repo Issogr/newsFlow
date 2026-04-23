@@ -3,7 +3,6 @@ import {
   BookOpenText,
   CalendarDays,
   ExternalLink,
-  Rss,
   Share2,
 } from 'lucide-react';
 import { getDateLocale, getLocalizedTopic } from '../i18n';
@@ -215,6 +214,18 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
               {shareControls}
             </div>
           ) : null}
+          {!compact && sourceEntries.length > 0 ? (
+            <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center gap-2 overflow-hidden px-4 py-3 bg-gradient-to-t from-black/60 to-transparent">
+              {sourceEntries.map((source) => (
+                <span
+                  key={source.id}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-900"
+                >
+                  {source.name}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
       <div className={`flex min-w-0 flex-1 flex-col ${compact ? 'p-3' : 'p-5'}`}>
@@ -269,23 +280,6 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
                   </span>
                 );
               })}
-            </div>
-
-            <div className="mt-5">
-              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">
-                <Rss className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>{t('sources')}</span>
-              </div>
-              <div className="flex min-h-7 flex-wrap content-start gap-2">
-                {sourceEntries.map((source) => (
-                  <span
-                    key={source.id}
-                    className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-900"
-                  >
-                    {source.name}
-                  </span>
-                ))}
-              </div>
             </div>
           </>
         )}
