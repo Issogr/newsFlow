@@ -45,6 +45,7 @@ const MobileBottomNav = ({
 }) => {
   const [openBubble, setOpenBubble] = useState(null);
   const [searchMode, setSearchMode] = useState(false);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const searchInputRef = useRef(null);
   const navRef = useRef(null);
   const ignoreNextToggleClickRef = useRef(false);
@@ -95,6 +96,29 @@ const MobileBottomNav = ({
   }, [searchMode]);
 
   useEffect(() => {
+    if (!searchMode || !window.visualViewport) {
+      setKeyboardOffset(0);
+      return undefined;
+    }
+
+    const updateKeyboardOffset = () => {
+      const viewport = window.visualViewport;
+      const nextOffset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      setKeyboardOffset(Math.round(nextOffset));
+    };
+
+    updateKeyboardOffset();
+    window.visualViewport.addEventListener('resize', updateKeyboardOffset);
+    window.visualViewport.addEventListener('scroll', updateKeyboardOffset);
+
+    return () => {
+      window.visualViewport.removeEventListener('resize', updateKeyboardOffset);
+      window.visualViewport.removeEventListener('scroll', updateKeyboardOffset);
+      setKeyboardOffset(0);
+    };
+  }, [searchMode]);
+
+  useEffect(() => {
     if (!openBubble) {
       return undefined;
     }
@@ -117,7 +141,11 @@ const MobileBottomNav = ({
       }`}
     >
       {/* Bubbles + Nav wrapped together for outside-click detection */}
-      <div ref={navRef} className="relative mx-auto w-[calc(100%-1.25rem)] max-w-md pb-[calc(env(safe-area-inset-bottom)+0.875rem)]">
+      <div
+        ref={navRef}
+        className="relative mx-auto w-[calc(100%-1.25rem)] max-w-md pb-[calc(env(safe-area-inset-bottom)+0.875rem+var(--mobile-keyboard-offset,0px))] transition-[padding-bottom] duration-200 ease-out"
+        style={{ '--mobile-keyboard-offset': `${keyboardOffset}px` }}
+      >
         <FilterBubble
           open={openBubble === 'sources'}
         >
