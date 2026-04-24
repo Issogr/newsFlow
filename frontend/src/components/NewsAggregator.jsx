@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowDown,
   ArrowUp,
   Cog,
   LogOut,
@@ -521,7 +522,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={loadingMore}
                 >
-                  {loadingMore && <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                  {loadingMore ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                  )}
                   {loadingMore ? t('loadingMore') : t('loadMore')}
                 </button>
               ) : (
