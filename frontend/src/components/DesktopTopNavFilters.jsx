@@ -16,7 +16,7 @@ const TOP_BUBBLE_MAX_HEIGHT = 'min(55vh, 28rem)';
 function TopFilterBubble({ children, open }) {
   return (
     <div
-      className={`absolute right-0 top-full z-50 mt-3 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md transition-all duration-200 ease-out ${
+      className={`absolute right-0 top-[calc(100%+1rem)] z-50 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md transition-all duration-200 ease-out ${
         open
           ? 'pointer-events-auto translate-y-0 opacity-100'
           : 'pointer-events-none -translate-y-2 opacity-0'
@@ -43,6 +43,8 @@ const DesktopTopNavFilters = ({
   onToggleRecent,
   onSearchChange,
   onSearchClear,
+  onOpenSurface,
+  closeSignal = 0,
 }) => {
   const [openBubble, setOpenBubble] = useState(null);
   const [searchMode, setSearchMode] = useState(false);
@@ -54,8 +56,9 @@ const DesktopTopNavFilters = ({
 
   const handleToggleBubble = useCallback((name) => {
     setSearchMode(false);
+    onOpenSurface?.();
     setOpenBubble((current) => (current === name ? null : name));
-  }, []);
+  }, [onOpenSurface]);
 
   const handleBubbleButtonPress = useCallback((event, name) => {
     event.preventDefault();
@@ -76,8 +79,9 @@ const DesktopTopNavFilters = ({
 
   const handleEnterSearch = useCallback(() => {
     closeBubbles();
+    onOpenSurface?.();
     setSearchMode(true);
-  }, [closeBubbles]);
+  }, [closeBubbles, onOpenSurface]);
 
   const handleExitSearch = useCallback(() => {
     setSearchMode(false);
@@ -94,6 +98,11 @@ const DesktopTopNavFilters = ({
       searchInputRef.current.focus();
     }
   }, [searchMode]);
+
+  useEffect(() => {
+    closeBubbles();
+    setSearchMode(false);
+  }, [closeBubbles, closeSignal]);
 
   useEffect(() => {
     if (!openBubble) {

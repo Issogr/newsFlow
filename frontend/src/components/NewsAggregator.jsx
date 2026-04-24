@@ -121,6 +121,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [desktopFiltersCloseSignal, setDesktopFiltersCloseSignal] = useState(0);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(true);
   const [topNavCompact, setTopNavCompact] = useState(false);
@@ -181,6 +182,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       const currentY = window.scrollY;
       setShowBackToTop(currentY > BACK_TO_TOP_THRESHOLD);
       setTopNavCompact(currentY > TOP_NAV_SHRINK_THRESHOLD);
+      setUserMenuOpen(false);
       if (currentY > lastScrollY.current && currentY > 50) {
         setShowMobileNav(false);
       } else {
@@ -373,6 +375,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   setSearch('');
                   setDebouncedSearch('');
                 }}
+                onOpenSurface={() => setUserMenuOpen(false)}
+                closeSignal={desktopFiltersCloseSignal}
               />
 
               <div className="relative">
@@ -390,7 +394,15 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 <TopNavActionButton
                   icon={User}
                   label={t('userMenu')}
-                  onClick={() => setUserMenuOpen((current) => !current)}
+                  onClick={() => {
+                    setUserMenuOpen((current) => {
+                      const nextOpen = !current;
+                      if (nextOpen) {
+                        setDesktopFiltersCloseSignal((value) => value + 1);
+                      }
+                      return nextOpen;
+                    });
+                  }}
                   active={userMenuOpen}
                   className="z-20"
                   aria-expanded={userMenuOpen}
@@ -399,7 +411,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 />
 
                 {userMenuOpen && (
-                  <div className={`absolute right-0 z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur transition-all duration-200 ${topNavCompact ? 'top-12' : 'top-14'}`} role="menu">
+                  <div className="absolute right-0 top-[calc(100%+1rem)] z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur transition-all duration-200" role="menu">
                     <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-4">
                       <div className="flex items-start gap-3">
                         <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-sm">
