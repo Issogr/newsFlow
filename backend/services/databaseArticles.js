@@ -30,7 +30,7 @@ function createArticleRepository({
     const aliasedNames = new Set();
 
     sourceIds.forEach((sourceId) => {
-      const aliases = getResolvedSourceAliases(sourceId, null, options.userId || null);
+      const aliases = getResolvedSourceAliases(sourceId, null, options.userId || null, options.customSourceGroups || null);
       aliases.ids.forEach((id) => aliasedIds.add(id));
       aliases.names.forEach((name) => aliasedNames.add(name));
     });
@@ -259,9 +259,17 @@ function createArticleRepository({
   function hydrateArticleRows(rows, options = {}) {
     const articleIds = rows.map((row) => row.id);
     const topicMap = getTopicsByArticleIds(articleIds);
+    const metadataCache = options.sourceMetadataCache || new Map();
 
     return rows.map((row) => {
-      const sourceMetadata = getResolvedSourceMetadata(row.sourceId, row.source, options.userId || row.ownerUserId || null);
+      const userId = options.userId || row.ownerUserId || null;
+      const cacheKey = `${userId || ''}:${row.sourceId || ''}:${row.source || ''}`;
+      let sourceMetadata = metadataCache.get(cacheKey);
+
+      if (!sourceMetadata) {
+        sourceMetadata = getResolvedSourceMetadata(row.sourceId, row.source, userId, options.customSourceGroups || null);
+        metadataCache.set(cacheKey, sourceMetadata);
+      }
 
       return {
         ...row,
@@ -732,8 +740,15 @@ function createArticleRepository({
       ORDER BY count DESC, name ASC
     `).all(...params);
 
+    const metadataCache = options.sourceMetadataCache || new Map();
     const aggregatedRows = rows.reduce((map, row) => {
-      const sourceMetadata = getResolvedSourceMetadata(row.id, row.name, options.userId || null);
+      const cacheKey = `${options.userId || ''}:${row.id || ''}:${row.name || ''}`;
+      let sourceMetadata = metadataCache.get(cacheKey);
+
+      if (!sourceMetadata) {
+        sourceMetadata = getResolvedSourceMetadata(row.id, row.name, options.userId || null, options.customSourceGroups || null);
+        metadataCache.set(cacheKey, sourceMetadata);
+      }
       const canonicalId = sourceMetadata.sourceId;
       const current = map.get(canonicalId) || {
         id: canonicalId,

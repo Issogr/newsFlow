@@ -482,7 +482,7 @@ describe('API auth and user flows', () => {
     expect(Number(count)).toBe(2);
   });
 
-  test('revokes api tokens immediately and removes their rows from the database', async () => {
+  test('revokes api tokens immediately and records revocation in the database', async () => {
     const registerResponse = await request(app)
       .post('/api/auth/register')
       .send({ username: 'revoke-user', password: 'secret123' })
@@ -511,10 +511,11 @@ describe('API auth and user flows', () => {
       .set('Authorization', `Bearer ${apiToken}`)
       .expect(401);
 
-    expect(database.getDb().prepare('SELECT COUNT(*) AS count FROM api_tokens WHERE user_id = ?').get(userId).count).toBe(0);
+    const revokedRow = database.getDb().prepare('SELECT revoked_at AS revokedAt FROM api_tokens WHERE user_id = ?').get(userId);
+    expect(revokedRow.revokedAt).toEqual(expect.any(String));
   });
 
-  test('regenerates api tokens immediately and removes the previous token row', async () => {
+  test('regenerates api tokens immediately and revokes the previous token row', async () => {
     const registerResponse = await request(app)
       .post('/api/auth/register')
       .send({ username: 'regen-user', password: 'secret123' })
@@ -552,13 +553,17 @@ describe('API auth and user flows', () => {
       .expect(200);
 
     const tokenRows = database.getDb().prepare(`
-      SELECT token_prefix AS tokenPrefix
+      SELECT token_prefix AS tokenPrefix, revoked_at AS revokedAt
       FROM api_tokens
       WHERE user_id = ?
+      ORDER BY datetime(created_at) ASC
     `).all(userId);
 
-    expect(tokenRows).toHaveLength(1);
-    expect(tokenRows[0].tokenPrefix).toBe(secondToken.slice(0, 12));
+    expect(tokenRows).toHaveLength(2);
+    expect(tokenRows[0].tokenPrefix).toBe(firstToken.slice(0, 12));
+    expect(tokenRows[0].revokedAt).toEqual(expect.any(String));
+    expect(tokenRows[1].tokenPrefix).toBe(secondToken.slice(0, 12));
+    expect(tokenRows[1].revokedAt).toBeNull();
   });
 
   test('adds, updates, and removes a personal source after validation', async () => {

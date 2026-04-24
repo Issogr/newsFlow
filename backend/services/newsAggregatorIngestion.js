@@ -9,6 +9,35 @@ const {
 } = require('./newsAggregatorGrouping');
 
 const ARTICLE_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
+const RSS_INGESTION_CONCURRENCY = Math.max(1, parseInt(process.env.RSS_INGESTION_CONCURRENCY || '8', 10) || 8);
+
+async function mapSettledWithConcurrency(items = [], concurrency = RSS_INGESTION_CONCURRENCY, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+
+      try {
+        results[currentIndex] = {
+          status: 'fulfilled',
+          value: await mapper(items[currentIndex], currentIndex)
+        };
+      } catch (reason) {
+        results[currentIndex] = {
+          status: 'rejected',
+          reason
+        };
+      }
+    }
+  }
+
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
 
 function purgeExpiredArticles() {
   const normalizedFutureCount = database.normalizeFuturePublicationDates();
@@ -92,7 +121,7 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
       cleanupRemovedConfiguredSourceData();
     }
 
-    const results = await Promise.allSettled(sourceConfigs.map((source) => rssParser.parseFeed(source)));
+    const results = await mapSettledWithConcurrency(sourceConfigs, RSS_INGESTION_CONCURRENCY, (source) => rssParser.parseFeed(source));
     const fetchedArticles = results
       .filter((result) => result.status === 'fulfilled')
       .flatMap((result) => result.value);
@@ -147,5 +176,6 @@ module.exports = {
   purgeExpiredArticles,
   cleanupRemovedConfiguredSourceData,
   createEmptyRefreshPayload,
-  ingestSourceConfigs
+  ingestSourceConfigs,
+  mapSettledWithConcurrency
 };

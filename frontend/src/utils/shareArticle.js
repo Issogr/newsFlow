@@ -15,8 +15,12 @@ export async function shareArticleUrl({ url, title = '' }) {
   }
 
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(url);
-    return 'copied';
+    try {
+      await navigator.clipboard.writeText(url);
+      return 'copied';
+    } catch {
+      return 'failed';
+    }
   }
 
   if (typeof window !== 'undefined' && typeof window.open === 'function') {

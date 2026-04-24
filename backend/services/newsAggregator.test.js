@@ -36,6 +36,7 @@ const rssParser = require('./rssParser');
 const database = require('./database');
 const websocketService = require('./websocketService');
 const newsAggregator = require('./newsAggregator');
+const { mapSettledWithConcurrency } = require('./newsAggregatorIngestion');
 const { getCanonicalSourceId, getCanonicalSourceName } = require('../utils/sourceCatalog');
 
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
@@ -113,6 +114,33 @@ describe('newsAggregator service flows', () => {
     expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({ limit: 2, offset: 0 }), expect.objectContaining({ userId: 'user-1' }));
   });
 
+  test('getNewsFeed applies page offsets when no cursor is provided', async () => {
+    database.getArticles.mockReturnValue([]);
+
+    await newsAggregator.getNewsFeed({ page: 3, pageSize: 10 }, { userId: 'user-1' });
+
+    expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({
+      limit: 11,
+      offset: 20
+    }), expect.objectContaining({ userId: 'user-1' }));
+  });
+
+  test('getNewsFeed ignores page offset when cursor pagination is used', async () => {
+    database.getArticles.mockReturnValue([]);
+
+    await newsAggregator.getNewsFeed({
+      page: 3,
+      pageSize: 10,
+      beforePubDate: '2026-03-07T10:00:00.000Z',
+      beforeId: 'article-1'
+    }, { userId: 'user-1' });
+
+    expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({
+      limit: 11,
+      offset: 0
+    }), expect.objectContaining({ userId: 'user-1' }));
+  });
+
   test('ingestAllNews stores topics and broadcasts global and private groups separately', async () => {
     database.listAllActiveUserSources.mockReturnValue([
       { id: 'custom-1', name: 'My Feed', url: 'https://example.com/custom.xml', language: 'en', userId: 'user-1', isActive: true }
@@ -185,5 +213,27 @@ describe('newsAggregator service flows', () => {
       ownerUserId: 'user-1'
     }));
     expect(database.createIngestionRun).not.toHaveBeenCalled();
+  });
+
+  test('mapSettledWithConcurrency limits concurrent feed work', async () => {
+    let activeCount = 0;
+    let maxActiveCount = 0;
+
+    const results = await mapSettledWithConcurrency([1, 2, 3, 4, 5], 2, async (item) => {
+      activeCount += 1;
+      maxActiveCount = Math.max(maxActiveCount, activeCount);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      activeCount -= 1;
+      return item * 2;
+    });
+
+    expect(maxActiveCount).toBeLessThanOrEqual(2);
+    expect(results).toEqual([
+      { status: 'fulfilled', value: 2 },
+      { status: 'fulfilled', value: 4 },
+      { status: 'fulfilled', value: 6 },
+      { status: 'fulfilled', value: 8 },
+      { status: 'fulfilled', value: 10 }
+    ]);
   });
 });

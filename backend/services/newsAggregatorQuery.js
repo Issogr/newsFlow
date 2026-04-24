@@ -21,10 +21,12 @@ function expandUserSources(userSources = []) {
     }));
 }
 
-function getAvailableSources(userContext = {}) {
-  const userSources = userContext.userId ? database.listUserSources(userContext.userId) : [];
+function getAvailableSources(userContext = {}, userSources = null) {
+  const resolvedUserSources = Array.isArray(userSources)
+    ? userSources
+    : (userContext.userId ? database.listUserSources(userContext.userId) : []);
   const availableSources = new Map(getConfiguredSourceGroups().map((group) => [group.id, { ...group, subSources: [...group.subSources] }]));
-  const customGroups = buildDomainSourceGroups(userSources);
+  const customGroups = buildDomainSourceGroups(resolvedUserSources);
 
   customGroups.forEach((group) => {
     const existingGroup = availableSources.get(group.id);
@@ -96,11 +98,18 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
 
   await ensureSeedData();
 
-  const queryOptions = getQueryOptions(userContext);
-  const availableSources = getAvailableSources(userContext);
+  const userSources = userContext.userId ? database.listUserSources(userContext.userId) : [];
+  const customSourceGroups = buildDomainSourceGroups(userSources);
+  const queryOptions = {
+    ...getQueryOptions(userContext),
+    customSourceGroups,
+    sourceMetadataCache: new Map()
+  };
+  const availableSources = getAvailableSources(userContext, userSources);
 
   const page = Math.max(1, Number(filters.page) || 1);
   const pageSize = Math.max(1, Math.min(Number(filters.pageSize) || 12, 30));
+  const usesCursor = Boolean(filters.beforePubDate || filters.beforeId);
   const articles = database.getArticles({
     search: filters.search,
     sourceIds: filters.sourceIds,
@@ -109,7 +118,7 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
     beforePubDate: filters.beforePubDate,
     beforeId: filters.beforeId,
     limit: pageSize + 1,
-    offset: 0
+    offset: usesCursor ? 0 : (page - 1) * pageSize
   }, queryOptions);
   const hasMore = articles.length > pageSize;
   const pageArticles = hasMore ? articles.slice(0, pageSize) : articles;

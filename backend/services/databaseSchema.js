@@ -188,6 +188,55 @@ function createDatabaseSchema({ logger }) {
     return row ? Number(row.value) : null;
   }
 
+  function tableExists(database, tableName) {
+    const row = database.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table' AND name = ?
+    `).get(tableName);
+
+    return Boolean(row);
+  }
+
+  function getColumnNames(database, tableName) {
+    if (!tableExists(database, tableName)) {
+      return new Set();
+    }
+
+    return new Set(database.prepare(`PRAGMA table_info(${tableName})`).all().map((column) => column.name));
+  }
+
+  function hasExistingApplicationSchema(database) {
+    return ['articles', 'users', 'user_settings', 'user_sources'].some((tableName) => tableExists(database, tableName));
+  }
+
+  function inferLegacySchemaVersion(database) {
+    if (!hasExistingApplicationSchema(database)) {
+      return null;
+    }
+
+    const userSettingsColumns = getColumnNames(database, 'user_settings');
+    const userColumns = getColumnNames(database, 'users');
+
+    if (!tableExists(database, 'api_tokens')) {
+      return 15;
+    }
+
+    if (tableExists(database, 'user_settings') && !userSettingsColumns.has('compact_news_cards')) {
+      return 16;
+    }
+
+    if (tableExists(database, 'user_settings') && !userSettingsColumns.has('compact_news_cards_mode')) {
+      return 17;
+    }
+
+    if (!userColumns.has('public_api_request_count') || !userColumns.has('public_api_last_used_at')) {
+      return 18;
+    }
+
+    return CURRENT_SCHEMA_VERSION;
+  }
+
   function setCurrentSchemaVersion(database) {
     database.prepare(`
       INSERT INTO app_meta (key, value)
@@ -289,10 +338,20 @@ function createDatabaseSchema({ logger }) {
     );
   }
 
-  function ensureSupportedSchema(database) {
+  function ensureSupportedSchema(database, options = {}) {
     const currentVersion = getCurrentSchemaVersion(database);
 
     if (currentVersion === null) {
+      if (options.legacySchemaVersion && options.legacySchemaVersion !== CURRENT_SCHEMA_VERSION) {
+        database.prepare(`
+          INSERT INTO app_meta (key, value)
+          VALUES ('migration_version', ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        `).run(String(options.legacySchemaVersion));
+        migrateSchema(database, options.legacySchemaVersion);
+        return;
+      }
+
       setCurrentSchemaVersion(database);
       logger.info(`Initialized DB schema version ${CURRENT_SCHEMA_VERSION}`);
       return;
@@ -305,7 +364,8 @@ function createDatabaseSchema({ logger }) {
 
   return {
     initializeSchema,
-    ensureSupportedSchema
+    ensureSupportedSchema,
+    inferLegacySchemaVersion
   };
 }
 

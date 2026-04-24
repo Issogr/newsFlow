@@ -32,11 +32,13 @@ describe('bff server', () => {
   let sessionDb;
   let sessionStore;
   let lastBackendHeaders;
+  let logoutShouldFail;
 
   beforeEach(async () => {
     frontendDistDir = createFrontendDist();
     ({ tempDir: sessionDir, sessionDbPath } = createSessionDbPath());
     lastBackendHeaders = {};
+    logoutShouldFail = false;
     const backendSessions = new Map();
     const usersById = new Map([
       ['admin-id', { id: 'admin-id', username: 'admin' }],
@@ -67,6 +69,11 @@ describe('bff server', () => {
 
     backendApp.post('/internal-api/auth/logout', (req, res) => {
       lastBackendHeaders = req.headers;
+      if (logoutShouldFail) {
+        res.status(503).json({ error: { message: 'Backend unavailable', code: 'UNAVAILABLE' } });
+        return;
+      }
+
       backendSessions.delete(String(req.headers.cookie || ''));
       res.json({ success: true });
     });
@@ -99,6 +106,18 @@ describe('bff server', () => {
       }
 
       res.json({ success: true, user: targetUser });
+    });
+
+    backendApp.post('/internal-api/me/feedback', (req, res) => {
+      lastBackendHeaders = req.headers;
+      let byteCount = 0;
+
+      req.on('data', (chunk) => {
+        byteCount += chunk.length;
+      });
+      req.on('end', () => {
+        res.json({ contentType: req.headers['content-type'], byteCount });
+      });
     });
 
     backendApp.get('/api/public/ping', (req, res) => {
@@ -150,6 +169,7 @@ describe('bff server', () => {
     expect(bffSessionCookie).toContain('newsflow_bff_session=');
     expect(bffSessionCookie).not.toContain('newsflow_session=');
     expect(bffSessionCookie).not.toContain('backend-session-user-1');
+    expect(sessionDb.prepare('SELECT sess FROM sessions').get().sess).not.toContain('backend-session-user-1');
     expect(lastBackendHeaders['x-newsflow-service']).toBe('bff');
     expect(lastBackendHeaders['x-newsflow-proxy']).toBe('test-proxy-token');
 
@@ -161,6 +181,16 @@ describe('bff server', () => {
     expect(meResponse.body).toEqual({ user: { id: 'user-1', username: 'alice' } });
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
     expect(meResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='))).toContain('Expires=');
+  });
+
+  test('serves browser responses with security headers', async () => {
+    const response = await request(app)
+      .get('/')
+      .expect(200);
+
+    expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
+    expect(response.headers['content-security-policy']).toContain("default-src 'self'");
+    expect(response.headers['referrer-policy']).toBe('same-origin');
   });
 
   test('keeps the session valid after recreating the BFF app instance', async () => {
@@ -206,6 +236,55 @@ describe('bff server', () => {
       .expect(401);
   });
 
+  test('clears the local BFF session when backend logout fails', async () => {
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'alice', password: 'secret123' })
+      .expect(200);
+
+    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+    logoutShouldFail = true;
+
+    const logoutResponse = await request(app)
+      .post('/api/auth/logout')
+      .set('Cookie', bffSessionCookie)
+      .expect(200);
+
+    expect(logoutResponse.body).toEqual({ success: true });
+    expect(logoutResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='))).toContain('Max-Age=0');
+
+    await request(app)
+      .get('/api/me')
+      .set('Cookie', bffSessionCookie)
+      .expect(401);
+  });
+
+  test('does not allow raw backend session headers through the app proxy', async () => {
+    await request(app)
+      .delete('/api/admin/users/user-1')
+      .set('x-session-token', 'backend-session-admin-id')
+      .expect(401);
+
+    const adminLoginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'secret123' })
+      .expect(200);
+    const adminBffSessionCookie = adminLoginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+
+    await request(app)
+      .delete('/api/admin/users/user-1')
+      .set('Cookie', adminBffSessionCookie)
+      .set('Authorization', 'Bearer hostile')
+      .set('x-session-token', 'hostile')
+      .set('x-newsflow-app', 'hostile')
+      .expect(200);
+
+    expect(lastBackendHeaders.authorization).toBeUndefined();
+    expect(lastBackendHeaders['x-session-token']).toBeUndefined();
+    expect(lastBackendHeaders['x-newsflow-app']).toBeUndefined();
+    expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-admin-id');
+  });
+
   test('removes persisted BFF sessions for a deleted user after an admin delete', async () => {
     const aliceLoginResponse = await request(app)
       .post('/api/auth/login')
@@ -242,6 +321,27 @@ describe('bff server', () => {
       .expect(200);
 
     expect(response.body).toEqual({ ok: true });
+  });
+
+  test('streams multipart feedback through the authenticated app proxy', async () => {
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'alice', password: 'secret123' })
+      .expect(200);
+    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+
+    const response = await request(app)
+      .post('/api/me/feedback')
+      .set('Cookie', bffSessionCookie)
+      .field('category', 'bug')
+      .field('title', 'Upload issue')
+      .field('description', 'Attached screenshot')
+      .attach('attachment', Buffer.from('fake-image'), 'screenshot.png')
+      .expect(200);
+
+    expect(response.body.contentType).toContain('multipart/form-data');
+    expect(response.body.byteCount).toBeGreaterThan(0);
+    expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
   });
 
   test('requires a non-default BFF session secret in production', () => {

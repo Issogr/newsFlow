@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { AlertCircle, Check } from 'lucide-react';
 
 function getShareStatusPresentation(shareState, t) {
   if (shareState === 'copied') {
@@ -8,6 +8,15 @@ function getShareStatusPresentation(shareState, t) {
       text: t('shareCopiedMessage'),
       className: 'border-emerald-200 bg-emerald-50 text-emerald-800',
       iconClassName: 'bg-white text-emerald-700',
+    };
+  }
+
+  if (shareState === 'failed') {
+    return {
+      Icon: AlertCircle,
+      text: t('shareFailedMessage'),
+      className: 'border-amber-200 bg-amber-50 text-amber-800',
+      iconClassName: 'bg-white text-amber-700',
     };
   }
 

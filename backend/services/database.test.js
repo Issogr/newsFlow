@@ -90,6 +90,61 @@ describe('database migrations', () => {
     expect(apiTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'token_prefix', 'expires_at', 'revoked_at', 'last_used_at']));
   });
 
+  test('migrates an unversioned legacy database instead of marking it current', () => {
+    const sqlite = new SqliteDatabase(dbPath);
+
+    sqlite.exec(`
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT,
+        role TEXT NOT NULL DEFAULT 'user',
+        last_login_at TEXT,
+        last_activity_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE user_settings (
+        user_id TEXT PRIMARY KEY,
+        default_language TEXT NOT NULL DEFAULT 'auto',
+        theme_mode TEXT NOT NULL DEFAULT 'system',
+        article_retention_hours INTEGER NOT NULL DEFAULT 24,
+        recent_hours INTEGER NOT NULL DEFAULT 3,
+        auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
+        show_news_images INTEGER NOT NULL DEFAULT 1,
+        reader_panel_position TEXT NOT NULL DEFAULT 'right',
+        reader_text_size TEXT NOT NULL DEFAULT 'medium',
+        last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
+        default_source_ids TEXT NOT NULL DEFAULT '[]',
+        excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    sqlite.close();
+
+    database = require('./database');
+    database.getDb();
+
+    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migratedVersion = migratedDb.prepare(`
+      SELECT value
+      FROM app_meta
+      WHERE key = 'migration_version'
+    `).get()?.value;
+    const settingsColumns = migratedDb.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
+    const userColumns = migratedDb.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
+    const apiTokenColumns = migratedDb.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
+
+    migratedDb.close();
+
+    expect(migratedVersion).toBe('19');
+    expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
+    expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
+    expect(apiTokenColumns).toContain('token_hash');
+  });
+
   test('opens an existing database already on the current schema version', () => {
     const sqlite = new SqliteDatabase(dbPath);
 

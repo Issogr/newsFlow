@@ -10,7 +10,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Installa le dipendenze di produzione
-RUN npm install --omit=dev --no-audit --no-fund
+RUN npm ci --omit=dev --no-audit --no-fund
 
 # Production stage
 FROM node:18-alpine

@@ -207,6 +207,29 @@ describe('NewsCard', () => {
     expect(screen.getByText('shareCopiedMessage')).toBeInTheDocument();
   });
 
+  test('shows a share failure bubble when clipboard fallback is denied', async () => {
+    navigator.share = undefined;
+    navigator.clipboard = {
+      writeText: jest.fn().mockRejectedValue(new Error('denied'))
+    };
+
+    render(
+      <NewsCard
+        group={{ ...group, url: 'https://example.com/story' }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
+    });
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.com/story');
+    expect(screen.getByText('shareFailedMessage')).toBeInTheDocument();
+  });
+
   test('opens reader mode on title double click and reader button click', () => {
     const onOpenReader = jest.fn();
 

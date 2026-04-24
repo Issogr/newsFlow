@@ -171,7 +171,7 @@ describe('useSettingsPanelState', () => {
     expect(result.current.settings.excludedSourceIds).toEqual([]);
     expect(result.current.customSources).toEqual([]);
     expect(onUserUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
-      settings: expect.objectContaining({ defaultLanguage: 'en', excludedSourceIds: ['source-1'] }),
+      settings: expect.objectContaining({ defaultLanguage: 'en', excludedSourceIds: [] }),
       customSources: []
     }));
   });

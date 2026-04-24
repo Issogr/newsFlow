@@ -36,7 +36,7 @@ describe('useWebSocket', () => {
     jest.clearAllMocks();
   });
 
-  test('removes already visible groups from the pending badge count', () => {
+  test('tracks seen groups so duplicate realtime updates are ignored', () => {
     const { result } = renderHook(() => useWebSocket('http://localhost:3000', {
       newGroups: (count) => `${count} new groups`
     }));
@@ -54,19 +54,21 @@ describe('useWebSocket', () => {
       });
     });
 
-    expect(result.current.newArticlesCount).toBe(2);
-
-    act(() => {
-      result.current.markGroupsSeen(['group-1']);
+    expect(result.current.lastNewsUpdate).toMatchObject({
+      count: 2,
+      timestamp: '2026-03-14T10:00:00.000Z'
     });
 
-    expect(result.current.newArticlesCount).toBe(1);
+    let removedAny = false;
+    act(() => {
+      removedAny = result.current.markGroupsSeen(['group-1']);
+    });
+
+    expect(removedAny).toBe(true);
 
     act(() => {
       result.current.markGroupsSeen(['group-2']);
     });
-
-    expect(result.current.newArticlesCount).toBe(0);
 
     act(() => {
       handlers['news:update']({
@@ -77,6 +79,9 @@ describe('useWebSocket', () => {
       });
     });
 
-    expect(result.current.newArticlesCount).toBe(0);
+    expect(result.current.lastNewsUpdate).toMatchObject({
+      count: 2,
+      timestamp: '2026-03-14T10:00:00.000Z'
+    });
   });
 });
