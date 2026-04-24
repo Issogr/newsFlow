@@ -101,6 +101,21 @@ describe('NewsCard', () => {
     expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
   });
 
+  test('can choose an alternate generic fallback illustration', () => {
+    jest.spyOn(Math, 'random').mockReturnValue(0.99);
+
+    render(
+      <NewsCard
+        group={group}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover-4/));
+  });
+
   test('falls back to the generic illustration for unsafe or broken article images', () => {
     const { rerender } = render(
       <NewsCard
