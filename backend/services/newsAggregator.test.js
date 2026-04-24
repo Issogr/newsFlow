@@ -1,5 +1,6 @@
 jest.mock('./rssParser', () => ({
-  parseFeed: jest.fn()
+  parseFeed: jest.fn(),
+  _buildArticleId: jest.fn((source, item, canonicalUrl = '') => `${source.id}:${canonicalUrl || item.link || item.title}`)
 }));
 
 jest.mock('./database', () => ({
@@ -63,6 +64,7 @@ describe('newsAggregator service flows', () => {
     database.listAllActiveUserSources.mockReturnValue([]);
     database.upsertArticles.mockReturnValue({ insertedIds: [], insertedCount: 0, updatedCount: 0 });
     aiTopicClassifier.classifyTopicsForArticles.mockResolvedValue(new Map());
+    rssParser._buildArticleId.mockImplementation((source, item, canonicalUrl = '') => `${source.id}:${canonicalUrl || item.link || item.title}`);
     rssParser.parseFeed.mockResolvedValue([]);
   });
 
@@ -211,6 +213,56 @@ describe('newsAggregator service flows', () => {
       expect.objectContaining({ articleId: 'inserted-1', topics: ['Economia'] })
     ]));
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].topics).toEqual(['Economia']);
+  });
+
+  test('ingestAllNews fetches a shared custom RSS URL once and fans out articles per owning user source', async () => {
+    const sharedUrl = 'https://example.com/shared.xml';
+    database.listAllActiveUserSources.mockReturnValue([
+      { id: 'custom-user-1', name: 'Shared Feed A', url: sharedUrl, language: 'en', userId: 'user-1', isActive: true },
+      { id: 'custom-user-2', name: 'Shared Feed B', url: sharedUrl, language: 'en', userId: 'user-2', isActive: true }
+    ]);
+    rssParser.parseFeed.mockImplementation(async (source) => {
+      if (source.url !== sharedUrl) {
+        return [];
+      }
+
+      return [{
+        id: 'representative-id',
+        sourceId: source.id,
+        source: source.name,
+        title: 'Shared custom story',
+        description: 'Shared story description',
+        pubDate: '2026-03-07T10:00:00.000Z',
+        url: 'https://example.com/story',
+        canonicalUrl: 'https://example.com/story',
+        language: 'en',
+        ownerUserId: source.ownerUserId
+      }];
+    });
+    database.upsertArticles.mockReturnValue({
+      insertedIds: ['custom-user-1:https://example.com/story', 'custom-user-2:https://example.com/story'],
+      insertedCount: 2,
+      updatedCount: 0
+    });
+
+    await newsAggregator.ingestAllNews({ broadcast: false });
+
+    const sharedFetchCalls = rssParser.parseFeed.mock.calls.filter(([source]) => source.url === sharedUrl);
+    expect(sharedFetchCalls).toHaveLength(1);
+    expect(database.upsertArticles).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'custom-user-1:https://example.com/story',
+        sourceId: 'custom-user-1',
+        source: 'Shared Feed A',
+        ownerUserId: 'user-1'
+      }),
+      expect.objectContaining({
+        id: 'custom-user-2:https://example.com/story',
+        sourceId: 'custom-user-2',
+        source: 'Shared Feed B',
+        ownerUserId: 'user-2'
+      })
+    ]));
   });
 
   test('normalizes duplicate sibling subfeed articles into one incoming article', () => {

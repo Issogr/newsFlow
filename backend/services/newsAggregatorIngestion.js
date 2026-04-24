@@ -4,6 +4,7 @@ const logger = require('../utils/logger');
 const websocketService = require('./websocketService');
 const { classifyTopicsForArticles } = require('./aiTopicClassifier');
 const { createError } = require('../utils/errorHandler');
+const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const {
   normalizeIncomingArticles,
   buildInsertedGroupsByOwner
@@ -81,6 +82,63 @@ function createEmptyRefreshPayload(lastRefreshAt = null) {
   };
 }
 
+function normalizeSourceFetchUrl(url) {
+  return normalizeArticleUrl(url || '') || String(url || '').trim();
+}
+
+function cloneArticleForSource(article = {}, source = {}) {
+  const clonedArticle = {
+    ...article,
+    id: rssParser._buildArticleId(source, {
+      link: article.url,
+      title: article.title,
+      description: article.description,
+      content: article.content,
+      pubDate: article.pubDate
+    }, article.canonicalUrl || ''),
+    source: source.name,
+    sourceId: source.id,
+    language: source.language || article.language || 'it',
+    ownerUserId: source.ownerUserId || null
+  };
+
+  return clonedArticle;
+}
+
+function buildSourceFetchTasks(sourceConfigs = []) {
+  const tasks = [];
+  const userSourceGroups = new Map();
+
+  sourceConfigs.forEach((source) => {
+    if (!source?.ownerUserId) {
+      tasks.push({ fetchSource: source, targetSources: [source], fanOut: false });
+      return;
+    }
+
+    const fetchKey = normalizeSourceFetchUrl(source.url);
+    const groupedSource = userSourceGroups.get(fetchKey) || {
+      fetchSource: source,
+      targetSources: [],
+      fanOut: true
+    };
+
+    groupedSource.targetSources.push(source);
+    userSourceGroups.set(fetchKey, groupedSource);
+  });
+
+  return [...tasks, ...userSourceGroups.values()];
+}
+
+async function fetchSourceTask(task) {
+  const parsedArticles = await rssParser.parseFeed(task.fetchSource);
+
+  if (!task.fanOut) {
+    return parsedArticles;
+  }
+
+  return task.targetSources.flatMap((source) => parsedArticles.map((article) => cloneArticleForSource(article, source)));
+}
+
 async function applyAiTopicsForInsertedArticles(normalizedArticles = [], insertedIds = []) {
   if (!Array.isArray(normalizedArticles) || normalizedArticles.length === 0 || !Array.isArray(insertedIds) || insertedIds.length === 0) {
     return;
@@ -144,7 +202,8 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
       cleanupRemovedConfiguredSourceData();
     }
 
-    const results = await mapSettledWithConcurrency(sourceConfigs, RSS_INGESTION_CONCURRENCY, (source) => rssParser.parseFeed(source));
+    const sourceFetchTasks = buildSourceFetchTasks(sourceConfigs);
+    const results = await mapSettledWithConcurrency(sourceFetchTasks, RSS_INGESTION_CONCURRENCY, fetchSourceTask);
     const fetchedArticles = results
       .filter((result) => result.status === 'fulfilled')
       .flatMap((result) => result.value);
@@ -201,5 +260,7 @@ module.exports = {
   createEmptyRefreshPayload,
   ingestSourceConfigs,
   mapSettledWithConcurrency,
-  applyAiTopicsForInsertedArticles
+  applyAiTopicsForInsertedArticles,
+  buildSourceFetchTasks,
+  cloneArticleForSource
 };

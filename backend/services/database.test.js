@@ -620,6 +620,72 @@ describe('database queries and user data', () => {
     expect(database.getArticles({}, { userId: 'user-1' })).toEqual([]);
   });
 
+  test('deleting one user shared custom source does not remove another user shared source data', () => {
+    const now = new Date().toISOString();
+
+    database.createUser({ id: 'user-1', username: 'alice', passwordHash: null, createdAt: now, updatedAt: now });
+    database.createUser({ id: 'user-2', username: 'bob', passwordHash: null, createdAt: now, updatedAt: now });
+    database.createUserSource({
+      id: 'custom-user-1',
+      userId: 'user-1',
+      name: 'Shared Feed A',
+      url: 'https://example.com/shared.xml',
+      language: 'en',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      validatedAt: now
+    });
+    database.createUserSource({
+      id: 'custom-user-2',
+      userId: 'user-2',
+      name: 'Shared Feed B',
+      url: 'https://example.com/shared.xml',
+      language: 'en',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      validatedAt: now
+    });
+    database.upsertArticles([
+      {
+        id: 'user-1-shared-story',
+        sourceId: 'custom-user-1',
+        source: 'Shared Feed A',
+        ownerUserId: 'user-1',
+        title: 'Shared story',
+        description: 'Private copy for user one',
+        content: '',
+        url: 'https://example.com/story',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'user-2-shared-story',
+        sourceId: 'custom-user-2',
+        source: 'Shared Feed B',
+        ownerUserId: 'user-2',
+        title: 'Shared story',
+        description: 'Private copy for user two',
+        content: '',
+        url: 'https://example.com/story',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+
+    expect(database.deleteUserSource('user-1', 'custom-user-1')).toBe(1);
+
+    expect(database.listUserSources('user-1')).toEqual([]);
+    expect(database.listUserSources('user-2')).toEqual([
+      expect.objectContaining({ id: 'custom-user-2', url: 'https://example.com/shared.xml' })
+    ]);
+    expect(database.getArticles({}, { userId: 'user-1', maxArticleAgeHours: 9999 })).toEqual([]);
+    expect(database.getArticles({}, { userId: 'user-2', maxArticleAgeHours: 9999 })).toEqual([
+      expect.objectContaining({ id: 'user-2-shared-story', rawSourceId: 'custom-user-2' })
+    ]);
+  });
+
   test('falls back safely when stored user settings JSON is malformed', () => {
     const now = new Date().toISOString();
 
