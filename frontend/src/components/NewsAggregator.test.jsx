@@ -68,6 +68,10 @@ async function renderNewsAggregator(overrides = {}) {
   return view;
 }
 
+function openDesktopSearch() {
+  fireEvent.click(screen.getAllByRole('button', { name: 'Search' })[0]);
+}
+
 const currentUser = {
   user: { username: 'alice' },
   settings: {
@@ -155,6 +159,7 @@ describe('NewsAggregator', () => {
 
     await renderNewsAggregator();
 
+    openDesktopSearch();
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'economy' } });
 
     await act(async () => {
@@ -387,6 +392,7 @@ describe('NewsAggregator', () => {
 
     await renderNewsAggregator();
 
+    openDesktopSearch();
     const searchInput = screen.getByRole('searchbox');
     fireEvent.change(searchInput, { target: { value: 'economy' } });
 

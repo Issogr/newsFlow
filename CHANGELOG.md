@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.2.11
+
+- moved the share button into the image container for non-compact NewsCard layouts so the title and content below it no longer need asymmetric right padding reserved for a floating control
+- removed the SOURCES section from the NewsCard content area and repositioned source pills as an absolute overlay at the bottom of the article image, backed by a bottom-to-transparent gradient so pills remain readable across varying image content
+- cleaned up the unused `Rss` import from NewsCard after removing the sources heading
+- removed topic icon pills from the NewsCard content area to further declutter the card surface
+- added a mobile-only floating bottom navigation pill for Sources, Topics, recent-time filtering, and Search, replacing the sticky desktop filter panel on small screens while preserving the existing desktop/tablet controls
+- added mobile filter bubbles above the bottom navigation for source and topic selection, a smoother animated search expansion with an icon-only close control, and scroll-direction behavior so the mobile nav hides on downward scroll and returns on upward scroll
+- made the top navigation sticky and compact on scroll, with matching desktop filter-panel offsets so the sticky filter controls stay below the shrinking header
+- aligned the mobile bottom navigation surface with the sticky header treatment by using a translucent blurred white pill, softer border, and calmer shadow
+- replaced the legacy desktop filter pill with flat labeled top-navigation controls beside refresh, matching the mobile four-action Sources, Topics, recent-time, and Search flow with source/topic bubbles
+- aligned the desktop refresh and user-menu buttons with the same flat labeled top-navigation style used by the filter controls
+
 ## 3.2.10.4
 
 - replaced the forced post-login release-notes modal with a lightweight top-center update notice that lets users keep working and open the full changelog on demand, while still persisting `lastSeenReleaseNotesVersion` only after they actually dismiss the full release-notes view

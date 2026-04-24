@@ -1,13 +1,16 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.2.10.4',
+  version: '3.2.11',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '🔔 New releases now appear as a small update pill at the top of the app instead of opening the changelog immediately after login.',
-      '🧭 The update pill can open the full changelog on demand, can be closed manually, and fades away automatically with a visible countdown bar.',
-      '📊 The admin dashboard now shows per-user public API usage totals and the total number of anonymous public API requests received.',
+      '📰 News card titles now use the full available width for easier scanning.',
+      '🏷 Source labels moved onto the article image to free up card space.',
+      '🧹 Removed topic icons from cards for a calmer, less cluttered layout.',
+      '📱 Mobile now has a floating bottom navigation for sources, topics, time filters, and search.',
+      '✨ The top bar now stays visible and gently shrinks while scrolling.',
+      '🔎 Desktop now has flat quick controls for sources, topics, time, search, refresh, and user actions in the top bar.',
     ]
   },
   it: {
@@ -15,9 +18,12 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '🔔 I nuovi rilasci ora compaiono come una piccola pill in alto nell\'app invece di aprire subito il changelog dopo il login.',
-      '🧭 La pill di aggiornamento puo aprire il changelog completo su richiesta, si puo chiudere a mano e sparisce da sola con una barra di avanzamento visibile.',
-      '📊 La dashboard admin ora mostra il totale delle richieste API pubbliche per utente e quante richieste API anonime stanno arrivando.',
+      '📰 I titoli delle card notizia usano ora tutta la larghezza disponibile per una lettura piu comoda.',
+      '🏷 Le etichette delle fonti sono state spostate sull\'immagine dell\'articolo per liberare spazio nella card.',
+      '🧹 Rimosse le icone dei topic dalle card per un layout piu pulito e ordinato.',
+      '📱 Su mobile c\'e una nuova navigazione flottante in basso per fonti, topic, filtro orario e ricerca.',
+      '✨ La barra superiore resta visibile e si compatta leggermente durante lo scroll.',
+      '🔎 Su desktop fonti, topic, filtro orario, ricerca, aggiornamento e utente sono ora piu comodi e leggeri nella barra superiore.',
     ]
   }
 };

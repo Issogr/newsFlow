@@ -1,21 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowDown,
   ArrowUp,
   Cog,
-  Filter,
   LogOut,
   MessageSquare,
   PauseCircle,
   RefreshCw,
-  Rss,
-  Search,
-  Tags,
-  Clock3,
-  ChevronDown,
-  ChevronUp,
   User,
   WifiOff,
-  X
 } from 'lucide-react';
 import { fetchNews, isRequestCanceled } from '../services/api';
 import ErrorMessage from './ErrorMessage';
@@ -26,16 +19,19 @@ import FeedbackModal from './FeedbackModal';
 import SettingsPanel from './SettingsPanel';
 import useLatestRequest from '../hooks/useLatestRequest';
 import useWebSocket from '../hooks/useWebSocket';
-import { createTranslator, getLocalizedTopic, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
+import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
 import { getSettingsLimits } from '../config/settingsLimits';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
-import { getTopicPresentation } from '../topicPresentation';
 import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
+import MobileBottomNav from './MobileBottomNav';
+import DesktopTopNavFilters from './DesktopTopNavFilters';
+import TopNavActionButton from './TopNavActionButton';
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 const BACK_TO_TOP_THRESHOLD = 280;
+const TOP_NAV_SHRINK_THRESHOLD = 28;
 const COMPACT_CARD_DESKTOP_QUERY = '(min-width: 768px)';
 
 function resolveCompactNewsCardsEnabled(mode, isDesktop) {
@@ -121,12 +117,15 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeFilters, setActiveFilters] = useState(EMPTY_FILTERS);
   const [showRecentOnly, setShowRecentOnly] = useState(false);
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [readerState, setReaderState] = useState({ isOpen: false, group: null, articleId: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [desktopFiltersCloseSignal, setDesktopFiltersCloseSignal] = useState(0);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(true);
+  const [topNavCompact, setTopNavCompact] = useState(false);
+  const lastScrollY = useRef(0);
   const userMenuRef = useRef(null);
   const visibleGroupIds = useMemo(() => news.map((group) => group?.id).filter(Boolean), [news]);
   const recentHours = Math.max(
@@ -179,14 +178,23 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [currentUser?.settings?.readerTextSize]);
 
   useEffect(() => {
-    const updateBackToTopVisibility = () => {
-      setShowBackToTop(window.scrollY > BACK_TO_TOP_THRESHOLD);
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      setShowBackToTop(currentY > BACK_TO_TOP_THRESHOLD);
+      setTopNavCompact(currentY > TOP_NAV_SHRINK_THRESHOLD);
+      setUserMenuOpen(false);
+      if (currentY > lastScrollY.current && currentY > 50) {
+        setShowMobileNav(false);
+      } else {
+        setShowMobileNav(true);
+      }
+      lastScrollY.current = currentY;
     };
 
-    updateBackToTopVisibility();
-    window.addEventListener('scroll', updateBackToTopVisibility, { passive: true });
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
-    return () => window.removeEventListener('scroll', updateBackToTopVisibility);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   useEffect(() => {
@@ -311,19 +319,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     });
   }, []);
 
-  const resetFilters = useCallback(() => {
-    setActiveFilters({ sourceIds: [], topics: [] });
-    setShowRecentOnly(false);
-    setSearch('');
-    setDebouncedSearch('');
-  }, []);
-
-  const activeFiltersCount = useMemo(() => {
-    return activeFilters.sourceIds.length + activeFilters.topics.length + (showRecentOnly ? 1 : 0) + (debouncedSearch ? 1 : 0);
-  }, [activeFilters.sourceIds.length, activeFilters.topics.length, debouncedSearch, showRecentOnly]);
-
-  const hasActiveFilters = activeFiltersCount > 0;
-
   const openReader = useCallback((group, articleId) => {
     setReaderState({ isOpen: true, group, articleId });
   }, []);
@@ -338,8 +333,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      <header className="relative z-40 border-b border-slate-200 bg-white shadow-sm">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 lg:px-6">
+      <header className={`sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md transition-shadow duration-200 ${topNavCompact ? 'shadow-md' : 'shadow-sm'}`}>
+        <div className={`mx-auto flex max-w-7xl flex-col px-4 transition-all duration-200 lg:px-6 ${topNavCompact ? 'gap-2 py-2.5' : 'gap-4 py-5'}`}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <button
@@ -350,7 +345,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 disabled={loading}
               >
                 <div className="relative">
-                  <BrandMark className="h-11 w-11" />
+                  <BrandMark className={`transition-all duration-200 ${topNavCompact ? 'h-9 w-9' : 'h-11 w-11'}`} />
                   {loading && (
                     <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-sm">
                       <RefreshCw className="h-3.5 w-3.5 animate-spin text-slate-700" aria-hidden="true" />
@@ -358,42 +353,65 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   )}
                 </div>
                 <div className="min-w-0">
-                  <h1 className="truncate text-2xl font-semibold tracking-tight">{t('pageTitle')}</h1>
+                  <h1 className={`truncate font-semibold tracking-tight transition-all duration-200 ${topNavCompact ? 'text-xl' : 'text-2xl'}`}>{t('pageTitle')}</h1>
                 </div>
               </button>
             </div>
 
             <div className="flex shrink-0 items-center gap-3">
+              <DesktopTopNavFilters
+                visibleSources={visibleAvailableSources}
+                availableTopics={availableTopics}
+                activeFilters={activeFilters}
+                showRecentOnly={showRecentOnly}
+                search={search}
+                recentHours={recentHours}
+                t={t}
+                locale={locale}
+                onToggleFilter={toggleFilter}
+                onToggleRecent={() => setShowRecentOnly((value) => !value)}
+                onSearchChange={setSearch}
+                onSearchClear={() => {
+                  setSearch('');
+                  setDebouncedSearch('');
+                }}
+                onOpenSurface={() => setUserMenuOpen(false)}
+                closeSignal={desktopFiltersCloseSignal}
+              />
+
               <div className="relative">
-                <button
-                  type="button"
+                <TopNavActionButton
+                  icon={RefreshCw}
+                  label={t('refresh')}
                   onClick={() => loadNews({ page: 1, append: false, resetRealtime: true })}
                   disabled={isLiveAutoRefreshWorking || loading || loadingMore}
-                  className={`relative rounded-full p-2 shadow-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    isLiveAutoRefreshWorking
-                      ? 'cursor-not-allowed bg-slate-100 text-slate-300 shadow-none'
-                      : 'bg-white text-gray-600 hover:bg-gray-100'
-                  }`}
                   aria-label={refreshButtonLabel}
-                >
-                  <RefreshCw className={`h-6 w-6 ${(loading || loadingMore) ? 'animate-spin' : ''}`} aria-hidden="true" />
-                </button>
+                  iconClassName={(loading || loadingMore) ? 'animate-spin' : ''}
+                />
               </div>
 
               <div className="relative" ref={userMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => setUserMenuOpen((current) => !current)}
-                  className="relative z-20 rounded-full bg-white p-2 shadow-md transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <TopNavActionButton
+                  icon={User}
+                  label={t('userMenu')}
+                  onClick={() => {
+                    setUserMenuOpen((current) => {
+                      const nextOpen = !current;
+                      if (nextOpen) {
+                        setDesktopFiltersCloseSignal((value) => value + 1);
+                      }
+                      return nextOpen;
+                    });
+                  }}
+                  active={userMenuOpen}
+                  className="z-20"
                   aria-expanded={userMenuOpen}
                   aria-haspopup="menu"
                   aria-label={t('userMenu')}
-                >
-                  <User className="h-6 w-6 text-gray-600" />
-                </button>
+                />
 
                 {userMenuOpen && (
-                  <div className="absolute right-0 top-14 z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur" role="menu">
+                  <div className="absolute right-0 top-[calc(100%+1rem)] z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur transition-all duration-200" role="menu">
                     <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-4">
                       <div className="flex items-start gap-3">
                         <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-sm">
@@ -476,165 +494,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         </div>
       </header>
 
-      <section className="sticky top-0 z-30 bg-transparent">
-        <div className="mx-auto max-w-7xl px-4 py-3 lg:px-6">
-          <div className="relative">
-            <div className={`overflow-hidden border border-slate-200/80 bg-white/90 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md transition-[border-radius] ${filtersExpanded ? 'rounded-t-[1.75rem] rounded-b-none' : 'rounded-[1.75rem]'}`}>
-              <div className="border-b border-slate-200/70 px-4 py-3 sm:px-5">
-                <label className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-2.5 shadow-sm backdrop-blur-sm">
-                  <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
-                  <input
-                    type="search"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={t('searchPlaceholder')}
-                    className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-                  />
-                  {search && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearch('');
-                        setDebouncedSearch('');
-                      }}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-300"
-                      aria-label={t('clearSearch')}
-                    >
-                      <X className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  )}
-                </label>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setFiltersExpanded((value) => !value)}
-                className="flex w-full items-center justify-between px-4 py-3 text-left sm:px-5"
-              >
-                <div className="flex items-center gap-3">
-                  <Filter className="h-5 w-5 text-slate-500" aria-hidden="true" />
-                  <div>
-                    <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t('filtersTitle')}</h2>
-                    <p className="text-xs text-slate-600 sm:text-sm">{t('filtersSubtitle')}</p>
-                  </div>
-                  {activeFiltersCount > 0 && (
-                    <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-medium text-white">
-                      {activeFiltersCount}
-                    </span>
-                  )}
-                </div>
-                {filtersExpanded ? <ChevronUp className="h-5 w-5 text-slate-500" /> : <ChevronDown className="h-5 w-5 text-slate-500" />}
-              </button>
-            </div>
-
-            <div
-              className={`absolute left-0 right-0 top-full z-20 -mt-px max-h-[calc(100vh-8.5rem)] origin-top overflow-y-auto overscroll-contain rounded-b-[1.75rem] border border-slate-200/80 border-t-0 bg-white/90 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md transition-all duration-200 ease-out ${
-                filtersExpanded
-                  ? 'pointer-events-auto translate-y-0 scale-y-100 opacity-100'
-                  : 'pointer-events-none -translate-y-2 scale-y-95 opacity-0'
-              }`}
-              aria-hidden={!filtersExpanded}
-            >
-                <div className="px-4 py-5 sm:px-5">
-                  <div className="mb-5 flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowRecentOnly((value) => !value)}
-                      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                        showRecentOnly ? 'bg-amber-500 text-white shadow-sm' : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
-                      }`}
-                    >
-                      <Clock3 className="h-4 w-4" aria-hidden="true" />
-                      {t('latestHours', { hours: recentHours })}
-                    </button>
-
-                    {hasActiveFilters && (
-                      <button
-                        type="button"
-                        onClick={resetFilters}
-                        className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200"
-                      >
-                        {t('resetFilters')}
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="grid gap-6 lg:grid-cols-2">
-                    <div>
-                      <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-sky-700">
-                        <Rss className="h-4 w-4" aria-hidden="true" />
-                        <span>{t('sources')}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {visibleAvailableSources.map((source) => {
-                          const isActive = activeFilters.sourceIds.includes(source.id);
-                          return (
-                            <button
-                              key={source.id}
-                              type="button"
-                              onClick={() => toggleFilter('sourceIds', source.id)}
-                              className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
-                                isActive
-                                  ? 'bg-sky-600 text-white shadow-sm'
-                                  : 'bg-sky-100 text-sky-900 hover:bg-sky-200'
-                              }`}
-                            >
-                              <span>{source.name}</span>
-                              {source.count > 0 && (
-                                <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-sky-700'}`}>
-                                  {source.count}
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-emerald-700">
-                        <Tags className="h-4 w-4" aria-hidden="true" />
-                        <span>{t('topics')}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {availableTopics.map((topic) => {
-                          const isActive = activeFilters.topics.includes(topic.topic);
-                          const { Icon, iconBadgeClassName } = getTopicPresentation(topic.topic);
-                          return (
-                            <button
-                              key={topic.topic}
-                              type="button"
-                              onClick={() => toggleFilter('topics', topic.topic)}
-                              className={`inline-flex items-center gap-1.5 rounded-full border pl-1 pr-1 py-1 text-sm font-medium transition-colors ${
-                                isActive
-                                  ? 'border-slate-900 bg-white text-slate-950 shadow-sm'
-                                  : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50'
-                              }`}
-                            >
-                              <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors ${iconBadgeClassName}`}>
-                                <Icon className="h-3 w-3" aria-hidden="true" />
-                              </span>
-                              <span>{getLocalizedTopic(topic.topic, locale)}</span>
-                              <span className={`rounded-full px-2 py-0.5 text-xs ${
-                                isActive
-                                  ? 'bg-slate-100 text-slate-700'
-                                  : 'bg-slate-50 text-slate-600'
-                              }`}>
-                                {topic.count}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-          </div>
-        </div>
-      </section>
-
-      <main className="mx-auto max-w-7xl px-4 py-4 pb-10 lg:px-6">
+      <main className="mx-auto max-w-7xl px-4 py-4 pb-24 md:pb-10 lg:px-6">
         {loading && !loadingMore ? (
           <div className="flex h-64 items-center justify-center">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
@@ -674,7 +534,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={loadingMore}
                 >
-                  {loadingMore && <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                  {loadingMore ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                  )}
                   {loadingMore ? t('loadingMore') : t('loadMore')}
                 </button>
               ) : (
@@ -720,7 +584,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       <button
         type="button"
         onClick={scrollToTop}
-        className={`fixed bottom-5 left-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-700 shadow-lg backdrop-blur transition-all duration-200 hover:bg-white hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 sm:bottom-6 sm:left-6 ${
+        className={`fixed bottom-20 left-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-700 shadow-lg backdrop-blur transition-all duration-200 hover:bg-white hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 sm:bottom-6 sm:left-6 ${
           showBackToTop
             ? 'translate-y-0 opacity-100'
             : 'pointer-events-none translate-y-3 opacity-0'
@@ -729,6 +593,27 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       >
         <ArrowUp className="h-5 w-5" aria-hidden="true" />
       </button>
+
+      {!readerState.isOpen && !settingsOpen && !feedbackOpen ? (
+        <MobileBottomNav
+          visibleSources={visibleAvailableSources}
+          availableTopics={availableTopics}
+          activeFilters={activeFilters}
+          showRecentOnly={showRecentOnly}
+          search={search}
+          recentHours={recentHours}
+          t={t}
+          locale={locale}
+          onToggleFilter={toggleFilter}
+          onToggleRecent={() => setShowRecentOnly((v) => !v)}
+          onSearchChange={setSearch}
+          onSearchClear={() => {
+            setSearch('');
+            setDebouncedSearch('');
+          }}
+          visible={showMobileNav}
+        />
+      ) : null}
     </div>
   );
 };

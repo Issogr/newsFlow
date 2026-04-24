@@ -3,11 +3,9 @@ import {
   BookOpenText,
   CalendarDays,
   ExternalLink,
-  Rss,
   Share2,
 } from 'lucide-react';
-import { getDateLocale, getLocalizedTopic } from '../i18n';
-import { getTopicPresentation } from '../topicPresentation';
+import { getDateLocale } from '../i18n';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import genericNewsCover from '../assets/generic-news-cover.webp';
 import { shareArticleUrl } from '../utils/shareArticle';
@@ -184,15 +182,15 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
 
   return (
     <article className={`relative flex overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-xl ${compact ? 'h-[12.5rem] max-h-[12.5rem] flex-row' : 'h-full min-h-[20rem] flex-col'}`}>
-      {compactWithoutImage ? null : (
-        <div className={`absolute z-10 flex items-center ${compact ? 'left-3 top-3 justify-start' : 'right-4 top-4 justify-end'}`}>
+      {compact && !compactWithoutImage ? (
+        <div className="absolute z-10 flex items-center left-3 top-3 justify-start">
           {shareControls}
         </div>
-      )}
+      ) : null}
 
       {imageUrl ? (
         <div
-          className={compact ? 'w-[34%] min-w-[7.75rem] max-w-[10rem] overflow-hidden bg-slate-100' : 'aspect-[16/9] w-full overflow-hidden bg-slate-100'}
+          className={compact ? 'w-[34%] min-w-[7.75rem] max-w-[10rem] overflow-hidden bg-slate-100' : 'relative aspect-[16/9] w-full overflow-hidden bg-slate-100'}
           {...interactionPropsByArea.image}
         >
           <img
@@ -210,9 +208,26 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
               setImageUrl((current) => (current === genericNewsCover ? '' : genericNewsCover));
             }}
           />
+          {!compact ? (
+            <div className="absolute right-4 top-4 z-10 flex items-center justify-end">
+              {shareControls}
+            </div>
+          ) : null}
+          {!compact && sourceEntries.length > 0 ? (
+            <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center gap-2 overflow-hidden px-4 py-3 bg-gradient-to-t from-black/60 to-transparent">
+              {sourceEntries.map((source) => (
+                <span
+                  key={source.id}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-900"
+                >
+                  {source.name}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
-      <div className={`flex min-w-0 flex-1 flex-col ${compact ? 'p-3' : 'p-5 pr-20'}`}>
+      <div className={`flex min-w-0 flex-1 flex-col ${compact ? 'p-3' : 'p-5'}`}>
         {compactWithoutImage ? (
           <div className="flex items-start gap-2">
             <div className="flex shrink-0 items-center justify-start">
@@ -226,12 +241,19 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
             </h2>
           </div>
         ) : (
-          <h2
-            className={`${compact ? 'pr-1 text-[15px] leading-5' : 'text-xl'} font-semibold text-slate-900`}
-            {...interactionPropsByArea.title}
-          >
-            {group.title}
-          </h2>
+          <>
+            {!compact && !imageUrl ? (
+              <div className="flex justify-end mb-2">
+                {shareControls}
+              </div>
+            ) : null}
+            <h2
+              className={`${compact ? 'pr-1 text-[15px] leading-5' : 'text-xl'} font-semibold text-slate-900`}
+              {...interactionPropsByArea.title}
+            >
+              {group.title}
+            </h2>
+          </>
         )}
 
         {compact ? null : (
@@ -242,38 +264,7 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
                 {formatPublicationDate(group.pubDate, locale)}
               </span>
 
-              {group.topics?.map((topic) => {
-                const { Icon, className } = getTopicPresentation(topic);
-                const localizedTopic = getLocalizedTopic(topic, locale);
 
-                return (
-                  <span
-                    key={topic}
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors ${className}`}
-                    aria-label={localizedTopic}
-                    title={localizedTopic}
-                  >
-                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                  </span>
-                );
-              })}
-            </div>
-
-            <div className="mt-5">
-              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">
-                <Rss className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>{t('sources')}</span>
-              </div>
-              <div className="flex min-h-7 flex-wrap content-start gap-2">
-                {sourceEntries.map((source) => (
-                  <span
-                    key={source.id}
-                    className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-900"
-                  >
-                    {source.name}
-                  </span>
-                ))}
-              </div>
             </div>
           </>
         )}
