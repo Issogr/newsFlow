@@ -117,7 +117,7 @@ const MobileBottomNav = ({
       }`}
     >
       {/* Bubbles + Nav wrapped together for outside-click detection */}
-      <div ref={navRef} className="relative mx-auto w-[calc(100%-1.25rem)] max-w-md pb-2.5">
+      <div ref={navRef} className="relative mx-auto w-[calc(100%-1.25rem)] max-w-md pb-[calc(env(safe-area-inset-bottom)+0.875rem)]">
         <FilterBubble
           open={openBubble === 'sources'}
         >
