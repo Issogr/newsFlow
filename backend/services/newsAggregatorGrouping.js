@@ -83,7 +83,7 @@ function shouldPreferIncomingArticle(candidate, current) {
 
 function buildIncomingArticleDeduplicationKey(article = {}) {
   if (article.canonicalUrl) {
-    return [article.ownerUserId || '', article.rawSourceId || article.sourceId || '', article.canonicalUrl].join('|');
+    return [article.ownerUserId || '', article.sourceId || article.rawSourceId || '', article.canonicalUrl].join('|');
   }
 
   return article.id;

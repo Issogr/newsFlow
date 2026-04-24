@@ -18,6 +18,9 @@ const groupedSourceFamily = groupedSource
   : null;
 const groupedSourceFamilyId = groupedSourceFamily?.id || groupedSource?.id || 'grouped-source';
 const groupedSourceFamilyName = groupedSourceFamily?.name || groupedSource?.name || 'Grouped Source';
+const alternateGroupedSource = groupedSourceFamily
+  ? configuredSources.find((source) => source.id !== groupedSource?.id && groupedSourceFamily.subSources.some((subSource) => subSource.id === source.id))
+  : null;
 const primarySourceFamilyId = getCanonicalSourceId(primarySource.id, primarySource.name);
 const secondarySourceFamilyId = getCanonicalSourceId(secondarySource.id, secondarySource.name);
 const secondarySourceFamilyName = getCanonicalSourceName(secondarySource.id, secondarySource.name);
@@ -433,6 +436,54 @@ describe('database queries and user data', () => {
       id: 'article-1',
       title: 'Canonical story updated',
       url: 'https://example.com/story?utm_source=homepage'
+    }));
+  });
+
+  test('updates an existing grouped-source article when a sibling subfeed repeats the canonical URL', () => {
+    expect(groupedSource).toBeTruthy();
+    expect(alternateGroupedSource).toBeTruthy();
+
+    const now = Date.now();
+    const firstResult = database.upsertArticles([
+      {
+        id: 'grouped-article-1',
+        sourceId: groupedSource.id,
+        source: groupedSource.name,
+        title: 'Grouped canonical story',
+        description: 'First subfeed version',
+        content: 'First body',
+        url: 'https://example.com/grouped-story?utm_source=home',
+        language: 'it',
+        pubDate: new Date(now).toISOString()
+      }
+    ]);
+    const secondResult = database.upsertArticles([
+      {
+        id: 'grouped-article-2',
+        sourceId: alternateGroupedSource.id,
+        source: alternateGroupedSource.name,
+        title: 'Grouped canonical story updated',
+        description: 'Sibling subfeed version',
+        content: 'Second body',
+        url: 'https://example.com/grouped-story?utm_source=mondo',
+        language: 'it',
+        pubDate: new Date(now + 60 * 1000).toISOString()
+      }
+    ]);
+
+    const rawRows = database.getDb().prepare('SELECT id, source_id AS sourceId FROM articles ORDER BY id ASC').all();
+    const articles = database.getArticles({}, { maxArticleAgeHours: 9999 });
+
+    expect(firstResult).toMatchObject({ insertedCount: 1, updatedCount: 0 });
+    expect(secondResult).toMatchObject({ insertedCount: 0, updatedCount: 1, updatedIds: ['grouped-article-1'] });
+    expect(rawRows).toEqual([{ id: 'grouped-article-1', sourceId: alternateGroupedSource.id }]);
+    expect(articles).toHaveLength(1);
+    expect(articles[0]).toEqual(expect.objectContaining({
+      id: 'grouped-article-1',
+      sourceId: groupedSourceFamilyId,
+      source: groupedSourceFamilyName,
+      rawSourceId: alternateGroupedSource.id,
+      title: 'Grouped canonical story updated'
     }));
   });
 

@@ -234,6 +234,39 @@ function createArticleRepository({
     return { sql, params };
   }
 
+  function getArticleRowsByCanonicalSource(database, sourceId, sourceName, ownerUserId, canonicalUrl) {
+    if (!canonicalUrl) {
+      return [];
+    }
+
+    const aliases = getResolvedSourceAliases(sourceId, sourceName, ownerUserId || null);
+    const sourceClauses = [];
+    const sourceParams = [];
+
+    if (aliases.ids.length > 0) {
+      sourceClauses.push(`source_id IN (${aliases.ids.map(() => '?').join(', ')})`);
+      sourceParams.push(...aliases.ids);
+    }
+
+    if (aliases.names.length > 0) {
+      sourceClauses.push(`source_name IN (${aliases.names.map(() => '?').join(', ')})`);
+      sourceParams.push(...aliases.names);
+    }
+
+    if (sourceClauses.length === 0) {
+      return [];
+    }
+
+    return database.prepare(`
+      SELECT id
+      FROM articles
+      WHERE canonical_url = ?
+        AND COALESCE(owner_user_id, '') = ?
+        AND (${sourceClauses.join(' OR ')})
+      ORDER BY datetime(updated_at) DESC, datetime(published_at) DESC, datetime(created_at) DESC, id DESC
+    `).all(canonicalUrl, ownerUserId || '', ...sourceParams);
+  }
+
   function getTopicsByArticleIds(articleIds) {
     if (!Array.isArray(articleIds) || articleIds.length === 0) {
       return new Map();
@@ -333,15 +366,7 @@ function createArticleRepository({
       INSERT INTO article_search (article_id, title, description, content)
       VALUES (?, ?, ?, ?)
     `);
-    const selectArticleByCanonicalUrlStmt = database.prepare(`
-      SELECT id
-      FROM articles
-      WHERE source_id = ?
-        AND canonical_url = ?
-        AND COALESCE(owner_user_id, '') = ?
-      ORDER BY datetime(updated_at) DESC, datetime(published_at) DESC, datetime(created_at) DESC, id DESC
-      LIMIT 1
-    `);
+    const deleteArticleStmt = database.prepare('DELETE FROM articles WHERE id = ?');
     const existingIdSet = new Set(
       chunkValues(articles.map((article) => article.id).filter(Boolean)).flatMap((articleIds) => {
         return database.prepare(`
@@ -360,16 +385,26 @@ function createArticleRepository({
         const storedSourceId = article.rawSourceId || article.sourceId;
         const storedSourceName = article.rawSource || article.source;
         const canonicalUrl = normalizeArticleUrl(article.canonicalUrl || article.url || '');
-        const canonicalMatch = !existingIdSet.has(article.id) && canonicalUrl
-          ? selectArticleByCanonicalUrlStmt.get(storedSourceId, canonicalUrl, article.ownerUserId || '')
+        const canonicalMatches = getArticleRowsByCanonicalSource(database, storedSourceId, storedSourceName, article.ownerUserId || '', canonicalUrl);
+        const canonicalMatch = !existingIdSet.has(article.id)
+          ? canonicalMatches.find((row) => row.id !== article.id)
           : null;
-        const persistedArticleId = canonicalMatch?.id || article.id;
+        const persistedArticleId = existingIdSet.has(article.id) ? article.id : (canonicalMatch?.id || article.id);
+        const duplicateIds = canonicalMatches
+          .map((row) => row.id)
+          .filter((id) => id && id !== persistedArticleId);
         const exists = existingIdSet.has(persistedArticleId) || Boolean(canonicalMatch);
         const normalizedPubDate = normalizePublicationDate(article.pubDate, now);
 
         article.id = persistedArticleId;
         article.canonicalUrl = canonicalUrl;
         article.pubDate = normalizedPubDate;
+
+        duplicateIds.forEach((duplicateId) => {
+          deleteSearchStmt.run(duplicateId);
+          deleteArticleStmt.run(duplicateId);
+          existingIdSet.delete(duplicateId);
+        });
 
         upsertStmt.run(
           persistedArticleId,

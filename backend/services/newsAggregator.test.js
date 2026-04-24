@@ -36,6 +36,7 @@ const rssParser = require('./rssParser');
 const database = require('./database');
 const websocketService = require('./websocketService');
 const newsAggregator = require('./newsAggregator');
+const { normalizeIncomingArticles } = require('./newsAggregatorGrouping');
 const { mapSettledWithConcurrency } = require('./newsAggregatorIngestion');
 const { getCanonicalSourceId, getCanonicalSourceName } = require('../utils/sourceCatalog');
 
@@ -165,6 +166,39 @@ describe('newsAggregator service flows', () => {
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0]).toMatchObject({ id: expect.stringContaining('group-'), ownerUserId: null });
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].items[0]).toMatchObject({ sourceId: ansaSourceId, subSource: 'Mondo' });
     expect(websocketService.broadcastNewsUpdate.mock.calls[1][0][0]).toMatchObject({ ownerUserId: 'user-1' });
+  });
+
+  test('normalizes duplicate sibling subfeed articles into one incoming article', () => {
+    const normalizedArticles = normalizeIncomingArticles([
+      {
+        id: 'ansa-home-story',
+        sourceId: 'ansa_home',
+        source: 'ANSA - Home',
+        title: 'Shared ANSA story',
+        description: 'Home version',
+        pubDate: '2026-03-07T10:00:00.000Z',
+        url: 'https://example.com/shared-story?utm_source=home'
+      },
+      {
+        id: 'ansa-mondo-story',
+        sourceId: 'ansa_mondo',
+        source: 'ANSA - Mondo',
+        title: 'Shared ANSA story updated',
+        description: 'Mondo version with more detail',
+        content: 'Longer body wins when the same source family repeats a story.',
+        pubDate: '2026-03-07T10:05:00.000Z',
+        url: 'https://example.com/shared-story?utm_source=mondo'
+      }
+    ]);
+
+    expect(normalizedArticles).toHaveLength(1);
+    expect(normalizedArticles[0]).toEqual(expect.objectContaining({
+      id: 'ansa-mondo-story',
+      rawSourceId: 'ansa_mondo',
+      sourceId: ansaSourceId,
+      source: ansaSourceName,
+      title: 'Shared ANSA story updated'
+    }));
   });
 
   test('ingestAllNews throws a connection error when no feed is reachable and the database is empty', async () => {

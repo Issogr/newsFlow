@@ -10,6 +10,7 @@
 - made schema startup distinguish fresh databases from unversioned legacy databases so missing migration metadata no longer silently marks an older schema as current
 - reduced frontend scroll-time state churn, fixed canceled load-more requests leaving pagination controls stuck, removed unused realtime notification and reader-refresh UI state, and surfaced clipboard-share failures cleanly
 - lifted the mobile bottom search bar above the on-screen keyboard using visual viewport changes so iOS and Android users can keep typing without the field being covered
+- fixed duplicate cards from sibling RSS subfeeds of the same configured source family by deduping canonical URLs against the displayed source group instead of only the raw subfeed id
 - consolidated duplicated source/topic filter rendering and backend news-query parsing to reduce drift between desktop/mobile and internal/public API paths
 - fixed Docker Compose startup for the non-root BFF container by repairing ownership on the persistent BFF session-data volume before the service starts
 - aligned README/runtime metadata with the current required Compose secrets, tag-only container release workflow, and Node engine requirements
