@@ -5,6 +5,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
+      '🤖 Topic detection can now use AI for cleaner news categories when configured.',
       '🔐 Security around browser sessions and live updates is stricter.',
       '🚪 Logging out is more reliable, even if the server is having trouble.',
       '📄 Feed pagination is more predictable when moving through older results.',
@@ -21,6 +22,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
+      '🤖 Il rilevamento degli argomenti puo usare l\'AI per categorie piu precise, se configurata.',
       '🔐 La sicurezza delle sessioni browser e degli aggiornamenti live e piu rigorosa.',
       '🚪 Il logout e piu affidabile, anche se il server sta avendo problemi.',
       '📄 La paginazione delle notizie e piu prevedibile quando scorri verso i risultati meno recenti.',

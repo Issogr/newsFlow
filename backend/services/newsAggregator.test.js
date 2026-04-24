@@ -32,9 +32,14 @@ jest.mock('./websocketService', () => ({
   broadcastSystemNotification: jest.fn()
 }));
 
+jest.mock('./aiTopicClassifier', () => ({
+  classifyTopicsForArticles: jest.fn(async () => new Map())
+}));
+
 const rssParser = require('./rssParser');
 const database = require('./database');
 const websocketService = require('./websocketService');
+const aiTopicClassifier = require('./aiTopicClassifier');
 const newsAggregator = require('./newsAggregator');
 const { normalizeIncomingArticles } = require('./newsAggregatorGrouping');
 const { mapSettledWithConcurrency } = require('./newsAggregatorIngestion');
@@ -57,6 +62,7 @@ describe('newsAggregator service flows', () => {
     database.listUserSources.mockReturnValue([]);
     database.listAllActiveUserSources.mockReturnValue([]);
     database.upsertArticles.mockReturnValue({ insertedIds: [], insertedCount: 0, updatedCount: 0 });
+    aiTopicClassifier.classifyTopicsForArticles.mockResolvedValue(new Map());
     rssParser.parseFeed.mockResolvedValue([]);
   });
 
@@ -166,6 +172,45 @@ describe('newsAggregator service flows', () => {
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0]).toMatchObject({ id: expect.stringContaining('group-'), ownerUserId: null });
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].items[0]).toMatchObject({ sourceId: ansaSourceId, subSource: 'Mondo' });
     expect(websocketService.broadcastNewsUpdate.mock.calls[1][0][0]).toMatchObject({ ownerUserId: 'user-1' });
+  });
+
+  test('ingestAllNews applies AI topics only to inserted articles before merging and broadcasting', async () => {
+    rssParser.parseFeed.mockResolvedValue([
+      { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'AI chips advance', description: 'New processors for data centers', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/ai' },
+      { id: 'updated-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Market update', description: 'Markets rise', pubDate: '2026-03-07T09:00:00.000Z', url: 'https://example.com/markets' }
+    ]);
+    database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], updatedIds: ['updated-1'], insertedCount: 1, updatedCount: 1 });
+    aiTopicClassifier.classifyTopicsForArticles.mockResolvedValue(new Map([
+      ['inserted-1', ['Tecnologia']]
+    ]));
+
+    await newsAggregator.ingestAllNews({ broadcast: true });
+
+    expect(aiTopicClassifier.classifyTopicsForArticles).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'inserted-1', title: 'AI chips advance' })
+    ]);
+    expect(database.mergeTopicsForArticles).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ articleId: 'inserted-1', topics: ['Tecnologia'] }),
+      expect.objectContaining({ articleId: 'updated-1', topics: expect.any(Array) })
+    ]));
+    expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].topics).toEqual(['Tecnologia']);
+  });
+
+  test('ingestAllNews keeps fallback topics when AI is unsure', async () => {
+    rssParser.parseFeed.mockResolvedValue([
+      { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Global market update', description: 'Markets rise', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/markets', rawTopics: ['markets'] }
+    ]);
+    database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], insertedCount: 1, updatedCount: 0 });
+    aiTopicClassifier.classifyTopicsForArticles.mockResolvedValue(new Map([
+      ['inserted-1', []]
+    ]));
+
+    await newsAggregator.ingestAllNews({ broadcast: true });
+
+    expect(database.mergeTopicsForArticles).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ articleId: 'inserted-1', topics: ['Economia'] })
+    ]));
+    expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].topics).toEqual(['Economia']);
   });
 
   test('normalizes duplicate sibling subfeed articles into one incoming article', () => {

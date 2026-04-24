@@ -2,6 +2,7 @@ const rssParser = require('./rssParser');
 const database = require('./database');
 const logger = require('../utils/logger');
 const websocketService = require('./websocketService');
+const { classifyTopicsForArticles } = require('./aiTopicClassifier');
 const { createError } = require('../utils/errorHandler');
 const {
   normalizeIncomingArticles,
@@ -80,12 +81,34 @@ function createEmptyRefreshPayload(lastRefreshAt = null) {
   };
 }
 
-function persistNormalizedArticles(normalizedArticles = []) {
-  const upsertResult = database.upsertArticles(normalizedArticles);
+async function applyAiTopicsForInsertedArticles(normalizedArticles = [], insertedIds = []) {
+  if (!Array.isArray(normalizedArticles) || normalizedArticles.length === 0 || !Array.isArray(insertedIds) || insertedIds.length === 0) {
+    return;
+  }
+
+  const insertedIdSet = new Set(insertedIds);
+  const insertedArticles = normalizedArticles.filter((article) => insertedIdSet.has(article.id));
+  const topicsByArticleId = await classifyTopicsForArticles(insertedArticles);
+
+  topicsByArticleId.forEach((topics, articleId) => {
+    const article = insertedArticles.find((item) => item.id === articleId);
+    if (article && Array.isArray(topics) && topics.length > 0) {
+      article.topics = topics;
+    }
+  });
+}
+
+function mergeNormalizedArticleTopics(normalizedArticles = []) {
   database.mergeTopicsForArticles(normalizedArticles.map((article) => ({
     articleId: article.id,
     topics: article.topics
   })));
+}
+
+async function persistNormalizedArticles(normalizedArticles = []) {
+  const upsertResult = database.upsertArticles(normalizedArticles);
+  await applyAiTopicsForInsertedArticles(normalizedArticles, upsertResult.insertedIds);
+  mergeNormalizedArticleTopics(normalizedArticles);
   return upsertResult;
 }
 
@@ -131,7 +154,7 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
       throw createError(503, 'Unable to connect to news feeds. Please try again later.', 'CONNECTION_ERROR');
     }
 
-    const upsertResult = persistNormalizedArticles(normalizedArticles);
+    const upsertResult = await persistNormalizedArticles(normalizedArticles);
     const insertedGroups = buildInsertedGroupsByOwner(normalizedArticles, upsertResult.insertedIds);
 
     if (broadcast) {
@@ -177,5 +200,6 @@ module.exports = {
   cleanupRemovedConfiguredSourceData,
   createEmptyRefreshPayload,
   ingestSourceConfigs,
-  mapSettledWithConcurrency
+  mapSettledWithConcurrency,
+  applyAiTopicsForInsertedArticles
 };

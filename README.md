@@ -91,6 +91,21 @@ Feed ingestion and querying:
 | `RSS_CACHE_MAX_ENTRIES` | `200` | Max cached feed responses |
 | `RSS_INGESTION_CONCURRENCY` | `8` | Max feed requests processed concurrently during ingestion |
 
+AI topic detection:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OPENROUTER_API_KEY` | unset | Server-side OpenRouter API key used only by the backend for AI topic detection |
+| `OPENROUTER_MODEL` | `liquid/lfm-2.5-1.2b-instruct:free` | OpenRouter model id used for topic classification |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL |
+| `AI_TOPIC_DETECTION_ENABLED` | `auto` | Set to `false` to disable AI topics; `auto` enables AI only when `OPENROUTER_API_KEY` is present |
+| `AI_TOPIC_BATCH_SIZE` | `20` | Max new articles sent in one AI topic-classification request |
+| `AI_TOPIC_BATCH_CONCURRENCY` | `2` | Max concurrent AI topic-classification requests during ingestion |
+| `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles classified by AI per refresh before falling back to local detection |
+| `AI_TOPIC_REQUEST_TIMEOUT_MS` | `10000` | Timeout for one AI topic-classification request |
+
+AI topic detection sends only compact metadata for newly inserted articles: source, title, and short description. Full article bodies and provider RSS categories are not sent to the model. The existing local/RSS-derived taxonomy is used as an immediate fallback, then replaced only when AI returns at least one valid canonical topic. If OpenRouter is unavailable, disabled, over the per-refresh cap, unsure, or returns invalid topics, the backend keeps the local fallback so ingestion can continue.
+
 Reader and article image extraction:
 
 | Variable | Default | Purpose |

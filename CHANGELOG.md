@@ -2,6 +2,7 @@
 
 ## 3.2.12
 
+- added optional OpenRouter-powered AI topic detection for newly inserted articles, with server-side API-key handling, configurable model selection, batched source/title/description-only classification that does not send provider RSS categories, strict taxonomy validation, and local fallback until AI returns valid topics
 - hardened the BFF boundary by stripping raw backend credentials from browser-facing app and Socket.IO proxy paths, requiring a valid BFF session before proxying authenticated app traffic, and clearing local BFF sessions even when upstream logout fails
 - added browser security headers to the BFF-served frontend and switched BFF/backend Docker dependency installs to lockfile-based `npm ci`, with the BFF container now running as an unprivileged user
 - tightened outbound URL safety for RSS/reader fetches by blocking additional special-use IPv4 ranges, carrier-grade NAT, multicast/reserved ranges, and IPv4-mapped IPv6 private targets
