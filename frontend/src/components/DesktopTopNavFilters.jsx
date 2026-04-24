@@ -12,10 +12,12 @@ import TopNavActionButton from './TopNavActionButton';
 
 const TOP_BUBBLE_MAX_HEIGHT = 'min(55vh, 28rem)';
 
-function TopFilterBubble({ children, open }) {
+function TopFilterBubble({ children, open, compact }) {
+  const positionClassName = compact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]';
+
   return (
     <div
-      className={`absolute right-0 top-[calc(100%+1rem)] z-50 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md transition-all duration-200 ease-out ${
+      className={`absolute right-0 ${positionClassName} z-50 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md transition-all duration-200 ease-out ${
         open
           ? 'pointer-events-auto translate-y-0 opacity-100'
           : 'pointer-events-none -translate-y-2 opacity-0'
@@ -44,6 +46,7 @@ const DesktopTopNavFilters = ({
   onSearchClear,
   onOpenSurface,
   closeSignal = 0,
+  compact = false,
 }) => {
   const [openBubble, setOpenBubble] = useState(null);
   const [searchMode, setSearchMode] = useState(false);
@@ -121,7 +124,7 @@ const DesktopTopNavFilters = ({
 
   return (
     <div ref={wrapperRef} className="relative hidden md:block">
-      <TopFilterBubble open={openBubble === 'sources'}>
+      <TopFilterBubble open={openBubble === 'sources'} compact={compact}>
         <SourceFilterList
           sources={visibleSources}
           activeSourceIds={activeFilters.sourceIds}
@@ -130,7 +133,7 @@ const DesktopTopNavFilters = ({
         />
       </TopFilterBubble>
 
-      <TopFilterBubble open={openBubble === 'topics'}>
+      <TopFilterBubble open={openBubble === 'topics'} compact={compact}>
         <TopicFilterList
           topics={availableTopics}
           activeTopics={activeFilters.topics}

@@ -390,6 +390,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 }}
                 onOpenSurface={() => setUserMenuOpen(false)}
                 closeSignal={desktopFiltersCloseSignal}
+                compact={topNavCompact}
               />
 
               <div className="relative">
@@ -424,7 +425,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 />
 
                 {userMenuOpen && (
-                  <div className="absolute right-0 top-[calc(100%+1rem)] z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur transition-all duration-200" role="menu">
+                  <div className={`absolute right-0 ${topNavCompact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]'} z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur transition-all duration-200`} role="menu">
                     <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-4">
                       <div className="flex items-start gap-3">
                         <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-sm">
