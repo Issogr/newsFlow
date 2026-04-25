@@ -2,11 +2,11 @@ const logger = require('../utils/logger');
 const topicNormalizer = require('./topicNormalizer');
 
 const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-const DEFAULT_OPENROUTER_MODEL = 'liquid/lfm-2.5-1.2b-instruct:free';
-const DEFAULT_BATCH_SIZE = 20;
-const DEFAULT_BATCH_CONCURRENCY = 2;
+const DEFAULT_OPENROUTER_MODEL = 'qwen/qwen3.5-9b';
+const DEFAULT_BATCH_SIZE = 8;
+const DEFAULT_BATCH_CONCURRENCY = 1;
 const DEFAULT_MAX_ARTICLES_PER_REFRESH = 160;
-const DEFAULT_TIMEOUT_MS = 10000;
+const DEFAULT_TIMEOUT_MS = 30000;
 
 let openRouterSdkLoader = () => import('@openrouter/sdk');
 let openRouterSdkPromise = null;
@@ -56,7 +56,7 @@ function getConfig() {
     batchSize: getIntegerEnv('AI_TOPIC_BATCH_SIZE', DEFAULT_BATCH_SIZE, 1, 50),
     batchConcurrency: getIntegerEnv('AI_TOPIC_BATCH_CONCURRENCY', DEFAULT_BATCH_CONCURRENCY, 1, 4),
     maxArticlesPerRefresh: getIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, 1, 1000),
-    timeoutMs: getIntegerEnv('AI_TOPIC_REQUEST_TIMEOUT_MS', DEFAULT_TIMEOUT_MS, 1000, 30000)
+    timeoutMs: getIntegerEnv('AI_TOPIC_REQUEST_TIMEOUT_MS', DEFAULT_TIMEOUT_MS, 1000, 120000)
   };
 }
 
@@ -80,7 +80,7 @@ async function mapWithConcurrency(items = [], concurrency = DEFAULT_BATCH_CONCUR
       try {
         results[currentIndex] = await mapper(items[currentIndex], currentIndex);
       } catch (error) {
-        logger.warn(`AI topic batch failed: ${error.message}`);
+        logger.warn(`AI topic batch failed: ${summarizeAiError(error)}`);
         results[currentIndex] = new Map();
       }
     }
@@ -89,6 +89,20 @@ async function mapWithConcurrency(items = [], concurrency = DEFAULT_BATCH_CONCUR
   const workerCount = Math.min(Math.max(1, concurrency), items.length);
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
   return results;
+}
+
+function isTimeoutError(error) {
+  const name = String(error?.name || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  return name.includes('timeout') || message.includes('aborted due to timeout') || message.includes('timeout');
+}
+
+function summarizeAiError(error) {
+  if (isTimeoutError(error)) {
+    return 'OpenRouter request timed out; keeping local fallback topics';
+  }
+
+  return error?.message || 'OpenRouter request failed; keeping local fallback topics';
 }
 
 function truncateText(value, maxLength) {
@@ -111,11 +125,12 @@ function buildArticlePayload(article = {}) {
 
 function buildPrompt(batch = []) {
   return [
-    'Classify each news item into zero to three canonical topics.',
+    'Classify each news item into one to three canonical topics when the title or description is enough to decide.',
     `Allowed topics: ${topicNormalizer.CANONICAL_TOPICS.join(', ')}.`,
+    'Use the exact allowed Italian topic labels only.',
     'Use only the title, short description, and source. Do not use provider RSS categories and do not infer from missing full article content.',
     'Return strict JSON only with this shape: {"topicsById":[{"id":"article-id","topics":["Topic"]}]}',
-    'If unsure, return an empty topics array for that item.',
+    'Return one object for every provided id. If truly impossible to classify an item, return an empty topics array for that item.',
     '',
     JSON.stringify({ articles: batch.map(buildArticlePayload) })
   ].join('\n');
@@ -135,21 +150,129 @@ function parseJsonContent(content) {
   }
 }
 
+function getClassifierEntries(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return [
+    payload?.topicsById,
+    payload?.results,
+    payload?.classifications,
+    payload?.articles,
+    payload?.items
+  ].find(Array.isArray) || [];
+}
+
+function getClassifierEntryId(entry = {}) {
+  return String(entry.id || entry.articleId || entry.article_id || '').trim();
+}
+
+function getClassifierEntryTopics(entry = {}) {
+  if (Array.isArray(entry.topics)) {
+    return entry.topics;
+  }
+
+  if (Array.isArray(entry.categories)) {
+    return entry.categories;
+  }
+
+  if (entry.topic) {
+    return [entry.topic];
+  }
+
+  if (entry.category) {
+    return [entry.category];
+  }
+
+  return [];
+}
+
+function summarizeClassifierResult(payload, allowedIds = new Set()) {
+  if (!payload || typeof payload !== 'object') {
+    return 'invalid_json';
+  }
+
+  const entries = getClassifierEntries(payload);
+  if (entries.length === 0) {
+    return 'missing_topics_array';
+  }
+
+  const validIdEntries = entries.filter((entry) => allowedIds.has(getClassifierEntryId(entry)));
+  if (validIdEntries.length === 0) {
+    return `no_matching_article_ids entries=${entries.length}`;
+  }
+
+  const topicEntries = validIdEntries.filter((entry) => getClassifierEntryTopics(entry).length > 0);
+  if (topicEntries.length === 0) {
+    return `empty_topics entries=${entries.length} validIds=${validIdEntries.length}`;
+  }
+
+  return `unsupported_topics entries=${entries.length} validIds=${validIdEntries.length}`;
+}
+
 function normalizeClassifierResult(payload, allowedIds = new Set()) {
-  const entries = Array.isArray(payload?.topicsById) ? payload.topicsById : [];
+  const entries = getClassifierEntries(payload);
   const result = new Map();
 
   entries.forEach((entry) => {
-    const id = String(entry?.id || '').trim();
+    const id = getClassifierEntryId(entry);
     if (!id || !allowedIds.has(id)) {
       return;
     }
 
-    const topics = topicNormalizer.limitTopics(Array.isArray(entry.topics) ? entry.topics : [], 3);
-    result.set(id, topics);
+    const topics = topicNormalizer.limitTopics(getClassifierEntryTopics(entry), 3);
+    if (topics.length > 0) {
+      result.set(id, topics);
+    }
   });
 
   return result;
+}
+
+function extractContentPart(value) {
+  if (!value) {
+    return '';
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(extractContentPart).filter(Boolean).join('\n');
+  }
+
+  if (typeof value === 'object') {
+    return extractContentPart(value.text || value.content || value.outputText || value.output_text);
+  }
+
+  return '';
+}
+
+function extractAssistantContent(response = {}) {
+  const choice = response.choices?.[0] || {};
+  return extractContentPart(
+    choice.message?.content
+      || choice.message?.text
+      || choice.text
+      || response.outputText
+      || response.output_text
+      || response.message?.content
+      || response.content
+  );
+}
+
+function summarizeResponseShape(response = {}) {
+  const choice = response.choices?.[0] || {};
+  const message = choice.message || {};
+  const messageKeys = Object.keys(message).sort().join(',') || 'none';
+  const contentType = Array.isArray(message.content) ? 'array' : typeof message.content;
+  const finishReason = choice.finishReason || choice.finish_reason || 'unknown';
+  const reasoningChars = String(message.reasoning || '').length;
+  const refusalChars = String(message.refusal || '').length;
+
+  return `finishReason=${finishReason}, messageKeys=${messageKeys}, contentType=${contentType}, reasoningChars=${reasoningChars}, refusalChars=${refusalChars}`;
 }
 
 async function classifyBatch(batch, config) {
@@ -160,7 +283,7 @@ async function classifyBatch(batch, config) {
 
   const startedAt = Date.now();
   const openRouter = await createOpenRouterClient(config);
-  const response = await openRouter.chat.send({
+  const completionPromise = openRouter.chat.send({
     chatRequest: {
       model: config.model,
       messages: [
@@ -174,13 +297,36 @@ async function classifyBatch(batch, config) {
         }
       ],
       temperature: 0,
-      maxTokens: Math.min(2000, 160 + (batch.length * 36)),
+      maxTokens: Math.min(2000, 220 + (batch.length * 48)),
+      maxCompletionTokens: Math.min(2000, 220 + (batch.length * 48)),
+      reasoning: {
+        enabled: false,
+        effort: 'none',
+        maxTokens: 0
+      },
+      responseFormat: { type: 'json_object' },
       stream: false
     }
+  }, {
+    retries: { strategy: 'none' },
+    timeoutMs: config.timeoutMs
   });
 
-  const content = response.choices?.[0]?.message?.content;
-  const result = normalizeClassifierResult(parseJsonContent(content), allowedIds);
+  // The SDK's APIPromise owns a secondary unwrapped promise; attach a catch so
+  // expected request failures do not also surface as global unhandled rejections.
+  if (completionPromise && typeof completionPromise.catch === 'function') {
+    completionPromise.catch(() => {});
+  }
+
+  const response = await completionPromise;
+
+  const content = extractAssistantContent(response);
+  const payload = parseJsonContent(content);
+  const result = normalizeClassifierResult(payload, allowedIds);
+
+  if (result.size === 0) {
+    logger.warn(`AI topic batch produced no valid topics: reason=${summarizeClassifierResult(payload, allowedIds)}, responseChars=${content.length}, ${summarizeResponseShape(response)}`);
+  }
 
   logger.info(`AI topic batch completed: model=${config.model}, articles=${batch.length}, classified=${result.size}, durationMs=${Date.now() - startedAt}`);
   return result;
@@ -223,7 +369,9 @@ module.exports = {
   _buildArticlePayload: buildArticlePayload,
   _buildPrompt: buildPrompt,
   _getConfig: getConfig,
+  _extractAssistantContent: extractAssistantContent,
   _normalizeClassifierResult: normalizeClassifierResult,
   _parseJsonContent: parseJsonContent,
+  _summarizeResponseShape: summarizeResponseShape,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };

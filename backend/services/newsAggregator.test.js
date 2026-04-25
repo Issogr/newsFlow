@@ -181,21 +181,56 @@ describe('newsAggregator service flows', () => {
     ]));
   });
 
-  test('getNewsFeed triggers one immediate assigned-source refresh until a scheduled cycle runs', async () => {
+  test('getNewsFeed starts one background assigned-source refresh until a scheduled cycle runs', async () => {
     const userContext = { userId: 'user-1', excludedSourceIds: [ansaSourceId], excludedSubSourceIds: [] };
     const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
     database.listUserSources.mockReturnValue([customSource]);
     database.listAllActiveUserSources.mockReturnValue([customSource]);
 
     await newsAggregator.getNewsFeed({}, userContext);
-    await newsAggregator.getNewsFeed({}, userContext);
+    await newsAggregator._waitForExistingUserAssignedSourceRefresh(userContext);
 
+    expect(rssParser.parseFeed.mock.calls.filter(([source]) => source.id === 'custom-1')).toHaveLength(1);
+
+    await newsAggregator.getNewsFeed({}, userContext);
     expect(rssParser.parseFeed.mock.calls.filter(([source]) => source.id === 'custom-1')).toHaveLength(1);
 
     await newsAggregator.ingestAllNews({ broadcast: false });
     await newsAggregator.getNewsFeed({}, userContext);
+    await newsAggregator._waitForExistingUserAssignedSourceRefresh(userContext);
 
     expect(rssParser.parseFeed.mock.calls.filter(([source]) => source.id === 'custom-1')).toHaveLength(3);
+  });
+
+  test('getNewsFeed waits for an existing immediate assigned-source refresh before reading feed', async () => {
+    const allDefaultSourceGroupIds = [...new Set(newsAggregator.newsSources.map((source) => getCanonicalSourceId(source.id, source.name)))];
+    const userContext = { userId: 'user-1', excludedSourceIds: allDefaultSourceGroupIds, excludedSubSourceIds: [] };
+    const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
+    let resolveParse;
+    const parseStarted = new Promise((resolve) => {
+      rssParser.parseFeed.mockImplementation(async (source) => {
+        if (source.id !== 'custom-1') {
+          return [];
+        }
+
+        resolve();
+        await new Promise((parseResolve) => { resolveParse = parseResolve; });
+        return [];
+      });
+    });
+    database.listUserSources.mockReturnValue([customSource]);
+
+    await newsAggregator.getNewsFeed({}, userContext);
+    await parseStarted;
+
+    const secondRequest = newsAggregator.getNewsFeed({}, userContext);
+    await Promise.resolve();
+    expect(database.getArticles).toHaveBeenCalledTimes(1);
+
+    resolveParse();
+    await secondRequest;
+
+    expect(database.getArticles).toHaveBeenCalledTimes(2);
   });
 
   test('ingestAllNews stores topics and broadcasts global and private groups separately', async () => {

@@ -97,26 +97,28 @@ AI topic detection:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | unset | Server-side OpenRouter API key used only by the backend for AI topic detection |
-| `OPENROUTER_MODEL` | `liquid/lfm-2.5-1.2b-instruct:free` | OpenRouter model id used for topic classification |
+| `OPENROUTER_MODEL` | `qwen/qwen3.5-9b` | OpenRouter model id used for topic classification |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL |
 | `AI_TOPIC_DETECTION_ENABLED` | `auto` | Set to `false` to disable AI topics; `auto` enables AI only when `OPENROUTER_API_KEY` is present |
-| `AI_TOPIC_BATCH_SIZE` | `20` | Max new articles sent in one AI topic-classification request |
-| `AI_TOPIC_BATCH_CONCURRENCY` | `2` | Max concurrent AI topic-classification requests during ingestion |
+| `AI_TOPIC_BATCH_SIZE` | `8` | Max new articles sent in one AI topic-classification request |
+| `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Max concurrent AI topic-classification requests during ingestion |
 | `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles classified by AI per refresh before falling back to local detection |
-| `AI_TOPIC_REQUEST_TIMEOUT_MS` | `10000` | Timeout for one AI topic-classification request |
+| `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one AI topic-classification request, configurable up to 120 seconds for slower models |
 
-AI topic detection uses the official `@openrouter/sdk` package from the backend. It sends only compact metadata for newly inserted articles: source, title, and short description. Full article bodies and provider RSS categories are not sent to the model. The existing local/RSS-derived taxonomy is used as an immediate fallback, then replaced only when AI returns at least one valid canonical topic. If OpenRouter is unavailable, disabled, over the per-refresh cap, unsure, or returns invalid topics, the backend keeps the local fallback so ingestion can continue.
+AI topic detection uses the official `@openrouter/sdk` package from the backend. It sends only compact metadata for newly inserted articles: source, title, and short description. Full article bodies and provider RSS categories are not sent to the model. Classifier requests disable model reasoning and request JSON-object responses so the output budget is reserved for the final taxonomy JSON. The existing local/RSS-derived taxonomy is used as an immediate fallback, then replaced only when AI returns at least one valid canonical topic. If OpenRouter is unavailable, disabled, over the per-refresh cap, unsure, or returns invalid topics, the backend keeps the local fallback so ingestion can continue.
 
 For Docker Compose development, AI topic activity is visible in backend logs without exposing prompts or secrets:
 
 - `AI topic detection skipped: ...`
 - `AI topic detection started: model=..., articles=..., batches=...`
 - `AI topic batch completed: model=..., articles=..., classified=..., durationMs=...`
+- `AI topic batch produced no valid topics: reason=..., responseChars=..., finishReason=...`
 - `AI topic detection completed: model=..., requested=..., classified=..., durationMs=...`
+- `AI topic batch failed: OpenRouter request timed out; keeping local fallback topics`
 
 Use `docker compose logs -f backend` to follow these messages while debugging.
 
-Scheduled ingestion refreshes only sources assigned to recently active users. Default sources are considered assigned when a user has not excluded the source family or subsource; custom sources are assigned to their owning user. When a user opens the app, their assigned default and custom sources can refresh immediately once per scheduled ingestion cycle so returning sessions do not rely only on the next scheduled tick and repeated app requests do not spam upstream feeds. If the database is empty, the backend still seeds the default source set so first-run startup has data.
+Scheduled ingestion refreshes only sources assigned to recently active users. Default sources are considered assigned when a user has not excluded the source family or subsource; custom sources are assigned to their owning user. When a user opens the app, their assigned default and custom sources can refresh immediately once per scheduled ingestion cycle so returning sessions do not rely only on the next scheduled tick and repeated app requests do not spam upstream feeds. A newly triggered immediate refresh runs in the background so the current `/news` response can return cached articles quickly; if a later `/news` request arrives while that immediate refresh is still running, it waits for the in-flight refresh before reading the feed. If the database is empty, the backend still seeds the default source set so first-run startup has data.
 
 When multiple users add the same custom RSS URL, ingestion fetches that URL once per refresh and fans out parsed articles into each owning user source. Each user source still owns its private article rows, so deleting or updating one user source removes only that user source data and leaves other users with the same RSS URL unaffected.
 

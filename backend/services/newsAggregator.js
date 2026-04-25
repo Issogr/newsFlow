@@ -27,6 +27,7 @@ let lastRefreshAt = null;
 let schedulerHandle = null;
 let ingestionQueue = Promise.resolve();
 const usersRefreshedSinceScheduledIngestion = new Set();
+const userImmediateRefreshPromises = new Map();
 
 function getLastRefreshAt() {
   return lastRefreshAt;
@@ -126,7 +127,7 @@ function getUserAssignedSourceConfigs(userContext = {}) {
   ];
 }
 
-async function refreshUserAssignedSourcesIfDue(userContext = {}, options = {}) {
+function startUserAssignedSourceRefresh(userContext = {}, options = {}) {
   const userId = userContext.userId;
 
   if (!userId || usersRefreshedSinceScheduledIngestion.has(userId)) {
@@ -135,7 +136,7 @@ async function refreshUserAssignedSourcesIfDue(userContext = {}, options = {}) {
 
   usersRefreshedSinceScheduledIngestion.add(userId);
 
-  return enqueueIngestionTask(async () => {
+  const refreshTask = enqueueIngestionTask(async () => {
     const sourceConfigs = getUserAssignedSourceConfigs(userContext);
     if (sourceConfigs.length === 0) {
       return createEmptyRefreshPayload(getLastRefreshAt());
@@ -148,7 +149,26 @@ async function refreshUserAssignedSourcesIfDue(userContext = {}, options = {}) {
       updateRefreshTimestamp: true,
       trackIngestionRun: false
     }, getIngestionRuntime());
+  }).catch((error) => {
+    logger.warn(`Immediate assigned-source refresh failed for user ${userId}: ${error.message}`);
+    return createEmptyRefreshPayload(getLastRefreshAt());
+  }).finally(() => {
+    userImmediateRefreshPromises.delete(userId);
   });
+
+  userImmediateRefreshPromises.set(userId, refreshTask);
+  return refreshTask;
+}
+
+async function waitForExistingUserAssignedSourceRefresh(userContext = {}) {
+  const userId = userContext.userId;
+  const existingRefresh = userImmediateRefreshPromises.get(userId);
+
+  if (!existingRefresh) {
+    return createEmptyRefreshPayload(getLastRefreshAt());
+  }
+
+  return existingRefresh;
 }
 
 async function ingestAllNews(options = {}) {
@@ -176,6 +196,7 @@ async function ingestAllNews(options = {}) {
       }, getIngestionRuntime());
 
       usersRefreshedSinceScheduledIngestion.clear();
+      userImmediateRefreshPromises.clear();
 
       logger.info(`Ingestion completed: ${payload.fetchedCount} fetched, ${payload.insertedCount} inserted, ${payload.updatedCount} updated`);
       return payload;
@@ -229,7 +250,12 @@ async function ensureSeedData() {
 
 async function getNewsFeed(filters = {}, userContext = {}) {
   await ensureSeedData();
-  await refreshUserAssignedSourcesIfDue(userContext, { broadcast: true });
+
+  if (userImmediateRefreshPromises.has(userContext.userId)) {
+    await waitForExistingUserAssignedSourceRefresh(userContext);
+  } else {
+    startUserAssignedSourceRefresh(userContext, { broadcast: true });
+  }
 
   return buildNewsFeed(filters, userContext, {
     ensureSeedData: async () => {},
@@ -269,6 +295,7 @@ function stopScheduler() {
 
 function resetImmediateRefreshState() {
   usersRefreshedSinceScheduledIngestion.clear();
+  userImmediateRefreshPromises.clear();
 }
 
 process.on('exit', stopScheduler);
@@ -285,5 +312,7 @@ module.exports = {
   _getUserAssignedSourceConfigs: getUserAssignedSourceConfigs,
   _isConfiguredSourceAssignedToSettings: isConfiguredSourceAssignedToSettings,
   _isRecentlyActive: isRecentlyActive,
+  _startUserAssignedSourceRefresh: startUserAssignedSourceRefresh,
+  _waitForExistingUserAssignedSourceRefresh: waitForExistingUserAssignedSourceRefresh,
   _resetImmediateRefreshState: resetImmediateRefreshState
 };
