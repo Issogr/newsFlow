@@ -132,6 +132,7 @@ async function classifyBatch(batch, config) {
     return new Map();
   }
 
+  const startedAt = Date.now();
   const response = await axios.post(`${config.baseUrl}/chat/completions`, {
     model: config.model,
     messages: [
@@ -158,21 +159,31 @@ async function classifyBatch(batch, config) {
   });
 
   const content = response.data?.choices?.[0]?.message?.content;
-  return normalizeClassifierResult(parseJsonContent(content), allowedIds);
+  const result = normalizeClassifierResult(parseJsonContent(content), allowedIds);
+
+  logger.info(`AI topic batch completed: model=${config.model}, articles=${batch.length}, classified=${result.size}, durationMs=${Date.now() - startedAt}`);
+  return result;
 }
 
 async function classifyTopicsForArticles(articles = []) {
   const config = getConfig();
-  if (!config.enabled || !Array.isArray(articles) || articles.length === 0) {
+  if (!Array.isArray(articles) || articles.length === 0) {
     return new Map();
   }
 
+  if (!config.enabled) {
+    logger.info(`AI topic detection skipped: reason=${config.apiKey ? 'disabled' : 'missing_api_key'}, articles=${articles.length}`);
+    return new Map();
+  }
+
+  const startedAt = Date.now();
   const limitedArticles = articles.slice(0, config.maxArticlesPerRefresh);
   if (articles.length > limitedArticles.length) {
     logger.warn(`AI topic detection capped at ${limitedArticles.length}/${articles.length} new articles for this refresh`);
   }
 
   const batches = chunkItems(limitedArticles, config.batchSize);
+  logger.info(`AI topic detection started: model=${config.model}, articles=${limitedArticles.length}, batches=${batches.length}`);
   const batchResults = await mapWithConcurrency(batches, config.batchConcurrency, (batch) => classifyBatch(batch, config));
   const result = new Map();
 
@@ -182,6 +193,7 @@ async function classifyTopicsForArticles(articles = []) {
     });
   });
 
+  logger.info(`AI topic detection completed: model=${config.model}, requested=${limitedArticles.length}, classified=${result.size}, durationMs=${Date.now() - startedAt}`);
   return result;
 }
 

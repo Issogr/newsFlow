@@ -3,6 +3,9 @@
 ## 3.2.12
 
 - added optional OpenRouter-powered AI topic detection for newly inserted articles, with server-side API-key handling, configurable model selection, batched source/title/description-only classification that does not send provider RSS categories, strict taxonomy validation, and local fallback until AI returns valid topics
+- added safe backend log feedback for AI topic requests so Docker Compose development can see skipped, started, completed, capped, and failed AI classification batches without logging prompts or secrets
+- switched the BFF Docker dependency and runtime stages to Node 20 while keeping the frontend build on Node 22, avoiding Node 22 deprecation noise from the proxy dependency at container startup
+- guarded batched topic merges against stale article ids left behind by article deduplication or cleanup so ingestion no longer fails with a foreign-key error when an article disappears before its topics are merged
 - changed custom-source ingestion to fetch identical active user RSS URLs once per refresh and fan out the parsed articles per owning user source, while keeping delete/update cleanup scoped to the affected user source
 - changed scheduled ingestion to refresh only sources assigned to recently active users, with one immediate per-user assigned-source refresh between scheduled cycles and a first-run seed fallback when the article database is empty
 - hardened the BFF boundary by stripping raw backend credentials from browser-facing app and Socket.IO proxy paths, requiring a valid BFF session before proxying authenticated app traffic, and clearing local BFF sessions even when upstream logout fails

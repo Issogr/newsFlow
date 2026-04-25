@@ -107,6 +107,15 @@ AI topic detection:
 
 AI topic detection sends only compact metadata for newly inserted articles: source, title, and short description. Full article bodies and provider RSS categories are not sent to the model. The existing local/RSS-derived taxonomy is used as an immediate fallback, then replaced only when AI returns at least one valid canonical topic. If OpenRouter is unavailable, disabled, over the per-refresh cap, unsure, or returns invalid topics, the backend keeps the local fallback so ingestion can continue.
 
+For Docker Compose development, AI topic activity is visible in backend logs without exposing prompts or secrets:
+
+- `AI topic detection skipped: ...`
+- `AI topic detection started: model=..., articles=..., batches=...`
+- `AI topic batch completed: model=..., articles=..., classified=..., durationMs=...`
+- `AI topic detection completed: model=..., requested=..., classified=..., durationMs=...`
+
+Use `docker compose logs -f backend` to follow these messages while debugging.
+
 Scheduled ingestion refreshes only sources assigned to recently active users. Default sources are considered assigned when a user has not excluded the source family or subsource; custom sources are assigned to their owning user. When a user opens the app, their assigned default and custom sources can refresh immediately once per scheduled ingestion cycle so returning sessions do not rely only on the next scheduled tick and repeated app requests do not spam upstream feeds. If the database is empty, the backend still seeds the default source set so first-run startup has data.
 
 When multiple users add the same custom RSS URL, ingestion fetches that URL once per refresh and fans out parsed articles into each owning user source. Each user source still owns its private article rows, so deleting or updating one user source removes only that user source data and leaves other users with the same RSS URL unaffected.

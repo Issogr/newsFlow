@@ -452,6 +452,11 @@ function createArticleRepository({
     }
 
     const database = getDb();
+    const articleExists = database.prepare('SELECT 1 FROM articles WHERE id = ?').get(articleId);
+    if (!articleExists) {
+      return [];
+    }
+
     const selectStmt = database.prepare('SELECT topic FROM article_topics WHERE article_id = ? ORDER BY topic ASC');
     const insertStmt = database.prepare(`
       INSERT OR IGNORE INTO article_topics (article_id, topic)
@@ -485,6 +490,21 @@ function createArticleRepository({
     }
 
     const database = getDb();
+    const existingArticleIds = new Set(
+      chunkValues([...new Set(normalizedEntries.map((entry) => entry.articleId))]).flatMap((articleIds) => {
+        return database.prepare(`
+          SELECT id
+          FROM articles
+          WHERE id IN (${articleIds.map(() => '?').join(', ')})
+        `).all(...articleIds).map((row) => row.id);
+      })
+    );
+    const existingEntries = normalizedEntries.filter((entry) => existingArticleIds.has(entry.articleId));
+
+    if (existingEntries.length === 0) {
+      return 0;
+    }
+
     const insertStmt = database.prepare(`
       INSERT OR IGNORE INTO article_topics (article_id, topic)
       VALUES (?, ?)
@@ -505,7 +525,7 @@ function createArticleRepository({
       return insertedCount;
     });
 
-    return transaction(normalizedEntries);
+    return transaction(existingEntries);
   }
 
   function getArticles(filters = {}, options = {}) {

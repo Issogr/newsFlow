@@ -487,6 +487,37 @@ describe('database queries and user data', () => {
     }));
   });
 
+  test('ignores topic merges for article ids that are no longer present', () => {
+    const now = new Date().toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'existing-topic-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Existing topic article',
+        description: 'Existing description',
+        content: '',
+        url: 'https://example.com/existing-topic-article',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+
+    expect(() => database.mergeTopicsForArticles([
+      { articleId: 'missing-topic-article', topics: ['Economia'] },
+      { articleId: 'existing-topic-article', topics: ['Technology'] }
+    ])).not.toThrow();
+    expect(database.mergeTopicsForArticle('missing-topic-article', ['Economia'])).toEqual([]);
+
+    const articles = database.getArticles({}, { maxArticleAgeHours: 9999 });
+    expect(articles).toHaveLength(1);
+    expect(articles[0]).toEqual(expect.objectContaining({
+      id: 'existing-topic-article',
+      topics: ['Tecnologia']
+    }));
+  });
+
   test('normalizes future publication dates on insert and during cleanup', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-03-15T14:30:00.000Z'));
 

@@ -10,6 +10,7 @@ jest.mock('../utils/logger', () => ({
 }));
 
 const axios = require('axios');
+const logger = require('../utils/logger');
 const aiTopicClassifier = require('./aiTopicClassifier');
 
 describe('aiTopicClassifier', () => {
@@ -59,6 +60,9 @@ describe('aiTopicClassifier', () => {
     expect(prompt).toContain('Do not use provider RSS categories');
     expect(prompt).not.toContain('tech');
     expect(prompt).not.toContain('This full article body should not be sent');
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection started'));
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic batch completed'));
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection completed'));
   });
 
   test('returns no AI topics when disabled or unconfigured', async () => {
@@ -70,6 +74,7 @@ describe('aiTopicClassifier', () => {
 
     expect(result.size).toBe(0);
     expect(axios.post).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection skipped: reason=missing_api_key'));
   });
 
   test('drops unknown ids and topics outside the supported taxonomy', () => {
