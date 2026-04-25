@@ -81,6 +81,7 @@ Feed ingestion and querying:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SCRAPE_INTERVAL_MS` | `900000` | Scheduled ingestion interval in ms |
+| `SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES` | `ONLINE_ACTIVITY_WINDOW_MINUTES` or `5` | Recent-activity window used to decide which users have assigned sources eligible for scheduled refresh |
 | `ARTICLE_RETENTION_HOURS` | `24` | Article and reader-cache retention window in hours |
 | `MAX_ARTICLES_PER_SOURCE` | `25` | Max parsed items per feed |
 | `MAX_SCAN_ARTICLES` | `600` | Max scanned articles for grouped-query mode |
@@ -105,6 +106,8 @@ AI topic detection:
 | `AI_TOPIC_REQUEST_TIMEOUT_MS` | `10000` | Timeout for one AI topic-classification request |
 
 AI topic detection sends only compact metadata for newly inserted articles: source, title, and short description. Full article bodies and provider RSS categories are not sent to the model. The existing local/RSS-derived taxonomy is used as an immediate fallback, then replaced only when AI returns at least one valid canonical topic. If OpenRouter is unavailable, disabled, over the per-refresh cap, unsure, or returns invalid topics, the backend keeps the local fallback so ingestion can continue.
+
+Scheduled ingestion refreshes only sources assigned to recently active users. Default sources are considered assigned when a user has not excluded the source family or subsource; custom sources are assigned to their owning user. When a user opens the app, their assigned default and custom sources can refresh immediately once per scheduled ingestion cycle so returning sessions do not rely only on the next scheduled tick and repeated app requests do not spam upstream feeds. If the database is empty, the backend still seeds the default source set so first-run startup has data.
 
 When multiple users add the same custom RSS URL, ingestion fetches that URL once per refresh and fans out parsed articles into each owning user source. Each user source still owns its private article rows, so deleting or updating one user source removes only that user source data and leaves other users with the same RSS URL unaffected.
 

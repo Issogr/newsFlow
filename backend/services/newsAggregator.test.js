@@ -17,6 +17,8 @@ jest.mock('./database', () => ({
   getLatestIngestionRun: jest.fn(() => null),
   getSourceStats: jest.fn(() => []),
   getTopicStatsByFilters: jest.fn(() => []),
+  getUserSettings: jest.fn(() => ({ excludedSourceIds: [], excludedSubSourceIds: [] })),
+  listUsers: jest.fn(() => []),
   listUserSources: jest.fn(() => []),
   listAllActiveUserSources: jest.fn(() => [])
 }));
@@ -52,6 +54,7 @@ const ansaSourceName = getCanonicalSourceName('ansa_mondo', 'ANSA - Mondo');
 describe('newsAggregator service flows', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    newsAggregator._resetImmediateRefreshState();
     database.countArticles.mockReturnValue(1);
     database.deleteArticlesOlderThan.mockReturnValue(0);
     database.normalizeFuturePublicationDates.mockReturnValue(0);
@@ -60,6 +63,8 @@ describe('newsAggregator service flows', () => {
     database.getLatestIngestionRun.mockReturnValue(null);
     database.getSourceStats.mockReturnValue([]);
     database.getTopicStatsByFilters.mockReturnValue([]);
+    database.getUserSettings.mockReturnValue({ excludedSourceIds: [], excludedSubSourceIds: [] });
+    database.listUsers.mockReturnValue([{ id: 'user-1', lastActivityAt: new Date().toISOString() }]);
     database.listUserSources.mockReturnValue([]);
     database.listAllActiveUserSources.mockReturnValue([]);
     database.upsertArticles.mockReturnValue({ insertedIds: [], insertedCount: 0, updatedCount: 0 });
@@ -150,6 +155,49 @@ describe('newsAggregator service flows', () => {
     }), expect.objectContaining({ userId: 'user-1' }));
   });
 
+  test('active assigned source selection skips inactive users and excluded default sources', () => {
+    const now = Date.now();
+    database.listUsers.mockReturnValue([
+      { id: 'active-user', lastActivityAt: new Date(now).toISOString() },
+      { id: 'inactive-user', lastActivityAt: new Date(now - (20 * 60 * 1000)).toISOString() }
+    ]);
+    database.getUserSettings.mockImplementation((userId) => ({
+      excludedSourceIds: userId === 'active-user' ? [ansaSourceId] : [],
+      excludedSubSourceIds: []
+    }));
+    database.listAllActiveUserSources.mockReturnValue([
+      { id: 'active-custom', userId: 'active-user', name: 'Active Feed', url: 'https://example.com/active.xml', language: 'en', isActive: true },
+      { id: 'inactive-custom', userId: 'inactive-user', name: 'Inactive Feed', url: 'https://example.com/inactive.xml', language: 'en', isActive: true }
+    ]);
+
+    const sourceConfigs = newsAggregator._getActiveAssignedSourceConfigs(now);
+
+    expect(sourceConfigs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'active-custom', ownerUserId: 'active-user' })
+    ]));
+    expect(sourceConfigs).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'inactive-custom' }),
+      expect.objectContaining({ id: 'ansa_mondo' })
+    ]));
+  });
+
+  test('getNewsFeed triggers one immediate assigned-source refresh until a scheduled cycle runs', async () => {
+    const userContext = { userId: 'user-1', excludedSourceIds: [ansaSourceId], excludedSubSourceIds: [] };
+    const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
+    database.listUserSources.mockReturnValue([customSource]);
+    database.listAllActiveUserSources.mockReturnValue([customSource]);
+
+    await newsAggregator.getNewsFeed({}, userContext);
+    await newsAggregator.getNewsFeed({}, userContext);
+
+    expect(rssParser.parseFeed.mock.calls.filter(([source]) => source.id === 'custom-1')).toHaveLength(1);
+
+    await newsAggregator.ingestAllNews({ broadcast: false });
+    await newsAggregator.getNewsFeed({}, userContext);
+
+    expect(rssParser.parseFeed.mock.calls.filter(([source]) => source.id === 'custom-1')).toHaveLength(3);
+  });
+
   test('ingestAllNews stores topics and broadcasts global and private groups separately', async () => {
     database.listAllActiveUserSources.mockReturnValue([
       { id: 'custom-1', name: 'My Feed', url: 'https://example.com/custom.xml', language: 'en', userId: 'user-1', isActive: true }
@@ -217,6 +265,10 @@ describe('newsAggregator service flows', () => {
 
   test('ingestAllNews fetches a shared custom RSS URL once and fans out articles per owning user source', async () => {
     const sharedUrl = 'https://example.com/shared.xml';
+    database.listUsers.mockReturnValue([
+      { id: 'user-1', lastActivityAt: new Date().toISOString() },
+      { id: 'user-2', lastActivityAt: new Date().toISOString() }
+    ]);
     database.listAllActiveUserSources.mockReturnValue([
       { id: 'custom-user-1', name: 'Shared Feed A', url: sharedUrl, language: 'en', userId: 'user-1', isActive: true },
       { id: 'custom-user-2', name: 'Shared Feed B', url: sharedUrl, language: 'en', userId: 'user-2', isActive: true }

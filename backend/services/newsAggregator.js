@@ -8,17 +8,25 @@ const {
   getNewsFeed: buildNewsFeed
 } = require('./newsAggregatorQuery');
 const {
+  getCanonicalSourceId
+} = require('../utils/sourceCatalog');
+const {
   purgeExpiredArticles,
   createEmptyRefreshPayload,
   ingestSourceConfigs
 } = require('./newsAggregatorIngestion');
 
 const SCRAPE_INTERVAL_MS = parseInt(process.env.SCRAPE_INTERVAL_MS || '900000', 10);
+const ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES = parseInt(
+  process.env.SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES || process.env.ONLINE_ACTIVITY_WINDOW_MINUTES || '5',
+  10
+);
 
 let refreshPromise = null;
 let lastRefreshAt = null;
 let schedulerHandle = null;
 let ingestionQueue = Promise.resolve();
+const usersRefreshedSinceScheduledIngestion = new Set();
 
 function getLastRefreshAt() {
   return lastRefreshAt;
@@ -44,6 +52,105 @@ function getIngestionRuntime() {
   };
 }
 
+function isRecentlyActive(user, referenceTime = Date.now()) {
+  if (!user?.lastActivityAt || !Number.isFinite(ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES) || ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES <= 0) {
+    return false;
+  }
+
+  const activityTime = new Date(user.lastActivityAt).getTime();
+  return Number.isFinite(activityTime) && activityTime >= referenceTime - (ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES * 60 * 1000);
+}
+
+function getSettingsForSourceAssignment(userId) {
+  const settings = database.getUserSettings(userId) || {};
+  return {
+    excludedSourceIds: Array.isArray(settings.excludedSourceIds) ? settings.excludedSourceIds : [],
+    excludedSubSourceIds: Array.isArray(settings.excludedSubSourceIds) ? settings.excludedSubSourceIds : []
+  };
+}
+
+function isConfiguredSourceAssignedToSettings(source, settings = {}) {
+  const canonicalSourceId = getCanonicalSourceId(source.id, source.name);
+  return !settings.excludedSourceIds.includes(canonicalSourceId)
+    && !settings.excludedSubSourceIds.includes(source.id);
+}
+
+function getAssignedConfiguredSourcesForUsers(users = []) {
+  const assignedSources = new Map();
+
+  users.forEach((user) => {
+    const settings = getSettingsForSourceAssignment(user.id);
+    expandConfiguredSources()
+      .filter((source) => isConfiguredSourceAssignedToSettings(source, settings))
+      .forEach((source) => assignedSources.set(source.id, source));
+  });
+
+  return [...assignedSources.values()];
+}
+
+function getActiveUsers(referenceTime = Date.now()) {
+  return database.listUsers().filter((user) => isRecentlyActive(user, referenceTime));
+}
+
+function getActiveAssignedSourceConfigs(referenceTime = Date.now()) {
+  const activeUsers = getActiveUsers(referenceTime);
+  const activeUserIds = new Set(activeUsers.map((user) => user.id));
+  const assignedConfiguredSources = getAssignedConfiguredSourcesForUsers(activeUsers);
+  const assignedUserSources = database.listAllActiveUserSources()
+    .filter((source) => activeUserIds.has(source.userId));
+
+  return [
+    ...assignedConfiguredSources,
+    ...expandUserSources(assignedUserSources)
+  ];
+}
+
+function getUserAssignedSourceConfigs(userContext = {}) {
+  if (!userContext.userId) {
+    return [];
+  }
+
+  const storedSettings = getSettingsForSourceAssignment(userContext.userId);
+  const settings = {
+    excludedSourceIds: Array.isArray(userContext.excludedSourceIds) ? userContext.excludedSourceIds : storedSettings.excludedSourceIds,
+    excludedSubSourceIds: Array.isArray(userContext.excludedSubSourceIds) ? userContext.excludedSubSourceIds : storedSettings.excludedSubSourceIds
+  };
+  const assignedConfiguredSources = expandConfiguredSources()
+    .filter((source) => isConfiguredSourceAssignedToSettings(source, settings));
+  const assignedUserSources = database.listUserSources(userContext.userId)
+    .filter((source) => source?.isActive !== false);
+
+  return [
+    ...assignedConfiguredSources,
+    ...expandUserSources(assignedUserSources)
+  ];
+}
+
+async function refreshUserAssignedSourcesIfDue(userContext = {}, options = {}) {
+  const userId = userContext.userId;
+
+  if (!userId || usersRefreshedSinceScheduledIngestion.has(userId)) {
+    return createEmptyRefreshPayload(getLastRefreshAt());
+  }
+
+  usersRefreshedSinceScheduledIngestion.add(userId);
+
+  return enqueueIngestionTask(async () => {
+    const sourceConfigs = getUserAssignedSourceConfigs(userContext);
+    if (sourceConfigs.length === 0) {
+      return createEmptyRefreshPayload(getLastRefreshAt());
+    }
+
+    return ingestSourceConfigs(sourceConfigs, {
+      broadcast: options.broadcast === true,
+      includeMaintenance: false,
+      failWhenEmpty: false,
+      updateRefreshTimestamp: true,
+      trackIngestionRun: false
+    }, getIngestionRuntime());
+  });
+}
+
 async function ingestAllNews(options = {}) {
   const broadcast = options.broadcast !== false;
 
@@ -53,17 +160,22 @@ async function ingestAllNews(options = {}) {
 
   refreshPromise = enqueueIngestionTask(async () => {
     try {
-      const sourceConfigs = [
-        ...expandConfiguredSources(),
-        ...expandUserSources(database.listAllActiveUserSources())
-      ];
+      const databaseIsEmpty = database.countArticles() === 0;
+      const sourceConfigs = databaseIsEmpty
+        ? [
+            ...expandConfiguredSources(),
+            ...expandUserSources(database.listAllActiveUserSources())
+          ]
+        : getActiveAssignedSourceConfigs();
       const payload = await ingestSourceConfigs(sourceConfigs, {
         broadcast,
         includeMaintenance: true,
-        failWhenEmpty: true,
-        updateRefreshTimestamp: true,
+        failWhenEmpty: databaseIsEmpty && sourceConfigs.length > 0,
+        updateRefreshTimestamp: sourceConfigs.length > 0,
         trackIngestionRun: true
       }, getIngestionRuntime());
+
+      usersRefreshedSinceScheduledIngestion.clear();
 
       logger.info(`Ingestion completed: ${payload.fetchedCount} fetched, ${payload.insertedCount} inserted, ${payload.updatedCount} updated`);
       return payload;
@@ -116,8 +228,11 @@ async function ensureSeedData() {
 }
 
 async function getNewsFeed(filters = {}, userContext = {}) {
+  await ensureSeedData();
+  await refreshUserAssignedSourcesIfDue(userContext, { broadcast: true });
+
   return buildNewsFeed(filters, userContext, {
-    ensureSeedData,
+    ensureSeedData: async () => {},
     getLastRefreshAt
   });
 }
@@ -152,6 +267,10 @@ function stopScheduler() {
   }
 }
 
+function resetImmediateRefreshState() {
+  usersRefreshedSinceScheduledIngestion.clear();
+}
+
 process.on('exit', stopScheduler);
 
 module.exports = {
@@ -161,5 +280,10 @@ module.exports = {
   getCachedNewsFeed,
   startScheduler,
   stopScheduler,
-  newsSources
+  newsSources,
+  _getActiveAssignedSourceConfigs: getActiveAssignedSourceConfigs,
+  _getUserAssignedSourceConfigs: getUserAssignedSourceConfigs,
+  _isConfiguredSourceAssignedToSettings: isConfiguredSourceAssignedToSettings,
+  _isRecentlyActive: isRecentlyActive,
+  _resetImmediateRefreshState: resetImmediateRefreshState
 };

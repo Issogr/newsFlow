@@ -41,6 +41,7 @@ services:
       - SERVER_TIMEOUT=60000        # Server timeout in ms
       - LOG_LEVEL=info              # Logging level (debug, info, warn, error)
       - SCRAPE_INTERVAL_MS=900000   # Balanced scraping interval (15 min)
+      - SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES=${SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES:-5}
       - ARTICLE_RETENTION_HOURS=24  # Delete articles and cache entries older than 24 hours
       - MAX_SCAN_ARTICLES=600       # Maximum number of articles to scan for grouped queries
       # WebSocket configuration

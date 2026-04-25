@@ -4,6 +4,7 @@
 
 - added optional OpenRouter-powered AI topic detection for newly inserted articles, with server-side API-key handling, configurable model selection, batched source/title/description-only classification that does not send provider RSS categories, strict taxonomy validation, and local fallback until AI returns valid topics
 - changed custom-source ingestion to fetch identical active user RSS URLs once per refresh and fan out the parsed articles per owning user source, while keeping delete/update cleanup scoped to the affected user source
+- changed scheduled ingestion to refresh only sources assigned to recently active users, with one immediate per-user assigned-source refresh between scheduled cycles and a first-run seed fallback when the article database is empty
 - hardened the BFF boundary by stripping raw backend credentials from browser-facing app and Socket.IO proxy paths, requiring a valid BFF session before proxying authenticated app traffic, and clearing local BFF sessions even when upstream logout fails
 - added browser security headers to the BFF-served frontend and switched BFF/backend Docker dependency installs to lockfile-based `npm ci`, with the BFF container now running as an unprivileged user
 - tightened outbound URL safety for RSS/reader fetches by blocking additional special-use IPv4 ranges, carrier-grade NAT, multicast/reserved ranges, and IPv4-mapped IPv6 private targets
