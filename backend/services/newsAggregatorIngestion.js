@@ -189,10 +189,16 @@ function scheduleAiTopicsForPendingArticles(normalizedArticles = []) {
 }
 
 function mergeNormalizedArticleTopics(normalizedArticles = []) {
-  database.mergeTopicsForArticles(normalizedArticles.map((article) => ({
+  const pendingArticleIdSet = new Set(
+    database.getArticleIdsPendingAiTopicProcessing(normalizedArticles.map((article) => article.id))
+  );
+
+  database.mergeTopicsForArticles(normalizedArticles
+    .filter((article) => pendingArticleIdSet.has(article.id))
+    .map((article) => ({
     articleId: article.id,
     topics: article.topicDetails || article.topics
-  })));
+    })));
 }
 
 async function persistNormalizedArticles(normalizedArticles = []) {

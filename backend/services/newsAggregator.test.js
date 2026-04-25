@@ -252,6 +252,7 @@ describe('newsAggregator service flows', () => {
       .mockResolvedValueOnce([{ id: 'global-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Global economy update', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/g', rawTopics: ['Economy'] }])
       .mockResolvedValueOnce([{ id: 'private-1', sourceId: 'custom-1', source: 'My Feed', title: 'Private portfolio update', pubDate: '2026-03-07T11:00:00.000Z', url: 'https://example.com/p', rawTopics: ['Markets'], ownerUserId: 'user-1' }]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['global-1', 'private-1'], insertedCount: 2, updatedCount: 0 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['global-1', 'private-1']);
 
     const result = await newsAggregator.ingestAllNews({ broadcast: true });
 
@@ -283,10 +284,9 @@ describe('newsAggregator service flows', () => {
 
     await newsAggregator.ingestAllNews({ broadcast: true });
 
-    expect(database.mergeTopicsForArticles).toHaveBeenCalledWith(expect.arrayContaining([
-      expect.objectContaining({ articleId: 'inserted-1', topics: expect.any(Array) }),
-      expect.objectContaining({ articleId: 'updated-1', topics: expect.any(Array) })
-    ]));
+    expect(database.mergeTopicsForArticles).toHaveBeenCalledWith([
+      expect.objectContaining({ articleId: 'inserted-1', topics: expect.any(Array) })
+    ]);
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].topics).toEqual(['Tecnologia']);
     expect(aiTopicClassifier.classifyTopicDetailsForArticles).not.toHaveBeenCalled();
 
@@ -325,6 +325,18 @@ describe('newsAggregator service flows', () => {
 
     expect(database.replaceTopicsForArticles).not.toHaveBeenCalled();
     expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'no_topics');
+  });
+
+  test('ingestAllNews does not re-merge fallback topics for already AI-processed articles', async () => {
+    rssParser.parseFeed.mockResolvedValue([
+      { id: 'existing-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Existing story', description: 'Markets rise', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/existing' }
+    ]);
+    database.upsertArticles.mockReturnValue({ insertedIds: [], updatedIds: ['existing-1'], insertedCount: 0, updatedCount: 1 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue([]);
+
+    await newsAggregator.ingestAllNews({ broadcast: true });
+
+    expect(database.mergeTopicsForArticles).toHaveBeenCalledWith([]);
   });
 
   test('ingestAllNews fetches a shared custom RSS URL once and fans out articles per owning user source', async () => {
