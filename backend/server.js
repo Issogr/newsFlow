@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const internalApiRoutes = require('./routes/api');
 const publicApiRoutes = require('./routes/publicApi');
 const logger = require('./utils/logger');
@@ -77,7 +77,7 @@ const baseRateLimit = rateLimit({
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip,
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
   skip: (req) => req.path === '/health',
   message: {
     error: {
