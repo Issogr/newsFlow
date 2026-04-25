@@ -3,6 +3,7 @@
 ## 3.2.12
 
 - added optional OpenRouter-powered AI topic detection for newly inserted articles, with server-side API-key handling, configurable model selection, batched source/title/description-only classification that does not send provider RSS categories, strict taxonomy validation, and local fallback until AI returns valid topics
+- switched OpenRouter topic classification from a custom HTTP call to the official `@openrouter/sdk` client while keeping the backend CommonJS runtime through dynamic import
 - added safe backend log feedback for AI topic requests so Docker Compose development can see skipped, started, completed, capped, and failed AI classification batches without logging prompts or secrets
 - switched the BFF Docker dependency and runtime stages to Node 20 while keeping the frontend build on Node 22, avoiding Node 22 deprecation noise from the proxy dependency at container startup
 - guarded batched topic merges against stale article ids left behind by article deduplication or cleanup so ingestion no longer fails with a foreign-key error when an article disappears before its topics are merged

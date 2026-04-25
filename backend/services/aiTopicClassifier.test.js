@@ -1,7 +1,3 @@
-jest.mock('axios', () => ({
-  post: jest.fn()
-}));
-
 jest.mock('../utils/logger', () => ({
   debug: jest.fn(),
   info: jest.fn(),
@@ -9,15 +5,23 @@ jest.mock('../utils/logger', () => ({
   error: jest.fn()
 }));
 
-const axios = require('axios');
 const logger = require('../utils/logger');
 const aiTopicClassifier = require('./aiTopicClassifier');
 
 describe('aiTopicClassifier', () => {
   const originalEnv = process.env;
+  let chatSend;
+  let OpenRouterMock;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    chatSend = jest.fn();
+    OpenRouterMock = jest.fn(() => ({
+      chat: {
+        send: chatSend
+      }
+    }));
+    aiTopicClassifier._setOpenRouterSdkLoader(async () => ({ OpenRouter: OpenRouterMock }));
     process.env = {
       ...originalEnv,
       OPENROUTER_API_KEY: 'test-key',
@@ -26,16 +30,15 @@ describe('aiTopicClassifier', () => {
   });
 
   afterEach(() => {
+    aiTopicClassifier._setOpenRouterSdkLoader();
     process.env = originalEnv;
   });
 
   test('keeps the API key server-side while sending compact article payloads without RSS topics', async () => {
-    axios.post.mockResolvedValue({
-      data: {
-        choices: [
-          { message: { content: JSON.stringify({ topicsById: [{ id: 'article-1', topics: ['Technology', 'rss'] }] }) } }
-        ]
-      }
+    chatSend.mockResolvedValue({
+      choices: [
+        { message: { content: JSON.stringify({ topicsById: [{ id: 'article-1', topics: ['Technology', 'rss'] }] }) } }
+      ]
     });
 
     const result = await aiTopicClassifier.classifyTopicsForArticles([
@@ -49,13 +52,18 @@ describe('aiTopicClassifier', () => {
       }
     ]);
 
-    const requestBody = axios.post.mock.calls[0][1];
-    const requestConfig = axios.post.mock.calls[0][2];
+    const clientOptions = OpenRouterMock.mock.calls[0][0];
+    const requestBody = chatSend.mock.calls[0][0].chatRequest;
     const prompt = requestBody.messages[1].content;
 
     expect(result.get('article-1')).toEqual(['Tecnologia']);
     expect(requestBody.model).toBe('liquid/lfm-2.5-1.2b-instruct:free');
-    expect(requestConfig.headers.Authorization).toBe('Bearer test-key');
+    expect(clientOptions).toEqual(expect.objectContaining({
+      apiKey: 'test-key',
+      serverURL: 'https://openrouter.ai/api/v1',
+      httpReferer: expect.any(String),
+      appTitle: 'News Flow'
+    }));
     expect(prompt).toContain('AI chips arrive');
     expect(prompt).toContain('Do not use provider RSS categories');
     expect(prompt).not.toContain('tech');
@@ -73,7 +81,7 @@ describe('aiTopicClassifier', () => {
     ]);
 
     expect(result.size).toBe(0);
-    expect(axios.post).not.toHaveBeenCalled();
+    expect(chatSend).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection skipped: reason=missing_api_key'));
   });
 

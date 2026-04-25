@@ -1,4 +1,3 @@
-const axios = require('axios');
 const logger = require('../utils/logger');
 const topicNormalizer = require('./topicNormalizer');
 
@@ -8,6 +7,33 @@ const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_BATCH_CONCURRENCY = 2;
 const DEFAULT_MAX_ARTICLES_PER_REFRESH = 160;
 const DEFAULT_TIMEOUT_MS = 10000;
+
+let openRouterSdkLoader = () => import('@openrouter/sdk');
+let openRouterSdkPromise = null;
+
+function setOpenRouterSdkLoader(loader) {
+  openRouterSdkLoader = loader || (() => import('@openrouter/sdk'));
+  openRouterSdkPromise = null;
+}
+
+async function loadOpenRouterSdk() {
+  if (!openRouterSdkPromise) {
+    openRouterSdkPromise = openRouterSdkLoader();
+  }
+
+  return openRouterSdkPromise;
+}
+
+async function createOpenRouterClient(config) {
+  const { OpenRouter } = await loadOpenRouterSdk();
+  return new OpenRouter({
+    apiKey: config.apiKey,
+    serverURL: config.baseUrl,
+    timeoutMs: config.timeoutMs,
+    httpReferer: String(process.env.APP_BASE_URL || 'http://localhost'),
+    appTitle: 'News Flow'
+  });
+}
 
 function getIntegerEnv(name, fallback, min, max) {
   const value = Number(process.env[name]);
@@ -133,32 +159,27 @@ async function classifyBatch(batch, config) {
   }
 
   const startedAt = Date.now();
-  const response = await axios.post(`${config.baseUrl}/chat/completions`, {
-    model: config.model,
-    messages: [
-      {
-        role: 'system',
-        content: 'You are a fast, conservative news taxonomy classifier. Return valid JSON only.'
-      },
-      {
-        role: 'user',
-        content: buildPrompt(batch)
-      }
-    ],
-    temperature: 0,
-    max_tokens: Math.min(2000, 160 + (batch.length * 36))
-  }, {
-    timeout: config.timeoutMs,
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': String(process.env.APP_BASE_URL || 'http://localhost'),
-      'X-Title': 'News Flow'
-    },
-    validateStatus: (status) => status >= 200 && status < 300
+  const openRouter = await createOpenRouterClient(config);
+  const response = await openRouter.chat.send({
+    chatRequest: {
+      model: config.model,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a fast, conservative news taxonomy classifier. Return valid JSON only.'
+        },
+        {
+          role: 'user',
+          content: buildPrompt(batch)
+        }
+      ],
+      temperature: 0,
+      maxTokens: Math.min(2000, 160 + (batch.length * 36)),
+      stream: false
+    }
   });
 
-  const content = response.data?.choices?.[0]?.message?.content;
+  const content = response.choices?.[0]?.message?.content;
   const result = normalizeClassifierResult(parseJsonContent(content), allowedIds);
 
   logger.info(`AI topic batch completed: model=${config.model}, articles=${batch.length}, classified=${result.size}, durationMs=${Date.now() - startedAt}`);
@@ -203,5 +224,6 @@ module.exports = {
   _buildPrompt: buildPrompt,
   _getConfig: getConfig,
   _normalizeClassifierResult: normalizeClassifierResult,
-  _parseJsonContent: parseJsonContent
+  _parseJsonContent: parseJsonContent,
+  _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };

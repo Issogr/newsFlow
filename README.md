@@ -105,7 +105,7 @@ AI topic detection:
 | `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles classified by AI per refresh before falling back to local detection |
 | `AI_TOPIC_REQUEST_TIMEOUT_MS` | `10000` | Timeout for one AI topic-classification request |
 
-AI topic detection sends only compact metadata for newly inserted articles: source, title, and short description. Full article bodies and provider RSS categories are not sent to the model. The existing local/RSS-derived taxonomy is used as an immediate fallback, then replaced only when AI returns at least one valid canonical topic. If OpenRouter is unavailable, disabled, over the per-refresh cap, unsure, or returns invalid topics, the backend keeps the local fallback so ingestion can continue.
+AI topic detection uses the official `@openrouter/sdk` package from the backend. It sends only compact metadata for newly inserted articles: source, title, and short description. Full article bodies and provider RSS categories are not sent to the model. The existing local/RSS-derived taxonomy is used as an immediate fallback, then replaced only when AI returns at least one valid canonical topic. If OpenRouter is unavailable, disabled, over the per-refresh cap, unsure, or returns invalid topics, the backend keeps the local fallback so ingestion can continue.
 
 For Docker Compose development, AI topic activity is visible in backend logs without exposing prompts or secrets:
 
