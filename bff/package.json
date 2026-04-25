@@ -1,25 +1,25 @@
 {
   "name": "newsflow-bff",
-  "version": "1.0.0",
+  "version": "3.2.13",
   "description": "Browser-facing BFF for News Flow",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "jest"
+    "test": "NODE_OPTIONS=--no-experimental-webstorage jest"
   },
   "dependencies": {
-    "better-sqlite3": "^12.4.1",
+    "axios": "^1.15.2",
+    "better-sqlite3": "^12.9.0",
     "better-sqlite3-session-store": "^0.1.0",
-    "axios": "^1.9.0",
-    "cookie": "^1.0.2",
+    "cookie": "^1.1.1",
     "cookie-signature": "^1.2.2",
-    "express": "^5.1.0",
-    "express-session": "^1.18.2",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
     "helmet": "^8.1.0",
     "http-proxy-middleware": "^3.0.5"
   },
   "devDependencies": {
-    "jest": "^29.7.0",
+    "jest": "^30.3.0",
     "supertest": "^7.2.2"
   },
   "engines": {

@@ -2,6 +2,11 @@
 
 ## 3.2.13
 
+- fixed AI topic background processing so capped or failed classifier batches are not permanently marked as processed without an actual attempt, allowing later refreshes to retry untouched articles
+- reduced SQLite write pressure by throttling backend session-expiry refreshes, batching anonymous public API counters, skipping filter-stat recomputation on feed pagination, and letting hot feed ordering use the `published_at` index directly
+- hardened the BFF with upstream request timeouts, corrected Socket.IO proxy path handling, malformed-JSON `400` responses, session cleanup for invalid stored payloads, and less session-store work for public/static paths
+- upgraded backend, BFF, and frontend dependencies, moved the backend Docker runtime to Node 20 for the current SQLite dependency line, and migrated the frontend Tailwind PostCSS setup for Tailwind 4
+- fixed frontend development proxying for normal `/api/*` browser calls through the BFF, removed stale token-auth helpers, cleaned macOS artifact ignores, and guarded admin async updates after unmount
 - added optional OpenRouter-powered AI topic detection for newly inserted articles, with server-side API-key handling, configurable model selection, batched source/title/description-only classification that does not send provider RSS categories, strict taxonomy validation, and local fallback until AI returns valid topics
 - switched OpenRouter topic classification from a custom HTTP call to the official `@openrouter/sdk` client while keeping the backend CommonJS runtime through dynamic import
 - added safe backend log feedback for AI topic requests so Docker Compose development can see skipped, started, completed, capped, and failed AI classification batches without logging prompts or secrets

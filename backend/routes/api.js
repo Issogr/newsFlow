@@ -1,5 +1,5 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const multer = require('multer');
 const newsService = require('../services/newsAggregator');
 const database = require('../services/database');
@@ -42,7 +42,7 @@ const authRateLimit = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const username = String(req.body?.username || '').trim().toLowerCase();
-    return `${req.ip}:${username}`;
+    return `${ipKeyGenerator(req.ip)}:${username}`;
   },
   message: {
     error: {
@@ -59,7 +59,7 @@ const passwordSetupRateLimit = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const token = String(req.body?.token || req.query?.token || '').trim().slice(0, 24);
-    return `${req.ip}:${token}`;
+    return `${ipKeyGenerator(req.ip)}:${token}`;
   },
   message: {
     error: {

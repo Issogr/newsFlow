@@ -2,6 +2,7 @@ import { defineConfig, transformWithOxc } from 'vite';
 import react from '@vitejs/plugin-react';
 
 const backendOrigin = process.env.VITE_BACKEND_ORIGIN || 'http://localhost:5000';
+const bffOrigin = process.env.VITE_BFF_ORIGIN || 'http://localhost:80';
 
 function transformFrontendJsx() {
   return {
@@ -34,8 +35,12 @@ export default defineConfig({
         target: backendOrigin,
         changeOrigin: true
       },
+      '/api': {
+        target: bffOrigin,
+        changeOrigin: true
+      },
       '/socket.io': {
-        target: backendOrigin,
+        target: bffOrigin,
         changeOrigin: true,
         ws: true
       }

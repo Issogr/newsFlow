@@ -19,6 +19,7 @@ function parseNewsQuery(query = {}) {
     beforeId: query.beforeId || '',
     page: query.page ? Number(query.page) : 1,
     pageSize: query.pageSize ? Number(query.pageSize) : 12,
+    includeFilters: query.includeFilters !== 'false',
   };
 }
 

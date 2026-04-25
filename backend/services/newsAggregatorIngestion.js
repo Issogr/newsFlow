@@ -2,7 +2,11 @@ const rssParser = require('./rssParser');
 const database = require('./database');
 const logger = require('../utils/logger');
 const websocketService = require('./websocketService');
-const { classifyTopicDetailsForArticles, isAiTopicDetectionAvailable } = require('./aiTopicClassifier');
+const {
+  classifyTopicDetailsForArticles,
+  classifyTopicDetailsForArticlesWithStatus,
+  isAiTopicDetectionAvailable
+} = require('./aiTopicClassifier');
 const { createError } = require('../utils/errorHandler');
 const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const {
@@ -147,7 +151,18 @@ async function processAiTopicsForPendingArticles(articles = []) {
   const articleIds = articles.map((article) => article.id).filter(Boolean);
 
   try {
-    const topicsByArticleId = await classifyTopicDetailsForArticles(articles);
+    const classification = typeof classifyTopicDetailsForArticlesWithStatus === 'function'
+      ? await classifyTopicDetailsForArticlesWithStatus(articles)
+      : {
+        topicsByArticleId: await classifyTopicDetailsForArticles(articles),
+        attemptedArticleIds: articleIds,
+        failedArticleIds: []
+      };
+    const topicsByArticleId = classification.topicsByArticleId || new Map();
+    const attemptedArticleIds = Array.isArray(classification.attemptedArticleIds)
+      ? classification.attemptedArticleIds
+      : articleIds;
+    const failedArticleIds = new Set(classification.failedArticleIds || []);
     const classifiedIds = [];
     const topicEntries = [];
 
@@ -163,9 +178,11 @@ async function processAiTopicsForPendingArticles(articles = []) {
     }
 
     database.markArticlesAiTopicProcessing(classifiedIds, 'completed');
-    database.markArticlesAiTopicProcessing(articleIds.filter((articleId) => !classifiedIds.includes(articleId)), 'no_topics');
+    database.markArticlesAiTopicProcessing(
+      attemptedArticleIds.filter((articleId) => !classifiedIds.includes(articleId) && !failedArticleIds.has(articleId)),
+      'no_topics'
+    );
   } catch (error) {
-    database.markArticlesAiTopicProcessing(articleIds, 'failed');
     logger.warn(`Background AI topic processing failed: ${error.message}`);
   }
 }

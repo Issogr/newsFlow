@@ -8,6 +8,7 @@ const API_TOKEN_TTL_DAYS = 30;
 const SESSION_PURGE_INTERVAL_MS = parseInt(process.env.SESSION_PURGE_INTERVAL_MS || '300000', 10);
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase() || 'admin';
 const USER_ACTIVITY_TOUCH_INTERVAL_SECONDS = parseInt(process.env.USER_ACTIVITY_TOUCH_INTERVAL_SECONDS || '60', 10);
+const SESSION_REFRESH_WINDOW_MS = parseInt(process.env.SESSION_REFRESH_WINDOW_MS || String(24 * 60 * 60 * 1000), 10);
 const SESSION_COOKIE_NAME = 'newsflow_session';
 const scryptAsync = promisify(crypto.scrypt);
 
@@ -116,6 +117,15 @@ function createSessionExpiryDate() {
   return new Date(Date.now() + (SESSION_TTL_DAYS * 24 * 60 * 60 * 1000)).toISOString();
 }
 
+function shouldRefreshSessionExpiry(expiresAt, now = Date.now()) {
+  const expiresAtTime = new Date(expiresAt).getTime();
+  if (!Number.isFinite(expiresAtTime)) {
+    return true;
+  }
+
+  return expiresAtTime - now <= SESSION_REFRESH_WINDOW_MS;
+}
+
 function createApiTokenExpiryDate() {
   return new Date(Date.now() + (API_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000)).toISOString();
 }
@@ -144,8 +154,10 @@ function resolveAuthenticatedSession({ headers = {}, authToken = '', touchActivi
     sessionToken
   };
 
-  const refreshedExpiresAt = createSessionExpiryDate();
-  database.refreshSessionExpiry(session.tokenHash, refreshedExpiresAt);
+  const refreshedExpiresAt = shouldRefreshSessionExpiry(session.expiresAt) ? createSessionExpiryDate() : session.expiresAt;
+  if (refreshedExpiresAt !== session.expiresAt) {
+    database.refreshSessionExpiry(session.tokenHash, refreshedExpiresAt);
+  }
   database.touchUserActivity(user.id, new Date().toISOString(), touchActivitySeconds);
 
   return {
@@ -276,6 +288,7 @@ module.exports = {
   generateSessionToken,
   hashSessionToken,
   createSessionExpiryDate,
+  shouldRefreshSessionExpiry,
   createApiTokenExpiryDate,
   API_TOKEN_TTL_DAYS,
   SESSION_COOKIE_NAME,

@@ -22,7 +22,11 @@ const commandArgs = shouldRunOnce
 
 const result = spawnSync('npx', commandArgs, {
   stdio: 'inherit',
-  shell: process.platform === 'win32'
+  shell: process.platform === 'win32',
+  env: {
+    ...process.env,
+    NODE_OPTIONS: [process.env.NODE_OPTIONS, '--no-experimental-webstorage'].filter(Boolean).join(' ')
+  }
 });
 
 process.exit(result.status === null ? 1 : result.status);

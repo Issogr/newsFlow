@@ -87,6 +87,10 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') {
+        return;
+      }
+
       loadUsers();
     }, REFRESH_INTERVAL_MS);
 
@@ -143,6 +147,10 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
 
     try {
       const response = await createAdminPasswordSetupLink(user.id);
+      if (!isMountedRef.current) {
+        return;
+      }
+
       setLatestGeneratedLink({
         userId: user.id,
         username: user.username,
@@ -152,9 +160,13 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
       setCopiedLink(false);
       await loadUsers();
     } catch (requestError) {
-      setError(requestError.message || t('genericError'));
+      if (isMountedRef.current) {
+        setError(requestError.message || t('genericError'));
+      }
     } finally {
-      setCreatingForUserId('');
+      if (isMountedRef.current) {
+        setCreatingForUserId('');
+      }
     }
   };
 
@@ -185,12 +197,20 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
 
     try {
       await deleteAdminUser(user.id);
+      if (!isMountedRef.current) {
+        return;
+      }
+
       setLatestGeneratedLink((current) => (current?.userId === user.id ? null : current));
       await loadUsers();
     } catch (requestError) {
-      setError(requestError.message || t('genericError'));
+      if (isMountedRef.current) {
+        setError(requestError.message || t('genericError'));
+      }
     } finally {
-      setDeletingUserId('');
+      if (isMountedRef.current) {
+        setDeletingUserId('');
+      }
     }
   };
 
@@ -200,11 +220,17 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
 
     try {
       const response = await updateUserSettings({ themeMode: nextThemeMode });
-      onUserUpdate?.(response.settings);
+      if (isMountedRef.current) {
+        onUserUpdate?.(response.settings);
+      }
     } catch (requestError) {
-      setError(requestError.message || t('genericError'));
+      if (isMountedRef.current) {
+        setError(requestError.message || t('genericError'));
+      }
     } finally {
-      setThemeSaving(false);
+      if (isMountedRef.current) {
+        setThemeSaving(false);
+      }
     }
   };
 

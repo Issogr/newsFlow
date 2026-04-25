@@ -22,6 +22,7 @@ const SESSION_STORE_CLEAR_INTERVAL_MS = parseInt(process.env.SESSION_STORE_CLEAR
 const SESSION_SCHEMA_VERSION = 1;
 const DEFAULT_BFF_SESSION_SECRET = 'development-only-change-me';
 const DEFAULT_INTERNAL_PROXY_TOKEN = 'development-only-change-me';
+const UPSTREAM_TIMEOUT_MS = parseInt(process.env.BFF_UPSTREAM_TIMEOUT_MS || '30000', 10);
 
 function readConfiguredSecret(name, developmentFallback) {
   const configured = String(process.env[name] || '').trim();
@@ -312,7 +313,7 @@ function buildSessionMiddleware(store) {
   });
 }
 
-function normalizeSessionState(req, res, next) {
+function normalizeSessionState(req, res, next, sessionDb = null) {
   if (!req.session) {
     next();
     return;
@@ -329,7 +330,7 @@ function normalizeSessionState(req, res, next) {
     return;
   }
 
-  destroySession(req).then(() => {
+  destroySession(req, sessionDb).then(() => {
     clearBffSessionCookie(res);
     next();
   });
@@ -403,6 +404,7 @@ function createApp(options = {}) {
   const sessionMiddleware = options.sessionMiddleware || buildSessionMiddleware(sessionStore);
   const backendHttp = options.backendHttp || axios.create({
     baseURL: backendBaseUrl,
+    timeout: UPSTREAM_TIMEOUT_MS,
     validateStatus: () => true,
     maxRedirects: 0,
   });
@@ -432,9 +434,6 @@ function createApp(options = {}) {
     referrerPolicy: { policy: 'same-origin' },
   }));
 
-  app.use(sessionMiddleware);
-  app.use(normalizeSessionState);
-
   function buildInternalHeaders(req) {
     const getHeader = (name) => (
       typeof req.get === 'function'
@@ -459,6 +458,20 @@ function createApp(options = {}) {
     proxyReq.removeHeader('authorization');
     proxyReq.removeHeader('x-session-token');
     proxyReq.removeHeader('x-newsflow-app');
+  }
+
+  function applyBackendSessionProxyHeaders(proxyReq, req) {
+    stripClientCredentials(proxyReq);
+    Object.entries(buildInternalHeaders(req)).forEach(([name, value]) => {
+      proxyReq.setHeader(name, value);
+    });
+
+    const backendSessionCookie = getBackendSessionCookieFromRequest(req);
+    if (backendSessionCookie) {
+      proxyReq.setHeader('cookie', backendSessionCookie);
+    } else {
+      proxyReq.removeHeader('cookie');
+    }
   }
 
   function requireBackendSession(req, res, next) {
@@ -537,6 +550,8 @@ function createApp(options = {}) {
     target: `${backendBaseUrl}/api/public`,
     changeOrigin: false,
     xfwd: true,
+    timeout: UPSTREAM_TIMEOUT_MS,
+    proxyTimeout: UPSTREAM_TIMEOUT_MS,
     on: {
       proxyReq: (proxyReq) => {
         proxyReq.removeHeader('cookie');
@@ -548,19 +563,11 @@ function createApp(options = {}) {
     target: `${backendBaseUrl}/internal-api`,
     changeOrigin: false,
     xfwd: true,
+    timeout: UPSTREAM_TIMEOUT_MS,
+    proxyTimeout: UPSTREAM_TIMEOUT_MS,
     on: {
       proxyReq: (proxyReq, req) => {
-        stripClientCredentials(proxyReq);
-        Object.entries(buildInternalHeaders(req)).forEach(([name, value]) => {
-          proxyReq.setHeader(name, value);
-        });
-
-        const backendSessionCookie = getBackendSessionCookieFromRequest(req);
-        if (backendSessionCookie) {
-          proxyReq.setHeader('cookie', backendSessionCookie);
-        } else {
-          proxyReq.removeHeader('cookie');
-        }
+        applyBackendSessionProxyHeaders(proxyReq, req);
       },
       proxyRes: (proxyRes, req, res) => {
         delete proxyRes.headers['set-cookie'];
@@ -580,36 +587,19 @@ function createApp(options = {}) {
   });
 
   const socketProxy = createProxyMiddleware({
-    target: `${backendBaseUrl}/socket.io`,
+    target: backendBaseUrl,
     changeOrigin: false,
     xfwd: true,
     ws: true,
+    pathRewrite: (proxyPath, req) => req.originalUrl || proxyPath,
+    timeout: UPSTREAM_TIMEOUT_MS,
+    proxyTimeout: UPSTREAM_TIMEOUT_MS,
     on: {
       proxyReq: (proxyReq, req) => {
-        stripClientCredentials(proxyReq);
-        Object.entries(buildInternalHeaders(req)).forEach(([name, value]) => {
-          proxyReq.setHeader(name, value);
-        });
-
-        const backendSessionCookie = getBackendSessionCookieFromRequest(req);
-        if (backendSessionCookie) {
-          proxyReq.setHeader('cookie', backendSessionCookie);
-        } else {
-          proxyReq.removeHeader('cookie');
-        }
+        applyBackendSessionProxyHeaders(proxyReq, req);
       },
       proxyReqWs: (proxyReq, req) => {
-        stripClientCredentials(proxyReq);
-        Object.entries(buildInternalHeaders(req)).forEach(([name, value]) => {
-          proxyReq.setHeader(name, value);
-        });
-
-        const backendSessionCookie = getBackendSessionCookieFromRequest(req);
-        if (backendSessionCookie) {
-          proxyReq.setHeader('cookie', backendSessionCookie);
-        } else {
-          proxyReq.removeHeader('cookie');
-        }
+        applyBackendSessionProxyHeaders(proxyReq, req);
       },
     },
   });
@@ -626,6 +616,29 @@ function createApp(options = {}) {
 
   app.get(['/api/docs', '/api/docs/'], (req, res) => {
     serveSpaIndex(frontendDistDir, res);
+  });
+
+  app.use(express.static(frontendDistDir, {
+    index: false,
+    maxAge: '30d',
+    immutable: true,
+  }));
+
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
+      next();
+      return;
+    }
+
+    sessionMiddleware(req, res, next);
+  });
+  app.use((req, res, next) => {
+    if (!req.session) {
+      next();
+      return;
+    }
+
+    normalizeSessionState(req, res, next, sessionDb);
   });
 
   app.post('/api/auth/register', jsonParser, (req, res, next) => {
@@ -713,12 +726,6 @@ function createApp(options = {}) {
   app.use('/api', requireBackendSession, appApiProxy);
   app.use('/socket.io', requireBackendSession, socketProxy);
 
-  app.use(express.static(frontendDistDir, {
-    index: false,
-    maxAge: '30d',
-    immutable: true,
-  }));
-
   app.get(/.*/, (req, res) => {
     serveSpaIndex(frontendDistDir, res);
   });
@@ -726,6 +733,16 @@ function createApp(options = {}) {
   app.use((error, req, res, next) => {
     if (res.headersSent) {
       next(error);
+      return;
+    }
+
+    if (error instanceof SyntaxError && error.type === 'entity.parse.failed') {
+      res.status(400).json({
+        error: {
+          message: 'Request body contains malformed JSON.',
+          code: 'INVALID_JSON',
+        },
+      });
       return;
     }
 

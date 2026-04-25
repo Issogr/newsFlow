@@ -28,6 +28,7 @@ describe('aiTopicClassifier', () => {
       OPENROUTER_MODEL: 'qwen/qwen3.5-9b',
       AI_TOPIC_BATCH_SIZE: undefined,
       AI_TOPIC_BATCH_CONCURRENCY: undefined,
+      AI_TOPIC_MAX_ARTICLES_PER_REFRESH: undefined,
       AI_TOPIC_REQUEST_TIMEOUT_MS: undefined
     };
   });
@@ -124,6 +125,29 @@ describe('aiTopicClassifier', () => {
     expect(catchSpy).toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith('AI topic batch failed: OpenRouter request timed out; keeping local fallback topics');
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection completed'));
+  });
+
+  test('reports attempted, failed, and capped article ids separately', async () => {
+    process.env.AI_TOPIC_BATCH_SIZE = '1';
+    process.env.AI_TOPIC_MAX_ARTICLES_PER_REFRESH = '2';
+    chatSend
+      .mockResolvedValueOnce({
+        choices: [
+          { message: { content: JSON.stringify({ topicsById: [{ id: 'article-1', topics: [{ topic: 'Technology', confidence: 0.9 }] }] }) } }
+        ]
+      })
+      .mockRejectedValueOnce(new Error('temporary upstream failure'));
+
+    const result = await aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus([
+      { id: 'article-1', title: 'AI chip rollout', description: 'Software and data center update' },
+      { id: 'article-2', title: 'Market rally' },
+      { id: 'article-3', title: 'Space mission' }
+    ]);
+
+    expect(result.topicsByArticleId.has('article-1')).toBe(true);
+    expect(result.attemptedArticleIds).toEqual(['article-1', 'article-2']);
+    expect(result.failedArticleIds).toEqual(['article-2']);
+    expect(result.cappedArticleIds).toEqual(['article-3']);
   });
 
   test('drops unknown ids and topics outside the supported taxonomy', () => {

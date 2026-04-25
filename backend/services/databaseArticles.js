@@ -225,7 +225,7 @@ function createArticleRepository({
       FROM articles a
       ${joins.join('\n')}
       ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
-      ORDER BY datetime(a.published_at) DESC, a.id DESC
+      ORDER BY a.published_at DESC, a.id DESC
       LIMIT ? OFFSET ?
     `;
 
@@ -785,7 +785,7 @@ function createArticleRepository({
         a.published_at AS pubDate
       FROM articles a
       WHERE ${where.join(' AND ')}
-      ORDER BY datetime(a.published_at) DESC, a.id DESC
+      ORDER BY a.published_at DESC, a.id DESC
     `).all(...params);
 
     return hydrateArticleRows(rows, options);
@@ -830,29 +830,22 @@ function createArticleRepository({
     }
 
     const database = getDb();
-    const selectArticleIds = database.prepare(`
-      SELECT id
-      FROM articles
-      WHERE published_at < ?
-    `);
     const deleteSearchEntries = database.prepare(`
       DELETE FROM article_search
-      WHERE article_id = ?
+      WHERE article_id IN (
+        SELECT id
+        FROM articles
+        WHERE published_at < ?
+      )
     `);
-    const deleteArticle = database.prepare(`
+    const deleteArticles = database.prepare(`
       DELETE FROM articles
-      WHERE id = ?
+      WHERE published_at < ?
     `);
 
     const transaction = database.transaction((threshold) => {
-      const articleIds = selectArticleIds.all(threshold).map((row) => row.id);
-
-      articleIds.forEach((articleId) => {
-        deleteSearchEntries.run(articleId);
-        deleteArticle.run(articleId);
-      });
-
-      return articleIds.length;
+      deleteSearchEntries.run(threshold);
+      return deleteArticles.run(threshold).changes;
     });
 
     return transaction(isoTimestamp);
@@ -1038,6 +1031,10 @@ function createArticleRepository({
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
     const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
+    const canonicalTopics = topicNormalizer.CANONICAL_TOPICS;
+
+    where.push(`article_topics.topic IN (${canonicalTopics.map(() => '?').join(', ')})`);
+    params.push(...canonicalTopics);
 
     where.push(scopeFilter.clause);
     params.push(...scopeFilter.params);
@@ -1084,11 +1081,10 @@ function createArticleRepository({
       ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
       GROUP BY article_topics.topic
       ORDER BY count DESC, article_topics.topic ASC
-    `).all(...params);
+      LIMIT ?
+    `).all(...params, limit);
 
-    return rows
-      .filter((row) => topicNormalizer.isCanonicalTopic(row.topic))
-      .slice(0, limit);
+    return rows;
   }
 
   function createIngestionRun() {

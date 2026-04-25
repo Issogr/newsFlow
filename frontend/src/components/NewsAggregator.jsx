@@ -242,6 +242,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         recentHours: showRecentOnly ? recentHours : null,
         beforePubDate: append ? cursor?.beforePubDate : '',
         beforeId: append ? cursor?.beforeId : '',
+        includeFilters: !append,
         signal: request.signal
       });
 
@@ -251,9 +252,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
       setNews((current) => append ? appendUniqueGroups(current, response.items || []) : (response.items || []));
       setMeta(response.meta || null);
-      setAvailableSources(response.filters?.sources || []);
-      setSourceCatalog(response.filters?.sourceCatalog || []);
-      setAvailableTopics(response.filters?.topics || []);
+      if (response.filters) {
+        setAvailableSources(response.filters.sources || []);
+        setSourceCatalog(response.filters.sourceCatalog || []);
+        setAvailableTopics(response.filters.topics || []);
+      }
 
       if (resetRealtime) {
         resetNewArticlesCount();

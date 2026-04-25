@@ -123,6 +123,7 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   const hasMore = articles.length > pageSize;
   const pageArticles = hasMore ? articles.slice(0, pageSize) : articles;
   const latestIngestion = database.getLatestIngestionRun();
+  const includeFilters = filters.includeFilters !== false;
 
   return {
     items: pageArticles.map((article) => createStandaloneGroup(article)),
@@ -136,7 +137,7 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
       lastRefreshAt: getLastRefreshAt(),
       ingestion: latestIngestion
     },
-    filters: {
+    filters: includeFilters ? {
       sources: database.getSourceStats(availableSources, queryOptions),
       sourceCatalog: buildSourceCatalogResponse(availableSources),
       topics: database.getTopicStatsByFilters({
@@ -144,7 +145,7 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
         sourceIds: filters.sourceIds,
         recentHours: filters.recentHours
       }, 18, queryOptions)
-    }
+    } : null
   };
 }
 

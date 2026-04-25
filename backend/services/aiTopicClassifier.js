@@ -91,10 +91,16 @@ async function mapWithConcurrency(items = [], concurrency = DEFAULT_BATCH_CONCUR
       nextIndex += 1;
 
       try {
-        results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+        results[currentIndex] = {
+          ok: true,
+          value: await mapper(items[currentIndex], currentIndex)
+        };
       } catch (error) {
         logger.warn(`AI topic batch failed: ${summarizeAiError(error)}`);
-        results[currentIndex] = new Map();
+        results[currentIndex] = {
+          ok: false,
+          value: new Map()
+        };
       }
     }
   }
@@ -446,18 +452,34 @@ async function classifyTopicsForArticles(articles = []) {
 }
 
 async function classifyTopicDetailsForArticles(articles = []) {
+  const status = await classifyTopicDetailsForArticlesWithStatus(articles);
+  return status.topicsByArticleId;
+}
+
+async function classifyTopicDetailsForArticlesWithStatus(articles = []) {
   const config = getConfig();
   if (!Array.isArray(articles) || articles.length === 0) {
-    return new Map();
+    return {
+      topicsByArticleId: new Map(),
+      attemptedArticleIds: [],
+      failedArticleIds: [],
+      cappedArticleIds: []
+    };
   }
 
   if (!config.enabled) {
     logger.info(`AI topic detection skipped: reason=${config.apiKey ? 'disabled' : 'missing_api_key'}, articles=${articles.length}`);
-    return new Map();
+    return {
+      topicsByArticleId: new Map(),
+      attemptedArticleIds: [],
+      failedArticleIds: [],
+      cappedArticleIds: articles.map((article) => article?.id).filter(Boolean)
+    };
   }
 
   const startedAt = Date.now();
   const limitedArticles = articles.slice(0, config.maxArticlesPerRefresh);
+  const cappedArticleIds = articles.slice(config.maxArticlesPerRefresh).map((article) => article?.id).filter(Boolean);
   if (articles.length > limitedArticles.length) {
     logger.warn(`AI topic detection capped at ${limitedArticles.length}/${articles.length} new articles for this refresh`);
   }
@@ -466,15 +488,26 @@ async function classifyTopicDetailsForArticles(articles = []) {
   logger.info(`AI topic detection started: model=${config.model}, articles=${limitedArticles.length}, batches=${batches.length}`);
   const batchResults = await mapWithConcurrency(batches, config.batchConcurrency, (batch) => classifyBatch(batch, config));
   const result = new Map();
+  const failedArticleIds = [];
 
-  batchResults.forEach((batchResult) => {
-    batchResult.forEach((topics, articleId) => {
+  batchResults.forEach((batchResult, index) => {
+    if (!batchResult?.ok) {
+      failedArticleIds.push(...batches[index].map((article) => article?.id).filter(Boolean));
+      return;
+    }
+
+    batchResult.value.forEach((topics, articleId) => {
       result.set(articleId, topics);
     });
   });
 
   logger.info(`AI topic detection completed: model=${config.model}, requested=${limitedArticles.length}, classified=${result.size}, durationMs=${Date.now() - startedAt}`);
-  return result;
+  return {
+    topicsByArticleId: result,
+    attemptedArticleIds: limitedArticles.map((article) => article?.id).filter(Boolean),
+    failedArticleIds,
+    cappedArticleIds
+  };
 }
 
 function isAiTopicDetectionAvailable() {
@@ -484,6 +517,7 @@ function isAiTopicDetectionAvailable() {
 module.exports = {
   classifyTopicsForArticles,
   classifyTopicDetailsForArticles,
+  classifyTopicDetailsForArticlesWithStatus,
   isAiTopicDetectionAvailable,
   _buildArticlePayload: buildArticlePayload,
   _buildPrompt: buildPrompt,

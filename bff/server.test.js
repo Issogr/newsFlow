@@ -124,6 +124,11 @@ describe('bff server', () => {
       res.json({ ok: true });
     });
 
+    backendApp.get('/socket.io/ping', (req, res) => {
+      lastBackendHeaders = req.headers;
+      res.json({ path: req.path });
+    });
+
     backendServer = http.createServer(backendApp);
     await new Promise((resolve) => {
       backendServer.listen(0, resolve);
@@ -191,6 +196,20 @@ describe('bff server', () => {
     expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
     expect(response.headers['content-security-policy']).toContain("default-src 'self'");
     expect(response.headers['referrer-policy']).toBe('same-origin');
+    expect(response.headers['set-cookie']).toBeUndefined();
+  });
+
+  test('returns a client error for malformed JSON on auth routes', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .set('Content-Type', 'application/json')
+      .send('{bad json')
+      .expect(400);
+
+    expect(response.body.error).toEqual({
+      message: 'Request body contains malformed JSON.',
+      code: 'INVALID_JSON',
+    });
   });
 
   test('keeps the session valid after recreating the BFF app instance', async () => {
@@ -341,6 +360,22 @@ describe('bff server', () => {
 
     expect(response.body.contentType).toContain('multipart/form-data');
     expect(response.body.byteCount).toBeGreaterThan(0);
+    expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
+  });
+
+  test('proxies socket.io requests without duplicating the socket path', async () => {
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'alice', password: 'secret123' })
+      .expect(200);
+    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+
+    const response = await request(app)
+      .get('/socket.io/ping')
+      .set('Cookie', bffSessionCookie)
+      .expect(200);
+
+    expect(response.body.path).toBe('/socket.io/ping');
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
   });
 
