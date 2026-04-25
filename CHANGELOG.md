@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.2.12
+## 3.2.13
 
 - added optional OpenRouter-powered AI topic detection for newly inserted articles, with server-side API-key handling, configurable model selection, batched source/title/description-only classification that does not send provider RSS categories, strict taxonomy validation, and local fallback until AI returns valid topics
 - switched OpenRouter topic classification from a custom HTTP call to the official `@openrouter/sdk` client while keeping the backend CommonJS runtime through dynamic import
@@ -9,14 +9,17 @@
 - relaxed AI topic-classification defaults to one 8-article batch at a time with a 30-second request timeout, and allow configuring up to 120 seconds so slower OpenRouter models have enough time before fallback kicks in
 - made AI topic parsing more tolerant of common model response variants, requested JSON-object responses, and added safe zero-classification diagnostics that report only structural reasons and response length
 - disabled reasoning for AI topic-classification calls and added robust assistant-content extraction so reasoning-first models do not spend the response budget without returning final taxonomy JSON
-- restored icon-only topic markers on standard NewsCard layouts so non-compact cards again show article categories next to the publication date without adding text noise
 - moved AI topic classification out of the blocking ingestion path and added persisted per-article AI processing metadata so attempted articles are not repeatedly classified across refreshes or service restarts
 - tightened topic normalization and AI classification guidance so short aliases such as `ia` no longer turn unrelated words like `aria` into Technology, and incident/crime stories are steered toward Cronaca instead of the misleading Local news label
+- restored icon-only topic markers on standard NewsCard layouts so non-compact cards again show article categories next to the publication date without adding text noise
 - switched the BFF Docker dependency and runtime stages to Node 20 while keeping the frontend build on Node 22, avoiding Node 22 deprecation noise from the proxy dependency at container startup
 - guarded batched topic merges against stale article ids left behind by article deduplication or cleanup so ingestion no longer fails with a foreign-key error when an article disappears before its topics are merged
 - changed custom-source ingestion to fetch identical active user RSS URLs once per refresh and fan out the parsed articles per owning user source, while keeping delete/update cleanup scoped to the affected user source
 - changed scheduled ingestion to refresh only sources assigned to recently active users, with one immediate per-user assigned-source refresh between scheduled cycles and a first-run seed fallback when the article database is empty
 - decoupled newly triggered immediate assigned-source refreshes from the current `/news` response while still waiting on an already-running immediate refresh, preventing AI topic classification latency from slowing the first cached feed load
+
+## 3.2.12
+
 - hardened the BFF boundary by stripping raw backend credentials from browser-facing app and Socket.IO proxy paths, requiring a valid BFF session before proxying authenticated app traffic, and clearing local BFF sessions even when upstream logout fails
 - added browser security headers to the BFF-served frontend and switched BFF/backend Docker dependency installs to lockfile-based `npm ci`, with the BFF container now running as an unprivileged user
 - tightened outbound URL safety for RSS/reader fetches by blocking additional special-use IPv4 ranges, carrier-grade NAT, multicast/reserved ranges, and IPv4-mapped IPv6 private targets
