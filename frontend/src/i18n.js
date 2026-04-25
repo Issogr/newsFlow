@@ -78,6 +78,7 @@ export const translations = {
     feedbackErrorVideoTooLarge: 'Videos must be 12 MB or smaller.',
     feedbackErrorAttachmentType: 'Please attach an image or a short video.',
     shareCopiedMessage: 'Link copied to clipboard.',
+    shareFailedMessage: 'Could not copy the link.',
     preferences: 'Preferences',
     customSources: 'Custom sources',
     noCustomSources: 'No custom sources yet.',
@@ -220,14 +221,6 @@ export const translations = {
     authErrorServer: 'The server reported an internal error',
     authErrorUnavailable: 'The service is temporarily unavailable',
     authErrorGeneric: 'Unable to complete authentication right now',
-    notifications: 'Notifications',
-    closeNotifications: 'Close notifications',
-    noNotifications: 'No notifications',
-    refreshNewArticles: ({ count }) => `Load ${count} new ${count === 1 ? 'article' : 'articles'}`,
-    newArticles: ({ count }) => `${count} ${count === 1 ? 'new article' : 'new articles'}`,
-    clickToRefresh: 'Click to refresh',
-    removeNotification: 'Remove notification',
-    clearAllNotifications: 'Clear all notifications',
     errorTitle: 'Unable to load the news',
     unknownError: 'An unknown error occurred.',
     networkError: 'Unable to reach the server. Check your internet connection.',
@@ -256,12 +249,7 @@ export const translations = {
     readerFallback: 'Showing fallback text extracted from the feed.',
     readTime: ({ minutes }) => `${minutes} min read`,
     sourceVersions: 'Source versions',
-    refreshReader: 'Refresh reader copy',
-    newsLanguage: ({ language }) => `News language: ${language}`,
-    wsConnected: 'Real-time connection active',
-    wsDisconnected: 'Real-time connection lost, reconnecting...',
-    wsReconnectFailed: 'Unable to restore the real-time connection',
-    wsNewGroups: ({ count }) => `${count} new news groups available`
+    newsLanguage: ({ language }) => `News language: ${language}`
   },
   it: {
     pageTitle: 'News Flow',
@@ -339,6 +327,7 @@ export const translations = {
     feedbackErrorVideoTooLarge: 'I video devono essere di 12 MB o meno.',
     feedbackErrorAttachmentType: 'Allega un\'immagine o un breve video.',
     shareCopiedMessage: 'Link copiato negli appunti.',
+    shareFailedMessage: 'Impossibile copiare il link.',
     preferences: 'Preferenze',
     customSources: 'Fonti personali',
     noCustomSources: 'Nessuna fonte personale per ora.',
@@ -481,14 +470,6 @@ export const translations = {
     authErrorServer: 'Il server ha restituito un errore interno',
     authErrorUnavailable: 'Il servizio e temporaneamente non disponibile',
     authErrorGeneric: 'Impossibile completare l\'autenticazione in questo momento',
-    notifications: 'Notifiche',
-    closeNotifications: 'Chiudi notifiche',
-    noNotifications: 'Nessuna notifica',
-    refreshNewArticles: ({ count }) => `Carica ${count} nuovi ${count === 1 ? 'articolo' : 'articoli'}`,
-    newArticles: ({ count }) => `${count} ${count === 1 ? 'nuovo articolo' : 'nuovi articoli'}`,
-    clickToRefresh: 'Clicca per aggiornare',
-    removeNotification: 'Elimina notifica',
-    clearAllNotifications: 'Elimina tutte le notifiche',
     errorTitle: 'Impossibile caricare le notizie',
     unknownError: 'Si è verificato un errore sconosciuto.',
     networkError: 'Impossibile connettersi al server. Verifica la tua connessione internet.',
@@ -517,12 +498,7 @@ export const translations = {
     readerFallback: 'Mostro il testo di fallback estratto dal feed.',
     readTime: ({ minutes }) => `${minutes} min di lettura`,
     sourceVersions: 'Versioni fonte',
-    refreshReader: 'Aggiorna copia lettura',
-    newsLanguage: ({ language }) => `Lingua notizia: ${language}`,
-    wsConnected: 'Connessione real-time attiva',
-    wsDisconnected: 'Connessione real-time persa, riconnessione in corso...',
-    wsReconnectFailed: 'Impossibile ristabilire la connessione real-time',
-    wsNewGroups: ({ count }) => `${count} nuovi gruppi di notizie disponibili`
+    newsLanguage: ({ language }) => `Lingua notizia: ${language}`
   }
 };
 

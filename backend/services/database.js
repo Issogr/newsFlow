@@ -37,7 +37,11 @@ function chunkValues(values = [], size = 200) {
   return chunks;
 }
 
-function getCustomSourceGroups(userId) {
+function getCustomSourceGroups(userId, customSourceGroups = null) {
+  if (customSourceGroups instanceof Map) {
+    return customSourceGroups;
+  }
+
   if (!userId) {
     return new Map();
   }
@@ -45,14 +49,14 @@ function getCustomSourceGroups(userId) {
   return buildDomainSourceGroups(userStateRepository.listUserSources(userId));
 }
 
-function resolveCustomSourceGroup(sourceId, sourceName, userId) {
+function resolveCustomSourceGroup(sourceId, sourceName, userId, customSourceGroups = null) {
   if (!userId) {
     return null;
   }
 
-  const customSourceGroups = getCustomSourceGroups(userId);
+  const resolvedCustomSourceGroups = getCustomSourceGroups(userId, customSourceGroups);
 
-  for (const group of customSourceGroups.values()) {
+  for (const group of resolvedCustomSourceGroups.values()) {
     if (group.id === sourceId || group.memberIds.has(sourceId) || group.memberNames.has(sourceName)) {
       return group;
     }
@@ -61,9 +65,9 @@ function resolveCustomSourceGroup(sourceId, sourceName, userId) {
   return null;
 }
 
-function getResolvedSourceAliases(sourceId, sourceName, userId) {
+function getResolvedSourceAliases(sourceId, sourceName, userId, customSourceGroups = null) {
   const configuredAliases = getSourceAliases(sourceId, sourceName);
-  const customSourceGroup = resolveCustomSourceGroup(sourceId, sourceName, userId);
+  const customSourceGroup = resolveCustomSourceGroup(sourceId, sourceName, userId, customSourceGroups);
 
   if (!customSourceGroup) {
     return configuredAliases;
@@ -75,7 +79,7 @@ function getResolvedSourceAliases(sourceId, sourceName, userId) {
   };
 }
 
-function getResolvedSourceMetadata(sourceId, sourceName, userId) {
+function getResolvedSourceMetadata(sourceId, sourceName, userId, customSourceGroups = null) {
   const configuredSourceId = getCanonicalSourceId(sourceId, sourceName);
   const configuredSourceName = getCanonicalSourceName(sourceId, sourceName);
   const configuredSubSource = getSourceVariantLabel(sourceId, sourceName);
@@ -88,7 +92,7 @@ function getResolvedSourceMetadata(sourceId, sourceName, userId) {
     };
   }
 
-  const customSourceGroup = resolveCustomSourceGroup(sourceId, sourceName, userId);
+  const customSourceGroup = resolveCustomSourceGroup(sourceId, sourceName, userId, customSourceGroups);
   if (!customSourceGroup) {
     return {
       sourceId,
@@ -142,8 +146,9 @@ function getDb() {
   db.pragma('foreign_keys = ON');
   db.pragma('temp_store = MEMORY');
 
+  const legacySchemaVersion = dbSchema.inferLegacySchemaVersion(db);
   dbSchema.initializeSchema(db);
-  dbSchema.ensureSupportedSchema(db);
+  dbSchema.ensureSupportedSchema(db, { legacySchemaVersion });
   logger.info(`SQLite database ready at ${DB_PATH}`);
 
   return db;

@@ -8,8 +8,26 @@ import {
 import { getDateLocale } from '../i18n';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import genericNewsCover from '../assets/generic-news-cover.webp';
+import genericNewsCover2 from '../assets/generic-news-cover-2.webp';
+import genericNewsCover3 from '../assets/generic-news-cover-3.webp';
+import genericNewsCover4 from '../assets/generic-news-cover-4.webp';
 import { shareArticleUrl } from '../utils/shareArticle';
 import ShareStatusBubble from './ShareStatusBubble';
+
+const GENERIC_NEWS_COVERS = [
+  genericNewsCover,
+  genericNewsCover2,
+  genericNewsCover3,
+  genericNewsCover4,
+];
+
+function getRandomGenericNewsCover() {
+  return GENERIC_NEWS_COVERS[Math.floor(Math.random() * GENERIC_NEWS_COVERS.length)] || genericNewsCover;
+}
+
+function isGenericNewsCover(imageUrl) {
+  return GENERIC_NEWS_COVERS.includes(imageUrl);
+}
 
 function getSourceEntries(group) {
   const sourceMap = new Map();
@@ -55,15 +73,26 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
   const sourceEntries = getSourceEntries(group);
   const safeOriginalUrl = getSafeExternalUrl(group?.url);
   const safeImageUrl = showImages ? getGroupImageUrl(group) : '';
-  const [imageUrl, setImageUrl] = useState(showImages ? (safeImageUrl || genericNewsCover) : '');
+  const [fallbackImageUrl, setFallbackImageUrl] = useState(getRandomGenericNewsCover);
+  const [imageUrl, setImageUrl] = useState(showImages ? (safeImageUrl || fallbackImageUrl) : '');
   const [shareState, setShareState] = useState('idle');
   const fallbackImageAlt = t('genericNewsCoverAlt');
+  const fallbackGroupIdRef = useRef(group?.id);
   const lastTouchGestureRef = useRef({ area: '', timestamp: 0 });
   const lastReaderOpenAtRef = useRef(0);
 
   useEffect(() => {
-    setImageUrl(showImages ? (safeImageUrl || genericNewsCover) : '');
-  }, [safeImageUrl, showImages]);
+    if (fallbackGroupIdRef.current === group?.id) {
+      return;
+    }
+
+    fallbackGroupIdRef.current = group?.id;
+    setFallbackImageUrl(getRandomGenericNewsCover());
+  }, [group?.id]);
+
+  useEffect(() => {
+    setImageUrl(showImages ? (safeImageUrl || fallbackImageUrl) : '');
+  }, [fallbackImageUrl, safeImageUrl, showImages]);
 
   useEffect(() => {
     if (shareState === 'idle') {
@@ -195,7 +224,7 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
         >
           <img
             src={imageUrl}
-            alt={imageUrl === genericNewsCover ? fallbackImageAlt : group.title}
+            alt={isGenericNewsCover(imageUrl) ? fallbackImageAlt : group.title}
             loading="lazy"
             className="h-full w-full object-cover"
             onDoubleClick={openReader}
@@ -205,7 +234,7 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
                 return;
               }
 
-              setImageUrl((current) => (current === genericNewsCover ? '' : genericNewsCover));
+              setImageUrl((current) => (isGenericNewsCover(current) ? '' : fallbackImageUrl));
             }}
           />
           {!compact ? (

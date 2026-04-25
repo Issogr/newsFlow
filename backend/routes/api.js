@@ -17,6 +17,7 @@ const {
 const { asyncHandler, createError } = require('../utils/errorHandler');
 const { sanitizeParam, sanitizeQuery, validateParam, sanitizeBody } = require('../utils/inputValidator');
 const { requireAuthenticatedUser, requireAdminUser, SESSION_COOKIE_NAME } = require('../utils/auth');
+const { parseNewsQuery } = require('../utils/newsQuery');
 
 const router = express.Router();
 
@@ -161,30 +162,6 @@ function handleFeedbackUpload(req, res, next) {
 
     next(createError(400, 'Unable to process the uploaded attachment.', 'INVALID_FEEDBACK_IMAGE', error));
   });
-}
-
-function parseCsvParam(value) {
-  if (!value) {
-    return [];
-  }
-
-  return String(value)
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function parseNewsQuery(query = {}) {
-  return {
-    search: query.search || '',
-    sourceIds: parseCsvParam(query.sources),
-    topics: parseCsvParam(query.topics),
-    recentHours: query.recentHours ? Number(query.recentHours) : null,
-    beforePubDate: query.beforePubDate || '',
-    beforeId: query.beforeId || '',
-    page: query.page ? Number(query.page) : 1,
-    pageSize: query.pageSize ? Number(query.pageSize) : 12
-  };
 }
 
 function getUserContext(req) {

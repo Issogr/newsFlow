@@ -30,7 +30,21 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
   const [latestGeneratedLink, setLatestGeneratedLink] = useState(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const hasLoadedRef = useRef(false);
+  const isMountedRef = useRef(false);
   const latestRequestIdRef = useRef(0);
+  const copyTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+      latestRequestIdRef.current += 1;
+      if (copyTimeoutRef.current) {
+        window.clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const loadUsers = useCallback(async ({ showRefreshingIndicator = false } = {}) => {
     const requestId = latestRequestIdRef.current + 1;
@@ -44,7 +58,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
 
     try {
       const response = await fetchAdminUsers();
-      if (latestRequestIdRef.current !== requestId) {
+      if (!isMountedRef.current || latestRequestIdRef.current !== requestId) {
         return;
       }
 
@@ -53,15 +67,15 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
       setSummary(response.summary || { totalUsers: 0, onlineUsers: 0, activeUsers: 0, onlineWindowMinutes: 5 });
       setError('');
     } catch (requestError) {
-      if (latestRequestIdRef.current === requestId) {
+      if (isMountedRef.current && latestRequestIdRef.current === requestId) {
         setError(requestError.message || t('genericError'));
       }
     } finally {
-      if (latestRequestIdRef.current === requestId) {
+      if (isMountedRef.current && latestRequestIdRef.current === requestId) {
         setLoading(false);
       }
 
-      if (showRefreshingIndicator) {
+      if (isMountedRef.current && showRefreshingIndicator) {
         setRefreshing(false);
       }
     }
@@ -151,8 +165,12 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
 
     await navigator.clipboard.writeText(latestGeneratedLink.setupLink);
     setCopiedLink(true);
-    window.setTimeout(() => {
+    if (copyTimeoutRef.current) {
+      window.clearTimeout(copyTimeoutRef.current);
+    }
+    copyTimeoutRef.current = window.setTimeout(() => {
       setCopiedLink(false);
+      copyTimeoutRef.current = null;
     }, 1500);
   };
 

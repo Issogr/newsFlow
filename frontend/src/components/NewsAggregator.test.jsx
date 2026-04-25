@@ -383,6 +383,69 @@ describe('NewsAggregator', () => {
     expect(await screen.findByText('Older headline')).toBeInTheDocument();
   });
 
+  test('clears loading-more state when a list reload cancels pagination', async () => {
+    const appendRequest = createDeferred();
+    const reloadRequest = createDeferred();
+    let callCount = 0;
+
+    fetchNews.mockImplementation(() => {
+      callCount += 1;
+
+      if (callCount <= 2) {
+        return Promise.resolve({
+          items: [{ id: 'group-1', title: 'Current headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }],
+          meta: {
+            page: 1,
+            pageSize: 12,
+            hasMore: true,
+            nextCursor: {
+              beforePubDate: '2026-03-14T10:00:00.000Z',
+              beforeId: 'article-1'
+            }
+          },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        });
+      }
+
+      if (callCount === 3) {
+        return appendRequest.promise;
+      }
+
+      return reloadRequest.promise;
+    });
+
+    await renderNewsAggregator();
+    const loadMoreButton = await screen.findByRole('button', { name: 'Load more' });
+
+    fireEvent.click(loadMoreButton);
+    expect(await screen.findByRole('button', { name: 'Loading...' })).toBeDisabled();
+
+    openDesktopSearch();
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'economy' } });
+
+    await act(async () => {
+      jest.advanceTimersByTime(350);
+    });
+
+    await resolveDeferred(reloadRequest, {
+      items: [{ id: 'group-reloaded', title: 'Reloaded headline', items: [{ id: 'article-2', pubDate: '2026-03-14T11:00:00.000Z' }] }],
+      meta: {
+        page: 1,
+        pageSize: 12,
+        hasMore: true,
+        nextCursor: {
+          beforePubDate: '2026-03-14T11:00:00.000Z',
+          beforeId: 'article-2'
+        }
+      },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Load more' })).toBeEnabled();
+    });
+  });
+
   test('shows a clear-search button and clears the search field', async () => {
     fetchNews.mockResolvedValue({
       items: [],
@@ -423,6 +486,7 @@ describe('NewsAggregator', () => {
         configurable: true
       });
       fireEvent.scroll(window);
+      jest.advanceTimersByTime(16);
     });
 
     expect(backToTopButton).toHaveClass('opacity-100');

@@ -1,4 +1,4 @@
-const { extractBearerToken, safeTokenCompare } = require('./auth');
+const { extractBearerToken, extractSessionCookie, safeTokenCompare } = require('./auth');
 
 describe('auth utils', () => {
   test('extractBearerToken returns empty string for invalid values', () => {
@@ -15,6 +15,11 @@ describe('auth utils', () => {
     expect(safeTokenCompare('abc', 'abc')).toBe(true);
     expect(safeTokenCompare('abc', 'abcd')).toBe(false);
     expect(safeTokenCompare('abc', 'def')).toBe(false);
+  });
+
+  test('ignores malformed cookie values instead of throwing', () => {
+    expect(() => extractSessionCookie('newsflow_session=%')).not.toThrow();
+    expect(extractSessionCookie('newsflow_session=%')).toBe('');
   });
 });
 

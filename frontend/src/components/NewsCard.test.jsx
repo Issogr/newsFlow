@@ -101,6 +101,21 @@ describe('NewsCard', () => {
     expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
   });
 
+  test('can choose an alternate generic fallback illustration', () => {
+    jest.spyOn(Math, 'random').mockReturnValue(0.99);
+
+    render(
+      <NewsCard
+        group={group}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover-4/));
+  });
+
   test('falls back to the generic illustration for unsafe or broken article images', () => {
     const { rerender } = render(
       <NewsCard
@@ -205,6 +220,29 @@ describe('NewsCard', () => {
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.com/story');
     expect(screen.getByText('shareCopiedMessage')).toBeInTheDocument();
+  });
+
+  test('shows a share failure bubble when clipboard fallback is denied', async () => {
+    navigator.share = undefined;
+    navigator.clipboard = {
+      writeText: jest.fn().mockRejectedValue(new Error('denied'))
+    };
+
+    render(
+      <NewsCard
+        group={{ ...group, url: 'https://example.com/story' }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
+    });
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.com/story');
+    expect(screen.getByText('shareFailedMessage')).toBeInTheDocument();
   });
 
   test('opens reader mode on title double click and reader button click', () => {

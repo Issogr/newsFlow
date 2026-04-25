@@ -108,6 +108,15 @@ function App() {
   }, [isApiDocsRoute, isCookiePolicyRoute, isPasswordSetupRoute, isPrivacyPolicyRoute]);
 
   useEffect(() => {
+    const syncLocationState = () => {
+      setLocationState({ pathname: window.location.pathname, search: window.location.search });
+    };
+
+    window.addEventListener('popstate', syncLocationState);
+    return () => window.removeEventListener('popstate', syncLocationState);
+  }, []);
+
+  useEffect(() => {
     loadSession();
   }, [loadSession]);
 

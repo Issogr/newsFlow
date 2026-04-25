@@ -18,6 +18,9 @@ const groupedSourceFamily = groupedSource
   : null;
 const groupedSourceFamilyId = groupedSourceFamily?.id || groupedSource?.id || 'grouped-source';
 const groupedSourceFamilyName = groupedSourceFamily?.name || groupedSource?.name || 'Grouped Source';
+const alternateGroupedSource = groupedSourceFamily
+  ? configuredSources.find((source) => source.id !== groupedSource?.id && groupedSourceFamily.subSources.some((subSource) => subSource.id === source.id))
+  : null;
 const primarySourceFamilyId = getCanonicalSourceId(primarySource.id, primarySource.name);
 const secondarySourceFamilyId = getCanonicalSourceId(secondarySource.id, secondarySource.name);
 const secondarySourceFamilyName = getCanonicalSourceName(secondarySource.id, secondarySource.name);
@@ -88,6 +91,61 @@ describe('database migrations', () => {
     expect(userColumns).toContain('public_api_last_used_at');
     expect(passwordSetupTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'purpose', 'expires_at', 'used_at']));
     expect(apiTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'token_prefix', 'expires_at', 'revoked_at', 'last_used_at']));
+  });
+
+  test('migrates an unversioned legacy database instead of marking it current', () => {
+    const sqlite = new SqliteDatabase(dbPath);
+
+    sqlite.exec(`
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT,
+        role TEXT NOT NULL DEFAULT 'user',
+        last_login_at TEXT,
+        last_activity_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE user_settings (
+        user_id TEXT PRIMARY KEY,
+        default_language TEXT NOT NULL DEFAULT 'auto',
+        theme_mode TEXT NOT NULL DEFAULT 'system',
+        article_retention_hours INTEGER NOT NULL DEFAULT 24,
+        recent_hours INTEGER NOT NULL DEFAULT 3,
+        auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
+        show_news_images INTEGER NOT NULL DEFAULT 1,
+        reader_panel_position TEXT NOT NULL DEFAULT 'right',
+        reader_text_size TEXT NOT NULL DEFAULT 'medium',
+        last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
+        default_source_ids TEXT NOT NULL DEFAULT '[]',
+        excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    sqlite.close();
+
+    database = require('./database');
+    database.getDb();
+
+    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migratedVersion = migratedDb.prepare(`
+      SELECT value
+      FROM app_meta
+      WHERE key = 'migration_version'
+    `).get()?.value;
+    const settingsColumns = migratedDb.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
+    const userColumns = migratedDb.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
+    const apiTokenColumns = migratedDb.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
+
+    migratedDb.close();
+
+    expect(migratedVersion).toBe('19');
+    expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
+    expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
+    expect(apiTokenColumns).toContain('token_hash');
   });
 
   test('opens an existing database already on the current schema version', () => {
@@ -378,6 +436,54 @@ describe('database queries and user data', () => {
       id: 'article-1',
       title: 'Canonical story updated',
       url: 'https://example.com/story?utm_source=homepage'
+    }));
+  });
+
+  test('updates an existing grouped-source article when a sibling subfeed repeats the canonical URL', () => {
+    expect(groupedSource).toBeTruthy();
+    expect(alternateGroupedSource).toBeTruthy();
+
+    const now = Date.now();
+    const firstResult = database.upsertArticles([
+      {
+        id: 'grouped-article-1',
+        sourceId: groupedSource.id,
+        source: groupedSource.name,
+        title: 'Grouped canonical story',
+        description: 'First subfeed version',
+        content: 'First body',
+        url: 'https://example.com/grouped-story?utm_source=home',
+        language: 'it',
+        pubDate: new Date(now).toISOString()
+      }
+    ]);
+    const secondResult = database.upsertArticles([
+      {
+        id: 'grouped-article-2',
+        sourceId: alternateGroupedSource.id,
+        source: alternateGroupedSource.name,
+        title: 'Grouped canonical story updated',
+        description: 'Sibling subfeed version',
+        content: 'Second body',
+        url: 'https://example.com/grouped-story?utm_source=mondo',
+        language: 'it',
+        pubDate: new Date(now + 60 * 1000).toISOString()
+      }
+    ]);
+
+    const rawRows = database.getDb().prepare('SELECT id, source_id AS sourceId FROM articles ORDER BY id ASC').all();
+    const articles = database.getArticles({}, { maxArticleAgeHours: 9999 });
+
+    expect(firstResult).toMatchObject({ insertedCount: 1, updatedCount: 0 });
+    expect(secondResult).toMatchObject({ insertedCount: 0, updatedCount: 1, updatedIds: ['grouped-article-1'] });
+    expect(rawRows).toEqual([{ id: 'grouped-article-1', sourceId: alternateGroupedSource.id }]);
+    expect(articles).toHaveLength(1);
+    expect(articles[0]).toEqual(expect.objectContaining({
+      id: 'grouped-article-1',
+      sourceId: groupedSourceFamilyId,
+      source: groupedSourceFamilyName,
+      rawSourceId: alternateGroupedSource.id,
+      title: 'Grouped canonical story updated'
     }));
   });
 

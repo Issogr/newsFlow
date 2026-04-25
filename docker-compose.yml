@@ -3,11 +3,13 @@ services:
     image: alpine:3.20
     user: "0:0"
     command: >
-      sh -c "mkdir -p /mnt/data &&
-      chown -R 1001:1001 /mnt/data &&
-      chmod -R u+rwX,g+rwX /mnt/data"
+      sh -c "mkdir -p /mnt/backend-data /mnt/bff-data &&
+      chown -R 1001:1001 /mnt/backend-data &&
+      chown -R 1000:1000 /mnt/bff-data &&
+      chmod -R u+rwX,g+rwX /mnt/backend-data /mnt/bff-data"
     volumes:
-      - ./backend/data:/mnt/data:rw,z
+      - ./backend/data:/mnt/backend-data:rw,z
+      - bff-data:/mnt/bff-data:rw
     restart: "no"
 
   backend:
@@ -81,7 +83,10 @@ services:
       - APP_BASE_URL=http://localhost
       - TRUST_PROXY=true
     depends_on:
-      - backend
+      init-permissions:
+        condition: service_completed_successfully
+      backend:
+        condition: service_started
     volumes:
       - bff-data:/app/bff/data
     networks:

@@ -24,10 +24,16 @@
 ## Quick Start
 
 ```bash
-docker-compose up --build -d
+INTERNAL_PROXY_TOKEN=<change-me> BFF_SESSION_SECRET=<change-me> docker compose up --build -d
 ```
 
 Open `http://localhost`.
+
+Local runtime requirements:
+
+- Backend: Node.js 18+
+- BFF: Node.js 20+
+- Frontend: Node.js `^20.19.0 || >=22.12.0`
 
 ## Container Images
 
@@ -36,9 +42,7 @@ Each published GitHub release builds and publishes two public GHCR images:
 - `ghcr.io/issogr/newsflow-backend:<release-tag>`
 - `ghcr.io/issogr/newsflow-bff:<release-tag>`
 
-Every push to `main` also refreshes the rolling `latest` image for both containers.
-
-If the pushed commit message contains `Release`, use a format like `Release v3.1.3` and the workflow will also publish that version tag alongside `latest`.
+Container publishing runs from `v*` tags that point to commits on `main`; each image is tagged with the release tag.
 
 ## Configuration
 
@@ -85,6 +89,7 @@ Feed ingestion and querying:
 | `RSS_TIMEOUT` | `15000` | RSS fetch timeout in ms |
 | `RSS_CACHE_TTL` | `60000` | Feed response cache TTL in ms |
 | `RSS_CACHE_MAX_ENTRIES` | `200` | Max cached feed responses |
+| `RSS_INGESTION_CONCURRENCY` | `8` | Max feed requests processed concurrently during ingestion |
 
 Reader and article image extraction:
 

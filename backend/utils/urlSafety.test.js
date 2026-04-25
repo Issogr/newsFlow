@@ -35,8 +35,34 @@ describe('urlSafety', () => {
     });
   });
 
+  test('rejects special-use IPv4 and IPv4-mapped IPv6 URLs', async () => {
+    await expect(assertSafeOutboundUrl('http://0.0.0.0/feed')).rejects.toMatchObject({
+      status: 403,
+      code: 'FORBIDDEN_URL'
+    });
+
+    await expect(assertSafeOutboundUrl('http://100.64.0.1/feed')).rejects.toMatchObject({
+      status: 403,
+      code: 'FORBIDDEN_URL'
+    });
+
+    await expect(assertSafeOutboundUrl('http://[::ffff:127.0.0.1]/feed')).rejects.toMatchObject({
+      status: 403,
+      code: 'FORBIDDEN_URL'
+    });
+  });
+
   test('rejects public hostnames that resolve to private IPs', async () => {
     dns.lookup.mockResolvedValue([{ address: '10.0.0.25', family: 4 }]);
+
+    await expect(assertSafeOutboundUrl('https://feeds.example.com/rss')).rejects.toMatchObject({
+      status: 403,
+      code: 'FORBIDDEN_URL'
+    });
+  });
+
+  test('rejects public hostnames that resolve to IPv4-mapped private IPv6 addresses', async () => {
+    dns.lookup.mockResolvedValue([{ address: '::ffff:7f00:1', family: 6 }]);
 
     await expect(assertSafeOutboundUrl('https://feeds.example.com/rss')).rejects.toMatchObject({
       status: 403,

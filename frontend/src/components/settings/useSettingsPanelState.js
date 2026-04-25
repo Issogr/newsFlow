@@ -81,10 +81,11 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     });
   }, [currentUser, onUserUpdate]);
 
-  const syncCustomSourcesState = useCallback((nextCustomSources) => {
+  const syncCustomSourcesState = useCallback((nextCustomSources, nextSettings = null) => {
     setCustomSources(nextCustomSources);
     onUserUpdate({
       ...currentUser,
+      ...(nextSettings ? { settings: nextSettings } : {}),
       customSources: nextCustomSources
     });
   }, [currentUser, onUserUpdate]);
@@ -312,10 +313,14 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
         ...settings,
         excludedSourceIds: (settings.excludedSourceIds || []).filter((item) => item !== sourceId)
       };
+      const nextPersistedSettings = {
+        ...(currentUser?.settings || {}),
+        excludedSourceIds: (currentUser?.settings?.excludedSourceIds || []).filter((item) => item !== sourceId)
+      };
       setSettings(nextSettings);
-      syncCustomSourcesState(nextCustomSources);
+      syncCustomSourcesState(nextCustomSources, nextPersistedSettings);
     });
-  }, [customSources, runSavingAction, settings, syncCustomSourcesState]);
+  }, [currentUser?.settings, customSources, runSavingAction, settings, syncCustomSourcesState]);
 
   return {
     saving,

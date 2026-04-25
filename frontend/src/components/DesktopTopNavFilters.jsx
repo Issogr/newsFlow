@@ -6,17 +6,18 @@ import {
   Tags,
   X,
 } from 'lucide-react';
-import { getLocalizedTopic } from '../i18n';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
-import { getTopicPresentation } from '../topicPresentation';
+import { SourceFilterList, TopicFilterList } from './FilterOptionLists';
 import TopNavActionButton from './TopNavActionButton';
 
 const TOP_BUBBLE_MAX_HEIGHT = 'min(55vh, 28rem)';
 
-function TopFilterBubble({ children, open }) {
+function TopFilterBubble({ children, open, compact }) {
+  const positionClassName = compact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]';
+
   return (
     <div
-      className={`absolute right-0 top-[calc(100%+1rem)] z-50 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md transition-all duration-200 ease-out ${
+      className={`absolute right-0 ${positionClassName} z-50 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md transition-all duration-200 ease-out ${
         open
           ? 'pointer-events-auto translate-y-0 opacity-100'
           : 'pointer-events-none -translate-y-2 opacity-0'
@@ -45,6 +46,7 @@ const DesktopTopNavFilters = ({
   onSearchClear,
   onOpenSurface,
   closeSignal = 0,
+  compact = false,
 }) => {
   const [openBubble, setOpenBubble] = useState(null);
   const [searchMode, setSearchMode] = useState(false);
@@ -122,68 +124,23 @@ const DesktopTopNavFilters = ({
 
   return (
     <div ref={wrapperRef} className="relative hidden md:block">
-      <TopFilterBubble open={openBubble === 'sources'}>
-        {visibleSources.length === 0 ? (
-          <p className="text-sm text-slate-500">{t('noNewsText')}</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {visibleSources.map((source) => {
-              const isActive = activeFilters.sourceIds.includes(source.id);
-              return (
-                <button
-                  key={source.id}
-                  type="button"
-                  onClick={() => onToggleFilter('sourceIds', source.id)}
-                  className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-sky-600 text-white shadow-sm'
-                      : 'bg-sky-100 text-sky-900 hover:bg-sky-200'
-                  }`}
-                >
-                  <span>{source.name}</span>
-                  {source.count > 0 && (
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-sky-700'}`}>
-                      {source.count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
+      <TopFilterBubble open={openBubble === 'sources'} compact={compact}>
+        <SourceFilterList
+          sources={visibleSources}
+          activeSourceIds={activeFilters.sourceIds}
+          emptyLabel={t('noNewsText')}
+          onToggleSource={(sourceId) => onToggleFilter('sourceIds', sourceId)}
+        />
       </TopFilterBubble>
 
-      <TopFilterBubble open={openBubble === 'topics'}>
-        {availableTopics.length === 0 ? (
-          <p className="text-sm text-slate-500">{t('noNewsText')}</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {availableTopics.map((topic) => {
-              const isActive = activeFilters.topics.includes(topic.topic);
-              const { Icon, iconBadgeClassName } = getTopicPresentation(topic.topic);
-              return (
-                <button
-                  key={topic.topic}
-                  type="button"
-                  onClick={() => onToggleFilter('topics', topic.topic)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border pl-1 pr-3 py-1 text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'border-slate-900 bg-white text-slate-950 shadow-sm'
-                      : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50'
-                  }`}
-                >
-                  <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors ${iconBadgeClassName}`}>
-                    <Icon className="h-3 w-3" aria-hidden="true" />
-                  </span>
-                  <span>{getLocalizedTopic(topic.topic, locale)}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-600'}`}>
-                    {topic.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+      <TopFilterBubble open={openBubble === 'topics'} compact={compact}>
+        <TopicFilterList
+          topics={availableTopics}
+          activeTopics={activeFilters.topics}
+          emptyLabel={t('noNewsText')}
+          locale={locale}
+          onToggleTopic={(topic) => onToggleFilter('topics', topic)}
+        />
       </TopFilterBubble>
 
       {searchMode ? (

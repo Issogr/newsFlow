@@ -86,24 +86,20 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
   const t = useMemo(() => createTranslator(locale), [locale]);
   const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
-  const websocketMessages = useMemo(() => ({
-    connected: t('wsConnected'),
-    disconnected: t('wsDisconnected'),
-    reconnectFailed: t('wsReconnectFailed'),
-    newGroups: (count) => t('wsNewGroups', { count })
-  }), [t]);
   const {
     isConnected,
     lastNewsUpdate,
     updateSubscriptionFilters,
     resetNewArticlesCount,
     markGroupsSeen
-  } = useWebSocket('', websocketMessages, autoRefreshEnabled);
+  } = useWebSocket('', {}, autoRefreshEnabled);
   const liveStatusLabel = autoRefreshEnabled
     ? (isConnected ? t('liveActive') : t('liveOffline'))
     : t('liveDisabled');
   const lastNewsUpdateRef = useRef(null);
-  const { startLatestRequest } = useLatestRequest();
+  const scrollFrameRef = useRef(null);
+  const { startLatestRequest: startListRequest } = useLatestRequest();
+  const { startLatestRequest: startPaginationRequest, cancelLatestRequest: cancelPaginationRequest } = useLatestRequest();
 
   const [news, setNews] = useState([]);
   const [meta, setMeta] = useState(null);
@@ -179,22 +175,34 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
   useEffect(() => {
     const handleScroll = () => {
-      const currentY = window.scrollY;
-      setShowBackToTop(currentY > BACK_TO_TOP_THRESHOLD);
-      setTopNavCompact(currentY > TOP_NAV_SHRINK_THRESHOLD);
-      setUserMenuOpen(false);
-      if (currentY > lastScrollY.current && currentY > 50) {
-        setShowMobileNav(false);
-      } else {
-        setShowMobileNav(true);
+      if (scrollFrameRef.current) {
+        return;
       }
-      lastScrollY.current = currentY;
+
+      scrollFrameRef.current = window.requestAnimationFrame(() => {
+        const currentY = window.scrollY;
+        const nextShowBackToTop = currentY > BACK_TO_TOP_THRESHOLD;
+        const nextTopNavCompact = currentY > TOP_NAV_SHRINK_THRESHOLD;
+        const nextShowMobileNav = !(currentY > lastScrollY.current && currentY > 50);
+
+        setShowBackToTop((current) => (current === nextShowBackToTop ? current : nextShowBackToTop));
+        setTopNavCompact((current) => (current === nextTopNavCompact ? current : nextTopNavCompact));
+        setUserMenuOpen((current) => (current ? false : current));
+        setShowMobileNav((current) => (current === nextShowMobileNav ? current : nextShowMobileNav));
+        lastScrollY.current = currentY;
+        scrollFrameRef.current = null;
+      });
     };
 
     handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
 
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollFrameRef.current) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -214,7 +222,12 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
   const loadNews = useCallback(async ({ page = 1, append = false, resetRealtime = true, cursor = null } = {}) => {
     const setBusyState = append ? setLoadingMore : setLoading;
-    const request = startLatestRequest();
+    const request = append ? startPaginationRequest() : startListRequest();
+
+    if (!append) {
+      cancelPaginationRequest();
+      setLoadingMore(false);
+    }
 
     setBusyState(true);
     setError(null);
@@ -254,7 +267,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         setBusyState(false);
       }
     }
-  }, [activeFilters.sourceIds, activeFilters.topics, debouncedSearch, recentHours, resetNewArticlesCount, showRecentOnly, startLatestRequest]);
+  }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, recentHours, resetNewArticlesCount, showRecentOnly, startListRequest, startPaginationRequest]);
 
   useEffect(() => {
     if (sourceReloadSignature === sourceReloadSignatureRef.current) {
@@ -377,6 +390,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 }}
                 onOpenSurface={() => setUserMenuOpen(false)}
                 closeSignal={desktopFiltersCloseSignal}
+                compact={topNavCompact}
               />
 
               <div className="relative">
@@ -411,7 +425,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 />
 
                 {userMenuOpen && (
-                  <div className="absolute right-0 top-[calc(100%+1rem)] z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur transition-all duration-200" role="menu">
+                  <div className={`absolute right-0 ${topNavCompact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]'} z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur transition-all duration-200`} role="menu">
                     <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-4">
                       <div className="flex items-start gap-3">
                         <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-sm">

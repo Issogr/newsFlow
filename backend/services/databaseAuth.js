@@ -220,9 +220,10 @@ function createAuthRepository({ getDb }) {
     }
 
     return getDb().prepare(`
-      DELETE FROM api_tokens
+      UPDATE api_tokens
+      SET revoked_at = ?
       WHERE user_id = ? AND revoked_at IS NULL
-    `).run(userId).changes;
+    `).run(revokedAt || new Date().toISOString(), userId).changes;
   }
 
   function touchApiTokenUsage(tokenId, usedAt) {
@@ -274,7 +275,7 @@ function createAuthRepository({ getDb }) {
   function purgeExpiredApiTokens() {
     return getDb().prepare(`
       DELETE FROM api_tokens
-      WHERE expires_at < ? OR revoked_at IS NOT NULL
+      WHERE expires_at < ?
     `).run(new Date().toISOString()).changes;
   }
 

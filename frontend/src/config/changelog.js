@@ -1,16 +1,19 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.2.11',
+  version: '3.2.12',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '📰 News card titles now use the full available width for easier scanning.',
-      '🏷 Source labels moved onto the article image to free up card space.',
-      '🧹 Removed topic icons from cards for a calmer, less cluttered layout.',
-      '📱 Mobile now has a floating bottom navigation for sources, topics, time filters, and search.',
-      '✨ The top bar now stays visible and gently shrinks while scrolling.',
-      '🔎 Desktop now has flat quick controls for sources, topics, time, search, refresh, and user actions in the top bar.',
+      '🔐 Security around browser sessions and live updates is stricter.',
+      '🚪 Logging out is more reliable, even if the server is having trouble.',
+      '📄 Feed pagination is more predictable when moving through older results.',
+      '🌊 Refreshes are calmer under load because RSS sources are fetched in controlled batches.',
+      '⚡ Scrolling and loading more stories should feel smoother, with fewer stuck loading states.',
+      '⌨️ Mobile search now stays visible when the keyboard opens.',
+      '🖼️ Stories without official images now rotate through more fallback covers.',
+      '🧹 Repeated stories from the same source are cleaned up more reliably.',
+      '🔗 Sharing now shows a clear message if the browser blocks copying the link.',
     ]
   },
   it: {
@@ -18,12 +21,15 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '📰 I titoli delle card notizia usano ora tutta la larghezza disponibile per una lettura piu comoda.',
-      '🏷 Le etichette delle fonti sono state spostate sull\'immagine dell\'articolo per liberare spazio nella card.',
-      '🧹 Rimosse le icone dei topic dalle card per un layout piu pulito e ordinato.',
-      '📱 Su mobile c\'e una nuova navigazione flottante in basso per fonti, topic, filtro orario e ricerca.',
-      '✨ La barra superiore resta visibile e si compatta leggermente durante lo scroll.',
-      '🔎 Su desktop fonti, topic, filtro orario, ricerca, aggiornamento e utente sono ora piu comodi e leggeri nella barra superiore.',
+      '🔐 La sicurezza delle sessioni browser e degli aggiornamenti live e piu rigorosa.',
+      '🚪 Il logout e piu affidabile, anche se il server sta avendo problemi.',
+      '📄 La paginazione delle notizie e piu prevedibile quando scorri verso i risultati meno recenti.',
+      '🌊 Gli aggiornamenti sono piu stabili sotto carico perche le fonti RSS vengono lette in gruppi controllati.',
+      '⚡ Scroll e caricamento di altre notizie dovrebbero risultare piu fluidi, con meno stati di caricamento bloccati.',
+      '⌨️ La ricerca su mobile resta visibile quando si apre la tastiera.',
+      '🖼️ Le notizie senza immagine ufficiale ora alternano piu copertine di fallback.',
+      '🧹 Le notizie ripetute dalla stessa fonte vengono ripulite in modo piu affidabile.',
+      '🔗 La condivisione ora mostra un messaggio chiaro se il browser blocca la copia del link.',
     ]
   }
 };

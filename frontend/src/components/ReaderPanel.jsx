@@ -76,7 +76,6 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
   const [selectedArticleId, setSelectedArticleId] = useState(initialArticleId || group?.items?.[0]?.id || null);
   const [readerByArticleId, setReaderByArticleId] = useState({});
   const [loading, setLoading] = useState(false);
-  const [, setRefreshing] = useState(false);
   const [shareState, setShareState] = useState('idle');
   const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   const [error, setError] = useState(null);
@@ -135,26 +134,22 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
 
   const selectedReader = selectedArticleId ? readerByArticleId[selectedArticleId] : null;
 
-  const loadReader = useCallback(async (articleId, refresh = false) => {
+  const loadReader = useCallback(async (articleId) => {
     if (!articleId) {
       return;
     }
 
-    if (!refresh && readerCacheRef.current[articleId]) {
+    if (readerCacheRef.current[articleId]) {
       return;
     }
 
     const request = startLatestRequest();
 
     setError(null);
-    if (refresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
+    setLoading(true);
 
     try {
-      const payload = await fetchReaderArticle(articleId, { refresh, signal: request.signal });
+      const payload = await fetchReaderArticle(articleId, { signal: request.signal });
 
       if (!request.isLatest()) {
         return;
@@ -171,7 +166,6 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
     } finally {
       if (request.isLatest()) {
         setLoading(false);
-        setRefreshing(false);
       }
     }
   }, [startLatestRequest]);

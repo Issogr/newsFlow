@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.2.12
+
+- hardened the BFF boundary by stripping raw backend credentials from browser-facing app and Socket.IO proxy paths, requiring a valid BFF session before proxying authenticated app traffic, and clearing local BFF sessions even when upstream logout fails
+- added browser security headers to the BFF-served frontend and switched BFF/backend Docker dependency installs to lockfile-based `npm ci`, with the BFF container now running as an unprivileged user
+- tightened outbound URL safety for RSS/reader fetches by blocking additional special-use IPv4 ranges, carrier-grade NAT, multicast/reserved ranges, and IPv4-mapped IPv6 private targets
+- fixed page-based feed pagination so `page > 1` uses the expected offset when cursor pagination is not active
+- changed RSS ingestion to use bounded concurrency instead of firing every configured and user feed request at once
+- made schema startup distinguish fresh databases from unversioned legacy databases so missing migration metadata no longer silently marks an older schema as current
+- reduced frontend scroll-time state churn, fixed canceled load-more requests leaving pagination controls stuck, removed unused realtime notification and reader-refresh UI state, and surfaced clipboard-share failures cleanly
+- lifted the mobile bottom search bar above the on-screen keyboard using visual viewport changes so iOS and Android users can keep typing without the field being covered
+- added multiple optimized WebP fallback cover illustrations and randomized the no-image card fallback so cards without official images feel less repetitive
+- fixed duplicate cards from sibling RSS subfeeds of the same configured source family by deduping canonical URLs against the displayed source group instead of only the raw subfeed id
+- consolidated duplicated source/topic filter rendering and backend news-query parsing to reduce drift between desktop/mobile and internal/public API paths
+- fixed Docker Compose startup for the non-root BFF container by repairing ownership on the persistent BFF session-data volume before the service starts
+- aligned README/runtime metadata with the current required Compose secrets, tag-only container release workflow, and Node engine requirements
+
 ## 3.2.11
 
 - moved the share button into the image container for non-compact NewsCard layouts so the title and content below it no longer need asymmetric right padding reserved for a floating control

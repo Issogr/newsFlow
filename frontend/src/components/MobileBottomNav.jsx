@@ -7,8 +7,7 @@ import {
   X,
 } from 'lucide-react';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
-import { getTopicPresentation } from '../topicPresentation';
-import { getLocalizedTopic } from '../i18n';
+import { SourceFilterList, TopicFilterList } from './FilterOptionLists';
 
 const BUBBLE_MAX_HEIGHT = 'min(50vh, 24rem)';
 
@@ -46,6 +45,7 @@ const MobileBottomNav = ({
 }) => {
   const [openBubble, setOpenBubble] = useState(null);
   const [searchMode, setSearchMode] = useState(false);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const searchInputRef = useRef(null);
   const navRef = useRef(null);
   const ignoreNextToggleClickRef = useRef(false);
@@ -96,6 +96,29 @@ const MobileBottomNav = ({
   }, [searchMode]);
 
   useEffect(() => {
+    if (!searchMode || !window.visualViewport) {
+      setKeyboardOffset(0);
+      return undefined;
+    }
+
+    const updateKeyboardOffset = () => {
+      const viewport = window.visualViewport;
+      const nextOffset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      setKeyboardOffset(Math.round(nextOffset));
+    };
+
+    updateKeyboardOffset();
+    window.visualViewport.addEventListener('resize', updateKeyboardOffset);
+    window.visualViewport.addEventListener('scroll', updateKeyboardOffset);
+
+    return () => {
+      window.visualViewport.removeEventListener('resize', updateKeyboardOffset);
+      window.visualViewport.removeEventListener('scroll', updateKeyboardOffset);
+      setKeyboardOffset(0);
+    };
+  }, [searchMode]);
+
+  useEffect(() => {
     if (!openBubble) {
       return undefined;
     }
@@ -118,77 +141,32 @@ const MobileBottomNav = ({
       }`}
     >
       {/* Bubbles + Nav wrapped together for outside-click detection */}
-      <div ref={navRef} className="relative mx-auto w-[calc(100%-1.25rem)] max-w-md pb-2.5">
+      <div
+        ref={navRef}
+        className="relative mx-auto w-[calc(100%-1.25rem)] max-w-md pb-[calc(env(safe-area-inset-bottom)+0.875rem+var(--mobile-keyboard-offset,0px))] transition-[padding-bottom] duration-200 ease-out"
+        style={{ '--mobile-keyboard-offset': `${keyboardOffset}px` }}
+      >
         <FilterBubble
           open={openBubble === 'sources'}
         >
-          {visibleSources.length === 0 ? (
-            <p className="text-sm text-slate-500">{t('noNewsText')}</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {visibleSources.map((source) => {
-                const isActive = activeFilters.sourceIds.includes(source.id);
-                return (
-                  <button
-                    key={source.id}
-                    type="button"
-                    onClick={() => onToggleFilter('sourceIds', source.id)}
-                    className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-sky-600 text-white shadow-sm'
-                        : 'bg-sky-100 text-sky-900 hover:bg-sky-200'
-                    }`}
-                  >
-                    <span>{source.name}</span>
-                    {source.count > 0 && (
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-sky-700'}`}>
-                        {source.count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <SourceFilterList
+            sources={visibleSources}
+            activeSourceIds={activeFilters.sourceIds}
+            emptyLabel={t('noNewsText')}
+            onToggleSource={(sourceId) => onToggleFilter('sourceIds', sourceId)}
+          />
         </FilterBubble>
 
         <FilterBubble
           open={openBubble === 'topics'}
         >
-          {availableTopics.length === 0 ? (
-            <p className="text-sm text-slate-500">{t('noNewsText')}</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {availableTopics.map((topic) => {
-                const isActive = activeFilters.topics.includes(topic.topic);
-                const { Icon, iconBadgeClassName } = getTopicPresentation(topic.topic);
-                return (
-                  <button
-                    key={topic.topic}
-                    type="button"
-                    onClick={() => onToggleFilter('topics', topic.topic)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border pl-1 pr-3 py-1 text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'border-slate-900 bg-white text-slate-950 shadow-sm'
-                        : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors ${iconBadgeClassName}`}>
-                      <Icon className="h-3 w-3" aria-hidden="true" />
-                    </span>
-                    <span>{getLocalizedTopic(topic.topic, locale)}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${
-                      isActive
-                        ? 'bg-slate-100 text-slate-700'
-                        : 'bg-slate-50 text-slate-600'
-                    }`}>
-                      {topic.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <TopicFilterList
+            topics={availableTopics}
+            activeTopics={activeFilters.topics}
+            emptyLabel={t('noNewsText')}
+            locale={locale}
+            onToggleTopic={(topic) => onToggleFilter('topics', topic)}
+          />
         </FilterBubble>
 
         {/* Nav bar */}
