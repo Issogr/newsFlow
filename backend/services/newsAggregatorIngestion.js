@@ -2,7 +2,7 @@ const rssParser = require('./rssParser');
 const database = require('./database');
 const logger = require('../utils/logger');
 const websocketService = require('./websocketService');
-const { classifyTopicsForArticles, isAiTopicDetectionAvailable } = require('./aiTopicClassifier');
+const { classifyTopicDetailsForArticles, isAiTopicDetectionAvailable } = require('./aiTopicClassifier');
 const { createError } = require('../utils/errorHandler');
 const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const {
@@ -147,14 +147,14 @@ async function processAiTopicsForPendingArticles(articles = []) {
   const articleIds = articles.map((article) => article.id).filter(Boolean);
 
   try {
-    const topicsByArticleId = await classifyTopicsForArticles(articles);
+    const topicsByArticleId = await classifyTopicDetailsForArticles(articles);
     const classifiedIds = [];
     const topicEntries = [];
 
-    topicsByArticleId.forEach((topics, articleId) => {
-      if (Array.isArray(topics) && topics.length > 0) {
+    topicsByArticleId.forEach((topicDetails, articleId) => {
+      if (Array.isArray(topicDetails) && topicDetails.length > 0) {
         classifiedIds.push(articleId);
-        topicEntries.push({ articleId, topics });
+        topicEntries.push({ articleId, topics: topicDetails });
       }
     });
 
@@ -191,7 +191,7 @@ function scheduleAiTopicsForPendingArticles(normalizedArticles = []) {
 function mergeNormalizedArticleTopics(normalizedArticles = []) {
   database.mergeTopicsForArticles(normalizedArticles.map((article) => ({
     articleId: article.id,
-    topics: article.topics
+    topics: article.topicDetails || article.topics
   })));
 }
 

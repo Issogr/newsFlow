@@ -1,4 +1,5 @@
 const topicNormalizer = require('./topicNormalizer');
+const topicRegressionFixtures = require('./topicRegressionFixtures');
 
 describe('topicNormalizer canonical taxonomy', () => {
   test('drops raw topics outside the supported taxonomy', () => {
@@ -27,6 +28,29 @@ describe('topicNormalizer canonical taxonomy', () => {
 
     expect(topics).toEqual(expect.arrayContaining(['Cronaca']));
     expect(topics).not.toEqual(expect.arrayContaining(['Tecnologia']));
+  });
+
+  test('weighted topic fixtures classify representative difficult headlines', () => {
+    expect(topicRegressionFixtures).toHaveLength(40);
+
+    topicRegressionFixtures.forEach((fixture) => {
+      const topics = topicNormalizer.extractTopics({ title: fixture.title });
+
+      expect(topics).toEqual(expect.arrayContaining(fixture.expected));
+      expect(topics).not.toEqual(expect.arrayContaining(fixture.rejected));
+    });
+  });
+
+  test('returns weighted classification details for debugging', () => {
+    const details = topicNormalizer.extractTopicDetails({
+      title: 'A Roma due persone al corteo del 25 aprile ferite da colpi di pistola ad aria compressa'
+    });
+
+    expect(details[0]).toEqual(expect.objectContaining({
+      topic: 'Cronaca',
+      source: 'local',
+      evidence: expect.arrayContaining(['ferite', 'pistola'])
+    }));
   });
 
   test('extractTopics returns only canonical topics', () => {

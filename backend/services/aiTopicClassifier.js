@@ -3,7 +3,7 @@ const topicNormalizer = require('./topicNormalizer');
 
 const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_OPENROUTER_MODEL = 'qwen/qwen3.5-9b';
-const DEFAULT_BATCH_SIZE = 8;
+const DEFAULT_BATCH_SIZE = 4;
 const DEFAULT_BATCH_CONCURRENCY = 1;
 const DEFAULT_MAX_ARTICLES_PER_REFRESH = 160;
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -130,7 +130,6 @@ function truncateText(value, maxLength) {
 function buildArticlePayload(article = {}) {
   return {
     id: String(article.id || '').trim(),
-    source: truncateText(article.source || article.rawSource || '', 80),
     title: truncateText(article.title || '', 220),
     description: truncateText(article.description || '', 420)
   };
@@ -142,14 +141,20 @@ function buildPrompt(batch = []) {
     `Allowed topics: ${topicNormalizer.CANONICAL_TOPICS.join(', ')}.`,
     `Topic meanings: ${TOPIC_GUIDANCE.join(' ')}`,
     'Use the exact allowed Italian topic labels only.',
-    'Use only the title, short description, and source. Do not use provider RSS categories and do not infer from missing full article content.',
+    'Use only the title and short description. Do not use provider RSS categories and do not infer from missing full article content.',
+    'Return minified JSON only. Do not use markdown fences, prose, or trailing explanations.',
     'If people are wounded, attacked, arrested, shot, or involved in a police/court incident, prefer Cronaca. If the same event is a demonstration or public ceremony, also consider Politica.',
     'Example: "A Roma due persone che partecipavano al corteo per il 25 aprile sono state ferite da colpi di pistola ad aria compressa" -> ["Cronaca", "Politica"], not Tecnologia.',
-    'Return strict JSON only with this shape: {"topicsById":[{"id":"article-id","topics":["Topic"]}]}',
+    'Return strict JSON only with this shape: {"topicsById":[{"id":"article-id","topics":[{"topic":"Topic","confidence":0.82}]}]}',
+    'Confidence must be between 0 and 1.',
     'Return one object for every provided id. If truly impossible to classify an item, return an empty topics array for that item.',
     '',
     JSON.stringify({ articles: batch.map(buildArticlePayload) })
   ].join('\n');
+}
+
+function getCompletionTokenBudget(batchLength) {
+  return Math.min(2000, 320 + (Math.max(1, batchLength) * 120));
 }
 
 function parseJsonContent(content) {
@@ -162,7 +167,16 @@ function parseJsonContent(content) {
     return JSON.parse(rawContent);
   } catch {
     const jsonMatch = rawContent.match(/\{[\s\S]*\}/u);
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+
+    if (!jsonMatch) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(jsonMatch[0]);
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -204,6 +218,51 @@ function getClassifierEntryTopics(entry = {}) {
   return [];
 }
 
+function getArticleEvidenceText(article = {}) {
+  return topicNormalizer.cleanTopicValue([
+    article.title,
+    article.description
+  ].filter(Boolean).join(' '));
+}
+
+function getTopicCandidateDetails(entry = {}) {
+  const entryEvidence = Array.isArray(entry.evidence) ? entry.evidence : [];
+  const entryConfidence = Number(entry.confidence);
+  const topics = getClassifierEntryTopics(entry);
+
+  return topics.map((topicEntry) => {
+    if (topicEntry && typeof topicEntry === 'object') {
+      return {
+        topic: topicEntry.topic || topicEntry.name || topicEntry.category,
+        confidence: Number(topicEntry.confidence),
+        evidence: Array.isArray(topicEntry.evidence) ? topicEntry.evidence : entryEvidence
+      };
+    }
+
+    return {
+      topic: topicEntry,
+      confidence: Number.isFinite(entryConfidence) ? entryConfidence : 1,
+      evidence: entryEvidence
+    };
+  });
+}
+
+function evidenceMatchesArticle(evidence = [], article = null) {
+  if (!Array.isArray(evidence) || evidence.length === 0) {
+    return true;
+  }
+
+  if (!article) {
+    return true;
+  }
+
+  const articleText = getArticleEvidenceText(article);
+  return evidence.some((phrase) => {
+    const cleanedPhrase = topicNormalizer.cleanTopicValue(phrase);
+    return cleanedPhrase.length >= 2 && articleText.includes(cleanedPhrase);
+  });
+}
+
 function summarizeClassifierResult(payload, allowedIds = new Set()) {
   if (!payload || typeof payload !== 'object') {
     return 'invalid_json';
@@ -227,7 +286,7 @@ function summarizeClassifierResult(payload, allowedIds = new Set()) {
   return `unsupported_topics entries=${entries.length} validIds=${validIdEntries.length}`;
 }
 
-function normalizeClassifierResult(payload, allowedIds = new Set()) {
+function normalizeClassifierDetails(payload, allowedIds = new Set(), articlesById = null) {
   const entries = getClassifierEntries(payload);
   const result = new Map();
 
@@ -237,10 +296,36 @@ function normalizeClassifierResult(payload, allowedIds = new Set()) {
       return;
     }
 
-    const topics = topicNormalizer.limitTopics(getClassifierEntryTopics(entry), 3);
-    if (topics.length > 0) {
-      result.set(id, topics);
+    const article = articlesById?.get(id) || null;
+    const details = getTopicCandidateDetails(entry)
+      .map((candidate) => ({
+        topic: topicNormalizer.normalizeTopic(candidate.topic),
+        confidence: Number.isFinite(candidate.confidence) ? candidate.confidence : 0,
+        evidence: Array.isArray(candidate.evidence) ? candidate.evidence.map((value) => String(value || '').trim()).filter(Boolean) : []
+      }))
+      .filter((candidate) => candidate.topic && candidate.confidence >= 0.65)
+      .filter((candidate) => !article || evidenceMatchesArticle(candidate.evidence, article))
+      .slice(0, 3)
+      .map((candidate) => ({
+        ...candidate,
+        source: 'ai',
+        reasonCode: 'ai_confident_evidence'
+      }));
+
+    if (details.length > 0) {
+      result.set(id, details);
     }
+  });
+
+  return result;
+}
+
+function normalizeClassifierResult(payload, allowedIds = new Set(), articlesById = null) {
+  const detailsByArticleId = normalizeClassifierDetails(payload, allowedIds, articlesById);
+  const result = new Map();
+
+  detailsByArticleId.forEach((details, articleId) => {
+    result.set(articleId, details.map((entry) => entry.topic));
   });
 
   return result;
@@ -293,6 +378,7 @@ function summarizeResponseShape(response = {}) {
 
 async function classifyBatch(batch, config) {
   const allowedIds = new Set(batch.map((article) => article.id).filter(Boolean));
+  const articlesById = new Map(batch.map((article) => [article.id, article]));
   if (allowedIds.size === 0) {
     return new Map();
   }
@@ -313,8 +399,8 @@ async function classifyBatch(batch, config) {
         }
       ],
       temperature: 0,
-      maxTokens: Math.min(2000, 220 + (batch.length * 48)),
-      maxCompletionTokens: Math.min(2000, 220 + (batch.length * 48)),
+      maxTokens: getCompletionTokenBudget(batch.length),
+      maxCompletionTokens: getCompletionTokenBudget(batch.length),
       reasoning: {
         enabled: false,
         effort: 'none',
@@ -338,7 +424,7 @@ async function classifyBatch(batch, config) {
 
   const content = extractAssistantContent(response);
   const payload = parseJsonContent(content);
-  const result = normalizeClassifierResult(payload, allowedIds);
+  const result = normalizeClassifierDetails(payload, allowedIds, articlesById);
 
   if (result.size === 0) {
     logger.warn(`AI topic batch produced no valid topics: reason=${summarizeClassifierResult(payload, allowedIds)}, responseChars=${content.length}, ${summarizeResponseShape(response)}`);
@@ -349,6 +435,17 @@ async function classifyBatch(batch, config) {
 }
 
 async function classifyTopicsForArticles(articles = []) {
+  const detailsByArticleId = await classifyTopicDetailsForArticles(articles);
+  const result = new Map();
+
+  detailsByArticleId.forEach((details, articleId) => {
+    result.set(articleId, details.map((entry) => entry.topic));
+  });
+
+  return result;
+}
+
+async function classifyTopicDetailsForArticles(articles = []) {
   const config = getConfig();
   if (!Array.isArray(articles) || articles.length === 0) {
     return new Map();
@@ -386,11 +483,14 @@ function isAiTopicDetectionAvailable() {
 
 module.exports = {
   classifyTopicsForArticles,
+  classifyTopicDetailsForArticles,
   isAiTopicDetectionAvailable,
   _buildArticlePayload: buildArticlePayload,
   _buildPrompt: buildPrompt,
   _getConfig: getConfig,
+  _getCompletionTokenBudget: getCompletionTokenBudget,
   _extractAssistantContent: extractAssistantContent,
+  _normalizeClassifierDetails: normalizeClassifierDetails,
   _normalizeClassifierResult: normalizeClassifierResult,
   _parseJsonContent: parseJsonContent,
   _summarizeResponseShape: summarizeResponseShape,

@@ -1,5 +1,5 @@
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 20;
+  const CURRENT_SCHEMA_VERSION = 21;
 
   function initializeSchema(database) {
     database.exec(`
@@ -35,6 +35,10 @@ function createDatabaseSchema({ logger }) {
       CREATE TABLE IF NOT EXISTS article_topics (
         article_id TEXT NOT NULL,
         topic TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'legacy',
+        confidence REAL,
+        evidence TEXT NOT NULL DEFAULT '[]',
+        reason_code TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (article_id, topic),
         FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
@@ -224,6 +228,7 @@ function createDatabaseSchema({ logger }) {
     const userSettingsColumns = getColumnNames(database, 'user_settings');
     const userColumns = getColumnNames(database, 'users');
     const articleColumns = getColumnNames(database, 'articles');
+    const articleTopicColumns = getColumnNames(database, 'article_topics');
 
     if (!tableExists(database, 'api_tokens')) {
       return 15;
@@ -243,6 +248,10 @@ function createDatabaseSchema({ logger }) {
 
     if (!articleColumns.has('ai_topics_processed_at') || !articleColumns.has('ai_topics_status')) {
       return 19;
+    }
+
+    if (!articleTopicColumns.has('source') || !articleTopicColumns.has('confidence') || !articleTopicColumns.has('evidence') || !articleTopicColumns.has('reason_code')) {
+      return 20;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -375,6 +384,39 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database);
       logger.info('Migrated DB schema from version 19 to 20');
+      migrateSchema(database, 20);
+      return;
+    }
+
+    if (currentVersion === 20) {
+      const articleTopicColumns = getColumnNames(database, 'article_topics');
+      if (!articleTopicColumns.has('source')) {
+        database.exec(`
+          ALTER TABLE article_topics
+          ADD COLUMN source TEXT NOT NULL DEFAULT 'legacy'
+        `);
+      }
+      if (!articleTopicColumns.has('confidence')) {
+        database.exec(`
+          ALTER TABLE article_topics
+          ADD COLUMN confidence REAL
+        `);
+      }
+      if (!articleTopicColumns.has('evidence')) {
+        database.exec(`
+          ALTER TABLE article_topics
+          ADD COLUMN evidence TEXT NOT NULL DEFAULT '[]'
+        `);
+      }
+      if (!articleTopicColumns.has('reason_code')) {
+        database.exec(`
+          ALTER TABLE article_topics
+          ADD COLUMN reason_code TEXT
+        `);
+      }
+
+      setCurrentSchemaVersion(database);
+      logger.info('Migrated DB schema from version 20 to 21');
       return;
     }
 

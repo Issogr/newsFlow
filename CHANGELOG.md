@@ -6,12 +6,17 @@
 - switched OpenRouter topic classification from a custom HTTP call to the official `@openrouter/sdk` client while keeping the backend CommonJS runtime through dynamic import
 - added safe backend log feedback for AI topic requests so Docker Compose development can see skipped, started, completed, capped, and failed AI classification batches without logging prompts or secrets
 - made OpenRouter timeout handling explicit and non-fatal in AI topic classification logs, disabling SDK retries for classifier calls and suppressing duplicate expected timeout rejections while keeping local fallback topics
-- relaxed AI topic-classification defaults to one 8-article batch at a time with a 30-second request timeout, and allow configuring up to 120 seconds so slower OpenRouter models have enough time before fallback kicks in
+- relaxed AI topic-classification defaults to one 4-article batch at a time with a 30-second request timeout, increased the structured-output completion budget, and allow configuring up to 120 seconds so slower OpenRouter models have enough time before fallback kicks in
 - made AI topic parsing more tolerant of common model response variants, requested JSON-object responses, and added safe zero-classification diagnostics that report only structural reasons and response length
 - disabled reasoning for AI topic-classification calls and added robust assistant-content extraction so reasoning-first models do not spend the response budget without returning final taxonomy JSON
 - moved AI topic classification out of the blocking ingestion path and added persisted per-article AI processing metadata so attempted articles are not repeatedly classified across refreshes or service restarts
 - tightened topic normalization and AI classification guidance so short aliases such as `ia` no longer turn unrelated words like `aria` into Technology, and incident/crime stories are steered toward Cronaca instead of the misleading Local news label
-- restored icon-only topic markers on standard NewsCard layouts so non-compact cards again show article categories next to the publication date without adding text noise
+- replaced local topic keyword matching with weighted phrase scoring, positive/negative evidence, and 40 regression fixtures for difficult headlines so fallback topics are more deterministic and auditable
+- changed AI topic output validation to require per-topic confidence and evidence copied from article title/description before accepting a model-assigned topic
+- extended stored article topics with source, confidence, evidence, and reason-code metadata, plus an admin-only topic debug report endpoint for inspecting classification decisions
+- simplified the AI topic JSON contract to focus on topic plus confidence, making model responses smaller and less likely to be truncated before valid JSON completes
+- removed source names from AI topic-classification payloads so requests stay smaller and rely on the article text instead of publisher branding
+- restored icon-only topic markers on standard NewsCard layouts, with a subtle rainbow ring around AI-classified topics so non-compact cards show article categories without adding text noise
 - switched the BFF Docker dependency and runtime stages to Node 20 while keeping the frontend build on Node 22, avoiding Node 22 deprecation noise from the proxy dependency at container startup
 - guarded batched topic merges against stale article ids left behind by article deduplication or cleanup so ingestion no longer fails with a foreign-key error when an article disappears before its topics are merged
 - changed custom-source ingestion to fetch identical active user RSS URLs once per refresh and fan out the parsed articles per owning user source, while keeping delete/update cleanup scoped to the affected user source

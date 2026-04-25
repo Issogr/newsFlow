@@ -40,7 +40,7 @@ describe('aiTopicClassifier', () => {
   test('keeps the API key server-side while sending compact article payloads without RSS topics', async () => {
     chatSend.mockResolvedValue({
       choices: [
-        { message: { content: JSON.stringify({ topicsById: [{ id: 'article-1', topics: ['Technology', 'rss'] }] }) } }
+        { message: { content: JSON.stringify({ topicsById: [{ id: 'article-1', topics: [{ topic: 'Technology', confidence: 0.9, evidence: ['AI chips'] }, { topic: 'rss', confidence: 0.8, evidence: ['AI chips'] }] }] }) } }
       ]
     });
 
@@ -68,7 +68,7 @@ describe('aiTopicClassifier', () => {
       effort: 'none',
       maxTokens: 0,
     });
-    expect(requestBody.maxCompletionTokens).toBe(268);
+    expect(requestBody.maxCompletionTokens).toBe(440);
     expect(requestOptions).toEqual({
       retries: { strategy: 'none' },
       timeoutMs: 30000
@@ -83,8 +83,13 @@ describe('aiTopicClassifier', () => {
     expect(prompt).toContain('AI chips arrive');
     expect(prompt).toContain('air/compressed-air weapons');
     expect(prompt).toContain('prefer Cronaca');
+    expect(prompt).toContain('confidence');
+    expect(prompt).not.toContain('Evidence must be copied');
+    expect(prompt).toContain('Return minified JSON only');
     expect(prompt).toContain('Return one object for every provided id');
     expect(prompt).toContain('Do not use provider RSS categories');
+    expect(prompt).toContain('Use only the title and short description');
+    expect(prompt).not.toContain('Example Source');
     expect(prompt).not.toContain('rawTopics');
     expect(prompt).not.toContain('This full article body should not be sent');
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection started'));
@@ -169,6 +174,16 @@ describe('aiTopicClassifier', () => {
     })).toBe('{"topicsById":[]}');
   });
 
+  test('returns null instead of throwing on truncated JSON output', () => {
+    expect(aiTopicClassifier._parseJsonContent('{"topicsById":[')).toBeNull();
+    expect(aiTopicClassifier._parseJsonContent('```json\n{"topicsById":[{"id":"article-1"}]')).toBeNull();
+  });
+
+  test('uses a larger completion budget for structured JSON output', () => {
+    expect(aiTopicClassifier._getCompletionTokenBudget(1)).toBe(440);
+    expect(aiTopicClassifier._getCompletionTokenBudget(4)).toBe(800);
+  });
+
   test('logs a safe reason when a completed AI response has no usable topics', async () => {
     chatSend.mockResolvedValue({
       choices: [
@@ -183,5 +198,47 @@ describe('aiTopicClassifier', () => {
     expect(result.size).toBe(0);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('AI topic batch produced no valid topics: reason=empty_topics'));
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('finishReason=unknown'));
+  });
+
+  test('rejects AI topics without matching evidence in the article text', () => {
+    const articlesById = new Map([
+      ['article-1', { id: 'article-1', title: 'Mercati in rialzo', description: 'Borsa positiva' }]
+    ]);
+    const result = aiTopicClassifier._normalizeClassifierDetails({
+      topicsById: [
+        { id: 'article-1', topics: [{ topic: 'Tecnologia', confidence: 0.92, evidence: ['software'] }] }
+      ]
+    }, new Set(['article-1']), articlesById);
+
+    expect(result.has('article-1')).toBe(false);
+  });
+
+  test('accepts AI topics with confidence and evidence copied from the article text', () => {
+    const articlesById = new Map([
+      ['article-1', { id: 'article-1', title: 'Arrestato dopo una aggressione', description: 'Indaga la polizia' }]
+    ]);
+    const result = aiTopicClassifier._normalizeClassifierDetails({
+      topicsById: [
+        { id: 'article-1', topics: [{ topic: 'Cronaca', confidence: 0.88, evidence: ['aggressione', 'polizia'] }] }
+      ]
+    }, new Set(['article-1']), articlesById);
+
+    expect(result.get('article-1')).toEqual([
+      expect.objectContaining({ topic: 'Cronaca', confidence: 0.88, source: 'ai', reasonCode: 'ai_confident_evidence' })
+    ]);
+  });
+
+  test('accepts AI topics with confidence even when evidence is omitted', () => {
+    const result = aiTopicClassifier._normalizeClassifierDetails({
+      topicsById: [
+        { id: 'article-1', topics: [{ topic: 'Tecnologia', confidence: 0.86 }] }
+      ]
+    }, new Set(['article-1']), new Map([
+      ['article-1', { id: 'article-1', title: 'Nuovi chip per AI', description: 'Data center e software' }]
+    ]));
+
+    expect(result.get('article-1')).toEqual([
+      expect.objectContaining({ topic: 'Tecnologia', confidence: 0.86, source: 'ai' })
+    ]);
   });
 });

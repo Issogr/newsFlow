@@ -39,7 +39,7 @@ jest.mock('./websocketService', () => ({
 }));
 
 jest.mock('./aiTopicClassifier', () => ({
-  classifyTopicsForArticles: jest.fn(async () => new Map()),
+  classifyTopicDetailsForArticles: jest.fn(async () => new Map()),
   isAiTopicDetectionAvailable: jest.fn(() => true)
 }));
 
@@ -79,7 +79,7 @@ describe('newsAggregator service flows', () => {
     database.listAllActiveUserSources.mockReturnValue([]);
     database.upsertArticles.mockReturnValue({ insertedIds: [], insertedCount: 0, updatedCount: 0 });
     aiTopicClassifier.isAiTopicDetectionAvailable.mockReturnValue(true);
-    aiTopicClassifier.classifyTopicsForArticles.mockResolvedValue(new Map());
+    aiTopicClassifier.classifyTopicDetailsForArticles.mockResolvedValue(new Map());
     rssParser._buildArticleId.mockImplementation((source, item, canonicalUrl = '') => `${source.id}:${canonicalUrl || item.link || item.title}`);
     rssParser.parseFeed.mockResolvedValue([]);
   });
@@ -277,8 +277,8 @@ describe('newsAggregator service flows', () => {
     ]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], updatedIds: ['updated-1'], insertedCount: 1, updatedCount: 1 });
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
-    aiTopicClassifier.classifyTopicsForArticles.mockResolvedValue(new Map([
-      ['inserted-1', ['Tecnologia']]
+    aiTopicClassifier.classifyTopicDetailsForArticles.mockResolvedValue(new Map([
+      ['inserted-1', [{ topic: 'Tecnologia', source: 'ai', confidence: 0.88, evidence: ['AI chips'], reasonCode: 'ai_confident_evidence' }]]
     ]));
 
     await newsAggregator.ingestAllNews({ broadcast: true });
@@ -288,15 +288,15 @@ describe('newsAggregator service flows', () => {
       expect.objectContaining({ articleId: 'updated-1', topics: expect.any(Array) })
     ]));
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].topics).toEqual(['Tecnologia']);
-    expect(aiTopicClassifier.classifyTopicsForArticles).not.toHaveBeenCalled();
+    expect(aiTopicClassifier.classifyTopicDetailsForArticles).not.toHaveBeenCalled();
 
     await flushBackgroundAiProcessing();
 
-    expect(aiTopicClassifier.classifyTopicsForArticles).toHaveBeenCalledWith([
+    expect(aiTopicClassifier.classifyTopicDetailsForArticles).toHaveBeenCalledWith([
       expect.objectContaining({ id: 'inserted-1', title: 'AI chips advance' })
     ]);
     expect(database.replaceTopicsForArticles).toHaveBeenCalledWith([
-      { articleId: 'inserted-1', topics: ['Tecnologia'] }
+      { articleId: 'inserted-1', topics: [{ topic: 'Tecnologia', source: 'ai', confidence: 0.88, evidence: ['AI chips'], reasonCode: 'ai_confident_evidence' }] }
     ]);
     expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'completed');
   });
@@ -307,14 +307,17 @@ describe('newsAggregator service flows', () => {
     ]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], insertedCount: 1, updatedCount: 0 });
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
-    aiTopicClassifier.classifyTopicsForArticles.mockResolvedValue(new Map([
+    aiTopicClassifier.classifyTopicDetailsForArticles.mockResolvedValue(new Map([
       ['inserted-1', []]
     ]));
 
     await newsAggregator.ingestAllNews({ broadcast: true });
 
     expect(database.mergeTopicsForArticles).toHaveBeenCalledWith(expect.arrayContaining([
-      expect.objectContaining({ articleId: 'inserted-1', topics: ['Economia'] })
+      expect.objectContaining({
+        articleId: 'inserted-1',
+        topics: expect.arrayContaining([expect.objectContaining({ topic: 'Economia' })])
+      })
     ]));
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].topics).toEqual(['Economia']);
 

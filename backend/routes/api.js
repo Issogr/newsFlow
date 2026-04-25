@@ -2,6 +2,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const newsService = require('../services/newsAggregator');
+const database = require('../services/database');
 const readerService = require('../services/readerService');
 const userService = require('../services/userService');
 const feedbackService = require('../services/feedbackService');
@@ -325,6 +326,20 @@ router.delete('/admin/users/:userId', [
 ], asyncHandler(async (req, res) => {
   const result = userService.deleteUserAsAdmin(req.user.id, req.params.userId);
   res.json(result);
+}));
+
+router.get('/admin/articles/:articleId/topics/debug', [
+  requireAuthenticatedUser,
+  requireAdminUser,
+  validateParam('articleId', 'Invalid article ID'),
+  sanitizeParam('articleId')
+], asyncHandler(async (req, res) => {
+  const report = database.getTopicClassificationReport(req.params.articleId);
+  if (!report) {
+    throw createError(404, 'Article not found', 'RESOURCE_NOT_FOUND');
+  }
+
+  res.json(report);
 }));
 
 router.get('/news', [requireAuthenticatedUser, sanitizeQuery('search'), sanitizeQuery('beforePubDate'), sanitizeQuery('beforeId')], asyncHandler(async (req, res) => {

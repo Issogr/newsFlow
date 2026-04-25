@@ -46,25 +46,33 @@ function getSourceEntries(group) {
 }
 
 function getTopicEntries(group) {
-  const topics = [
-    ...(group?.topics || []),
-    ...(group?.items || []).flatMap((item) => item?.topics || []),
-  ];
-  const seen = new Set();
+  const topicMap = new Map();
+  const addTopic = (entry) => {
+    const topic = String(entry?.topic || entry || '').trim();
+    if (!topic) {
+      return;
+    }
 
-  return topics
-    .map((topic) => String(topic || '').trim())
-    .filter(Boolean)
-    .filter((topic) => {
-      const key = topic.toLowerCase();
-      if (seen.has(key)) {
-        return false;
-      }
+    const key = topic.toLowerCase();
+    const current = topicMap.get(key);
+    const nextEntry = {
+      topic,
+      source: String(entry?.source || current?.source || '').trim().toLowerCase()
+    };
 
-      seen.add(key);
-      return true;
-    })
-    .slice(0, 4);
+    if (!current || nextEntry.source === 'ai') {
+      topicMap.set(key, nextEntry);
+    }
+  };
+
+  (group?.topicDetails || []).forEach(addTopic);
+  (group?.topics || []).forEach(addTopic);
+  (group?.items || []).forEach((item) => {
+    (item?.topicDetails || []).forEach(addTopic);
+    (item?.topics || []).forEach(addTopic);
+  });
+
+  return [...topicMap.values()].slice(0, 4);
 }
 
 function getGroupImageUrl(group) {
@@ -317,14 +325,33 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
                 {formatPublicationDate(group.pubDate, locale)}
               </span>
 
-              {topicEntries.map((topic) => {
+              {topicEntries.map(({ topic, source }) => {
                 const { Icon, iconBadgeClassName } = getTopicPresentation(topic);
+                const localizedTopic = getLocalizedTopic(topic, locale);
+                const isAiTopic = source === 'ai';
+
+                if (isAiTopic) {
+                  return (
+                    <span
+                      key={topic}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full p-[1.5px] shadow-sm"
+                      style={{ backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)' }}
+                      aria-label={localizedTopic}
+                      title={localizedTopic}
+                    >
+                      <span className={`inline-flex h-full w-full items-center justify-center rounded-full ${iconBadgeClassName}`}>
+                        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                      </span>
+                    </span>
+                  );
+                }
+
                 return (
                   <span
                     key={topic}
                     className={`inline-flex h-7 w-7 items-center justify-center rounded-full shadow-sm ${iconBadgeClassName}`}
-                    aria-label={getLocalizedTopic(topic, locale)}
-                    title={getLocalizedTopic(topic, locale)}
+                    aria-label={localizedTopic}
+                    title={localizedTopic}
                   >
                     <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                   </span>

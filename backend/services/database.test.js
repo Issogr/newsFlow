@@ -72,11 +72,11 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('20');
+    expect(migrationVersion).toBe('21');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
-    expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
+    expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'source', 'confidence', 'evidence', 'reason_code', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
     expect(settingsColumns).toContain('auto_refresh_enabled');
@@ -145,7 +145,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('20');
+    expect(migratedVersion).toBe('21');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
@@ -260,7 +260,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('20');
+    expect(migratedVersion).toBe('21');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -546,7 +546,7 @@ describe('database queries and user data', () => {
 
     expect(database.getArticleIdsPendingAiTopicProcessing(['ai-topic-article'])).toEqual(['ai-topic-article']);
     expect(database.replaceTopicsForArticles([
-      { articleId: 'ai-topic-article', topics: ['Technology'] }
+      { articleId: 'ai-topic-article', topics: [{ topic: 'Technology', source: 'ai', confidence: 0.91, evidence: ['AI topic'], reasonCode: 'ai_confident_evidence' }] }
     ])).toBe(1);
     expect(database.markArticlesAiTopicProcessing(['ai-topic-article'], 'completed')).toBe(1);
 
@@ -556,6 +556,7 @@ describe('database queries and user data', () => {
       FROM articles
       WHERE id = ?
     `).get('ai-topic-article');
+    const report = database.getTopicClassificationReport('ai-topic-article');
 
     expect(database.getArticleIdsPendingAiTopicProcessing(['ai-topic-article'])).toEqual([]);
     expect(articles[0]).toEqual(expect.objectContaining({
@@ -563,6 +564,13 @@ describe('database queries and user data', () => {
       topics: ['Tecnologia']
     }));
     expect(aiState).toEqual({ processedAt: expect.any(String), status: 'completed' });
+    expect(report.storedTopics[0]).toEqual(expect.objectContaining({
+      topic: 'Tecnologia',
+      source: 'ai',
+      confidence: 0.91,
+      evidence: ['AI topic'],
+      reasonCode: 'ai_confident_evidence'
+    }));
   });
 
   test('normalizes future publication dates on insert and during cleanup', () => {

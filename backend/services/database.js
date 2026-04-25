@@ -207,6 +207,7 @@ module.exports = {
   getArticleById: articleRepository.getArticleById,
   getArticlesByIds: articleRepository.getArticlesByIds,
   getArticleIdsPendingAiTopicProcessing: articleRepository.getArticleIdsPendingAiTopicProcessing,
+  getTopicClassificationReport: articleRepository.getTopicClassificationReport,
   markArticlesAiTopicProcessing: articleRepository.markArticlesAiTopicProcessing,
   mergeTopicsForArticle: articleRepository.mergeTopicsForArticle,
   mergeTopicsForArticles: articleRepository.mergeTopicsForArticles,

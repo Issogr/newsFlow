@@ -117,6 +117,28 @@ describe('NewsCard', () => {
     expect(screen.queryByText('Economy')).not.toBeInTheDocument();
   });
 
+  test('adds a rainbow ring around AI-classified topic icons', () => {
+    render(
+      <NewsCard
+        group={{
+          ...group,
+          topicDetails: [
+            { topic: 'Tecnologia', source: 'ai' },
+            { topic: 'Economia', source: 'local' }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Technology')).toHaveStyle({
+      backgroundImage: expect.stringContaining('conic-gradient')
+    });
+    expect(screen.getByLabelText('Economy').getAttribute('style') || '').not.toContain('conic-gradient');
+  });
+
   test('does not render topic pills on compact cards', () => {
     render(
       <NewsCard
