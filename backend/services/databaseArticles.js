@@ -446,6 +446,39 @@ function createArticleRepository({
     return transaction(articles);
   }
 
+  function getArticleIdsPendingAiTopicProcessing(articleIds = []) {
+    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    if (normalizedArticleIds.length === 0) {
+      return [];
+    }
+
+    return chunkValues(normalizedArticleIds).flatMap((ids) => {
+      return getDb().prepare(`
+        SELECT id
+        FROM articles
+        WHERE id IN (${ids.map(() => '?').join(', ')})
+          AND ai_topics_processed_at IS NULL
+      `).all(...ids).map((row) => row.id);
+    });
+  }
+
+  function markArticlesAiTopicProcessing(articleIds = [], status = 'completed') {
+    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    if (normalizedArticleIds.length === 0) {
+      return 0;
+    }
+
+    const processedAt = new Date().toISOString();
+    return chunkValues(normalizedArticleIds).reduce((total, ids) => {
+      return total + getDb().prepare(`
+        UPDATE articles
+        SET ai_topics_processed_at = ?,
+            ai_topics_status = ?
+        WHERE id IN (${ids.map(() => '?').join(', ')})
+      `).run(processedAt, status, ...ids).changes;
+    }, 0);
+  }
+
   function mergeTopicsForArticle(articleId, topics = []) {
     if (!articleId || !Array.isArray(topics) || topics.length === 0) {
       return [];
@@ -520,6 +553,58 @@ function createArticleRepository({
           .forEach((topic) => {
             insertedCount += insertStmt.run(articleId, topic).changes;
           });
+      });
+
+      return insertedCount;
+    });
+
+    return transaction(existingEntries);
+  }
+
+  function replaceTopicsForArticles(entries = []) {
+    const normalizedEntries = Array.isArray(entries)
+      ? entries
+        .map((entry) => ({
+          articleId: entry?.articleId,
+          topics: topicNormalizer.limitTopics(entry?.topics || [], 3)
+        }))
+        .filter((entry) => entry.articleId && entry.topics.length > 0)
+      : [];
+
+    if (normalizedEntries.length === 0) {
+      return 0;
+    }
+
+    const database = getDb();
+    const existingArticleIds = new Set(
+      chunkValues([...new Set(normalizedEntries.map((entry) => entry.articleId))]).flatMap((articleIds) => {
+        return database.prepare(`
+          SELECT id
+          FROM articles
+          WHERE id IN (${articleIds.map(() => '?').join(', ')})
+        `).all(...articleIds).map((row) => row.id);
+      })
+    );
+    const existingEntries = normalizedEntries.filter((entry) => existingArticleIds.has(entry.articleId));
+
+    if (existingEntries.length === 0) {
+      return 0;
+    }
+
+    const deleteStmt = database.prepare('DELETE FROM article_topics WHERE article_id = ?');
+    const insertStmt = database.prepare(`
+      INSERT OR IGNORE INTO article_topics (article_id, topic)
+      VALUES (?, ?)
+    `);
+
+    const transaction = database.transaction((items) => {
+      let insertedCount = 0;
+
+      items.forEach(({ articleId, topics }) => {
+        deleteStmt.run(articleId);
+        topics.forEach((topic) => {
+          insertedCount += insertStmt.run(articleId, topic).changes;
+        });
       });
 
       return insertedCount;
@@ -949,8 +1034,11 @@ function createArticleRepository({
     getArticles,
     getArticleById,
     getArticlesByIds,
+    getArticleIdsPendingAiTopicProcessing,
+    markArticlesAiTopicProcessing,
     mergeTopicsForArticle,
     mergeTopicsForArticles,
+    replaceTopicsForArticles,
     upsertArticles,
     countArticles,
     deleteArticlesOlderThan,

@@ -81,9 +81,11 @@ describe('aiTopicClassifier', () => {
       appTitle: 'News Flow'
     }));
     expect(prompt).toContain('AI chips arrive');
+    expect(prompt).toContain('air/compressed-air weapons');
+    expect(prompt).toContain('prefer Cronaca');
     expect(prompt).toContain('Return one object for every provided id');
     expect(prompt).toContain('Do not use provider RSS categories');
-    expect(prompt).not.toContain('tech');
+    expect(prompt).not.toContain('rawTopics');
     expect(prompt).not.toContain('This full article body should not be sent');
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection started'));
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic batch completed'));
@@ -131,6 +133,16 @@ describe('aiTopicClassifier', () => {
     expect(result.get('article-1')).toEqual(['Economia', 'Scienza']);
     expect(result.has('article-2')).toBe(false);
     expect(result.has('other-article')).toBe(false);
+  });
+
+  test('does not normalize air-gun wording to technology', () => {
+    const result = aiTopicClassifier._normalizeClassifierResult({
+      topicsById: [
+        { id: 'article-1', topics: ['aria compressa', 'Cronaca'] }
+      ]
+    }, new Set(['article-1']));
+
+    expect(result.get('article-1')).toEqual(['Cronaca']);
   });
 
   test('accepts common model response variants', () => {

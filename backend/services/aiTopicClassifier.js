@@ -7,6 +7,19 @@ const DEFAULT_BATCH_SIZE = 8;
 const DEFAULT_BATCH_CONCURRENCY = 1;
 const DEFAULT_MAX_ARTICLES_PER_REFRESH = 160;
 const DEFAULT_TIMEOUT_MS = 30000;
+const TOPIC_GUIDANCE = [
+  'Politica: government, elections, parties, institutions, protests, policy, public ceremonies.',
+  'Economia: markets, business, companies, finance, inflation, jobs, trade.',
+  'Tecnologia: digital technology only, AI, software, hardware, cybersecurity, chips, startups. Do not use for generic physical objects or air/compressed-air weapons.',
+  'Scienza: scientific research, space, labs, discoveries, biology, physics.',
+  'Ambiente: climate, pollution, energy transition, weather impacts, environment.',
+  'Sport: sports events, teams, athletes, competitions.',
+  'Cultura: books, art, museums, theatre, literature.',
+  'Salute: medicine, healthcare, hospitals, public health, diseases.',
+  'Esteri: foreign affairs, international conflicts, diplomacy, events outside Italy.',
+  'Cronaca: incidents, crime, accidents, injuries, police, courts, public order. This is not limited to local news.',
+  'Spettacolo: cinema, TV, music, celebrities, entertainment.'
+];
 
 let openRouterSdkLoader = () => import('@openrouter/sdk');
 let openRouterSdkPromise = null;
@@ -127,8 +140,11 @@ function buildPrompt(batch = []) {
   return [
     'Classify each news item into one to three canonical topics when the title or description is enough to decide.',
     `Allowed topics: ${topicNormalizer.CANONICAL_TOPICS.join(', ')}.`,
+    `Topic meanings: ${TOPIC_GUIDANCE.join(' ')}`,
     'Use the exact allowed Italian topic labels only.',
     'Use only the title, short description, and source. Do not use provider RSS categories and do not infer from missing full article content.',
+    'If people are wounded, attacked, arrested, shot, or involved in a police/court incident, prefer Cronaca. If the same event is a demonstration or public ceremony, also consider Politica.',
+    'Example: "A Roma due persone che partecipavano al corteo per il 25 aprile sono state ferite da colpi di pistola ad aria compressa" -> ["Cronaca", "Politica"], not Tecnologia.',
     'Return strict JSON only with this shape: {"topicsById":[{"id":"article-id","topics":["Topic"]}]}',
     'Return one object for every provided id. If truly impossible to classify an item, return an empty topics array for that item.',
     '',
@@ -364,8 +380,13 @@ async function classifyTopicsForArticles(articles = []) {
   return result;
 }
 
+function isAiTopicDetectionAvailable() {
+  return getConfig().enabled;
+}
+
 module.exports = {
   classifyTopicsForArticles,
+  isAiTopicDetectionAvailable,
   _buildArticlePayload: buildArticlePayload,
   _buildPrompt: buildPrompt,
   _getConfig: getConfig,

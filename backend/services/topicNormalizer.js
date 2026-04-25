@@ -29,14 +29,14 @@ const TOPIC_ALIASES = {
 const KEYWORD_TOPICS = {
   Politica: ['governo', 'senato', 'camera', 'presidente', 'ministro', 'parlamento', 'decreto', 'election', 'minister', 'premier'],
   Economia: ['pil', 'inflazione', 'spread', 'borsa', 'bank', 'banca', 'mercato', 'economy', 'finanza', 'lavoro'],
-  Tecnologia: ['software', 'hardware', 'chip', 'cloud', 'cyber', 'digitale', 'artificial intelligence', 'intelligenza artificiale', 'app'],
+  Tecnologia: ['ai', 'software', 'hardware', 'chip', 'cloud', 'cyber', 'digitale', 'artificial intelligence', 'intelligenza artificiale', 'app'],
   Scienza: ['ricerca', 'laboratorio', 'nasa', 'esa', 'astronomia', 'scientist', 'studio clinico'],
   Ambiente: ['clima', 'emissioni', 'carbon', 'energia rinnovabile', 'alluvione', 'siccita', 'biodiversita'],
   Sport: ['partita', 'campionato', 'serie a', 'champions', 'gol', 'allenatore', 'tennis', 'gp', 'maratona'],
   Cultura: ['mostra', 'romanzo', 'festival letterario', 'museo', 'opera', 'teatro', 'biennale'],
   Salute: ['ospedale', 'medico', 'medici', 'farmaco', 'vaccino', 'sanitario', 'epidemia', 'diagnosi'],
   Esteri: ['ucraina', 'russia', 'usa', 'europa', 'nato', 'gaza', 'israele', 'cina', 'francia', 'germania'],
-  Cronaca: ['incidente', 'arresto', 'procura', 'tribunale', 'omicidio', 'furto', 'vigili del fuoco'],
+  Cronaca: ['incidente', 'arresto', 'procura', 'tribunale', 'omicidio', 'furto', 'vigili del fuoco', 'ferito', 'feriti', 'ferita', 'ferite', 'pistola', 'spari', 'colpi di pistola', 'aggressione'],
   Spettacolo: ['attore', 'attrice', 'serie tv', 'box office', 'album', 'sanremo', 'concerto']
 };
 
@@ -59,6 +59,40 @@ function cleanTopicValue(topic) {
     .replace(/[^\p{L}\p{N}\s-]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function containsCleanPhrase(text, phrase) {
+  const normalizedPhrase = cleanTopicValue(phrase);
+  if (!normalizedPhrase) {
+    return false;
+  }
+
+  if (text === normalizedPhrase) {
+    return true;
+  }
+
+  return new RegExp(`(^|\\s)${escapeRegex(normalizedPhrase)}(\\s|$)`, 'u').test(text);
+}
+
+function topicAliasMatches(cleaned, alias) {
+  const normalizedAlias = cleanTopicValue(alias);
+  if (!normalizedAlias) {
+    return false;
+  }
+
+  if (cleaned === normalizedAlias) {
+    return true;
+  }
+
+  if (normalizedAlias.length <= 3) {
+    return containsCleanPhrase(cleaned, normalizedAlias);
+  }
+
+  return containsCleanPhrase(cleaned, normalizedAlias) || cleaned.includes(normalizedAlias);
 }
 
 function formatTopic(topic) {
@@ -87,7 +121,7 @@ function normalizeTopic(topic) {
   }
 
   for (const [canonicalTopic, aliases] of Object.entries(TOPIC_ALIASES)) {
-    if (aliases.some((alias) => cleaned === cleanTopicValue(alias) || cleaned.includes(cleanTopicValue(alias)))) {
+    if (aliases.some((alias) => topicAliasMatches(cleaned, alias))) {
       return canonicalTopic;
     }
   }
@@ -162,7 +196,7 @@ function inferTopicsFromText(article = {}) {
   const scoredTopics = Object.entries(KEYWORD_TOPICS)
     .map(([topic, keywords]) => {
       const score = keywords.reduce((total, keyword) => {
-        return total + (text.includes(cleanTopicValue(keyword)) ? 1 : 0);
+        return total + (containsCleanPhrase(text, keyword) ? 1 : 0);
       }, 0);
 
       return { topic, score };

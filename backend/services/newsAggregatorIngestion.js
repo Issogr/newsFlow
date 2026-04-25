@@ -2,7 +2,7 @@ const rssParser = require('./rssParser');
 const database = require('./database');
 const logger = require('../utils/logger');
 const websocketService = require('./websocketService');
-const { classifyTopicsForArticles } = require('./aiTopicClassifier');
+const { classifyTopicsForArticles, isAiTopicDetectionAvailable } = require('./aiTopicClassifier');
 const { createError } = require('../utils/errorHandler');
 const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const {
@@ -139,21 +139,53 @@ async function fetchSourceTask(task) {
   return task.targetSources.flatMap((source) => parsedArticles.map((article) => cloneArticleForSource(article, source)));
 }
 
-async function applyAiTopicsForInsertedArticles(normalizedArticles = [], insertedIds = []) {
-  if (!Array.isArray(normalizedArticles) || normalizedArticles.length === 0 || !Array.isArray(insertedIds) || insertedIds.length === 0) {
+async function processAiTopicsForPendingArticles(articles = []) {
+  if (!Array.isArray(articles) || articles.length === 0) {
     return;
   }
 
-  const insertedIdSet = new Set(insertedIds);
-  const insertedArticles = normalizedArticles.filter((article) => insertedIdSet.has(article.id));
-  const topicsByArticleId = await classifyTopicsForArticles(insertedArticles);
+  const articleIds = articles.map((article) => article.id).filter(Boolean);
 
-  topicsByArticleId.forEach((topics, articleId) => {
-    const article = insertedArticles.find((item) => item.id === articleId);
-    if (article && Array.isArray(topics) && topics.length > 0) {
-      article.topics = topics;
+  try {
+    const topicsByArticleId = await classifyTopicsForArticles(articles);
+    const classifiedIds = [];
+    const topicEntries = [];
+
+    topicsByArticleId.forEach((topics, articleId) => {
+      if (Array.isArray(topics) && topics.length > 0) {
+        classifiedIds.push(articleId);
+        topicEntries.push({ articleId, topics });
+      }
+    });
+
+    if (topicEntries.length > 0) {
+      database.replaceTopicsForArticles(topicEntries);
     }
-  });
+
+    database.markArticlesAiTopicProcessing(classifiedIds, 'completed');
+    database.markArticlesAiTopicProcessing(articleIds.filter((articleId) => !classifiedIds.includes(articleId)), 'no_topics');
+  } catch (error) {
+    database.markArticlesAiTopicProcessing(articleIds, 'failed');
+    logger.warn(`Background AI topic processing failed: ${error.message}`);
+  }
+}
+
+function scheduleAiTopicsForPendingArticles(normalizedArticles = []) {
+  if (!Array.isArray(normalizedArticles) || normalizedArticles.length === 0 || !isAiTopicDetectionAvailable()) {
+    return;
+  }
+
+  const pendingArticleIds = database.getArticleIdsPendingAiTopicProcessing(normalizedArticles.map((article) => article.id));
+  if (pendingArticleIds.length === 0) {
+    return;
+  }
+
+  const pendingArticleIdSet = new Set(pendingArticleIds);
+  const pendingArticles = normalizedArticles.filter((article) => pendingArticleIdSet.has(article.id));
+
+  setTimeout(() => {
+    processAiTopicsForPendingArticles(pendingArticles);
+  }, 0);
 }
 
 function mergeNormalizedArticleTopics(normalizedArticles = []) {
@@ -165,8 +197,8 @@ function mergeNormalizedArticleTopics(normalizedArticles = []) {
 
 async function persistNormalizedArticles(normalizedArticles = []) {
   const upsertResult = database.upsertArticles(normalizedArticles);
-  await applyAiTopicsForInsertedArticles(normalizedArticles, upsertResult.insertedIds);
   mergeNormalizedArticleTopics(normalizedArticles);
+  scheduleAiTopicsForPendingArticles(normalizedArticles);
   return upsertResult;
 }
 
@@ -260,7 +292,8 @@ module.exports = {
   createEmptyRefreshPayload,
   ingestSourceConfigs,
   mapSettledWithConcurrency,
-  applyAiTopicsForInsertedArticles,
+  processAiTopicsForPendingArticles,
+  scheduleAiTopicsForPendingArticles,
   buildSourceFetchTasks,
   cloneArticleForSource
 };

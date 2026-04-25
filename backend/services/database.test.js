@@ -72,8 +72,10 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('19');
+    expect(migrationVersion).toBe('20');
     expect(articleColumns).toContain('canonical_url');
+    expect(articleColumns).toContain('ai_topics_processed_at');
+    expect(articleColumns).toContain('ai_topics_status');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
@@ -138,13 +140,15 @@ describe('database migrations', () => {
     `).get()?.value;
     const settingsColumns = migratedDb.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
     const userColumns = migratedDb.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
+    const articleColumns = migratedDb.prepare('PRAGMA table_info(articles)').all().map((column) => column.name);
     const apiTokenColumns = migratedDb.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('19');
+    expect(migratedVersion).toBe('20');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
+    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
     expect(apiTokenColumns).toContain('token_hash');
   });
 
@@ -247,6 +251,8 @@ describe('database migrations', () => {
     `).get()?.value;
     const settingsColumns = migratedDb.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
     const userColumns = migratedDb.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
+    const articleColumns = migratedDb.prepare('PRAGMA table_info(articles)').all().map((column) => column.name);
+    const articleAiState = migratedDb.prepare('SELECT ai_topics_processed_at AS processedAt, ai_topics_status AS status FROM articles WHERE id = ?').get('article-1');
     const passwordSetupTokenColumns = migratedDb.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column) => column.name);
     const apiTokenColumns = migratedDb.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
 
@@ -254,7 +260,9 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('19');
+    expect(migratedVersion).toBe('20');
+    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
+    expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
     expect(settingsColumns).toContain('compact_news_cards');
     expect(settingsColumns).toContain('compact_news_cards_mode');
@@ -516,6 +524,45 @@ describe('database queries and user data', () => {
       id: 'existing-topic-article',
       topics: ['Tecnologia']
     }));
+  });
+
+  test('tracks AI topic processing and replaces fallback topics', () => {
+    const now = new Date().toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'ai-topic-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'AI topic article',
+        description: 'Existing description',
+        content: '',
+        url: 'https://example.com/ai-topic-article',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+    database.mergeTopicsForArticle('ai-topic-article', ['Economy']);
+
+    expect(database.getArticleIdsPendingAiTopicProcessing(['ai-topic-article'])).toEqual(['ai-topic-article']);
+    expect(database.replaceTopicsForArticles([
+      { articleId: 'ai-topic-article', topics: ['Technology'] }
+    ])).toBe(1);
+    expect(database.markArticlesAiTopicProcessing(['ai-topic-article'], 'completed')).toBe(1);
+
+    const articles = database.getArticles({}, { maxArticleAgeHours: 9999 });
+    const aiState = database.getDb().prepare(`
+      SELECT ai_topics_processed_at AS processedAt, ai_topics_status AS status
+      FROM articles
+      WHERE id = ?
+    `).get('ai-topic-article');
+
+    expect(database.getArticleIdsPendingAiTopicProcessing(['ai-topic-article'])).toEqual([]);
+    expect(articles[0]).toEqual(expect.objectContaining({
+      id: 'ai-topic-article',
+      topics: ['Tecnologia']
+    }));
+    expect(aiState).toEqual({ processedAt: expect.any(String), status: 'completed' });
   });
 
   test('normalizes future publication dates on insert and during cleanup', () => {

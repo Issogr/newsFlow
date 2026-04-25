@@ -6,6 +6,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     intro: 'A quick summary of the latest update.',
     items: [
       '🤖 Topic detection can now use AI for cleaner news categories when configured.',
+      '🧠 AI topic detection now works in the background so fresh news loads faster.',
       '🔐 Security around browser sessions and live updates is stricter.',
       '🚪 Logging out is more reliable, even if the server is having trouble.',
       '📄 Feed pagination is more predictable when moving through older results.',
@@ -15,6 +16,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '⚡ Scrolling and loading more stories should feel smoother, with fewer stuck loading states.',
       '⌨️ Mobile search now stays visible when the keyboard opens.',
       '🖼️ Stories without official images now rotate through more fallback covers.',
+      '🏷️ Standard story cards show simple topic icons again for quicker scanning.',
       '🧹 Repeated stories from the same source are cleaned up more reliably.',
       '🔗 Sharing now shows a clear message if the browser blocks copying the link.',
     ]
@@ -25,6 +27,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
       '🤖 Il rilevamento degli argomenti puo usare l\'AI per categorie piu precise, se configurata.',
+      '🧠 Il rilevamento AI dei topic ora lavora in background, cosi le notizie si caricano piu rapidamente.',
       '🔐 La sicurezza delle sessioni browser e degli aggiornamenti live e piu rigorosa.',
       '🚪 Il logout e piu affidabile, anche se il server sta avendo problemi.',
       '📄 La paginazione delle notizie e piu prevedibile quando scorri verso i risultati meno recenti.',
@@ -34,6 +37,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '⚡ Scroll e caricamento di altre notizie dovrebbero risultare piu fluidi, con meno stati di caricamento bloccati.',
       '⌨️ La ricerca su mobile resta visibile quando si apre la tastiera.',
       '🖼️ Le notizie senza immagine ufficiale ora alternano piu copertine di fallback.',
+      '🏷️ Le schede standard mostrano di nuovo semplici icone dei topic per orientarti piu in fretta.',
       '🧹 Le notizie ripetute dalla stessa fonte vengono ripulite in modo piu affidabile.',
       '🔗 La condivisione ora mostra un messaggio chiaro se il browser blocca la copia del link.',
     ]

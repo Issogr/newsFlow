@@ -9,6 +9,9 @@
 - relaxed AI topic-classification defaults to one 8-article batch at a time with a 30-second request timeout, and allow configuring up to 120 seconds so slower OpenRouter models have enough time before fallback kicks in
 - made AI topic parsing more tolerant of common model response variants, requested JSON-object responses, and added safe zero-classification diagnostics that report only structural reasons and response length
 - disabled reasoning for AI topic-classification calls and added robust assistant-content extraction so reasoning-first models do not spend the response budget without returning final taxonomy JSON
+- restored icon-only topic markers on standard NewsCard layouts so non-compact cards again show article categories next to the publication date without adding text noise
+- moved AI topic classification out of the blocking ingestion path and added persisted per-article AI processing metadata so attempted articles are not repeatedly classified across refreshes or service restarts
+- tightened topic normalization and AI classification guidance so short aliases such as `ia` no longer turn unrelated words like `aria` into Technology, and incident/crime stories are steered toward Cronaca instead of the misleading Local news label
 - switched the BFF Docker dependency and runtime stages to Node 20 while keeping the frontend build on Node 22, avoiding Node 22 deprecation noise from the proxy dependency at container startup
 - guarded batched topic merges against stale article ids left behind by article deduplication or cleanup so ingestion no longer fails with a foreign-key error when an article disappears before its topics are merged
 - changed custom-source ingestion to fetch identical active user RSS URLs once per refresh and fan out the parsed articles per owning user source, while keeping delete/update cleanup scoped to the affected user source

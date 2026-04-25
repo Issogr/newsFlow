@@ -11,7 +11,10 @@ jest.mock('./database', () => ({
   normalizeFuturePublicationDates: jest.fn(() => 0),
   cleanupRemovedConfiguredSourceData: jest.fn(() => ({ removedArticles: 0, updatedSettings: 0 })),
   upsertArticles: jest.fn(() => ({ insertedIds: [], insertedCount: 0, updatedCount: 0 })),
+  getArticleIdsPendingAiTopicProcessing: jest.fn(() => []),
+  markArticlesAiTopicProcessing: jest.fn(() => 0),
   mergeTopicsForArticles: jest.fn(() => 0),
+  replaceTopicsForArticles: jest.fn(() => 0),
   getArticlesByIds: jest.fn(() => []),
   getArticles: jest.fn(() => []),
   getLatestIngestionRun: jest.fn(() => null),
@@ -36,7 +39,8 @@ jest.mock('./websocketService', () => ({
 }));
 
 jest.mock('./aiTopicClassifier', () => ({
-  classifyTopicsForArticles: jest.fn(async () => new Map())
+  classifyTopicsForArticles: jest.fn(async () => new Map()),
+  isAiTopicDetectionAvailable: jest.fn(() => true)
 }));
 
 const rssParser = require('./rssParser');
@@ -51,6 +55,11 @@ const { getCanonicalSourceId, getCanonicalSourceName } = require('../utils/sourc
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
 const ansaSourceName = getCanonicalSourceName('ansa_mondo', 'ANSA - Mondo');
 
+async function flushBackgroundAiProcessing() {
+  await new Promise((resolve) => { setTimeout(resolve, 0); });
+  await Promise.resolve();
+}
+
 describe('newsAggregator service flows', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -59,6 +68,7 @@ describe('newsAggregator service flows', () => {
     database.deleteArticlesOlderThan.mockReturnValue(0);
     database.normalizeFuturePublicationDates.mockReturnValue(0);
     database.cleanupRemovedConfiguredSourceData.mockReturnValue({ removedArticles: 0, updatedSettings: 0 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue([]);
     database.getArticles.mockReturnValue([]);
     database.getLatestIngestionRun.mockReturnValue(null);
     database.getSourceStats.mockReturnValue([]);
@@ -68,6 +78,7 @@ describe('newsAggregator service flows', () => {
     database.listUserSources.mockReturnValue([]);
     database.listAllActiveUserSources.mockReturnValue([]);
     database.upsertArticles.mockReturnValue({ insertedIds: [], insertedCount: 0, updatedCount: 0 });
+    aiTopicClassifier.isAiTopicDetectionAvailable.mockReturnValue(true);
     aiTopicClassifier.classifyTopicsForArticles.mockResolvedValue(new Map());
     rssParser._buildArticleId.mockImplementation((source, item, canonicalUrl = '') => `${source.id}:${canonicalUrl || item.link || item.title}`);
     rssParser.parseFeed.mockResolvedValue([]);
@@ -259,26 +270,35 @@ describe('newsAggregator service flows', () => {
     expect(websocketService.broadcastNewsUpdate.mock.calls[1][0][0]).toMatchObject({ ownerUserId: 'user-1' });
   });
 
-  test('ingestAllNews applies AI topics only to inserted articles before merging and broadcasting', async () => {
+  test('ingestAllNews schedules AI topics after merging and broadcasting fallback topics', async () => {
     rssParser.parseFeed.mockResolvedValue([
       { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'AI chips advance', description: 'New processors for data centers', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/ai' },
       { id: 'updated-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Market update', description: 'Markets rise', pubDate: '2026-03-07T09:00:00.000Z', url: 'https://example.com/markets' }
     ]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], updatedIds: ['updated-1'], insertedCount: 1, updatedCount: 1 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
     aiTopicClassifier.classifyTopicsForArticles.mockResolvedValue(new Map([
       ['inserted-1', ['Tecnologia']]
     ]));
 
     await newsAggregator.ingestAllNews({ broadcast: true });
 
-    expect(aiTopicClassifier.classifyTopicsForArticles).toHaveBeenCalledWith([
-      expect.objectContaining({ id: 'inserted-1', title: 'AI chips advance' })
-    ]);
     expect(database.mergeTopicsForArticles).toHaveBeenCalledWith(expect.arrayContaining([
-      expect.objectContaining({ articleId: 'inserted-1', topics: ['Tecnologia'] }),
+      expect.objectContaining({ articleId: 'inserted-1', topics: expect.any(Array) }),
       expect.objectContaining({ articleId: 'updated-1', topics: expect.any(Array) })
     ]));
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].topics).toEqual(['Tecnologia']);
+    expect(aiTopicClassifier.classifyTopicsForArticles).not.toHaveBeenCalled();
+
+    await flushBackgroundAiProcessing();
+
+    expect(aiTopicClassifier.classifyTopicsForArticles).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'inserted-1', title: 'AI chips advance' })
+    ]);
+    expect(database.replaceTopicsForArticles).toHaveBeenCalledWith([
+      { articleId: 'inserted-1', topics: ['Tecnologia'] }
+    ]);
+    expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'completed');
   });
 
   test('ingestAllNews keeps fallback topics when AI is unsure', async () => {
@@ -286,6 +306,7 @@ describe('newsAggregator service flows', () => {
       { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Global market update', description: 'Markets rise', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/markets', rawTopics: ['markets'] }
     ]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], insertedCount: 1, updatedCount: 0 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
     aiTopicClassifier.classifyTopicsForArticles.mockResolvedValue(new Map([
       ['inserted-1', []]
     ]));
@@ -296,6 +317,11 @@ describe('newsAggregator service flows', () => {
       expect.objectContaining({ articleId: 'inserted-1', topics: ['Economia'] })
     ]));
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].topics).toEqual(['Economia']);
+
+    await flushBackgroundAiProcessing();
+
+    expect(database.replaceTopicsForArticles).not.toHaveBeenCalled();
+    expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'no_topics');
   });
 
   test('ingestAllNews fetches a shared custom RSS URL once and fans out articles per owning user source', async () => {

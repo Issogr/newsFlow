@@ -5,13 +5,14 @@ import {
   ExternalLink,
   Share2,
 } from 'lucide-react';
-import { getDateLocale } from '../i18n';
+import { getDateLocale, getLocalizedTopic } from '../i18n';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import genericNewsCover from '../assets/generic-news-cover.webp';
 import genericNewsCover2 from '../assets/generic-news-cover-2.webp';
 import genericNewsCover3 from '../assets/generic-news-cover-3.webp';
 import genericNewsCover4 from '../assets/generic-news-cover-4.webp';
 import { shareArticleUrl } from '../utils/shareArticle';
+import { getTopicPresentation } from '../topicPresentation';
 import ShareStatusBubble from './ShareStatusBubble';
 
 const GENERIC_NEWS_COVERS = [
@@ -44,6 +45,28 @@ function getSourceEntries(group) {
   return [...sourceMap.values()];
 }
 
+function getTopicEntries(group) {
+  const topics = [
+    ...(group?.topics || []),
+    ...(group?.items || []).flatMap((item) => item?.topics || []),
+  ];
+  const seen = new Set();
+
+  return topics
+    .map((topic) => String(topic || '').trim())
+    .filter(Boolean)
+    .filter((topic) => {
+      const key = topic.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 4);
+}
+
 function getGroupImageUrl(group) {
   const rawImageUrl = (group?.items || []).map((item) => item?.image).find(Boolean);
   return getSafeExternalUrl(rawImageUrl);
@@ -71,6 +94,7 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
   const hasItems = Boolean(group?.items?.length);
 
   const sourceEntries = getSourceEntries(group);
+  const topicEntries = getTopicEntries(group);
   const safeOriginalUrl = getSafeExternalUrl(group?.url);
   const safeImageUrl = showImages ? getGroupImageUrl(group) : '';
   const [fallbackImageUrl, setFallbackImageUrl] = useState(getRandomGenericNewsCover);
@@ -293,7 +317,19 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
                 {formatPublicationDate(group.pubDate, locale)}
               </span>
 
-
+              {topicEntries.map((topic) => {
+                const { Icon, iconBadgeClassName } = getTopicPresentation(topic);
+                return (
+                  <span
+                    key={topic}
+                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full shadow-sm ${iconBadgeClassName}`}
+                    aria-label={getLocalizedTopic(topic, locale)}
+                    title={getLocalizedTopic(topic, locale)}
+                  >
+                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                );
+              })}
             </div>
           </>
         )}

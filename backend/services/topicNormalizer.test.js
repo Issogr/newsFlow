@@ -14,6 +14,21 @@ describe('topicNormalizer canonical taxonomy', () => {
     expect(topicNormalizer.normalizeTopic('science')).toBe('Scienza');
   });
 
+  test('does not map short AI aliases inside unrelated Italian words', () => {
+    expect(topicNormalizer.normalizeTopic('aria compressa')).toBeNull();
+    expect(topicNormalizer.normalizeTopic('notizia')).toBeNull();
+    expect(topicNormalizer.normalizeTopic('AI')).toBe('Tecnologia');
+  });
+
+  test('classifies the air-gun protest example as cronaca, not technology', () => {
+    const topics = topicNormalizer.extractTopics({
+      title: 'A Roma due persone che partecipavano al corteo per il 25 aprile sono state ferite da colpi di pistola ad aria compressa'
+    });
+
+    expect(topics).toEqual(expect.arrayContaining(['Cronaca']));
+    expect(topics).not.toEqual(expect.arrayContaining(['Tecnologia']));
+  });
+
   test('extractTopics returns only canonical topics', () => {
     const topics = topicNormalizer.extractTopics({
       title: 'Trump e Meloni discutono i dazi e l economia',
