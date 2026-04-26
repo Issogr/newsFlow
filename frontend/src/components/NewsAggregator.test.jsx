@@ -337,6 +337,64 @@ describe('NewsAggregator', () => {
     });
   });
 
+  test('reloads the current feed when realtime requests a topic refresh', async () => {
+    const websocketState = {
+      isConnected: true,
+      notifications: [],
+      lastNewsUpdate: null,
+      newArticlesCount: 0,
+      updateSubscriptionFilters: jest.fn(),
+      resetNewArticlesCount: jest.fn(),
+      markGroupsSeen: jest.fn(),
+      removeNotification: jest.fn()
+    };
+
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [{ id: 'group-1', title: 'Fallback topic headline' }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: 'group-1', title: 'AI topic headline' }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+
+    useWebSocket.mockImplementation(() => websocketState);
+
+    const view = await renderNewsAggregator();
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenCalled();
+    });
+    const initialCallCount = fetchNews.mock.calls.length;
+
+    websocketState.lastNewsUpdate = {
+      timestamp: '2026-03-14T10:15:00.000Z',
+      count: 1,
+      refresh: true,
+      reason: 'topics',
+      groupIds: [],
+      data: []
+    };
+
+    await act(async () => {
+      view.rerender(
+        <NewsAggregator
+          currentUser={currentUser}
+          onLogout={jest.fn()}
+          onUserUpdate={jest.fn()}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenCalledTimes(initialCallCount + 1);
+    });
+  });
+
   test('uses the server cursor for load more requests', async () => {
     fetchNews.mockImplementation(({ beforeId }) => {
       if (beforeId === 'article-1') {

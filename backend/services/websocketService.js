@@ -286,6 +286,37 @@ function broadcastNewsUpdate(newsGroups = []) {
   logger.info(`Broadcast news update to ${recipients} clients`);
 }
 
+function broadcastFeedRefresh(options = {}) {
+  if (!io) {
+    return;
+  }
+
+  const userIds = [...new Set((Array.isArray(options.userIds) ? options.userIds : []).filter(Boolean))];
+  const refreshAll = userIds.length === 0;
+  const payload = {
+    count: 1,
+    groupIds: [],
+    data: [],
+    refresh: true,
+    reason: options.reason || 'news',
+    timestamp: new Date().toISOString()
+  };
+  let recipients = 0;
+
+  activeConnections.forEach((socket) => {
+    if (!refreshAll && !userIds.includes(socket.data?.userId)) {
+      return;
+    }
+
+    if (emitToSocket(socket, 'news:update', payload)) {
+      recipients += 1;
+    }
+  });
+
+  statistics.newsUpdatesSent += 1;
+  logger.info(`Broadcast feed refresh to ${recipients} clients: reason=${payload.reason}`);
+}
+
 function broadcastSystemNotification(message, type = 'info') {
   if (!io || !message) {
     return;
@@ -314,6 +345,7 @@ module.exports = {
   initialize,
   disconnectUserSockets,
   broadcastNewsUpdate,
+  broadcastFeedRefresh,
   broadcastSystemNotification,
   getStatistics
 };

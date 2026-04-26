@@ -317,11 +317,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       return;
     }
 
+    if (lastNewsUpdate.refresh) {
+      loadNews({ page: 1, append: false, resetRealtime: false });
+      return;
+    }
+
     if (Array.isArray(lastNewsUpdate.data) && lastNewsUpdate.data.length > 0) {
       setNews((current) => mergeUniqueGroups(current, lastNewsUpdate.data));
       resetNewArticlesCount();
     }
-  }, [isLiveAutoRefreshWorking, lastNewsUpdate, resetNewArticlesCount]);
+  }, [isLiveAutoRefreshWorking, lastNewsUpdate, loadNews, resetNewArticlesCount]);
 
   const toggleFilter = useCallback((type, value) => {
     setActiveFilters((current) => {

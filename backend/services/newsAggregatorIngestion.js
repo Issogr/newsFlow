@@ -150,6 +150,27 @@ async function processAiTopicsForPendingArticles(articles = []) {
 
   const articleIds = articles.map((article) => article.id).filter(Boolean);
 
+  const getRefreshUserIds = (classifiedIds = []) => {
+    const classifiedIdSet = new Set(classifiedIds);
+    const userIds = new Set();
+    let includesGlobalArticles = false;
+
+    articles.forEach((article) => {
+      if (!classifiedIdSet.has(article?.id)) {
+        return;
+      }
+
+      if (article.ownerUserId) {
+        userIds.add(article.ownerUserId);
+        return;
+      }
+
+      includesGlobalArticles = true;
+    });
+
+    return includesGlobalArticles ? [] : [...userIds];
+  };
+
   try {
     const classification = typeof classifyTopicDetailsForArticlesWithStatus === 'function'
       ? await classifyTopicDetailsForArticlesWithStatus(articles)
@@ -175,6 +196,10 @@ async function processAiTopicsForPendingArticles(articles = []) {
 
     if (topicEntries.length > 0) {
       database.replaceTopicsForArticles(topicEntries);
+      websocketService.broadcastFeedRefresh({
+        userIds: getRefreshUserIds(classifiedIds),
+        reason: 'topics'
+      });
     }
 
     database.markArticlesAiTopicProcessing(classifiedIds, 'completed');

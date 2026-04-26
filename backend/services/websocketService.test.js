@@ -204,6 +204,25 @@ describe('websocketService', () => {
     }));
   });
 
+  test('broadcasts feed refresh events only to targeted users', () => {
+    const socketOne = createSocket('socket-1', { auth: { token: 'token-1' }, headers: {} });
+    socketOne.data.userId = 'user-1';
+    const socketTwo = createSocket('socket-2', { auth: { token: 'token-2' }, headers: {} });
+    socketTwo.data.userId = 'user-2';
+
+    ioMock.connectionHandler(socketOne);
+    ioMock.connectionHandler(socketTwo);
+
+    websocketService.broadcastFeedRefresh({ userIds: ['user-1'], reason: 'topics' });
+
+    expect(socketOne.emit).toHaveBeenCalledWith('news:update', expect.objectContaining({
+      count: 1,
+      refresh: true,
+      reason: 'topics'
+    }));
+    expect(socketTwo.emit).not.toHaveBeenCalled();
+  });
+
   test('broadcasts notifications to all active sockets and tracks failed emits', () => {
     const healthySocket = createSocket('socket-1', { auth: { token: 'token-1' }, headers: {} });
     const failingSocket = createSocket('socket-2', { auth: { token: 'token-2' }, headers: {} });

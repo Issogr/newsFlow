@@ -35,6 +35,7 @@ jest.mock('../utils/logger', () => ({
 
 jest.mock('./websocketService', () => ({
   broadcastNewsUpdate: jest.fn(),
+  broadcastFeedRefresh: jest.fn(),
   broadcastSystemNotification: jest.fn()
 }));
 
@@ -298,6 +299,7 @@ describe('newsAggregator service flows', () => {
     expect(database.replaceTopicsForArticles).toHaveBeenCalledWith([
       { articleId: 'inserted-1', topics: [{ topic: 'Tecnologia', source: 'ai', confidence: 0.88, evidence: ['AI chips'], reasonCode: 'ai_confident_evidence' }] }
     ]);
+    expect(websocketService.broadcastFeedRefresh).toHaveBeenCalledWith({ userIds: [], reason: 'topics' });
     expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'completed');
   });
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.2.13.1
+
+- broadcast a lightweight live feed reload after background AI topic-classification runs finish so topic pills, AI-classified topic markers, and topic-filtered results refresh without a manual page reload when live auto refresh is active
+
 ## 3.2.13
 
 - fixed AI topic background processing so capped or failed classifier batches are not permanently marked as processed without an actual attempt, allowing later refreshes to retry untouched articles
