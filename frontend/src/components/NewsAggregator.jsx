@@ -345,7 +345,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     }
 
     if (Array.isArray(lastNewsUpdate.data) && lastNewsUpdate.data.length > 0) {
-      setNews((current) => mergeUniqueGroups(current, lastNewsUpdate.data));
+      setNews((current) => {
+        const currentGroupIdSet = new Set(current.map((group) => group?.id).filter(Boolean));
+        const incomingGroups = lastNewsUpdate.data.filter((group) => !currentGroupIdSet.has(group?.id));
+
+        if (incomingGroups.length === 0) {
+          return current;
+        }
+
+        return mergeUniqueGroups(current, incomingGroups);
+      });
       resetNewArticlesCount();
     }
   }, [isLiveAutoRefreshWorking, lastNewsUpdate, loadNews, resetNewArticlesCount]);

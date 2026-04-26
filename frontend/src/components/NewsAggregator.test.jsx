@@ -422,6 +422,52 @@ describe('NewsAggregator', () => {
     });
   });
 
+  test('ignores live websocket groups already present in the loaded feed', async () => {
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'Existing headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    const websocketState = {
+      isConnected: true,
+      notifications: [],
+      lastNewsUpdate: null,
+      newArticlesCount: 0,
+      updateSubscriptionFilters: jest.fn(),
+      resetNewArticlesCount: jest.fn(),
+      markGroupsSeen: jest.fn(),
+      removeNotification: jest.fn()
+    };
+
+    useWebSocket.mockImplementation(() => websocketState);
+
+    const view = await renderNewsAggregator();
+
+    expect(await screen.findByText('Existing headline')).toBeInTheDocument();
+
+    websocketState.lastNewsUpdate = {
+      timestamp: '2026-03-14T10:20:00.000Z',
+      count: 1,
+      groupIds: ['group-1'],
+      data: [{ id: 'group-1', title: 'Existing headline' }]
+    };
+
+    await act(async () => {
+      view.rerender(
+        <NewsAggregator
+          currentUser={currentUser}
+          onLogout={jest.fn()}
+          onUserUpdate={jest.fn()}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    expect(screen.getAllByText('Existing headline')).toHaveLength(1);
+    expect(websocketState.resetNewArticlesCount).toHaveBeenCalled();
+  });
+
   test('uses the server cursor for load more requests', async () => {
     fetchNews.mockImplementation(({ beforeId }) => {
       if (beforeId === 'article-1') {

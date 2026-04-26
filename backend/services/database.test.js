@@ -495,6 +495,132 @@ describe('database queries and user data', () => {
     }));
   });
 
+  test('updates an existing grouped-source article when a sibling subfeed repeats the normalized title within a short time window', () => {
+    expect(groupedSource).toBeTruthy();
+    expect(alternateGroupedSource).toBeTruthy();
+
+    const now = Date.now();
+    const firstResult = database.upsertArticles([
+      {
+        id: 'grouped-title-article-1',
+        sourceId: groupedSource.id,
+        source: groupedSource.name,
+        title: 'Grouped title fallback story',
+        description: 'First subfeed version',
+        content: 'First body',
+        url: 'https://example.com/grouped-story-a',
+        language: 'it',
+        pubDate: new Date(now).toISOString()
+      }
+    ]);
+    const secondResult = database.upsertArticles([
+      {
+        id: 'grouped-title-article-2',
+        sourceId: alternateGroupedSource.id,
+        source: alternateGroupedSource.name,
+        title: '  grouped title fallback story  ',
+        description: 'Sibling subfeed version',
+        content: 'Second body',
+        url: 'https://example.com/grouped-story-b',
+        language: 'it',
+        pubDate: new Date(now + 30 * 60 * 1000).toISOString()
+      }
+    ]);
+
+    const rawRows = database.getDb().prepare('SELECT id, source_id AS sourceId FROM articles ORDER BY id ASC').all();
+    const articles = database.getArticles({}, { maxArticleAgeHours: 9999 });
+
+    expect(firstResult).toMatchObject({ insertedCount: 1, updatedCount: 0 });
+    expect(secondResult).toMatchObject({ insertedCount: 0, updatedCount: 1, updatedIds: ['grouped-title-article-1'] });
+    expect(rawRows).toEqual([{ id: 'grouped-title-article-1', sourceId: alternateGroupedSource.id }]);
+    expect(articles).toHaveLength(1);
+    expect(articles[0]).toEqual(expect.objectContaining({
+      id: 'grouped-title-article-1',
+      sourceId: groupedSourceFamilyId,
+      source: groupedSourceFamilyName,
+      rawSourceId: alternateGroupedSource.id,
+      title: '  grouped title fallback story  '
+    }));
+  });
+
+  test('does not create a new AI topic candidate when title fallback dedupe reuses an existing article', () => {
+    expect(groupedSource).toBeTruthy();
+    expect(alternateGroupedSource).toBeTruthy();
+
+    const now = Date.now();
+
+    database.upsertArticles([
+      {
+        id: 'grouped-title-ai-1',
+        sourceId: groupedSource.id,
+        source: groupedSource.name,
+        title: 'Grouped AI fallback story',
+        description: 'First version',
+        content: 'First body',
+        url: 'https://example.com/grouped-ai-a',
+        language: 'it',
+        pubDate: new Date(now).toISOString()
+      }
+    ]);
+    database.markArticlesAiTopicProcessing(['grouped-title-ai-1'], 'completed');
+
+    const secondResult = database.upsertArticles([
+      {
+        id: 'grouped-title-ai-2',
+        sourceId: alternateGroupedSource.id,
+        source: alternateGroupedSource.name,
+        title: 'Grouped AI fallback story',
+        description: 'Second version',
+        content: 'Second body',
+        url: 'https://example.com/grouped-ai-b',
+        language: 'it',
+        pubDate: new Date(now + 20 * 60 * 1000).toISOString()
+      }
+    ]);
+
+    expect(secondResult).toMatchObject({ insertedCount: 0, updatedCount: 1, updatedIds: ['grouped-title-ai-1'] });
+    expect(database.getArticleIdsPendingAiTopicProcessing(['grouped-title-ai-1', 'grouped-title-ai-2'])).toEqual([]);
+  });
+
+  test('does not merge same-title sibling subfeed articles when they are too far apart in time', () => {
+    expect(groupedSource).toBeTruthy();
+    expect(alternateGroupedSource).toBeTruthy();
+
+    const now = Date.now();
+    const firstResult = database.upsertArticles([
+      {
+        id: 'grouped-title-window-1',
+        sourceId: groupedSource.id,
+        source: groupedSource.name,
+        title: 'Grouped time window story',
+        description: 'Morning version',
+        content: 'First body',
+        url: 'https://example.com/grouped-window-a',
+        language: 'it',
+        pubDate: new Date(now).toISOString()
+      }
+    ]);
+    const secondResult = database.upsertArticles([
+      {
+        id: 'grouped-title-window-2',
+        sourceId: alternateGroupedSource.id,
+        source: alternateGroupedSource.name,
+        title: 'Grouped time window story',
+        description: 'Evening version',
+        content: 'Second body',
+        url: 'https://example.com/grouped-window-b',
+        language: 'it',
+        pubDate: new Date(now + 4 * 60 * 60 * 1000).toISOString()
+      }
+    ]);
+
+    const rawRows = database.getDb().prepare('SELECT id FROM articles ORDER BY id ASC').all();
+
+    expect(firstResult).toMatchObject({ insertedCount: 1, updatedCount: 0 });
+    expect(secondResult).toMatchObject({ insertedCount: 1, updatedCount: 0, insertedIds: ['grouped-title-window-2'] });
+    expect(rawRows).toEqual([{ id: 'grouped-title-window-1' }, { id: 'grouped-title-window-2' }]);
+  });
+
   test('ignores topic merges for article ids that are no longer present', () => {
     const now = new Date().toISOString();
 
