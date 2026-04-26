@@ -24,6 +24,36 @@ const TOPIC_GUIDANCE = [
 let openRouterSdkLoader = () => import('@openrouter/sdk');
 let openRouterSdkPromise = null;
 
+function isAiArticleDebugLoggingEnabled() {
+  return ['1', 'true', 'yes', 'on'].includes(String(process.env.AI_TOPIC_DEBUG_LOG_ARTICLES || '').trim().toLowerCase());
+}
+
+function summarizeArticleForDebug(article = {}) {
+  return `${String(article.id || '').trim() || 'unknown'}:${truncateText(article.title || '', 120) || '(untitled)'}`;
+}
+
+function logBatchArticlesForDebug(batch = [], config = {}, batchIndex = 0, batchCount = 0) {
+  if (!isAiArticleDebugLoggingEnabled() || batch.length === 0) {
+    return;
+  }
+
+  logger.info(`AI topic batch articles (dev): model=${config.model}, batch=${batchIndex + 1}/${batchCount || 1}, items=${batch.map((article) => summarizeArticleForDebug(article)).join(' | ')}`);
+}
+
+function logBatchClassificationsForDebug(result = new Map(), articlesById = new Map(), config = {}) {
+  if (!isAiArticleDebugLoggingEnabled() || result.size === 0) {
+    return;
+  }
+
+  const summary = [...result.entries()].map(([articleId, topics]) => {
+    const article = articlesById.get(articleId) || {};
+    const topicLabels = Array.isArray(topics) ? topics.map((entry) => entry?.topic).filter(Boolean).join(',') : '';
+    return `${summarizeArticleForDebug({ id: articleId, title: article.title })}->${topicLabels || 'none'}`;
+  }).join(' | ');
+
+  logger.info(`AI topic batch classifications (dev): model=${config.model}, items=${summary}`);
+}
+
 function setOpenRouterSdkLoader(loader) {
   openRouterSdkLoader = loader || (() => import('@openrouter/sdk'));
   openRouterSdkPromise = null;
@@ -382,7 +412,7 @@ function summarizeResponseShape(response = {}) {
   return `finishReason=${finishReason}, messageKeys=${messageKeys}, contentType=${contentType}, reasoningChars=${reasoningChars}, refusalChars=${refusalChars}`;
 }
 
-async function classifyBatch(batch, config) {
+async function classifyBatch(batch, config, context = {}) {
   const allowedIds = new Set(batch.map((article) => article.id).filter(Boolean));
   const articlesById = new Map(batch.map((article) => [article.id, article]));
   if (allowedIds.size === 0) {
@@ -390,6 +420,7 @@ async function classifyBatch(batch, config) {
   }
 
   const startedAt = Date.now();
+  logBatchArticlesForDebug(batch, config, context.batchIndex || 0, context.batchCount || 0);
   const openRouter = await createOpenRouterClient(config);
   const completionPromise = openRouter.chat.send({
     chatRequest: {
@@ -436,6 +467,7 @@ async function classifyBatch(batch, config) {
     logger.warn(`AI topic batch produced no valid topics: reason=${summarizeClassifierResult(payload, allowedIds)}, responseChars=${content.length}, ${summarizeResponseShape(response)}`);
   }
 
+  logBatchClassificationsForDebug(result, articlesById, config);
   logger.info(`AI topic batch completed: model=${config.model}, articles=${batch.length}, classified=${result.size}, durationMs=${Date.now() - startedAt}`);
   return result;
 }
@@ -486,7 +518,10 @@ async function classifyTopicDetailsForArticlesWithStatus(articles = []) {
 
   const batches = chunkItems(limitedArticles, config.batchSize);
   logger.info(`AI topic detection started: model=${config.model}, articles=${limitedArticles.length}, batches=${batches.length}`);
-  const batchResults = await mapWithConcurrency(batches, config.batchConcurrency, (batch) => classifyBatch(batch, config));
+  const batchResults = await mapWithConcurrency(batches, config.batchConcurrency, (batch, batchIndex) => classifyBatch(batch, config, {
+    batchIndex,
+    batchCount: batches.length
+  }));
   const result = new Map();
   const failedArticleIds = [];
 
@@ -524,6 +559,7 @@ module.exports = {
   _getConfig: getConfig,
   _getCompletionTokenBudget: getCompletionTokenBudget,
   _extractAssistantContent: extractAssistantContent,
+  _isAiArticleDebugLoggingEnabled: isAiArticleDebugLoggingEnabled,
   _normalizeClassifierDetails: normalizeClassifierDetails,
   _normalizeClassifierResult: normalizeClassifierResult,
   _parseJsonContent: parseJsonContent,

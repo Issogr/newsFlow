@@ -38,6 +38,10 @@ describe('aiTopicClassifier', () => {
     process.env = originalEnv;
   });
 
+  function hasInfoLogMatching(fragment) {
+    return logger.info.mock.calls.some(([message]) => String(message || '').includes(fragment));
+  }
+
   test('keeps the API key server-side while sending compact article payloads without RSS topics', async () => {
     chatSend.mockResolvedValue({
       choices: [
@@ -96,6 +100,40 @@ describe('aiTopicClassifier', () => {
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection started'));
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic batch completed'));
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection completed'));
+  });
+
+  test('logs processed article titles only when AI article debug logging is enabled', async () => {
+    process.env.AI_TOPIC_DEBUG_LOG_ARTICLES = 'true';
+    chatSend.mockResolvedValue({
+      choices: [
+        { message: { content: JSON.stringify({ topicsById: [{ id: 'article-1', topics: [{ topic: 'Technology', confidence: 0.9, evidence: ['AI chips'] }] }] }) } }
+      ]
+    });
+
+    await aiTopicClassifier.classifyTopicsForArticles([
+      { id: 'article-1', title: 'AI chips arrive for data centers', description: 'New hardware accelerates cloud workloads.' }
+    ]);
+
+    expect(hasInfoLogMatching('AI topic batch articles (dev):')).toBe(true);
+    expect(hasInfoLogMatching('article-1:AI chips arrive for data centers')).toBe(true);
+    expect(hasInfoLogMatching('AI topic batch classifications (dev):')).toBe(true);
+    expect(hasInfoLogMatching('article-1:AI chips arrive for data centers->Tecnologia')).toBe(true);
+  });
+
+  test('does not log processed article titles when AI article debug logging is disabled', async () => {
+    delete process.env.AI_TOPIC_DEBUG_LOG_ARTICLES;
+    chatSend.mockResolvedValue({
+      choices: [
+        { message: { content: JSON.stringify({ topicsById: [{ id: 'article-1', topics: [{ topic: 'Technology', confidence: 0.9, evidence: ['AI chips'] }] }] }) } }
+      ]
+    });
+
+    await aiTopicClassifier.classifyTopicsForArticles([
+      { id: 'article-1', title: 'AI chips arrive for data centers', description: 'New hardware accelerates cloud workloads.' }
+    ]);
+
+    expect(hasInfoLogMatching('AI topic batch articles (dev):')).toBe(false);
+    expect(hasInfoLogMatching('AI topic batch classifications (dev):')).toBe(false);
   });
 
   test('returns no AI topics when disabled or unconfigured', async () => {

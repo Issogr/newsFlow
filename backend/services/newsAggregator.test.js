@@ -50,7 +50,12 @@ const websocketService = require('./websocketService');
 const aiTopicClassifier = require('./aiTopicClassifier');
 const newsAggregator = require('./newsAggregator');
 const { normalizeIncomingArticles } = require('./newsAggregatorGrouping');
-const { mapSettledWithConcurrency } = require('./newsAggregatorIngestion');
+const {
+  mapSettledWithConcurrency,
+  scheduleAiTopicsForPendingArticles,
+  _filterArticlesWithinRetention,
+  _resetPendingAiTopicProcessingIds
+} = require('./newsAggregatorIngestion');
 const { getCanonicalSourceId, getCanonicalSourceName } = require('../utils/sourceCatalog');
 
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
@@ -61,10 +66,15 @@ async function flushBackgroundAiProcessing() {
   await Promise.resolve();
 }
 
+function recentIso({ hoursAgo = 0, minutesAgo = 0 } = {}) {
+  return new Date(Date.now() - ((hoursAgo * 60 * 60 * 1000) + (minutesAgo * 60 * 1000))).toISOString();
+}
+
 describe('newsAggregator service flows', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     newsAggregator._resetImmediateRefreshState();
+    _resetPendingAiTopicProcessingIds();
     database.countArticles.mockReturnValue(1);
     database.deleteArticlesOlderThan.mockReturnValue(0);
     database.normalizeFuturePublicationDates.mockReturnValue(0);
@@ -284,8 +294,8 @@ describe('newsAggregator service flows', () => {
       { id: 'custom-1', name: 'My Feed', url: 'https://example.com/custom.xml', language: 'en', userId: 'user-1', isActive: true }
     ]);
     rssParser.parseFeed
-      .mockResolvedValueOnce([{ id: 'global-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Global economy update', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/g', rawTopics: ['Economy'] }])
-      .mockResolvedValueOnce([{ id: 'private-1', sourceId: 'custom-1', source: 'My Feed', title: 'Private portfolio update', pubDate: '2026-03-07T11:00:00.000Z', url: 'https://example.com/p', rawTopics: ['Markets'], ownerUserId: 'user-1' }]);
+      .mockResolvedValueOnce([{ id: 'global-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Global economy update', pubDate: recentIso({ hoursAgo: 2 }), url: 'https://example.com/g', rawTopics: ['Economy'] }])
+      .mockResolvedValueOnce([{ id: 'private-1', sourceId: 'custom-1', source: 'My Feed', title: 'Private portfolio update', pubDate: recentIso({ hoursAgo: 1, minutesAgo: 30 }), url: 'https://example.com/p', rawTopics: ['Markets'], ownerUserId: 'user-1' }]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['global-1', 'private-1'], insertedCount: 2, updatedCount: 0 });
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['global-1', 'private-1']);
 
@@ -308,8 +318,8 @@ describe('newsAggregator service flows', () => {
 
   test('ingestAllNews schedules AI topics after merging and broadcasting fallback topics', async () => {
     rssParser.parseFeed.mockResolvedValue([
-      { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'AI chips advance', description: 'New processors for data centers', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/ai' },
-      { id: 'updated-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Market update', description: 'Markets rise', pubDate: '2026-03-07T09:00:00.000Z', url: 'https://example.com/markets' }
+      { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'AI chips advance', description: 'New processors for data centers', pubDate: recentIso({ hoursAgo: 2 }), url: 'https://example.com/ai' },
+      { id: 'updated-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Market update', description: 'Markets rise', pubDate: recentIso({ hoursAgo: 3 }), url: 'https://example.com/markets' }
     ]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], updatedIds: ['updated-1'], insertedCount: 1, updatedCount: 1 });
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
@@ -337,9 +347,93 @@ describe('newsAggregator service flows', () => {
     expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'completed');
   });
 
+  test('does not schedule the same pending AI article twice while processing is already in flight', async () => {
+    let resolveClassification;
+
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
+    aiTopicClassifier.classifyTopicDetailsForArticles.mockImplementation(() => {
+      return new Promise((resolve) => {
+        resolveClassification = resolve;
+      });
+    });
+
+    const pendingArticles = [
+      {
+        id: 'inserted-1',
+        sourceId: 'ansa_mondo',
+        source: 'ANSA - Mondo',
+        title: 'AI chips advance',
+        description: 'New processors for data centers',
+        pubDate: recentIso({ hoursAgo: 2 }),
+        url: 'https://example.com/ai'
+      }
+    ];
+
+    scheduleAiTopicsForPendingArticles(pendingArticles);
+    scheduleAiTopicsForPendingArticles(pendingArticles);
+
+    await flushBackgroundAiProcessing();
+
+    expect(aiTopicClassifier.classifyTopicDetailsForArticles).toHaveBeenCalledTimes(1);
+
+    resolveClassification(new Map([
+      ['inserted-1', [{ topic: 'Tecnologia', source: 'ai', confidence: 0.88, evidence: ['AI chips'], reasonCode: 'ai_confident_evidence' }]]
+    ]));
+
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  test('filters out articles older than retention before persistence and live broadcast', async () => {
+    const now = Date.now();
+    rssParser.parseFeed.mockResolvedValue([
+      {
+        id: 'fresh-1',
+        sourceId: 'ansa_mondo',
+        source: 'ANSA - Mondo',
+        title: 'Fresh story',
+        description: 'Fresh description',
+        pubDate: new Date(now - (2 * 60 * 60 * 1000)).toISOString(),
+        url: 'https://example.com/fresh-story'
+      },
+      {
+        id: 'stale-1',
+        sourceId: 'ansa_mondo',
+        source: 'ANSA - Mondo',
+        title: 'Stale story',
+        description: 'Stale description',
+        pubDate: new Date(now - (30 * 60 * 60 * 1000)).toISOString(),
+        url: 'https://example.com/stale-story'
+      }
+    ]);
+    database.upsertArticles.mockReturnValue({ insertedIds: ['fresh-1'], insertedCount: 1, updatedCount: 0 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['fresh-1']);
+
+    await newsAggregator.ingestAllNews({ broadcast: true });
+
+    expect(database.upsertArticles).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'fresh-1', title: 'Fresh story' })
+    ]);
+    expect(database.upsertArticles).not.toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ id: 'stale-1' })
+    ]));
+    expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0]).toMatchObject({ title: 'Fresh story' });
+  });
+
+  test('retention filter keeps only recent articles while leaving future-dated normalization alone', () => {
+    const now = Date.now();
+    const filtered = _filterArticlesWithinRetention([
+      { id: 'recent-1', pubDate: new Date(now - (60 * 60 * 1000)).toISOString() },
+      { id: 'stale-1', pubDate: new Date(now - (30 * 60 * 60 * 1000)).toISOString() },
+      { id: 'future-1', pubDate: new Date(now + (60 * 60 * 1000)).toISOString() }
+    ]);
+
+    expect(filtered.map((article) => article.id)).toEqual(['recent-1', 'future-1']);
+  });
+
   test('ingestAllNews keeps fallback topics when AI is unsure', async () => {
     rssParser.parseFeed.mockResolvedValue([
-      { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Global market update', description: 'Markets rise', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/markets', rawTopics: ['markets'] }
+      { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Global market update', description: 'Markets rise', pubDate: recentIso({ hoursAgo: 2 }), url: 'https://example.com/markets', rawTopics: ['markets'] }
     ]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], insertedCount: 1, updatedCount: 0 });
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
@@ -365,7 +459,7 @@ describe('newsAggregator service flows', () => {
 
   test('ingestAllNews does not re-merge fallback topics for already AI-processed articles', async () => {
     rssParser.parseFeed.mockResolvedValue([
-      { id: 'existing-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Existing story', description: 'Markets rise', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/existing' }
+      { id: 'existing-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Existing story', description: 'Markets rise', pubDate: recentIso({ hoursAgo: 2 }), url: 'https://example.com/existing' }
     ]);
     database.upsertArticles.mockReturnValue({ insertedIds: [], updatedIds: ['existing-1'], insertedCount: 0, updatedCount: 1 });
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue([]);
@@ -396,7 +490,7 @@ describe('newsAggregator service flows', () => {
         source: source.name,
         title: 'Shared custom story',
         description: 'Shared story description',
-        pubDate: '2026-03-07T10:00:00.000Z',
+        pubDate: recentIso({ hoursAgo: 2 }),
         url: 'https://example.com/story',
         canonicalUrl: 'https://example.com/story',
         language: 'en',
@@ -495,7 +589,7 @@ describe('newsAggregator service flows', () => {
       { id: 'custom-2', name: 'Beta Feed', url: 'https://example.com/beta.xml', language: 'it', userId: 'user-1', isActive: true },
       { id: 'custom-3', name: 'Inactive Feed', url: 'https://example.com/inactive.xml', language: 'it', userId: 'user-1', isActive: false }
     ]);
-    rssParser.parseFeed.mockResolvedValue([{ id: 'private-1', sourceId: 'custom-2', source: 'Beta Feed', title: 'Private update', pubDate: '2026-03-07T11:00:00.000Z', url: 'https://example.com/p', rawTopics: ['Markets'], ownerUserId: 'user-1' }]);
+    rssParser.parseFeed.mockResolvedValue([{ id: 'private-1', sourceId: 'custom-2', source: 'Beta Feed', title: 'Private update', pubDate: recentIso({ hoursAgo: 1 }), url: 'https://example.com/p', rawTopics: ['Markets'], ownerUserId: 'user-1' }]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['private-1'], insertedCount: 1, updatedCount: 0 });
 
     const result = await newsAggregator.refreshUserSources('user-1', { sourceIds: ['custom-2'], broadcast: false });

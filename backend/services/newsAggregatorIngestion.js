@@ -16,6 +16,35 @@ const {
 
 const ARTICLE_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
 const RSS_INGESTION_CONCURRENCY = Math.max(1, parseInt(process.env.RSS_INGESTION_CONCURRENCY || '8', 10) || 8);
+const pendingAiTopicProcessingIds = new Set();
+
+function filterArticlesWithinRetention(articles = []) {
+  if (!Array.isArray(articles) || articles.length === 0) {
+    return [];
+  }
+
+  const now = Date.now();
+  const cutoff = Number.isFinite(ARTICLE_RETENTION_HOURS) && ARTICLE_RETENTION_HOURS > 0
+    ? now - (ARTICLE_RETENTION_HOURS * 60 * 60 * 1000)
+    : null;
+
+  return articles.filter((article) => {
+    const publishedAt = Date.parse(article?.pubDate || '');
+    if (!Number.isFinite(publishedAt)) {
+      return true;
+    }
+
+    if (publishedAt > now) {
+      return true;
+    }
+
+    if (cutoff === null) {
+      return true;
+    }
+
+    return publishedAt >= cutoff;
+  });
+}
 
 async function mapSettledWithConcurrency(items = [], concurrency = RSS_INGESTION_CONCURRENCY, mapper) {
   const results = new Array(items.length);
@@ -209,6 +238,8 @@ async function processAiTopicsForPendingArticles(articles = []) {
     );
   } catch (error) {
     logger.warn(`Background AI topic processing failed: ${error.message}`);
+  } finally {
+    articleIds.forEach((articleId) => pendingAiTopicProcessingIds.delete(articleId));
   }
 }
 
@@ -223,11 +254,26 @@ function scheduleAiTopicsForPendingArticles(normalizedArticles = []) {
   }
 
   const pendingArticleIdSet = new Set(pendingArticleIds);
-  const pendingArticles = normalizedArticles.filter((article) => pendingArticleIdSet.has(article.id));
+  const pendingArticles = normalizedArticles.filter((article) => {
+    if (!pendingArticleIdSet.has(article.id) || pendingAiTopicProcessingIds.has(article.id)) {
+      return false;
+    }
+
+    pendingAiTopicProcessingIds.add(article.id);
+    return true;
+  });
+
+  if (pendingArticles.length === 0) {
+    return;
+  }
 
   setTimeout(() => {
     processAiTopicsForPendingArticles(pendingArticles);
   }, 0);
+}
+
+function resetPendingAiTopicProcessingIds() {
+  pendingAiTopicProcessingIds.clear();
 }
 
 function mergeNormalizedArticleTopics(normalizedArticles = []) {
@@ -293,8 +339,10 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
       throw createError(503, 'Unable to connect to news feeds. Please try again later.', 'CONNECTION_ERROR');
     }
 
-    const upsertResult = await persistNormalizedArticles(normalizedArticles);
-    const insertedGroups = buildInsertedGroupsByOwner(normalizedArticles, upsertResult.insertedIds);
+    const retainedArticles = filterArticlesWithinRetention(normalizedArticles);
+
+    const upsertResult = await persistNormalizedArticles(retainedArticles);
+    const insertedGroups = buildInsertedGroupsByOwner(retainedArticles, upsertResult.insertedIds);
 
     if (broadcast) {
       broadcastInsertedGroups(insertedGroups);
@@ -306,7 +354,7 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
 
     const payload = {
       success: true,
-      fetchedCount: normalizedArticles.length,
+      fetchedCount: retainedArticles.length,
       insertedCount: upsertResult.insertedCount,
       updatedCount: upsertResult.updatedCount,
       lastRefreshAt: getLastRefreshAt()
@@ -342,6 +390,8 @@ module.exports = {
   mapSettledWithConcurrency,
   processAiTopicsForPendingArticles,
   scheduleAiTopicsForPendingArticles,
+  _filterArticlesWithinRetention: filterArticlesWithinRetention,
+  _resetPendingAiTopicProcessingIds: resetPendingAiTopicProcessingIds,
   buildSourceFetchTasks,
   cloneArticleForSource
 };
