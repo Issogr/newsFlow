@@ -108,6 +108,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [availableTopics, setAvailableTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [waitingForBackgroundRefresh, setWaitingForBackgroundRefresh] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -220,8 +221,17 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     return () => clearTimeout(timeoutId);
   }, [search]);
 
-  const loadNews = useCallback(async ({ page = 1, append = false, resetRealtime = true, cursor = null } = {}) => {
-    const setBusyState = append ? setLoadingMore : setLoading;
+  const loadNews = useCallback(async function loadNewsRequest({
+    page = 1,
+    append = false,
+    resetRealtime = true,
+    cursor = null,
+    allowPendingRefreshFollowup = true,
+    backgroundRefreshFollowup = false
+  } = {}) {
+    const setBusyState = append
+      ? setLoadingMore
+      : (backgroundRefreshFollowup ? setWaitingForBackgroundRefresh : setLoading);
     const request = append ? startPaginationRequest() : startListRequest();
 
     if (!append) {
@@ -250,6 +260,18 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         return;
       }
 
+      if (!append && allowPendingRefreshFollowup && !autoRefreshEnabled && response?.meta?.pendingUserRefresh) {
+        await loadNewsRequest({
+          page,
+          append: false,
+          resetRealtime,
+          cursor: null,
+          allowPendingRefreshFollowup: false,
+          backgroundRefreshFollowup: true
+        });
+        return;
+      }
+
       setNews((current) => append ? appendUniqueGroups(current, response.items || []) : (response.items || []));
       setMeta(response.meta || null);
       if (response.filters) {
@@ -270,7 +292,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         setBusyState(false);
       }
     }
-  }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, recentHours, resetNewArticlesCount, showRecentOnly, startListRequest, startPaginationRequest]);
+  }, [activeFilters.sourceIds, activeFilters.topics, autoRefreshEnabled, cancelPaginationRequest, debouncedSearch, recentHours, resetNewArticlesCount, showRecentOnly, startListRequest, startPaginationRequest]);
 
   useEffect(() => {
     if (sourceReloadSignature === sourceReloadSignatureRef.current) {
@@ -518,8 +540,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
       <main className="mx-auto max-w-7xl px-4 py-4 pb-24 md:pb-10 lg:px-6">
         {loading && !loadingMore ? (
-          <div className="flex h-64 items-center justify-center">
+          <div className="flex h-64 flex-col items-center justify-center gap-3">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
+            {waitingForBackgroundRefresh ? (
+              <p className="text-sm text-slate-500">{t('refreshing')}</p>
+            ) : null}
           </div>
         ) : error ? (
           <ErrorMessage error={error} onRetry={() => loadNews({ page: 1, append: false, resetRealtime: true })} t={t} />

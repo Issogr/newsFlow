@@ -3,6 +3,7 @@
 ## 3.2.13.1
 
 - broadcast a lightweight live feed reload after background AI topic-classification runs finish so topic pills, AI-classified topic markers, and topic-filtered results refresh without a manual page reload when live auto refresh is active
+- changed the initial app feed load to detect when an open-triggered assigned-source refresh is still running and perform one automatic follow-up reload, so users without live auto refresh are less likely to stay on stale cached news until they refresh manually
 
 ## 3.2.13
 

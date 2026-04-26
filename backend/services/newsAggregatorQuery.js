@@ -93,7 +93,8 @@ function buildSourceCatalogResponse(availableSources = []) {
 async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   const {
     ensureSeedData = async () => {},
-    getLastRefreshAt = () => null
+    getLastRefreshAt = () => null,
+    isUserRefreshPending = () => false
   } = runtime;
 
   await ensureSeedData();
@@ -135,7 +136,8 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
       totalGroups: !hasMore && !filters.beforePubDate && !filters.beforeId ? pageArticles.length : null,
       scannedArticles: articles.length,
       lastRefreshAt: getLastRefreshAt(),
-      ingestion: latestIngestion
+      ingestion: latestIngestion,
+      pendingUserRefresh: isUserRefreshPending()
     },
     filters: includeFilters ? {
       sources: database.getSourceStats(availableSources, queryOptions),

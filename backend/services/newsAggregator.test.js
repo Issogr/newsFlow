@@ -214,6 +214,40 @@ describe('newsAggregator service flows', () => {
     expect(rssParser.parseFeed.mock.calls.filter(([source]) => source.id === 'custom-1')).toHaveLength(3);
   });
 
+  test('getNewsFeed reports when an open-triggered user refresh is still pending', async () => {
+    const allDefaultSourceGroupIds = [...new Set(newsAggregator.newsSources.map((source) => getCanonicalSourceId(source.id, source.name)))];
+    const userContext = { userId: 'user-1', excludedSourceIds: allDefaultSourceGroupIds, excludedSubSourceIds: [] };
+    const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
+    let resolveParse;
+    const parseStarted = new Promise((resolve) => {
+      rssParser.parseFeed.mockImplementation(async (source) => {
+        if (source.id !== 'custom-1') {
+          return [];
+        }
+
+        resolve();
+        await new Promise((parseResolve) => {
+          resolveParse = parseResolve;
+        });
+        return [];
+      });
+    });
+    database.listUserSources.mockReturnValue([customSource]);
+
+    const resultPromise = newsAggregator.getNewsFeed({}, userContext);
+    await parseStarted;
+
+    expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(true);
+
+    const result = await resultPromise;
+
+    expect(result.meta.pendingUserRefresh).toBe(true);
+
+    resolveParse();
+    await newsAggregator._waitForExistingUserAssignedSourceRefresh(userContext);
+    expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(false);
+  });
+
   test('getNewsFeed waits for an existing immediate assigned-source refresh before reading feed', async () => {
     const allDefaultSourceGroupIds = [...new Set(newsAggregator.newsSources.map((source) => getCanonicalSourceId(source.id, source.name)))];
     const userContext = { userId: 'user-1', excludedSourceIds: allDefaultSourceGroupIds, excludedSubSourceIds: [] };

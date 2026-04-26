@@ -222,6 +222,33 @@ describe('NewsAggregator', () => {
     expect(screen.getAllByRole('button', { name: 'Refresh' })[1]).toBeEnabled();
   });
 
+  test('retries once for fresh feed data on open when auto refresh is off and a user refresh is pending', async () => {
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [{ id: 'group-stale', title: 'Stale headline' }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1, pendingUserRefresh: true },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: 'group-fresh', title: 'Fresh headline' }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1, pendingUserRefresh: false },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+
+    await renderNewsAggregator({
+      currentUser: {
+        ...currentUser,
+        settings: {
+          ...currentUser.settings,
+          autoRefreshEnabled: false
+        }
+      }
+    });
+
+    expect(await screen.findByText('Fresh headline')).toBeInTheDocument();
+    expect(fetchNews).toHaveBeenCalledTimes(2);
+  });
+
   test('subscribes realtime updates with source exclusions', async () => {
     const updateSubscriptionFilters = jest.fn();
 
