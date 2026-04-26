@@ -19,7 +19,7 @@ const {
   getSourceAliases,
   getSourceVariantLabel
 } = require('../utils/sourceCatalog');
-const { normalizeArticleUrl } = require('../utils/articleIdentity');
+const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
 
 const DATA_DIR = path.join(__dirname, '../data');
 const DB_PATH = process.env.NEWS_DB_PATH || path.join(DATA_DIR, 'news.db');
@@ -115,6 +115,7 @@ const articleRepository = createArticleRepository({
   chunkValues,
   topicNormalizer,
   normalizeArticleUrl,
+  normalizeIdentityText,
   getResolvedSourceAliases,
   getResolvedSourceMetadata,
   getRawConfiguredSourceIds,

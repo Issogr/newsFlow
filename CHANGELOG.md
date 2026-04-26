@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.2.13.1
+
+- broadcast a lightweight live feed reload after background AI topic-classification runs finish so topic pills, AI-classified topic markers, and topic-filtered results refresh without a manual page reload when live auto refresh is active
+- changed the initial app feed load to detect when an open-triggered assigned-source refresh is still running and perform one automatic follow-up reload, so users without live auto refresh are less likely to stay on stale cached news until they refresh manually
+- tightened article deduplication for sibling source variants by reusing an existing recent article when the same source family republishes the same normalized title under a different URL, reducing fake new-article inserts and unnecessary AI topic-classifier work
+- preserved the user's viewport during live auto-refresh feed updates, compensating scroll position both when new article cards are prepended and when topic-refresh reloads update the current feed so readers are not yanked back to the top
+- added an opt-in `AI_TOPIC_DEBUG_LOG_ARTICLES` backend environment flag for local Docker Compose runs so development logs can show which article ids and titles each AI topic-classification batch processed without enabling that extra detail by default
+- stopped background AI topic classification from scheduling the same still-pending article ids multiple times during overlapping startup/app-open refreshes, reducing duplicate dev logs and wasted repeated classifier work after service restarts
+- dropped feed items older than the configured retention window before persistence, live websocket broadcast, and AI topic scheduling so stale source entries no longer flash at the top of the feed and then disappear on the next retained query
+
 ## 3.2.13
 
 - fixed AI topic background processing so capped or failed classifier batches are not permanently marked as processed without an actual attempt, allowing later refreshes to retry untouched articles

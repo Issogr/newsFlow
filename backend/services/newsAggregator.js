@@ -53,6 +53,10 @@ function getIngestionRuntime() {
   };
 }
 
+function hasPendingUserAssignedSourceRefresh(userContext = {}) {
+  return Boolean(userContext.userId) && userImmediateRefreshPromises.has(userContext.userId);
+}
+
 function isRecentlyActive(user, referenceTime = Date.now()) {
   if (!user?.lastActivityAt || !Number.isFinite(ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES) || ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES <= 0) {
     return false;
@@ -259,14 +263,16 @@ async function getNewsFeed(filters = {}, userContext = {}) {
 
   return buildNewsFeed(filters, userContext, {
     ensureSeedData: async () => {},
-    getLastRefreshAt
+    getLastRefreshAt,
+    isUserRefreshPending: () => hasPendingUserAssignedSourceRefresh(userContext)
   });
 }
 
 async function getCachedNewsFeed(filters = {}, userContext = {}) {
   return buildNewsFeed(filters, userContext, {
     ensureSeedData: async () => {},
-    getLastRefreshAt
+    getLastRefreshAt,
+    isUserRefreshPending: () => false
   });
 }
 
@@ -312,6 +318,7 @@ module.exports = {
   _getUserAssignedSourceConfigs: getUserAssignedSourceConfigs,
   _isConfiguredSourceAssignedToSettings: isConfiguredSourceAssignedToSettings,
   _isRecentlyActive: isRecentlyActive,
+  _hasPendingUserAssignedSourceRefresh: hasPendingUserAssignedSourceRefresh,
   _startUserAssignedSourceRefresh: startUserAssignedSourceRefresh,
   _waitForExistingUserAssignedSourceRefresh: waitForExistingUserAssignedSourceRefresh,
   _resetImmediateRefreshState: resetImmediateRefreshState

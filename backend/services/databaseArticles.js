@@ -18,6 +18,7 @@ function createArticleRepository({
   chunkValues,
   topicNormalizer,
   normalizeArticleUrl,
+  normalizeIdentityText,
   getResolvedSourceAliases,
   getResolvedSourceMetadata,
   getRawConfiguredSourceIds,
@@ -25,6 +26,8 @@ function createArticleRepository({
   getLegacyConfiguredSourceGroupIds,
   getGroupedConfiguredSourceIds
 }) {
+  const TITLE_DEDUPE_WINDOW_MS = 3 * 60 * 60 * 1000;
+
   function getSourceFilterClauses(sourceIds = [], options = {}) {
     const aliasedIds = new Set();
     const aliasedNames = new Set();
@@ -267,6 +270,63 @@ function createArticleRepository({
     `).all(canonicalUrl, ownerUserId || '', ...sourceParams);
   }
 
+  function normalizeArticleTitle(title) {
+    return normalizeIdentityText(title, { lowercase: true });
+  }
+
+  function getArticleRowsByApproximateSourceTitle(database, sourceId, sourceName, ownerUserId, title, publishedAt) {
+    const normalizedTitle = normalizeArticleTitle(title);
+    const publishedTimestamp = Date.parse(publishedAt || '');
+
+    if (!normalizedTitle || Number.isNaN(publishedTimestamp)) {
+      return [];
+    }
+
+    const aliases = getResolvedSourceAliases(sourceId, sourceName, ownerUserId || null);
+    const sourceClauses = [];
+    const sourceParams = [];
+
+    if (aliases.ids.length > 0) {
+      sourceClauses.push(`source_id IN (${aliases.ids.map(() => '?').join(', ')})`);
+      sourceParams.push(...aliases.ids);
+    }
+
+    if (aliases.names.length > 0) {
+      sourceClauses.push(`source_name IN (${aliases.names.map(() => '?').join(', ')})`);
+      sourceParams.push(...aliases.names);
+    }
+
+    if (sourceClauses.length === 0) {
+      return [];
+    }
+
+    const publishedAfter = new Date(publishedTimestamp - TITLE_DEDUPE_WINDOW_MS).toISOString();
+    const publishedBefore = new Date(publishedTimestamp + TITLE_DEDUPE_WINDOW_MS).toISOString();
+    const rows = database.prepare(`
+      SELECT id, title, published_at AS publishedAt, updated_at AS updatedAt, created_at AS createdAt
+      FROM articles
+      WHERE COALESCE(owner_user_id, '') = ?
+        AND (${sourceClauses.join(' OR ')})
+        AND published_at BETWEEN ? AND ?
+      ORDER BY datetime(updated_at) DESC, datetime(published_at) DESC, datetime(created_at) DESC, id DESC
+    `).all(ownerUserId || '', ...sourceParams, publishedAfter, publishedBefore);
+
+    return rows
+      .filter((row) => normalizeArticleTitle(row.title) === normalizedTitle)
+      .sort((left, right) => {
+        const leftDiff = Math.abs(Date.parse(left.publishedAt || '') - publishedTimestamp);
+        const rightDiff = Math.abs(Date.parse(right.publishedAt || '') - publishedTimestamp);
+
+        if (leftDiff !== rightDiff) {
+          return leftDiff - rightDiff;
+        }
+
+        return String(right.updatedAt || right.createdAt || right.id || '').localeCompare(
+          String(left.updatedAt || left.createdAt || left.id || '')
+        );
+      });
+  }
+
   function getTopicDetailsByArticleIds(articleIds) {
     if (!Array.isArray(articleIds) || articleIds.length === 0) {
       return new Map();
@@ -454,11 +514,22 @@ function createArticleRepository({
         const canonicalMatch = !existingIdSet.has(article.id)
           ? canonicalMatches.find((row) => row.id !== article.id)
           : null;
-        const persistedArticleId = existingIdSet.has(article.id) ? article.id : (canonicalMatch?.id || article.id);
+        const titleMatches = !existingIdSet.has(article.id) && !canonicalMatch
+          ? getArticleRowsByApproximateSourceTitle(
+              database,
+              storedSourceId,
+              storedSourceName,
+              article.ownerUserId || '',
+              article.title,
+              article.pubDate
+            )
+          : [];
+        const titleMatch = titleMatches.find((row) => row.id !== article.id) || null;
+        const persistedArticleId = existingIdSet.has(article.id) ? article.id : (canonicalMatch?.id || titleMatch?.id || article.id);
         const duplicateIds = canonicalMatches
           .map((row) => row.id)
           .filter((id) => id && id !== persistedArticleId);
-        const exists = existingIdSet.has(persistedArticleId) || Boolean(canonicalMatch);
+        const exists = existingIdSet.has(persistedArticleId) || Boolean(canonicalMatch) || Boolean(titleMatch);
         const normalizedPubDate = normalizePublicationDate(article.pubDate, now);
 
         article.id = persistedArticleId;
