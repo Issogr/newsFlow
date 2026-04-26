@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.2.13.2
+
+- completed the frontend Tailwind 4 migration by switching Vite to the official Tailwind plugin, replacing the legacy Tailwind CSS directives, and preserving Tailwind 3's default border-color behavior for existing `border` utilities
+
 ## 3.2.13.1
 
 - broadcast a lightweight live feed reload after background AI topic-classification runs finish so topic pills, AI-classified topic markers, and topic-filtered results refresh without a manual page reload when live auto refresh is active
