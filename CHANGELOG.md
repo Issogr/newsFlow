@@ -1,5 +1,33 @@
 # Changelog
 
+## 3.2.13
+
+- fixed AI topic background processing so capped or failed classifier batches are not permanently marked as processed without an actual attempt, allowing later refreshes to retry untouched articles
+- reduced SQLite write pressure by throttling backend session-expiry refreshes, batching anonymous public API counters, skipping filter-stat recomputation on feed pagination, and letting hot feed ordering use the `published_at` index directly
+- hardened the BFF with upstream request timeouts, corrected Socket.IO proxy path handling, malformed-JSON `400` responses, session cleanup for invalid stored payloads, and less session-store work for public/static paths
+- upgraded backend, BFF, and frontend dependencies, moved the backend Docker runtime to Node 20 for the current SQLite dependency line, and migrated the frontend Tailwind PostCSS setup for Tailwind 4
+- fixed frontend development proxying for normal `/api/*` browser calls through the BFF, removed stale token-auth helpers, cleaned macOS artifact ignores, and guarded admin async updates after unmount
+- added optional OpenRouter-powered AI topic detection for newly inserted articles, with server-side API-key handling, configurable model selection, batched source/title/description-only classification that does not send provider RSS categories, strict taxonomy validation, and local fallback until AI returns valid topics
+- switched OpenRouter topic classification from a custom HTTP call to the official `@openrouter/sdk` client while keeping the backend CommonJS runtime through dynamic import
+- added safe backend log feedback for AI topic requests so Docker Compose development can see skipped, started, completed, capped, and failed AI classification batches without logging prompts or secrets
+- made OpenRouter timeout handling explicit and non-fatal in AI topic classification logs, disabling SDK retries for classifier calls and suppressing duplicate expected timeout rejections while keeping local fallback topics
+- relaxed AI topic-classification defaults to one 4-article batch at a time with a 30-second request timeout, increased the structured-output completion budget, and allow configuring up to 120 seconds so slower OpenRouter models have enough time before fallback kicks in
+- made AI topic parsing more tolerant of common model response variants, requested JSON-object responses, and added safe zero-classification diagnostics that report only structural reasons and response length
+- disabled reasoning for AI topic-classification calls and added robust assistant-content extraction so reasoning-first models do not spend the response budget without returning final taxonomy JSON
+- moved AI topic classification out of the blocking ingestion path and added persisted per-article AI processing metadata so attempted articles are not repeatedly classified across refreshes or service restarts
+- tightened topic normalization and AI classification guidance so short aliases such as `ia` no longer turn unrelated words like `aria` into Technology, and incident/crime stories are steered toward Cronaca instead of the misleading Local news label
+- replaced local topic keyword matching with weighted phrase scoring, positive/negative evidence, and 40 regression fixtures for difficult headlines so fallback topics are more deterministic and auditable
+- changed AI topic output validation to require per-topic confidence and evidence copied from article title/description before accepting a model-assigned topic
+- extended stored article topics with source, confidence, evidence, and reason-code metadata, plus an admin-only topic debug report endpoint for inspecting classification decisions
+- simplified the AI topic JSON contract to focus on topic plus confidence, making model responses smaller and less likely to be truncated before valid JSON completes
+- removed source names from AI topic-classification payloads so requests stay smaller and rely on the article text instead of publisher branding
+- restored icon-only topic markers on standard NewsCard layouts, with a subtle rainbow ring around AI-classified topics so non-compact cards show article categories without adding text noise
+- switched the BFF Docker dependency and runtime stages to Node 20 while keeping the frontend build on Node 22, avoiding Node 22 deprecation noise from the proxy dependency at container startup
+- guarded batched topic merges against stale article ids left behind by article deduplication or cleanup so ingestion no longer fails with a foreign-key error when an article disappears before its topics are merged
+- changed custom-source ingestion to fetch identical active user RSS URLs once per refresh and fan out the parsed articles per owning user source, while keeping delete/update cleanup scoped to the affected user source
+- changed scheduled ingestion to refresh only sources assigned to recently active users, with one immediate per-user assigned-source refresh between scheduled cycles and a first-run seed fallback when the article database is empty
+- decoupled newly triggered immediate assigned-source refreshes from the current `/news` response while still waiting on an already-running immediate refresh, preventing AI topic classification latency from slowing the first cached feed load
+
 ## 3.2.12
 
 - hardened the BFF boundary by stripping raw backend credentials from browser-facing app and Socket.IO proxy paths, requiring a valid BFF session before proxying authenticated app traffic, and clearing local BFF sessions even when upstream logout fails

@@ -48,10 +48,6 @@ api.interceptors.response.use(
   }
 );
 
-export const setAuthToken = () => {};
-
-export const getAuthToken = () => '';
-
 export const isRequestCanceled = (error) => {
   return axios.isCancel?.(error) || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';
 };
@@ -175,6 +171,7 @@ export const fetchNews = async ({
   recentHours = null,
   beforePubDate = '',
   beforeId = '',
+  includeFilters = true,
   signal
 } = {}) => {
   const params = { page, pageSize };
@@ -201,6 +198,10 @@ export const fetchNews = async ({
 
   if (beforeId) {
     params.beforeId = beforeId;
+  }
+
+  if (!includeFilters) {
+    params.includeFilters = 'false';
   }
 
   const response = await api.get('/news', { params, signal });

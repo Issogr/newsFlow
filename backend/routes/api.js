@@ -1,7 +1,8 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const multer = require('multer');
 const newsService = require('../services/newsAggregator');
+const database = require('../services/database');
 const readerService = require('../services/readerService');
 const userService = require('../services/userService');
 const feedbackService = require('../services/feedbackService');
@@ -41,7 +42,7 @@ const authRateLimit = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const username = String(req.body?.username || '').trim().toLowerCase();
-    return `${req.ip}:${username}`;
+    return `${ipKeyGenerator(req.ip)}:${username}`;
   },
   message: {
     error: {
@@ -58,7 +59,7 @@ const passwordSetupRateLimit = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const token = String(req.body?.token || req.query?.token || '').trim().slice(0, 24);
-    return `${req.ip}:${token}`;
+    return `${ipKeyGenerator(req.ip)}:${token}`;
   },
   message: {
     error: {
@@ -325,6 +326,20 @@ router.delete('/admin/users/:userId', [
 ], asyncHandler(async (req, res) => {
   const result = userService.deleteUserAsAdmin(req.user.id, req.params.userId);
   res.json(result);
+}));
+
+router.get('/admin/articles/:articleId/topics/debug', [
+  requireAuthenticatedUser,
+  requireAdminUser,
+  validateParam('articleId', 'Invalid article ID'),
+  sanitizeParam('articleId')
+], asyncHandler(async (req, res) => {
+  const report = database.getTopicClassificationReport(req.params.articleId);
+  if (!report) {
+    throw createError(404, 'Article not found', 'RESOURCE_NOT_FOUND');
+  }
+
+  res.json(report);
 }));
 
 router.get('/news', [requireAuthenticatedUser, sanitizeQuery('search'), sanitizeQuery('beforePubDate'), sanitizeQuery('beforeId')], asyncHandler(async (req, res) => {

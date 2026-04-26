@@ -261,13 +261,14 @@ function createAuthRepository({ getDb }) {
     return Number(row?.value || 0);
   }
 
-  function incrementAnonymousPublicApiRequestCount() {
+  function incrementAnonymousPublicApiRequestCount(amount = 1) {
+    const incrementBy = Math.max(1, Math.floor(Number(amount) || 1));
     getDb().prepare(`
       INSERT INTO app_meta (key, value)
-      VALUES ('anonymous_public_api_request_count', '1')
+      VALUES ('anonymous_public_api_request_count', ?)
       ON CONFLICT(key) DO UPDATE
-      SET value = CAST(COALESCE(app_meta.value, '0') AS INTEGER) + 1
-    `).run();
+      SET value = CAST(COALESCE(app_meta.value, '0') AS INTEGER) + ?
+    `).run(String(incrementBy), incrementBy);
 
     return getAnonymousPublicApiRequestCount();
   }

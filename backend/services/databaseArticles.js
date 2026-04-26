@@ -225,7 +225,7 @@ function createArticleRepository({
       FROM articles a
       ${joins.join('\n')}
       ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
-      ORDER BY datetime(a.published_at) DESC, a.id DESC
+      ORDER BY a.published_at DESC, a.id DESC
       LIMIT ? OFFSET ?
     `;
 
@@ -267,31 +267,41 @@ function createArticleRepository({
     `).all(canonicalUrl, ownerUserId || '', ...sourceParams);
   }
 
-  function getTopicsByArticleIds(articleIds) {
+  function getTopicDetailsByArticleIds(articleIds) {
     if (!Array.isArray(articleIds) || articleIds.length === 0) {
       return new Map();
     }
 
     const rows = getDb().prepare(`
-      SELECT article_id AS articleId, topic
+      SELECT article_id AS articleId, topic, source, confidence, evidence, reason_code AS reasonCode
       FROM article_topics
       WHERE article_id IN (${articleIds.map(() => '?').join(', ')})
       ORDER BY topic ASC
     `).all(...articleIds);
 
-    const topicMap = new Map();
+    const topicDetailsMap = new Map();
     rows.forEach((row) => {
-      const topics = topicMap.get(row.articleId) || [];
-      topics.push(row.topic);
-      topicMap.set(row.articleId, topics);
+      if (!topicNormalizer.isCanonicalTopic(row.topic)) {
+        return;
+      }
+
+      const topics = topicDetailsMap.get(row.articleId) || [];
+      topics.push({
+        topic: row.topic,
+        source: row.source || 'legacy',
+        confidence: row.confidence,
+        evidence: parseEvidence(row.evidence),
+        reasonCode: row.reasonCode || null
+      });
+      topicDetailsMap.set(row.articleId, topics);
     });
 
-    return topicMap;
+    return topicDetailsMap;
   }
 
   function hydrateArticleRows(rows, options = {}) {
     const articleIds = rows.map((row) => row.id);
-    const topicMap = getTopicsByArticleIds(articleIds);
+    const topicDetailsMap = getTopicDetailsByArticleIds(articleIds);
     const metadataCache = options.sourceMetadataCache || new Map();
 
     return rows.map((row) => {
@@ -304,6 +314,8 @@ function createArticleRepository({
         metadataCache.set(cacheKey, sourceMetadata);
       }
 
+      const topicDetails = topicDetailsMap.get(row.id) || [];
+
       return {
         ...row,
         rawSourceId: row.sourceId,
@@ -311,9 +323,62 @@ function createArticleRepository({
         sourceId: sourceMetadata.sourceId,
         source: sourceMetadata.sourceName,
         subSource: sourceMetadata.subSource,
-        topics: (topicMap.get(row.id) || []).filter((topic) => topicNormalizer.isCanonicalTopic(topic))
+        topics: topicDetails.map((entry) => entry.topic),
+        topicDetails
       };
     });
+  }
+
+  function normalizeTopicEntry(entry, fallbackSource = 'local') {
+    const rawTopic = entry && typeof entry === 'object' ? entry.topic : entry;
+    const topic = topicNormalizer.normalizeTopic(rawTopic);
+    if (!topic || !topicNormalizer.isCanonicalTopic(topic)) {
+      return null;
+    }
+
+    const confidence = entry && typeof entry === 'object' && Number.isFinite(Number(entry.confidence))
+      ? Math.max(0, Math.min(1, Number(entry.confidence)))
+      : null;
+    const evidence = entry && typeof entry === 'object' && Array.isArray(entry.evidence)
+      ? entry.evidence.map((value) => String(value || '').trim()).filter(Boolean).slice(0, 8)
+      : [];
+
+    return {
+      topic,
+      source: String(entry?.source || fallbackSource || 'local').slice(0, 32),
+      confidence,
+      evidence: JSON.stringify(evidence),
+      reasonCode: entry?.reasonCode ? String(entry.reasonCode).slice(0, 80) : null
+    };
+  }
+
+  function normalizeTopicEntries(topics = [], fallbackSource = 'local') {
+    if (!Array.isArray(topics)) {
+      return [];
+    }
+
+    const seen = new Set();
+    return topics
+      .map((topic) => normalizeTopicEntry(topic, fallbackSource))
+      .filter(Boolean)
+      .filter((entry) => {
+        const key = entry.topic.toLowerCase();
+        if (seen.has(key)) {
+          return false;
+        }
+
+        seen.add(key);
+        return true;
+      });
+  }
+
+  function parseEvidence(value) {
+    try {
+      const parsed = JSON.parse(value || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   }
 
   function upsertArticles(articles = []) {
@@ -446,24 +511,64 @@ function createArticleRepository({
     return transaction(articles);
   }
 
+  function getArticleIdsPendingAiTopicProcessing(articleIds = []) {
+    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    if (normalizedArticleIds.length === 0) {
+      return [];
+    }
+
+    return chunkValues(normalizedArticleIds).flatMap((ids) => {
+      return getDb().prepare(`
+        SELECT id
+        FROM articles
+        WHERE id IN (${ids.map(() => '?').join(', ')})
+          AND ai_topics_processed_at IS NULL
+      `).all(...ids).map((row) => row.id);
+    });
+  }
+
+  function markArticlesAiTopicProcessing(articleIds = [], status = 'completed') {
+    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    if (normalizedArticleIds.length === 0) {
+      return 0;
+    }
+
+    const processedAt = new Date().toISOString();
+    return chunkValues(normalizedArticleIds).reduce((total, ids) => {
+      return total + getDb().prepare(`
+        UPDATE articles
+        SET ai_topics_processed_at = ?,
+            ai_topics_status = ?
+        WHERE id IN (${ids.map(() => '?').join(', ')})
+      `).run(processedAt, status, ...ids).changes;
+    }, 0);
+  }
+
   function mergeTopicsForArticle(articleId, topics = []) {
     if (!articleId || !Array.isArray(topics) || topics.length === 0) {
       return [];
     }
 
     const database = getDb();
+    const articleExists = database.prepare('SELECT 1 FROM articles WHERE id = ?').get(articleId);
+    if (!articleExists) {
+      return [];
+    }
+
     const selectStmt = database.prepare('SELECT topic FROM article_topics WHERE article_id = ? ORDER BY topic ASC');
     const insertStmt = database.prepare(`
-      INSERT OR IGNORE INTO article_topics (article_id, topic)
-      VALUES (?, ?)
+      INSERT INTO article_topics (article_id, topic, source, confidence, evidence, reason_code)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(article_id, topic) DO UPDATE SET
+        source = excluded.source,
+        confidence = excluded.confidence,
+        evidence = excluded.evidence,
+        reason_code = excluded.reason_code
     `);
 
     const transaction = database.transaction((articleIdentifier, topicList) => {
-      topicList
-        .map((topic) => topicNormalizer.normalizeTopic(topic))
-        .filter((topic) => topicNormalizer.isCanonicalTopic(topic))
-        .forEach((topic) => {
-          insertStmt.run(articleIdentifier, topic);
+      normalizeTopicEntries(topicList).forEach((entry) => {
+          insertStmt.run(articleIdentifier, entry.topic, entry.source, entry.confidence, entry.evidence, entry.reasonCode);
         });
 
       return selectStmt
@@ -485,27 +590,137 @@ function createArticleRepository({
     }
 
     const database = getDb();
+    const existingArticleIds = new Set(
+      chunkValues([...new Set(normalizedEntries.map((entry) => entry.articleId))]).flatMap((articleIds) => {
+        return database.prepare(`
+          SELECT id
+          FROM articles
+          WHERE id IN (${articleIds.map(() => '?').join(', ')})
+        `).all(...articleIds).map((row) => row.id);
+      })
+    );
+    const existingEntries = normalizedEntries.filter((entry) => existingArticleIds.has(entry.articleId));
+
+    if (existingEntries.length === 0) {
+      return 0;
+    }
+
     const insertStmt = database.prepare(`
-      INSERT OR IGNORE INTO article_topics (article_id, topic)
-      VALUES (?, ?)
+      INSERT INTO article_topics (article_id, topic, source, confidence, evidence, reason_code)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(article_id, topic) DO UPDATE SET
+        source = excluded.source,
+        confidence = excluded.confidence,
+        evidence = excluded.evidence,
+        reason_code = excluded.reason_code
     `);
 
     const transaction = database.transaction((items) => {
       let insertedCount = 0;
 
       items.forEach(({ articleId, topics }) => {
-        topics
-          .map((topic) => topicNormalizer.normalizeTopic(topic))
-          .filter((topic) => topicNormalizer.isCanonicalTopic(topic))
-          .forEach((topic) => {
-            insertedCount += insertStmt.run(articleId, topic).changes;
+        normalizeTopicEntries(topics).forEach((entry) => {
+            insertedCount += insertStmt.run(articleId, entry.topic, entry.source, entry.confidence, entry.evidence, entry.reasonCode).changes;
           });
       });
 
       return insertedCount;
     });
 
-    return transaction(normalizedEntries);
+    return transaction(existingEntries);
+  }
+
+  function replaceTopicsForArticles(entries = []) {
+    const normalizedEntries = Array.isArray(entries)
+      ? entries
+        .map((entry) => ({
+          articleId: entry?.articleId,
+          topics: normalizeTopicEntries(entry?.topics || [], 'ai').slice(0, 3)
+        }))
+        .filter((entry) => entry.articleId && entry.topics.length > 0)
+      : [];
+
+    if (normalizedEntries.length === 0) {
+      return 0;
+    }
+
+    const database = getDb();
+    const existingArticleIds = new Set(
+      chunkValues([...new Set(normalizedEntries.map((entry) => entry.articleId))]).flatMap((articleIds) => {
+        return database.prepare(`
+          SELECT id
+          FROM articles
+          WHERE id IN (${articleIds.map(() => '?').join(', ')})
+        `).all(...articleIds).map((row) => row.id);
+      })
+    );
+    const existingEntries = normalizedEntries.filter((entry) => existingArticleIds.has(entry.articleId));
+
+    if (existingEntries.length === 0) {
+      return 0;
+    }
+
+    const deleteStmt = database.prepare('DELETE FROM article_topics WHERE article_id = ?');
+    const insertStmt = database.prepare(`
+      INSERT OR IGNORE INTO article_topics (article_id, topic, source, confidence, evidence, reason_code)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    const transaction = database.transaction((items) => {
+      let insertedCount = 0;
+
+      items.forEach(({ articleId, topics }) => {
+        deleteStmt.run(articleId);
+        topics.forEach((entry) => {
+          insertedCount += insertStmt.run(articleId, entry.topic, entry.source, entry.confidence, entry.evidence, entry.reasonCode).changes;
+        });
+      });
+
+      return insertedCount;
+    });
+
+    return transaction(existingEntries);
+  }
+
+  function getTopicClassificationReport(articleId) {
+    if (!articleId) {
+      return null;
+    }
+
+    const article = getDb().prepare(`
+      SELECT id, title, description, source_id AS sourceId, source_name AS sourceName,
+             ai_topics_processed_at AS aiTopicsProcessedAt, ai_topics_status AS aiTopicsStatus
+      FROM articles
+      WHERE id = ?
+    `).get(articleId);
+
+    if (!article) {
+      return null;
+    }
+
+    const topicRows = getDb().prepare(`
+      SELECT topic, source, confidence, evidence, reason_code AS reasonCode, created_at AS createdAt
+      FROM article_topics
+      WHERE article_id = ?
+      ORDER BY topic ASC
+    `).all(articleId);
+    const localCandidates = topicNormalizer.classifyTopicsFromText(article).map((entry) => ({
+      topic: entry.topic,
+      score: entry.score,
+      confidence: entry.confidence,
+      evidence: entry.evidence,
+      negativeEvidence: entry.negativeEvidence,
+      reasonCode: entry.reasonCode
+    }));
+
+    return {
+      article,
+      storedTopics: topicRows.map((row) => ({
+        ...row,
+        evidence: parseEvidence(row.evidence)
+      })),
+      localCandidates
+    };
   }
 
   function getArticles(filters = {}, options = {}) {
@@ -570,7 +785,7 @@ function createArticleRepository({
         a.published_at AS pubDate
       FROM articles a
       WHERE ${where.join(' AND ')}
-      ORDER BY datetime(a.published_at) DESC, a.id DESC
+      ORDER BY a.published_at DESC, a.id DESC
     `).all(...params);
 
     return hydrateArticleRows(rows, options);
@@ -615,29 +830,22 @@ function createArticleRepository({
     }
 
     const database = getDb();
-    const selectArticleIds = database.prepare(`
-      SELECT id
-      FROM articles
-      WHERE published_at < ?
-    `);
     const deleteSearchEntries = database.prepare(`
       DELETE FROM article_search
-      WHERE article_id = ?
+      WHERE article_id IN (
+        SELECT id
+        FROM articles
+        WHERE published_at < ?
+      )
     `);
-    const deleteArticle = database.prepare(`
+    const deleteArticles = database.prepare(`
       DELETE FROM articles
-      WHERE id = ?
+      WHERE published_at < ?
     `);
 
     const transaction = database.transaction((threshold) => {
-      const articleIds = selectArticleIds.all(threshold).map((row) => row.id);
-
-      articleIds.forEach((articleId) => {
-        deleteSearchEntries.run(articleId);
-        deleteArticle.run(articleId);
-      });
-
-      return articleIds.length;
+      deleteSearchEntries.run(threshold);
+      return deleteArticles.run(threshold).changes;
     });
 
     return transaction(isoTimestamp);
@@ -823,6 +1031,10 @@ function createArticleRepository({
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
     const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
+    const canonicalTopics = topicNormalizer.CANONICAL_TOPICS;
+
+    where.push(`article_topics.topic IN (${canonicalTopics.map(() => '?').join(', ')})`);
+    params.push(...canonicalTopics);
 
     where.push(scopeFilter.clause);
     params.push(...scopeFilter.params);
@@ -869,11 +1081,10 @@ function createArticleRepository({
       ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
       GROUP BY article_topics.topic
       ORDER BY count DESC, article_topics.topic ASC
-    `).all(...params);
+      LIMIT ?
+    `).all(...params, limit);
 
-    return rows
-      .filter((row) => topicNormalizer.isCanonicalTopic(row.topic))
-      .slice(0, limit);
+    return rows;
   }
 
   function createIngestionRun() {
@@ -929,8 +1140,12 @@ function createArticleRepository({
     getArticles,
     getArticleById,
     getArticlesByIds,
+    getArticleIdsPendingAiTopicProcessing,
+    getTopicClassificationReport,
+    markArticlesAiTopicProcessing,
     mergeTopicsForArticle,
     mergeTopicsForArticles,
+    replaceTopicsForArticles,
     upsertArticles,
     countArticles,
     deleteArticlesOlderThan,

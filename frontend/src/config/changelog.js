@@ -1,19 +1,16 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.2.12',
+  version: '3.2.13',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '🔐 Security around browser sessions and live updates is stricter.',
-      '🚪 Logging out is more reliable, even if the server is having trouble.',
-      '📄 Feed pagination is more predictable when moving through older results.',
-      '🌊 Refreshes are calmer under load because RSS sources are fetched in controlled batches.',
-      '⚡ Scrolling and loading more stories should feel smoother, with fewer stuck loading states.',
-      '⌨️ Mobile search now stays visible when the keyboard opens.',
-      '🖼️ Stories without official images now rotate through more fallback covers.',
-      '🧹 Repeated stories from the same source are cleaned up more reliably.',
-      '🔗 Sharing now shows a clear message if the browser blocks copying the link.',
+      '🤖 AI topic detection can optionally assign cleaner categories, now runs in the background, handles slower models better, and retries stories skipped by temporary caps or failures.',
+      '🏷️ Topic matching is stricter and clearer, so mislabels are less likely and confidence or evidence is easier to inspect when something looks off.',
+      '🟢 Source refresh is smarter too: active users get a quicker catch-up, and shared custom RSS feeds are fetched once and reused safely across users.',
+      '🏷️ Standard story cards show topic icons again, with a rainbow ring when a topic was classified by AI.',
+      '⚡ Feed paging, session activity, and browser-gateway requests now do less unnecessary work and stay more resilient when the backend is slow or input is malformed.',
+      '🧰 Local development and dependencies were also refreshed, including the frontend build pipeline.',
     ]
   },
   it: {
@@ -21,15 +18,12 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '🔐 La sicurezza delle sessioni browser e degli aggiornamenti live e piu rigorosa.',
-      '🚪 Il logout e piu affidabile, anche se il server sta avendo problemi.',
-      '📄 La paginazione delle notizie e piu prevedibile quando scorri verso i risultati meno recenti.',
-      '🌊 Gli aggiornamenti sono piu stabili sotto carico perche le fonti RSS vengono lette in gruppi controllati.',
-      '⚡ Scroll e caricamento di altre notizie dovrebbero risultare piu fluidi, con meno stati di caricamento bloccati.',
-      '⌨️ La ricerca su mobile resta visibile quando si apre la tastiera.',
-      '🖼️ Le notizie senza immagine ufficiale ora alternano piu copertine di fallback.',
-      '🧹 Le notizie ripetute dalla stessa fonte vengono ripulite in modo piu affidabile.',
-      '🔗 La condivisione ora mostra un messaggio chiaro se il browser blocca la copia del link.',
+      '🤖 Il rilevamento AI dei topic puo assegnare categorie piu precise, ora lavora in background, gestisce meglio i modelli lenti e riprova gli articoli saltati per limiti o errori temporanei.',
+      '🏷️ Il riconoscimento dei topic e piu rigoroso e piu chiaro, cosi gli errori di etichetta sono meno probabili e confidenza o evidenze sono piu facili da controllare.',
+      '🟢 Anche l aggiornamento delle fonti e piu intelligente: gli utenti attivi recuperano prima le novita e le fonti RSS personalizzate condivise vengono scaricate una volta sola e riusate in sicurezza.',
+      '🏷️ Le schede standard mostrano di nuovo le icone dei topic, con un anello arcobaleno quando il topic arriva dall AI.',
+      '⚡ Paginazione del feed, attivita di sessione e richieste attraverso il gateway browser fanno meno lavoro inutile e restano piu affidabili quando il backend rallenta o l input non e valido.',
+      '🧰 Sono stati aggiornati anche sviluppo locale e dipendenze, incluso il processo di build del frontend.',
     ]
   }
 };

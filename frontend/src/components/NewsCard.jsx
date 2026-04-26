@@ -5,13 +5,14 @@ import {
   ExternalLink,
   Share2,
 } from 'lucide-react';
-import { getDateLocale } from '../i18n';
+import { getDateLocale, getLocalizedTopic } from '../i18n';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import genericNewsCover from '../assets/generic-news-cover.webp';
 import genericNewsCover2 from '../assets/generic-news-cover-2.webp';
 import genericNewsCover3 from '../assets/generic-news-cover-3.webp';
 import genericNewsCover4 from '../assets/generic-news-cover-4.webp';
 import { shareArticleUrl } from '../utils/shareArticle';
+import { getTopicPresentation } from '../topicPresentation';
 import ShareStatusBubble from './ShareStatusBubble';
 
 const GENERIC_NEWS_COVERS = [
@@ -44,6 +45,36 @@ function getSourceEntries(group) {
   return [...sourceMap.values()];
 }
 
+function getTopicEntries(group) {
+  const topicMap = new Map();
+  const addTopic = (entry) => {
+    const topic = String(entry?.topic || entry || '').trim();
+    if (!topic) {
+      return;
+    }
+
+    const key = topic.toLowerCase();
+    const current = topicMap.get(key);
+    const nextEntry = {
+      topic,
+      source: String(entry?.source || current?.source || '').trim().toLowerCase()
+    };
+
+    if (!current || nextEntry.source === 'ai') {
+      topicMap.set(key, nextEntry);
+    }
+  };
+
+  (group?.topicDetails || []).forEach(addTopic);
+  (group?.topics || []).forEach(addTopic);
+  (group?.items || []).forEach((item) => {
+    (item?.topicDetails || []).forEach(addTopic);
+    (item?.topics || []).forEach(addTopic);
+  });
+
+  return [...topicMap.values()].slice(0, 4);
+}
+
 function getGroupImageUrl(group) {
   const rawImageUrl = (group?.items || []).map((item) => item?.image).find(Boolean);
   return getSafeExternalUrl(rawImageUrl);
@@ -71,6 +102,7 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
   const hasItems = Boolean(group?.items?.length);
 
   const sourceEntries = getSourceEntries(group);
+  const topicEntries = getTopicEntries(group);
   const safeOriginalUrl = getSafeExternalUrl(group?.url);
   const safeImageUrl = showImages ? getGroupImageUrl(group) : '';
   const [fallbackImageUrl, setFallbackImageUrl] = useState(getRandomGenericNewsCover);
@@ -293,7 +325,38 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
                 {formatPublicationDate(group.pubDate, locale)}
               </span>
 
+              {topicEntries.map(({ topic, source }) => {
+                const { Icon, iconBadgeClassName } = getTopicPresentation(topic);
+                const localizedTopic = getLocalizedTopic(topic, locale);
+                const isAiTopic = source === 'ai';
 
+                if (isAiTopic) {
+                  return (
+                    <span
+                      key={topic}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full p-[1.5px] shadow-sm"
+                      style={{ backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)' }}
+                      aria-label={localizedTopic}
+                      title={localizedTopic}
+                    >
+                      <span className={`inline-flex h-full w-full items-center justify-center rounded-full ${iconBadgeClassName}`}>
+                        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                      </span>
+                    </span>
+                  );
+                }
+
+                return (
+                  <span
+                    key={topic}
+                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full shadow-sm ${iconBadgeClassName}`}
+                    aria-label={localizedTopic}
+                    title={localizedTopic}
+                  >
+                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                );
+              })}
             </div>
           </>
         )}

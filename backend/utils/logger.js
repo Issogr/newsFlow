@@ -44,14 +44,21 @@ let globalErrorHandlersConfigured = false;
 function formatUnhandledRejection(reason) {
   if (reason instanceof Error) {
     return {
-      message: reason.message,
+      errorMessage: reason.message,
       stack: reason.stack
     };
   }
 
   return {
-    message: String(reason)
+    errorMessage: String(reason)
   };
+}
+
+function isExpectedTimeoutRejection(reason) {
+  const name = String(reason?.name || '').toLowerCase();
+  const message = String(reason?.message || reason || '').toLowerCase();
+
+  return name === 'timeouterror' && message.includes('aborted due to timeout');
 }
 
 function setupGlobalErrorHandlers() {
@@ -67,6 +74,10 @@ function setupGlobalErrorHandlers() {
   });
 
   process.on('unhandledRejection', (reason) => {
+    if (isExpectedTimeoutRejection(reason)) {
+      return;
+    }
+
     logger.error('Unhandled promise rejection', formatUnhandledRejection(reason));
   });
 
@@ -79,5 +90,7 @@ if (!isTestEnvironment) {
 }
 
 logger.setupGlobalErrorHandlers = setupGlobalErrorHandlers;
+logger._formatUnhandledRejection = formatUnhandledRejection;
+logger._isExpectedTimeoutRejection = isExpectedTimeoutRejection;
 
 module.exports = logger;

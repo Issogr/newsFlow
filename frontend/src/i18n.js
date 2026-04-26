@@ -564,7 +564,7 @@ const topicTranslations = {
   tech: { en: 'Technology', it: 'Tecnologia' },
   scienza: { en: 'Science', it: 'Scienza' },
   science: { en: 'Science', it: 'Scienza' },
-  cronaca: { en: 'Local news', it: 'Cronaca' },
+  cronaca: { en: 'Crime & incidents', it: 'Cronaca' },
   esteri: { en: 'World', it: 'Esteri' },
   world: { en: 'World', it: 'Esteri' },
   international: { en: 'World', it: 'Esteri' },

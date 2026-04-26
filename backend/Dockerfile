@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine AS build
+FROM node:20-alpine AS build
 
 RUN apk add --no-cache python3 make g++
 
@@ -13,7 +13,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
 # Production stage
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Crea un utente non-root
 RUN addgroup -g 1001 -S nodejs && \

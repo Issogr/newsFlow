@@ -72,9 +72,11 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('19');
+    expect(migrationVersion).toBe('21');
     expect(articleColumns).toContain('canonical_url');
-    expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'created_at']));
+    expect(articleColumns).toContain('ai_topics_processed_at');
+    expect(articleColumns).toContain('ai_topics_status');
+    expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'source', 'confidence', 'evidence', 'reason_code', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
     expect(settingsColumns).toContain('auto_refresh_enabled');
@@ -138,13 +140,15 @@ describe('database migrations', () => {
     `).get()?.value;
     const settingsColumns = migratedDb.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
     const userColumns = migratedDb.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
+    const articleColumns = migratedDb.prepare('PRAGMA table_info(articles)').all().map((column) => column.name);
     const apiTokenColumns = migratedDb.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('19');
+    expect(migratedVersion).toBe('21');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
+    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
     expect(apiTokenColumns).toContain('token_hash');
   });
 
@@ -247,6 +251,8 @@ describe('database migrations', () => {
     `).get()?.value;
     const settingsColumns = migratedDb.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
     const userColumns = migratedDb.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
+    const articleColumns = migratedDb.prepare('PRAGMA table_info(articles)').all().map((column) => column.name);
+    const articleAiState = migratedDb.prepare('SELECT ai_topics_processed_at AS processedAt, ai_topics_status AS status FROM articles WHERE id = ?').get('article-1');
     const passwordSetupTokenColumns = migratedDb.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column) => column.name);
     const apiTokenColumns = migratedDb.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
 
@@ -254,7 +260,9 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('19');
+    expect(migratedVersion).toBe('21');
+    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
+    expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
     expect(settingsColumns).toContain('compact_news_cards');
     expect(settingsColumns).toContain('compact_news_cards_mode');
@@ -487,6 +495,84 @@ describe('database queries and user data', () => {
     }));
   });
 
+  test('ignores topic merges for article ids that are no longer present', () => {
+    const now = new Date().toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'existing-topic-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Existing topic article',
+        description: 'Existing description',
+        content: '',
+        url: 'https://example.com/existing-topic-article',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+
+    expect(() => database.mergeTopicsForArticles([
+      { articleId: 'missing-topic-article', topics: ['Economia'] },
+      { articleId: 'existing-topic-article', topics: ['Technology'] }
+    ])).not.toThrow();
+    expect(database.mergeTopicsForArticle('missing-topic-article', ['Economia'])).toEqual([]);
+
+    const articles = database.getArticles({}, { maxArticleAgeHours: 9999 });
+    expect(articles).toHaveLength(1);
+    expect(articles[0]).toEqual(expect.objectContaining({
+      id: 'existing-topic-article',
+      topics: ['Tecnologia']
+    }));
+  });
+
+  test('tracks AI topic processing and replaces fallback topics', () => {
+    const now = new Date().toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'ai-topic-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'AI topic article',
+        description: 'Existing description',
+        content: '',
+        url: 'https://example.com/ai-topic-article',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+    database.mergeTopicsForArticle('ai-topic-article', ['Economy']);
+
+    expect(database.getArticleIdsPendingAiTopicProcessing(['ai-topic-article'])).toEqual(['ai-topic-article']);
+    expect(database.replaceTopicsForArticles([
+      { articleId: 'ai-topic-article', topics: [{ topic: 'Technology', source: 'ai', confidence: 0.91, evidence: ['AI topic'], reasonCode: 'ai_confident_evidence' }] }
+    ])).toBe(1);
+    expect(database.markArticlesAiTopicProcessing(['ai-topic-article'], 'completed')).toBe(1);
+
+    const articles = database.getArticles({}, { maxArticleAgeHours: 9999 });
+    const aiState = database.getDb().prepare(`
+      SELECT ai_topics_processed_at AS processedAt, ai_topics_status AS status
+      FROM articles
+      WHERE id = ?
+    `).get('ai-topic-article');
+    const report = database.getTopicClassificationReport('ai-topic-article');
+
+    expect(database.getArticleIdsPendingAiTopicProcessing(['ai-topic-article'])).toEqual([]);
+    expect(articles[0]).toEqual(expect.objectContaining({
+      id: 'ai-topic-article',
+      topics: ['Tecnologia']
+    }));
+    expect(aiState).toEqual({ processedAt: expect.any(String), status: 'completed' });
+    expect(report.storedTopics[0]).toEqual(expect.objectContaining({
+      topic: 'Tecnologia',
+      source: 'ai',
+      confidence: 0.91,
+      evidence: ['AI topic'],
+      reasonCode: 'ai_confident_evidence'
+    }));
+  });
+
   test('normalizes future publication dates on insert and during cleanup', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-03-15T14:30:00.000Z'));
 
@@ -618,6 +704,72 @@ describe('database queries and user data', () => {
     expect(database.deleteUserSource('user-1', 'custom-1')).toBe(1);
     expect(database.listUserSources('user-1')).toEqual([]);
     expect(database.getArticles({}, { userId: 'user-1' })).toEqual([]);
+  });
+
+  test('deleting one user shared custom source does not remove another user shared source data', () => {
+    const now = new Date().toISOString();
+
+    database.createUser({ id: 'user-1', username: 'alice', passwordHash: null, createdAt: now, updatedAt: now });
+    database.createUser({ id: 'user-2', username: 'bob', passwordHash: null, createdAt: now, updatedAt: now });
+    database.createUserSource({
+      id: 'custom-user-1',
+      userId: 'user-1',
+      name: 'Shared Feed A',
+      url: 'https://example.com/shared.xml',
+      language: 'en',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      validatedAt: now
+    });
+    database.createUserSource({
+      id: 'custom-user-2',
+      userId: 'user-2',
+      name: 'Shared Feed B',
+      url: 'https://example.com/shared.xml',
+      language: 'en',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      validatedAt: now
+    });
+    database.upsertArticles([
+      {
+        id: 'user-1-shared-story',
+        sourceId: 'custom-user-1',
+        source: 'Shared Feed A',
+        ownerUserId: 'user-1',
+        title: 'Shared story',
+        description: 'Private copy for user one',
+        content: '',
+        url: 'https://example.com/story',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'user-2-shared-story',
+        sourceId: 'custom-user-2',
+        source: 'Shared Feed B',
+        ownerUserId: 'user-2',
+        title: 'Shared story',
+        description: 'Private copy for user two',
+        content: '',
+        url: 'https://example.com/story',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+
+    expect(database.deleteUserSource('user-1', 'custom-user-1')).toBe(1);
+
+    expect(database.listUserSources('user-1')).toEqual([]);
+    expect(database.listUserSources('user-2')).toEqual([
+      expect.objectContaining({ id: 'custom-user-2', url: 'https://example.com/shared.xml' })
+    ]);
+    expect(database.getArticles({}, { userId: 'user-1', maxArticleAgeHours: 9999 })).toEqual([]);
+    expect(database.getArticles({}, { userId: 'user-2', maxArticleAgeHours: 9999 })).toEqual([
+      expect.objectContaining({ id: 'user-2-shared-story', rawSourceId: 'custom-user-2' })
+    ]);
   });
 
   test('falls back safely when stored user settings JSON is malformed', () => {

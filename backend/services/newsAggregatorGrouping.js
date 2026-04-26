@@ -42,6 +42,7 @@ function createStandaloneGroup(item) {
     description: item.description,
     pubDate: item.pubDate,
     topics: [...(item.topics || [])],
+    topicDetails: [...(item.topicDetails || [])],
     url: item.url
   };
 }
@@ -94,6 +95,7 @@ function normalizeIncomingArticles(articles = []) {
 
   articles.forEach((article) => {
     const baseTopics = topicNormalizer.extractTopics(article, article.rawTopics);
+    const topicDetails = topicNormalizer.extractTopicDetails(article, article.rawTopics);
     const canonicalSourceId = getCanonicalSourceId(article.sourceId, article.source);
     const canonicalSourceName = getCanonicalSourceName(article.sourceId, article.source);
     const normalizedArticle = {
@@ -104,7 +106,8 @@ function normalizeIncomingArticles(articles = []) {
       sourceId: canonicalSourceId,
       source: canonicalSourceName,
       subSource: getSourceVariantLabel(article.sourceId, article.source),
-      topics: baseTopics
+      topics: baseTopics,
+      topicDetails
     };
     const dedupeKey = buildIncomingArticleDeduplicationKey(normalizedArticle);
     const existingArticle = dedupedArticles.get(dedupeKey);

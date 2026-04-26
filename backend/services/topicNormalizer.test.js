@@ -1,4 +1,5 @@
 const topicNormalizer = require('./topicNormalizer');
+const topicRegressionFixtures = require('./topicRegressionFixtures');
 
 describe('topicNormalizer canonical taxonomy', () => {
   test('drops raw topics outside the supported taxonomy', () => {
@@ -12,6 +13,44 @@ describe('topicNormalizer canonical taxonomy', () => {
     expect(topicNormalizer.normalizeTopic('politics')).toBe('Politica');
     expect(topicNormalizer.normalizeTopic('markets')).toBe('Economia');
     expect(topicNormalizer.normalizeTopic('science')).toBe('Scienza');
+  });
+
+  test('does not map short AI aliases inside unrelated Italian words', () => {
+    expect(topicNormalizer.normalizeTopic('aria compressa')).toBeNull();
+    expect(topicNormalizer.normalizeTopic('notizia')).toBeNull();
+    expect(topicNormalizer.normalizeTopic('AI')).toBe('Tecnologia');
+  });
+
+  test('classifies the air-gun protest example as cronaca, not technology', () => {
+    const topics = topicNormalizer.extractTopics({
+      title: 'A Roma due persone che partecipavano al corteo per il 25 aprile sono state ferite da colpi di pistola ad aria compressa'
+    });
+
+    expect(topics).toEqual(expect.arrayContaining(['Cronaca']));
+    expect(topics).not.toEqual(expect.arrayContaining(['Tecnologia']));
+  });
+
+  test('weighted topic fixtures classify representative difficult headlines', () => {
+    expect(topicRegressionFixtures).toHaveLength(40);
+
+    topicRegressionFixtures.forEach((fixture) => {
+      const topics = topicNormalizer.extractTopics({ title: fixture.title });
+
+      expect(topics).toEqual(expect.arrayContaining(fixture.expected));
+      expect(topics).not.toEqual(expect.arrayContaining(fixture.rejected));
+    });
+  });
+
+  test('returns weighted classification details for debugging', () => {
+    const details = topicNormalizer.extractTopicDetails({
+      title: 'A Roma due persone al corteo del 25 aprile ferite da colpi di pistola ad aria compressa'
+    });
+
+    expect(details[0]).toEqual(expect.objectContaining({
+      topic: 'Cronaca',
+      source: 'local',
+      evidence: expect.arrayContaining(['ferite', 'pistola'])
+    }));
   });
 
   test('extractTopics returns only canonical topics', () => {

@@ -1,5 +1,5 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const newsService = require('../services/newsAggregator');
 const userService = require('../services/userService');
 const { asyncHandler } = require('../utils/errorHandler');
@@ -16,7 +16,7 @@ const anonymousPublicNewsRateLimit = rateLimit({
   legacyHeaders: false,
   skip: (req) => Boolean(req.externalApi?.authenticated),
   keyGenerator: (req) => {
-    return `anon:${req.ip}`;
+    return `anon:${ipKeyGenerator(req.ip)}`;
   },
   handler: (req, res) => {
     res.status(429).json({
@@ -86,7 +86,7 @@ const preAuthPublicNewsRateLimit = rateLimit({
   max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip,
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
   message: {
     error: {
       message: 'Too many public API requests. Please try again later.',

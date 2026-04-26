@@ -473,6 +473,8 @@ describe('API auth and user flows', () => {
       .get('/api/public/news')
       .expect(200);
 
+    userService.flushAnonymousPublicApiUsage({ force: true });
+
     const count = database.getDb().prepare(`
       SELECT value
       FROM app_meta

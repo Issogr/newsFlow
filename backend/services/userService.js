@@ -27,10 +27,41 @@ const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().slic
 const PASSWORD_SETUP_TTL_MINUTES = parseInt(process.env.PASSWORD_SETUP_TTL_MINUTES || '60', 10);
 const ADMIN_BOOTSTRAP_TTL_MINUTES = parseInt(process.env.ADMIN_BOOTSTRAP_TTL_MINUTES || '30', 10);
 const ONLINE_ACTIVITY_WINDOW_MINUTES = parseInt(process.env.ONLINE_ACTIVITY_WINDOW_MINUTES || '5', 10);
+const ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS = parseInt(process.env.ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS || '5000', 10);
+const ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD = parseInt(process.env.ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD || '100', 10);
 const SUPPORTED_LANGUAGES = new Set(['auto', 'it', 'en']);
 const SUPPORTED_THEME_MODES = new Set(['system', 'light', 'dark']);
 const SUPPORTED_READER_PANEL_POSITIONS = new Set(['left', 'center', 'right']);
 const SUPPORTED_READER_TEXT_SIZES = new Set(['small', 'medium', 'large']);
+
+let pendingAnonymousPublicApiRequests = 0;
+let lastAnonymousPublicApiUsageFlushAt = Date.now();
+
+function flushAnonymousPublicApiUsage({ force = false } = {}) {
+  if (pendingAnonymousPublicApiRequests <= 0) {
+    return 0;
+  }
+
+  const now = Date.now();
+  if (
+    !force
+    && pendingAnonymousPublicApiRequests < ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD
+    && now - lastAnonymousPublicApiUsageFlushAt < ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS
+  ) {
+    return 0;
+  }
+
+  const incrementBy = pendingAnonymousPublicApiRequests;
+  pendingAnonymousPublicApiRequests = 0;
+  lastAnonymousPublicApiUsageFlushAt = now;
+  try {
+    database.incrementAnonymousPublicApiRequestCount(incrementBy);
+  } catch (error) {
+    pendingAnonymousPublicApiRequests += incrementBy;
+    throw error;
+  }
+  return incrementBy;
+}
 
 function createId() {
   return crypto.randomBytes(16).toString('hex');
@@ -694,6 +725,8 @@ async function completePasswordSetup(payload = {}) {
 }
 
 function listUsersForAdmin() {
+  flushAnonymousPublicApiUsage({ force: true });
+
   const users = database.listUsers()
     .map(buildAdminUserSummary)
     .sort((left, right) => {
@@ -731,7 +764,8 @@ function recordPublicApiRequestUsage({ authenticated = false, userId = null, use
     return;
   }
 
-  database.incrementAnonymousPublicApiRequestCount();
+  pendingAnonymousPublicApiRequests += 1;
+  flushAnonymousPublicApiUsage();
 }
 
 function createUserPasswordSetupLink(adminUserId, targetUserId) {
@@ -860,6 +894,7 @@ module.exports = {
   completePasswordSetup,
   listUsersForAdmin,
   recordPublicApiRequestUsage,
+  flushAnonymousPublicApiUsage,
   createUserPasswordSetupLink,
   deleteUserAsAdmin,
   updateUserSettings,

@@ -1,5 +1,6 @@
 jest.mock('./rssParser', () => ({
-  parseFeed: jest.fn()
+  parseFeed: jest.fn(),
+  _buildArticleId: jest.fn((source, item, canonicalUrl = '') => `${source.id}:${canonicalUrl || item.link || item.title}`)
 }));
 
 jest.mock('./database', () => ({
@@ -10,12 +11,17 @@ jest.mock('./database', () => ({
   normalizeFuturePublicationDates: jest.fn(() => 0),
   cleanupRemovedConfiguredSourceData: jest.fn(() => ({ removedArticles: 0, updatedSettings: 0 })),
   upsertArticles: jest.fn(() => ({ insertedIds: [], insertedCount: 0, updatedCount: 0 })),
+  getArticleIdsPendingAiTopicProcessing: jest.fn(() => []),
+  markArticlesAiTopicProcessing: jest.fn(() => 0),
   mergeTopicsForArticles: jest.fn(() => 0),
+  replaceTopicsForArticles: jest.fn(() => 0),
   getArticlesByIds: jest.fn(() => []),
   getArticles: jest.fn(() => []),
   getLatestIngestionRun: jest.fn(() => null),
   getSourceStats: jest.fn(() => []),
   getTopicStatsByFilters: jest.fn(() => []),
+  getUserSettings: jest.fn(() => ({ excludedSourceIds: [], excludedSubSourceIds: [] })),
+  listUsers: jest.fn(() => []),
   listUserSources: jest.fn(() => []),
   listAllActiveUserSources: jest.fn(() => [])
 }));
@@ -32,9 +38,15 @@ jest.mock('./websocketService', () => ({
   broadcastSystemNotification: jest.fn()
 }));
 
+jest.mock('./aiTopicClassifier', () => ({
+  classifyTopicDetailsForArticles: jest.fn(async () => new Map()),
+  isAiTopicDetectionAvailable: jest.fn(() => true)
+}));
+
 const rssParser = require('./rssParser');
 const database = require('./database');
 const websocketService = require('./websocketService');
+const aiTopicClassifier = require('./aiTopicClassifier');
 const newsAggregator = require('./newsAggregator');
 const { normalizeIncomingArticles } = require('./newsAggregatorGrouping');
 const { mapSettledWithConcurrency } = require('./newsAggregatorIngestion');
@@ -43,20 +55,32 @@ const { getCanonicalSourceId, getCanonicalSourceName } = require('../utils/sourc
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
 const ansaSourceName = getCanonicalSourceName('ansa_mondo', 'ANSA - Mondo');
 
+async function flushBackgroundAiProcessing() {
+  await new Promise((resolve) => { setTimeout(resolve, 0); });
+  await Promise.resolve();
+}
+
 describe('newsAggregator service flows', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    newsAggregator._resetImmediateRefreshState();
     database.countArticles.mockReturnValue(1);
     database.deleteArticlesOlderThan.mockReturnValue(0);
     database.normalizeFuturePublicationDates.mockReturnValue(0);
     database.cleanupRemovedConfiguredSourceData.mockReturnValue({ removedArticles: 0, updatedSettings: 0 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue([]);
     database.getArticles.mockReturnValue([]);
     database.getLatestIngestionRun.mockReturnValue(null);
     database.getSourceStats.mockReturnValue([]);
     database.getTopicStatsByFilters.mockReturnValue([]);
+    database.getUserSettings.mockReturnValue({ excludedSourceIds: [], excludedSubSourceIds: [] });
+    database.listUsers.mockReturnValue([{ id: 'user-1', lastActivityAt: new Date().toISOString() }]);
     database.listUserSources.mockReturnValue([]);
     database.listAllActiveUserSources.mockReturnValue([]);
     database.upsertArticles.mockReturnValue({ insertedIds: [], insertedCount: 0, updatedCount: 0 });
+    aiTopicClassifier.isAiTopicDetectionAvailable.mockReturnValue(true);
+    aiTopicClassifier.classifyTopicDetailsForArticles.mockResolvedValue(new Map());
+    rssParser._buildArticleId.mockImplementation((source, item, canonicalUrl = '') => `${source.id}:${canonicalUrl || item.link || item.title}`);
     rssParser.parseFeed.mockResolvedValue([]);
   });
 
@@ -142,6 +166,84 @@ describe('newsAggregator service flows', () => {
     }), expect.objectContaining({ userId: 'user-1' }));
   });
 
+  test('active assigned source selection skips inactive users and excluded default sources', () => {
+    const now = Date.now();
+    database.listUsers.mockReturnValue([
+      { id: 'active-user', lastActivityAt: new Date(now).toISOString() },
+      { id: 'inactive-user', lastActivityAt: new Date(now - (20 * 60 * 1000)).toISOString() }
+    ]);
+    database.getUserSettings.mockImplementation((userId) => ({
+      excludedSourceIds: userId === 'active-user' ? [ansaSourceId] : [],
+      excludedSubSourceIds: []
+    }));
+    database.listAllActiveUserSources.mockReturnValue([
+      { id: 'active-custom', userId: 'active-user', name: 'Active Feed', url: 'https://example.com/active.xml', language: 'en', isActive: true },
+      { id: 'inactive-custom', userId: 'inactive-user', name: 'Inactive Feed', url: 'https://example.com/inactive.xml', language: 'en', isActive: true }
+    ]);
+
+    const sourceConfigs = newsAggregator._getActiveAssignedSourceConfigs(now);
+
+    expect(sourceConfigs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'active-custom', ownerUserId: 'active-user' })
+    ]));
+    expect(sourceConfigs).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'inactive-custom' }),
+      expect.objectContaining({ id: 'ansa_mondo' })
+    ]));
+  });
+
+  test('getNewsFeed starts one background assigned-source refresh until a scheduled cycle runs', async () => {
+    const userContext = { userId: 'user-1', excludedSourceIds: [ansaSourceId], excludedSubSourceIds: [] };
+    const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
+    database.listUserSources.mockReturnValue([customSource]);
+    database.listAllActiveUserSources.mockReturnValue([customSource]);
+
+    await newsAggregator.getNewsFeed({}, userContext);
+    await newsAggregator._waitForExistingUserAssignedSourceRefresh(userContext);
+
+    expect(rssParser.parseFeed.mock.calls.filter(([source]) => source.id === 'custom-1')).toHaveLength(1);
+
+    await newsAggregator.getNewsFeed({}, userContext);
+    expect(rssParser.parseFeed.mock.calls.filter(([source]) => source.id === 'custom-1')).toHaveLength(1);
+
+    await newsAggregator.ingestAllNews({ broadcast: false });
+    await newsAggregator.getNewsFeed({}, userContext);
+    await newsAggregator._waitForExistingUserAssignedSourceRefresh(userContext);
+
+    expect(rssParser.parseFeed.mock.calls.filter(([source]) => source.id === 'custom-1')).toHaveLength(3);
+  });
+
+  test('getNewsFeed waits for an existing immediate assigned-source refresh before reading feed', async () => {
+    const allDefaultSourceGroupIds = [...new Set(newsAggregator.newsSources.map((source) => getCanonicalSourceId(source.id, source.name)))];
+    const userContext = { userId: 'user-1', excludedSourceIds: allDefaultSourceGroupIds, excludedSubSourceIds: [] };
+    const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
+    let resolveParse;
+    const parseStarted = new Promise((resolve) => {
+      rssParser.parseFeed.mockImplementation(async (source) => {
+        if (source.id !== 'custom-1') {
+          return [];
+        }
+
+        resolve();
+        await new Promise((parseResolve) => { resolveParse = parseResolve; });
+        return [];
+      });
+    });
+    database.listUserSources.mockReturnValue([customSource]);
+
+    await newsAggregator.getNewsFeed({}, userContext);
+    await parseStarted;
+
+    const secondRequest = newsAggregator.getNewsFeed({}, userContext);
+    await Promise.resolve();
+    expect(database.getArticles).toHaveBeenCalledTimes(1);
+
+    resolveParse();
+    await secondRequest;
+
+    expect(database.getArticles).toHaveBeenCalledTimes(2);
+  });
+
   test('ingestAllNews stores topics and broadcasts global and private groups separately', async () => {
     database.listAllActiveUserSources.mockReturnValue([
       { id: 'custom-1', name: 'My Feed', url: 'https://example.com/custom.xml', language: 'en', userId: 'user-1', isActive: true }
@@ -150,6 +252,7 @@ describe('newsAggregator service flows', () => {
       .mockResolvedValueOnce([{ id: 'global-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Global economy update', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/g', rawTopics: ['Economy'] }])
       .mockResolvedValueOnce([{ id: 'private-1', sourceId: 'custom-1', source: 'My Feed', title: 'Private portfolio update', pubDate: '2026-03-07T11:00:00.000Z', url: 'https://example.com/p', rawTopics: ['Markets'], ownerUserId: 'user-1' }]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['global-1', 'private-1'], insertedCount: 2, updatedCount: 0 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['global-1', 'private-1']);
 
     const result = await newsAggregator.ingestAllNews({ broadcast: true });
 
@@ -166,6 +269,128 @@ describe('newsAggregator service flows', () => {
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0]).toMatchObject({ id: expect.stringContaining('group-'), ownerUserId: null });
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].items[0]).toMatchObject({ sourceId: ansaSourceId, subSource: 'Mondo' });
     expect(websocketService.broadcastNewsUpdate.mock.calls[1][0][0]).toMatchObject({ ownerUserId: 'user-1' });
+  });
+
+  test('ingestAllNews schedules AI topics after merging and broadcasting fallback topics', async () => {
+    rssParser.parseFeed.mockResolvedValue([
+      { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'AI chips advance', description: 'New processors for data centers', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/ai' },
+      { id: 'updated-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Market update', description: 'Markets rise', pubDate: '2026-03-07T09:00:00.000Z', url: 'https://example.com/markets' }
+    ]);
+    database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], updatedIds: ['updated-1'], insertedCount: 1, updatedCount: 1 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
+    aiTopicClassifier.classifyTopicDetailsForArticles.mockResolvedValue(new Map([
+      ['inserted-1', [{ topic: 'Tecnologia', source: 'ai', confidence: 0.88, evidence: ['AI chips'], reasonCode: 'ai_confident_evidence' }]]
+    ]));
+
+    await newsAggregator.ingestAllNews({ broadcast: true });
+
+    expect(database.mergeTopicsForArticles).toHaveBeenCalledWith([
+      expect.objectContaining({ articleId: 'inserted-1', topics: expect.any(Array) })
+    ]);
+    expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].topics).toEqual(['Tecnologia']);
+    expect(aiTopicClassifier.classifyTopicDetailsForArticles).not.toHaveBeenCalled();
+
+    await flushBackgroundAiProcessing();
+
+    expect(aiTopicClassifier.classifyTopicDetailsForArticles).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'inserted-1', title: 'AI chips advance' })
+    ]);
+    expect(database.replaceTopicsForArticles).toHaveBeenCalledWith([
+      { articleId: 'inserted-1', topics: [{ topic: 'Tecnologia', source: 'ai', confidence: 0.88, evidence: ['AI chips'], reasonCode: 'ai_confident_evidence' }] }
+    ]);
+    expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'completed');
+  });
+
+  test('ingestAllNews keeps fallback topics when AI is unsure', async () => {
+    rssParser.parseFeed.mockResolvedValue([
+      { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Global market update', description: 'Markets rise', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/markets', rawTopics: ['markets'] }
+    ]);
+    database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], insertedCount: 1, updatedCount: 0 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
+    aiTopicClassifier.classifyTopicDetailsForArticles.mockResolvedValue(new Map([
+      ['inserted-1', []]
+    ]));
+
+    await newsAggregator.ingestAllNews({ broadcast: true });
+
+    expect(database.mergeTopicsForArticles).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({
+        articleId: 'inserted-1',
+        topics: expect.arrayContaining([expect.objectContaining({ topic: 'Economia' })])
+      })
+    ]));
+    expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].topics).toEqual(['Economia']);
+
+    await flushBackgroundAiProcessing();
+
+    expect(database.replaceTopicsForArticles).not.toHaveBeenCalled();
+    expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'no_topics');
+  });
+
+  test('ingestAllNews does not re-merge fallback topics for already AI-processed articles', async () => {
+    rssParser.parseFeed.mockResolvedValue([
+      { id: 'existing-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Existing story', description: 'Markets rise', pubDate: '2026-03-07T10:00:00.000Z', url: 'https://example.com/existing' }
+    ]);
+    database.upsertArticles.mockReturnValue({ insertedIds: [], updatedIds: ['existing-1'], insertedCount: 0, updatedCount: 1 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue([]);
+
+    await newsAggregator.ingestAllNews({ broadcast: true });
+
+    expect(database.mergeTopicsForArticles).toHaveBeenCalledWith([]);
+  });
+
+  test('ingestAllNews fetches a shared custom RSS URL once and fans out articles per owning user source', async () => {
+    const sharedUrl = 'https://example.com/shared.xml';
+    database.listUsers.mockReturnValue([
+      { id: 'user-1', lastActivityAt: new Date().toISOString() },
+      { id: 'user-2', lastActivityAt: new Date().toISOString() }
+    ]);
+    database.listAllActiveUserSources.mockReturnValue([
+      { id: 'custom-user-1', name: 'Shared Feed A', url: sharedUrl, language: 'en', userId: 'user-1', isActive: true },
+      { id: 'custom-user-2', name: 'Shared Feed B', url: sharedUrl, language: 'en', userId: 'user-2', isActive: true }
+    ]);
+    rssParser.parseFeed.mockImplementation(async (source) => {
+      if (source.url !== sharedUrl) {
+        return [];
+      }
+
+      return [{
+        id: 'representative-id',
+        sourceId: source.id,
+        source: source.name,
+        title: 'Shared custom story',
+        description: 'Shared story description',
+        pubDate: '2026-03-07T10:00:00.000Z',
+        url: 'https://example.com/story',
+        canonicalUrl: 'https://example.com/story',
+        language: 'en',
+        ownerUserId: source.ownerUserId
+      }];
+    });
+    database.upsertArticles.mockReturnValue({
+      insertedIds: ['custom-user-1:https://example.com/story', 'custom-user-2:https://example.com/story'],
+      insertedCount: 2,
+      updatedCount: 0
+    });
+
+    await newsAggregator.ingestAllNews({ broadcast: false });
+
+    const sharedFetchCalls = rssParser.parseFeed.mock.calls.filter(([source]) => source.url === sharedUrl);
+    expect(sharedFetchCalls).toHaveLength(1);
+    expect(database.upsertArticles).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'custom-user-1:https://example.com/story',
+        sourceId: 'custom-user-1',
+        source: 'Shared Feed A',
+        ownerUserId: 'user-1'
+      }),
+      expect.objectContaining({
+        id: 'custom-user-2:https://example.com/story',
+        sourceId: 'custom-user-2',
+        source: 'Shared Feed B',
+        ownerUserId: 'user-2'
+      })
+    ]));
   });
 
   test('normalizes duplicate sibling subfeed articles into one incoming article', () => {

@@ -6,10 +6,6 @@ vi.mock('socket.io-client', () => ({
   io: vi.fn()
 }));
 
-vi.mock('../services/api', () => ({
-  getAuthToken: vi.fn(() => 'session-token')
-}));
-
 describe('useWebSocket', () => {
   let socket;
   let handlers;

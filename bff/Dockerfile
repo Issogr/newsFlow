@@ -8,7 +8,7 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM node:22-alpine AS bff-deps
+FROM --platform=$BUILDPLATFORM node:20-alpine AS bff-deps
 
 WORKDIR /app/bff
 
@@ -17,7 +17,7 @@ RUN apk add --no-cache python3 make g++
 COPY bff/package*.json ./
 RUN npm ci --omit=dev
 
-FROM node:22-alpine
+FROM node:20-alpine
 
 WORKDIR /app/bff
 ENV NODE_ENV=production

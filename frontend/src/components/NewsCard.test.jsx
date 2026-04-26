@@ -101,6 +101,58 @@ describe('NewsCard', () => {
     expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
   });
 
+  test('renders icon-only topic pills on standard cards', () => {
+    render(
+      <NewsCard
+        group={{ ...group, topics: ['Tecnologia', 'Economia'] }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Technology')).toBeInTheDocument();
+    expect(screen.getByLabelText('Economy')).toBeInTheDocument();
+    expect(screen.queryByText('Technology')).not.toBeInTheDocument();
+    expect(screen.queryByText('Economy')).not.toBeInTheDocument();
+  });
+
+  test('adds a rainbow ring around AI-classified topic icons', () => {
+    render(
+      <NewsCard
+        group={{
+          ...group,
+          topicDetails: [
+            { topic: 'Tecnologia', source: 'ai' },
+            { topic: 'Economia', source: 'local' }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Technology')).toHaveStyle({
+      backgroundImage: expect.stringContaining('conic-gradient')
+    });
+    expect(screen.getByLabelText('Economy').getAttribute('style') || '').not.toContain('conic-gradient');
+  });
+
+  test('does not render topic pills on compact cards', () => {
+    render(
+      <NewsCard
+        group={{ ...group, topics: ['Tecnologia'] }}
+        compact
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByLabelText('Technology')).not.toBeInTheDocument();
+  });
+
   test('can choose an alternate generic fallback illustration', () => {
     jest.spyOn(Math, 'random').mockReturnValue(0.99);
 
