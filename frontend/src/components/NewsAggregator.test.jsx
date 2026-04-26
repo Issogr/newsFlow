@@ -108,6 +108,7 @@ describe('NewsAggregator', () => {
       writable: true,
       configurable: true
     });
+    window.scrollBy = jest.fn();
     window.scrollTo = jest.fn();
     desktopMediaQuery = {
       matches: true,
@@ -422,6 +423,84 @@ describe('NewsAggregator', () => {
     });
   });
 
+  test('preserves scroll position when realtime topic refresh reloads the current feed', async () => {
+    const websocketState = {
+      isConnected: true,
+      notifications: [],
+      lastNewsUpdate: null,
+      newArticlesCount: 0,
+      updateSubscriptionFilters: jest.fn(),
+      resetNewArticlesCount: jest.fn(),
+      markGroupsSeen: jest.fn(),
+      removeNotification: jest.fn()
+    };
+
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [{ id: 'group-1', title: 'Existing headline' }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: 'group-1', title: 'Existing headline' }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+
+    useWebSocket.mockImplementation(() => websocketState);
+    Object.defineProperty(window, 'scrollY', {
+      value: 420,
+      writable: true,
+      configurable: true
+    });
+
+    const view = await renderNewsAggregator();
+    const initialCallCount = fetchNews.mock.calls.length;
+
+    const existingHeadlineWrapper = (await screen.findByText('Existing headline')).parentElement;
+    let measurementCount = 0;
+    existingHeadlineWrapper.getBoundingClientRect = jest.fn(() => {
+      const top = measurementCount++ === 0 ? 120 : 340;
+
+      return {
+        top,
+        bottom: top + 80,
+        left: 0,
+        right: 0,
+        width: 0,
+        height: 80,
+        x: 0,
+        y: top,
+        toJSON: () => ({})
+      };
+    });
+
+    websocketState.lastNewsUpdate = {
+      timestamp: '2026-03-14T10:18:00.000Z',
+      count: 1,
+      refresh: true,
+      reason: 'topics',
+      groupIds: [],
+      data: []
+    };
+
+    await act(async () => {
+      view.rerender(
+        <NewsAggregator
+          currentUser={currentUser}
+          onLogout={jest.fn()}
+          onUserUpdate={jest.fn()}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenCalledTimes(initialCallCount + 1);
+    });
+    expect(window.scrollBy).toHaveBeenCalledWith(0, 220);
+  });
+
   test('ignores live websocket groups already present in the loaded feed', async () => {
     fetchNews.mockResolvedValue({
       items: [{ id: 'group-1', title: 'Existing headline' }],
@@ -466,6 +545,69 @@ describe('NewsAggregator', () => {
 
     expect(screen.getAllByText('Existing headline')).toHaveLength(1);
     expect(websocketState.resetNewArticlesCount).toHaveBeenCalled();
+  });
+
+  test('preserves scroll position when live auto refresh prepends new groups', async () => {
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'Existing headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    const websocketState = {
+      isConnected: true,
+      notifications: [],
+      lastNewsUpdate: null,
+      newArticlesCount: 0,
+      updateSubscriptionFilters: jest.fn(),
+      resetNewArticlesCount: jest.fn(),
+      markGroupsSeen: jest.fn(),
+      removeNotification: jest.fn()
+    };
+
+    useWebSocket.mockImplementation(() => websocketState);
+    Object.defineProperty(window, 'scrollY', {
+      value: 420,
+      writable: true,
+      configurable: true
+    });
+
+    const view = await renderNewsAggregator();
+
+    const existingHeadlineWrapper = (await screen.findByText('Existing headline')).parentElement;
+    let measurementCount = 0;
+    existingHeadlineWrapper.getBoundingClientRect = jest.fn(() => ({
+      top: measurementCount++ === 0 ? 120 : 360,
+      bottom: measurementCount === 1 ? 200 : 440,
+      left: 0,
+      right: 0,
+      width: 0,
+      height: 80,
+      x: 0,
+      y: measurementCount === 1 ? 120 : 360,
+      toJSON: () => ({})
+    }));
+
+    websocketState.lastNewsUpdate = {
+      timestamp: '2026-03-14T10:25:00.000Z',
+      count: 1,
+      groupIds: ['group-new'],
+      data: [{ id: 'group-new', title: 'New headline' }]
+    };
+
+    await act(async () => {
+      view.rerender(
+        <NewsAggregator
+          currentUser={currentUser}
+          onLogout={jest.fn()}
+          onUserUpdate={jest.fn()}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('New headline')).toBeInTheDocument();
+    expect(window.scrollBy).toHaveBeenCalledWith(0, 240);
   });
 
   test('uses the server cursor for load more requests', async () => {

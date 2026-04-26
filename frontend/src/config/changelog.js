@@ -9,6 +9,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '📰 When live auto refresh is off, opening the app now waits for one quick follow-up feed refresh so fresh stories are less likely to require a manual refresh.',
       '🏷️ Topic-filtered views also catch up sooner when those background AI labels change what should be visible.',
       '🧹 Duplicate stories from sibling source variants are filtered more carefully when the same headline is republished under a different URL, so fake new items and wasted AI topic checks are less likely.',
+      '📍 Live auto refresh now keeps your place in the feed both when new stories appear and when background topic updates refresh the current list, so scrolling readers are not pulled back to the top.',
     ]
   },
   it: {
@@ -20,6 +21,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '📰 Quando l auto refresh live e spento, aprire l app ora aspetta un rapido aggiornamento aggiuntivo del feed cosi le notizie nuove hanno meno probabilita di richiedere un refresh manuale.',
       '🏷️ Anche le viste filtrate per topic si aggiornano prima quando queste etichette AI cambiano cio che deve essere mostrato.',
       '🧹 Le storie duplicate provenienti da varianti della stessa fonte vengono filtrate con piu attenzione quando lo stesso titolo viene ripubblicato con un URL diverso, cosi i falsi nuovi articoli e i controlli AI inutili sono meno probabili.',
+      '📍 L auto refresh live ora mantiene il punto nel feed sia quando arrivano nuove storie sia quando gli aggiornamenti dei topic ricaricano la lista corrente, cosi chi sta scorrendo non viene riportato in alto.',
     ]
   }
 };

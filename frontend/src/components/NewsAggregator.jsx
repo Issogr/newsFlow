@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -96,7 +96,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const liveStatusLabel = autoRefreshEnabled
     ? (isConnected ? t('liveActive') : t('liveOffline'))
     : t('liveDisabled');
+  const groupElementRefs = useRef(new Map());
   const lastNewsUpdateRef = useRef(null);
+  const pendingScrollAnchorRef = useRef(null);
   const scrollFrameRef = useRef(null);
   const { startLatestRequest: startListRequest } = useLatestRequest();
   const { startLatestRequest: startPaginationRequest, cancelLatestRequest: cancelPaginationRequest } = useLatestRequest();
@@ -108,6 +110,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [availableTopics, setAvailableTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
   const [waitingForBackgroundRefresh, setWaitingForBackgroundRefresh] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
@@ -136,6 +139,64 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [currentUser?.customSources, excludedSourceIds, excludedSubSourceIds]);
   const sourceReloadSignatureRef = useRef(sourceReloadSignature);
 
+  const setGroupElementRef = useCallback((groupId, element) => {
+    if (!groupId) {
+      return;
+    }
+
+    if (element) {
+      groupElementRefs.current.set(groupId, element);
+      return;
+    }
+
+    groupElementRefs.current.delete(groupId);
+  }, []);
+
+  const captureVisibleScrollAnchor = useCallback(() => {
+    if (typeof window === 'undefined' || window.scrollY <= 0) {
+      pendingScrollAnchorRef.current = null;
+      return;
+    }
+
+    const nextAnchor = [...groupElementRefs.current.entries()]
+      .map(([groupId, element]) => {
+        const rect = element.getBoundingClientRect();
+        if (rect.bottom <= 0 || rect.top >= window.innerHeight) {
+          return null;
+        }
+
+        return {
+          id: groupId,
+          top: rect.top
+        };
+      })
+      .filter(Boolean)
+      .sort((left, right) => left.top - right.top)[0] || null;
+
+    pendingScrollAnchorRef.current = nextAnchor;
+  }, []);
+
+  useLayoutEffect(() => {
+    const anchor = pendingScrollAnchorRef.current;
+    if (!anchor || typeof window === 'undefined') {
+      return;
+    }
+
+    const element = groupElementRefs.current.get(anchor.id);
+    pendingScrollAnchorRef.current = null;
+
+    if (!element) {
+      return;
+    }
+
+    const nextTop = element.getBoundingClientRect().top;
+    const offsetDelta = nextTop - anchor.top;
+
+    if (Math.abs(offsetDelta) > 1) {
+      window.scrollBy(0, offsetDelta);
+    }
+  }, [news]);
+
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') {
       return undefined;
@@ -158,6 +219,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [availableSources, excludedSourceIds]);
   const isLiveAutoRefreshWorking = autoRefreshEnabled && isConnected && !debouncedSearch && !showRecentOnly;
   const refreshButtonLabel = isLiveAutoRefreshWorking ? t('refreshHandledByLive') : t('refresh');
+  const isFeedRefreshActive = loading || loadingMore || backgroundRefreshing;
 
   useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
@@ -227,16 +289,21 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     resetRealtime = true,
     cursor = null,
     allowPendingRefreshFollowup = true,
-    backgroundRefreshFollowup = false
+    backgroundRefreshFollowup = false,
+    preserveVisibleContent = false
   } = {}) {
     const setBusyState = append
       ? setLoadingMore
-      : (backgroundRefreshFollowup ? setWaitingForBackgroundRefresh : setLoading);
+      : (backgroundRefreshFollowup ? setWaitingForBackgroundRefresh : (preserveVisibleContent ? setBackgroundRefreshing : setLoading));
     const request = append ? startPaginationRequest() : startListRequest();
 
     if (!append) {
       cancelPaginationRequest();
       setLoadingMore(false);
+    }
+
+    if (preserveVisibleContent) {
+      captureVisibleScrollAnchor();
     }
 
     setBusyState(true);
@@ -292,7 +359,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         setBusyState(false);
       }
     }
-  }, [activeFilters.sourceIds, activeFilters.topics, autoRefreshEnabled, cancelPaginationRequest, debouncedSearch, recentHours, resetNewArticlesCount, showRecentOnly, startListRequest, startPaginationRequest]);
+  }, [activeFilters.sourceIds, activeFilters.topics, autoRefreshEnabled, cancelPaginationRequest, captureVisibleScrollAnchor, debouncedSearch, recentHours, resetNewArticlesCount, showRecentOnly, startListRequest, startPaginationRequest]);
 
   useEffect(() => {
     if (sourceReloadSignature === sourceReloadSignatureRef.current) {
@@ -340,24 +407,24 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     }
 
     if (lastNewsUpdate.refresh) {
-      loadNews({ page: 1, append: false, resetRealtime: false });
+      loadNews({ page: 1, append: false, resetRealtime: false, preserveVisibleContent: true });
       return;
     }
 
     if (Array.isArray(lastNewsUpdate.data) && lastNewsUpdate.data.length > 0) {
-      setNews((current) => {
-        const currentGroupIdSet = new Set(current.map((group) => group?.id).filter(Boolean));
-        const incomingGroups = lastNewsUpdate.data.filter((group) => !currentGroupIdSet.has(group?.id));
+      const currentGroupIdSet = new Set(news.map((group) => group?.id).filter(Boolean));
+      const incomingGroups = lastNewsUpdate.data.filter((group) => !currentGroupIdSet.has(group?.id));
 
-        if (incomingGroups.length === 0) {
-          return current;
-        }
+      if (incomingGroups.length === 0) {
+        resetNewArticlesCount();
+        return;
+      }
 
-        return mergeUniqueGroups(current, incomingGroups);
-      });
+      captureVisibleScrollAnchor();
+      setNews((current) => mergeUniqueGroups(current, incomingGroups));
       resetNewArticlesCount();
     }
-  }, [isLiveAutoRefreshWorking, lastNewsUpdate, loadNews, resetNewArticlesCount]);
+  }, [captureVisibleScrollAnchor, isLiveAutoRefreshWorking, lastNewsUpdate, loadNews, news, resetNewArticlesCount]);
 
   const toggleFilter = useCallback((type, value) => {
     setActiveFilters((current) => {
@@ -394,11 +461,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 onClick={() => loadNews({ page: 1, append: false, resetRealtime: true })}
                 className="group flex items-center gap-3 rounded-2xl text-left transition-opacity hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
                 aria-label={t('refresh')}
-                disabled={loading}
+                disabled={loading || backgroundRefreshing}
               >
                 <div className="relative">
                   <BrandMark className={`transition-all duration-200 ${topNavCompact ? 'h-9 w-9' : 'h-11 w-11'}`} />
-                  {loading && (
+                  {isFeedRefreshActive && (
                     <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-sm">
                       <RefreshCw className="h-3.5 w-3.5 animate-spin text-slate-700" aria-hidden="true" />
                     </span>
@@ -437,9 +504,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   icon={RefreshCw}
                   label={t('refresh')}
                   onClick={() => loadNews({ page: 1, append: false, resetRealtime: true })}
-                  disabled={isLiveAutoRefreshWorking || loading || loadingMore}
+                  disabled={isLiveAutoRefreshWorking || isFeedRefreshActive}
                   aria-label={refreshButtonLabel}
-                  iconClassName={(loading || loadingMore) ? 'animate-spin' : ''}
+                  iconClassName={isFeedRefreshActive ? 'animate-spin' : ''}
                 />
               </div>
 
@@ -566,15 +633,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           <>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {news.map((group) => (
-                <NewsCard
-                  key={group.id}
-                  group={group}
-                  showImages={showNewsImages}
-                  compact={compactNewsCards}
-                  locale={locale}
-                  t={t}
-                  onOpenReader={openReader}
-                />
+                <div key={group.id} ref={(element) => setGroupElementRef(group.id, element)}>
+                  <NewsCard
+                    group={group}
+                    showImages={showNewsImages}
+                    compact={compactNewsCards}
+                    locale={locale}
+                    t={t}
+                    onOpenReader={openReader}
+                  />
+                </div>
               ))}
             </div>
 
