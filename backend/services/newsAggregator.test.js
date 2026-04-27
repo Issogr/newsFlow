@@ -66,6 +66,17 @@ async function flushBackgroundAiProcessing() {
   await Promise.resolve();
 }
 
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
 function recentIso({ hoursAgo = 0, minutesAgo = 0 } = {}) {
   return new Date(Date.now() - ((hoursAgo * 60 * 60 * 1000) + (minutesAgo * 60 * 1000))).toISOString();
 }
@@ -256,6 +267,65 @@ describe('newsAggregator service flows', () => {
     resolveParse();
     await newsAggregator._waitForExistingUserAssignedSourceRefresh(userContext);
     expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(false);
+  });
+
+  test('keeps a queued user refresh pending after a scheduled ingestion completes', async () => {
+    const allDefaultSourceGroupIds = [...new Set(newsAggregator.newsSources.map((source) => getCanonicalSourceId(source.id, source.name)))];
+    const userContext = { userId: 'user-1', excludedSourceIds: allDefaultSourceGroupIds, excludedSubSourceIds: [] };
+    const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
+    const scheduledRelease = createDeferred();
+    const userRelease = createDeferred();
+    let customParseCount = 0;
+    let resolveScheduledStarted;
+    let resolveUserStarted;
+    const scheduledStarted = new Promise((resolve) => { resolveScheduledStarted = resolve; });
+    const userStarted = new Promise((resolve) => { resolveUserStarted = resolve; });
+
+    database.getUserSettings.mockReturnValue({ excludedSourceIds: allDefaultSourceGroupIds, excludedSubSourceIds: [] });
+    database.listUserSources.mockReturnValue([customSource]);
+    database.listAllActiveUserSources.mockReturnValue([customSource]);
+    rssParser.parseFeed.mockImplementation(async (source) => {
+      if (source.id !== 'custom-1') {
+        return [];
+      }
+
+      customParseCount += 1;
+
+      if (customParseCount === 1) {
+        resolveScheduledStarted();
+        await scheduledRelease.promise;
+        return [];
+      }
+
+      if (customParseCount === 2) {
+        resolveUserStarted();
+        await userRelease.promise;
+        return [];
+      }
+
+      return [];
+    });
+
+    const scheduledIngestion = newsAggregator.ingestAllNews({ broadcast: false });
+    await scheduledStarted;
+
+    const firstFeed = await newsAggregator.getNewsFeed({}, userContext);
+    expect(firstFeed.meta.pendingUserRefresh).toBe(true);
+
+    scheduledRelease.resolve();
+    await userStarted;
+    await scheduledIngestion;
+
+    const secondFeed = newsAggregator.getNewsFeed({}, userContext);
+    await Promise.resolve();
+
+    expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(true);
+    expect(database.getArticles).toHaveBeenCalledTimes(1);
+
+    userRelease.resolve();
+    await secondFeed;
+
+    expect(customParseCount).toBe(2);
   });
 
   test('getNewsFeed waits for an existing immediate assigned-source refresh before reading feed', async () => {

@@ -212,6 +212,11 @@ function createSessionStore(options = {}) {
         this.cleanupInterval = null;
       }
     }
+
+    clearExpiredSessions() {
+      super.clearExpiredSessions();
+      cleanupStoredSessionUsers(db);
+    }
   }
 
   const store = new ManagedSqliteStore({
@@ -223,6 +228,21 @@ function createSessionStore(options = {}) {
     });
 
   return { store, db };
+}
+
+function cleanupStoredSessionUsers(sessionDb) {
+  if (!sessionDb) {
+    return 0;
+  }
+
+  return sessionDb.prepare(`
+    DELETE FROM session_users
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM sessions
+      WHERE sessions.sid = session_users.sid
+    )
+  `).run().changes;
 }
 
 function destroyStoredSessionsByUserId(sessionStore, sessionDb, userId) {

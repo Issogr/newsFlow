@@ -328,6 +328,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       }
 
       if (!append && allowPendingRefreshFollowup && !autoRefreshEnabled && response?.meta?.pendingUserRefresh) {
+        setBusyState(false);
         await loadNewsRequest({
           page,
           append: false,

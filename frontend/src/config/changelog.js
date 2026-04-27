@@ -5,7 +5,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '🛠️ The app styling foundation has been refreshed under the hood, preserving the current look while making future interface updates safer and smoother.',
+      '🔄 Feed refreshes are calmer when live updates are paused, so the loading state clears correctly after fresh articles arrive.',
+      '🔗 External article links are handled more strictly, avoiding misleading internal app links from malformed feeds.',
+      '⚡ The public news API is lighter by default, with source and topic filter metadata available only when requested.',
     ]
   },
   it: {
@@ -13,7 +15,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '🛠️ La base grafica dell app e stata aggiornata sotto il cofano, mantenendo l aspetto attuale e rendendo i futuri ritocchi all interfaccia piu sicuri e fluidi.',
+      '🔄 Gli aggiornamenti del feed sono piu fluidi quando gli aggiornamenti live sono in pausa, con il caricamento che si chiude correttamente dopo l arrivo delle notizie fresche.',
+      '🔗 I link esterni degli articoli sono gestiti in modo piu rigoroso, evitando collegamenti interni fuorvianti da feed non corretti.',
+      '⚡ L API pubblica delle notizie e piu leggera di default, con metadati per fonti e argomenti disponibili solo su richiesta.',
     ]
   }
 };

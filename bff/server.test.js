@@ -334,6 +334,22 @@ describe('bff server', () => {
     expect(lastBackendHeaders.cookie).not.toBe('newsflow_session=backend-session-user-1');
   });
 
+  test('removes stale session_users rows when expired sessions are cleaned', async () => {
+    await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'alice', password: 'secret123' })
+      .expect(200);
+
+    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(1);
+    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users').get().count).toBe(1);
+
+    sessionDb.prepare('UPDATE sessions SET expire = ?').run(new Date(Date.now() - 1000).toISOString());
+    sessionStore.clearExpiredSessions();
+
+    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(0);
+    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users').get().count).toBe(0);
+  });
+
   test('proxies public API routes without requiring a BFF session', async () => {
     const response = await request(app)
       .get('/api/public/ping')

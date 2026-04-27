@@ -407,10 +407,30 @@ describe('API auth and user flows', () => {
       excludedSourceIds: [],
       excludedSubSourceIds: []
     }));
+    expect(newsService.getCachedNewsFeed.mock.calls[0][0]).toEqual(expect.objectContaining({
+      includeFilters: false
+    }));
     expect(response.body.access).toEqual({
       mode: 'anonymous',
       cachedOnly: true
     });
+  });
+
+  test('only includes public API filter metadata when explicitly requested', async () => {
+    newsService.getCachedNewsFeed.mockResolvedValueOnce({
+      items: [],
+      meta: { hasMore: false },
+      filters: { sources: [], topics: [] }
+    });
+
+    await request(app)
+      .get('/api/public/news')
+      .query({ includeFilters: 'true' })
+      .expect(200);
+
+    expect(newsService.getCachedNewsFeed.mock.calls[0][0]).toEqual(expect.objectContaining({
+      includeFilters: true
+    }));
   });
 
   test('serves public cached news with user-scoped context for valid API tokens', async () => {

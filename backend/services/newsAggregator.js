@@ -200,7 +200,6 @@ async function ingestAllNews(options = {}) {
       }, getIngestionRuntime());
 
       usersRefreshedSinceScheduledIngestion.clear();
-      userImmediateRefreshPromises.clear();
 
       logger.info(`Ingestion completed: ${payload.fetchedCount} fetched, ${payload.insertedCount} inserted, ${payload.updatedCount} updated`);
       return payload;

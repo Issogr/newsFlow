@@ -4,7 +4,12 @@ export function getSafeExternalUrl(rawUrl) {
   }
 
   try {
-    const parsedUrl = new URL(String(rawUrl), window.location.origin);
+    const normalizedUrl = String(rawUrl).trim();
+    if (!/^https?:\/\//i.test(normalizedUrl)) {
+      return '';
+    }
+
+    const parsedUrl = new URL(normalizedUrl);
     return ['http:', 'https:'].includes(parsedUrl.protocol) ? parsedUrl.toString() : '';
   } catch {
     return '';

@@ -247,6 +247,7 @@ describe('NewsAggregator', () => {
     });
 
     expect(await screen.findByText('Fresh headline')).toBeInTheDocument();
+    expect(screen.getByText('You reached the end of the available results.')).toBeInTheDocument();
     expect(fetchNews).toHaveBeenCalledTimes(2);
   });
 

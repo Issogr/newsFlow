@@ -3,6 +3,11 @@
 ## 3.2.13.2
 
 - completed the frontend Tailwind 4 migration by switching Vite to the official Tailwind plugin, replacing the legacy Tailwind CSS directives, and preserving Tailwind 3's default border-color behavior for existing `border` utilities
+- made public API filter metadata opt-in with `includeFilters=true`, reducing default cached news read cost by avoiding source/topic aggregate scans for item-only clients
+- fixed queued immediate user-source refresh tracking so scheduled ingestion no longer clears pending per-user refresh promises before they run, preventing duplicate refresh work and stale pending-state reporting
+- fixed the manual-refresh-off follow-up load so the main feed spinner clears after fresh cached data arrives
+- tightened frontend external URL handling so relative feed/article links are rejected instead of being rewritten to the app origin
+- cleaned stale BFF `session_users` rows whenever expired persisted sessions are purged, keeping admin session cleanup scoped to real sessions
 
 ## 3.2.13.1
 
