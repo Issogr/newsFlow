@@ -372,25 +372,12 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         <div className={`mx-auto flex max-w-7xl flex-col px-4 transition-all duration-200 lg:px-6 ${topNavCompact ? 'gap-2 py-2.5' : 'gap-4 py-5'}`}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <button
-                type="button"
-                onClick={() => loadNews({ page: 1, append: false, forceRefresh: true })}
-                className="group flex items-center gap-3 rounded-2xl text-left transition-opacity hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
-                aria-label={t('refresh')}
-                disabled={loading}
-              >
-                <div className="relative">
-                  <BrandMark className={`transition-all duration-200 ${topNavCompact ? 'h-9 w-9' : 'h-11 w-11'}`} />
-                  {isFeedRefreshActive && (
-                    <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-sm">
-                      <RefreshCw className="h-3.5 w-3.5 animate-spin text-slate-700" aria-hidden="true" />
-                    </span>
-                  )}
-                </div>
+              <div className="flex items-center gap-3">
+                <BrandMark className={`transition-all duration-200 ${topNavCompact ? 'h-9 w-9' : 'h-11 w-11'}`} />
                 <div className="min-w-0">
                   <h1 className={`truncate font-semibold tracking-tight transition-all duration-200 ${topNavCompact ? 'text-xl' : 'text-2xl'}`}>{t('pageTitle')}</h1>
                 </div>
-              </button>
+              </div>
             </div>
 
             <div className="flex shrink-0 items-center gap-3">

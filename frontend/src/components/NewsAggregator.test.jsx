@@ -204,7 +204,7 @@ describe('NewsAggregator', () => {
       expect(fetchNews).toHaveBeenCalledWith(expect.objectContaining({ refresh: false }));
     });
 
-    expect(screen.getAllByRole('button', { name: 'Refresh' })[1]).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
   });
 
   test('forces a source refresh from the top navigation refresh button', async () => {
@@ -218,12 +218,29 @@ describe('NewsAggregator', () => {
 
     expect(await screen.findByText('Current headline')).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Refresh' })[1]);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
 
     await waitFor(() => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
     });
     expect(screen.getByText('You reached the end of the available results.')).toBeInTheDocument();
+  });
+
+  test('does not trigger a refresh when the app title is clicked', async () => {
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'Current headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    await renderNewsAggregator();
+
+    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+    const initialCallCount = fetchNews.mock.calls.length;
+
+    fireEvent.click(screen.getByText('News Flow'));
+
+    expect(fetchNews).toHaveBeenCalledTimes(initialCallCount);
   });
 
   test('reloads cached feed silently when AI topic updates complete', async () => {
