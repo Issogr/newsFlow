@@ -12,6 +12,8 @@
 - fixed queued immediate user-source refresh tracking so scheduled ingestion no longer clears pending per-user refresh promises before they run, preventing duplicate refresh work and stale pending-state reporting
 - removed the automatic follow-up feed reload on app open so cached feed reads stay stable until the user explicitly refreshes
 - tightened frontend external URL handling so relative feed/article links are rejected instead of being rewritten to the app origin
+- added a manual reader-mode retry button beside the text-size controls, forcing a fresh reader extraction attempt for the current article when generation needs another try
+- replaced the generic external-link icon with the GitHub icon on project links in Settings and the release-notes modal so repository shortcuts are clearer at a glance
 - cleaned stale BFF `session_users` rows whenever expired persisted sessions are purged, keeping admin session cleanup scoped to real sessions
 - removed the frontend live auto-refresh flow and settings toggle, making normal feed loads cache-only and moving source refreshes behind explicit top-navbar refresh clicks
 - kept AI topic updates dynamic by listening only for backend topic-completion events and reloading cached feed data without triggering another RSS/source refresh
