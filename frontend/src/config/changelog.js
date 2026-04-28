@@ -5,7 +5,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '🔄 Feed refreshes are calmer when live updates are paused, so the loading state clears correctly after fresh articles arrive.',
+      '🔄 Feed updates are now fully manual: use the top refresh button when you want to fetch fresh articles.',
+      '✨ AI topic labels can still appear automatically after classification finishes, without fetching RSS sources again.',
       '🔗 External article links are handled more strictly, avoiding misleading internal app links from malformed feeds.',
       '⚡ The public news API is lighter by default, with source and topic filter metadata available only when requested.',
     ]
@@ -15,7 +16,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '🔄 Gli aggiornamenti del feed sono piu fluidi quando gli aggiornamenti live sono in pausa, con il caricamento che si chiude correttamente dopo l arrivo delle notizie fresche.',
+      '🔄 Gli aggiornamenti del feed ora sono completamente manuali: usa il pulsante in alto quando vuoi recuperare nuove notizie.',
+      '✨ Le etichette AI degli argomenti possono comunque comparire automaticamente dopo la classificazione, senza recuperare di nuovo le fonti RSS.',
       '🔗 I link esterni degli articoli sono gestiti in modo piu rigoroso, evitando collegamenti interni fuorvianti da feed non corretti.',
       '⚡ L API pubblica delle notizie e piu leggera di default, con metadati per fonti e argomenti disponibili solo su richiesta.',
     ]

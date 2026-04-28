@@ -171,6 +171,7 @@ export const fetchNews = async ({
   recentHours = null,
   beforePubDate = '',
   beforeId = '',
+  refresh = false,
   includeFilters = true,
   signal
 } = {}) => {
@@ -198,6 +199,10 @@ export const fetchNews = async ({
 
   if (beforeId) {
     params.beforeId = beforeId;
+  }
+
+  if (refresh) {
+    params.refresh = 'true';
   }
 
   if (!includeFilters) {

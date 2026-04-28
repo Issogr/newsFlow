@@ -53,6 +53,7 @@ describe('API auth and user flows', () => {
 
     jest.doMock('../services/newsAggregator', () => ({
       ingestAllNews: jest.fn().mockResolvedValue({ success: true }),
+      getNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       getCachedNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       refreshUserSources: jest.fn().mockResolvedValue({ success: true }),
       startScheduler: jest.fn(),
@@ -389,6 +390,27 @@ describe('API auth and user flows', () => {
       feedbackVideoMaxBytes: 12582912,
       apiTokenTtlDays: 30
     });
+  });
+
+  test('passes manual refresh requests through to the authenticated news feed service', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'refresh-user', password: 'secret123' })
+      .expect(201);
+
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    await request(app)
+      .get('/api/news')
+      .query({ refresh: 'true' })
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(newsService.getNewsFeed).toHaveBeenCalledWith(expect.objectContaining({
+      refresh: true
+    }), expect.objectContaining({
+      userId: registerResponse.body.user.id
+    }));
   });
 
   test('serves public cached news anonymously without user context', async () => {
