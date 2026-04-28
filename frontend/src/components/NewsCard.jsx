@@ -161,6 +161,14 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
     onOpenReader(group, group.items[0]?.id);
   };
 
+  const openOriginalSource = () => {
+    if (!safeOriginalUrl) {
+      return;
+    }
+
+    window.open(safeOriginalUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const handleReaderTouchEnd = (area) => {
     const now = Date.now();
     const lastTouchGesture = lastTouchGestureRef.current;
@@ -185,39 +193,45 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
     }
   };
 
+  const actionButtonClassName = `inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white font-medium text-slate-700 no-underline transition-colors hover:bg-slate-100 ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`;
+  const disabledActionButtonClassName = `inline-flex min-w-0 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 font-medium text-slate-400 ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`;
+  const openOriginalSourceUnavailableMessage = t('openOriginalSourceUnavailable');
+
   const actionButtons = (
     <div className={`${compact ? '-mx-3 -mb-3 mt-auto border-t border-slate-100 bg-slate-50/70 px-3 py-2' : 'border-t border-slate-100 bg-slate-50/70 px-5 py-4'}`}>
       <div className="grid grid-cols-2 gap-2.5">
         <button
           type="button"
           onClick={openReader}
-          className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white font-medium text-slate-700 transition-colors hover:bg-slate-100 ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`}
+          className={actionButtonClassName}
           aria-label={t('readerMode')}
         >
           <BookOpenText className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} shrink-0`} />
           <span className="min-w-0 text-center leading-tight">{t('readerMode')}</span>
         </button>
-        {safeOriginalUrl ? (
-          <a
-            href={safeOriginalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white font-medium text-slate-800 transition-colors hover:bg-slate-100 ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`}
-          >
-            <ExternalLink className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} shrink-0`} />
-            <span className="min-w-0 text-center leading-tight">{t('openOriginalSource')}</span>
-          </a>
-        ) : (
-          <button
-            type="button"
-            disabled
-            className={`inline-flex min-w-0 cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-slate-300 font-medium text-slate-600 ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`}
-          >
-            <ExternalLink className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} shrink-0`} />
-            <span className="min-w-0 text-center leading-tight">{t('openOriginalSource')}</span>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={openOriginalSource}
+          disabled={!safeOriginalUrl}
+          className={safeOriginalUrl
+            ? actionButtonClassName
+            : disabledActionButtonClassName}
+          aria-label={t('openOriginalSource')}
+          aria-describedby={!safeOriginalUrl ? `open-original-source-help-${group?.id}` : undefined}
+          title={!safeOriginalUrl ? openOriginalSourceUnavailableMessage : undefined}
+        >
+          <ExternalLink className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} shrink-0`} />
+          <span className="min-w-0 text-center leading-tight">{t('openOriginalSource')}</span>
+        </button>
       </div>
+      {!safeOriginalUrl ? (
+        <p
+          id={`open-original-source-help-${group?.id}`}
+          className={`${compact ? 'px-1 pt-2 text-[11px]' : 'pt-3 text-xs'} text-slate-500`}
+        >
+          {openOriginalSourceUnavailableMessage}
+        </p>
+      ) : null}
     </div>
   );
 
