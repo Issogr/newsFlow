@@ -102,6 +102,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [pendingNewsGroupIds, setPendingNewsGroupIds] = useState([]);
   const [desktopFiltersCloseSignal, setDesktopFiltersCloseSignal] = useState(0);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(true);
@@ -145,6 +146,15 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     return availableSources.filter((source) => !excludedSourceIds.includes(source.id));
   }, [availableSources, excludedSourceIds]);
   const isFeedRefreshActive = loading || loadingMore;
+  const pendingNewsCount = pendingNewsGroupIds.length;
+  const socketSubscription = useMemo(() => ({
+    search: debouncedSearch,
+    sourceIds: activeFilters.sourceIds,
+    topics: activeFilters.topics,
+    recentHours: showRecentOnly ? recentHours : null,
+    excludedSourceIds,
+    excludedSubSourceIds
+  }), [activeFilters.sourceIds, activeFilters.topics, debouncedSearch, excludedSourceIds, excludedSubSourceIds, recentHours, showRecentOnly]);
 
   useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
@@ -304,6 +314,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
         return nextMeta;
       });
+      if (!append) {
+        setPendingNewsGroupIds([]);
+      }
       if (response.filters) {
         setAvailableSources(response.filters.sources || []);
         setSourceCatalog(response.filters.sourceCatalog || []);
@@ -320,13 +333,33 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     }
   }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, recentHours, showRecentOnly, startListRequest, startPaginationRequest]);
 
-  useTopicRefreshSocket(() => {
+  const handleTopicRefresh = useCallback(() => {
     loadNews({
       page: 1,
       append: false,
       silent: true,
       minimumItemCount: Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current)
     });
+  }, [loadNews]);
+
+  const handleNewsUpdate = useCallback((payload = {}) => {
+    const incomingGroupIds = (Array.isArray(payload.groupIds) ? payload.groupIds : []).filter(Boolean);
+
+    if (incomingGroupIds.length === 0) {
+      return;
+    }
+
+    setPendingNewsGroupIds((current) => {
+      const nextIds = new Set(current);
+      incomingGroupIds.forEach((groupId) => nextIds.add(groupId));
+      return nextIds.size === current.length ? current : [...nextIds];
+    });
+  }, []);
+
+  useTopicRefreshSocket({
+    onTopicRefresh: handleTopicRefresh,
+    onNewsUpdate: handleNewsUpdate,
+    subscription: socketSubscription
   });
 
   useEffect(() => {
@@ -519,6 +552,19 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           </div>
         ) : (
           <>
+            {pendingNewsCount > 0 && (
+              <div className="mb-4 flex justify-center">
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 shadow-sm"
+                >
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                  {t('newArticlesAvailable', { count: pendingNewsCount })}
+                </div>
+              </div>
+            )}
+
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {news.map((group) => (
                 <div key={group.id}>

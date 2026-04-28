@@ -5,6 +5,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
+      '✨ A new pill above the feed shows how many fresh articles are waiting, without auto-loading them into the list.',
       '✨ The header stays cleaner while news loads: the app logo no longer shows the extra spinning reload badge.',
       '🔄 Feed updates are now fully manual: use the top refresh button when you want to fetch fresh articles.',
       '✨ AI topic labels can still appear automatically after classification finishes, without fetching RSS sources again.',
@@ -18,6 +19,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
+      '✨ Un nuovo pill sopra il feed mostra quante notizie fresche ti aspettano, senza caricarle automaticamente nella lista.',
       '✨ L intestazione resta piu pulita durante il caricamento: il logo dell app non mostra piu il piccolo badge di aggiornamento in rotazione.',
       '🔄 Gli aggiornamenti del feed ora sono completamente manuali: usa il pulsante in alto quando vuoi recuperare nuove notizie.',
       '✨ Le etichette AI degli argomenti possono comunque comparire automaticamente dopo la classificazione, senza recuperare di nuovo le fonti RSS.',

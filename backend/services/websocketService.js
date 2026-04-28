@@ -19,10 +19,36 @@ function normalizeFilterValues(values = []) {
   return [...new Set((Array.isArray(values) ? values : []).filter(Boolean))].sort();
 }
 
+function normalizeSearchValue(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeRecentHours(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function buildSearchableText(group = {}) {
+  return [
+    group.title,
+    group.description,
+    ...(Array.isArray(group.topics) ? group.topics : []),
+    ...(Array.isArray(group.sources) ? group.sources : []),
+    ...(Array.isArray(group.items)
+      ? group.items.flatMap((item) => [item?.title, item?.description, item?.content, item?.source, item?.subSource])
+      : [])
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
 function buildSocketFilters(filters = {}) {
   const normalizedFilters = {
+    search: normalizeSearchValue(filters.search),
     topics: normalizeFilterValues(filters.topics),
     sourceIds: normalizeFilterValues(filters.sourceIds),
+    recentHours: normalizeRecentHours(filters.recentHours),
     excludedSourceIds: normalizeFilterValues(filters.excludedSourceIds),
     excludedSubSourceIds: normalizeFilterValues(filters.excludedSubSourceIds)
   };
@@ -30,8 +56,10 @@ function buildSocketFilters(filters = {}) {
   return {
     filters: normalizedFilters,
     filterSets: {
+      search: normalizedFilters.search,
       topics: new Set(normalizedFilters.topics),
       sourceIds: new Set(normalizedFilters.sourceIds),
+      recentHours: normalizedFilters.recentHours,
       excludedSourceIds: new Set(normalizedFilters.excludedSourceIds),
       excludedSubSourceIds: new Set(normalizedFilters.excludedSubSourceIds)
     },
@@ -143,12 +171,16 @@ function disconnectUserSockets(userId) {
 }
 
 function groupMatchesFilters(group, filters = {}) {
+  const searchFilter = typeof filters.search === 'string' ? filters.search : normalizeSearchValue(filters.search);
   const topicFilters = filters.topics instanceof Set
     ? filters.topics
     : new Set(Array.isArray(filters.topics) ? filters.topics : []);
   const sourceFilters = filters.sourceIds instanceof Set
     ? filters.sourceIds
     : new Set(Array.isArray(filters.sourceIds) ? filters.sourceIds : []);
+  const recentHoursFilter = Number.isFinite(filters.recentHours) && filters.recentHours > 0
+    ? filters.recentHours
+    : normalizeRecentHours(filters.recentHours);
   const excludedSourceFilters = filters.excludedSourceIds instanceof Set
     ? filters.excludedSourceIds
     : new Set(Array.isArray(filters.excludedSourceIds) ? filters.excludedSourceIds : []);
@@ -156,7 +188,12 @@ function groupMatchesFilters(group, filters = {}) {
     ? filters.excludedSubSourceIds
     : new Set(Array.isArray(filters.excludedSubSourceIds) ? filters.excludedSubSourceIds : []);
 
-  if (topicFilters.size === 0 && sourceFilters.size === 0 && excludedSourceFilters.size === 0 && excludedSubSourceFilters.size === 0) {
+  if (searchFilter.length === 0
+    && topicFilters.size === 0
+    && sourceFilters.size === 0
+    && !recentHoursFilter
+    && excludedSourceFilters.size === 0
+    && excludedSubSourceFilters.size === 0) {
     return true;
   }
 
@@ -167,17 +204,27 @@ function groupMatchesFilters(group, filters = {}) {
   const groupRawSourceIds = group.rawSourceIdSet || new Set(
     Array.isArray(group.items) ? group.items.map((item) => item.rawSourceId || item.sourceId).filter(Boolean) : []
   );
+  const groupSearchableText = typeof group.searchableText === 'string' ? group.searchableText : buildSearchableText(group);
+  const groupPubDateMs = Number.isFinite(group.pubDateMs)
+    ? group.pubDateMs
+    : Date.parse(group.pubDate || group.items?.[0]?.pubDate || '');
 
+  const hasSearchMatch = searchFilter.length === 0 || groupSearchableText.includes(searchFilter);
   const hasTopicMatch = topicFilters.size === 0 || [...topicFilters].some((topic) => groupTopics.has(topic));
 
   const hasSourceMatch = sourceFilters.size === 0 || [...sourceFilters].some((sourceId) => groupSourceIds.has(sourceId));
+
+  const hasRecentMatch = !recentHoursFilter || (
+    Number.isFinite(groupPubDateMs)
+    && groupPubDateMs >= (Date.now() - (recentHoursFilter * 60 * 60 * 1000))
+  );
 
   const hasExcludedSource = excludedSourceFilters.size > 0 && [...excludedSourceFilters].some((sourceId) => groupSourceIds.has(sourceId));
 
   const hasExcludedSubSource = excludedSubSourceFilters.size > 0
     && [...excludedSubSourceFilters].some((sourceId) => groupRawSourceIds.has(sourceId));
 
-  return hasTopicMatch && hasSourceMatch && !hasExcludedSource && !hasExcludedSubSource;
+  return hasSearchMatch && hasTopicMatch && hasSourceMatch && hasRecentMatch && !hasExcludedSource && !hasExcludedSubSource;
 }
 
 function emitToSocket(socket, event, payload) {
@@ -228,7 +275,9 @@ function broadcastNewsUpdate(newsGroups = []) {
   let recipients = 0;
   const preparedGroups = newsGroups.map((group) => ({
     ...group,
+    searchableText: buildSearchableText(group),
     topicSet: new Set(Array.isArray(group.topics) ? group.topics : []),
+    pubDateMs: Date.parse(group.pubDate || group.items?.[0]?.pubDate || ''),
     sourceIdSet: new Set(Array.isArray(group.items) ? group.items.map((item) => item.sourceId).filter(Boolean) : []),
     rawSourceIdSet: new Set(Array.isArray(group.items) ? group.items.map((item) => item.rawSourceId || item.sourceId).filter(Boolean) : [])
   }));

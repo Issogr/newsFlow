@@ -147,6 +147,49 @@ describe('websocketService', () => {
     }));
   });
 
+  test('matches news updates against search and recent-hours subscriptions', () => {
+    const matchingSocket = createSocket('socket-1', { auth: { token: 'token-1' }, headers: {} });
+    matchingSocket.data.userId = 'user-1';
+    const staleSocket = createSocket('socket-2', { auth: { token: 'token-2' }, headers: {} });
+    staleSocket.data.userId = 'user-1';
+
+    ioMock.connectionHandler(matchingSocket);
+    ioMock.connectionHandler(staleSocket);
+
+    matchingSocket.handlers['subscribe:filters']({ search: 'economy', recentHours: 2 });
+    staleSocket.handlers['subscribe:filters']({ search: 'economy', recentHours: 1 });
+
+    websocketService.broadcastNewsUpdate([
+      {
+        id: 'group-1',
+        ownerUserId: 'user-1',
+        title: 'Economy rebounds at close',
+        description: 'Markets finish higher after a volatile session.',
+        pubDate: new Date(Date.now() - (30 * 60 * 1000)).toISOString(),
+        topics: ['Economy'],
+        items: [{ sourceId: 'ansa', title: 'Economy rebounds at close' }]
+      },
+      {
+        id: 'group-2',
+        ownerUserId: 'user-1',
+        title: 'Economy outlook last week',
+        description: 'A stale market wrap.',
+        pubDate: new Date(Date.now() - (3 * 60 * 60 * 1000)).toISOString(),
+        topics: ['Economy'],
+        items: [{ sourceId: 'ansa', title: 'Economy outlook last week' }]
+      }
+    ]);
+
+    expect(matchingSocket.emit).toHaveBeenCalledWith('news:update', expect.objectContaining({
+      count: 1,
+      groupIds: ['group-1']
+    }));
+    expect(staleSocket.emit).toHaveBeenCalledWith('news:update', expect.objectContaining({
+      count: 1,
+      groupIds: ['group-1']
+    }));
+  });
+
   test('does not broadcast groups from excluded sources or sub-sources', () => {
     const socket = createSocket('socket-1', { auth: { token: 'token-1' }, headers: {} });
     socket.data.userId = 'user-1';

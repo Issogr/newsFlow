@@ -2,6 +2,7 @@
 
 ## 3.2.13.2
 
+- added a passive new-articles pill above the feed that counts unseen incoming stories for the current view while keeping normal feed refreshes manual
 - removed the small spinning reload badge from the top-left News Flow logo while news loads, leaving refresh state only on the dedicated top-navigation refresh control
 - preserved already loaded feed pages during silent AI-topic completion reloads so topic updates no longer collapse the list back to the first page after using Load more
 - changed the NewsCard external-article action from a filled black button to a readable outlined control and tightened action label wrapping for compact cards

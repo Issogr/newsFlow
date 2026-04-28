@@ -246,8 +246,8 @@ describe('NewsAggregator', () => {
   test('reloads cached feed silently when AI topic updates complete', async () => {
     let onTopicRefresh;
 
-    useTopicRefreshSocket.mockImplementation((callback) => {
-      onTopicRefresh = callback;
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
     });
     fetchNews
       .mockResolvedValueOnce({
@@ -285,8 +285,8 @@ describe('NewsAggregator', () => {
   test('keeps loaded-more articles during silent AI topic reloads', async () => {
     let onTopicRefresh;
 
-    useTopicRefreshSocket.mockImplementation((callback) => {
-      onTopicRefresh = callback;
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
     });
 
     fetchNews.mockImplementation(({ beforeId, pageSize }) => {
@@ -347,8 +347,8 @@ describe('NewsAggregator', () => {
     let onTopicRefresh;
     const appendRequest = createDeferred();
 
-    useTopicRefreshSocket.mockImplementation((callback) => {
-      onTopicRefresh = callback;
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
     });
 
     fetchNews.mockImplementation(({ beforeId, pageSize }) => {
@@ -405,8 +405,8 @@ describe('NewsAggregator', () => {
   test('keeps the visible tail if a silent topic refresh only returns the first page', async () => {
     let onTopicRefresh;
 
-    useTopicRefreshSocket.mockImplementation((callback) => {
-      onTopicRefresh = callback;
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
     });
 
     fetchNews.mockImplementation(({ beforeId, pageSize }) => {
@@ -466,6 +466,44 @@ describe('NewsAggregator', () => {
     expect(await screen.findByText('refreshed headline 12')).toBeInTheDocument();
     expect(screen.getByText('older headline 24')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Load more' })).toBeEnabled();
+  });
+
+  test('shows a passive pill for unseen new articles without triggering a refresh', async () => {
+    let socketHandlers;
+
+    useTopicRefreshSocket.mockImplementation((handlers) => {
+      socketHandlers = handlers;
+    });
+    fetchNews.mockReset();
+    fetchNews.mockImplementation(({ refresh }) => Promise.resolve(
+      refresh
+        ? {
+          items: [{ id: 'group-2', title: 'Fresh headline', items: [{ id: 'article-2', pubDate: '2026-03-14T11:00:00.000Z' }] }],
+          meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        }
+        : {
+          items: [{ id: 'group-1', title: 'Current headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }],
+          meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        }
+    ));
+
+    await renderNewsAggregator();
+
+    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+    const initialCallCount = fetchNews.mock.calls.length;
+
+    await act(async () => {
+      socketHandlers.onNewsUpdate({ count: 2, groupIds: ['group-2', 'group-3'] });
+      socketHandlers.onNewsUpdate({ count: 1, groupIds: ['group-3'] });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('2 new articles available');
+    expect(screen.queryByRole('button', { name: '2 new articles available' })).not.toBeInTheDocument();
+    expect(fetchNews).toHaveBeenCalledTimes(initialCallCount);
+    expect(screen.queryByText('Fresh headline')).not.toBeInTheDocument();
   });
 
   test('passes the compact card preference to news cards', async () => {

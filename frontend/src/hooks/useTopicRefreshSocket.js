@@ -1,12 +1,28 @@
 import { useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 
-const useTopicRefreshSocket = (onTopicRefresh, enabled = true) => {
-  const callbackRef = useRef(onTopicRefresh);
+const useTopicRefreshSocket = ({
+  onTopicRefresh,
+  onNewsUpdate,
+  subscription = {},
+  enabled = true
+}) => {
+  const topicRefreshCallbackRef = useRef(onTopicRefresh);
+  const newsUpdateCallbackRef = useRef(onNewsUpdate);
+  const subscriptionRef = useRef(subscription);
+  const socketRef = useRef(null);
 
   useEffect(() => {
-    callbackRef.current = onTopicRefresh;
+    topicRefreshCallbackRef.current = onTopicRefresh;
   }, [onTopicRefresh]);
+
+  useEffect(() => {
+    newsUpdateCallbackRef.current = onNewsUpdate;
+  }, [onNewsUpdate]);
+
+  useEffect(() => {
+    subscriptionRef.current = subscription;
+  }, [subscription]);
 
   useEffect(() => {
     if (!enabled) {
@@ -23,19 +39,35 @@ const useTopicRefreshSocket = (onTopicRefresh, enabled = true) => {
       withCredentials: true,
     });
 
+    socketRef.current = socket;
+
     const handleNewsUpdate = (payload) => {
       if (payload?.refresh === true && payload.reason === 'topics') {
-        callbackRef.current?.(payload);
+        topicRefreshCallbackRef.current?.(payload);
+        return;
+      }
+
+      if (payload?.refresh !== true && payload?.count > 0) {
+        newsUpdateCallbackRef.current?.(payload);
       }
     };
 
     socket.on('news:update', handleNewsUpdate);
 
     return () => {
+      socketRef.current = null;
       socket.off('news:update', handleNewsUpdate);
       socket.disconnect();
     };
   }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled || !socketRef.current) {
+      return;
+    }
+
+    socketRef.current.emit('subscribe:filters', subscriptionRef.current || {});
+  }, [enabled, subscription]);
 };
 
 export default useTopicRefreshSocket;
