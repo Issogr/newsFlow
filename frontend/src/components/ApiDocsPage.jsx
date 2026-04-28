@@ -55,7 +55,7 @@ const docsContent = {
       {
         title: 'Response shape',
         items: [
-          'Responses include `items`, `meta`, `filters`, and `access`.',
+          'Responses include `items`, `meta`, and `access`; `filters` is returned only when `includeFilters=true` is passed.',
           '`access.mode` is `anonymous` or `token`.',
           'Errors use the standard `{ error: { message, code } }` format.'
         ]
@@ -98,7 +98,7 @@ const docsContent = {
       {
         title: 'Formato risposta',
         items: [
-          'Le risposte includono `items`, `meta`, `filters` e `access`.',
+          'Le risposte includono `items`, `meta` e `access`; `filters` viene restituito solo passando `includeFilters=true`.',
           '`access.mode` vale `anonymous` oppure `token`.',
           'Gli errori usano il formato standard `{ error: { message, code } }`.'
         ]

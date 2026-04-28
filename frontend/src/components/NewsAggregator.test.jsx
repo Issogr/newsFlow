@@ -2,19 +2,19 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import NewsAggregator from './NewsAggregator';
 import { fetchNews, isRequestCanceled } from '../services/api';
-import useWebSocket from '../hooks/useWebSocket';
+import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 
 vi.mock('../services/api', () => ({
   fetchNews: vi.fn(),
   isRequestCanceled: vi.fn((error) => error?.code === 'ERR_CANCELED')
 }));
 
-vi.mock('../hooks/useWebSocket', () => ({
-  default: vi.fn()
-}));
-
 vi.mock('../hooks/useOnClickOutside', () => ({
   useOnClickOutside: vi.fn()
+}));
+
+vi.mock('../hooks/useTopicRefreshSocket', () => ({
+  default: vi.fn()
 }));
 
 vi.mock('./NewsCard', () => ({
@@ -72,6 +72,18 @@ function openDesktopSearch() {
   fireEvent.click(screen.getAllByRole('button', { name: 'Search' })[0]);
 }
 
+function createGroups(prefix, start, count) {
+  return Array.from({ length: count }, (_, index) => {
+    const number = start + index;
+
+    return {
+      id: `group-${prefix}-${number}`,
+      title: `${prefix} headline ${number}`,
+      items: [{ id: `article-${prefix}-${number}`, pubDate: `2026-03-14T10:${String(number).padStart(2, '0')}:00.000Z` }]
+    };
+  });
+}
+
 const currentUser = {
   user: { username: 'alice' },
   settings: {
@@ -116,16 +128,7 @@ describe('NewsAggregator', () => {
       removeEventListener: jest.fn()
     };
     window.matchMedia = jest.fn().mockImplementation(() => desktopMediaQuery);
-    useWebSocket.mockReturnValue({
-      isConnected: true,
-      notifications: [],
-      lastNewsUpdate: null,
-      newArticlesCount: 0,
-      updateSubscriptionFilters: jest.fn(),
-      resetNewArticlesCount: jest.fn(),
-      markGroupsSeen: jest.fn(),
-      removeNotification: jest.fn()
-    });
+    useTopicRefreshSocket.mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -188,106 +191,319 @@ describe('NewsAggregator', () => {
     expect(isRequestCanceled).not.toHaveBeenCalled();
   });
 
-  test('disables websocket listening when auto refresh is off', async () => {
+  test('loads cached news on open without forcing a source refresh', async () => {
     fetchNews.mockResolvedValue({
       items: [],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 0 },
       filters: { sources: [], sourceCatalog: [], topics: [] }
     });
-    useWebSocket.mockReturnValue({
-      isConnected: true,
-      notifications: [],
-      lastNewsUpdate: null,
-      newArticlesCount: 3,
-      updateSubscriptionFilters: jest.fn(),
-      resetNewArticlesCount: jest.fn(),
-      markGroupsSeen: jest.fn(),
-      removeNotification: jest.fn()
-    });
 
-    await renderNewsAggregator({
-      currentUser: {
-        ...currentUser,
-        settings: {
-          ...currentUser.settings,
-          autoRefreshEnabled: false
-        }
-      }
-    });
+    await renderNewsAggregator();
 
     await waitFor(() => {
-      expect(fetchNews).toHaveBeenCalled();
+      expect(fetchNews).toHaveBeenCalledWith(expect.objectContaining({ refresh: false }));
     });
 
-    expect(useWebSocket).toHaveBeenCalledWith('', expect.any(Object), false);
-    expect(screen.getAllByRole('button', { name: 'Refresh' })[1]).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
   });
 
-  test('retries once for fresh feed data on open when auto refresh is off and a user refresh is pending', async () => {
-    fetchNews
-      .mockResolvedValueOnce({
-        items: [{ id: 'group-stale', title: 'Stale headline' }],
-        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1, pendingUserRefresh: true },
-        filters: { sources: [], sourceCatalog: [], topics: [] }
-      })
-      .mockResolvedValueOnce({
-        items: [{ id: 'group-fresh', title: 'Fresh headline' }],
-        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1, pendingUserRefresh: false },
-        filters: { sources: [], sourceCatalog: [], topics: [] }
-      });
-
-    await renderNewsAggregator({
-      currentUser: {
-        ...currentUser,
-        settings: {
-          ...currentUser.settings,
-          autoRefreshEnabled: false
-        }
-      }
-    });
-
-    expect(await screen.findByText('Fresh headline')).toBeInTheDocument();
-    expect(fetchNews).toHaveBeenCalledTimes(2);
-  });
-
-  test('subscribes realtime updates with source exclusions', async () => {
-    const updateSubscriptionFilters = jest.fn();
-
+  test('forces a source refresh from the top navigation refresh button', async () => {
     fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'First headline' }],
+      items: [{ id: 'group-1', title: 'Current headline' }],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
       filters: { sources: [], sourceCatalog: [], topics: [] }
     });
-    useWebSocket.mockReturnValue({
-      isConnected: true,
-      notifications: [],
-      lastNewsUpdate: null,
-      newArticlesCount: 0,
-      updateSubscriptionFilters,
-      resetNewArticlesCount: jest.fn(),
-      markGroupsSeen: jest.fn(),
-      removeNotification: jest.fn()
+
+    await renderNewsAggregator();
+
+    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
+    });
+    expect(screen.getByText('You reached the end of the available results.')).toBeInTheDocument();
+  });
+
+  test('does not trigger a refresh when the app title is clicked', async () => {
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'Current headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
     });
 
-    await renderNewsAggregator({
-      currentUser: {
-        ...currentUser,
-        settings: {
-          ...currentUser.settings,
-          excludedSourceIds: ['ansa'],
-          excludedSubSourceIds: ['ansa_world']
-        }
-      }
+    await renderNewsAggregator();
+
+    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+    const initialCallCount = fetchNews.mock.calls.length;
+
+    fireEvent.click(screen.getByText('News Flow'));
+
+    expect(fetchNews).toHaveBeenCalledTimes(initialCallCount);
+  });
+
+  test('reloads cached feed silently when AI topic updates complete', async () => {
+    let onTopicRefresh;
+
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [{ id: 'group-1', title: 'Fallback topic headline' }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockResolvedValue({
+        items: [{ id: 'group-1', title: 'AI topic headline' }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+
+    await renderNewsAggregator();
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenCalled();
+    });
+    const initialCallCount = fetchNews.mock.calls.length;
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
     });
 
     await waitFor(() => {
-      expect(updateSubscriptionFilters).toHaveBeenCalledWith({
-        topics: [],
-        sourceIds: [],
-        excludedSourceIds: ['ansa'],
-        excludedSubSourceIds: ['ansa_world']
+      expect(fetchNews).toHaveBeenCalledTimes(initialCallCount + 1);
+    });
+    expect(await screen.findByText('AI topic headline')).toBeInTheDocument();
+    expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
+      refresh: false,
+      includeFilters: true
+    }));
+  });
+
+  test('keeps loaded-more articles during silent AI topic reloads', async () => {
+    let onTopicRefresh;
+
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+
+    fetchNews.mockImplementation(({ beforeId, pageSize }) => {
+      if (beforeId === 'article-initial-12') {
+        return Promise.resolve({
+          items: createGroups('older', 13, 1),
+          meta: { page: 1, pageSize: 12, hasMore: false, nextCursor: null },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        });
+      }
+
+      if (pageSize === 13) {
+        return Promise.resolve({
+          items: createGroups('refreshed', 1, 13),
+          meta: { page: 1, pageSize: 13, hasMore: false, nextCursor: null },
+          filters: { sources: [], sourceCatalog: [], topics: ['Technology'] }
+        });
+      }
+
+      return Promise.resolve({
+        items: createGroups('initial', 1, 12),
+        meta: {
+          page: 1,
+          pageSize: 12,
+          hasMore: true,
+          nextCursor: {
+            beforePubDate: '2026-03-14T10:12:00.000Z',
+            beforeId: 'article-initial-12'
+          }
+        },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
       });
     });
+
+    await renderNewsAggregator();
+    expect(await screen.findByText('initial headline 12')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(await screen.findByText('older headline 13')).toBeInTheDocument();
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('refreshed headline 13')).toBeInTheDocument();
+    expect(screen.queryByText('older headline 13')).not.toBeInTheDocument();
+    expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
+      pageSize: 13,
+      beforePubDate: '',
+      beforeId: '',
+      refresh: false,
+      includeFilters: true
+    }));
+  });
+
+  test('preserves the loaded article count when a topic refresh lands right after load more resolves', async () => {
+    let onTopicRefresh;
+    const appendRequest = createDeferred();
+
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+
+    fetchNews.mockImplementation(({ beforeId, pageSize }) => {
+      if (beforeId === 'article-initial-12') {
+        return appendRequest.promise;
+      }
+
+      if (pageSize > 12) {
+        return Promise.resolve({
+          items: createGroups('refreshed', 1, 13),
+          meta: { page: 1, pageSize: 13, hasMore: false, nextCursor: null },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        });
+      }
+
+      return Promise.resolve({
+        items: createGroups('initial', 1, 12),
+        meta: {
+          page: 1,
+          pageSize: 12,
+          hasMore: true,
+          nextCursor: {
+            beforePubDate: '2026-03-14T10:12:00.000Z',
+            beforeId: 'article-initial-12'
+          }
+        },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+    });
+
+    await renderNewsAggregator();
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+
+    await act(async () => {
+      appendRequest.resolve({
+        items: createGroups('older', 13, 1),
+        meta: { page: 1, pageSize: 12, hasMore: false, nextCursor: null },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+      await appendRequest.promise;
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('refreshed headline 13')).toBeInTheDocument();
+    expect(fetchNews.mock.calls.at(-1)?.[0]?.pageSize).toBeGreaterThan(12);
+    expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
+      beforePubDate: '',
+      beforeId: '',
+      includeFilters: true
+    }));
+  });
+
+  test('keeps the visible tail if a silent topic refresh only returns the first page', async () => {
+    let onTopicRefresh;
+
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+
+    fetchNews.mockImplementation(({ beforeId, pageSize }) => {
+      if (beforeId === 'article-initial-12') {
+        return Promise.resolve({
+          items: createGroups('older', 13, 12),
+          meta: {
+            page: 1,
+            pageSize: 12,
+            hasMore: true,
+            nextCursor: {
+              beforePubDate: '2026-03-14T10:24:00.000Z',
+              beforeId: 'article-older-24'
+            }
+          },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        });
+      }
+
+      if (pageSize > 12) {
+        return Promise.resolve({
+          items: createGroups('refreshed', 1, 12),
+          meta: {
+            page: 1,
+            pageSize: 12,
+            hasMore: false,
+            nextCursor: null
+          },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        });
+      }
+
+      return Promise.resolve({
+        items: createGroups('initial', 1, 12),
+        meta: {
+          page: 1,
+          pageSize: 12,
+          hasMore: true,
+          nextCursor: {
+            beforePubDate: '2026-03-14T10:12:00.000Z',
+            beforeId: 'article-initial-12'
+          }
+        },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+    });
+
+    await renderNewsAggregator();
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+    expect(await screen.findByText('older headline 24')).toBeInTheDocument();
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('refreshed headline 12')).toBeInTheDocument();
+    expect(screen.getByText('older headline 24')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Load more' })).toBeEnabled();
+  });
+
+  test('shows a passive pill for unseen new articles without triggering a refresh', async () => {
+    let socketHandlers;
+
+    useTopicRefreshSocket.mockImplementation((handlers) => {
+      socketHandlers = handlers;
+    });
+    fetchNews.mockReset();
+    fetchNews.mockImplementation(({ refresh }) => Promise.resolve(
+      refresh
+        ? {
+          items: [{ id: 'group-2', title: 'Fresh headline', items: [{ id: 'article-2', pubDate: '2026-03-14T11:00:00.000Z' }] }],
+          meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        }
+        : {
+          items: [{ id: 'group-1', title: 'Current headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }],
+          meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        }
+    ));
+
+    await renderNewsAggregator();
+
+    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+    const initialCallCount = fetchNews.mock.calls.length;
+
+    await act(async () => {
+      socketHandlers.onNewsUpdate({ count: 2, groupIds: ['group-2', 'group-3'] });
+      socketHandlers.onNewsUpdate({ count: 1, groupIds: ['group-3'] });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('2 new articles available');
+    expect(screen.queryByRole('button', { name: '2 new articles available' })).not.toBeInTheDocument();
+    expect(fetchNews).toHaveBeenCalledTimes(initialCallCount);
+    expect(screen.queryByText('Fresh headline')).not.toBeInTheDocument();
   });
 
   test('passes the compact card preference to news cards', async () => {
@@ -330,284 +546,6 @@ describe('NewsAggregator', () => {
 
     expect(await screen.findByText('First headline')).toBeInTheDocument();
     expect(screen.queryByText('First headline compact')).not.toBeInTheDocument();
-  });
-
-  test('marks already visible groups as seen after loading news', async () => {
-    const markGroupsSeen = jest.fn();
-
-    fetchNews.mockResolvedValue({
-      items: [
-        { id: 'group-1', title: 'First headline' },
-        { id: 'group-2', title: 'Second headline' }
-      ],
-      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 2 },
-      filters: { sources: [], sourceCatalog: [], topics: [] }
-    });
-    useWebSocket.mockReturnValue({
-      isConnected: true,
-      notifications: [],
-      lastNewsUpdate: {
-        timestamp: '2026-03-14T10:00:00.000Z',
-        count: 1,
-        groupIds: ['group-1']
-      },
-      newArticlesCount: 1,
-      updateSubscriptionFilters: jest.fn(),
-      resetNewArticlesCount: jest.fn(),
-      markGroupsSeen,
-      removeNotification: jest.fn()
-    });
-
-    await renderNewsAggregator();
-
-    await waitFor(() => {
-      expect(markGroupsSeen).toHaveBeenCalledWith(['group-1', 'group-2']);
-    });
-  });
-
-  test('reloads the current feed when realtime requests a topic refresh', async () => {
-    const websocketState = {
-      isConnected: true,
-      notifications: [],
-      lastNewsUpdate: null,
-      newArticlesCount: 0,
-      updateSubscriptionFilters: jest.fn(),
-      resetNewArticlesCount: jest.fn(),
-      markGroupsSeen: jest.fn(),
-      removeNotification: jest.fn()
-    };
-
-    fetchNews
-      .mockResolvedValueOnce({
-        items: [{ id: 'group-1', title: 'Fallback topic headline' }],
-        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-        filters: { sources: [], sourceCatalog: [], topics: [] }
-      })
-      .mockResolvedValueOnce({
-        items: [{ id: 'group-1', title: 'AI topic headline' }],
-        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-        filters: { sources: [], sourceCatalog: [], topics: [] }
-      });
-
-    useWebSocket.mockImplementation(() => websocketState);
-
-    const view = await renderNewsAggregator();
-
-    await waitFor(() => {
-      expect(fetchNews).toHaveBeenCalled();
-    });
-    const initialCallCount = fetchNews.mock.calls.length;
-
-    websocketState.lastNewsUpdate = {
-      timestamp: '2026-03-14T10:15:00.000Z',
-      count: 1,
-      refresh: true,
-      reason: 'topics',
-      groupIds: [],
-      data: []
-    };
-
-    await act(async () => {
-      view.rerender(
-        <NewsAggregator
-          currentUser={currentUser}
-          onLogout={jest.fn()}
-          onUserUpdate={jest.fn()}
-        />
-      );
-      await Promise.resolve();
-    });
-
-    await waitFor(() => {
-      expect(fetchNews).toHaveBeenCalledTimes(initialCallCount + 1);
-    });
-  });
-
-  test('preserves scroll position when realtime topic refresh reloads the current feed', async () => {
-    const websocketState = {
-      isConnected: true,
-      notifications: [],
-      lastNewsUpdate: null,
-      newArticlesCount: 0,
-      updateSubscriptionFilters: jest.fn(),
-      resetNewArticlesCount: jest.fn(),
-      markGroupsSeen: jest.fn(),
-      removeNotification: jest.fn()
-    };
-
-    fetchNews
-      .mockResolvedValueOnce({
-        items: [{ id: 'group-1', title: 'Existing headline' }],
-        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-        filters: { sources: [], sourceCatalog: [], topics: [] }
-      })
-      .mockResolvedValueOnce({
-        items: [{ id: 'group-1', title: 'Existing headline' }],
-        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-        filters: { sources: [], sourceCatalog: [], topics: [] }
-      });
-
-    useWebSocket.mockImplementation(() => websocketState);
-    Object.defineProperty(window, 'scrollY', {
-      value: 420,
-      writable: true,
-      configurable: true
-    });
-
-    const view = await renderNewsAggregator();
-    const initialCallCount = fetchNews.mock.calls.length;
-
-    const existingHeadlineWrapper = (await screen.findByText('Existing headline')).parentElement;
-    let measurementCount = 0;
-    existingHeadlineWrapper.getBoundingClientRect = jest.fn(() => {
-      const top = measurementCount++ === 0 ? 120 : 340;
-
-      return {
-        top,
-        bottom: top + 80,
-        left: 0,
-        right: 0,
-        width: 0,
-        height: 80,
-        x: 0,
-        y: top,
-        toJSON: () => ({})
-      };
-    });
-
-    websocketState.lastNewsUpdate = {
-      timestamp: '2026-03-14T10:18:00.000Z',
-      count: 1,
-      refresh: true,
-      reason: 'topics',
-      groupIds: [],
-      data: []
-    };
-
-    await act(async () => {
-      view.rerender(
-        <NewsAggregator
-          currentUser={currentUser}
-          onLogout={jest.fn()}
-          onUserUpdate={jest.fn()}
-        />
-      );
-      await Promise.resolve();
-    });
-
-    await waitFor(() => {
-      expect(fetchNews).toHaveBeenCalledTimes(initialCallCount + 1);
-    });
-    expect(window.scrollBy).toHaveBeenCalledWith(0, 220);
-  });
-
-  test('ignores live websocket groups already present in the loaded feed', async () => {
-    fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'Existing headline' }],
-      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-      filters: { sources: [], sourceCatalog: [], topics: [] }
-    });
-
-    const websocketState = {
-      isConnected: true,
-      notifications: [],
-      lastNewsUpdate: null,
-      newArticlesCount: 0,
-      updateSubscriptionFilters: jest.fn(),
-      resetNewArticlesCount: jest.fn(),
-      markGroupsSeen: jest.fn(),
-      removeNotification: jest.fn()
-    };
-
-    useWebSocket.mockImplementation(() => websocketState);
-
-    const view = await renderNewsAggregator();
-
-    expect(await screen.findByText('Existing headline')).toBeInTheDocument();
-
-    websocketState.lastNewsUpdate = {
-      timestamp: '2026-03-14T10:20:00.000Z',
-      count: 1,
-      groupIds: ['group-1'],
-      data: [{ id: 'group-1', title: 'Existing headline' }]
-    };
-
-    await act(async () => {
-      view.rerender(
-        <NewsAggregator
-          currentUser={currentUser}
-          onLogout={jest.fn()}
-          onUserUpdate={jest.fn()}
-        />
-      );
-      await Promise.resolve();
-    });
-
-    expect(screen.getAllByText('Existing headline')).toHaveLength(1);
-    expect(websocketState.resetNewArticlesCount).toHaveBeenCalled();
-  });
-
-  test('preserves scroll position when live auto refresh prepends new groups', async () => {
-    fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'Existing headline' }],
-      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-      filters: { sources: [], sourceCatalog: [], topics: [] }
-    });
-
-    const websocketState = {
-      isConnected: true,
-      notifications: [],
-      lastNewsUpdate: null,
-      newArticlesCount: 0,
-      updateSubscriptionFilters: jest.fn(),
-      resetNewArticlesCount: jest.fn(),
-      markGroupsSeen: jest.fn(),
-      removeNotification: jest.fn()
-    };
-
-    useWebSocket.mockImplementation(() => websocketState);
-    Object.defineProperty(window, 'scrollY', {
-      value: 420,
-      writable: true,
-      configurable: true
-    });
-
-    const view = await renderNewsAggregator();
-
-    const existingHeadlineWrapper = (await screen.findByText('Existing headline')).parentElement;
-    let measurementCount = 0;
-    existingHeadlineWrapper.getBoundingClientRect = jest.fn(() => ({
-      top: measurementCount++ === 0 ? 120 : 360,
-      bottom: measurementCount === 1 ? 200 : 440,
-      left: 0,
-      right: 0,
-      width: 0,
-      height: 80,
-      x: 0,
-      y: measurementCount === 1 ? 120 : 360,
-      toJSON: () => ({})
-    }));
-
-    websocketState.lastNewsUpdate = {
-      timestamp: '2026-03-14T10:25:00.000Z',
-      count: 1,
-      groupIds: ['group-new'],
-      data: [{ id: 'group-new', title: 'New headline' }]
-    };
-
-    await act(async () => {
-      view.rerender(
-        <NewsAggregator
-          currentUser={currentUser}
-          onLogout={jest.fn()}
-          onUserUpdate={jest.fn()}
-        />
-      );
-      await Promise.resolve();
-    });
-
-    expect(await screen.findByText('New headline')).toBeInTheDocument();
-    expect(window.scrollBy).toHaveBeenCalledWith(0, 240);
   });
 
   test('uses the server cursor for load more requests', async () => {

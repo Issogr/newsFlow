@@ -1,5 +1,6 @@
 import React from 'react';
-import { ExternalLink, Settings, X } from 'lucide-react';
+import { Github, Settings, X } from 'lucide-react';
+import SettingsAccessSection from './settings/SettingsAccessSection';
 import SettingsCustomSourcesSection from './settings/SettingsCustomSourcesSection';
 import SettingsExclusionsSection from './settings/SettingsExclusionsSection';
 import SettingsPreferencesSection from './settings/SettingsPreferencesSection';
@@ -26,7 +27,6 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     setEditingSourceForm,
     setDefaultLanguage,
     setThemeMode,
-    setAutoRefreshEnabled,
     setShowNewsImages,
     setCompactNewsCardsMode,
     setReaderPanelPosition,
@@ -77,34 +77,15 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
           <div className="space-y-5">
             <SettingsPreferencesSection
               t={t}
-              saving={saving}
-              importInputRef={importInputRef}
               settings={settings}
-              apiToken={apiToken}
-              newApiToken={newApiToken}
               settingsLimits={settingsLimits}
               onDefaultLanguageChange={setDefaultLanguage}
               onThemeModeChange={setThemeMode}
-              onAutoRefreshChange={setAutoRefreshEnabled}
               onShowNewsImagesChange={setShowNewsImages}
               onCompactNewsCardsModeChange={setCompactNewsCardsMode}
               onReaderPanelPositionChange={setReaderPanelPosition}
               onReaderTextSizeChange={setReaderTextSize}
               onNumericSettingChange={updateNumericSetting}
-              onExport={handleExport}
-              onImportClick={handleImportClick}
-              onImport={handleImport}
-              onCreateApiToken={handleCreateApiToken}
-              onRevokeApiToken={handleRevokeApiToken}
-            />
-
-            <SettingsExclusionsSection
-              t={t}
-              settings={settings}
-              excludedSourceCatalog={excludedSourceCatalog}
-              excludedSubFeedCatalog={excludedSubFeedCatalog}
-              onToggleSource={toggleExcludedSource}
-              onToggleSubFeed={toggleExcludedSubFeed}
             />
 
             <SettingsCustomSourcesSection
@@ -123,11 +104,34 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               onDeleteSource={handleDeleteSource}
             />
 
+            <SettingsExclusionsSection
+              t={t}
+              settings={settings}
+              excludedSourceCatalog={excludedSourceCatalog}
+              excludedSubFeedCatalog={excludedSubFeedCatalog}
+              onToggleSource={toggleExcludedSource}
+              onToggleSubFeed={toggleExcludedSubFeed}
+            />
+
             {error && (
               <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error.message}
               </div>
             )}
+
+            <SettingsAccessSection
+              t={t}
+              saving={saving}
+              importInputRef={importInputRef}
+              apiToken={apiToken}
+              newApiToken={newApiToken}
+              settingsLimits={settingsLimits}
+              onExport={handleExport}
+              onImportClick={handleImportClick}
+              onImport={handleImport}
+              onCreateApiToken={handleCreateApiToken}
+              onRevokeApiToken={handleRevokeApiToken}
+            />
           </div>
         </div>
 
@@ -140,7 +144,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               aria-label="GitHub"
               className="inline-flex items-center justify-center rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
             >
-              <ExternalLink className="h-5 w-5" />
+              <Github className="h-5 w-5" />
             </a>
             <button
               type="button"

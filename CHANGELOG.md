@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.2.13.2
+
+- reworked topic badge colors into a softer pastel palette with stronger per-topic separation so Politics, Economy, Technology, Science, Sport, Culture, Health, Local news, Entertainment, World, Climate, and Security remain easy to distinguish at a glance
+- added a passive new-articles pill above the feed that counts unseen incoming stories for the current view while keeping normal feed refreshes manual
+- removed the small spinning reload badge from the top-left News Flow logo while news loads, leaving refresh state only on the dedicated top-navigation refresh control
+- preserved already loaded feed pages during silent AI-topic completion reloads so topic updates no longer collapse the list back to the first page after using Load more
+- changed the NewsCard external-article action from a filled black button to a readable outlined control and tightened action label wrapping for compact cards
+- completed the frontend Tailwind 4 migration by switching Vite to the official Tailwind plugin, replacing the legacy Tailwind CSS directives, and preserving Tailwind 3's default border-color behavior for existing `border` utilities
+- made public API filter metadata opt-in with `includeFilters=true`, reducing default cached news read cost by avoiding source/topic aggregate scans for item-only clients
+- fixed queued immediate user-source refresh tracking so scheduled ingestion no longer clears pending per-user refresh promises before they run, preventing duplicate refresh work and stale pending-state reporting
+- removed the automatic follow-up feed reload on app open so cached feed reads stay stable until the user explicitly refreshes
+- tightened frontend external URL handling so relative feed/article links are rejected instead of being rewritten to the app origin
+- added a manual reader-mode retry button beside the text-size controls, forcing a fresh reader extraction attempt for the current article when generation needs another try
+- replaced the generic external-link icon with the GitHub icon on project links in Settings and the release-notes modal so repository shortcuts are clearer at a glance
+- cleaned stale BFF `session_users` rows whenever expired persisted sessions are purged, keeping admin session cleanup scoped to real sessions
+- removed the frontend live auto-refresh flow and settings toggle, making normal feed loads cache-only and moving source refreshes behind explicit top-navbar refresh clicks
+- kept AI topic updates dynamic by listening only for backend topic-completion events and reloading cached feed data without triggering another RSS/source refresh
+
 ## 3.2.13.1
 
 - broadcast a lightweight live feed reload after background AI topic-classification runs finish so topic pills, AI-classified topic markers, and topic-filtered results refresh without a manual page reload when live auto refresh is active

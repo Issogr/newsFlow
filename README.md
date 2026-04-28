@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  A calm, personal RSS news hub that cuts through the noise with smart grouping, clean reader mode, live updates, and full control over your sources.
+  A calm, personal RSS news hub that cuts through the noise with smart grouping, clean reader mode, manual refreshes, and full control over your sources.
 </p>
 
 ## Table of Contents
@@ -31,7 +31,7 @@
 
 - News Flow reduces RSS noise by grouping overlapping coverage into cleaner story clusters instead of showing the same story repeated across many feeds.
 - It stays lightweight and self-hostable with local SQLite storage, built-in full-text search, and a small two-tier web architecture.
-- It gives each user control over relevance and reading flow through exclusions, recent filters, retention limits, personal RSS feeds, live updates, and a cleaner in-app reader mode.
+- It gives each user control over relevance and reading flow through exclusions, recent filters, retention limits, personal RSS feeds, manual refreshes, and a cleaner in-app reader mode.
 
 ## Key Features
 
@@ -42,7 +42,7 @@
 - Personal custom RSS feeds
 - Account-based access with persistent settings
 - Settings import and export
-- Realtime updates with Socket.IO
+- Manual top-navbar feed refreshes
 - In-app feedback flow with optional Telegram forwarding
 
 ## Quick Start
@@ -287,10 +287,10 @@ Scheduled ingestion refreshes only sources assigned to recently active users.
 
 - Default sources are considered assigned when a user has not excluded the source family or subsource.
 - Custom sources are assigned to their owning user.
-- When a user opens the app, their assigned default and custom sources can refresh immediately once per scheduled ingestion cycle.
-- This keeps returning sessions from waiting only on the next scheduled tick and avoids repeated app requests spamming upstream feeds.
-- A newly triggered immediate refresh runs in the background so the current `/news` response can return cached articles quickly.
-- If a later `/news` request arrives while that immediate refresh is still running, it waits for the in-flight refresh before reading the feed.
+- Normal app feed loads read cached articles without triggering upstream RSS requests.
+- Clicking the top-navbar refresh button refreshes the user's assigned default and custom sources, then reads the updated feed.
+- AI topic completion can update the visible cached feed automatically, but this does not trigger another RSS/source refresh.
+- If another `/news` request arrives while that manual refresh is still running, it waits for the in-flight refresh before reading the feed.
 - If the database is empty, the backend still seeds the default source set so first-run startup has data.
 
 ### Shared Custom RSS URLs
@@ -310,7 +310,7 @@ When multiple users add the same custom RSS URL, ingestion fetches that URL once
 - `backend/utils/` - auth, validation, logging, network safety, and shared helpers
 - `bff/server.js` - browser-facing BFF, session bridge, static frontend host, and proxy layer
 - `frontend/src/components/` - UI screens, cards, panels, and settings views
-- `frontend/src/hooks/` - WebSocket, request, and interaction helpers
+- `frontend/src/hooks/` - request and interaction helpers
 - `frontend/src/services/api.js` - frontend API client
 - `frontend/src/config/` - changelog and frontend config modules
 - `frontend/src/utils/` - frontend utility helpers

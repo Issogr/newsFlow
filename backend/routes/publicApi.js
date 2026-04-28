@@ -105,6 +105,7 @@ router.get('/news', [
   sanitizeQuery('beforeId')
 ], asyncHandler(async (req, res) => {
   const filters = parseNewsQuery(req.query);
+  filters.includeFilters = req.query.includeFilters === 'true';
   userService.recordPublicApiRequestUsage({
     authenticated: Boolean(req.externalApi?.authenticated),
     userId: req.externalApi?.user?.id || null

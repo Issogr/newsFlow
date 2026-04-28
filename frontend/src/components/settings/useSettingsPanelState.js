@@ -125,13 +125,6 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     }));
   }, []);
 
-  const setAutoRefreshEnabled = useCallback((value) => {
-    setSettings((current) => ({
-      ...current,
-      autoRefreshEnabled: Boolean(value)
-    }));
-  }, []);
-
   const setShowNewsImages = useCallback((value) => {
     setSettings((current) => ({
       ...current,
@@ -343,7 +336,6 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     setEditingSourceForm,
     setDefaultLanguage,
     setThemeMode,
-    setAutoRefreshEnabled,
     setShowNewsImages,
     setCompactNewsCardsMode,
     setReaderPanelPosition,

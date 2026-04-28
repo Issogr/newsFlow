@@ -134,7 +134,7 @@ function getUserAssignedSourceConfigs(userContext = {}) {
 function startUserAssignedSourceRefresh(userContext = {}, options = {}) {
   const userId = userContext.userId;
 
-  if (!userId || usersRefreshedSinceScheduledIngestion.has(userId)) {
+  if (!userId || (!options.force && usersRefreshedSinceScheduledIngestion.has(userId))) {
     return createEmptyRefreshPayload(getLastRefreshAt());
   }
 
@@ -200,7 +200,6 @@ async function ingestAllNews(options = {}) {
       }, getIngestionRuntime());
 
       usersRefreshedSinceScheduledIngestion.clear();
-      userImmediateRefreshPromises.clear();
 
       logger.info(`Ingestion completed: ${payload.fetchedCount} fetched, ${payload.insertedCount} inserted, ${payload.updatedCount} updated`);
       return payload;
@@ -255,10 +254,10 @@ async function ensureSeedData() {
 async function getNewsFeed(filters = {}, userContext = {}) {
   await ensureSeedData();
 
-  if (userImmediateRefreshPromises.has(userContext.userId)) {
+  if (filters.refresh) {
+    await startUserAssignedSourceRefresh(userContext, { broadcast: false, force: true });
+  } else if (userImmediateRefreshPromises.has(userContext.userId)) {
     await waitForExistingUserAssignedSourceRefresh(userContext);
-  } else {
-    startUserAssignedSourceRefresh(userContext, { broadcast: true });
   }
 
   return buildNewsFeed(filters, userContext, {

@@ -5,6 +5,7 @@ import {
   BookOpenText,
   Clock3,
   Newspaper,
+  RefreshCw,
   Share2,
   X
 } from 'lucide-react';
@@ -134,12 +135,12 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
 
   const selectedReader = selectedArticleId ? readerByArticleId[selectedArticleId] : null;
 
-  const loadReader = useCallback(async (articleId) => {
+  const loadReader = useCallback(async (articleId, { forceRefresh = false } = {}) => {
     if (!articleId) {
       return;
     }
 
-    if (readerCacheRef.current[articleId]) {
+    if (!forceRefresh && readerCacheRef.current[articleId]) {
       return;
     }
 
@@ -149,7 +150,10 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
     setLoading(true);
 
     try {
-      const payload = await fetchReaderArticle(articleId, { signal: request.signal });
+      const payload = await fetchReaderArticle(articleId, {
+        refresh: forceRefresh,
+        signal: request.signal
+      });
 
       if (!request.isLatest()) {
         return;
@@ -243,6 +247,14 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
     updateReaderTextSize(READER_TEXT_SIZE_ORDER[nextIndex]);
   }, [readerTextSizeIndex, updateReaderTextSize]);
 
+  const refreshReader = useCallback(() => {
+    if (!selectedArticleId || loading) {
+      return;
+    }
+
+    loadReader(selectedArticleId, { forceRefresh: true });
+  }, [loadReader, loading, selectedArticleId]);
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/35 backdrop-blur-sm">
       <button
@@ -301,6 +313,17 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
                   +
                 </button>
               </div>
+
+              <button
+                type="button"
+                onClick={refreshReader}
+                disabled={!selectedArticleId || loading}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label={t('refreshReader')}
+                title={t('refreshReader')}
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
             </div>
 
             <div className="flex items-center gap-2">

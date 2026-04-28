@@ -21,14 +21,18 @@ const group = {
 describe('NewsCard', () => {
   const originalShare = navigator.share;
   const originalClipboard = navigator.clipboard;
+  const originalWindowOpen = window.open;
 
   afterEach(() => {
     navigator.share = originalShare;
     navigator.clipboard = originalClipboard;
+    window.open = originalWindowOpen;
     jest.restoreAllMocks();
   });
 
-  test('renders a safe external link for http urls', () => {
+  test('opens a safe external url in a new tab', () => {
+    window.open = jest.fn();
+
     render(
       <NewsCard
         group={{ ...group, url: 'https://example.com/story' }}
@@ -38,7 +42,9 @@ describe('NewsCard', () => {
       />
     );
 
-    expect(screen.getByRole('link', { name: 'openOriginalSource' })).toHaveAttribute('href', 'https://example.com/story');
+    fireEvent.click(screen.getByRole('button', { name: 'openOriginalSource' }));
+
+    expect(window.open).toHaveBeenCalledWith('https://example.com/story', '_blank', 'noopener,noreferrer');
   });
 
   test('renders the first safe article image in the card', () => {
@@ -225,8 +231,9 @@ describe('NewsCard', () => {
       />
     );
 
-    expect(screen.queryByRole('link', { name: 'openOriginalSource' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'openOriginalSource' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'openOriginalSource' })).toHaveAttribute('title', 'openOriginalSourceUnavailable');
+    expect(screen.getByText('openOriginalSourceUnavailable')).toBeInTheDocument();
   });
 
   test('uses the native share action when available', async () => {
@@ -362,6 +369,8 @@ describe('NewsCard', () => {
   });
 
   test('renders the compact horizontal layout while preserving actions', () => {
+    window.open = jest.fn();
+
     const { container } = render(
       <NewsCard
         group={{
@@ -386,6 +395,21 @@ describe('NewsCard', () => {
     expect(container.firstChild).toHaveClass('flex-row');
     expect(screen.getByRole('button', { name: 'shareArticle' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'readerMode' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'openOriginalSource' })).toHaveAttribute('href', 'https://example.com/story');
+    fireEvent.click(screen.getByRole('button', { name: 'openOriginalSource' }));
+    expect(window.open).toHaveBeenCalledWith('https://example.com/story', '_blank', 'noopener,noreferrer');
+  });
+
+  test('renders reader and open article as matching buttons', () => {
+    render(
+      <NewsCard
+        group={{ ...group, url: 'https://example.com/story' }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'readerMode' })).toHaveClass('font-medium', 'text-slate-700', 'text-sm');
+    expect(screen.getByRole('button', { name: 'openOriginalSource' })).toHaveClass('font-medium', 'text-slate-700', 'text-sm');
   });
 });

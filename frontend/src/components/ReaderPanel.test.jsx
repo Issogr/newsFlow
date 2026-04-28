@@ -315,4 +315,46 @@ describe('ReaderPanel', () => {
     expect(updateUserSettings).toHaveBeenCalledWith({ readerTextSize: 'large' });
     expect(window.localStorage.getItem('news-flow-reader-text-size')).toBe('large');
   });
+
+  test('refreshes reader mode and bypasses the cached article payload', async () => {
+    fetchReaderArticle
+      .mockResolvedValueOnce({
+        title: 'Reader title',
+        language: 'en',
+        excerpt: 'Excerpt',
+        contentBlocks: [{ type: 'paragraph', text: 'Body' }],
+        minutesToRead: 1
+      })
+      .mockResolvedValueOnce({
+        title: 'Refreshed reader title',
+        language: 'en',
+        excerpt: 'Updated excerpt',
+        contentBlocks: [{ type: 'paragraph', text: 'Updated body' }],
+        minutesToRead: 1
+      });
+
+    render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="right"
+        locale="en"
+        t={t}
+        currentUser={currentUser}
+        onUserUpdate={jest.fn()}
+        onClose={jest.fn()}
+      />
+    );
+
+    await screen.findByText('Reader title');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'refreshReader' }));
+    });
+
+    expect(fetchReaderArticle).toHaveBeenNthCalledWith(2, 'article-1', expect.objectContaining({
+      refresh: true
+    }));
+    expect(await screen.findByText('Refreshed reader title')).toBeInTheDocument();
+  });
 });

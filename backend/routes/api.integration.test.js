@@ -53,6 +53,7 @@ describe('API auth and user flows', () => {
 
     jest.doMock('../services/newsAggregator', () => ({
       ingestAllNews: jest.fn().mockResolvedValue({ success: true }),
+      getNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       getCachedNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       refreshUserSources: jest.fn().mockResolvedValue({ success: true }),
       startScheduler: jest.fn(),
@@ -391,6 +392,27 @@ describe('API auth and user flows', () => {
     });
   });
 
+  test('passes manual refresh requests through to the authenticated news feed service', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'refresh-user', password: 'secret123' })
+      .expect(201);
+
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    await request(app)
+      .get('/api/news')
+      .query({ refresh: 'true' })
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(newsService.getNewsFeed).toHaveBeenCalledWith(expect.objectContaining({
+      refresh: true
+    }), expect.objectContaining({
+      userId: registerResponse.body.user.id
+    }));
+  });
+
   test('serves public cached news anonymously without user context', async () => {
     newsService.getCachedNewsFeed.mockResolvedValueOnce({
       items: [],
@@ -407,10 +429,30 @@ describe('API auth and user flows', () => {
       excludedSourceIds: [],
       excludedSubSourceIds: []
     }));
+    expect(newsService.getCachedNewsFeed.mock.calls[0][0]).toEqual(expect.objectContaining({
+      includeFilters: false
+    }));
     expect(response.body.access).toEqual({
       mode: 'anonymous',
       cachedOnly: true
     });
+  });
+
+  test('only includes public API filter metadata when explicitly requested', async () => {
+    newsService.getCachedNewsFeed.mockResolvedValueOnce({
+      items: [],
+      meta: { hasMore: false },
+      filters: { sources: [], topics: [] }
+    });
+
+    await request(app)
+      .get('/api/public/news')
+      .query({ includeFilters: 'true' })
+      .expect(200);
+
+    expect(newsService.getCachedNewsFeed.mock.calls[0][0]).toEqual(expect.objectContaining({
+      includeFilters: true
+    }));
   });
 
   test('serves public cached news with user-scoped context for valid API tokens', async () => {

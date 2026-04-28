@@ -66,6 +66,17 @@ async function flushBackgroundAiProcessing() {
   await Promise.resolve();
 }
 
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
 function recentIso({ hoursAgo = 0, minutesAgo = 0 } = {}) {
   return new Date(Date.now() - ((hoursAgo * 60 * 60 * 1000) + (minutesAgo * 60 * 1000))).toISOString();
 }
@@ -203,88 +214,64 @@ describe('newsAggregator service flows', () => {
     ]));
   });
 
-  test('getNewsFeed starts one background assigned-source refresh until a scheduled cycle runs', async () => {
+  test('getNewsFeed reads cached articles without starting an assigned-source refresh', async () => {
     const userContext = { userId: 'user-1', excludedSourceIds: [ansaSourceId], excludedSubSourceIds: [] };
     const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
     database.listUserSources.mockReturnValue([customSource]);
-    database.listAllActiveUserSources.mockReturnValue([customSource]);
 
     await newsAggregator.getNewsFeed({}, userContext);
-    await newsAggregator._waitForExistingUserAssignedSourceRefresh(userContext);
 
-    expect(rssParser.parseFeed.mock.calls.filter(([source]) => source.id === 'custom-1')).toHaveLength(1);
-
-    await newsAggregator.getNewsFeed({}, userContext);
-    expect(rssParser.parseFeed.mock.calls.filter(([source]) => source.id === 'custom-1')).toHaveLength(1);
-
-    await newsAggregator.ingestAllNews({ broadcast: false });
-    await newsAggregator.getNewsFeed({}, userContext);
-    await newsAggregator._waitForExistingUserAssignedSourceRefresh(userContext);
-
-    expect(rssParser.parseFeed.mock.calls.filter(([source]) => source.id === 'custom-1')).toHaveLength(3);
+    expect(rssParser.parseFeed).not.toHaveBeenCalled();
   });
 
-  test('getNewsFeed reports when an open-triggered user refresh is still pending', async () => {
+  test('getNewsFeed refreshes assigned sources before reading articles when requested', async () => {
     const allDefaultSourceGroupIds = [...new Set(newsAggregator.newsSources.map((source) => getCanonicalSourceId(source.id, source.name)))];
     const userContext = { userId: 'user-1', excludedSourceIds: allDefaultSourceGroupIds, excludedSubSourceIds: [] };
     const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
-    let resolveParse;
-    const parseStarted = new Promise((resolve) => {
-      rssParser.parseFeed.mockImplementation(async (source) => {
-        if (source.id !== 'custom-1') {
-          return [];
-        }
-
-        resolve();
-        await new Promise((parseResolve) => {
-          resolveParse = parseResolve;
-        });
-        return [];
-      });
-    });
     database.listUserSources.mockReturnValue([customSource]);
+    database.getArticles.mockImplementation(() => {
+      expect(rssParser.parseFeed).toHaveBeenCalledWith(expect.objectContaining({ id: 'custom-1' }));
+      return [];
+    });
 
-    const resultPromise = newsAggregator.getNewsFeed({}, userContext);
+    const result = await newsAggregator.getNewsFeed({ refresh: true }, userContext);
+
+    expect(result.meta.pendingUserRefresh).toBe(false);
+  });
+
+  test('getNewsFeed waits for an existing manual assigned-source refresh before reading feed', async () => {
+    const allDefaultSourceGroupIds = [...new Set(newsAggregator.newsSources.map((source) => getCanonicalSourceId(source.id, source.name)))];
+    const userContext = { userId: 'user-1', excludedSourceIds: allDefaultSourceGroupIds, excludedSubSourceIds: [] };
+    const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
+    const parseRelease = createDeferred();
+    let resolveParseStarted;
+    const parseStarted = new Promise((resolve) => { resolveParseStarted = resolve; });
+
+    database.listUserSources.mockReturnValue([customSource]);
+    rssParser.parseFeed.mockImplementation(async (source) => {
+      if (source.id !== 'custom-1') {
+        return [];
+      }
+
+      resolveParseStarted();
+      await parseRelease.promise;
+      return [];
+    });
+
+    const refreshRequest = newsAggregator.getNewsFeed({ refresh: true }, userContext);
     await parseStarted;
 
     expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(true);
+    expect(database.getArticles).not.toHaveBeenCalled();
 
-    const result = await resultPromise;
-
-    expect(result.meta.pendingUserRefresh).toBe(true);
-
-    resolveParse();
-    await newsAggregator._waitForExistingUserAssignedSourceRefresh(userContext);
-    expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(false);
-  });
-
-  test('getNewsFeed waits for an existing immediate assigned-source refresh before reading feed', async () => {
-    const allDefaultSourceGroupIds = [...new Set(newsAggregator.newsSources.map((source) => getCanonicalSourceId(source.id, source.name)))];
-    const userContext = { userId: 'user-1', excludedSourceIds: allDefaultSourceGroupIds, excludedSubSourceIds: [] };
-    const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
-    let resolveParse;
-    const parseStarted = new Promise((resolve) => {
-      rssParser.parseFeed.mockImplementation(async (source) => {
-        if (source.id !== 'custom-1') {
-          return [];
-        }
-
-        resolve();
-        await new Promise((parseResolve) => { resolveParse = parseResolve; });
-        return [];
-      });
-    });
-    database.listUserSources.mockReturnValue([customSource]);
-
-    await newsAggregator.getNewsFeed({}, userContext);
-    await parseStarted;
-
-    const secondRequest = newsAggregator.getNewsFeed({}, userContext);
+    const secondFeed = newsAggregator.getNewsFeed({}, userContext);
     await Promise.resolve();
-    expect(database.getArticles).toHaveBeenCalledTimes(1);
 
-    resolveParse();
-    await secondRequest;
+    expect(database.getArticles).not.toHaveBeenCalled();
+
+    parseRelease.resolve();
+    await refreshRequest;
+    await secondFeed;
 
     expect(database.getArticles).toHaveBeenCalledTimes(2);
   });

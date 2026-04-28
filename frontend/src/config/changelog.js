@@ -1,15 +1,15 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.2.13.1',
+  version: '3.2.13.2',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '🤖 Stories reclassified by AI in the background now refresh automatically in the live feed, so new topic labels appear without a manual reload when auto refresh is active.',
-      '📰 When live auto refresh is off, opening the app now waits for one quick follow-up feed refresh so fresh stories are less likely to require a manual refresh.',
-      '🏷️ Topic-filtered views also catch up sooner when those background AI labels change what should be visible.',
-      '🧹 Duplicate stories from sibling source variants are filtered more carefully when the same headline is republished under a different URL, so fake new items and wasted AI topic checks are less likely.',
-      '📍 Live auto refresh now keeps your place in the feed both when new stories appear and when background topic updates refresh the current list, so scrolling readers are not pulled back to the top.',
+      '📖 Reader mode now includes a retry button beside the text-size controls, and GitHub project links now use the GitHub icon instead of a generic link icon.',
+      '🎨 The interface feels calmer and clearer, with softer topic colors, a new pill that counts waiting articles, and a cleaner header without the spinning logo reload badge.',
+      '🔄 Feed fetching is now fully manual from the top refresh button, while AI topic labels can still appear automatically afterward without re-fetching RSS sources and without collapsing the extra items you loaded with Load more.',
+      '🔗 External article links are handled more strictly, avoiding misleading internal app links from malformed feeds.',
+      '⚡ The public news API is lighter by default, with source and topic filter metadata available only when requested.',
     ]
   },
   it: {
@@ -17,11 +17,11 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '🤖 Gli articoli riclassificati dall AI in background ora aggiornano automaticamente il feed live, cosi i nuovi topic compaiono senza ricaricare la pagina quando l auto refresh e attivo.',
-      '📰 Quando l auto refresh live e spento, aprire l app ora aspetta un rapido aggiornamento aggiuntivo del feed cosi le notizie nuove hanno meno probabilita di richiedere un refresh manuale.',
-      '🏷️ Anche le viste filtrate per topic si aggiornano prima quando queste etichette AI cambiano cio che deve essere mostrato.',
-      '🧹 Le storie duplicate provenienti da varianti della stessa fonte vengono filtrate con piu attenzione quando lo stesso titolo viene ripubblicato con un URL diverso, cosi i falsi nuovi articoli e i controlli AI inutili sono meno probabili.',
-      '📍 L auto refresh live ora mantiene il punto nel feed sia quando arrivano nuove storie sia quando gli aggiornamenti dei topic ricaricano la lista corrente, cosi chi sta scorrendo non viene riportato in alto.',
+      '📖 La modalita lettura ora include un pulsante per riprovare accanto ai controlli della dimensione del testo, e i link di progetto verso GitHub ora usano l icona GitHub invece di una generica icona link.',
+      '🎨 L interfaccia e piu calma e chiara, con colori argomento piu morbidi, un nuovo pill che conta le notizie in attesa e un intestazione piu pulita senza il badge di aggiornamento in rotazione sul logo.',
+      '🔄 Il recupero del feed ora e completamente manuale dal pulsante di aggiornamento in alto, mentre le etichette AI degli argomenti possono comunque comparire automaticamente dopo la classificazione senza recuperare di nuovo le fonti RSS e senza perdere le notizie extra gia caricate con Carica altro.',
+      '🔗 I link esterni degli articoli sono gestiti in modo piu rigoroso, evitando collegamenti interni fuorvianti da feed non corretti.',
+      '⚡ L API pubblica delle notizie e piu leggera di default, con metadati per fonti e argomenti disponibili solo su richiesta.',
     ]
   }
 };
