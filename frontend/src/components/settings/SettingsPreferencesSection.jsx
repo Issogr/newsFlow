@@ -26,9 +26,7 @@ const SettingsPreferencesSection = ({
 }) => {
   const articleRetentionRange = `${settingsLimits.articleRetentionHours.min}-${settingsLimits.articleRetentionHours.max}h`;
   const recentHoursRange = `${settingsLimits.recentHours.min}-${settingsLimits.recentHours.max}h`;
-  const activeLabel = t('liveActive');
-  const disabledLabel = t('liveDisabled');
-  const toggleWidthLabel = activeLabel.length >= disabledLabel.length ? activeLabel : disabledLabel;
+  const showNewsImagesEnabled = settings.showNewsImages !== false;
 
   return (
     <SettingsSectionCard icon={Radio} title={t('preferences')} iconToneClassName="bg-sky-100 text-sky-700">
@@ -140,26 +138,24 @@ const SettingsPreferencesSection = ({
           </span>
           <button
             type="button"
-            onClick={() => onShowNewsImagesChange(settings.showNewsImages === false)}
-            aria-pressed={settings.showNewsImages !== false}
-            className={`inline-grid shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${
-              settings.showNewsImages !== false
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+            onClick={() => onShowNewsImagesChange(!showNewsImagesEnabled)}
+            role="switch"
+            aria-checked={showNewsImagesEnabled}
+            aria-label={t('showNewsImagesSetting')}
+            className={`inline-flex h-8 w-14 shrink-0 items-center rounded-full border p-1 transition-colors ${
+              showNewsImagesEnabled
+                ? 'border-emerald-200 bg-emerald-500/90 hover:bg-emerald-500'
+                : 'border-slate-200 bg-slate-300 hover:bg-slate-400'
             }`}
           >
-            <span className="invisible col-start-1 row-start-1 flex items-center justify-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full" aria-hidden="true" />
-              <span>{toggleWidthLabel}</span>
-            </span>
-            <span className="col-start-1 row-start-1 flex items-center justify-center gap-2">
-              <span
-                className={`h-2.5 w-2.5 rounded-full ${
-                  settings.showNewsImages !== false ? 'bg-emerald-500' : 'bg-slate-300'
-                }`}
-                aria-hidden="true"
-              />
-              <span>{settings.showNewsImages !== false ? activeLabel : disabledLabel}</span>
+            <span
+              className={`h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${
+                showNewsImagesEnabled ? 'translate-x-6' : 'translate-x-0'
+              }`}
+              aria-hidden="true"
+            />
+            <span className="sr-only">
+              {showNewsImagesEnabled ? t('liveActive') : t('liveDisabled')}
             </span>
           </button>
         </div>
