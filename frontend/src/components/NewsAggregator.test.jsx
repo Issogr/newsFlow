@@ -72,6 +72,18 @@ function openDesktopSearch() {
   fireEvent.click(screen.getAllByRole('button', { name: 'Search' })[0]);
 }
 
+function createGroups(prefix, start, count) {
+  return Array.from({ length: count }, (_, index) => {
+    const number = start + index;
+
+    return {
+      id: `group-${prefix}-${number}`,
+      title: `${prefix} headline ${number}`,
+      items: [{ id: `article-${prefix}-${number}`, pubDate: `2026-03-14T10:${String(number).padStart(2, '0')}:00.000Z` }]
+    };
+  });
+}
+
 const currentUser = {
   user: { username: 'alice' },
   settings: {
@@ -251,6 +263,192 @@ describe('NewsAggregator', () => {
       refresh: false,
       includeFilters: true
     }));
+  });
+
+  test('keeps loaded-more articles during silent AI topic reloads', async () => {
+    let onTopicRefresh;
+
+    useTopicRefreshSocket.mockImplementation((callback) => {
+      onTopicRefresh = callback;
+    });
+
+    fetchNews.mockImplementation(({ beforeId, pageSize }) => {
+      if (beforeId === 'article-initial-12') {
+        return Promise.resolve({
+          items: createGroups('older', 13, 1),
+          meta: { page: 1, pageSize: 12, hasMore: false, nextCursor: null },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        });
+      }
+
+      if (pageSize === 13) {
+        return Promise.resolve({
+          items: createGroups('refreshed', 1, 13),
+          meta: { page: 1, pageSize: 13, hasMore: false, nextCursor: null },
+          filters: { sources: [], sourceCatalog: [], topics: ['Technology'] }
+        });
+      }
+
+      return Promise.resolve({
+        items: createGroups('initial', 1, 12),
+        meta: {
+          page: 1,
+          pageSize: 12,
+          hasMore: true,
+          nextCursor: {
+            beforePubDate: '2026-03-14T10:12:00.000Z',
+            beforeId: 'article-initial-12'
+          }
+        },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+    });
+
+    await renderNewsAggregator();
+    expect(await screen.findByText('initial headline 12')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(await screen.findByText('older headline 13')).toBeInTheDocument();
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('refreshed headline 13')).toBeInTheDocument();
+    expect(screen.queryByText('older headline 13')).not.toBeInTheDocument();
+    expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
+      pageSize: 13,
+      beforePubDate: '',
+      beforeId: '',
+      refresh: false,
+      includeFilters: true
+    }));
+  });
+
+  test('preserves the loaded article count when a topic refresh lands right after load more resolves', async () => {
+    let onTopicRefresh;
+    const appendRequest = createDeferred();
+
+    useTopicRefreshSocket.mockImplementation((callback) => {
+      onTopicRefresh = callback;
+    });
+
+    fetchNews.mockImplementation(({ beforeId, pageSize }) => {
+      if (beforeId === 'article-initial-12') {
+        return appendRequest.promise;
+      }
+
+      if (pageSize > 12) {
+        return Promise.resolve({
+          items: createGroups('refreshed', 1, 13),
+          meta: { page: 1, pageSize: 13, hasMore: false, nextCursor: null },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        });
+      }
+
+      return Promise.resolve({
+        items: createGroups('initial', 1, 12),
+        meta: {
+          page: 1,
+          pageSize: 12,
+          hasMore: true,
+          nextCursor: {
+            beforePubDate: '2026-03-14T10:12:00.000Z',
+            beforeId: 'article-initial-12'
+          }
+        },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+    });
+
+    await renderNewsAggregator();
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+
+    await act(async () => {
+      appendRequest.resolve({
+        items: createGroups('older', 13, 1),
+        meta: { page: 1, pageSize: 12, hasMore: false, nextCursor: null },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+      await appendRequest.promise;
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('refreshed headline 13')).toBeInTheDocument();
+    expect(fetchNews.mock.calls.at(-1)?.[0]?.pageSize).toBeGreaterThan(12);
+    expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
+      beforePubDate: '',
+      beforeId: '',
+      includeFilters: true
+    }));
+  });
+
+  test('keeps the visible tail if a silent topic refresh only returns the first page', async () => {
+    let onTopicRefresh;
+
+    useTopicRefreshSocket.mockImplementation((callback) => {
+      onTopicRefresh = callback;
+    });
+
+    fetchNews.mockImplementation(({ beforeId, pageSize }) => {
+      if (beforeId === 'article-initial-12') {
+        return Promise.resolve({
+          items: createGroups('older', 13, 12),
+          meta: {
+            page: 1,
+            pageSize: 12,
+            hasMore: true,
+            nextCursor: {
+              beforePubDate: '2026-03-14T10:24:00.000Z',
+              beforeId: 'article-older-24'
+            }
+          },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        });
+      }
+
+      if (pageSize > 12) {
+        return Promise.resolve({
+          items: createGroups('refreshed', 1, 12),
+          meta: {
+            page: 1,
+            pageSize: 12,
+            hasMore: false,
+            nextCursor: null
+          },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        });
+      }
+
+      return Promise.resolve({
+        items: createGroups('initial', 1, 12),
+        meta: {
+          page: 1,
+          pageSize: 12,
+          hasMore: true,
+          nextCursor: {
+            beforePubDate: '2026-03-14T10:12:00.000Z',
+            beforeId: 'article-initial-12'
+          }
+        },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+    });
+
+    await renderNewsAggregator();
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+    expect(await screen.findByText('older headline 24')).toBeInTheDocument();
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('refreshed headline 12')).toBeInTheDocument();
+    expect(screen.getByText('older headline 24')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Load more' })).toBeEnabled();
   });
 
   test('passes the compact card preference to news cards', async () => {

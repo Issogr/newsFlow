@@ -2,6 +2,8 @@
 
 ## 3.2.13.2
 
+- preserved already loaded feed pages during silent AI-topic completion reloads so topic updates no longer collapse the list back to the first page after using Load more
+- changed the NewsCard external-article action from a filled black button to a readable outlined control and tightened action label wrapping for compact cards
 - completed the frontend Tailwind 4 migration by switching Vite to the official Tailwind plugin, replacing the legacy Tailwind CSS directives, and preserving Tailwind 3's default border-color behavior for existing `border` utilities
 - made public API filter metadata opt-in with `includeFilters=true`, reducing default cached news read cost by avoiding source/topic aggregate scans for item-only clients
 - fixed queued immediate user-source refresh tracking so scheduled ingestion no longer clears pending per-user refresh promises before they run, preventing duplicate refresh work and stale pending-state reporting

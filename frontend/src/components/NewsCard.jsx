@@ -194,27 +194,27 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
           className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white font-medium text-slate-700 transition-colors hover:bg-slate-100 ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`}
           aria-label={t('readerMode')}
         >
-          <BookOpenText className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
-          <span>{t('readerMode')}</span>
+          <BookOpenText className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} shrink-0`} />
+          <span className="min-w-0 text-center leading-tight">{t('readerMode')}</span>
         </button>
         {safeOriginalUrl ? (
           <a
             href={safeOriginalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className={`inline-flex min-w-0 items-center justify-center rounded-xl border border-slate-900 bg-slate-900 font-medium text-white transition-colors hover:bg-slate-700 ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`}
+            className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white font-medium text-slate-800 transition-colors hover:bg-slate-100 ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`}
           >
-            <ExternalLink className={`${compact ? 'mr-1.5 h-3.5 w-3.5' : 'mr-2 h-4 w-4'}`} />
-            {t('openOriginalSource')}
+            <ExternalLink className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} shrink-0`} />
+            <span className="min-w-0 text-center leading-tight">{t('openOriginalSource')}</span>
           </a>
         ) : (
           <button
             type="button"
             disabled
-            className={`inline-flex min-w-0 cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 font-medium text-slate-600 ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`}
+            className={`inline-flex min-w-0 cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-slate-300 font-medium text-slate-600 ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`}
           >
-            <ExternalLink className={`${compact ? 'mr-1.5 h-3.5 w-3.5' : 'mr-2 h-4 w-4'}`} />
-            {t('openOriginalSource')}
+            <ExternalLink className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} shrink-0`} />
+            <span className="min-w-0 text-center leading-tight">{t('openOriginalSource')}</span>
           </button>
         )}
       </div>

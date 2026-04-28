@@ -26,6 +26,7 @@ import DesktopTopNavFilters from './DesktopTopNavFilters';
 import TopNavActionButton from './TopNavActionButton';
 
 const PAGE_SIZE = 12;
+const MAX_TOPIC_RELOAD_PAGE_SIZE = 30;
 const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 const BACK_TO_TOP_THRESHOLD = 280;
@@ -107,6 +108,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [topNavCompact, setTopNavCompact] = useState(false);
   const lastScrollY = useRef(0);
   const userMenuRef = useRef(null);
+  const visibleNewsCountRef = useRef(0);
+  const preservedNewsCountRef = useRef(0);
   const recentHours = Math.max(
     settingsLimits.recentHours.min,
     Math.min(Number(currentUser?.settings?.recentHours) || settingsLimits.recentHours.max, settingsLimits.recentHours.max)
@@ -117,6 +120,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     return getSourceReloadSignature(excludedSourceIds, excludedSubSourceIds, currentUser?.customSources || []);
   }, [currentUser?.customSources, excludedSourceIds, excludedSubSourceIds]);
   const sourceReloadSignatureRef = useRef(sourceReloadSignature);
+  visibleNewsCountRef.current = news.length;
+  const metaRef = useRef(meta);
+  metaRef.current = meta;
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') {
@@ -207,10 +213,15 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     append = false,
     cursor = null,
     forceRefresh = false,
-    silent = false
+    silent = false,
+    minimumItemCount = 0
   } = {}) {
     const setBusyState = append ? setLoadingMore : (silent ? () => {} : setLoading);
     const request = append ? startPaginationRequest() : startListRequest();
+
+    if (append) {
+      preservedNewsCountRef.current = Math.max(preservedNewsCountRef.current || visibleNewsCountRef.current || PAGE_SIZE, visibleNewsCountRef.current || PAGE_SIZE) + PAGE_SIZE;
+    }
 
     if (!append) {
       cancelPaginationRequest();
@@ -221,9 +232,12 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     setError(null);
 
     try {
+      const responsePageSize = append
+        ? PAGE_SIZE
+        : Math.min(Math.max(PAGE_SIZE, minimumItemCount || PAGE_SIZE), MAX_TOPIC_RELOAD_PAGE_SIZE);
       const response = await fetchNews({
         page,
-        pageSize: PAGE_SIZE,
+        pageSize: responsePageSize,
         search: debouncedSearch,
         sourceIds: activeFilters.sourceIds,
         topics: activeFilters.topics,
@@ -239,8 +253,57 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         return;
       }
 
-      setNews((current) => append ? appendUniqueGroups(current, response.items || []) : (response.items || []));
-      setMeta(response.meta || null);
+      const targetItemCount = append ? 0 : minimumItemCount;
+      const mergedItems = response.items || [];
+      let nextMeta = response.meta || null;
+
+      while (
+        !append
+        && mergedItems.length < targetItemCount
+        && nextMeta?.hasMore
+        && nextMeta?.nextCursor
+      ) {
+        const nextPage = await fetchNews({
+          page: 1,
+          pageSize: Math.min(targetItemCount - mergedItems.length, MAX_TOPIC_RELOAD_PAGE_SIZE),
+          search: debouncedSearch,
+          sourceIds: activeFilters.sourceIds,
+          topics: activeFilters.topics,
+          recentHours: showRecentOnly ? recentHours : null,
+          beforePubDate: nextMeta.nextCursor.beforePubDate,
+          beforeId: nextMeta.nextCursor.beforeId,
+          refresh: false,
+          includeFilters: false,
+          signal: request.signal
+        });
+
+        if (!request.isLatest()) {
+          return;
+        }
+
+        mergedItems.splice(0, mergedItems.length, ...appendUniqueGroups(mergedItems, nextPage.items || []));
+        nextMeta = nextPage.meta || nextMeta;
+      }
+
+      setNews((current) => {
+        let nextNews = append ? appendUniqueGroups(current, response.items || []) : mergedItems;
+
+        if (!append && silent && current.length > nextNews.length) {
+          const preservedTail = current.slice(nextNews.length);
+          nextNews = appendUniqueGroups(nextNews, preservedTail).slice(0, current.length);
+        }
+
+        visibleNewsCountRef.current = nextNews.length;
+        preservedNewsCountRef.current = nextNews.length;
+        return nextNews;
+      });
+      setMeta((currentMeta) => {
+        if (!append && silent && visibleNewsCountRef.current > mergedItems.length) {
+          return currentMeta || metaRef.current || nextMeta;
+        }
+
+        return nextMeta;
+      });
       if (response.filters) {
         setAvailableSources(response.filters.sources || []);
         setSourceCatalog(response.filters.sourceCatalog || []);
@@ -258,7 +321,12 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, recentHours, showRecentOnly, startListRequest, startPaginationRequest]);
 
   useTopicRefreshSocket(() => {
-    loadNews({ page: 1, append: false, silent: true });
+    loadNews({
+      page: 1,
+      append: false,
+      silent: true,
+      minimumItemCount: Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current)
+    });
   });
 
   useEffect(() => {
