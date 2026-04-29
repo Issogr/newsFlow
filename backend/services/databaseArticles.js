@@ -492,6 +492,15 @@ function createArticleRepository({
       VALUES (?, ?, ?, ?)
     `);
     const deleteArticleStmt = database.prepare('DELETE FROM articles WHERE id = ?');
+    const existingSearchableFields = new Map(
+      chunkValues(articles.map((article) => article.id).filter(Boolean)).flatMap((articleIds) => {
+        return database.prepare(`
+          SELECT id, title, description, content
+          FROM articles
+          WHERE id IN (${articleIds.map(() => '?').join(', ')})
+        `).all(...articleIds).map((row) => [row.id, row]);
+      })
+    );
     const existingIdSet = new Set(
       chunkValues(articles.map((article) => article.id).filter(Boolean)).flatMap((articleIds) => {
         return database.prepare(`
@@ -560,8 +569,16 @@ function createArticleRepository({
           now
         );
 
-        deleteSearchStmt.run(persistedArticleId);
-        insertSearchStmt.run(persistedArticleId, article.title, article.description || '', article.content || '');
+        const previousSearchableFields = existingSearchableFields.get(persistedArticleId);
+        const searchableFieldsChanged = !previousSearchableFields
+          || previousSearchableFields.title !== article.title
+          || previousSearchableFields.description !== (article.description || '')
+          || previousSearchableFields.content !== (article.content || '');
+
+        if (searchableFieldsChanged) {
+          deleteSearchStmt.run(persistedArticleId);
+          insertSearchStmt.run(persistedArticleId, article.title, article.description || '', article.content || '');
+        }
 
         if (exists) {
           updatedIds.push(persistedArticleId);

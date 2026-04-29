@@ -8,7 +8,7 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM node:20-alpine AS bff-deps
+FROM node:20-alpine AS bff-deps
 
 WORKDIR /app/bff
 

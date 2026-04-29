@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.2.13.3
+
+- made authenticated feed filter metadata explicit instead of defaulting every news read into source/topic aggregate queries, reducing SQLite work for item-only requests while keeping the frontend filter catalog opt-in
+- preserved reader-mode article content across close/reopen cycles and capped retained feed groups in long sessions to reduce repeated reader extraction and oversized browser renders
+- made settings saves patch only changed fields so stale Settings drafts no longer overwrite reader-size or release-note preferences changed elsewhere in the session
+- improved ingestion failure accounting by letting RSS parse failures reach the ingestion runner, marking tracked runs as degraded on partial failures, and failing all-source outages instead of recording misleading success
+- persisted failed AI topic-processing attempts so repeatedly failing articles do not stay indefinitely pending across refreshes
+- avoided unnecessary article FTS rewrites when an upsert does not change searchable text, reducing write pressure during ingestion
+- preserved custom-source active state through update/export/import paths instead of forcing imported sources active
+- consolidated backend bounded-concurrency helpers, added structured BFF proxy errors, fixed the BFF multi-arch Docker dependency stage, waited for a healthy backend in Compose, routed dev API traffic through the BFF, and added release-workflow validation before image publishing
+
 ## 3.2.13.2
 
 - reworked topic badge colors into a softer pastel palette with stronger per-topic separation so Politics, Economy, Technology, Science, Sport, Culture, Health, Local news, Entertainment, World, Climate, and Security remain easy to distinguish at a glance

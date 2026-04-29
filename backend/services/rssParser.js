@@ -416,7 +416,7 @@ async function fetchFeedXml(url) {
   throw lastError;
 }
 
-async function parseFeed(source) {
+async function parseFeed(source, options = {}) {
   const url = source.url || '';
   if (!url) {
     return [];
@@ -457,6 +457,10 @@ async function parseFeed(source) {
     return normalizedItems;
   } catch (error) {
     logger.error(`Failed to parse RSS feed ${source.name} (${url}): ${summarizeErrorMessage(error)}`);
+    if (options.throwOnError) {
+      throw error;
+    }
+
     return [];
   }
 }

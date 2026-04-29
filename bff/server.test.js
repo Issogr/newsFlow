@@ -90,6 +90,10 @@ describe('bff server', () => {
       res.json({ user });
     });
 
+    backendApp.get('/internal-api/broken-stream', (req, res) => {
+      req.socket.destroy();
+    });
+
     backendApp.delete('/internal-api/admin/users/:userId', (req, res) => {
       lastBackendHeaders = req.headers;
       const actingUser = backendSessions.get(String(req.headers.cookie || ''));
@@ -393,6 +397,24 @@ describe('bff server', () => {
 
     expect(response.body.path).toBe('/socket.io/ping');
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
+  });
+
+  test('returns structured JSON when the app proxy fails upstream', async () => {
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'alice', password: 'secret123' })
+      .expect(200);
+    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+
+    const response = await request(app)
+      .get('/api/broken-stream')
+      .set('Cookie', bffSessionCookie)
+      .expect(502);
+
+    expect(response.body.error).toEqual({
+      message: 'Unable to reach the application backend.',
+      code: 'BFF_UPSTREAM_ERROR',
+    });
   });
 
   test('requires a non-default BFF session secret in production', () => {

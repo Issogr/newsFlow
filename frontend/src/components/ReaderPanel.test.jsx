@@ -175,6 +175,32 @@ describe('ReaderPanel', () => {
     expect(document.body.style.overflow).toBe('');
   });
 
+  test('uses provided reader cache without refetching an article', async () => {
+    render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="right"
+        locale="en"
+        t={t}
+        currentUser={currentUser}
+        readerCache={{
+          'article-1': {
+            title: 'Cached reader title',
+            language: 'en',
+            excerpt: 'Cached excerpt',
+            contentBlocks: [{ type: 'paragraph', text: 'Cached body' }],
+            minutesToRead: 2
+          }
+        }}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(await screen.findByText('Cached reader title')).toBeInTheDocument();
+    expect(fetchReaderArticle).not.toHaveBeenCalled();
+  });
+
   test('disables unsafe original-source links', async () => {
     fetchReaderArticle.mockResolvedValue({
       title: 'Unsafe reader title',

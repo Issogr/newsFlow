@@ -27,6 +27,7 @@ import TopNavActionButton from './TopNavActionButton';
 
 const PAGE_SIZE = 12;
 const MAX_TOPIC_RELOAD_PAGE_SIZE = 30;
+const MAX_RETAINED_NEWS_GROUPS = 72;
 const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 const BACK_TO_TOP_THRESHOLD = 280;
@@ -99,6 +100,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [activeFilters, setActiveFilters] = useState(EMPTY_FILTERS);
   const [showRecentOnly, setShowRecentOnly] = useState(false);
   const [readerState, setReaderState] = useState({ isOpen: false, group: null, articleId: null });
+  const [readerCacheByArticleId, setReaderCacheByArticleId] = useState({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -301,6 +303,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         if (!append && silent && current.length > nextNews.length) {
           const preservedTail = current.slice(nextNews.length);
           nextNews = appendUniqueGroups(nextNews, preservedTail).slice(0, current.length);
+        }
+
+        if (nextNews.length > MAX_RETAINED_NEWS_GROUPS) {
+          nextNews = append ? nextNews.slice(-MAX_RETAINED_NEWS_GROUPS) : nextNews.slice(0, MAX_RETAINED_NEWS_GROUPS);
         }
 
         visibleNewsCountRef.current = nextNews.length;
@@ -615,6 +621,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           locale={locale}
           t={t}
           currentUser={currentUser}
+          readerCache={readerCacheByArticleId}
+          onReaderCacheChange={setReaderCacheByArticleId}
           onClose={closeReader}
         />
       )}

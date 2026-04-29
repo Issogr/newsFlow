@@ -230,7 +230,7 @@ describe('newsAggregator service flows', () => {
     const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
     database.listUserSources.mockReturnValue([customSource]);
     database.getArticles.mockImplementation(() => {
-      expect(rssParser.parseFeed).toHaveBeenCalledWith(expect.objectContaining({ id: 'custom-1' }));
+      expect(rssParser.parseFeed).toHaveBeenCalledWith(expect.objectContaining({ id: 'custom-1' }), { throwOnError: true });
       return [];
     });
 
@@ -444,6 +444,20 @@ describe('newsAggregator service flows', () => {
     expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'no_topics');
   });
 
+  test('marks pending AI articles failed when background classification throws', async () => {
+    rssParser.parseFeed.mockResolvedValue([
+      { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'AI chips advance', description: 'New processors', pubDate: recentIso({ hoursAgo: 2 }), url: 'https://example.com/ai' }
+    ]);
+    database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], insertedCount: 1, updatedCount: 0 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
+    aiTopicClassifier.classifyTopicDetailsForArticles.mockRejectedValue(new Error('quota exhausted'));
+
+    await newsAggregator.ingestAllNews({ broadcast: true });
+    await flushBackgroundAiProcessing();
+
+    expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'failed');
+  });
+
   test('ingestAllNews does not re-merge fallback topics for already AI-processed articles', async () => {
     rssParser.parseFeed.mockResolvedValue([
       { id: 'existing-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Existing story', description: 'Markets rise', pubDate: recentIso({ hoursAgo: 2 }), url: 'https://example.com/existing' }
@@ -558,6 +572,27 @@ describe('newsAggregator service flows', () => {
     }));
   });
 
+  test('marks tracked ingestion degraded when some feeds fail', async () => {
+    let callCount = 0;
+    rssParser.parseFeed.mockImplementation(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        throw new Error('Network failed');
+      }
+
+      return [{ id: 'ok-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Reachable feed', pubDate: recentIso({ hoursAgo: 1 }), url: 'https://example.com/ok' }];
+    });
+    database.upsertArticles.mockReturnValue({ insertedIds: ['ok-1'], insertedCount: 1, updatedCount: 0 });
+
+    const result = await newsAggregator.ingestAllNews({ broadcast: false });
+
+    expect(result).toMatchObject({ success: true, fetchedCount: 1, insertedCount: 1 });
+    expect(database.completeIngestionRun).toHaveBeenCalledWith(1, expect.objectContaining({
+      status: 'degraded',
+      errorMessage: expect.stringContaining('feeds failed')
+    }));
+  });
+
   test('ingestAllNews cleans stale default-source data before fetching feeds', async () => {
     database.cleanupRemovedConfiguredSourceData.mockReturnValue({ removedArticles: 2, updatedSettings: 1 });
     database.normalizeFuturePublicationDates.mockReturnValue(1);
@@ -587,7 +622,7 @@ describe('newsAggregator service flows', () => {
       id: 'custom-2',
       name: 'Beta Feed',
       ownerUserId: 'user-1'
-    }));
+    }), { throwOnError: true });
     expect(database.createIngestionRun).not.toHaveBeenCalled();
   });
 

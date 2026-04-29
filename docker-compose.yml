@@ -95,7 +95,7 @@ services:
       init-permissions:
         condition: service_completed_successfully
       backend:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - bff-data:/app/bff/data
     networks:

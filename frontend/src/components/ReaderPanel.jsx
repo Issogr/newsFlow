@@ -73,9 +73,19 @@ function renderReaderBlock(block, index, readerTextStyles) {
   return <p key={`${block.type}-${index}`} className={readerTextStyles.paragraph}>{block.text}</p>;
 }
 
-const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale, t, onClose, currentUser }) => {
+const ReaderPanel = ({
+  group,
+  initialArticleId,
+  readerPosition = 'right',
+  locale,
+  t,
+  onClose,
+  currentUser,
+  readerCache = {},
+  onReaderCacheChange = null
+}) => {
   const [selectedArticleId, setSelectedArticleId] = useState(initialArticleId || group?.items?.[0]?.id || null);
-  const [readerByArticleId, setReaderByArticleId] = useState({});
+  const [readerByArticleId, setReaderByArticleId] = useState(readerCache || {});
   const [loading, setLoading] = useState(false);
   const [shareState, setShareState] = useState('idle');
   const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
@@ -90,10 +100,8 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
 
   useEffect(() => {
     setSelectedArticleId(initialArticleId || group?.items?.[0]?.id || null);
-    setReaderByArticleId({});
     setShareState('idle');
     setError(null);
-    readerCacheRef.current = {};
     resetLatestRequest();
   }, [group, initialArticleId, resetLatestRequest]);
 
@@ -159,10 +167,14 @@ const ReaderPanel = ({ group, initialArticleId, readerPosition = 'right', locale
         return;
       }
 
-      setReaderByArticleId((current) => ({
-        ...current,
-        [articleId]: payload
-      }));
+      setReaderByArticleId((current) => {
+        const nextCache = {
+          ...current,
+          [articleId]: payload
+        };
+        onReaderCacheChange?.(nextCache);
+        return nextCache;
+      });
     } catch (requestError) {
       if (!isRequestCanceled(requestError) && request.isLatest()) {
         setError(requestError);

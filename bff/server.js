@@ -509,6 +509,27 @@ function createApp(options = {}) {
     });
   }
 
+  function handleProxyError(error, req, res) {
+    if (typeof res?.setHeader !== 'function' || typeof res?.end !== 'function') {
+      res?.destroy?.();
+      return;
+    }
+
+    if (!res || res.headersSent) {
+      res?.destroy?.();
+      return;
+    }
+
+    res.statusCode = 502;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify({
+      error: {
+        message: 'Unable to reach the application backend.',
+        code: 'BFF_UPSTREAM_ERROR',
+      },
+    }));
+  }
+
   async function forwardInternalRequest(req, res, { pathName, method = req.method, payload = undefined, params = req.query, backendSessionCookie = '' }) {
     const response = await backendHttp.request({
       url: `/internal-api${pathName}`,
@@ -576,6 +597,7 @@ function createApp(options = {}) {
       proxyReq: (proxyReq) => {
         proxyReq.removeHeader('cookie');
       },
+      error: handleProxyError,
     },
   });
 
@@ -603,6 +625,7 @@ function createApp(options = {}) {
           destroyStoredSessionsByUserId(sessionStore, sessionDb, deletedUserId);
         }
       },
+      error: handleProxyError,
     },
   });
 
@@ -621,6 +644,7 @@ function createApp(options = {}) {
       proxyReqWs: (proxyReq, req) => {
         applyBackendSessionProxyHeaders(proxyReq, req);
       },
+      error: handleProxyError,
     },
   });
 

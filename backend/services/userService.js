@@ -3,6 +3,7 @@ const database = require('./database');
 const rssParser = require('./rssParser');
 const websocketService = require('./websocketService');
 const { createError } = require('../utils/errorHandler');
+const { mapWithConcurrency } = require('../utils/concurrency');
 const {
   MAX_FEEDBACK_DESCRIPTION_LENGTH,
   MAX_FEEDBACK_IMAGE_BYTES,
@@ -362,23 +363,6 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
   };
 }
 
-async function mapWithConcurrency(items = [], concurrency = 4, iteratee = async (item) => item) {
-  const results = [];
-  let nextIndex = 0;
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const currentIndex = nextIndex;
-      nextIndex += 1;
-      results[currentIndex] = await iteratee(items[currentIndex], currentIndex);
-    }
-  }
-
-  const workerCount = Math.min(Math.max(1, concurrency), items.length);
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
-  return results;
-}
-
 async function registerUser(payload = {}) {
   const username = sanitizeUsername(payload.username);
   const password = String(payload.password || '');
@@ -567,6 +551,7 @@ async function updateUserSource(userId, sourceId, payload = {}) {
     name: String(payload.name || preview.name || existingSource.name).trim().slice(0, 80),
     url,
     language: String(payload.language || preview.language || existingSource.language).trim().toLowerCase().slice(0, 5) || existingSource.language,
+    isActive: typeof payload.isActive === 'boolean' ? payload.isActive : existingSource.isActive !== false,
     updatedAt: new Date().toISOString(),
     validatedAt: new Date().toISOString()
   };
@@ -641,6 +626,7 @@ function exportUserSettings(userId) {
       name: source.name,
       url: source.url,
       language: source.language,
+      isActive: source.isActive !== false,
       isExcluded: settings.excludedSourceIds.includes(source.id)
     }))
   };
@@ -854,7 +840,7 @@ async function importUserSettings(userId, payload = {}) {
       name: String(source.name).trim().slice(0, 80),
       url: String(source.url).trim(),
       language: String(source.language || 'it').trim().toLowerCase().slice(0, 5) || 'it',
-      isActive: true,
+      isActive: source.isActive !== false,
       createdAt: now,
       updatedAt: now,
       validatedAt: now,

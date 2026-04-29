@@ -185,6 +185,7 @@ function createUserStateRepository({ getDb }) {
       SET name = ?,
           url = ?,
           language = ?,
+          is_active = ?,
           updated_at = ?,
           validated_at = ?
       WHERE user_id = ? AND id = ?
@@ -192,6 +193,7 @@ function createUserStateRepository({ getDb }) {
       updates.name,
       updates.url,
       updates.language,
+      updates.isActive !== false ? 1 : 0,
       updates.updatedAt,
       updates.validatedAt || null,
       userId,

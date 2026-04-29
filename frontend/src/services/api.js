@@ -205,8 +205,8 @@ export const fetchNews = async ({
     params.refresh = 'true';
   }
 
-  if (!includeFilters) {
-    params.includeFilters = 'false';
+  if (includeFilters) {
+    params.includeFilters = 'true';
   }
 
   const response = await api.get('/news', { params, signal });

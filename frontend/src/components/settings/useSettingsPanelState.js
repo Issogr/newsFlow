@@ -26,6 +26,26 @@ const getInitialSettings = (currentUser) => ({
   readerTextSize: getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize)
 });
 
+const areSettingValuesEqual = (left, right) => {
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return JSON.stringify(left || []) === JSON.stringify(right || []);
+  }
+
+  return left === right;
+};
+
+const createSettingsPatch = (nextSettings, currentUser) => {
+  const initialSettings = getInitialSettings(currentUser);
+
+  return Object.keys(nextSettings).reduce((patch, key) => {
+    if (!areSettingValuesEqual(nextSettings[key], initialSettings[key])) {
+      patch[key] = nextSettings[key];
+    }
+
+    return patch;
+  }, {});
+};
+
 const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserUpdate }) => {
   const [settings, setSettings] = useState(() => getInitialSettings(currentUser));
   const [customSources, setCustomSources] = useState(currentUser.customSources || []);
@@ -188,12 +208,18 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
 
   const handleSave = useCallback(async () => {
     await runSavingAction(async () => {
-      const response = await updateUserSettings(settings);
+      const settingsPatch = createSettingsPatch(settings, currentUser);
+      if (Object.keys(settingsPatch).length === 0) {
+        onClose();
+        return;
+      }
+
+      const response = await updateUserSettings(settingsPatch);
       setStoredReaderTextSizePreference(response.settings.readerTextSize);
       syncPersistedUserState(response.settings, customSources);
       onClose();
     });
-  }, [customSources, onClose, runSavingAction, settings, syncPersistedUserState]);
+  }, [currentUser, customSources, onClose, runSavingAction, settings, syncPersistedUserState]);
 
   const handleCreateApiToken = useCallback(async () => {
     await runSavingAction(async () => {

@@ -2,7 +2,6 @@ import { defineConfig, transformWithOxc } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-const backendOrigin = process.env.VITE_BACKEND_ORIGIN || 'http://localhost:5000';
 const bffOrigin = process.env.VITE_BFF_ORIGIN || 'http://localhost:80';
 
 function transformFrontendJsx() {
@@ -28,12 +27,8 @@ export default defineConfig({
   plugins: [transformFrontendJsx(), react(), tailwindcss()],
   server: {
     proxy: {
-      '/internal-api': {
-        target: backendOrigin,
-        changeOrigin: true
-      },
       '/api/public': {
-        target: backendOrigin,
+        target: bffOrigin,
         changeOrigin: true
       },
       '/api': {
