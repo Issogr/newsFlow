@@ -24,18 +24,6 @@ import { getStoredReaderTextSizePreference, setStoredReaderTextSizePreference } 
 
 const sourceChipClassName = 'inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-900';
 const readTimeChipClassName = 'inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600';
-const MAX_READER_CACHE_ARTICLES = 40;
-
-function getBoundedReaderCache(cache = {}) {
-  return Object.fromEntries(Object.entries(cache).slice(-MAX_READER_CACHE_ARTICLES));
-}
-
-function withReaderCacheEntry(cache = {}, articleId, payload) {
-  const nextCache = { ...cache };
-  delete nextCache[articleId];
-  nextCache[articleId] = payload;
-  return getBoundedReaderCache(nextCache);
-}
 
 function getArticleSourceLabel(article) {
   if (!article) {
@@ -92,23 +80,16 @@ const ReaderPanel = ({
   locale,
   t,
   onClose,
-  currentUser,
-  readerCache = {},
-  onReaderCacheChange = null
+  currentUser
 }) => {
   const [selectedArticleId, setSelectedArticleId] = useState(initialArticleId || group?.items?.[0]?.id || null);
-  const [readerByArticleId, setReaderByArticleId] = useState(() => getBoundedReaderCache(readerCache || {}));
+  const [readerByArticleId, setReaderByArticleId] = useState({});
   const [loading, setLoading] = useState(false);
   const [shareState, setShareState] = useState('idle');
   const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   const [error, setError] = useState(null);
-  const readerCacheRef = useRef({});
   const readerTextSizeRequestIdRef = useRef(0);
   const { startLatestRequest, resetLatestRequest } = useLatestRequest();
-
-  useEffect(() => {
-    readerCacheRef.current = readerByArticleId;
-  }, [readerByArticleId]);
 
   useEffect(() => {
     setSelectedArticleId(initialArticleId || group?.items?.[0]?.id || null);
@@ -162,10 +143,6 @@ const ReaderPanel = ({
 
     setError(null);
 
-    if (!forceRefresh && readerCacheRef.current[articleId]) {
-      return;
-    }
-
     const request = startLatestRequest();
 
     setLoading(true);
@@ -180,11 +157,10 @@ const ReaderPanel = ({
         return;
       }
 
-      setReaderByArticleId((current) => {
-        const nextCache = withReaderCacheEntry(current, articleId, payload);
-        onReaderCacheChange?.(nextCache);
-        return nextCache;
-      });
+      setReaderByArticleId((current) => ({
+        ...current,
+        [articleId]: payload
+      }));
     } catch (requestError) {
       if (!isRequestCanceled(requestError) && request.isLatest()) {
         setError(requestError);
@@ -194,7 +170,7 @@ const ReaderPanel = ({
         setLoading(false);
       }
     }
-  }, [onReaderCacheChange, startLatestRequest]);
+  }, [startLatestRequest]);
 
   useEffect(() => {
     if (selectedArticleId) {

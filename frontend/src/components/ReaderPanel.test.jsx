@@ -175,7 +175,15 @@ describe('ReaderPanel', () => {
     expect(document.body.style.overflow).toBe('');
   });
 
-  test('uses provided reader cache without refetching an article', async () => {
+  test('fetches reader content from the backend on open', async () => {
+    fetchReaderArticle.mockResolvedValue({
+      title: 'Backend cached reader title',
+      language: 'en',
+      excerpt: 'Cached excerpt',
+      contentBlocks: [{ type: 'paragraph', text: 'Cached body' }],
+      minutesToRead: 2
+    });
+
     render(
       <ReaderPanel
         group={group}
@@ -184,25 +192,26 @@ describe('ReaderPanel', () => {
         locale="en"
         t={t}
         currentUser={currentUser}
-        readerCache={{
-          'article-1': {
-            title: 'Cached reader title',
-            language: 'en',
-            excerpt: 'Cached excerpt',
-            contentBlocks: [{ type: 'paragraph', text: 'Cached body' }],
-            minutesToRead: 2
-          }
-        }}
         onClose={jest.fn()}
       />
     );
 
-    expect(await screen.findByText('Cached reader title')).toBeInTheDocument();
-    expect(fetchReaderArticle).not.toHaveBeenCalled();
+    expect(await screen.findByText('Backend cached reader title')).toBeInTheDocument();
+    expect(fetchReaderArticle).toHaveBeenCalledWith('article-1', expect.objectContaining({
+      refresh: false
+    }));
   });
 
-  test('clears a stale reader error when switching to a cached article', async () => {
-    fetchReaderArticle.mockRejectedValue(new Error('Reader failed'));
+  test('clears a stale reader error when switching to another article', async () => {
+    fetchReaderArticle
+      .mockRejectedValueOnce(new Error('Reader failed'))
+      .mockResolvedValueOnce({
+        title: 'Second reader title',
+        language: 'en',
+        excerpt: 'Cached excerpt',
+        contentBlocks: [{ type: 'paragraph', text: 'Second body' }],
+        minutesToRead: 2
+      });
 
     render(
       <ReaderPanel
@@ -212,15 +221,6 @@ describe('ReaderPanel', () => {
         locale="en"
         t={t}
         currentUser={currentUser}
-        readerCache={{
-          'article-2': {
-            title: 'Cached second title',
-            language: 'en',
-            excerpt: 'Cached excerpt',
-            contentBlocks: [{ type: 'paragraph', text: 'Cached second body' }],
-            minutesToRead: 2
-          }
-        }}
         onClose={jest.fn()}
       />
     );
@@ -229,7 +229,7 @@ describe('ReaderPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
 
-    expect(await screen.findByText('Cached second title')).toBeInTheDocument();
+    expect(await screen.findByText('Second reader title')).toBeInTheDocument();
     expect(screen.queryByText('readerUnavailable')).not.toBeInTheDocument();
   });
 
@@ -416,40 +416,4 @@ describe('ReaderPanel', () => {
     expect(await screen.findByText('Refreshed reader title')).toBeInTheDocument();
   });
 
-  test('caps the shared reader cache when storing new article payloads', async () => {
-    const readerCache = Object.fromEntries(Array.from({ length: 40 }, (_, index) => [
-      `cached-${index + 1}`,
-      { title: `Cached ${index + 1}`, contentBlocks: [] }
-    ]));
-    const onReaderCacheChange = jest.fn();
-
-    fetchReaderArticle.mockResolvedValueOnce({
-      title: 'New reader title',
-      language: 'en',
-      excerpt: 'Excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
-      minutesToRead: 1
-    });
-
-    render(
-      <ReaderPanel
-        group={{ ...group, items: [{ ...group.items[0], id: 'article-new', title: 'New article' }] }}
-        initialArticleId="article-new"
-        readerPosition="right"
-        locale="en"
-        t={t}
-        currentUser={currentUser}
-        readerCache={readerCache}
-        onReaderCacheChange={onReaderCacheChange}
-        onClose={jest.fn()}
-      />
-    );
-
-    expect(await screen.findByText('New reader title')).toBeInTheDocument();
-
-    const nextCache = onReaderCacheChange.mock.calls.at(-1)[0];
-    expect(Object.keys(nextCache)).toHaveLength(40);
-    expect(nextCache['cached-1']).toBeUndefined();
-    expect(nextCache['article-new']).toEqual(expect.objectContaining({ title: 'New reader title' }));
-  });
 });

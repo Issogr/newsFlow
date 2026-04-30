@@ -100,7 +100,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [activeFilters, setActiveFilters] = useState(EMPTY_FILTERS);
   const [showRecentOnly, setShowRecentOnly] = useState(false);
   const [readerState, setReaderState] = useState({ isOpen: false, group: null, articleId: null });
-  const [readerCacheByArticleId, setReaderCacheByArticleId] = useState({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -629,8 +628,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           locale={locale}
           t={t}
           currentUser={currentUser}
-          readerCache={readerCacheByArticleId}
-          onReaderCacheChange={setReaderCacheByArticleId}
           onClose={closeReader}
         />
       )}
