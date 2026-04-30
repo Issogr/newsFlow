@@ -328,17 +328,6 @@ function normalizeClassifierDetails(payload, allowedIds = new Set(), articlesByI
   return result;
 }
 
-function normalizeClassifierResult(payload, allowedIds = new Set(), articlesById = null) {
-  const detailsByArticleId = normalizeClassifierDetails(payload, allowedIds, articlesById);
-  const result = new Map();
-
-  detailsByArticleId.forEach((details, articleId) => {
-    result.set(articleId, details.map((entry) => entry.topic));
-  });
-
-  return result;
-}
-
 function extractContentPart(value) {
   if (!value) {
     return '';
@@ -444,22 +433,6 @@ async function classifyBatch(batch, config, context = {}) {
   return result;
 }
 
-async function classifyTopicsForArticles(articles = []) {
-  const detailsByArticleId = await classifyTopicDetailsForArticles(articles);
-  const result = new Map();
-
-  detailsByArticleId.forEach((details, articleId) => {
-    result.set(articleId, details.map((entry) => entry.topic));
-  });
-
-  return result;
-}
-
-async function classifyTopicDetailsForArticles(articles = []) {
-  const status = await classifyTopicDetailsForArticlesWithStatus(articles);
-  return status.topicsByArticleId;
-}
-
 async function classifyTopicDetailsForArticlesWithStatus(articles = []) {
   const config = getConfig();
   if (!Array.isArray(articles) || articles.length === 0) {
@@ -523,8 +496,6 @@ function isAiTopicDetectionAvailable() {
 }
 
 module.exports = {
-  classifyTopicsForArticles,
-  classifyTopicDetailsForArticles,
   classifyTopicDetailsForArticlesWithStatus,
   isAiTopicDetectionAvailable,
   _buildArticlePayload: buildArticlePayload,
@@ -534,7 +505,6 @@ module.exports = {
   _extractAssistantContent: extractAssistantContent,
   _isAiArticleDebugLoggingEnabled: isAiArticleDebugLoggingEnabled,
   _normalizeClassifierDetails: normalizeClassifierDetails,
-  _normalizeClassifierResult: normalizeClassifierResult,
   _parseJsonContent: parseJsonContent,
   _summarizeResponseShape: summarizeResponseShape,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader

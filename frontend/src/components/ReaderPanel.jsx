@@ -12,8 +12,8 @@ import {
 import { fetchReaderArticle, isRequestCanceled, updateUserSettings } from '../services/api';
 import useLatestRequest from '../hooks/useLatestRequest';
 import useLockBodyScroll from '../hooks/useLockBodyScroll';
+import useShareArticle from '../hooks/useShareArticle';
 import { getSafeExternalUrl } from '../utils/urlSafety';
-import { shareArticleUrl } from '../utils/shareArticle';
 import ShareStatusBubble from './ShareStatusBubble';
 import {
   DEFAULT_READER_TEXT_SIZE,
@@ -77,7 +77,6 @@ const ReaderPanel = ({
   group,
   initialArticleId,
   readerPosition = 'right',
-  locale,
   t,
   onClose,
   currentUser
@@ -85,7 +84,7 @@ const ReaderPanel = ({
   const [selectedArticleId, setSelectedArticleId] = useState(initialArticleId || group?.items?.[0]?.id || null);
   const [readerByArticleId, setReaderByArticleId] = useState({});
   const [loading, setLoading] = useState(false);
-  const [shareState, setShareState] = useState('idle');
+  const { shareState, shareArticle, resetShareState } = useShareArticle();
   const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   const [error, setError] = useState(null);
   const readerTextSizeRequestIdRef = useRef(0);
@@ -93,10 +92,10 @@ const ReaderPanel = ({
 
   useEffect(() => {
     setSelectedArticleId(initialArticleId || group?.items?.[0]?.id || null);
-    setShareState('idle');
+    resetShareState();
     setError(null);
     resetLatestRequest();
-  }, [group, initialArticleId, resetLatestRequest]);
+  }, [group, initialArticleId, resetLatestRequest, resetShareState]);
 
   useEffect(() => {
     setReaderTextSize(getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
@@ -184,26 +183,12 @@ const ReaderPanel = ({
     : (readerPosition === 'center' ? 'lg:justify-center' : 'lg:justify-end');
   const readerTextStyles = READER_TEXT_SIZE_STYLES[readerTextSize] || READER_TEXT_SIZE_STYLES[DEFAULT_READER_TEXT_SIZE];
   const readerTextSizeIndex = Math.max(READER_TEXT_SIZE_ORDER.indexOf(readerTextSize), 0);
-  useEffect(() => {
-    if (shareState === 'idle') {
-      return undefined;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setShareState('idle');
-    }, 1600);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [shareState]);
-
   const handleShare = useCallback(async () => {
-    const result = await shareArticleUrl({
+    await shareArticle({
       url: safeOriginalUrl,
       title: selectedReader?.title || selectedArticle?.title || ''
     });
-
-    setShareState(result || 'idle');
-  }, [safeOriginalUrl, selectedArticle?.title, selectedReader?.title]);
+  }, [safeOriginalUrl, selectedArticle?.title, selectedReader?.title, shareArticle]);
 
   const updateReaderTextSize = useCallback(async (nextValue) => {
     const normalizedNextValue = READER_TEXT_SIZE_ORDER.includes(nextValue) ? nextValue : DEFAULT_READER_TEXT_SIZE;

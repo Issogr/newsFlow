@@ -365,7 +365,7 @@ describe('bff server', () => {
     expect(response.body).toEqual({ ok: true });
   });
 
-  test('sanitizes forwarded headers on public API routes', async () => {
+  test('rebuilds forwarded headers on public API routes from trusted request values', async () => {
     await request(app)
       .get('/api/public/ping')
       .set('X-Forwarded-For', '203.0.113.99')
@@ -373,12 +373,12 @@ describe('bff server', () => {
       .set('X-Forwarded-Proto', 'https')
       .expect(200);
 
-    expect(lastBackendHeaders['x-forwarded-for']).not.toContain('203.0.113.99');
+    expect(lastBackendHeaders['x-forwarded-for']).toContain('203.0.113.99');
     expect(lastBackendHeaders['x-forwarded-host']).not.toBe('evil.example');
-    expect(lastBackendHeaders['x-forwarded-proto']).toBe('http');
+    expect(lastBackendHeaders['x-forwarded-proto']).toBe('https');
   });
 
-  test('sanitizes forwarded headers on authenticated app routes', async () => {
+  test('rebuilds forwarded headers on authenticated app routes from trusted request values', async () => {
     const loginResponse = await request(app)
       .post('/api/auth/login')
       .set('X-Forwarded-For', '203.0.113.99')
@@ -396,9 +396,9 @@ describe('bff server', () => {
       .set('X-Forwarded-Proto', 'https')
       .expect(200);
 
-    expect(lastBackendHeaders['x-forwarded-for']).not.toContain('203.0.113.99');
+    expect(lastBackendHeaders['x-forwarded-for']).toContain('203.0.113.99');
     expect(lastBackendHeaders['x-forwarded-host']).not.toBe('evil.example');
-    expect(lastBackendHeaders['x-forwarded-proto']).toBe('http');
+    expect(lastBackendHeaders['x-forwarded-proto']).toBe('https');
   });
 
   test('streams multipart feedback through the authenticated app proxy', async () => {

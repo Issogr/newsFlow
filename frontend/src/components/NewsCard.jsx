@@ -11,7 +11,7 @@ import genericNewsCover from '../assets/generic-news-cover.webp';
 import genericNewsCover2 from '../assets/generic-news-cover-2.webp';
 import genericNewsCover3 from '../assets/generic-news-cover-3.webp';
 import genericNewsCover4 from '../assets/generic-news-cover-4.webp';
-import { shareArticleUrl } from '../utils/shareArticle';
+import useShareArticle from '../hooks/useShareArticle';
 import { getTopicPresentation } from '../topicPresentation';
 import ShareStatusBubble from './ShareStatusBubble';
 
@@ -112,7 +112,7 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
   const safeImageUrl = showImages ? getGroupImageUrl(group) : '';
   const [fallbackImageUrl, setFallbackImageUrl] = useState(getRandomGenericNewsCover);
   const [imageUrl, setImageUrl] = useState(showImages ? (safeImageUrl || fallbackImageUrl) : '');
-  const [shareState, setShareState] = useState('idle');
+  const { shareState, shareArticle } = useShareArticle();
   const fallbackImageAlt = t('genericNewsCoverAlt');
   const fallbackGroupIdRef = useRef(group?.id);
   const lastTouchGestureRef = useRef({ area: '', timestamp: 0 });
@@ -131,29 +131,15 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
     setImageUrl(showImages ? (safeImageUrl || fallbackImageUrl) : '');
   }, [fallbackImageUrl, safeImageUrl, showImages]);
 
-  useEffect(() => {
-    if (shareState === 'idle') {
-      return undefined;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setShareState('idle');
-    }, 1600);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [shareState]);
-
   if (!hasItems) {
     return null;
   }
 
   const handleShare = async () => {
-    const result = await shareArticleUrl({
+    await shareArticle({
       url: safeOriginalUrl,
       title: group.title
     });
-
-    setShareState(result || 'idle');
   };
 
   const openReader = () => {

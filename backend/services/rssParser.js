@@ -6,19 +6,20 @@ const { sanitizeHtml } = require('../utils/inputValidator');
 const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
 const { normalizePublicationDate } = require('../utils/publicationDate');
 const { fetchSafeTextUrl } = require('../utils/urlSafety');
+const { parseIntegerEnv } = require('../utils/env');
 
-const MAX_ARTICLES_PER_SOURCE = parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '25', 10);
-const RSS_MAX_RETRIES = parseInt(process.env.RSS_MAX_RETRIES || '4', 10);
-const RSS_RETRY_DELAY = parseInt(process.env.RSS_RETRY_DELAY || '1500', 10);
-const RSS_TIMEOUT = parseInt(process.env.RSS_TIMEOUT || '15000', 10);
-const CACHE_TTL = parseInt(process.env.RSS_CACHE_TTL || '60000', 10);
-const MAX_CACHE_ENTRIES = parseInt(process.env.RSS_CACHE_MAX_ENTRIES || '200', 10);
-const ARTICLE_IMAGE_TIMEOUT = parseInt(process.env.ARTICLE_IMAGE_TIMEOUT || '8000', 10);
-const ARTICLE_IMAGE_CACHE_TTL = parseInt(process.env.ARTICLE_IMAGE_CACHE_TTL || String(6 * 60 * 60 * 1000), 10);
-const ARTICLE_IMAGE_CACHE_MAX_ENTRIES = parseInt(process.env.ARTICLE_IMAGE_CACHE_MAX_ENTRIES || '500', 10);
-const ARTICLE_IMAGE_FALLBACK_LIMIT = parseInt(process.env.ARTICLE_IMAGE_FALLBACK_LIMIT || '4', 10);
-const RSS_MAX_RESPONSE_BYTES = parseInt(process.env.RSS_MAX_RESPONSE_BYTES || '1048576', 10);
-const ARTICLE_IMAGE_MAX_RESPONSE_BYTES = parseInt(process.env.ARTICLE_IMAGE_MAX_RESPONSE_BYTES || '524288', 10);
+const MAX_ARTICLES_PER_SOURCE = parseIntegerEnv('MAX_ARTICLES_PER_SOURCE', 25, { min: 1 });
+const RSS_MAX_RETRIES = parseIntegerEnv('RSS_MAX_RETRIES', 4, { min: 1 });
+const RSS_RETRY_DELAY = parseIntegerEnv('RSS_RETRY_DELAY', 1500, { min: 0 });
+const RSS_TIMEOUT = parseIntegerEnv('RSS_TIMEOUT', 15000, { min: 1 });
+const CACHE_TTL = parseIntegerEnv('RSS_CACHE_TTL', 60000, { min: 0 });
+const MAX_CACHE_ENTRIES = parseIntegerEnv('RSS_CACHE_MAX_ENTRIES', 200, { min: 0 });
+const ARTICLE_IMAGE_TIMEOUT = parseIntegerEnv('ARTICLE_IMAGE_TIMEOUT', 8000, { min: 1 });
+const ARTICLE_IMAGE_CACHE_TTL = parseIntegerEnv('ARTICLE_IMAGE_CACHE_TTL', 6 * 60 * 60 * 1000, { min: 0 });
+const ARTICLE_IMAGE_CACHE_MAX_ENTRIES = parseIntegerEnv('ARTICLE_IMAGE_CACHE_MAX_ENTRIES', 500, { min: 0 });
+const ARTICLE_IMAGE_FALLBACK_LIMIT = parseIntegerEnv('ARTICLE_IMAGE_FALLBACK_LIMIT', 4, { min: 0 });
+const RSS_MAX_RESPONSE_BYTES = parseIntegerEnv('RSS_MAX_RESPONSE_BYTES', 1048576, { min: 1 });
+const ARTICLE_IMAGE_MAX_RESPONSE_BYTES = parseIntegerEnv('ARTICLE_IMAGE_MAX_RESPONSE_BYTES', 524288, { min: 1 });
 
 const parser = new RSSParser({
   customFields: {

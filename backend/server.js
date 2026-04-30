@@ -13,12 +13,13 @@ const newsService = require('./services/newsAggregator');
 const rssParser = require('./services/rssParser');
 const userService = require('./services/userService');
 const { errorMiddleware, createError } = require('./utils/errorHandler');
+const { parseIntegerEnv } = require('./utils/env');
 const { getAllowedOrigins, isOriginAllowed } = require('./utils/networkConfig');
 const { hasTrustedInternalService } = require('./utils/internalRequestGate');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const SERVER_TIMEOUT = parseInt(process.env.SERVER_TIMEOUT || '60000', 10);
+const SERVER_TIMEOUT = parseIntegerEnv('SERVER_TIMEOUT', 60000, { min: 1000 });
 const allowedOrigins = getAllowedOrigins();
 
 function redactSensitiveValues(value) {

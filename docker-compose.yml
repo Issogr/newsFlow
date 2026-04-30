@@ -23,7 +23,7 @@ services:
       - INTERNAL_SERVICE_NAME=${INTERNAL_SERVICE_NAME:-bff}
       - ALLOWED_ORIGINS=http://localhost,http://localhost:80,http://127.0.0.1,http://127.0.0.1:80,@local-network
       - TRUST_PROXY=true
-      - APP_BASE_URL=http://localhost
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
       - NEWS_DB_PATH=/usr/src/app/data/news.db
       - ADMIN_USERNAME=admin
       # Performance tuning variables
@@ -88,7 +88,7 @@ services:
       - BFF_SESSION_SECRET=${BFF_SESSION_SECRET:?BFF_SESSION_SECRET must be set}
       - INTERNAL_SERVICE_NAME=${INTERNAL_SERVICE_NAME:-bff}
       - BACKEND_BASE_URL=http://backend:5000
-      - APP_BASE_URL=http://localhost
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
       - TRUST_PROXY=false
     depends_on:
       init-permissions:

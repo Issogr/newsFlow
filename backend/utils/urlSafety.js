@@ -2,9 +2,10 @@ const dns = require('dns').promises;
 const net = require('net');
 const axios = require('axios');
 const { createError } = require('./errorHandler');
+const { parseIntegerEnv } = require('./env');
 
-const MAX_REDIRECTS = parseInt(process.env.OUTBOUND_MAX_REDIRECTS || '5', 10);
-const MAX_RESPONSE_BYTES = parseInt(process.env.OUTBOUND_MAX_RESPONSE_BYTES || '2097152', 10);
+const MAX_REDIRECTS = parseIntegerEnv('OUTBOUND_MAX_REDIRECTS', 5, { min: 0 });
+const MAX_RESPONSE_BYTES = parseIntegerEnv('OUTBOUND_MAX_RESPONSE_BYTES', 2097152, { min: 1 });
 const PRIVATE_HOSTNAMES = new Set(['localhost', 'frontend', '::1', '[::1]']);
 const UNSAFE_IPV4_RANGES = [
   ['0.0.0.0', 8],

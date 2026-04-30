@@ -1,15 +1,4 @@
-function parseJsonArray(value) {
-  if (!value) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+const { parseJsonArray } = require('../utils/json');
 
 function mapUserSourceRow(row) {
   return {

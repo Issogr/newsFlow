@@ -625,7 +625,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           group={readerState.group}
           initialArticleId={readerState.articleId}
           readerPosition={currentUser?.settings?.readerPanelPosition || 'right'}
-          locale={locale}
           t={t}
           currentUser={currentUser}
           onClose={closeReader}

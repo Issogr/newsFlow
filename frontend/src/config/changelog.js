@@ -5,6 +5,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
+      '🧹 A code audit cleaned up duplicated and stale paths so sharing, release notes, reader mode, and API reads stay easier to keep consistent.',
+      '🛡️ Runtime edge cases are safer, including feed settings, proxy headers, session cleanup, and AI topic batches that hit their processing cap.',
       '🧯 Feed pagination, reconnects, and reader-mode edge cases are steadier, with fewer duplicate loads and fewer stale errors.',
       '📖 Reader mode now remembers articles you already opened and keeps long browsing sessions lighter.',
       '⚡ Long feed sessions keep the newest stories visible while trimming older retained cards and avoiding extra filter-count work when the app only needs news items.',
@@ -23,6 +25,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
+      '🧹 Un audit del codice ha ripulito percorsi duplicati o non piu usati, cosi condivisione, note di rilascio, lettura e API restano piu coerenti.',
+      '🛡️ I casi limite di runtime sono piu sicuri, incluse impostazioni feed, header proxy, pulizia sessioni e batch AI che raggiungono il limite.',
       '🧯 Paginazione del feed, riconnessioni e casi limite della modalita lettura sono piu stabili, con meno caricamenti duplicati e meno errori rimasti in pagina.',
       '📖 La modalita lettura ora ricorda gli articoli gia aperti e mantiene piu leggere le sessioni lunghe.',
       '⚡ Le sessioni lunghe del feed mantengono visibili le notizie piu recenti, alleggerendo le card piu vecchie e evitando conteggi extra dei filtri quando servono solo le notizie.',

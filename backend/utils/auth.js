@@ -2,13 +2,14 @@ const crypto = require('crypto');
 const { promisify } = require('util');
 const database = require('../services/database');
 const { createError } = require('./errorHandler');
+const { parseIntegerEnv } = require('./env');
 
-const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '30', 10);
+const SESSION_TTL_DAYS = parseIntegerEnv('SESSION_TTL_DAYS', 30, { min: 1 });
 const API_TOKEN_TTL_DAYS = 30;
-const SESSION_PURGE_INTERVAL_MS = parseInt(process.env.SESSION_PURGE_INTERVAL_MS || '300000', 10);
+const SESSION_PURGE_INTERVAL_MS = parseIntegerEnv('SESSION_PURGE_INTERVAL_MS', 300000, { min: 1000 });
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase() || 'admin';
-const USER_ACTIVITY_TOUCH_INTERVAL_SECONDS = parseInt(process.env.USER_ACTIVITY_TOUCH_INTERVAL_SECONDS || '60', 10);
-const SESSION_REFRESH_WINDOW_MS = parseInt(process.env.SESSION_REFRESH_WINDOW_MS || String(24 * 60 * 60 * 1000), 10);
+const USER_ACTIVITY_TOUCH_INTERVAL_SECONDS = parseIntegerEnv('USER_ACTIVITY_TOUCH_INTERVAL_SECONDS', 60, { min: 0 });
+const SESSION_REFRESH_WINDOW_MS = parseIntegerEnv('SESSION_REFRESH_WINDOW_MS', 24 * 60 * 60 * 1000, { min: 0 });
 const SESSION_COOKIE_NAME = 'newsflow_session';
 const scryptAsync = promisify(crypto.scrypt);
 

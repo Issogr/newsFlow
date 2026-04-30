@@ -4,7 +4,6 @@ const logger = require('../utils/logger');
 const websocketService = require('./websocketService');
 const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const {
-  classifyTopicDetailsForArticles,
   classifyTopicDetailsForArticlesWithStatus,
   isAiTopicDetectionAvailable
 } = require('./aiTopicClassifier');
@@ -16,8 +15,8 @@ const {
   buildInsertedGroupsByOwner
 } = require('./newsAggregatorGrouping');
 
-const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
-const RSS_INGESTION_CONCURRENCY = Math.max(1, parseInt(process.env.RSS_INGESTION_CONCURRENCY || '8', 10) || 8);
+const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24, { min: 0 });
+const RSS_INGESTION_CONCURRENCY = parseIntegerEnv('RSS_INGESTION_CONCURRENCY', 8, { min: 1 });
 const pendingAiTopicProcessingIds = new Set();
 
 function filterArticlesWithinRetention(articles = []) {
@@ -178,18 +177,13 @@ async function processAiTopicsForPendingArticles(articles = []) {
   };
 
   try {
-    const classification = typeof classifyTopicDetailsForArticlesWithStatus === 'function'
-      ? await classifyTopicDetailsForArticlesWithStatus(articles)
-      : {
-        topicsByArticleId: await classifyTopicDetailsForArticles(articles),
-        attemptedArticleIds: articleIds,
-        failedArticleIds: []
-      };
+    const classification = await classifyTopicDetailsForArticlesWithStatus(articles);
     const topicsByArticleId = classification.topicsByArticleId || new Map();
     const attemptedArticleIds = Array.isArray(classification.attemptedArticleIds)
       ? classification.attemptedArticleIds
       : articleIds;
     const failedArticleIds = new Set(classification.failedArticleIds || []);
+    const cappedArticleIds = new Set(classification.cappedArticleIds || []);
     const classifiedIds = [];
     const topicEntries = [];
 
@@ -214,6 +208,7 @@ async function processAiTopicsForPendingArticles(articles = []) {
       'no_topics'
     );
     database.markArticlesAiTopicProcessing([...failedArticleIds], 'failed');
+    database.markArticlesAiTopicProcessing([...cappedArticleIds], 'deferred');
   } catch (error) {
     logger.warn(`Background AI topic processing failed: ${error.message}`);
     database.markArticlesAiTopicProcessing(articleIds, 'failed');

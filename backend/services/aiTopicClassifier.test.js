@@ -49,7 +49,7 @@ describe('aiTopicClassifier', () => {
       ]
     });
 
-    const result = await aiTopicClassifier.classifyTopicsForArticles([
+    const status = await aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus([
       {
         id: 'article-1',
         source: 'Example Source',
@@ -65,7 +65,7 @@ describe('aiTopicClassifier', () => {
     const requestOptions = chatSend.mock.calls[0][1];
     const prompt = requestBody.messages[1].content;
 
-    expect(result.get('article-1')).toEqual(['Tecnologia']);
+    expect(status.topicsByArticleId.get('article-1').map((entry) => entry.topic)).toEqual(['Tecnologia']);
     expect(requestBody.model).toBe('qwen/qwen3.5-9b');
     expect(requestBody.responseFormat).toEqual({ type: 'json_object' });
     expect(requestBody.reasoning).toEqual({
@@ -110,7 +110,7 @@ describe('aiTopicClassifier', () => {
       ]
     });
 
-    await aiTopicClassifier.classifyTopicsForArticles([
+    await aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus([
       { id: 'article-1', title: 'AI chips arrive for data centers', description: 'New hardware accelerates cloud workloads.' }
     ]);
 
@@ -128,7 +128,7 @@ describe('aiTopicClassifier', () => {
       ]
     });
 
-    await aiTopicClassifier.classifyTopicsForArticles([
+    await aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus([
       { id: 'article-1', title: 'AI chips arrive for data centers', description: 'New hardware accelerates cloud workloads.' }
     ]);
 
@@ -139,11 +139,11 @@ describe('aiTopicClassifier', () => {
   test('returns no AI topics when disabled or unconfigured', async () => {
     delete process.env.OPENROUTER_API_KEY;
 
-    const result = await aiTopicClassifier.classifyTopicsForArticles([
+    const result = await aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus([
       { id: 'article-1', title: 'Market rally' }
     ]);
 
-    expect(result.size).toBe(0);
+    expect(result.topicsByArticleId.size).toBe(0);
     expect(chatSend).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection skipped: reason=missing_api_key'));
   });
@@ -155,11 +155,11 @@ describe('aiTopicClassifier', () => {
     const catchSpy = jest.spyOn(sdkPromise, 'catch');
     chatSend.mockReturnValue(sdkPromise);
 
-    const result = await aiTopicClassifier.classifyTopicsForArticles([
+    const result = await aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus([
       { id: 'article-1', title: 'Market rally' }
     ]);
 
-    expect(result.size).toBe(0);
+    expect(result.topicsByArticleId.size).toBe(0);
     expect(catchSpy).toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith('AI topic batch failed: OpenRouter request timed out; keeping local fallback topics');
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection completed'));
@@ -189,7 +189,7 @@ describe('aiTopicClassifier', () => {
   });
 
   test('drops unknown ids and topics outside the supported taxonomy', () => {
-    const result = aiTopicClassifier._normalizeClassifierResult({
+    const result = aiTopicClassifier._normalizeClassifierDetails({
       topicsById: [
         { id: 'article-1', topics: ['Economy', 'made up topic', 'Science'] },
         { id: 'article-2', topics: [] },
@@ -197,31 +197,31 @@ describe('aiTopicClassifier', () => {
       ]
     }, new Set(['article-1', 'article-2']));
 
-    expect(result.get('article-1')).toEqual(['Economia', 'Scienza']);
+    expect(result.get('article-1').map((entry) => entry.topic)).toEqual(['Economia', 'Scienza']);
     expect(result.has('article-2')).toBe(false);
     expect(result.has('other-article')).toBe(false);
   });
 
   test('does not normalize air-gun wording to technology', () => {
-    const result = aiTopicClassifier._normalizeClassifierResult({
+    const result = aiTopicClassifier._normalizeClassifierDetails({
       topicsById: [
         { id: 'article-1', topics: ['aria compressa', 'Cronaca'] }
       ]
     }, new Set(['article-1']));
 
-    expect(result.get('article-1')).toEqual(['Cronaca']);
+    expect(result.get('article-1').map((entry) => entry.topic)).toEqual(['Cronaca']);
   });
 
   test('accepts common model response variants', () => {
-    const result = aiTopicClassifier._normalizeClassifierResult({
+    const result = aiTopicClassifier._normalizeClassifierDetails({
       results: [
         { articleId: 'article-1', category: 'Technology' },
         { article_id: 'article-2', topics: ['World'] }
       ]
     }, new Set(['article-1', 'article-2']));
 
-    expect(result.get('article-1')).toEqual(['Tecnologia']);
-    expect(result.get('article-2')).toEqual(['Esteri']);
+    expect(result.get('article-1').map((entry) => entry.topic)).toEqual(['Tecnologia']);
+    expect(result.get('article-2').map((entry) => entry.topic)).toEqual(['Esteri']);
   });
 
   test('extracts assistant content from SDK response variants', () => {
@@ -253,11 +253,11 @@ describe('aiTopicClassifier', () => {
       ]
     });
 
-    const result = await aiTopicClassifier.classifyTopicsForArticles([
+    const result = await aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus([
       { id: 'article-1', title: 'Market rally' }
     ]);
 
-    expect(result.size).toBe(0);
+    expect(result.topicsByArticleId.size).toBe(0);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('AI topic batch produced no valid topics: reason=empty_topics'));
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('finishReason=unknown'));
   });

@@ -5,10 +5,11 @@ const logger = require('../utils/logger');
 const summarizeErrorMessage = require('../utils/summarizeError');
 const { createError } = require('../utils/errorHandler');
 const { fetchSafeTextUrl } = require('../utils/urlSafety');
+const { parseIntegerEnv } = require('../utils/env');
 
-const READER_TIMEOUT = parseInt(process.env.READER_TIMEOUT || '12000', 10);
-const READER_CACHE_TTL_MS = parseInt(process.env.READER_CACHE_TTL_MS || String(24 * 60 * 60 * 1000), 10);
-const READER_MAX_RESPONSE_BYTES = parseInt(process.env.READER_MAX_RESPONSE_BYTES || '2097152', 10);
+const READER_TIMEOUT = parseIntegerEnv('READER_TIMEOUT', 12000, { min: 1 });
+const READER_CACHE_TTL_MS = parseIntegerEnv('READER_CACHE_TTL_MS', 24 * 60 * 60 * 1000, { min: 0 });
+const READER_MAX_RESPONSE_BYTES = parseIntegerEnv('READER_MAX_RESPONSE_BYTES', 2097152, { min: 1 });
 const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'PRE']);
 const CONTAINER_TAGS = new Set(['ARTICLE', 'SECTION', 'DIV', 'MAIN']);
 

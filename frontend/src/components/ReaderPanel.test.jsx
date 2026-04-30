@@ -56,10 +56,6 @@ const t = (key, params = {}) => {
     return `${params.minutes} min read`;
   }
 
-  if (key === 'newsLanguage') {
-    return params.language;
-  }
-
   return key;
 };
 
@@ -98,7 +94,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}
@@ -140,7 +135,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="center"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}
@@ -160,7 +154,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}
@@ -189,7 +182,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onClose={jest.fn()}
@@ -218,7 +210,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onClose={jest.fn()}
@@ -253,7 +244,6 @@ describe('ReaderPanel', () => {
         }}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}
@@ -282,7 +272,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}
@@ -319,7 +308,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}
@@ -356,7 +344,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}
@@ -396,7 +383,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}

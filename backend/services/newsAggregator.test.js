@@ -40,7 +40,12 @@ jest.mock('./websocketService', () => ({
 }));
 
 jest.mock('./aiTopicClassifier', () => ({
-  classifyTopicDetailsForArticles: jest.fn(async () => new Map()),
+  classifyTopicDetailsForArticlesWithStatus: jest.fn(async () => ({
+    topicsByArticleId: new Map(),
+    attemptedArticleIds: [],
+    failedArticleIds: [],
+    cappedArticleIds: []
+  })),
   isAiTopicDetectionAvailable: jest.fn(() => true)
 }));
 
@@ -101,7 +106,12 @@ describe('newsAggregator service flows', () => {
     database.listAllActiveUserSources.mockReturnValue([]);
     database.upsertArticles.mockReturnValue({ insertedIds: [], insertedCount: 0, updatedCount: 0 });
     aiTopicClassifier.isAiTopicDetectionAvailable.mockReturnValue(true);
-    aiTopicClassifier.classifyTopicDetailsForArticles.mockResolvedValue(new Map());
+    aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockResolvedValue({
+      topicsByArticleId: new Map(),
+      attemptedArticleIds: [],
+      failedArticleIds: [],
+      cappedArticleIds: []
+    });
     rssParser._buildArticleId.mockImplementation((source, item, canonicalUrl = '') => `${source.id}:${canonicalUrl || item.link || item.title}`);
     rssParser.parseFeed.mockResolvedValue([]);
   });
@@ -313,9 +323,14 @@ describe('newsAggregator service flows', () => {
     ]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], updatedIds: ['updated-1'], insertedCount: 1, updatedCount: 1 });
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
-    aiTopicClassifier.classifyTopicDetailsForArticles.mockResolvedValue(new Map([
-      ['inserted-1', [{ topic: 'Tecnologia', source: 'ai', confidence: 0.88, evidence: ['AI chips'], reasonCode: 'ai_confident_evidence' }]]
-    ]));
+    aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockResolvedValue({
+      topicsByArticleId: new Map([
+        ['inserted-1', [{ topic: 'Tecnologia', source: 'ai', confidence: 0.88, evidence: ['AI chips'], reasonCode: 'ai_confident_evidence' }]]
+      ]),
+      attemptedArticleIds: ['inserted-1'],
+      failedArticleIds: [],
+      cappedArticleIds: []
+    });
 
     await newsAggregator.ingestAllNews({ broadcast: true });
 
@@ -323,11 +338,9 @@ describe('newsAggregator service flows', () => {
       expect.objectContaining({ articleId: 'inserted-1', topics: expect.any(Array) })
     ]);
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0].topics).toEqual(['Tecnologia']);
-    expect(aiTopicClassifier.classifyTopicDetailsForArticles).not.toHaveBeenCalled();
-
     await flushBackgroundAiProcessing();
 
-    expect(aiTopicClassifier.classifyTopicDetailsForArticles).toHaveBeenCalledWith([
+    expect(aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus).toHaveBeenCalledWith([
       expect.objectContaining({ id: 'inserted-1', title: 'AI chips advance' })
     ]);
     expect(database.replaceTopicsForArticles).toHaveBeenCalledWith([
@@ -341,7 +354,7 @@ describe('newsAggregator service flows', () => {
     let resolveClassification;
 
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
-    aiTopicClassifier.classifyTopicDetailsForArticles.mockImplementation(() => {
+    aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockImplementation(() => {
       return new Promise((resolve) => {
         resolveClassification = resolve;
       });
@@ -364,11 +377,16 @@ describe('newsAggregator service flows', () => {
 
     await flushBackgroundAiProcessing();
 
-    expect(aiTopicClassifier.classifyTopicDetailsForArticles).toHaveBeenCalledTimes(1);
+    expect(aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus).toHaveBeenCalledTimes(1);
 
-    resolveClassification(new Map([
-      ['inserted-1', [{ topic: 'Tecnologia', source: 'ai', confidence: 0.88, evidence: ['AI chips'], reasonCode: 'ai_confident_evidence' }]]
-    ]));
+    resolveClassification({
+      topicsByArticleId: new Map([
+        ['inserted-1', [{ topic: 'Tecnologia', source: 'ai', confidence: 0.88, evidence: ['AI chips'], reasonCode: 'ai_confident_evidence' }]]
+      ]),
+      attemptedArticleIds: ['inserted-1'],
+      failedArticleIds: [],
+      cappedArticleIds: []
+    });
 
     await Promise.resolve();
     await Promise.resolve();
@@ -427,9 +445,14 @@ describe('newsAggregator service flows', () => {
     ]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], insertedCount: 1, updatedCount: 0 });
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
-    aiTopicClassifier.classifyTopicDetailsForArticles.mockResolvedValue(new Map([
-      ['inserted-1', []]
-    ]));
+    aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockResolvedValue({
+      topicsByArticleId: new Map([
+        ['inserted-1', []]
+      ]),
+      attemptedArticleIds: ['inserted-1'],
+      failedArticleIds: [],
+      cappedArticleIds: []
+    });
 
     await newsAggregator.ingestAllNews({ broadcast: true });
 
@@ -447,13 +470,32 @@ describe('newsAggregator service flows', () => {
     expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'no_topics');
   });
 
+  test('marks AI-capped articles as deferred so they do not remain pending forever', async () => {
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1', 'inserted-2']);
+    aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockResolvedValue({
+      topicsByArticleId: new Map(),
+      attemptedArticleIds: ['inserted-1'],
+      failedArticleIds: [],
+      cappedArticleIds: ['inserted-2']
+    });
+
+    scheduleAiTopicsForPendingArticles([
+      { id: 'inserted-1', title: 'AI chip rollout' },
+      { id: 'inserted-2', title: 'Market rally' }
+    ]);
+    await flushBackgroundAiProcessing();
+
+    expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'no_topics');
+    expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-2'], 'deferred');
+  });
+
   test('marks pending AI articles failed when background classification throws', async () => {
     rssParser.parseFeed.mockResolvedValue([
       { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'AI chips advance', description: 'New processors', pubDate: recentIso({ hoursAgo: 2 }), url: 'https://example.com/ai' }
     ]);
     database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], insertedCount: 1, updatedCount: 0 });
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
-    aiTopicClassifier.classifyTopicDetailsForArticles.mockRejectedValue(new Error('quota exhausted'));
+    aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockRejectedValue(new Error('quota exhausted'));
 
     await newsAggregator.ingestAllNews({ broadcast: true });
     await flushBackgroundAiProcessing();

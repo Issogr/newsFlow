@@ -225,7 +225,7 @@ function App() {
     } : current));
   }, []);
 
-  const handleDismissReleaseNotes = useCallback(async () => {
+  const acknowledgeCurrentReleaseNotes = useCallback(async () => {
     const version = CURRENT_CHANGELOG_ENTRY.version;
 
     setReleaseNotesState((current) => ({
@@ -247,7 +247,7 @@ function App() {
         settings: response.settings
       } : current));
     } catch {
-      // keep the popup dismissed for the current session; it will retry next login if persistence fails
+      // Keep the notice dismissed for this session; persistence retries on the next login.
     } finally {
       setReleaseNotesState((current) => ({
         ...current,
@@ -256,36 +256,8 @@ function App() {
     }
   }, [needsReleaseNotesAck]);
 
-  const handleDismissReleaseNotice = useCallback(async () => {
-    const version = CURRENT_CHANGELOG_ENTRY.version;
-
-    setReleaseNotesState((current) => ({
-      ...current,
-      hiddenVersion: version,
-      noticeHiddenVersion: version,
-      saving: needsReleaseNotesAck,
-      modalOpen: false
-    }));
-
-    if (!needsReleaseNotesAck) {
-      return;
-    }
-
-    try {
-      const response = await updateUserSettings({ lastSeenReleaseNotesVersion: version });
-      setAuthData((current) => (current ? {
-        ...current,
-        settings: response.settings
-      } : current));
-    } catch {
-      // keep the notice dismissed for the current session; it will retry next login if persistence fails
-    } finally {
-      setReleaseNotesState((current) => ({
-        ...current,
-        saving: false
-      }));
-    }
-  }, [needsReleaseNotesAck]);
+  const handleDismissReleaseNotes = acknowledgeCurrentReleaseNotes;
+  const handleDismissReleaseNotice = acknowledgeCurrentReleaseNotes;
 
   const handleOpenReleaseNotes = useCallback(() => {
     setReleaseNotesState((current) => ({

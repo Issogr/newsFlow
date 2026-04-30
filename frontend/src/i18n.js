@@ -12,9 +12,7 @@ export const translations = {
     searchLabel: 'Search',
     clearSearch: 'Clear search',
     backToTop: 'Back to top',
-    visibleGroups: ({ count }) => `${count} visible groups`,
     totalGroups: ({ count }) => `${count} groups`,
-    updatedAt: ({ time }) => `Updated ${time}`,
     genericNewsCoverAlt: 'Generic news cover illustration',
     filtersTitle: 'Filters',
     filtersSubtitle: 'Source, topic, and time window.',
@@ -120,8 +118,6 @@ export const translations = {
     readerTextSizeSmall: 'Small',
     readerTextSizeMedium: 'Medium',
     readerTextSizeLarge: 'Large',
-    readerTextSizeDecrease: 'Decrease reader text size',
-    readerTextSizeIncrease: 'Increase reader text size',
     apiTokenTitle: 'External API token',
     apiTokenHelp: 'Use a token for external access to the cached public news API.',
     apiTokenDocsLink: 'API docs',
@@ -237,7 +233,6 @@ export const translations = {
     persistentErrorHelp: 'If the issue persists, check the service status or contact support.',
     singleSource: 'Single source',
     sourceCount: ({ count }) => `${count} sources`,
-    noExcerpt: 'No excerpt available for this article.',
     openOriginalSource: 'Open article',
     openOriginalSourceUnavailable: 'Original article link is not available for this card.',
     shareArticle: 'Share article',
@@ -248,8 +243,7 @@ export const translations = {
     readerUnavailable: 'Reader mode is not available for this article.',
     readerFallback: 'Showing fallback text extracted from the feed.',
     readTime: ({ minutes }) => `${minutes} min read`,
-    sourceVersions: 'Source versions',
-    newsLanguage: ({ language }) => `News language: ${language}`
+    sourceVersions: 'Source versions'
   },
   it: {
     pageTitle: 'News Flow',
@@ -261,9 +255,7 @@ export const translations = {
     searchLabel: 'Cerca',
     clearSearch: 'Cancella ricerca',
     backToTop: 'Torna in cima',
-    visibleGroups: ({ count }) => `${count} gruppi visibili`,
     totalGroups: ({ count }) => `${count} gruppi`,
-    updatedAt: ({ time }) => `Aggiornato ${time}`,
     genericNewsCoverAlt: 'Illustrazione generica per una notizia senza immagine',
     openOriginalSourceUnavailable: 'Il link originale dell articolo non e disponibile per questa card.',
     filtersTitle: 'Filtri',
@@ -370,8 +362,6 @@ export const translations = {
     readerTextSizeSmall: 'Piccolo',
     readerTextSizeMedium: 'Medio',
     readerTextSizeLarge: 'Grande',
-    readerTextSizeDecrease: 'Riduci dimensione testo lettura',
-    readerTextSizeIncrease: 'Aumenta dimensione testo lettura',
     apiTokenTitle: 'Token API esterna',
     apiTokenHelp: 'Usa un token per l\'accesso esterno all\'API pubblica delle notizie in cache.',
     apiTokenDocsLink: 'Documentazione API',
@@ -487,7 +477,6 @@ export const translations = {
     persistentErrorHelp: 'Se il problema persiste, controlla lo stato del servizio o contatta l\'assistenza.',
     singleSource: 'Fonte singola',
     sourceCount: ({ count }) => `${count} fonti`,
-    noExcerpt: 'Nessun estratto disponibile per questo articolo.',
     openOriginalSource: 'Apri articolo',
     shareArticle: 'Condividi articolo',
     readerMode: 'Modalita lettura',
@@ -497,8 +486,7 @@ export const translations = {
     readerUnavailable: 'La modalita lettura non e disponibile per questo articolo.',
     readerFallback: 'Mostro il testo di fallback estratto dal feed.',
     readTime: ({ minutes }) => `${minutes} min di lettura`,
-    sourceVersions: 'Versioni fonte',
-    newsLanguage: ({ language }) => `Lingua notizia: ${language}`
+    sourceVersions: 'Versioni fonte'
   }
 };
 
@@ -593,31 +581,4 @@ export function getLocalizedTopic(topic, locale = 'en') {
   }
 
   return topic;
-}
-
-const languageMeta = {
-  it: { flag: 'IT', emoji: '🇮🇹', labels: { en: 'Italian', it: 'Italiano' } },
-  en: { flag: 'EN', emoji: '🇬🇧', labels: { en: 'English', it: 'Inglese' } },
-  fr: { flag: 'FR', emoji: '🇫🇷', labels: { en: 'French', it: 'Francese' } },
-  de: { flag: 'DE', emoji: '🇩🇪', labels: { en: 'German', it: 'Tedesco' } },
-  es: { flag: 'ES', emoji: '🇪🇸', labels: { en: 'Spanish', it: 'Spagnolo' } }
-};
-
-export function getLanguageMeta(language, locale = 'en') {
-  const normalized = String(language || '').toLowerCase().slice(0, 2);
-  const entry = languageMeta[normalized];
-
-  if (!entry) {
-    return {
-      flag: normalized ? normalized.toUpperCase() : '??',
-      emoji: '🌐',
-      label: normalized ? normalized.toUpperCase() : 'Unknown'
-    };
-  }
-
-  return {
-    flag: entry.flag,
-    emoji: entry.emoji,
-    label: entry.labels[locale] || entry.labels.en
-  };
 }

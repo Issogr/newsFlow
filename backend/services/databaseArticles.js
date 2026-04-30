@@ -1,17 +1,5 @@
 const { getCurrentPublicationDay, normalizePublicationDate } = require('../utils/publicationDate');
-
-function parseJsonArray(value) {
-  if (!value) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+const { parseJsonArray } = require('../utils/json');
 
 function createArticleRepository({
   getDb,
@@ -508,16 +496,19 @@ function createArticleRepository({
   }
 
   function getTopicDetailsByArticleIds(articleIds) {
-    if (!Array.isArray(articleIds) || articleIds.length === 0) {
+    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    if (normalizedArticleIds.length === 0) {
       return new Map();
     }
 
-    const rows = getDb().prepare(`
-      SELECT article_id AS articleId, topic, source, confidence, evidence, reason_code AS reasonCode
-      FROM article_topics
-      WHERE article_id IN (${articleIds.map(() => '?').join(', ')})
-      ORDER BY topic ASC
-    `).all(...articleIds);
+    const rows = chunkValues(normalizedArticleIds).flatMap((ids) => {
+      return getDb().prepare(`
+        SELECT article_id AS articleId, topic, source, confidence, evidence, reason_code AS reasonCode
+        FROM article_topics
+        WHERE article_id IN (${ids.map(() => '?').join(', ')})
+        ORDER BY topic ASC
+      `).all(...ids);
+    });
 
     const topicDetailsMap = new Map();
     rows.forEach((row) => {
@@ -1003,56 +994,63 @@ function createArticleRepository({
   }
 
   function getArticlesByIds(articleIds = [], options = {}) {
-    if (!Array.isArray(articleIds) || articleIds.length === 0) {
+    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    if (normalizedArticleIds.length === 0) {
       return [];
     }
 
-    const params = [...articleIds];
-    const where = [`a.id IN (${articleIds.map(() => '?').join(', ')})`];
-    const scopeFilter = buildScopeFilter(options, 'a');
-    const retentionFilter = buildRetentionFilter(options, 'a');
-    const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
-    const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
-    const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
+    const rows = chunkValues(normalizedArticleIds).flatMap((ids) => {
+      const params = [...ids];
+      const where = [`a.id IN (${ids.map(() => '?').join(', ')})`];
+      const scopeFilter = buildScopeFilter(options, 'a');
+      const retentionFilter = buildRetentionFilter(options, 'a');
+      const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
+      const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
+      const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
 
-    where.push(scopeFilter.clause);
-    params.push(...scopeFilter.params);
-    where.push(publishedBeforeNowFilter.clause);
-    params.push(...publishedBeforeNowFilter.params);
+      where.push(scopeFilter.clause);
+      params.push(...scopeFilter.params);
+      where.push(publishedBeforeNowFilter.clause);
+      params.push(...publishedBeforeNowFilter.params);
 
-    if (retentionFilter) {
-      where.push(retentionFilter.clause);
-      params.push(...retentionFilter.params);
-    }
+      if (retentionFilter) {
+        where.push(retentionFilter.clause);
+        params.push(...retentionFilter.params);
+      }
 
-    if (excludedSourceFilter) {
-      where.push(excludedSourceFilter.clause);
-      params.push(...excludedSourceFilter.params);
-    }
+      if (excludedSourceFilter) {
+        where.push(excludedSourceFilter.clause);
+        params.push(...excludedSourceFilter.params);
+      }
 
-    if (excludedSubSourceFilter) {
-      where.push(excludedSubSourceFilter.clause);
-      params.push(...excludedSubSourceFilter.params);
-    }
+      if (excludedSubSourceFilter) {
+        where.push(excludedSubSourceFilter.clause);
+        params.push(...excludedSubSourceFilter.params);
+      }
 
-    const rows = getDb().prepare(`
-      SELECT
-        a.id,
-        a.source_id AS sourceId,
-        a.source_name AS source,
-        a.owner_user_id AS ownerUserId,
-        a.title,
-        a.description,
-        a.content,
-        a.url,
-        a.image,
-        a.author,
-        a.language,
-        a.published_at AS pubDate
-      FROM articles a
-      WHERE ${where.join(' AND ')}
-      ORDER BY a.published_at DESC, a.id DESC
-    `).all(...params);
+      return getDb().prepare(`
+        SELECT
+          a.id,
+          a.source_id AS sourceId,
+          a.source_name AS source,
+          a.owner_user_id AS ownerUserId,
+          a.title,
+          a.description,
+          a.content,
+          a.url,
+          a.image,
+          a.author,
+          a.language,
+          a.published_at AS pubDate
+        FROM articles a
+        WHERE ${where.join(' AND ')}
+      `).all(...params);
+    });
+
+    rows.sort((left, right) => {
+      const publishedComparison = String(right.pubDate || '').localeCompare(String(left.pubDate || ''));
+      return publishedComparison || String(right.id || '').localeCompare(String(left.id || ''));
+    });
 
     return hydrateArticleRows(rows, options);
   }
@@ -1130,34 +1128,20 @@ function createArticleRepository({
 
   function cleanupRemovedConfiguredSourceData() {
     const database = getDb();
-    const rawConfiguredSourceIds = getRawConfiguredSourceIds();
+    const retainedGlobalSourceIds = [...new Set([
+      ...getRawConfiguredSourceIds(),
+      ...getConfiguredSourceGroupIds(),
+      ...getLegacyConfiguredSourceGroupIds(),
+    ])];
     const configuredSourceGroupIds = getConfiguredSourceGroupIds();
-    const legacyConfiguredSourceGroupIds = getLegacyConfiguredSourceGroupIds();
     const groupedConfiguredSourceIds = getGroupedConfiguredSourceIds();
-    const selectGlobalArticles = database.prepare(`
-      SELECT id, source_id AS sourceId, source_name AS sourceName
-      FROM articles
-      WHERE owner_user_id IS NULL
-    `);
-    const deleteSearchEntries = database.prepare(`
-      DELETE FROM article_search
-      WHERE article_id = ?
-    `);
-    const deleteArticle = database.prepare(`
-      DELETE FROM articles
-      WHERE id = ?
-    `);
     const selectSettings = database.prepare(`
       SELECT user_id AS userId,
              default_source_ids AS excludedSourceIds,
              excluded_sub_source_ids AS excludedSubSourceIds
       FROM user_settings
     `);
-    const selectUserSourceIds = database.prepare(`
-      SELECT id
-      FROM user_sources
-      WHERE user_id = ?
-    `);
+    const selectUserSourceIds = database.prepare('SELECT user_id AS userId, id FROM user_sources');
     const updateSettings = database.prepare(`
       UPDATE user_settings
       SET default_source_ids = ?,
@@ -1167,24 +1151,39 @@ function createArticleRepository({
     `);
 
     const transaction = database.transaction(() => {
-      let removedArticles = 0;
       let updatedSettings = 0;
       const now = new Date().toISOString();
+      const retainedPlaceholders = retainedGlobalSourceIds.map(() => '?').join(', ');
+      const removedArticleFilter = retainedGlobalSourceIds.length > 0
+        ? `owner_user_id IS NULL AND source_id NOT IN (${retainedPlaceholders})`
+        : 'owner_user_id IS NULL';
+      const deleteSearchEntries = database.prepare(`
+        DELETE FROM article_search
+        WHERE article_id IN (
+          SELECT id
+          FROM articles
+          WHERE ${removedArticleFilter}
+        )
+      `);
+      const deleteArticles = database.prepare(`
+        DELETE FROM articles
+        WHERE ${removedArticleFilter}
+      `);
+      const customSourceIdsByUserId = new Map();
 
-      selectGlobalArticles.all().forEach((article) => {
-        if (rawConfiguredSourceIds.has(article.sourceId) || configuredSourceGroupIds.has(article.sourceId) || legacyConfiguredSourceGroupIds.has(article.sourceId)) {
-          return;
-        }
-
-        deleteSearchEntries.run(article.id);
-        deleteArticle.run(article.id);
-        removedArticles += 1;
+      selectUserSourceIds.all().forEach((source) => {
+        const sourceIds = customSourceIdsByUserId.get(source.userId) || new Set();
+        sourceIds.add(source.id);
+        customSourceIdsByUserId.set(source.userId, sourceIds);
       });
+
+      deleteSearchEntries.run(...retainedGlobalSourceIds);
+      const removedArticles = deleteArticles.run(...retainedGlobalSourceIds).changes;
 
       selectSettings.all().forEach((row) => {
         const excludedSourceIds = parseJsonArray(row.excludedSourceIds);
         const excludedSubSourceIds = parseJsonArray(row.excludedSubSourceIds);
-        const customSourceIds = new Set(selectUserSourceIds.all(row.userId).map((source) => source.id));
+        const customSourceIds = customSourceIdsByUserId.get(row.userId) || new Set();
         const nextExcludedSourceIds = excludedSourceIds.filter((sourceId) => {
           return configuredSourceGroupIds.has(sourceId) || customSourceIds.has(sourceId);
         });

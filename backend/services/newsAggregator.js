@@ -15,11 +15,13 @@ const {
   createEmptyRefreshPayload,
   ingestSourceConfigs
 } = require('./newsAggregatorIngestion');
+const { parseIntegerEnv } = require('../utils/env');
 
-const SCRAPE_INTERVAL_MS = parseInt(process.env.SCRAPE_INTERVAL_MS || '900000', 10);
-const ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES = parseInt(
-  process.env.SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES || process.env.ONLINE_ACTIVITY_WINDOW_MINUTES || '5',
-  10
+const SCRAPE_INTERVAL_MS = parseIntegerEnv('SCRAPE_INTERVAL_MS', 900000, { min: 1000 });
+const ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES = parseIntegerEnv(
+  'SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES',
+  parseIntegerEnv('ONLINE_ACTIVITY_WINDOW_MINUTES', 5, { min: 0 }),
+  { min: 0 }
 );
 
 let refreshPromise = null;

@@ -2,6 +2,9 @@
 
 ## 3.2.13.3
 
+- closed audit findings around AI topic caps, env parsing, BFF forwarded headers, stale BFF session-user rows, and hop-by-hop response headers so edge-case runtime behavior is safer and more predictable
+- reduced duplicated/dead code across release-note dismissal, sharing status, backend user contexts, JSON parsing, AI classifier exports, reader props, and stale i18n metadata
+- optimized removed-source cleanup and chunked article/topic ID lookups to avoid broad per-row SQLite work and oversized `IN` queries as data grows
 - hardened news pagination parsing against non-finite or excessive page values before SQLite queries, added hot-path article/topic indexes, and removed the stale unused `MAX_SCAN_ARTICLES` runtime setting
 - reduced duplicate feed loads, preserved filtered WebSocket subscriptions across reconnects, cleared stale reader-mode errors when cached content is available, encoded reader article ids in client routes, and flushed buffered anonymous public API counters during graceful shutdown
 - hardened feed search, retention parsing, private-source metadata, and public feed pagination metadata so edge-case queries and API responses stay predictable

@@ -2,7 +2,6 @@ const fs = require('fs');
 const crypto = require('crypto');
 const http = require('http');
 const path = require('path');
-const util = require('util');
 const express = require('express');
 const axios = require('axios');
 const cookie = require('cookie');
@@ -12,20 +11,38 @@ const Database = require('better-sqlite3');
 const session = require('express-session');
 const SqliteStoreFactory = require('better-sqlite3-session-store')(session);
 
-util._extend = Object.assign;
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const BACKEND_SESSION_COOKIE_NAME = 'newsflow_session';
 const BFF_SESSION_COOKIE_NAME = 'newsflow_bff_session';
 const DEFAULT_FRONTEND_DIST_DIR = path.join(__dirname, 'public');
 const DEFAULT_SESSION_DB_PATH = path.join(__dirname, 'data', 'sessions.sqlite');
-const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '30', 10);
+const SESSION_TTL_DAYS = parseIntegerEnv('SESSION_TTL_DAYS', 30, { min: 1 });
 const SESSION_TTL_MS = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
-const SESSION_STORE_CLEAR_INTERVAL_MS = parseInt(process.env.SESSION_STORE_CLEAR_INTERVAL_MS || '300000', 10);
+const SESSION_STORE_CLEAR_INTERVAL_MS = parseIntegerEnv('SESSION_STORE_CLEAR_INTERVAL_MS', 300000, { min: 1000 });
 const SESSION_SCHEMA_VERSION = 1;
 const DEFAULT_BFF_SESSION_SECRET = 'development-only-change-me';
 const DEFAULT_INTERNAL_PROXY_TOKEN = 'development-only-change-me';
-const UPSTREAM_TIMEOUT_MS = parseInt(process.env.BFF_UPSTREAM_TIMEOUT_MS || '30000', 10);
+const UPSTREAM_TIMEOUT_MS = parseIntegerEnv('BFF_UPSTREAM_TIMEOUT_MS', 30000, { min: 1000 });
+
+function parseIntegerEnv(name, fallbackValue, options = {}) {
+  const parsed = parseInt(process.env[name] || String(fallbackValue), 10);
+  const fallback = Number(fallbackValue);
+
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  if (Number.isFinite(options.min) && parsed < options.min) {
+    return fallback;
+  }
+
+  if (Number.isFinite(options.max) && parsed > options.max) {
+    return fallback;
+  }
+
+  return parsed;
+}
 
 function readConfiguredSecret(name, developmentFallback) {
   const configured = String(process.env[name] || '').trim();
@@ -153,7 +170,7 @@ function applySanitizedForwardedHeaders(proxyReq, req) {
   proxyReq.removeHeader('x-forwarded-host');
   proxyReq.removeHeader('x-forwarded-proto');
 
-  const clientIp = req.socket?.remoteAddress || req.ip;
+  const clientIp = req.ip || req.socket?.remoteAddress;
   if (clientIp) {
     proxyReq.setHeader('X-Forwarded-For', clientIp);
   }
@@ -162,7 +179,7 @@ function applySanitizedForwardedHeaders(proxyReq, req) {
     proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
   }
 
-  proxyReq.setHeader('X-Forwarded-Proto', req.socket?.encrypted ? 'https' : 'http');
+  proxyReq.setHeader('X-Forwarded-Proto', req.protocol || (req.socket?.encrypted ? 'https' : 'http'));
 }
 
 function extractBackendSessionCookie(setCookieHeader) {
@@ -180,10 +197,23 @@ function extractBackendSessionCookie(setCookieHeader) {
 }
 
 function copyBackendResponseHeaders(res, headers = {}) {
+  const blockedHeaders = new Set([
+    'connection',
+    'content-length',
+    'keep-alive',
+    'proxy-authenticate',
+    'proxy-authorization',
+    'set-cookie',
+    'te',
+    'trailer',
+    'transfer-encoding',
+    'upgrade',
+  ]);
+
   Object.entries(headers).forEach(([name, value]) => {
     const lowerName = String(name || '').toLowerCase();
 
-    if (lowerName === 'set-cookie' || lowerName === 'transfer-encoding' || lowerName === 'content-length' || lowerName === 'connection') {
+    if (blockedHeaders.has(lowerName)) {
       return;
     }
 
@@ -426,9 +456,6 @@ function getBackendSessionCookieFromRequest(req) {
 
 async function persistSessionUserId(req, userId, sessionDb = null) {
   if (!req.session || !userId || req.session.userId === userId) {
-    if (req.session && userId) {
-      upsertStoredSessionUser(sessionDb, req.sessionID, userId);
-    }
     return;
   }
 
@@ -485,8 +512,8 @@ function createApp(options = {}) {
         ? req.get(name)
         : req.headers?.[String(name || '').toLowerCase()]
     );
-    const forwardedFor = String(req.socket?.remoteAddress || '').trim();
-    const forwardedProto = req.socket?.encrypted ? 'https' : 'http';
+    const forwardedFor = String(req.ip || req.socket?.remoteAddress || '').trim();
+    const forwardedProto = req.protocol || (req.socket?.encrypted ? 'https' : 'http');
     const host = String(getHeader('host') || '').trim();
 
     return {
@@ -645,7 +672,7 @@ function createApp(options = {}) {
 
         if (proxyRes.statusCode === 401) {
           clearBffSessionCookie(res);
-          req.session?.destroy?.(() => {});
+          destroySession(req, sessionDb).catch(() => {});
           return;
         }
 
@@ -864,7 +891,7 @@ function createServer(options = {}) {
 }
 
 if (require.main === module) {
-  const port = parseInt(process.env.PORT || '80', 10);
+  const port = parseIntegerEnv('PORT', 80, { min: 1, max: 65535 });
   const server = createServer();
 
   server.listen(port, () => {
