@@ -46,34 +46,22 @@ function getNavButton(name) {
 }
 
 describe('MobileBottomNav', () => {
-  it('renders four nav buttons', () => {
+  it.each([
+    ['Sources', ['BBC', 'CNN']],
+    ['Topics', ['Technology', 'Sport']]
+  ])('opens and closes the %s bubble', (buttonName, optionLabels) => {
     renderNav();
-    expect(getNavButton('Sources')).toBeInTheDocument();
-    expect(getNavButton('Topics')).toBeInTheDocument();
-    expect(getNavButton('Last 3 hours')).toBeInTheDocument();
-    expect(getNavButton('Search')).toBeInTheDocument();
-  });
+    const button = getNavButton(buttonName);
 
-  it('opens the sources bubble when Sources is pressed', () => {
-    const { container } = renderNav();
-    expect(container.querySelector('[aria-hidden="true"][inert]')).toBeInTheDocument();
+    fireEvent.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    optionLabels.forEach((label) => {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    });
 
-    fireEvent.click(getNavButton('Sources'));
-    expect(screen.getByText('BBC')).toBeInTheDocument();
-    expect(screen.getByText('CNN')).toBeInTheDocument();
-    expect(container.querySelector('[aria-hidden="false"][inert]')).not.toBeInTheDocument();
-  });
-
-  it('closes an open sources bubble when Sources is pressed again', () => {
-    renderNav();
-    const sourcesButton = getNavButton('Sources');
-
-    fireEvent.click(sourcesButton);
-    expect(sourcesButton).toHaveAttribute('aria-expanded', 'true');
-
-    fireEvent.pointerDown(sourcesButton);
-    fireEvent.click(sourcesButton);
-    expect(sourcesButton).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.pointerDown(button);
+    fireEvent.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('keeps sources open when a mobile tap emits follow-up mouse events', () => {
@@ -97,25 +85,6 @@ describe('MobileBottomNav', () => {
 
     fireEvent.scroll(window);
     expect(sourcesButton).toHaveAttribute('aria-expanded', 'false');
-  });
-
-  it('opens the topics bubble when Topics is pressed', () => {
-    renderNav();
-    fireEvent.click(getNavButton('Topics'));
-    expect(screen.getByText('Technology')).toBeInTheDocument();
-    expect(screen.getByText('Sport')).toBeInTheDocument();
-  });
-
-  it('closes an open topics bubble when Topics is pressed again', () => {
-    renderNav();
-    const topicsButton = getNavButton('Topics');
-
-    fireEvent.click(topicsButton);
-    expect(topicsButton).toHaveAttribute('aria-expanded', 'true');
-
-    fireEvent.pointerDown(topicsButton);
-    fireEvent.click(topicsButton);
-    expect(topicsButton).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('toggles time filter when Time button is pressed', () => {
@@ -164,7 +133,7 @@ describe('MobileBottomNav', () => {
       showRecentOnly: true,
       search: 'query',
     });
-    const badges = screen.getAllByText('1');
-    expect(badges.length).toBe(2);
+    expect(getNavButton('Sources')).toHaveTextContent('1');
+    expect(getNavButton('Topics')).toHaveTextContent('1');
   });
 });

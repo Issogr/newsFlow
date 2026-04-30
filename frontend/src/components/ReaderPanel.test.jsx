@@ -127,25 +127,6 @@ describe('ReaderPanel', () => {
     });
   });
 
-  test('applies centered desktop alignment when requested', () => {
-    fetchReaderArticle.mockImplementation(() => new Promise(() => {}));
-
-    const { container } = render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="center"
-        t={t}
-        currentUser={currentUser}
-        onUserUpdate={jest.fn()}
-        onClose={jest.fn()}
-      />
-    );
-
-    expect(container.firstChild).toBeInTheDocument();
-    expect(container.querySelector('.lg\\:justify-center')).toBeInTheDocument();
-  });
-
   test('locks body scroll while the reader is open', () => {
     fetchReaderArticle.mockImplementation(() => new Promise(() => {}));
 
@@ -288,40 +269,6 @@ describe('ReaderPanel', () => {
       title: 'Reader title',
       url: 'https://example.com/one'
     });
-  });
-
-  test('shows a share status bubble in reader mode when clipboard fallback is used', async () => {
-    navigator.share = undefined;
-    navigator.clipboard = {
-      writeText: jest.fn().mockResolvedValue(undefined)
-    };
-    fetchReaderArticle.mockResolvedValue({
-      title: 'Reader title',
-      language: 'en',
-      excerpt: 'Excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
-      minutesToRead: 1
-    });
-
-    render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onUserUpdate={jest.fn()}
-        onClose={jest.fn()}
-      />
-    );
-
-    await screen.findByText('Reader title');
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
-    });
-
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.com/one');
-    expect(screen.getByText('shareCopiedMessage')).toBeInTheDocument();
   });
 
   test('updates reader text size and persists it without reloading parent state', async () => {

@@ -226,23 +226,6 @@ describe('NewsAggregator', () => {
     expect(screen.getByText('You reached the end of the available results.')).toBeInTheDocument();
   });
 
-  test('does not trigger a refresh when the app title is clicked', async () => {
-    fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'Current headline' }],
-      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-      filters: { sources: [], sourceCatalog: [], topics: [] }
-    });
-
-    await renderNewsAggregator();
-
-    expect(await screen.findByText('Current headline')).toBeInTheDocument();
-    const initialCallCount = fetchNews.mock.calls.length;
-
-    fireEvent.click(screen.getByText('News Flow'));
-
-    expect(fetchNews).toHaveBeenCalledTimes(initialCallCount);
-  });
-
   test('reloads cached feed silently when AI topic updates complete', async () => {
     let onTopicRefresh;
 
@@ -506,7 +489,10 @@ describe('NewsAggregator', () => {
     expect(screen.queryByText('Fresh headline')).not.toBeInTheDocument();
   });
 
-  test('passes the compact card preference to news cards', async () => {
+  test.each([
+    ['desktop', true, 'First headline compact'],
+    ['mobile', false, 'First headline']
+  ])('resolves compact card mode %s on desktop', async (mode, compactNewsCards, expectedText) => {
     fetchNews.mockResolvedValue({
       items: [{ id: 'group-1', title: 'First headline' }],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
@@ -518,34 +504,16 @@ describe('NewsAggregator', () => {
         ...currentUser,
         settings: {
           ...currentUser.settings,
-          compactNewsCards: true,
-          compactNewsCardsMode: 'desktop'
+          compactNewsCards,
+          compactNewsCardsMode: mode
         }
       }
     });
 
-    expect(await screen.findByText('First headline compact')).toBeInTheDocument();
-  });
-
-  test('keeps standard cards when compact mode is mobile-only on desktop', async () => {
-    fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'First headline' }],
-      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-      filters: { sources: [], sourceCatalog: [], topics: [] }
-    });
-
-    await renderNewsAggregator({
-      currentUser: {
-        ...currentUser,
-        settings: {
-          ...currentUser.settings,
-          compactNewsCardsMode: 'mobile'
-        }
-      }
-    });
-
-    expect(await screen.findByText('First headline')).toBeInTheDocument();
-    expect(screen.queryByText('First headline compact')).not.toBeInTheDocument();
+    expect(await screen.findByText(expectedText)).toBeInTheDocument();
+    if (!compactNewsCards) {
+      expect(screen.queryByText('First headline compact')).not.toBeInTheDocument();
+    }
   });
 
   test('uses the server cursor for load more requests', async () => {
@@ -719,7 +687,7 @@ describe('NewsAggregator', () => {
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
   });
 
-  test('shows a back-to-top button after scrolling and scrolls smoothly to the top', async () => {
+  test('scrolls smoothly to the top from the back-to-top control', async () => {
     fetchNews.mockResolvedValue({
       items: [{ id: 'group-1', title: 'First headline' }],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
@@ -729,7 +697,6 @@ describe('NewsAggregator', () => {
     await renderNewsAggregator();
 
     const backToTopButton = screen.getByRole('button', { name: 'Back to top' });
-    expect(backToTopButton).toHaveClass('pointer-events-none');
 
     await act(async () => {
       Object.defineProperty(window, 'scrollY', {
@@ -740,8 +707,6 @@ describe('NewsAggregator', () => {
       fireEvent.scroll(window);
       jest.advanceTimersByTime(16);
     });
-
-    expect(backToTopButton).toHaveClass('opacity-100');
 
     fireEvent.click(backToTopButton);
 

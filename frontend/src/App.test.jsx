@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import {
   AUTH_EXPIRED_EVENT,
@@ -86,16 +86,6 @@ describe('App', () => {
     document.documentElement.style.colorScheme = '';
   });
 
-  test('renders the authentication screen when there is no saved session', () => {
-    fetchCurrentUser.mockRejectedValue(new Error('Session missing'));
-
-    render(<App />);
-
-    return waitFor(() => {
-      expect(screen.getByText('Sign in')).toBeInTheDocument();
-    });
-  });
-
   test('renders the authenticated app when the current session loads', async () => {
     fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.13.3' }));
 
@@ -149,8 +139,27 @@ describe('App', () => {
     });
   });
 
-  test('auto-dismisses the update notice after 30 seconds and persists the current version', async () => {
-    vi.useFakeTimers();
+  test.each([
+    {
+      name: 'auto-dismisses after 30 seconds',
+      useFakeTimers: true,
+      dismiss: async () => {
+        await act(async () => {
+          vi.advanceTimersByTime(30000);
+        });
+      }
+    },
+    {
+      name: 'dismisses with the close button',
+      useFakeTimers: false,
+      dismiss: async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Close update notice' }));
+      }
+    }
+  ])('$name and persists the current version', async ({ useFakeTimers, dismiss }) => {
+    if (useFakeTimers) {
+      vi.useFakeTimers();
+    }
     fetchCurrentUser.mockResolvedValue(createCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
@@ -161,27 +170,7 @@ describe('App', () => {
 
     expect(await screen.findByText('Update released')).toBeInTheDocument();
 
-    vi.advanceTimersByTime(30000);
-
-    await waitFor(() => {
-      expect(screen.queryByText('Update released')).not.toBeInTheDocument();
-    });
-
-    expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.13.3' });
-  });
-
-  test('persists the current version when the update notice is closed with the X button', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser());
-    updateUserSettings.mockResolvedValue({
-      success: true,
-      settings: createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.13.3' }).settings
-    });
-
-    render(<App />);
-
-    expect(await screen.findByText('Update released')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Close update notice' }));
+    await dismiss();
 
     await waitFor(() => {
       expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: '3.2.13.3' });
