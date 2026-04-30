@@ -52,7 +52,6 @@ describe('userService imports', () => {
         themeMode: 'dark',
         articleRetentionHours: 12,
         recentHours: 2,
-        autoRefreshEnabled: false,
         showNewsImages: false,
         compactNewsCards: true,
         compactNewsCardsMode: 'everywhere',
@@ -77,7 +76,6 @@ describe('userService imports', () => {
         themeMode: 'dark',
         articleRetentionHours: 12,
         recentHours: 2,
-        autoRefreshEnabled: false,
         showNewsImages: false,
         compactNewsCards: true,
         compactNewsCardsMode: 'everywhere',
@@ -100,7 +98,6 @@ describe('userService imports', () => {
       themeMode: 'dark',
       articleRetentionHours: 12,
       recentHours: 2,
-      autoRefreshEnabled: false,
       showNewsImages: false,
       readerPanelPosition: 'left',
       readerTextSize: 'large',
@@ -118,7 +115,6 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      autoRefreshEnabled: false,
       recentHours: 2,
       readerTextSize: 'small'
     });
@@ -130,7 +126,6 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      autoRefreshEnabled: false,
       recentHours: 2,
       readerTextSize: 'small'
     });
@@ -140,7 +135,6 @@ describe('userService imports', () => {
     expect(importedState.settings).toMatchObject({
       themeMode: 'dark',
       showNewsImages: false,
-      autoRefreshEnabled: false,
       recentHours: 2,
       readerTextSize: 'small'
     });
@@ -149,7 +143,6 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      autoRefreshEnabled: false,
       recentHours: 2
     });
   });

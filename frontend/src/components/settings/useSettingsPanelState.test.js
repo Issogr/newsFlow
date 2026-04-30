@@ -27,7 +27,6 @@ const baseCurrentUser = {
     themeMode: 'system',
     articleRetentionHours: 24,
     recentHours: 3,
-    autoRefreshEnabled: true,
     showNewsImages: true,
     compactNewsCards: false,
     compactNewsCardsMode: 'off',

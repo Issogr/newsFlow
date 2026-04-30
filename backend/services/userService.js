@@ -233,7 +233,6 @@ function getDefaultSettings() {
     themeMode: 'system',
     articleRetentionHours: GLOBAL_RETENTION_HOURS,
     recentHours: MAX_RECENT_HOURS,
-    autoRefreshEnabled: true,
     showNewsImages: true,
     compactNewsCards: false,
     compactNewsCardsMode: 'off',
@@ -326,9 +325,6 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     themeMode: normalizeThemeMode(payload.themeMode || currentSettings.themeMode),
     articleRetentionHours,
     recentHours,
-    autoRefreshEnabled: typeof payload.autoRefreshEnabled === 'boolean'
-      ? payload.autoRefreshEnabled
-      : currentSettings.autoRefreshEnabled !== false,
     showNewsImages: typeof payload.showNewsImages === 'boolean'
       ? payload.showNewsImages
       : currentSettings.showNewsImages !== false,
@@ -613,7 +609,6 @@ function exportUserSettings(userId) {
       themeMode: settings.themeMode || 'system',
       articleRetentionHours: settings.articleRetentionHours,
       recentHours: settings.recentHours,
-      autoRefreshEnabled: settings.autoRefreshEnabled !== false,
       showNewsImages: settings.showNewsImages !== false,
       compactNewsCards: settings.compactNewsCards === true,
       compactNewsCardsMode: normalizeCompactNewsCardsMode(settings.compactNewsCardsMode, settings.compactNewsCards === true ? 'everywhere' : 'off'),

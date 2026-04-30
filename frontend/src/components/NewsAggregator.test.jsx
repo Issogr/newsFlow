@@ -91,7 +91,6 @@ const currentUser = {
     themeMode: 'system',
     articleRetentionHours: 24,
     recentHours: 3,
-    autoRefreshEnabled: true,
     showNewsImages: true,
     compactNewsCards: false,
     compactNewsCardsMode: 'off',
@@ -204,6 +203,7 @@ describe('NewsAggregator', () => {
       expect(fetchNews).toHaveBeenCalledWith(expect.objectContaining({ refresh: false }));
     });
 
+    expect(fetchNews).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
   });
 
@@ -643,7 +643,7 @@ describe('NewsAggregator', () => {
     fetchNews.mockImplementation(() => {
       callCount += 1;
 
-      if (callCount <= 2) {
+      if (callCount === 1) {
         return Promise.resolve({
           items: [{ id: 'group-1', title: 'Current headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }],
           meta: {
@@ -659,7 +659,7 @@ describe('NewsAggregator', () => {
         });
       }
 
-      if (callCount === 3) {
+      if (callCount === 2) {
         return appendRequest.promise;
       }
 

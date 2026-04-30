@@ -201,6 +201,38 @@ describe('ReaderPanel', () => {
     expect(fetchReaderArticle).not.toHaveBeenCalled();
   });
 
+  test('clears a stale reader error when switching to a cached article', async () => {
+    fetchReaderArticle.mockRejectedValue(new Error('Reader failed'));
+
+    render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="right"
+        locale="en"
+        t={t}
+        currentUser={currentUser}
+        readerCache={{
+          'article-2': {
+            title: 'Cached second title',
+            language: 'en',
+            excerpt: 'Cached excerpt',
+            contentBlocks: [{ type: 'paragraph', text: 'Cached second body' }],
+            minutesToRead: 2
+          }
+        }}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(await screen.findByText('readerUnavailable')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
+
+    expect(await screen.findByText('Cached second title')).toBeInTheDocument();
+    expect(screen.queryByText('readerUnavailable')).not.toBeInTheDocument();
+  });
+
   test('disables unsafe original-source links', async () => {
     fetchReaderArticle.mockResolvedValue({
       title: 'Unsafe reader title',

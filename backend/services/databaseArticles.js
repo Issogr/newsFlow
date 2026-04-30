@@ -347,38 +347,75 @@ function createArticleRepository({
       }
     });
 
+    const canonicalUrlsByOwner = new Map();
     canonicalRowsByKey.forEach((rows, key) => {
       const [ownerUserId, canonicalUrl] = key.split('\u0000');
-      rows.push(...database.prepare(`
-        SELECT id, source_id AS sourceId, source_name AS sourceName,
-               published_at AS publishedAt, updated_at AS updatedAt, created_at AS createdAt
-        FROM articles
-        WHERE canonical_url = ?
-          AND COALESCE(owner_user_id, '') = ?
-        ORDER BY datetime(updated_at) DESC, datetime(published_at) DESC, datetime(created_at) DESC, id DESC
-      `).all(canonicalUrl, ownerUserId));
+      const urls = canonicalUrlsByOwner.get(ownerUserId) || [];
+      urls.push(canonicalUrl);
+      canonicalUrlsByOwner.set(ownerUserId, urls);
+      canonicalRowsByKey.set(key, rows);
     });
 
+    canonicalUrlsByOwner.forEach((urls, ownerUserId) => {
+      chunkValues([...new Set(urls)]).forEach((urlChunk) => {
+        database.prepare(`
+          SELECT id, source_id AS sourceId, source_name AS sourceName, canonical_url AS canonicalUrl,
+                 published_at AS publishedAt, updated_at AS updatedAt, created_at AS createdAt
+          FROM articles
+          WHERE COALESCE(owner_user_id, '') = ?
+            AND canonical_url IN (${urlChunk.map(() => '?').join(', ')})
+          ORDER BY datetime(updated_at) DESC, datetime(published_at) DESC, datetime(created_at) DESC, id DESC
+        `).all(ownerUserId, ...urlChunk).forEach((row) => {
+          const key = `${ownerUserId}\u0000${row.canonicalUrl}`;
+          const rows = canonicalRowsByKey.get(key);
+          if (rows) {
+            rows.push(row);
+          }
+        });
+      });
+    });
+
+    const titleRangesByOwner = new Map();
     titleGroupRanges.forEach((range, aliasKey) => {
-      const sourceClauses = [];
-      const sourceParams = [];
-
-      if (range.aliases.ids.length > 0) {
-        sourceClauses.push(`source_id IN (${range.aliases.ids.map(() => '?').join(', ')})`);
-        sourceParams.push(...range.aliases.ids);
-      }
-
-      if (range.aliases.names.length > 0) {
-        sourceClauses.push(`source_name IN (${range.aliases.names.map(() => '?').join(', ')})`);
-        sourceParams.push(...range.aliases.names);
-      }
-
-      if (sourceClauses.length === 0) {
+      if (range.aliases.ids.length === 0 && range.aliases.names.length === 0) {
         titleRowsByAliasKey.set(aliasKey, []);
         return;
       }
 
-      titleRowsByAliasKey.set(aliasKey, database.prepare(`
+      const ownerRanges = titleRangesByOwner.get(range.ownerUserId) || [];
+      ownerRanges.push({ aliasKey, range });
+      titleRangesByOwner.set(range.ownerUserId, ownerRanges);
+    });
+
+    titleRangesByOwner.forEach((ownerRanges, ownerUserId) => {
+      const sourceIds = new Set();
+      const sourceNames = new Set();
+      let publishedAfter = Infinity;
+      let publishedBefore = -Infinity;
+
+      ownerRanges.forEach(({ range }) => {
+        range.aliases.ids.forEach((id) => sourceIds.add(id));
+        range.aliases.names.forEach((name) => sourceNames.add(name));
+        publishedAfter = Math.min(publishedAfter, range.publishedAfter);
+        publishedBefore = Math.max(publishedBefore, range.publishedBefore);
+      });
+
+      const sourceClauses = [];
+      const sourceParams = [];
+      const sourceIdList = [...sourceIds];
+      const sourceNameList = [...sourceNames];
+
+      if (sourceIdList.length > 0) {
+        sourceClauses.push(`source_id IN (${sourceIdList.map(() => '?').join(', ')})`);
+        sourceParams.push(...sourceIdList);
+      }
+
+      if (sourceNameList.length > 0) {
+        sourceClauses.push(`source_name IN (${sourceNameList.map(() => '?').join(', ')})`);
+        sourceParams.push(...sourceNameList);
+      }
+
+      const candidateRows = database.prepare(`
         SELECT id, source_id AS sourceId, source_name AS sourceName, title,
                published_at AS publishedAt, updated_at AS updatedAt, created_at AS createdAt
         FROM articles
@@ -387,11 +424,21 @@ function createArticleRepository({
           AND published_at BETWEEN ? AND ?
         ORDER BY datetime(updated_at) DESC, datetime(published_at) DESC, datetime(created_at) DESC, id DESC
       `).all(
-        range.ownerUserId,
+        ownerUserId,
         ...sourceParams,
-        new Date(range.publishedAfter).toISOString(),
-        new Date(range.publishedBefore).toISOString()
-      ));
+        new Date(publishedAfter).toISOString(),
+        new Date(publishedBefore).toISOString()
+      );
+
+      ownerRanges.forEach(({ aliasKey, range }) => {
+        titleRowsByAliasKey.set(aliasKey, candidateRows.filter((row) => {
+          const rowTimestamp = Date.parse(row.publishedAt || '');
+          return sourceMatchesAliases(row, range.aliases)
+            && Number.isFinite(rowTimestamp)
+            && rowTimestamp >= range.publishedAfter
+            && rowTimestamp <= range.publishedBefore;
+        }));
+      });
     });
 
     return {
@@ -993,6 +1040,7 @@ function createArticleRepository({
         a.id,
         a.source_id AS sourceId,
         a.source_name AS source,
+        a.owner_user_id AS ownerUserId,
         a.title,
         a.description,
         a.content,

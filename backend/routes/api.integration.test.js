@@ -102,7 +102,6 @@ describe('API auth and user flows', () => {
         defaultLanguage: 'auto',
         articleRetentionHours: 24,
         recentHours: 3,
-        autoRefreshEnabled: true,
         showNewsImages: true,
         compactNewsCards: false,
         compactNewsCardsMode: 'off',
@@ -341,7 +340,6 @@ describe('API auth and user flows', () => {
         themeMode: 'dark',
         articleRetentionHours: 999,
         recentHours: 999,
-        autoRefreshEnabled: false,
         showNewsImages: false,
         compactNewsCardsMode: 'desktop',
         readerPanelPosition: 'left',
@@ -359,7 +357,6 @@ describe('API auth and user flows', () => {
         themeMode: 'dark',
         articleRetentionHours: 24,
         recentHours: 3,
-        autoRefreshEnabled: false,
         showNewsImages: false,
         compactNewsCards: true,
         compactNewsCardsMode: 'desktop',
@@ -452,6 +449,34 @@ describe('API auth and user flows', () => {
 
     expect(newsService.getCachedNewsFeed.mock.calls[0][0]).toEqual(expect.objectContaining({
       includeFilters: true
+    }));
+  });
+
+  test('normalizes unsafe public news pagination before querying cached news', async () => {
+    newsService.getCachedNewsFeed.mockResolvedValue({
+      items: [],
+      meta: { hasMore: false },
+      filters: null
+    });
+
+    await request(app)
+      .get('/api/public/news')
+      .query({ page: '1e309', pageSize: '1e309' })
+      .expect(200);
+
+    expect(newsService.getCachedNewsFeed.mock.calls[0][0]).toEqual(expect.objectContaining({
+      page: 1,
+      pageSize: 12
+    }));
+
+    await request(app)
+      .get('/api/public/news')
+      .query({ page: '999999', pageSize: '999999' })
+      .expect(200);
+
+    expect(newsService.getCachedNewsFeed.mock.calls[1][0]).toEqual(expect.objectContaining({
+      page: 1000,
+      pageSize: 30
     }));
   });
 
@@ -794,7 +819,6 @@ describe('API auth and user flows', () => {
           defaultLanguage: 'en',
           articleRetentionHours: 12,
           recentHours: 2,
-          autoRefreshEnabled: false,
           showNewsImages: false,
           compactNewsCards: true,
           compactNewsCardsMode: 'desktop',
@@ -821,7 +845,6 @@ describe('API auth and user flows', () => {
           defaultLanguage: 'en',
           articleRetentionHours: 12,
           recentHours: 2,
-          autoRefreshEnabled: false,
           showNewsImages: false,
           compactNewsCards: true,
           compactNewsCardsMode: 'desktop',

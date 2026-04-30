@@ -160,13 +160,14 @@ const ReaderPanel = ({
       return;
     }
 
+    setError(null);
+
     if (!forceRefresh && readerCacheRef.current[articleId]) {
       return;
     }
 
     const request = startLatestRequest();
 
-    setError(null);
     setLoading(true);
 
     try {

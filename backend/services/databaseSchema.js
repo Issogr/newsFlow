@@ -27,6 +27,7 @@ function createDatabaseSchema({ logger }) {
       CREATE INDEX IF NOT EXISTS idx_articles_source_id ON articles (source_id);
       CREATE INDEX IF NOT EXISTS idx_articles_source_name ON articles (source_name);
       CREATE INDEX IF NOT EXISTS idx_articles_owner_user_id ON articles (owner_user_id);
+      CREATE INDEX IF NOT EXISTS idx_articles_owner_published_id ON articles (owner_user_id, published_at DESC, id DESC);
       CREATE INDEX IF NOT EXISTS idx_articles_canonical_url ON articles (canonical_url);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_owner_source_canonical_url
       ON articles (COALESCE(owner_user_id, ''), source_id, canonical_url)
@@ -45,6 +46,7 @@ function createDatabaseSchema({ logger }) {
       );
 
       CREATE INDEX IF NOT EXISTS idx_article_topics_topic ON article_topics (topic);
+      CREATE INDEX IF NOT EXISTS idx_article_topics_topic_article ON article_topics (topic, article_id);
 
       CREATE TABLE IF NOT EXISTS ingestion_runs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,7 +132,6 @@ function createDatabaseSchema({ logger }) {
         theme_mode TEXT NOT NULL DEFAULT 'system',
         article_retention_hours INTEGER NOT NULL DEFAULT 24,
         recent_hours INTEGER NOT NULL DEFAULT 3,
-        auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
         show_news_images INTEGER NOT NULL DEFAULT 1,
         compact_news_cards INTEGER NOT NULL DEFAULT 0,
         compact_news_cards_mode TEXT NOT NULL DEFAULT 'off',

@@ -155,6 +155,11 @@ server.headersTimeout = 66000;
 process.on('SIGTERM', () => {
   logger.info('SIGTERM ricevuto. Shutdown graceful in corso...');
   newsService.stopScheduler();
+  try {
+    userService.flushAnonymousPublicApiUsage({ force: true });
+  } catch (error) {
+    logger.warn(`Anonymous public API usage flush failed during shutdown: ${error.message}`);
+  }
   rssParser.shutdown();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 10000);

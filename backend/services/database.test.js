@@ -69,6 +69,8 @@ describe('database migrations', () => {
     const userColumns = sqlite.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
     const passwordSetupTokenColumns = sqlite.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column) => column.name);
     const apiTokenColumns = sqlite.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
+    const articleIndexNames = sqlite.prepare('PRAGMA index_list(articles)').all().map((index) => index.name);
+    const topicIndexNames = sqlite.prepare('PRAGMA index_list(article_topics)').all().map((index) => index.name);
 
     sqlite.close();
 
@@ -79,7 +81,6 @@ describe('database migrations', () => {
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'source', 'confidence', 'evidence', 'reason_code', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
-    expect(settingsColumns).toContain('auto_refresh_enabled');
     expect(settingsColumns).toContain('show_news_images');
     expect(settingsColumns).toContain('compact_news_cards');
     expect(settingsColumns).toContain('compact_news_cards_mode');
@@ -93,6 +94,8 @@ describe('database migrations', () => {
     expect(userColumns).toContain('public_api_last_used_at');
     expect(passwordSetupTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'purpose', 'expires_at', 'used_at']));
     expect(apiTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'token_prefix', 'expires_at', 'revoked_at', 'last_used_at']));
+    expect(articleIndexNames).toContain('idx_articles_owner_published_id');
+    expect(topicIndexNames).toContain('idx_article_topics_topic_article');
   });
 
   test('migrates an unversioned legacy database instead of marking it current', () => {
@@ -116,8 +119,7 @@ describe('database migrations', () => {
         theme_mode TEXT NOT NULL DEFAULT 'system',
         article_retention_hours INTEGER NOT NULL DEFAULT 24,
         recent_hours INTEGER NOT NULL DEFAULT 3,
-        auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
-        show_news_images INTEGER NOT NULL DEFAULT 1,
+      show_news_images INTEGER NOT NULL DEFAULT 1,
         reader_panel_position TEXT NOT NULL DEFAULT 'right',
         reader_text_size TEXT NOT NULL DEFAULT 'medium',
         last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
@@ -192,8 +194,7 @@ describe('database migrations', () => {
         theme_mode TEXT NOT NULL DEFAULT 'system',
         article_retention_hours INTEGER NOT NULL DEFAULT 24,
         recent_hours INTEGER NOT NULL DEFAULT 3,
-        auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
-        show_news_images INTEGER NOT NULL DEFAULT 1,
+      show_news_images INTEGER NOT NULL DEFAULT 1,
         compact_news_cards INTEGER NOT NULL DEFAULT 0,
         reader_panel_position TEXT NOT NULL DEFAULT 'right',
         reader_text_size TEXT NOT NULL DEFAULT 'medium',
@@ -387,6 +388,10 @@ describe('database queries and user data', () => {
 
     const visibleForUser = database.getArticles({}, { userId: 'user-1', maxArticleAgeHours: 24 });
     expect(visibleForUser.map((article) => article.id)).toEqual(['private-1', 'global-2', 'global-1']);
+    expect(database.getArticleById('private-1', { userId: 'user-1', maxArticleAgeHours: 24 })).toEqual(expect.objectContaining({
+      id: 'private-1',
+      ownerUserId: 'user-1'
+    }));
     expect(visibleForUser[0]).toEqual(expect.objectContaining({
       rawSourceId: 'custom-1',
       rawSource: 'Private Feed',
@@ -764,7 +769,6 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      autoRefreshEnabled: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'everywhere',
       readerPanelPosition: 'left',
@@ -779,7 +783,6 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      autoRefreshEnabled: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'everywhere',
       readerPanelPosition: 'left',
@@ -919,19 +922,17 @@ describe('database queries and user data', () => {
         default_language,
         article_retention_hours,
         recent_hours,
-        auto_refresh_enabled,
         reader_panel_position,
         last_seen_release_notes_version,
         default_source_ids,
         excluded_sub_source_ids,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       'user-1',
       'en',
       12,
       2,
-      1,
       'right',
       '3.2.3',
       '{bad json',
@@ -1141,7 +1142,6 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 24,
       recentHours: 3,
-      autoRefreshEnabled: false,
       readerPanelPosition: 'center',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: ['retired-source', primarySourceFamilyId, 'custom-1'],
@@ -1234,7 +1234,6 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      autoRefreshEnabled: false,
       readerPanelPosition: 'left',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: [primarySourceFamilyId],
@@ -1269,7 +1268,6 @@ describe('database queries and user data', () => {
         defaultLanguage: 'it',
         articleRetentionHours: 24,
         recentHours: 3,
-        autoRefreshEnabled: false,
         readerPanelPosition: 'center',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: ['bbc'],
@@ -1289,7 +1287,6 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      autoRefreshEnabled: false,
       readerPanelPosition: 'left',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: [primarySourceFamilyId]

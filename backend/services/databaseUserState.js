@@ -23,7 +23,6 @@ const USER_SETTINGS_COLUMNS = [
   'theme_mode',
   'article_retention_hours',
   'recent_hours',
-  'auto_refresh_enabled',
   'show_news_images',
   'compact_news_cards',
   'compact_news_cards_mode',
@@ -51,7 +50,6 @@ function getUserSettingsValues(userId, settings = {}, updatedAt = new Date().toI
     settings.themeMode || 'system',
     settings.articleRetentionHours || 24,
     settings.recentHours || 3,
-    settings.autoRefreshEnabled === false ? 0 : 1,
     settings.showNewsImages === false ? 0 : 1,
     settings.compactNewsCardsMode && settings.compactNewsCardsMode !== 'off' ? 1 : 0,
     settings.compactNewsCardsMode || 'off',
@@ -72,11 +70,10 @@ function createUserStateRepository({ getDb }) {
 
     const row = getDb().prepare(`
       SELECT user_id AS userId, default_language AS defaultLanguage,
-             theme_mode AS themeMode,
-             article_retention_hours AS articleRetentionHours,
-             recent_hours AS recentHours,
-             auto_refresh_enabled AS autoRefreshEnabled,
-             show_news_images AS showNewsImages,
+              theme_mode AS themeMode,
+              article_retention_hours AS articleRetentionHours,
+              recent_hours AS recentHours,
+              show_news_images AS showNewsImages,
              compact_news_cards AS compactNewsCards,
              compact_news_cards_mode AS compactNewsCardsMode,
              reader_panel_position AS readerPanelPosition,
@@ -95,7 +92,6 @@ function createUserStateRepository({ getDb }) {
 
       return {
         ...row,
-        autoRefreshEnabled: Boolean(row.autoRefreshEnabled),
         showNewsImages: row.showNewsImages !== false && row.showNewsImages !== 0,
         compactNewsCards: Boolean(row.compactNewsCards),
         compactNewsCardsMode: row.compactNewsCardsMode || (row.compactNewsCards ? 'everywhere' : 'off'),

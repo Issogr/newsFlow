@@ -5,6 +5,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
+      '🧯 Feed pagination, reconnects, and reader-mode edge cases are steadier, with fewer duplicate loads and fewer stale errors.',
       '📖 Reader mode now remembers articles you already opened and keeps long browsing sessions lighter.',
       '⚡ Long feed sessions keep the newest stories visible while trimming older retained cards and avoiding extra filter-count work when the app only needs news items.',
       '🛡️ Settings saves are safer: changes made elsewhere, like reader text size or release-note acknowledgements, are no longer overwritten by an older Settings draft.',
@@ -22,6 +23,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
+      '🧯 Paginazione del feed, riconnessioni e casi limite della modalita lettura sono piu stabili, con meno caricamenti duplicati e meno errori rimasti in pagina.',
       '📖 La modalita lettura ora ricorda gli articoli gia aperti e mantiene piu leggere le sessioni lunghe.',
       '⚡ Le sessioni lunghe del feed mantengono visibili le notizie piu recenti, alleggerendo le card piu vecchie e evitando conteggi extra dei filtri quando servono solo le notizie.',
       '🛡️ I salvataggi delle impostazioni sono piu sicuri: modifiche fatte altrove, come dimensione del testo o note di rilascio gia viste, non vengono piu sovrascritte da una bozza vecchia.',

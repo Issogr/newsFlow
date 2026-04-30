@@ -195,7 +195,7 @@ export const fetchNews = async ({
 };
 
 export const fetchReaderArticle = async (articleId, { refresh = false, signal } = {}) => {
-  const response = await api.get(`/articles/${articleId}/reader`, {
+  const response = await api.get(`/articles/${encodeURIComponent(articleId)}/reader`, {
     params: refresh ? { refresh: 'true' } : undefined,
     signal,
     timeout: READER_REQUEST_TIMEOUT_MS

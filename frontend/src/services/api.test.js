@@ -58,6 +58,18 @@ describe('api service', () => {
     });
   });
 
+  test('encodes reader article ids in route paths', async () => {
+    mockApi.get.mockResolvedValue({
+      data: { articleId: 'source/article 1' }
+    });
+
+    await fetchReaderArticle('source/article 1');
+
+    expect(mockApi.get).toHaveBeenCalledWith('/articles/source%2Farticle%201/reader', expect.objectContaining({
+      timeout: 30000
+    }));
+  });
+
   test('targets the browser-facing BFF API namespace', () => {
     expect(mockApiConfig).toEqual(expect.objectContaining({
       baseURL: '/api',

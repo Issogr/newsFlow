@@ -2,6 +2,8 @@
 
 ## 3.2.13.3
 
+- hardened news pagination parsing against non-finite or excessive page values before SQLite queries, added hot-path article/topic indexes, and removed the stale unused `MAX_SCAN_ARTICLES` runtime setting
+- reduced duplicate feed loads, preserved filtered WebSocket subscriptions across reconnects, cleared stale reader-mode errors when cached content is available, encoded reader article ids in client routes, and flushed buffered anonymous public API counters during graceful shutdown
 - hardened feed search, retention parsing, private-source metadata, and public feed pagination metadata so edge-case queries and API responses stay predictable
 - reduced scheduled RSS refresh latency by skipping article-page image fallback fetches during ingestion while preserving normal RSS-provided images
 - tightened the BFF trust boundary by deriving forwarded headers from the direct socket, rejecting plaintext backend-session payloads, refreshing WebSocket-authenticated sessions, and making the direct Compose BFF avoid proxy-header trust
@@ -41,8 +43,8 @@
 
 ## 3.2.13.1
 
-- broadcast a lightweight live feed reload after background AI topic-classification runs finish so topic pills, AI-classified topic markers, and topic-filtered results refresh without a manual page reload when live auto refresh is active
-- changed the initial app feed load to detect when an open-triggered assigned-source refresh is still running and perform one automatic follow-up reload, so users without live auto refresh are less likely to stay on stale cached news until they refresh manually
+- broadcast a lightweight live feed reload after background AI topic-classification runs finish so topic pills, AI-classified topic markers, and topic-filtered results refresh without a manual page reload when live updates are active
+- changed the initial app feed load to detect when an open-triggered assigned-source refresh is still running and perform one automatic follow-up reload, so users in manual-refresh mode are less likely to stay on stale cached news until they refresh manually
 - tightened article deduplication for sibling source variants by reusing an existing recent article when the same source family republishes the same normalized title under a different URL, reducing fake new-article inserts and unnecessary AI topic-classifier work
 - preserved the user's viewport during live auto-refresh feed updates, compensating scroll position both when new article cards are prepended and when topic-refresh reloads update the current feed so readers are not yanked back to the top
 - added an opt-in `AI_TOPIC_DEBUG_LOG_ARTICLES` backend environment flag for local Docker Compose runs so development logs can show which article ids and titles each AI topic-classification batch processed without enabling that extra detail by default
@@ -173,7 +175,7 @@
 - simplified the reader toolbar by moving `Share` into a compact top-left icon action, replacing the text-size dropdown with a `- aA +` stepper, and removing extra header actions that competed with the reading flow
 - widened the reader content column, tightened the side gutters, and fixed dark-mode header/title surfaces so the reading panel uses more space without losing its calm layout
 - added a direct reader shortcut on news cards so a double click on desktop or double tap on mobile over the image or title now opens reader mode without needing the footer button
-- aligned the `Auto refresh news` and `Show card images` settings rows with the rest of the preferences UI and replaced the plain checkboxes with compact state pills that fit the refreshed settings visual language better
+- aligned the image-display settings row with the rest of the preferences UI and replaced plain checkboxes with compact state pills that fit the refreshed settings visual language better
 - removed the temporary `news_aggregator` rename migration code and the legacy DB schema upgrade ladder so startup and persistence handling now target only the current `newsflow` naming and schema baseline
 - changed the default scheduled ingestion interval from 5 minutes to 15 minutes to reduce upstream request pressure while keeping news reasonably fresh by default
 
@@ -201,7 +203,7 @@
 
 ## 3.2.6.1
 
-- simplified manual refresh behavior again by removing the refresh-button pending-update hint and keeping the button as a straightforward reload action when auto refresh is off
+- simplified manual refresh behavior again by removing the refresh-button pending-update hint and keeping the button as a straightforward reload action
 - refined the sticky search-and-filter surface so the dropdown now feels like a connected extension of the main bubble, animates open more smoothly, and can scroll internally when filters exceed the viewport height
 - adjusted news-card action buttons so `Reader` and `Share` use the same compact icon treatment on both desktop and mobile, while `Open article` remains the primary action
 
@@ -218,7 +220,7 @@
 - fixed live-update pagination drift by adding cursor-based news loading so prepended real-time groups no longer break `Load more` ordering or cause duplicate-heavy paging
 - reduced feed-query overhead and improved pagination accuracy by avoiding repeated intermediate resorting in grouped queries and by returning `hasMore` only when another page is actually reachable
 - reduced WebSocket fanout work by batching sockets with identical subscriptions and bounded browser-side live-update dedupe tracking so long-running tabs no longer retain every seen group id forever
-- fixed manual-refresh mode so the app still listens for live updates with auto refresh disabled, allowing the refresh button indicator to signal newly available news again
+- fixed manual-refresh mode so the app still listens for live updates, allowing the refresh button indicator to signal newly available news again
 - added a clear-search control inside the main search field and removed the `Updated` status chip from the header area to simplify the top-bar UI
 - removed the manual `Refresh reader` action from reader mode so the reading toolbar stays focused on opening the original article
 - moved filters directly below the search bar, made the search-and-filter controls sticky for easier access while scrolling, and prevented the expanded filter panel from pushing page content down

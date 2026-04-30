@@ -133,7 +133,6 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES` | `ONLINE_ACTIVITY_WINDOW_MINUTES` or `5` | Recent-activity window used to decide which users have assigned sources eligible for scheduled refresh |
 | `ARTICLE_RETENTION_HOURS` | `24` | Article and reader-cache retention window in hours |
 | `MAX_ARTICLES_PER_SOURCE` | `25` | Max parsed items per feed |
-| `MAX_SCAN_ARTICLES` | `600` | Max scanned articles for grouped-query mode |
 | `RSS_MAX_RETRIES` | `4` | Feed retry attempts for transient failures |
 | `RSS_RETRY_DELAY` | `1500` | Base delay between feed retries in ms |
 | `RSS_TIMEOUT` | `15000` | RSS fetch timeout in ms |

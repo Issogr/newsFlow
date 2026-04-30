@@ -51,11 +51,16 @@ const useTopicRefreshSocket = ({
         newsUpdateCallbackRef.current?.(payload);
       }
     };
+    const handleConnect = () => {
+      socket.emit('subscribe:filters', subscriptionRef.current || {});
+    };
 
+    socket.on('connect', handleConnect);
     socket.on('news:update', handleNewsUpdate);
 
     return () => {
       socketRef.current = null;
+      socket.off('connect', handleConnect);
       socket.off('news:update', handleNewsUpdate);
       socket.disconnect();
     };

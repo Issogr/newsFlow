@@ -207,10 +207,17 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, []);
 
   useEffect(() => {
-    setActiveFilters((current) => ({
-      ...current,
-      sourceIds: current.sourceIds.filter((sourceId) => !excludedSourceIds.includes(sourceId))
-    }));
+    setActiveFilters((current) => {
+      const nextSourceIds = current.sourceIds.filter((sourceId) => !excludedSourceIds.includes(sourceId));
+      if (nextSourceIds.length === current.sourceIds.length) {
+        return current;
+      }
+
+      return {
+        ...current,
+        sourceIds: nextSourceIds
+      };
+    });
   }, [excludedSourceIds]);
 
   useEffect(() => {
