@@ -3,7 +3,7 @@ var mockApiConfig;
 var responseErrorHandler;
 
 import axios from 'axios';
-import { AUTH_EXPIRED_EVENT, fetchNews, fetchReaderArticle } from './api';
+import { AUTH_EXPIRED_EVENT, fetchNews, fetchReaderArticle, submitFeedback } from './api';
 
 vi.mock('axios', () => {
   const axios = {
@@ -73,6 +73,20 @@ describe('api service', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/news', expect.objectContaining({
       params: expect.objectContaining({ refresh: 'true' })
     }));
+  });
+
+  test('lets the browser set multipart feedback boundaries', async () => {
+    mockApi.post.mockResolvedValue({ data: { success: true } });
+    const attachment = new File(['image'], 'screenshot.png', { type: 'image/png' });
+
+    await submitFeedback({
+      category: 'bug',
+      title: 'Upload bug',
+      description: 'The attachment should upload.',
+      attachment
+    });
+
+    expect(mockApi.post).toHaveBeenCalledWith('/me/feedback', expect.any(FormData));
   });
 
   test('broadcasts auth expiry when a non-auth request returns 401', async () => {

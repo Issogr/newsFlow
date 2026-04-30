@@ -18,6 +18,52 @@ function mapUserSourceRow(row) {
   };
 }
 
+const USER_SETTINGS_COLUMNS = [
+  'default_language',
+  'theme_mode',
+  'article_retention_hours',
+  'recent_hours',
+  'auto_refresh_enabled',
+  'show_news_images',
+  'compact_news_cards',
+  'compact_news_cards_mode',
+  'reader_panel_position',
+  'reader_text_size',
+  'last_seen_release_notes_version',
+  'default_source_ids',
+  'excluded_sub_source_ids',
+  'updated_at'
+];
+
+const USER_SETTINGS_UPSERT_SQL = `
+  INSERT INTO user_settings (
+    user_id,
+    ${USER_SETTINGS_COLUMNS.join(',\n    ')}
+  ) VALUES (${['user_id', ...USER_SETTINGS_COLUMNS].map(() => '?').join(', ')})
+  ON CONFLICT(user_id) DO UPDATE SET
+    ${USER_SETTINGS_COLUMNS.map((column) => `${column} = excluded.${column}`).join(',\n    ')}
+`;
+
+function getUserSettingsValues(userId, settings = {}, updatedAt = new Date().toISOString()) {
+  return [
+    userId,
+    settings.defaultLanguage || 'auto',
+    settings.themeMode || 'system',
+    settings.articleRetentionHours || 24,
+    settings.recentHours || 3,
+    settings.autoRefreshEnabled === false ? 0 : 1,
+    settings.showNewsImages === false ? 0 : 1,
+    settings.compactNewsCardsMode && settings.compactNewsCardsMode !== 'off' ? 1 : 0,
+    settings.compactNewsCardsMode || 'off',
+    settings.readerPanelPosition || 'right',
+    settings.readerTextSize || 'medium',
+    settings.lastSeenReleaseNotesVersion || '',
+    JSON.stringify(settings.excludedSourceIds || []),
+    JSON.stringify(settings.excludedSubSourceIds || []),
+    updatedAt
+  ];
+}
+
 function createUserStateRepository({ getDb }) {
   function getUserSettings(userId) {
     if (!userId) {
@@ -61,56 +107,7 @@ function createUserStateRepository({ getDb }) {
   function upsertUserSettings(userId, settings = {}) {
     const now = new Date().toISOString();
 
-    getDb().prepare(`
-      INSERT INTO user_settings (
-        user_id,
-        default_language,
-        theme_mode,
-        article_retention_hours,
-        recent_hours,
-        auto_refresh_enabled,
-        show_news_images,
-        compact_news_cards,
-        compact_news_cards_mode,
-        reader_panel_position,
-        reader_text_size,
-        last_seen_release_notes_version,
-        default_source_ids,
-        excluded_sub_source_ids,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id) DO UPDATE SET
-        default_language = excluded.default_language,
-        theme_mode = excluded.theme_mode,
-        article_retention_hours = excluded.article_retention_hours,
-        recent_hours = excluded.recent_hours,
-        auto_refresh_enabled = excluded.auto_refresh_enabled,
-        show_news_images = excluded.show_news_images,
-        compact_news_cards = excluded.compact_news_cards,
-        compact_news_cards_mode = excluded.compact_news_cards_mode,
-        reader_panel_position = excluded.reader_panel_position,
-        reader_text_size = excluded.reader_text_size,
-        last_seen_release_notes_version = excluded.last_seen_release_notes_version,
-        default_source_ids = excluded.default_source_ids,
-        excluded_sub_source_ids = excluded.excluded_sub_source_ids,
-        updated_at = excluded.updated_at
-    `).run(
-      userId,
-      settings.defaultLanguage || 'auto',
-      settings.themeMode || 'system',
-      settings.articleRetentionHours || 24,
-      settings.recentHours || 3,
-      settings.autoRefreshEnabled === false ? 0 : 1,
-      settings.showNewsImages === false ? 0 : 1,
-      settings.compactNewsCardsMode && settings.compactNewsCardsMode !== 'off' ? 1 : 0,
-      settings.compactNewsCardsMode || 'off',
-      settings.readerPanelPosition || 'right',
-      settings.readerTextSize || 'medium',
-      settings.lastSeenReleaseNotesVersion || '',
-      JSON.stringify(settings.excludedSourceIds || []),
-      JSON.stringify(settings.excludedSubSourceIds || []),
-      now
-    );
+    getDb().prepare(USER_SETTINGS_UPSERT_SQL).run(...getUserSettingsValues(userId, settings, now));
 
     return getUserSettings(userId);
   }
@@ -297,40 +294,7 @@ function createUserStateRepository({ getDb }) {
         id, user_id, name, url, language, is_active, created_at, updated_at, validated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const upsertSettingsStmt = database.prepare(`
-      INSERT INTO user_settings (
-        user_id,
-        default_language,
-        theme_mode,
-        article_retention_hours,
-        recent_hours,
-        auto_refresh_enabled,
-        show_news_images,
-        compact_news_cards,
-        compact_news_cards_mode,
-        reader_panel_position,
-        reader_text_size,
-        last_seen_release_notes_version,
-        default_source_ids,
-        excluded_sub_source_ids,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id) DO UPDATE SET
-        default_language = excluded.default_language,
-        theme_mode = excluded.theme_mode,
-        article_retention_hours = excluded.article_retention_hours,
-        recent_hours = excluded.recent_hours,
-        auto_refresh_enabled = excluded.auto_refresh_enabled,
-        show_news_images = excluded.show_news_images,
-        compact_news_cards = excluded.compact_news_cards,
-        compact_news_cards_mode = excluded.compact_news_cards_mode,
-        reader_panel_position = excluded.reader_panel_position,
-        reader_text_size = excluded.reader_text_size,
-        last_seen_release_notes_version = excluded.last_seen_release_notes_version,
-        default_source_ids = excluded.default_source_ids,
-        excluded_sub_source_ids = excluded.excluded_sub_source_ids,
-        updated_at = excluded.updated_at
-    `);
+    const upsertSettingsStmt = database.prepare(USER_SETTINGS_UPSERT_SQL);
 
     const transaction = database.transaction((ownerId, importedSources, nextSettings) => {
       database.prepare(`
@@ -364,23 +328,7 @@ function createUserStateRepository({ getDb }) {
         );
       });
 
-      upsertSettingsStmt.run(
-        ownerId,
-        nextSettings.defaultLanguage || 'auto',
-        nextSettings.themeMode || 'system',
-        nextSettings.articleRetentionHours || 24,
-        nextSettings.recentHours || 3,
-        nextSettings.autoRefreshEnabled === false ? 0 : 1,
-        nextSettings.showNewsImages === false ? 0 : 1,
-        nextSettings.compactNewsCardsMode && nextSettings.compactNewsCardsMode !== 'off' ? 1 : 0,
-        nextSettings.compactNewsCardsMode || 'off',
-        nextSettings.readerPanelPosition || 'right',
-        nextSettings.readerTextSize || 'medium',
-        nextSettings.lastSeenReleaseNotesVersion || '',
-        JSON.stringify(nextSettings.excludedSourceIds || []),
-        JSON.stringify(nextSettings.excludedSubSourceIds || []),
-        nextSettings.updatedAt || now
-      );
+      upsertSettingsStmt.run(...getUserSettingsValues(ownerId, nextSettings, nextSettings.updatedAt || now));
     });
 
     transaction(userId, sources, settings);

@@ -306,7 +306,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         }
 
         if (nextNews.length > MAX_RETAINED_NEWS_GROUPS) {
-          nextNews = append ? nextNews.slice(-MAX_RETAINED_NEWS_GROUPS) : nextNews.slice(0, MAX_RETAINED_NEWS_GROUPS);
+          nextNews = nextNews.slice(0, MAX_RETAINED_NEWS_GROUPS);
         }
 
         visibleNewsCountRef.current = nextNews.length;

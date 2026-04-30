@@ -20,6 +20,7 @@ function FilterBubble({ children, open }) {
           : 'pointer-events-none translate-y-2 opacity-0'
       }`}
       aria-hidden={!open}
+      inert={open ? undefined : ''}
     >
       <div className="max-h-[var(--bubble-max-height)] overflow-y-auto overscroll-contain p-4" style={{ '--bubble-max-height': BUBBLE_MAX_HEIGHT }}>
         {children}
@@ -259,6 +260,7 @@ const MobileBottomNav = ({
                 : 'pointer-events-none translate-x-8 scale-95 opacity-0 blur-sm'
             }`}
             aria-hidden={!searchMode}
+            inert={searchMode ? undefined : ''}
           >
             <label className="group flex h-full flex-1 items-center gap-2 rounded-full border border-slate-200/80 bg-gradient-to-r from-slate-50 to-white px-3.5 shadow-inner shadow-slate-200/60 transition-colors focus-within:border-sky-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100">
               <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm transition-colors group-focus-within:text-sky-600">

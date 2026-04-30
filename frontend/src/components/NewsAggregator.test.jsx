@@ -594,6 +594,47 @@ describe('NewsAggregator', () => {
     expect(await screen.findByText('Older headline')).toBeInTheDocument();
   });
 
+  test('keeps newest groups when appended pages exceed the retention cap', async () => {
+    fetchNews.mockImplementation(({ beforeId }) => {
+      const previousPage = beforeId ? Number(beforeId.replace('article-page-','').split('-')[0]) : 0;
+      const pageNumber = previousPage + 1;
+      const start = ((pageNumber - 1) * 12) + 1;
+      const items = createGroups(`page-${pageNumber}`, start, 12);
+      const hasMore = pageNumber < 7;
+
+      return Promise.resolve({
+        items,
+        meta: {
+          page: 1,
+          pageSize: 12,
+          hasMore,
+          nextCursor: hasMore ? {
+            beforePubDate: `2026-03-14T10:${String(start + 11).padStart(2, '0')}:00.000Z`,
+            beforeId: `article-page-${pageNumber}-${start + 11}`
+          } : null
+        },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+    });
+
+    await renderNewsAggregator();
+    expect(await screen.findByText('page-1 headline 1')).toBeInTheDocument();
+
+    for (let pageNumber = 2; pageNumber <= 6; pageNumber += 1) {
+      fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+      expect(await screen.findByText(`page-${pageNumber} headline ${pageNumber * 12}`)).toBeInTheDocument();
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    await waitFor(() => {
+      expect(fetchNews.mock.calls.some(([params]) => params.beforeId === 'article-page-6-72')).toBe(true);
+    });
+
+    expect(screen.getByText('page-1 headline 1')).toBeInTheDocument();
+    expect(screen.getByText('page-6 headline 72')).toBeInTheDocument();
+    expect(screen.queryByText('page-7 headline 73')).not.toBeInTheDocument();
+  });
+
   test('clears loading-more state when a list reload cancels pagination', async () => {
     const appendRequest = createDeferred();
     const reloadRequest = createDeferred();

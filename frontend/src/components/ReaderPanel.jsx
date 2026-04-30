@@ -24,6 +24,18 @@ import { getStoredReaderTextSizePreference, setStoredReaderTextSizePreference } 
 
 const sourceChipClassName = 'inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-900';
 const readTimeChipClassName = 'inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600';
+const MAX_READER_CACHE_ARTICLES = 40;
+
+function getBoundedReaderCache(cache = {}) {
+  return Object.fromEntries(Object.entries(cache).slice(-MAX_READER_CACHE_ARTICLES));
+}
+
+function withReaderCacheEntry(cache = {}, articleId, payload) {
+  const nextCache = { ...cache };
+  delete nextCache[articleId];
+  nextCache[articleId] = payload;
+  return getBoundedReaderCache(nextCache);
+}
 
 function getArticleSourceLabel(article) {
   if (!article) {
@@ -85,7 +97,7 @@ const ReaderPanel = ({
   onReaderCacheChange = null
 }) => {
   const [selectedArticleId, setSelectedArticleId] = useState(initialArticleId || group?.items?.[0]?.id || null);
-  const [readerByArticleId, setReaderByArticleId] = useState(readerCache || {});
+  const [readerByArticleId, setReaderByArticleId] = useState(() => getBoundedReaderCache(readerCache || {}));
   const [loading, setLoading] = useState(false);
   const [shareState, setShareState] = useState('idle');
   const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
@@ -168,10 +180,7 @@ const ReaderPanel = ({
       }
 
       setReaderByArticleId((current) => {
-        const nextCache = {
-          ...current,
-          [articleId]: payload
-        };
+        const nextCache = withReaderCacheEntry(current, articleId, payload);
         onReaderCacheChange?.(nextCache);
         return nextCache;
       });

@@ -2,6 +2,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const http = require('http');
 const path = require('path');
+const util = require('util');
 const express = require('express');
 const axios = require('axios');
 const cookie = require('cookie');
@@ -10,6 +11,8 @@ const helmet = require('helmet');
 const Database = require('better-sqlite3');
 const session = require('express-session');
 const SqliteStoreFactory = require('better-sqlite3-session-store')(session);
+
+util._extend = Object.assign;
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const BACKEND_SESSION_COOKIE_NAME = 'newsflow_session';
@@ -143,6 +146,23 @@ function getCookieClearOptions() {
 
 function clearBffSessionCookie(res) {
   res.append('Set-Cookie', serializeCookie(BFF_SESSION_COOKIE_NAME, '', getCookieClearOptions()));
+}
+
+function applySanitizedForwardedHeaders(proxyReq, req) {
+  proxyReq.removeHeader('x-forwarded-for');
+  proxyReq.removeHeader('x-forwarded-host');
+  proxyReq.removeHeader('x-forwarded-proto');
+
+  const clientIp = req.socket?.remoteAddress || req.ip;
+  if (clientIp) {
+    proxyReq.setHeader('X-Forwarded-For', clientIp);
+  }
+
+  if (req.headers.host) {
+    proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+  }
+
+  proxyReq.setHeader('X-Forwarded-Proto', req.protocol || (req.secure ? 'https' : 'http'));
 }
 
 function extractBackendSessionCookie(setCookieHeader) {
@@ -590,12 +610,13 @@ function createApp(options = {}) {
   const publicApiProxy = createProxyMiddleware({
     target: `${backendBaseUrl}/api/public`,
     changeOrigin: false,
-    xfwd: true,
+    xfwd: false,
     timeout: UPSTREAM_TIMEOUT_MS,
     proxyTimeout: UPSTREAM_TIMEOUT_MS,
     on: {
-      proxyReq: (proxyReq) => {
+      proxyReq: (proxyReq, req) => {
         proxyReq.removeHeader('cookie');
+        applySanitizedForwardedHeaders(proxyReq, req);
       },
       error: handleProxyError,
     },

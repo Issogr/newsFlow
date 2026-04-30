@@ -24,13 +24,6 @@ const api = axios.create({
   }
 });
 
-api.interceptors.request.use((config) => {
-  const nextConfig = { ...config };
-  nextConfig.headers = nextConfig.headers || {};
-
-  return nextConfig;
-});
-
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -84,11 +77,6 @@ export const fetchCurrentUser = async () => {
   return response.data;
 };
 
-export const fetchApiTokenStatus = async () => {
-  const response = await api.get('/me/api-token');
-  return response.data;
-};
-
 export const createApiToken = async (payload = {}) => {
   const response = await api.post('/me/api-token', payload);
   return response.data;
@@ -114,11 +102,7 @@ export const submitFeedback = async ({ category, title, description, attachment 
     formData.append('attachment', attachment);
   }
 
-  const response = await api.post('/me/feedback', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  });
+  const response = await api.post('/me/feedback', formData);
   return response.data;
 };
 

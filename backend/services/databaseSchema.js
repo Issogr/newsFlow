@@ -257,12 +257,12 @@ function createDatabaseSchema({ logger }) {
     return CURRENT_SCHEMA_VERSION;
   }
 
-  function setCurrentSchemaVersion(database) {
+  function setCurrentSchemaVersion(database, version = CURRENT_SCHEMA_VERSION) {
     database.prepare(`
       INSERT INTO app_meta (key, value)
       VALUES ('migration_version', ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
-    `).run(String(CURRENT_SCHEMA_VERSION));
+    `).run(String(version));
   }
 
   function migrateSchema(database, currentVersion) {
@@ -300,21 +300,28 @@ function createDatabaseSchema({ logger }) {
     }
 
     if (currentVersion === 16) {
-      database.exec(`
-        ALTER TABLE user_settings
-        ADD COLUMN compact_news_cards INTEGER NOT NULL DEFAULT 0
-      `);
+      const settingsColumns = getColumnNames(database, 'user_settings');
+      if (!settingsColumns.has('compact_news_cards')) {
+        database.exec(`
+          ALTER TABLE user_settings
+          ADD COLUMN compact_news_cards INTEGER NOT NULL DEFAULT 0
+        `);
+      }
 
+      setCurrentSchemaVersion(database, 17);
       logger.info('Migrated DB schema from version 16 to 17');
       migrateSchema(database, 17);
       return;
     }
 
     if (currentVersion === 17) {
-      database.exec(`
-        ALTER TABLE user_settings
-        ADD COLUMN compact_news_cards_mode TEXT NOT NULL DEFAULT 'off'
-      `);
+      const settingsColumns = getColumnNames(database, 'user_settings');
+      if (!settingsColumns.has('compact_news_cards_mode')) {
+        database.exec(`
+          ALTER TABLE user_settings
+          ADD COLUMN compact_news_cards_mode TEXT NOT NULL DEFAULT 'off'
+        `);
+      }
       database.exec(`
         UPDATE user_settings
         SET compact_news_cards_mode = CASE
@@ -323,36 +330,33 @@ function createDatabaseSchema({ logger }) {
         END
       `);
 
-      database.prepare(`
-        INSERT INTO app_meta (key, value)
-        VALUES ('migration_version', '18')
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value
-      `).run();
+      setCurrentSchemaVersion(database, 18);
       logger.info('Migrated DB schema from version 17 to 18');
       migrateSchema(database, 18);
       return;
     }
 
     if (currentVersion === 18) {
-      database.exec(`
-        ALTER TABLE users
-        ADD COLUMN public_api_request_count INTEGER NOT NULL DEFAULT 0
-      `);
-      database.exec(`
-        ALTER TABLE users
-        ADD COLUMN public_api_last_used_at TEXT
-      `);
+      const userColumns = getColumnNames(database, 'users');
+      if (!userColumns.has('public_api_request_count')) {
+        database.exec(`
+          ALTER TABLE users
+          ADD COLUMN public_api_request_count INTEGER NOT NULL DEFAULT 0
+        `);
+      }
+      if (!userColumns.has('public_api_last_used_at')) {
+        database.exec(`
+          ALTER TABLE users
+          ADD COLUMN public_api_last_used_at TEXT
+        `);
+      }
       database.exec(`
         UPDATE api_tokens
         SET created_by_ip = NULL,
             last_used_ip = NULL
       `);
 
-      database.prepare(`
-        INSERT INTO app_meta (key, value)
-        VALUES ('migration_version', '19')
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value
-      `).run();
+      setCurrentSchemaVersion(database, 19);
       logger.info('Migrated DB schema from version 18 to 19');
       migrateSchema(database, 19);
       return;
@@ -382,7 +386,7 @@ function createDatabaseSchema({ logger }) {
         CREATE INDEX IF NOT EXISTS idx_articles_ai_topics_processed_at ON articles (ai_topics_processed_at)
       `);
 
-      setCurrentSchemaVersion(database);
+      setCurrentSchemaVersion(database, 20);
       logger.info('Migrated DB schema from version 19 to 20');
       migrateSchema(database, 20);
       return;

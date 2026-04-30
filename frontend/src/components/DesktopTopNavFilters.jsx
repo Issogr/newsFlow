@@ -23,6 +23,7 @@ function TopFilterBubble({ children, open, compact }) {
           : 'pointer-events-none -translate-y-2 opacity-0'
       }`}
       aria-hidden={!open}
+      inert={open ? undefined : ''}
     >
       <div className="max-h-[var(--top-bubble-max-height)] overflow-y-auto overscroll-contain p-4" style={{ '--top-bubble-max-height': TOP_BUBBLE_MAX_HEIGHT }}>
         {children}

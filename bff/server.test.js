@@ -125,6 +125,7 @@ describe('bff server', () => {
     });
 
     backendApp.get('/api/public/ping', (req, res) => {
+      lastBackendHeaders = req.headers;
       res.json({ ok: true });
     });
 
@@ -360,6 +361,19 @@ describe('bff server', () => {
       .expect(200);
 
     expect(response.body).toEqual({ ok: true });
+  });
+
+  test('sanitizes forwarded headers on public API routes', async () => {
+    await request(app)
+      .get('/api/public/ping')
+      .set('X-Forwarded-For', '203.0.113.99')
+      .set('X-Forwarded-Host', 'evil.example')
+      .set('X-Forwarded-Proto', 'https')
+      .expect(200);
+
+    expect(lastBackendHeaders['x-forwarded-for']).not.toContain('203.0.113.99');
+    expect(lastBackendHeaders['x-forwarded-host']).not.toBe('evil.example');
+    expect(lastBackendHeaders['x-forwarded-proto']).toBe('http');
   });
 
   test('streams multipart feedback through the authenticated app proxy', async () => {

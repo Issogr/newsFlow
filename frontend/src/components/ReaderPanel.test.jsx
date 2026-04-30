@@ -383,4 +383,41 @@ describe('ReaderPanel', () => {
     }));
     expect(await screen.findByText('Refreshed reader title')).toBeInTheDocument();
   });
+
+  test('caps the shared reader cache when storing new article payloads', async () => {
+    const readerCache = Object.fromEntries(Array.from({ length: 40 }, (_, index) => [
+      `cached-${index + 1}`,
+      { title: `Cached ${index + 1}`, contentBlocks: [] }
+    ]));
+    const onReaderCacheChange = jest.fn();
+
+    fetchReaderArticle.mockResolvedValueOnce({
+      title: 'New reader title',
+      language: 'en',
+      excerpt: 'Excerpt',
+      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
+      minutesToRead: 1
+    });
+
+    render(
+      <ReaderPanel
+        group={{ ...group, items: [{ ...group.items[0], id: 'article-new', title: 'New article' }] }}
+        initialArticleId="article-new"
+        readerPosition="right"
+        locale="en"
+        t={t}
+        currentUser={currentUser}
+        readerCache={readerCache}
+        onReaderCacheChange={onReaderCacheChange}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(await screen.findByText('New reader title')).toBeInTheDocument();
+
+    const nextCache = onReaderCacheChange.mock.calls.at(-1)[0];
+    expect(Object.keys(nextCache)).toHaveLength(40);
+    expect(nextCache['cached-1']).toBeUndefined();
+    expect(nextCache['article-new']).toEqual(expect.objectContaining({ title: 'New reader title' }));
+  });
 });

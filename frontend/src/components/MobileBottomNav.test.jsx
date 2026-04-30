@@ -55,10 +55,13 @@ describe('MobileBottomNav', () => {
   });
 
   it('opens the sources bubble when Sources is pressed', () => {
-    renderNav();
+    const { container } = renderNav();
+    expect(container.querySelector('[aria-hidden="true"][inert]')).toBeInTheDocument();
+
     fireEvent.click(getNavButton('Sources'));
     expect(screen.getByText('BBC')).toBeInTheDocument();
     expect(screen.getByText('CNN')).toBeInTheDocument();
+    expect(container.querySelector('[aria-hidden="false"][inert]')).not.toBeInTheDocument();
   });
 
   it('closes an open sources bubble when Sources is pressed again', () => {
