@@ -94,6 +94,19 @@ describe('NewsCard', () => {
     expect(screen.queryByRole('img', { name: 'Headline' })).not.toBeInTheDocument();
   });
 
+  test('suppresses invalid publication dates', () => {
+    render(
+      <NewsCard
+        group={{ ...group, pubDate: 'not-a-date' }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByText('Invalid Date')).not.toBeInTheDocument();
+  });
+
   test('renders a generic fallback illustration when the article has no image', () => {
     render(
       <NewsCard

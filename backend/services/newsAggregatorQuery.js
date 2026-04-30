@@ -2,7 +2,9 @@ const database = require('./database');
 const newsSources = require('../config/newsSources');
 const { buildDomainSourceGroups, getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 const { createStandaloneGroup } = require('./newsAggregatorGrouping');
-const ARTICLE_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
+const { parseIntegerEnv } = require('../utils/env');
+
+const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
 
 function expandConfiguredSources() {
   return newsSources;
@@ -133,7 +135,8 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
       pageSize,
       hasMore,
       nextCursor: hasMore ? buildNextCursor(pageArticles) : null,
-      totalGroups: !hasMore && !filters.beforePubDate && !filters.beforeId ? pageArticles.length : null,
+      returnedGroups: pageArticles.length,
+      totalGroups: null,
       scannedArticles: articles.length,
       lastRefreshAt: getLastRefreshAt(),
       ingestion: latestIngestion,

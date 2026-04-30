@@ -9,13 +9,14 @@ const {
   isAiTopicDetectionAvailable
 } = require('./aiTopicClassifier');
 const { createError } = require('../utils/errorHandler');
+const { parseIntegerEnv } = require('../utils/env');
 const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const {
   normalizeIncomingArticles,
   buildInsertedGroupsByOwner
 } = require('./newsAggregatorGrouping');
 
-const ARTICLE_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
+const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
 const RSS_INGESTION_CONCURRENCY = Math.max(1, parseInt(process.env.RSS_INGESTION_CONCURRENCY || '8', 10) || 8);
 const pendingAiTopicProcessingIds = new Set();
 
@@ -136,7 +137,10 @@ function buildSourceFetchTasks(sourceConfigs = []) {
 }
 
 async function fetchSourceTask(task) {
-  const parsedArticles = await rssParser.parseFeed(task.fetchSource, { throwOnError: true });
+  const parsedArticles = await rssParser.parseFeed(task.fetchSource, {
+    imageFallback: false,
+    throwOnError: true
+  });
 
   if (!task.fanOut) {
     return parsedArticles;

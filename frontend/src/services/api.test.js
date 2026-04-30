@@ -87,6 +87,7 @@ describe('api service', () => {
     });
 
     expect(mockApi.post).toHaveBeenCalledWith('/me/feedback', expect.any(FormData));
+    expect(mockApiConfig.headers?.['Content-Type']).toBeUndefined();
   });
 
   test('broadcasts auth expiry when a non-auth request returns 401', async () => {

@@ -64,7 +64,7 @@ const appendUniqueGroups = (currentGroups, incomingGroups) => mergeGroups(curren
 const getSourceReloadSignature = (excludedSourceIds, excludedSubSourceIds, customSources) => JSON.stringify({
   excludedSourceIds,
   excludedSubSourceIds,
-  customSources: (customSources || []).map((source) => [source.id, source.url])
+  customSources: (customSources || []).map((source) => [source.id, source.name, source.url, source.language, source.isActive !== false])
 });
 
 const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogVersion, onOpenReleaseNotes }) => {
@@ -124,6 +124,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [currentUser?.customSources, excludedSourceIds, excludedSubSourceIds]);
   const sourceReloadSignatureRef = useRef(sourceReloadSignature);
   visibleNewsCountRef.current = news.length;
+  const retainedNewsLimitReached = news.length >= MAX_RETAINED_NEWS_GROUPS;
   const metaRef = useRef(meta);
   metaRef.current = meta;
 
@@ -587,7 +588,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
             </div>
 
             <div className="mt-8 flex justify-center">
-              {meta?.hasMore ? (
+              {meta?.hasMore && !retainedNewsLimitReached ? (
                 <button
                   type="button"
                   onClick={() => loadNews(

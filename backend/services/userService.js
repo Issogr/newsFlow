@@ -4,6 +4,7 @@ const rssParser = require('./rssParser');
 const websocketService = require('./websocketService');
 const { createError } = require('../utils/errorHandler');
 const { mapWithConcurrency } = require('../utils/concurrency');
+const { parseIntegerEnv } = require('../utils/env');
 const {
   MAX_FEEDBACK_DESCRIPTION_LENGTH,
   MAX_FEEDBACK_IMAGE_BYTES,
@@ -21,7 +22,7 @@ const {
   API_TOKEN_TTL_DAYS
 } = require('../utils/auth');
 
-const GLOBAL_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
+const GLOBAL_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
 const MAX_RECENT_HOURS = 3;
 const MIN_PASSWORD_LENGTH = 8;
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().slice(0, 40) || 'admin';

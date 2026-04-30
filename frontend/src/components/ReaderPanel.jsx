@@ -193,7 +193,7 @@ const ReaderPanel = ({
         setLoading(false);
       }
     }
-  }, [startLatestRequest]);
+  }, [onReaderCacheChange, startLatestRequest]);
 
   useEffect(() => {
     if (selectedArticleId) {

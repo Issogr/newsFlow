@@ -625,14 +625,14 @@ describe('NewsAggregator', () => {
       expect(await screen.findByText(`page-${pageNumber} headline ${pageNumber * 12}`)).toBeInTheDocument();
     }
 
-    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
     await waitFor(() => {
-      expect(fetchNews.mock.calls.some(([params]) => params.beforeId === 'article-page-6-72')).toBe(true);
+      expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
     });
 
     expect(screen.getByText('page-1 headline 1')).toBeInTheDocument();
     expect(screen.getByText('page-6 headline 72')).toBeInTheDocument();
     expect(screen.queryByText('page-7 headline 73')).not.toBeInTheDocument();
+    expect(fetchNews.mock.calls.some(([params]) => params.beforeId === 'article-page-6-72')).toBe(false);
   });
 
   test('clears loading-more state when a list reload cancels pagination', async () => {

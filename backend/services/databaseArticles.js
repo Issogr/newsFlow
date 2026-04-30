@@ -132,7 +132,7 @@ function createArticleRepository({
   function buildSearchQuery(search) {
     const tokens = String(search || '')
       .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s-]+/gu, ' ')
+      .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
       .split(/\s+/)
       .map((token) => token.trim())
       .filter((token) => token.length > 1)
@@ -224,6 +224,7 @@ function createArticleRepository({
         a.image,
         a.author,
         a.language,
+        a.owner_user_id AS ownerUserId,
         a.published_at AS pubDate
       FROM articles a
       ${joins.join('\n')}

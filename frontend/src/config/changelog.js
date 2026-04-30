@@ -11,6 +11,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🔄 Feed refreshes report upstream problems more accurately and avoid repeatedly retrying AI topic work that already failed.',
       '🧭 Hidden search and filter panels no longer catch keyboard focus while they are closed.',
       '📎 Feedback uploads are more reliable, especially when an attachment is included.',
+      '🚦 Long feed sessions now stop asking for older pages once the app has reached its retained-card limit.',
+      '🔎 Search, custom-source updates, and private-source labels behave more consistently in edge cases.',
+      '🔐 Browser session handling and deployment proxy defaults are stricter at the app boundary.',
       '✅ Deployment checks are stricter, with test/build validation before release images are published.',
     ]
   },
@@ -25,6 +28,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🔄 Gli aggiornamenti del feed segnalano meglio i problemi delle fonti e non riprovano all infinito gli argomenti AI gia falliti.',
       '🧭 I pannelli nascosti di ricerca e filtri non catturano piu il focus da tastiera quando sono chiusi.',
       '📎 Gli invii di feedback sono piu affidabili, soprattutto quando includono un allegato.',
+      '🚦 Nelle sessioni lunghe, il feed smette di chiedere pagine piu vecchie quando raggiunge il limite di card mantenute.',
+      '🔎 Ricerca, aggiornamenti delle fonti personalizzate ed etichette delle fonti private sono piu coerenti nei casi limite.',
+      '🔐 La gestione delle sessioni browser e le impostazioni proxy di deploy sono piu rigorose al confine dell app.',
       '✅ I controlli di rilascio sono piu rigorosi, con test e build prima della pubblicazione delle immagini.',
     ]
   }

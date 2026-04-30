@@ -230,7 +230,10 @@ describe('newsAggregator service flows', () => {
     const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
     database.listUserSources.mockReturnValue([customSource]);
     database.getArticles.mockImplementation(() => {
-      expect(rssParser.parseFeed).toHaveBeenCalledWith(expect.objectContaining({ id: 'custom-1' }), { throwOnError: true });
+      expect(rssParser.parseFeed).toHaveBeenCalledWith(expect.objectContaining({ id: 'custom-1' }), {
+        imageFallback: false,
+        throwOnError: true
+      });
       return [];
     });
 
@@ -622,7 +625,10 @@ describe('newsAggregator service flows', () => {
       id: 'custom-2',
       name: 'Beta Feed',
       ownerUserId: 'user-1'
-    }), { throwOnError: true });
+    }), {
+      imageFallback: false,
+      throwOnError: true
+    });
     expect(database.createIngestionRun).not.toHaveBeenCalled();
   });
 

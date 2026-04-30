@@ -325,7 +325,7 @@ describe('database queries and user data', () => {
         id: 'global-1',
         sourceId: primarySource.id,
         source: primarySource.name,
-        title: 'Economy outlook improves',
+        title: 'Economy outlook improves after COVID-19',
         description: 'Global market coverage',
         content: 'Economy content body',
         url: 'https://example.com/global-1',
@@ -389,7 +389,8 @@ describe('database queries and user data', () => {
     expect(visibleForUser.map((article) => article.id)).toEqual(['private-1', 'global-2', 'global-1']);
     expect(visibleForUser[0]).toEqual(expect.objectContaining({
       rawSourceId: 'custom-1',
-      rawSource: 'Private Feed'
+      rawSource: 'Private Feed',
+      ownerUserId: 'user-1'
     }));
 
     const excludedFiltered = database.getArticles({}, { userId: 'user-1', excludedSourceIds: [secondarySourceFamilyId], maxArticleAgeHours: 24 });
@@ -397,6 +398,9 @@ describe('database queries and user data', () => {
 
     const searchFiltered = database.getArticles({ search: 'outlook' }, { userId: 'user-1', maxArticleAgeHours: 24 });
     expect(searchFiltered.map((article) => article.id)).toEqual(['global-1']);
+
+    const hyphenSearchFiltered = database.getArticles({ search: 'covid-19' }, { userId: 'user-1', maxArticleAgeHours: 24 });
+    expect(hyphenSearchFiltered.map((article) => article.id)).toEqual(['global-1']);
 
     const topicFiltered = database.getArticles({ topics: ['Economia'] }, { userId: 'user-1', maxArticleAgeHours: 24 });
     expect(topicFiltered.map((article) => article.id)).toEqual(['private-1', 'global-1']);

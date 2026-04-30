@@ -2,6 +2,11 @@
 
 ## 3.2.13.3
 
+- hardened feed search, retention parsing, private-source metadata, and public feed pagination metadata so edge-case queries and API responses stay predictable
+- reduced scheduled RSS refresh latency by skipping article-page image fallback fetches during ingestion while preserving normal RSS-provided images
+- tightened the BFF trust boundary by deriving forwarded headers from the direct socket, rejecting plaintext backend-session payloads, refreshing WebSocket-authenticated sessions, and making the direct Compose BFF avoid proxy-header trust
+- stopped long feed sessions from offering Load more once the retained-card cap is reached, preventing discarded extra page fetches
+- added a real frontend ESLint hooks lint script and shared filter-surface state between desktop and mobile controls to reduce behavior drift
 - made authenticated feed filter metadata explicit instead of defaulting every news read into source/topic aggregate queries, reducing SQLite work for item-only requests while keeping the frontend filter catalog opt-in
 - preserved reader-mode article content across close/reopen cycles and capped retained feed groups in long sessions to reduce repeated reader extraction and oversized browser renders
 - corrected long-session feed retention so appended pagination keeps the newest groups instead of dropping the top of the feed once the retained-card cap is reached

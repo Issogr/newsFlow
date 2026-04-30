@@ -12,7 +12,7 @@
   "scripts": {
     "start": "vite",
     "build": "vite build",
-    "lint": "vite build",
+    "lint": "eslint .",
     "preview": "vite preview",
     "test": "node scripts/run-vitest.js"
   },
@@ -36,6 +36,8 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^10.2.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^26.1.0",
     "tailwindcss": "^4.2.4",
     "vite": "^8.0.10",

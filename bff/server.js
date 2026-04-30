@@ -81,7 +81,7 @@ function encryptBackendSessionCookie(value) {
 function decryptBackendSessionCookie(value) {
   const storedValue = String(value || '').trim();
   if (!storedValue || !storedValue.startsWith('enc:v1:')) {
-    return storedValue;
+    return '';
   }
 
   const [, , ivValue, tagValue, encryptedValue] = storedValue.split(':');
@@ -162,7 +162,7 @@ function applySanitizedForwardedHeaders(proxyReq, req) {
     proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
   }
 
-  proxyReq.setHeader('X-Forwarded-Proto', req.protocol || (req.secure ? 'https' : 'http'));
+  proxyReq.setHeader('X-Forwarded-Proto', req.socket?.encrypted ? 'https' : 'http');
 }
 
 function extractBackendSessionCookie(setCookieHeader) {
@@ -410,6 +410,11 @@ function loadUpgradeSession(req, sessionStore, secret) {
 
       req.session = sessionData;
       req.sessionID = sessionId;
+      if (typeof sessionStore.touch === 'function') {
+        sessionStore.touch(sessionId, sessionData, () => resolve(sessionData));
+        return;
+      }
+
       resolve(sessionData);
     });
   });
@@ -480,8 +485,8 @@ function createApp(options = {}) {
         ? req.get(name)
         : req.headers?.[String(name || '').toLowerCase()]
     );
-    const forwardedFor = String(Array.isArray(req.ips) && req.ips.length > 0 ? req.ips.join(', ') : (req.ip || req.socket?.remoteAddress || '')).trim();
-    const forwardedProto = String(req.protocol || (req.socket?.encrypted ? 'https' : 'http')).trim();
+    const forwardedFor = String(req.socket?.remoteAddress || '').trim();
+    const forwardedProto = req.socket?.encrypted ? 'https' : 'http';
     const host = String(getHeader('host') || '').trim();
 
     return {
@@ -502,6 +507,9 @@ function createApp(options = {}) {
 
   function applyBackendSessionProxyHeaders(proxyReq, req) {
     stripClientCredentials(proxyReq);
+    proxyReq.removeHeader('x-forwarded-for');
+    proxyReq.removeHeader('x-forwarded-host');
+    proxyReq.removeHeader('x-forwarded-proto');
     Object.entries(buildInternalHeaders(req)).forEach(([name, value]) => {
       proxyReq.setHeader(name, value);
     });
@@ -625,7 +633,7 @@ function createApp(options = {}) {
   const appApiProxy = createProxyMiddleware({
     target: `${backendBaseUrl}/internal-api`,
     changeOrigin: false,
-    xfwd: true,
+    xfwd: false,
     timeout: UPSTREAM_TIMEOUT_MS,
     proxyTimeout: UPSTREAM_TIMEOUT_MS,
     on: {
@@ -653,7 +661,7 @@ function createApp(options = {}) {
   const socketProxy = createProxyMiddleware({
     target: backendBaseUrl,
     changeOrigin: false,
-    xfwd: true,
+    xfwd: false,
     ws: true,
     pathRewrite: (proxyPath, req) => req.originalUrl || proxyPath,
     timeout: UPSTREAM_TIMEOUT_MS,
@@ -872,6 +880,7 @@ module.exports = {
   createServer,
   createSessionStore,
   destroyStoredSessionsByUserId,
+  encryptBackendSessionCookie,
   getBffSessionSecret,
   getInternalProxyToken,
   isValidSessionPayload,

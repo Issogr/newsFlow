@@ -112,6 +112,7 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | --- | --- | --- |
 | `SESSION_TTL_DAYS` | `30` | Session lifetime in days |
 | `SESSION_PURGE_INTERVAL_MS` | `300000` | Expired-session cleanup interval in ms |
+| `SESSION_STORE_CLEAR_INTERVAL_MS` | `300000` | BFF persisted session-store cleanup interval in ms |
 | `ADMIN_USERNAME` | `admin` | Reserved dedicated admin username |
 | `INTERNAL_PROXY_TOKEN` | `development-only-change-me` | Shared token used by the BFF when calling the private backend app API and Socket.IO surface |
 | `BFF_SESSION_SECRET` | `development-only-change-me` | Secret used by the BFF to sign browser session cookies; must be set to a non-default value in production |

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Clock3,
   Rss,
@@ -7,6 +7,7 @@ import {
   X,
 } from 'lucide-react';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
+import useFilterSurfaceState from '../hooks/useFilterSurfaceState';
 import { SourceFilterList, TopicFilterList } from './FilterOptionLists';
 
 const BUBBLE_MAX_HEIGHT = 'min(50vh, 24rem)';
@@ -44,57 +45,20 @@ const MobileBottomNav = ({
   onSearchClear,
   visible = true,
 }) => {
-  const [openBubble, setOpenBubble] = useState(null);
-  const [searchMode, setSearchMode] = useState(false);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
-  const searchInputRef = useRef(null);
-  const navRef = useRef(null);
-  const ignoreNextToggleClickRef = useRef(false);
+  const {
+    closeAll,
+    handleBubbleButtonClick,
+    handleBubbleButtonPress,
+    handleEnterSearch,
+    handleExitSearch,
+    openBubble,
+    searchInputRef,
+    searchMode,
+    surfaceRef,
+  } = useFilterSurfaceState({ onSearchClear });
 
-  const closeAll = useCallback(() => {
-    setOpenBubble(null);
-  }, []);
-
-  const handleToggleBubble = useCallback((name) => {
-    setOpenBubble((current) => (current === name ? null : name));
-  }, []);
-
-  const handleBubbleButtonPress = useCallback((event, name) => {
-    event.preventDefault();
-    event.stopPropagation();
-    ignoreNextToggleClickRef.current = true;
-    handleToggleBubble(name);
-  }, [handleToggleBubble]);
-
-  const handleBubbleButtonClick = useCallback((event, name) => {
-    event.stopPropagation();
-    if (ignoreNextToggleClickRef.current) {
-      ignoreNextToggleClickRef.current = false;
-      return;
-    }
-
-    handleToggleBubble(name);
-  }, [handleToggleBubble]);
-
-  const handleEnterSearch = useCallback(() => {
-    setSearchMode(true);
-    closeAll();
-  }, [closeAll]);
-
-  const handleExitSearch = useCallback(() => {
-    setSearchMode(false);
-    onSearchClear();
-  }, [onSearchClear]);
-
-  useOnClickOutside(navRef, () => {
-    setOpenBubble(null);
-  });
-
-  useEffect(() => {
-    if (searchMode && searchInputRef.current) {
-      searchInputRef.current.focus();
-    }
-  }, [searchMode]);
+  useOnClickOutside(surfaceRef, () => closeAll());
 
   useEffect(() => {
     if (!searchMode || !window.visualViewport) {
@@ -119,17 +83,6 @@ const MobileBottomNav = ({
     };
   }, [searchMode]);
 
-  useEffect(() => {
-    if (!openBubble) {
-      return undefined;
-    }
-
-    const handleScroll = () => setOpenBubble(null);
-    window.addEventListener('scroll', handleScroll, { passive: true });
-
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [openBubble]);
-
   const sourceCount = activeFilters.sourceIds.length;
   const topicCount = activeFilters.topics.length;
   const timeCount = showRecentOnly ? 1 : 0;
@@ -143,7 +96,7 @@ const MobileBottomNav = ({
     >
       {/* Bubbles + Nav wrapped together for outside-click detection */}
       <div
-        ref={navRef}
+        ref={surfaceRef}
         className="relative mx-auto w-[calc(100%-1.25rem)] max-w-md pb-[calc(env(safe-area-inset-bottom)+0.875rem+var(--mobile-keyboard-offset,0px))] transition-[padding-bottom] duration-200 ease-out"
         style={{ '--mobile-keyboard-offset': `${keyboardOffset}px` }}
       >
@@ -172,7 +125,7 @@ const MobileBottomNav = ({
 
         {/* Nav bar */}
         <div className="overflow-hidden rounded-full border border-slate-200 bg-white/95 shadow-md backdrop-blur-md">
-        <div className="relative h-[3.95rem] overflow-hidden">
+          <div className="relative h-[3.95rem] overflow-hidden">
           <div
             className={`absolute inset-0 grid grid-cols-4 transition-all duration-300 ease-out ${
               searchMode

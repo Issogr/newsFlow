@@ -86,7 +86,12 @@ function formatPublicationDate(dateString, locale) {
   }
 
   try {
-    return new Date(dateString).toLocaleDateString(getDateLocale(locale), {
+    const parsedDate = new Date(dateString);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return '';
+    }
+
+    return parsedDate.toLocaleDateString(getDateLocale(locale), {
       day: 'numeric',
       month: 'short',
       year: 'numeric',

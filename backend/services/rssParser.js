@@ -452,7 +452,9 @@ async function parseFeed(source, options = {}) {
         };
       });
 
-    await enrichArticlesWithImages(normalizedItems);
+    if (options.imageFallback !== false) {
+      await enrichArticlesWithImages(normalizedItems);
+    }
 
     return normalizedItems;
   } catch (error) {
