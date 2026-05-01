@@ -206,6 +206,10 @@ function getCanonicalSourceName(sourceId, sourceName) {
   return resolveConfiguredSourceGroup(sourceId, sourceName)?.name || sourceName;
 }
 
+function getCanonicalSourceIconUrl(sourceId, sourceName) {
+  return resolveConfiguredSourceGroup(sourceId, sourceName)?.iconUrl || '';
+}
+
 function getSourceVariantLabel(sourceId, sourceName) {
   const sourceGroup = resolveConfiguredSourceGroup(sourceId, sourceName);
   const configuredSource = resolveConfiguredSource(sourceId, sourceName);
@@ -253,6 +257,7 @@ module.exports = {
   getConfiguredSourceGroups,
   getCanonicalSourceId,
   getCanonicalSourceName,
+  getCanonicalSourceIconUrl,
   getSourceVariantLabel,
   getSourceAliases,
   getRawConfiguredSourceIds,

@@ -136,6 +136,40 @@ describe('NewsCard', () => {
     expect(screen.queryByText('Economy')).not.toBeInTheDocument();
   });
 
+  test('renders source favicons as a stacked image overlay instead of text pills', () => {
+    render(
+      <NewsCard
+        group={{
+          ...group,
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              sourceIconUrl: 'https://example.com/a.ico',
+              image: 'https://example.com/image.jpg'
+            },
+            {
+              id: 'article-2',
+              sourceId: 'source-b',
+              source: 'Source B',
+              sourceIconUrl: 'https://example.com/b.ico',
+              image: 'https://example.com/image-b.jpg'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Source A')).toBeInTheDocument();
+    expect(screen.getByLabelText('Source B')).toBeInTheDocument();
+    expect(screen.queryByText('Source A')).not.toBeInTheDocument();
+    expect(screen.queryByText('Source B')).not.toBeInTheDocument();
+  });
+
   test('adds a rainbow ring around AI-classified topic icons', () => {
     render(
       <NewsCard

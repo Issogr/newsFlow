@@ -2,7 +2,7 @@ const SOURCE_ICONS = {
   abc: 'https://abcnews.go.com/favicon.ico',
   ansa: 'https://www.ansa.it/favicon.ico',
   genova24: 'https://www.genova24.it/favicon.ico',
-  imperiapost: 'https://www.imperiapost.it/favicon.ico',
+  imperiapost: 'https://imperiapost.it/wp-content/uploads/2016/11/logo-imperiapost.jpg',
   ivgsavona: 'https://www.ivg.it/favicon.ico',
   repubblica: 'https://www.repubblica.it/favicon.ico',
   sole24ore: 'https://www.ilsole24ore.com/favicon.ico'

@@ -14,6 +14,7 @@ import genericNewsCover4 from '../assets/generic-news-cover-4.webp';
 import useShareArticle from '../hooks/useShareArticle';
 import { getTopicPresentation } from '../topicPresentation';
 import ShareStatusBubble from './ShareStatusBubble';
+import SourceIcon from './SourceIcon';
 
 const GENERIC_NEWS_COVERS = [
   genericNewsCover,
@@ -37,7 +38,8 @@ function getSourceEntries(group) {
     if (!sourceMap.has(item.sourceId)) {
       sourceMap.set(item.sourceId, {
         id: item.sourceId,
-        name: item.source
+        name: item.source,
+        iconUrl: item.sourceIconUrl || ''
       });
     }
   });
@@ -227,6 +229,19 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
   );
 
   const compactWithoutImage = compact && !imageUrl;
+  const sourceIconStack = sourceEntries.length > 0 ? (
+    <div className={`absolute z-10 flex flex-col gap-1.5 ${compact ? 'left-3 top-3' : 'left-4 top-4'}`} aria-label={t('sources')}>
+      {sourceEntries.map((source) => (
+        <span key={source.id} title={source.name} aria-label={source.name}>
+          <SourceIcon
+            source={source}
+            className={`${compact ? 'h-10 w-10' : 'h-11 w-11'} border-white/60 bg-white/80 shadow-sm backdrop-blur-md`}
+            imageClassName="h-5 w-5"
+          />
+        </span>
+      ))}
+    </div>
+  ) : null;
   const shareControls = (
     <>
       <ShareStatusBubble
@@ -249,7 +264,7 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
   return (
     <article className={`relative flex overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-xl ${compact ? 'h-[12.5rem] max-h-[12.5rem] flex-row' : 'h-full min-h-[20rem] flex-col'}`}>
       {compact && !compactWithoutImage ? (
-        <div className="absolute z-10 flex items-center left-3 top-3 justify-start">
+        <div className="absolute right-3 top-3 z-10 flex items-center justify-end">
           {shareControls}
         </div>
       ) : null}
@@ -274,21 +289,10 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
               setImageUrl((current) => (isGenericNewsCover(current) ? '' : fallbackImageUrl));
             }}
           />
+          {sourceIconStack}
           {!compact ? (
             <div className="absolute right-4 top-4 z-10 flex items-center justify-end">
               {shareControls}
-            </div>
-          ) : null}
-          {!compact && sourceEntries.length > 0 ? (
-            <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center gap-2 overflow-hidden px-4 py-3 bg-gradient-to-t from-black/60 to-transparent">
-              {sourceEntries.map((source) => (
-                <span
-                  key={source.id}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-900"
-                >
-                  {source.name}
-                </span>
-              ))}
             </div>
           ) : null}
         </div>
@@ -314,7 +318,7 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
               </div>
             ) : null}
             <h2
-              className={`${compact ? 'pr-1 text-[15px] leading-5' : 'text-xl'} font-semibold text-slate-900`}
+              className={`${compact ? 'pr-10 text-[15px] leading-5' : 'text-xl'} font-semibold text-slate-900`}
               {...interactionPropsByArea.title}
             >
               {group.title}

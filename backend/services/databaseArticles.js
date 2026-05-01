@@ -553,6 +553,7 @@ function createArticleRepository({
         rawSource: row.source,
         sourceId: sourceMetadata.sourceId,
         source: sourceMetadata.sourceName,
+        sourceIconUrl: sourceMetadata.sourceIconUrl || '',
         subSource: sourceMetadata.subSource,
         topics: topicDetails.map((entry) => entry.topic),
         topicDetails
