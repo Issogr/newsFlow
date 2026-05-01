@@ -136,7 +136,7 @@ describe('NewsCard', () => {
     expect(screen.queryByText('Economy')).not.toBeInTheDocument();
   });
 
-  test('renders source favicons as a stacked image overlay instead of text pills', () => {
+  test('renders source favicons and a social source summary', () => {
     render(
       <NewsCard
         group={{
@@ -166,7 +166,7 @@ describe('NewsCard', () => {
 
     expect(screen.getByLabelText('Source A')).toBeInTheDocument();
     expect(screen.getByLabelText('Source B')).toBeInTheDocument();
-    expect(screen.queryByText('Source A')).not.toBeInTheDocument();
+    expect(screen.getByText('Source A +1')).toBeInTheDocument();
     expect(screen.queryByText('Source B')).not.toBeInTheDocument();
   });
 
@@ -192,18 +192,17 @@ describe('NewsCard', () => {
     expect(screen.getByLabelText('Economy').getAttribute('style') || '').not.toContain('conic-gradient');
   });
 
-  test('does not render topic pills on compact cards', () => {
+  test('keeps topic pills in the unified card layout', () => {
     render(
       <NewsCard
         group={{ ...group, topics: ['Tecnologia'] }}
-        compact
         locale="en"
         t={t}
         onOpenReader={jest.fn()}
       />
     );
 
-    expect(screen.queryByLabelText('Technology')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Technology')).toBeInTheDocument();
   });
 
   test('falls back to the generic illustration for unsafe or broken article images', () => {
@@ -400,7 +399,7 @@ describe('NewsCard', () => {
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
   });
 
-  test('renders the compact horizontal layout while preserving actions', () => {
+  test('preserves actions and topics in the unified card layout', () => {
     window.open = jest.fn();
 
     render(
@@ -418,7 +417,6 @@ describe('NewsCard', () => {
             }
           ]
         }}
-        compact
         locale="en"
         t={t}
         onOpenReader={jest.fn()}
@@ -427,7 +425,7 @@ describe('NewsCard', () => {
 
     expect(screen.getByRole('button', { name: 'shareArticle' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'readerMode' })).toBeInTheDocument();
-    expect(screen.queryByLabelText('Technology')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Technology')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'openOriginalSource' }));
     expect(window.open).toHaveBeenCalledWith('https://example.com/story', '_blank', 'noopener,noreferrer');
   });

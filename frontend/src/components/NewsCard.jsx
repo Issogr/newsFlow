@@ -105,7 +105,7 @@ function formatPublicationDate(dateString, locale) {
   }
 }
 
-const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, onOpenReader }) => {
+const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) => {
   const hasItems = Boolean(group?.items?.length);
 
   const sourceEntries = getSourceEntries(group);
@@ -186,20 +186,22 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
     }
   };
 
-  const actionButtonClassName = `inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white font-medium text-slate-700 no-underline transition-colors hover:bg-slate-100 ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`;
-  const disabledActionButtonClassName = `inline-flex min-w-0 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 font-medium text-slate-400 ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`;
+  const readerActionButtonClassName = 'inline-flex min-w-0 items-center justify-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-800 no-underline shadow-sm transition-colors hover:bg-indigo-100';
+  const originalActionButtonClassName = 'inline-flex min-w-0 items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 no-underline shadow-sm transition-colors hover:bg-emerald-100';
+  const disabledActionButtonClassName = 'inline-flex min-w-0 cursor-not-allowed items-center justify-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-400';
   const openOriginalSourceUnavailableMessage = t('openOriginalSourceUnavailable');
+  const publicationDate = formatPublicationDate(group.pubDate, locale);
 
   const actionButtons = (
-    <div className={`${compact ? '-mx-3 -mb-3 mt-auto border-t border-slate-100 bg-slate-50/70 px-3 py-2' : 'border-t border-slate-100 bg-slate-50/70 px-5 py-4'}`}>
+    <div className="mt-auto px-4 pb-4 sm:px-5">
       <div className="grid grid-cols-2 gap-2.5">
         <button
           type="button"
           onClick={openReader}
-          className={actionButtonClassName}
+          className={readerActionButtonClassName}
           aria-label={t('readerMode')}
         >
-          <BookOpenText className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} shrink-0`} />
+          <BookOpenText className="h-4 w-4 shrink-0" />
           <span className="min-w-0 text-center leading-tight">{t('readerMode')}</span>
         </button>
         <button
@@ -207,20 +209,20 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
           onClick={openOriginalSource}
           disabled={!safeOriginalUrl}
           className={safeOriginalUrl
-            ? actionButtonClassName
+            ? originalActionButtonClassName
             : disabledActionButtonClassName}
           aria-label={t('openOriginalSource')}
           aria-describedby={!safeOriginalUrl ? `open-original-source-help-${group?.id}` : undefined}
           title={!safeOriginalUrl ? openOriginalSourceUnavailableMessage : undefined}
         >
-          <ExternalLink className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} shrink-0`} />
+          <ExternalLink className="h-4 w-4 shrink-0" />
           <span className="min-w-0 text-center leading-tight">{t('openOriginalSource')}</span>
         </button>
       </div>
       {!safeOriginalUrl ? (
         <p
           id={`open-original-source-help-${group?.id}`}
-          className={`${compact ? 'px-1 pt-2 text-[11px]' : 'pt-3 text-xs'} text-slate-500`}
+          className="px-1 pt-2 text-xs text-slate-500"
         >
           {openOriginalSourceUnavailableMessage}
         </p>
@@ -228,50 +230,101 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
     </div>
   );
 
-  const compactWithoutImage = compact && !imageUrl;
   const sourceIconStack = sourceEntries.length > 0 ? (
-    <div className={`absolute z-10 flex flex-col gap-1.5 ${compact ? 'left-3 top-3' : 'left-4 top-4'}`} aria-label={t('sources')}>
-      {sourceEntries.map((source) => (
+    <div className="flex -space-x-2 rounded-full bg-sky-50/90 p-1 shadow-sm ring-1 ring-sky-100" aria-label={t('sources')}>
+      {sourceEntries.slice(0, 3).map((source) => (
         <span key={source.id} title={source.name} aria-label={source.name}>
           <SourceIcon
             source={source}
-            className={`${compact ? 'h-10 w-10' : 'h-11 w-11'} border-white/60 bg-white/80 shadow-sm backdrop-blur-md`}
+            className="h-10 w-10 border-2 border-white bg-white shadow-md"
             imageClassName="h-5 w-5"
           />
         </span>
       ))}
+      {sourceEntries.length > 3 ? (
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-sky-100 text-xs font-bold text-sky-800 shadow-md">
+          +{sourceEntries.length - 3}
+        </span>
+      ) : null}
     </div>
   ) : null;
+  const sourceSummary = sourceEntries.length > 0
+    ? `${sourceEntries[0].name}${sourceEntries.length > 1 ? ` +${sourceEntries.length - 1}` : ''}`
+    : '';
   const shareControls = (
-    <>
+    <div className="relative flex items-center justify-end">
       <ShareStatusBubble
         shareState={shareState}
         t={t}
-        className={`share-status-pill-from-button ${compact ? 'order-2 ml-2 max-w-[min(12rem,calc(100vw-9rem))]' : 'mr-2 max-w-[min(16rem,calc(100vw-7rem))]'}`}
+        className="share-status-pill-from-button mr-2 max-w-[min(16rem,calc(100vw-7rem))]"
       />
       <button
         type="button"
         onClick={handleShare}
         disabled={!safeOriginalUrl}
-        className={`inline-flex shrink-0 items-center justify-center rounded-full border bg-white/80 text-slate-700 shadow-sm backdrop-blur-md transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 ${compact ? 'order-1 h-10 w-10 border-slate-200/80' : 'h-11 w-11 border-white/60'}`}
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sky-800 shadow-md transition-colors hover:bg-sky-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
         aria-label={t('shareArticle')}
       >
         <Share2 className="h-4 w-4" />
       </button>
-    </>
+    </div>
   );
 
   return (
-    <article className={`relative flex overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-xl ${compact ? 'h-[12.5rem] max-h-[12.5rem] flex-row' : 'h-full min-h-[20rem] flex-col'}`}>
-      {compact && !compactWithoutImage ? (
-        <div className="absolute right-3 top-3 z-10 flex items-center justify-end">
-          {shareControls}
+    <article className="relative flex h-full min-h-[18rem] flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-xl">
+      <div className="flex min-w-0 items-center gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
+        {sourceIconStack}
+        <div className="min-w-0 flex-1">
+          {sourceSummary ? (
+            <p className="truncate text-sm font-semibold text-slate-950">{sourceSummary}</p>
+          ) : null}
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
+            {publicationDate ? (
+              <span className="inline-flex items-center gap-1.5">
+                <CalendarDays className="h-3.5 w-3.5 text-sky-600" aria-hidden="true" />
+                {publicationDate}
+              </span>
+            ) : null}
+            {topicEntries.map(({ topic, source }) => {
+              const { Icon, iconBadgeClassName } = getTopicPresentation(topic);
+              const localizedTopic = getLocalizedTopic(topic, locale);
+              const isAiTopic = source === 'ai';
+
+              if (isAiTopic) {
+                return (
+                  <span
+                    key={topic}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full p-[1.5px] shadow-sm"
+                    style={{ backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)' }}
+                    aria-label={localizedTopic}
+                    title={localizedTopic}
+                  >
+                    <span className={`inline-flex h-full w-full items-center justify-center rounded-full ${iconBadgeClassName}`}>
+                      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                    </span>
+                  </span>
+                );
+              }
+
+              return (
+                <span
+                  key={topic}
+                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full shadow-sm ${iconBadgeClassName}`}
+                  aria-label={localizedTopic}
+                  title={localizedTopic}
+                >
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
+              );
+            })}
+          </div>
         </div>
-      ) : null}
+        {shareControls}
+      </div>
 
       {imageUrl ? (
         <div
-          className={compact ? 'w-[34%] min-w-[7.75rem] max-w-[10rem] overflow-hidden bg-slate-100' : 'relative aspect-[16/9] w-full overflow-hidden bg-slate-100'}
+          className="relative mx-4 aspect-[16/9] overflow-hidden rounded-3xl bg-slate-100 sm:mx-5"
           {...interactionPropsByArea.image}
         >
           <img
@@ -289,90 +342,18 @@ const NewsCard = memo(({ group, showImages = true, compact = false, locale, t, o
               setImageUrl((current) => (isGenericNewsCover(current) ? '' : fallbackImageUrl));
             }}
           />
-          {sourceIconStack}
-          {!compact ? (
-            <div className="absolute right-4 top-4 z-10 flex items-center justify-end">
-              {shareControls}
-            </div>
-          ) : null}
         </div>
       ) : null}
-      <div className={`flex min-w-0 flex-1 flex-col ${compact ? 'p-3' : 'p-5'}`}>
-        {compactWithoutImage ? (
-          <div className="flex items-start gap-2">
-            <div className="flex shrink-0 items-center justify-start">
-              {shareControls}
-            </div>
-            <h2
-              className="min-w-0 flex-1 pt-1 text-[15px] font-semibold leading-5 text-slate-900"
-              {...interactionPropsByArea.title}
-            >
-              {group.title}
-            </h2>
-          </div>
-        ) : (
-          <>
-            {!compact && !imageUrl ? (
-              <div className="flex justify-end mb-2">
-                {shareControls}
-              </div>
-            ) : null}
-            <h2
-              className={`${compact ? 'pr-10 text-[15px] leading-5' : 'text-xl'} font-semibold text-slate-900`}
-              {...interactionPropsByArea.title}
-            >
-              {group.title}
-            </h2>
-          </>
-        )}
 
-        {compact ? null : (
-          <>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5">
-                <CalendarDays className="h-3.5 w-3.5 text-sky-600" aria-hidden="true" />
-                {formatPublicationDate(group.pubDate, locale)}
-              </span>
-
-              {topicEntries.map(({ topic, source }) => {
-                const { Icon, iconBadgeClassName } = getTopicPresentation(topic);
-                const localizedTopic = getLocalizedTopic(topic, locale);
-                const isAiTopic = source === 'ai';
-
-                if (isAiTopic) {
-                  return (
-                    <span
-                      key={topic}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full p-[1.5px] shadow-sm"
-                      style={{ backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)' }}
-                      aria-label={localizedTopic}
-                      title={localizedTopic}
-                    >
-                      <span className={`inline-flex h-full w-full items-center justify-center rounded-full ${iconBadgeClassName}`}>
-                        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                      </span>
-                    </span>
-                  );
-                }
-
-                return (
-                  <span
-                    key={topic}
-                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full shadow-sm ${iconBadgeClassName}`}
-                    aria-label={localizedTopic}
-                    title={localizedTopic}
-                  >
-                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                  </span>
-                );
-              })}
-            </div>
-          </>
-        )}
-
-        {compact ? actionButtons : null}
+      <div className="flex min-w-0 flex-1 flex-col px-4 pb-4 pt-3 sm:px-5">
+        <h2
+          className="text-lg font-semibold leading-6 text-slate-900 sm:text-xl"
+          {...interactionPropsByArea.title}
+        >
+          {group.title}
+        </h2>
       </div>
-      {compact ? null : actionButtons}
+      {actionButtons}
     </article>
   );
 });

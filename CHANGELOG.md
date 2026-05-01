@@ -2,6 +2,7 @@
 
 ## 3.2.13.4
 
+- refreshed news cards into a single social-style layout that keeps source icons, dates, topics, sharing, reader mode, original links, and image-disable behavior without a separate compact card style
 - added a one-time built-in RSS source setup step for newly registered users, persisted with `source_setup_completed`, so unselected configured source groups are saved as exclusions before the first feed load while existing users keep their current setup
 - exposed the configured source catalog in authenticated user payloads so first-run source selection does not require an initial news query
 - added explicit reusable `iconUrl` metadata to configured source catalog responses and custom user sources, including a `user_sources.icon_url` schema migration, so source favicons can be reused outside the onboarding wizard

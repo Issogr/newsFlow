@@ -19,7 +19,7 @@ vi.mock('../hooks/useTopicRefreshSocket', () => ({
 }));
 
 vi.mock('./NewsCard', () => ({
-  default: ({ group, compact }) => <div>{group.title}{compact ? ' compact' : ''}</div>
+  default: ({ group }) => <div>{group.title}</div>
 }));
 vi.mock('./ReaderPanel', () => ({
   default: () => null
@@ -556,33 +556,6 @@ describe('NewsAggregator', () => {
     expect(screen.queryByRole('button', { name: '2 new articles available' })).not.toBeInTheDocument();
     expect(fetchNews).toHaveBeenCalledTimes(initialCallCount);
     expect(screen.queryByText('Fresh headline')).not.toBeInTheDocument();
-  });
-
-  test.each([
-    ['desktop', true, 'First headline compact'],
-    ['mobile', false, 'First headline']
-  ])('resolves compact card mode %s on desktop', async (mode, compactNewsCards, expectedText) => {
-    fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'First headline' }],
-      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-      filters: { sources: [], sourceCatalog: [], topics: [] }
-    });
-
-    await renderNewsAggregator({
-      currentUser: {
-        ...currentUser,
-        settings: {
-          ...currentUser.settings,
-          compactNewsCards,
-          compactNewsCardsMode: mode
-        }
-      }
-    });
-
-    expect(await screen.findByText(expectedText)).toBeInTheDocument();
-    if (!compactNewsCards) {
-      expect(screen.queryByText('First headline compact')).not.toBeInTheDocument();
-    }
   });
 
   test('uses the server cursor for load more requests', async () => {
