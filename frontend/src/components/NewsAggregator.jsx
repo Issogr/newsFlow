@@ -396,7 +396,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, []);
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-slate-100 text-slate-900">
+    <div className="min-h-screen overflow-x-clip bg-slate-100 text-slate-900">
       <header className={`sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md transition-shadow duration-200 ${topNavCompact ? 'shadow-md' : 'shadow-sm'}`}>
         <div className={`mx-auto flex max-w-7xl flex-col px-4 transition-all duration-200 lg:px-6 ${topNavCompact ? 'gap-2 py-2.5' : 'gap-4 py-5'}`}>
           <div className="flex items-center justify-between gap-3">

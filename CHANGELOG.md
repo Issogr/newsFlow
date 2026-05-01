@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.3.1
+## 3.3.2
 
 - fixed mobile news cards so feed items stay within the viewport and card images no longer resize unexpectedly while scrolling
 
