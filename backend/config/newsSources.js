@@ -20,7 +20,7 @@ module.exports = [
   { id: 'ansa_sport', name: 'ANSA - Sport', groupId: 'ansa', groupName: 'ANSA', subSource: 'Sport', url: 'https://www.ansa.it/sito/notizie/sport/sport_rss.xml', iconUrl: SOURCE_ICONS.ansa, type: 'rss', language: 'it' },
   { id: 'sole24ore_economia', name: 'Il Sole 24 Ore - Economia', groupId: 'sole24ore', groupName: 'Il Sole 24 Ore', subSource: 'Economia', url: 'https://www.ilsole24ore.com/rss/economia.xml', iconUrl: SOURCE_ICONS.sole24ore, type: 'rss', language: 'it' },
   { id: 'sole24ore_finanza', name: 'Il Sole 24 Ore - Finanza e Mercati', groupId: 'sole24ore', groupName: 'Il Sole 24 Ore', subSource: 'Finanza e Mercati', url: 'https://www.ilsole24ore.com/rss/finanza.xml', iconUrl: SOURCE_ICONS.sole24ore, type: 'rss', language: 'it' },
-  { id: 'ilpost', name: 'Il Post', url: 'https://www.ilpost.it/feed/', iconUrl: SOURCE_ICONS.ilpost, type: 'rss', language: 'it' },
+  { id: 'ilpost', name: 'Il Post', url: 'https://www.ilpost.it/feed', iconUrl: SOURCE_ICONS.ilpost, type: 'rss', language: 'it' },
   { id: 'open', name: 'Open', url: 'https://www.open.online/feed/', iconUrl: SOURCE_ICONS.open, type: 'rss', language: 'it' },
   { id: 'ilfattoquotidiano', name: 'Il Fatto Quotidiano', url: 'https://www.ilfattoquotidiano.it/feed/', iconUrl: SOURCE_ICONS.ilfattoquotidiano, type: 'rss', language: 'it' },
   { id: 'fanpage', name: 'Fanpage', url: 'https://www.fanpage.it/feed/', iconUrl: SOURCE_ICONS.fanpage, type: 'rss', language: 'it' },

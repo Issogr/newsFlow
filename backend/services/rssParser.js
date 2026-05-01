@@ -21,6 +21,14 @@ const ARTICLE_IMAGE_FALLBACK_LIMIT = parseIntegerEnv('ARTICLE_IMAGE_FALLBACK_LIM
 const RSS_MAX_RESPONSE_BYTES = parseIntegerEnv('RSS_MAX_RESPONSE_BYTES', 1048576, { min: 1 });
 const ARTICLE_IMAGE_MAX_RESPONSE_BYTES = parseIntegerEnv('ARTICLE_IMAGE_MAX_RESPONSE_BYTES', 524288, { min: 1 });
 
+const RSS_REQUEST_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 NewsFlow/2.0',
+  Accept: 'application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8, text/html;q=0.7, */*;q=0.5',
+  'Sec-Fetch-Mode': 'cors',
+  'Cache-Control': 'no-cache',
+  Pragma: 'no-cache'
+};
+
 const parser = new RSSParser({
   customFields: {
     item: [
@@ -32,9 +40,7 @@ const parser = new RSSParser({
     ]
   },
   timeout: RSS_TIMEOUT,
-  headers: {
-    'User-Agent': 'newsflow/2.0 (+https://localhost)'
-  }
+  headers: RSS_REQUEST_HEADERS
 });
 
 const responseCache = new Map();
@@ -321,6 +327,15 @@ function extractImageFromArticleHtml(html, pageUrl = '') {
   return extractImageFromHtml(html, pageUrl);
 }
 
+function isRetryableFetchError(error) {
+  const status = Number(error?.status);
+  if (!Number.isFinite(status)) {
+    return true;
+  }
+
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
 async function fetchArticleImage(url) {
   if (!url) {
     return null;
@@ -389,10 +404,7 @@ async function fetchFeedXml(url) {
       const response = await fetchSafeTextUrl(url, {
         timeout: RSS_TIMEOUT,
         maxResponseBytes: RSS_MAX_RESPONSE_BYTES,
-        headers: {
-          'User-Agent': 'newsflow/2.0 (+https://localhost)',
-          Accept: 'application/rss+xml, application/xml, text/xml, */*'
-        }
+        headers: RSS_REQUEST_HEADERS
       });
 
       responseCache.set(url, {
@@ -404,7 +416,7 @@ async function fetchFeedXml(url) {
       return response.data;
     } catch (error) {
       lastError = error;
-      if (attempt === RSS_MAX_RETRIES) {
+      if (attempt === RSS_MAX_RETRIES || !isRetryableFetchError(error)) {
         break;
       }
 
