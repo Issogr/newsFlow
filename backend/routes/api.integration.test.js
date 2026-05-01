@@ -411,6 +411,7 @@ describe('API auth and user flows', () => {
   });
 
   test('serves public cached news anonymously without user context', async () => {
+    const usageSpy = jest.spyOn(userService, 'recordPublicApiRequestUsage');
     newsService.getCachedNewsFeed.mockResolvedValueOnce({
       items: [],
       meta: { hasMore: false },
@@ -433,6 +434,18 @@ describe('API auth and user flows', () => {
       mode: 'anonymous',
       cachedOnly: true
     });
+    expect(usageSpy).toHaveBeenCalledWith({ authenticated: false, userId: null });
+  });
+
+  test('does not record public API usage when cached news lookup fails', async () => {
+    const usageSpy = jest.spyOn(userService, 'recordPublicApiRequestUsage');
+    newsService.getCachedNewsFeed.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await request(app)
+      .get('/api/public/news')
+      .expect(500);
+
+    expect(usageSpy).not.toHaveBeenCalled();
   });
 
   test('only includes public API filter metadata when explicitly requested', async () => {

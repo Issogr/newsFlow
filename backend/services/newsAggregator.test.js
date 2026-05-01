@@ -159,7 +159,7 @@ describe('newsAggregator service flows', () => {
       totalGroups: null,
       nextCursor: {
         beforePubDate: '2026-03-07T10:00:00.000Z',
-        beforeId: 'global-1'
+        beforeId: expect.any(String)
       },
       scannedArticles: 2,
       ingestion: { id: 7, status: 'completed' }
@@ -168,21 +168,21 @@ describe('newsAggregator service flows', () => {
       expect.objectContaining({ id: ansaSourceId, name: ansaSourceName }),
       expect.objectContaining({ id: 'example.com', name: 'My Feed', language: 'en' })
     ]));
-    expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({ limit: 2, offset: 0 }), expect.objectContaining({ userId: 'user-1' }));
+    expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({ limit: 251, offset: 0 }), expect.objectContaining({ userId: 'user-1' }));
   });
 
-  test('getNewsFeed applies page offsets when no cursor is provided', async () => {
+  test('getNewsFeed applies page offsets after story grouping when no cursor is provided', async () => {
     database.getArticles.mockReturnValue([]);
 
     await newsAggregator.getNewsFeed({ page: 3, pageSize: 10 }, { userId: 'user-1' });
 
     expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({
-      limit: 11,
-      offset: 20
+      limit: 251,
+      offset: 0
     }), expect.objectContaining({ userId: 'user-1' }));
   });
 
-  test('getNewsFeed ignores page offset when cursor pagination is used', async () => {
+  test('getNewsFeed resolves cursor pagination after story grouping', async () => {
     database.getArticles.mockReturnValue([]);
 
     await newsAggregator.getNewsFeed({
@@ -193,9 +193,53 @@ describe('newsAggregator service flows', () => {
     }, { userId: 'user-1' });
 
     expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({
-      limit: 11,
+      beforePubDate: '',
+      beforeId: '',
+      limit: 251,
       offset: 0
     }), expect.objectContaining({ userId: 'user-1' }));
+  });
+
+  test('getNewsFeed paginates complete story groups instead of raw articles', async () => {
+    database.getArticles.mockReturnValue([
+      {
+        id: 'article-1',
+        sourceId: 'source-a',
+        source: 'Source A',
+        title: 'Shared headline',
+        description: 'First version',
+        pubDate: '2026-03-07T10:00:00.000Z',
+        url: 'https://a.example.com/shared-headline',
+        topics: ['Economia']
+      },
+      {
+        id: 'article-2',
+        sourceId: 'source-b',
+        source: 'Source B',
+        title: 'Shared headline',
+        description: 'Second version',
+        pubDate: '2026-03-07T09:30:00.000Z',
+        url: 'https://b.example.com/shared-headline',
+        topics: ['Economia']
+      },
+      {
+        id: 'article-3',
+        sourceId: 'source-c',
+        source: 'Source C',
+        title: 'Another headline',
+        description: 'Different story',
+        pubDate: '2026-03-07T09:00:00.000Z',
+        url: 'https://c.example.com/another-headline',
+        topics: ['Tecnologia']
+      }
+    ]);
+
+    const result = await newsAggregator.getNewsFeed({ pageSize: 2 }, { userId: 'user-1' });
+
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0].items.map((item) => item.id)).toEqual(['article-1', 'article-2']);
+    expect(result.items[1].items.map((item) => item.id)).toEqual(['article-3']);
+    expect(result.meta).toMatchObject({ hasMore: false, returnedGroups: 2, scannedArticles: 3 });
   });
 
   test('active assigned source selection skips inactive users and excluded default sources', () => {

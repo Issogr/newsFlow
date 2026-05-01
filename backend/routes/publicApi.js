@@ -96,11 +96,11 @@ router.get('/news', [
 ], asyncHandler(async (req, res) => {
   const filters = parseNewsQuery(req.query);
   filters.includeFilters = req.query.includeFilters === 'true';
+  const result = await newsService.getCachedNewsFeed(filters, getExternalUserContext(req));
   userService.recordPublicApiRequestUsage({
     authenticated: Boolean(req.externalApi?.authenticated),
     userId: req.externalApi?.user?.id || null
   });
-  const result = await newsService.getCachedNewsFeed(filters, getExternalUserContext(req));
 
   res.json({
     ...result,

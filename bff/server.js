@@ -1,475 +1,45 @@
-const fs = require('fs');
-const crypto = require('crypto');
 const http = require('http');
 const path = require('path');
 const express = require('express');
 const axios = require('axios');
-const cookie = require('cookie');
-const cookieSignature = require('cookie-signature');
 const helmet = require('helmet');
-const Database = require('better-sqlite3');
-const session = require('express-session');
-const SqliteStoreFactory = require('better-sqlite3-session-store')(session);
 
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const { parseIntegerEnv } = require('./lib/env');
+const {
+  BACKEND_SESSION_COOKIE_NAME,
+  BFF_SESSION_COOKIE_NAME,
+  SESSION_SCHEMA_VERSION,
+  clearBffSessionCookie,
+  encryptBackendSessionCookie,
+  extractBackendSessionCookie,
+  getBffSessionSecret,
+  getInternalProxyToken,
+  isValidSessionPayload,
+  parseCookieHeader,
+  serializeCookie,
+  unsignSessionId
+} = require('./lib/sessionPolicy');
+const {
+  buildSessionMiddleware,
+  createSessionStore,
+  destroySession,
+  destroyStoredSessionsByUserId,
+  getBackendSessionCookieFromRequest,
+  loadUpgradeSession,
+  normalizeSessionState,
+  persistSessionUserId,
+  upsertStoredSessionUser
+} = require('./lib/sessionStore');
+const {
+  applySanitizedForwardedHeaders,
+  copyBackendResponseHeaders,
+  extractDeletedAdminUserId,
+  serveSpaIndex
+} = require('./lib/proxyHelpers');
 
-const BACKEND_SESSION_COOKIE_NAME = 'newsflow_session';
-const BFF_SESSION_COOKIE_NAME = 'newsflow_bff_session';
 const DEFAULT_FRONTEND_DIST_DIR = path.join(__dirname, 'public');
-const DEFAULT_SESSION_DB_PATH = path.join(__dirname, 'data', 'sessions.sqlite');
-const SESSION_TTL_DAYS = parseIntegerEnv('SESSION_TTL_DAYS', 30, { min: 1 });
-const SESSION_TTL_MS = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
-const SESSION_STORE_CLEAR_INTERVAL_MS = parseIntegerEnv('SESSION_STORE_CLEAR_INTERVAL_MS', 300000, { min: 1000 });
-const SESSION_SCHEMA_VERSION = 1;
-const DEFAULT_BFF_SESSION_SECRET = 'development-only-change-me';
-const DEFAULT_INTERNAL_PROXY_TOKEN = 'development-only-change-me';
 const UPSTREAM_TIMEOUT_MS = parseIntegerEnv('BFF_UPSTREAM_TIMEOUT_MS', 30000, { min: 1000 });
-
-function parseIntegerEnv(name, fallbackValue, options = {}) {
-  const parsed = parseInt(process.env[name] || String(fallbackValue), 10);
-  const fallback = Number(fallbackValue);
-
-  if (!Number.isFinite(parsed)) {
-    return fallback;
-  }
-
-  if (Number.isFinite(options.min) && parsed < options.min) {
-    return fallback;
-  }
-
-  if (Number.isFinite(options.max) && parsed > options.max) {
-    return fallback;
-  }
-
-  return parsed;
-}
-
-function readConfiguredSecret(name, developmentFallback) {
-  const configured = String(process.env[name] || '').trim();
-  const isProduction = process.env.NODE_ENV === 'production';
-
-  if (configured) {
-    if (isProduction && configured === developmentFallback) {
-      throw new Error(`${name} must not use the development default in production.`);
-    }
-
-    return configured;
-  }
-
-  if (isProduction) {
-    throw new Error(`${name} is required in production.`);
-  }
-
-  return developmentFallback;
-}
-
-function getBffSessionSecret() {
-  return readConfiguredSecret('BFF_SESSION_SECRET', DEFAULT_BFF_SESSION_SECRET);
-}
-
-function getInternalProxyToken() {
-  return readConfiguredSecret('INTERNAL_PROXY_TOKEN', DEFAULT_INTERNAL_PROXY_TOKEN);
-}
-
-function getSessionEncryptionKey() {
-  return crypto.createHash('sha256').update(getBffSessionSecret()).digest();
-}
-
-function encryptBackendSessionCookie(value) {
-  const rawValue = String(value || '').trim();
-  if (!rawValue) {
-    return '';
-  }
-
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', getSessionEncryptionKey(), iv);
-  const encrypted = Buffer.concat([cipher.update(rawValue, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-
-  return [
-    'enc',
-    'v1',
-    iv.toString('base64url'),
-    tag.toString('base64url'),
-    encrypted.toString('base64url'),
-  ].join(':');
-}
-
-function decryptBackendSessionCookie(value) {
-  const storedValue = String(value || '').trim();
-  if (!storedValue || !storedValue.startsWith('enc:v1:')) {
-    return '';
-  }
-
-  const [, , ivValue, tagValue, encryptedValue] = storedValue.split(':');
-  if (!ivValue || !tagValue || !encryptedValue) {
-    return '';
-  }
-
-  try {
-    const decipher = crypto.createDecipheriv('aes-256-gcm', getSessionEncryptionKey(), Buffer.from(ivValue, 'base64url'));
-    decipher.setAuthTag(Buffer.from(tagValue, 'base64url'));
-    return Buffer.concat([
-      decipher.update(Buffer.from(encryptedValue, 'base64url')),
-      decipher.final(),
-    ]).toString('utf8');
-  } catch {
-    return '';
-  }
-}
-
-function parseCookieHeader(cookieHeader) {
-  if (!cookieHeader || typeof cookieHeader !== 'string') {
-    return {};
-  }
-
-  return cookie.parse(cookieHeader);
-}
-
-function serializeCookie(name, value, options = {}) {
-  return cookie.serialize(name, value, options);
-}
-
-function getCookieSecureSetting() {
-  if (process.env.COOKIE_SECURE === 'true') {
-    return true;
-  }
-
-  if (process.env.COOKIE_SECURE === 'false') {
-    return false;
-  }
-
-  const appBaseUrl = String(process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim();
-  if (appBaseUrl.startsWith('https://')) {
-    return true;
-  }
-
-  return 'auto';
-}
-
-function getSessionCookieOptions() {
-  return {
-    httpOnly: true,
-    sameSite: 'strict',
-    secure: getCookieSecureSetting(),
-    path: '/',
-    maxAge: SESSION_TTL_MS,
-  };
-}
-
-function getCookieClearOptions() {
-  return {
-    httpOnly: true,
-    sameSite: 'strict',
-    path: '/',
-    maxAge: 0,
-  };
-}
-
-function clearBffSessionCookie(res) {
-  res.append('Set-Cookie', serializeCookie(BFF_SESSION_COOKIE_NAME, '', getCookieClearOptions()));
-}
-
-function applySanitizedForwardedHeaders(proxyReq, req) {
-  proxyReq.removeHeader('x-forwarded-for');
-  proxyReq.removeHeader('x-forwarded-host');
-  proxyReq.removeHeader('x-forwarded-proto');
-
-  const clientIp = req.ip || req.socket?.remoteAddress;
-  if (clientIp) {
-    proxyReq.setHeader('X-Forwarded-For', clientIp);
-  }
-
-  if (req.headers.host) {
-    proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
-  }
-
-  proxyReq.setHeader('X-Forwarded-Proto', req.protocol || (req.socket?.encrypted ? 'https' : 'http'));
-}
-
-function extractBackendSessionCookie(setCookieHeader) {
-  const values = Array.isArray(setCookieHeader)
-    ? setCookieHeader
-    : (setCookieHeader ? [setCookieHeader] : []);
-
-  const rawCookie = values.find((entry) => String(entry || '').startsWith(`${BACKEND_SESSION_COOKIE_NAME}=`));
-
-  if (!rawCookie) {
-    return '';
-  }
-
-  return rawCookie.split(';')[0];
-}
-
-function copyBackendResponseHeaders(res, headers = {}) {
-  const blockedHeaders = new Set([
-    'connection',
-    'content-length',
-    'keep-alive',
-    'proxy-authenticate',
-    'proxy-authorization',
-    'set-cookie',
-    'te',
-    'trailer',
-    'transfer-encoding',
-    'upgrade',
-  ]);
-
-  Object.entries(headers).forEach(([name, value]) => {
-    const lowerName = String(name || '').toLowerCase();
-
-    if (blockedHeaders.has(lowerName)) {
-      return;
-    }
-
-    if (value !== undefined) {
-      res.setHeader(name, value);
-    }
-  });
-}
-
-function serveSpaIndex(frontendDistDir, res) {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.sendFile(path.join(frontendDistDir, 'index.html'));
-}
-
-function ensureSessionDbDirectory(sessionDbPath) {
-  fs.mkdirSync(path.dirname(sessionDbPath), { recursive: true });
-}
-
-function createSessionStore(options = {}) {
-  const sessionDbPath = options.sessionDbPath || process.env.BFF_SESSION_DB_PATH || DEFAULT_SESSION_DB_PATH;
-  ensureSessionDbDirectory(sessionDbPath);
-
-  const db = new Database(sessionDbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
-  db.pragma('foreign_keys = ON');
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS session_users (
-      sid TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_session_users_user_id ON session_users (user_id);
-  `);
-
-  const BaseSqliteStore = SqliteStoreFactory;
-  class ManagedSqliteStore extends BaseSqliteStore {
-    startInterval() {
-      this.cleanupInterval = setInterval(this.clearExpiredSessions.bind(this), this.expired.intervalMs);
-      this.cleanupInterval?.unref?.();
-    }
-
-    stopCleanupInterval() {
-      if (this.cleanupInterval) {
-        clearInterval(this.cleanupInterval);
-        this.cleanupInterval = null;
-      }
-    }
-
-    clearExpiredSessions() {
-      super.clearExpiredSessions();
-      cleanupStoredSessionUsers(db);
-    }
-  }
-
-  const store = new ManagedSqliteStore({
-      client: db,
-      expired: {
-        clear: true,
-        intervalMs: SESSION_STORE_CLEAR_INTERVAL_MS,
-      },
-    });
-
-  return { store, db };
-}
-
-function cleanupStoredSessionUsers(sessionDb) {
-  if (!sessionDb) {
-    return 0;
-  }
-
-  return sessionDb.prepare(`
-    DELETE FROM session_users
-    WHERE NOT EXISTS (
-      SELECT 1
-      FROM sessions
-      WHERE sessions.sid = session_users.sid
-    )
-  `).run().changes;
-}
-
-function destroyStoredSessionsByUserId(sessionStore, sessionDb, userId) {
-  if (!sessionStore || !sessionDb || !userId) {
-    return 0;
-  }
-
-  const matchingSessionIds = sessionDb.prepare(`
-    SELECT sid
-    FROM session_users
-    WHERE user_id = ?
-  `).all(userId).map((row) => row.sid);
-
-  matchingSessionIds.forEach((sid) => {
-    sessionStore.destroy(sid, () => {});
-  });
-
-  sessionDb.prepare('DELETE FROM session_users WHERE user_id = ?').run(userId);
-
-  return matchingSessionIds.length;
-}
-
-function upsertStoredSessionUser(sessionDb, sid, userId) {
-  if (!sessionDb || !sid || !userId) {
-    return;
-  }
-
-  sessionDb.prepare(`
-    INSERT INTO session_users (sid, user_id)
-    VALUES (?, ?)
-    ON CONFLICT(sid) DO UPDATE SET user_id = excluded.user_id
-  `).run(sid, userId);
-}
-
-function removeStoredSessionUser(sessionDb, sid) {
-  if (!sessionDb || !sid) {
-    return;
-  }
-
-  sessionDb.prepare('DELETE FROM session_users WHERE sid = ?').run(sid);
-}
-
-function extractDeletedAdminUserId(req, statusCode) {
-  if (String(req.method || '').toUpperCase() !== 'DELETE' || statusCode < 200 || statusCode >= 300) {
-    return '';
-  }
-
-  const rawPath = String(req.originalUrl || req.url || '');
-  const match = rawPath.match(/^\/api\/admin\/users\/([^/?#]+)$/);
-  return match?.[1] || '';
-}
-
-function destroySession(req, sessionDb = null) {
-  if (!req.session) {
-    return Promise.resolve();
-  }
-
-  const sessionId = req.sessionID;
-
-  return new Promise((resolve) => {
-    req.session.destroy(() => {
-      removeStoredSessionUser(sessionDb, sessionId);
-      resolve();
-    });
-  });
-}
-
-function isValidSessionPayload(sessionData) {
-  if (!sessionData || typeof sessionData !== 'object') {
-    return false;
-  }
-
-  const backendSessionCookie = decryptBackendSessionCookie(sessionData.backendSessionCookie || '');
-  return sessionData.version === SESSION_SCHEMA_VERSION
-    && backendSessionCookie.startsWith(`${BACKEND_SESSION_COOKIE_NAME}=`);
-}
-
-function buildSessionMiddleware(store) {
-  return session({
-    name: BFF_SESSION_COOKIE_NAME,
-    store,
-    secret: getBffSessionSecret(),
-    resave: false,
-    saveUninitialized: false,
-    rolling: true,
-    unset: 'destroy',
-    cookie: getSessionCookieOptions(),
-  });
-}
-
-function normalizeSessionState(req, res, next, sessionDb = null) {
-  if (!req.session) {
-    next();
-    return;
-  }
-
-  const hasSessionData = Boolean(req.session.version || req.session.backendSessionCookie);
-  if (!hasSessionData) {
-    next();
-    return;
-  }
-
-  if (isValidSessionPayload(req.session)) {
-    next();
-    return;
-  }
-
-  destroySession(req, sessionDb).then(() => {
-    clearBffSessionCookie(res);
-    next();
-  });
-}
-
-function unsignSessionId(rawCookieValue, secret) {
-  const normalized = String(rawCookieValue || '').trim();
-
-  if (!normalized) {
-    return '';
-  }
-
-  const signedValue = normalized.startsWith('s:') ? normalized.slice(2) : normalized;
-  const unsigned = cookieSignature.unsign(signedValue, secret);
-  return unsigned === false ? '' : unsigned;
-}
-
-function loadUpgradeSession(req, sessionStore, secret) {
-  const cookies = parseCookieHeader(req.headers.cookie);
-  const sessionId = unsignSessionId(cookies[BFF_SESSION_COOKIE_NAME], secret);
-
-  if (!sessionId) {
-    return Promise.resolve(null);
-  }
-
-  return new Promise((resolve) => {
-    sessionStore.get(sessionId, (error, sessionData) => {
-      if (error || !isValidSessionPayload(sessionData)) {
-        if (sessionData) {
-          sessionStore.destroy(sessionId, () => resolve(null));
-          return;
-        }
-
-        resolve(null);
-        return;
-      }
-
-      req.session = sessionData;
-      req.sessionID = sessionId;
-      if (typeof sessionStore.touch === 'function') {
-        sessionStore.touch(sessionId, sessionData, () => resolve(sessionData));
-        return;
-      }
-
-      resolve(sessionData);
-    });
-  });
-}
-
-function getBackendSessionCookieFromRequest(req) {
-  return decryptBackendSessionCookie(req.session?.backendSessionCookie || '');
-}
-
-async function persistSessionUserId(req, userId, sessionDb = null) {
-  if (!req.session || !userId || req.session.userId === userId) {
-    return;
-  }
-
-  req.session.userId = userId;
-  await new Promise((resolve, reject) => {
-    req.session.save((error) => (error ? reject(error) : resolve()));
-  });
-  upsertStoredSessionUser(sessionDb, req.sessionID, userId);
-}
 
 function createApp(options = {}) {
   const backendBaseUrl = String(options.backendBaseUrl || process.env.BACKEND_BASE_URL || 'http://backend:5000').trim().replace(/\/+$/, '');
@@ -478,7 +48,7 @@ function createApp(options = {}) {
   const createdSessionStore = options.sessionStoreBundle || createSessionStore(options);
   const sessionStore = createdSessionStore.store;
   const sessionDb = createdSessionStore.db;
-  const sessionMiddleware = options.sessionMiddleware || buildSessionMiddleware(sessionStore);
+  const sessionMiddleware = options.sessionMiddleware || buildSessionMiddleware(sessionStore, getBffSessionSecret());
   const backendHttp = options.backendHttp || axios.create({
     baseURL: backendBaseUrl,
     timeout: UPSTREAM_TIMEOUT_MS,

@@ -5,6 +5,9 @@
 - refreshed news cards into a single social-style layout that keeps source icons, dates, topics, sharing, reader mode, original links, and image-disable behavior without a separate compact card style
 - refreshed the built-in RSS catalog by keeping ANSA and Il Sole 24 Ore economy/finance, adding Il Post, Open, Il Fatto Quotidiano, Fanpage, Wired Italia, BBC News, The Verge, and The Guardian, removing older unused defaults, and asking every user to reselect sources from an initially disabled catalog
 - removed custom RSS sources that duplicate newly built-in feed URLs during migration so users do not keep two copies of the same provider
+- made feed pagination operate on grouped story cards instead of raw articles, so pages stay filled consistently and related articles are not split by the underlying article cursor
+- counted public API usage only after cached feed reads complete successfully, avoiding inflated usage totals from failed requests
+- split BFF session, cookie, and proxy helper code into focused modules and removed an unused grouping helper to reduce drift in security-sensitive paths
 
 ## 3.2.13.4
 

@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "lint": "node --check server.js",
+    "lint": "node --check server.js && for file in lib/*.js; do node --check \"$file\"; done",
     "test": "NODE_OPTIONS=--no-experimental-webstorage jest"
   },
   "dependencies": {

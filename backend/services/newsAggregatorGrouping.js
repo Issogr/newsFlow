@@ -34,22 +34,10 @@ function buildStableGroupId(items) {
 }
 
 function sortGroupsByPubDate(groups = []) {
-  return groups.sort((left, right) => new Date(right.pubDate) - new Date(left.pubDate));
-}
-
-function createStandaloneGroup(item) {
-  return {
-    id: buildStableGroupId([item]),
-    items: [item],
-    ownerUserId: item.ownerUserId || null,
-    sources: [item.source],
-    title: item.title,
-    description: item.description,
-    pubDate: item.pubDate,
-    topics: [...(item.topics || [])],
-    topicDetails: [...(item.topicDetails || [])],
-    url: item.url
-  };
+  return groups.sort((left, right) => {
+    const dateComparison = new Date(right.pubDate) - new Date(left.pubDate);
+    return dateComparison || String(right.id || '').localeCompare(String(left.id || ''));
+  });
 }
 
 function normalizeTitleKey(title = '') {
@@ -283,7 +271,6 @@ function buildInsertedGroupsByOwner(normalizedArticles = [], insertedIds = []) {
 module.exports = {
   buildStableGroupId,
   sortGroupsByPubDate,
-  createStandaloneGroup,
   groupSimilarNews,
   normalizeIncomingArticles,
   buildInsertedGroupsByOwner
