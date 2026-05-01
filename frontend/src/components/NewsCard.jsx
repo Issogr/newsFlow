@@ -271,7 +271,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
   );
 
   return (
-    <article className="relative flex h-full min-h-[18rem] flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-xl">
+    <article className="relative flex h-full min-h-[18rem] w-full min-w-0 flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-xl sm:transition-[box-shadow,transform] sm:hover:-translate-y-0.5">
       <div className="flex min-w-0 items-center gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
         {sourceIconStack}
         <div className="min-w-0 flex-1">
@@ -324,14 +324,14 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
 
       {imageUrl ? (
         <div
-          className="relative mx-4 aspect-[16/9] overflow-hidden rounded-3xl bg-slate-100 sm:mx-5"
+          className="relative mx-4 aspect-[16/9] max-w-full overflow-hidden rounded-3xl bg-slate-100 sm:mx-5"
           {...interactionPropsByArea.image}
         >
           <img
             src={imageUrl}
             alt={isGenericNewsCover(imageUrl) ? fallbackImageAlt : group.title}
             loading="lazy"
-            className="h-full w-full object-cover"
+            className="block h-full w-full object-cover"
             onDoubleClick={openReader}
             onError={() => {
               if (!showImages) {
