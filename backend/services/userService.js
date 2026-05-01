@@ -5,13 +5,14 @@ const websocketService = require('./websocketService');
 const { createError } = require('../utils/errorHandler');
 const { mapWithConcurrency } = require('../utils/concurrency');
 const { parseIntegerEnv } = require('../utils/env');
+const { getProviderIconUrl } = require('../utils/sourceIcons');
 const {
   MAX_FEEDBACK_DESCRIPTION_LENGTH,
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_TITLE_LENGTH,
   MAX_FEEDBACK_VIDEO_BYTES,
 } = require('../utils/feedback');
-const { getConfiguredSourceGroupIds, getGroupedConfiguredSourceIds } = require('../utils/sourceCatalog');
+const { getConfiguredSourceGroupIds, getConfiguredSourceGroups, getGroupedConfiguredSourceIds } = require('../utils/sourceCatalog');
 const {
   hashPassword,
   verifyPassword,
@@ -274,7 +275,7 @@ function ensureAdminAccount() {
   return database.findUserById(adminUser.id);
 }
 
-function getDefaultSettings() {
+function getDefaultSettings(overrides = {}) {
   return {
     defaultLanguage: 'auto',
     themeMode: 'system',
@@ -286,6 +287,7 @@ function getDefaultSettings() {
     readerPanelPosition: 'right',
     readerTextSize: 'medium',
     lastSeenReleaseNotesVersion: '',
+    sourceSetupCompleted: overrides.sourceSetupCompleted !== false,
     excludedSourceIds: [],
     excludedSubSourceIds: []
   };
@@ -318,6 +320,7 @@ function buildAuthResponse(user, sessionToken) {
     user: buildUserPayload(user),
     settings: getUserSettings(user.id),
     limits: getUserLimits(),
+    sourceCatalog: getConfiguredSourceGroups(),
     customSources: database.listUserSources(user.id),
     apiToken: getUserApiToken(user.id)
   };
@@ -394,6 +397,9 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     lastSeenReleaseNotesVersion: Object.prototype.hasOwnProperty.call(payload, 'lastSeenReleaseNotesVersion')
       ? normalizeReleaseNotesVersion(payload.lastSeenReleaseNotesVersion)
       : normalizeReleaseNotesVersion(currentSettings.lastSeenReleaseNotesVersion),
+    sourceSetupCompleted: typeof payload.sourceSetupCompleted === 'boolean'
+      ? payload.sourceSetupCompleted
+      : currentSettings.sourceSetupCompleted !== false,
     excludedSourceIds: Array.isArray(overrides.excludedSourceIds)
       ? overrides.excludedSourceIds
       : (Array.isArray(payload.excludedSourceIds)
@@ -435,7 +441,7 @@ async function registerUser(payload = {}) {
   };
 
   database.createUser(user);
-  database.upsertUserSettings(user.id, getDefaultSettings());
+  database.upsertUserSettings(user.id, getDefaultSettings({ sourceSetupCompleted: false }));
   database.updateUserLogin(user.id, now);
 
   const sessionToken = generateSessionToken();
@@ -485,6 +491,7 @@ function getCurrentUser(userId) {
     user: buildUserPayload(user),
     settings: getUserSettings(userId),
     limits: getUserLimits(),
+    sourceCatalog: getConfiguredSourceGroups(),
     customSources: database.listUserSources(userId),
     apiToken: getUserApiToken(userId)
   };
@@ -561,6 +568,7 @@ async function addUserSource(userId, payload = {}) {
     name,
     url,
     language,
+    iconUrl: preview.iconUrl,
     isActive: true,
     createdAt: now,
     updatedAt: now,
@@ -596,6 +604,7 @@ async function updateUserSource(userId, sourceId, payload = {}) {
     name: String(payload.name || preview?.name || existingSource.name).trim().slice(0, 80),
     url,
     language: String(payload.language || preview?.language || existingSource.language).trim().toLowerCase().slice(0, 5) || existingSource.language,
+    iconUrl: urlChanged ? preview?.iconUrl || getProviderIconUrl(url) : existingSource.iconUrl || getProviderIconUrl(url),
     isActive: typeof payload.isActive === 'boolean' ? payload.isActive : existingSource.isActive !== false,
     updatedAt: new Date().toISOString(),
     validatedAt: urlChanged ? new Date().toISOString() : existingSource.validatedAt
@@ -629,6 +638,7 @@ async function previewUserSource(payload = {}) {
     const preview = await rssParser.validateFeedUrl(url);
     return {
       name: preview.title || '',
+      iconUrl: getProviderIconUrl(preview.siteUrl || url),
       language: preview.language || 'it',
       itemCount: preview.itemCount || 0
     };
@@ -670,6 +680,7 @@ function exportUserSettings(userId) {
       name: source.name,
       url: source.url,
       language: source.language,
+      iconUrl: source.iconUrl || getProviderIconUrl(source.url),
       isActive: source.isActive !== false,
       isExcluded: settings.excludedSourceIds.includes(source.id)
     }))
@@ -890,6 +901,7 @@ async function importUserSettings(userId, payload = {}) {
       name: String(source.name).trim().slice(0, 80),
       url: String(source.url).trim(),
       language: String(source.language || 'it').trim().toLowerCase().slice(0, 5) || 'it',
+      iconUrl: getProviderIconUrl(source.url),
       isActive: source.isActive !== false,
       createdAt: now,
       updatedAt: now,

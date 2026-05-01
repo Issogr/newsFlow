@@ -67,6 +67,7 @@ describe('database migrations', () => {
     const settingsColumns = sqlite.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
     const articleColumns = sqlite.prepare('PRAGMA table_info(articles)').all().map((column) => column.name);
     const userColumns = sqlite.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
+    const userSourceColumns = sqlite.prepare('PRAGMA table_info(user_sources)').all().map((column) => column.name);
     const passwordSetupTokenColumns = sqlite.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column) => column.name);
     const apiTokenColumns = sqlite.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
     const articleIndexNames = sqlite.prepare('PRAGMA index_list(articles)').all().map((index) => index.name);
@@ -74,7 +75,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('21');
+    expect(migrationVersion).toBe('23');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -87,11 +88,13 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('reader_text_size');
     expect(settingsColumns).toContain('reader_panel_position');
     expect(settingsColumns).toContain('last_seen_release_notes_version');
+    expect(settingsColumns).toContain('source_setup_completed');
     expect(userColumns).toContain('role');
     expect(userColumns).toContain('last_login_at');
     expect(userColumns).toContain('last_activity_at');
     expect(userColumns).toContain('public_api_request_count');
     expect(userColumns).toContain('public_api_last_used_at');
+    expect(userSourceColumns).toContain('icon_url');
     expect(passwordSetupTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'purpose', 'expires_at', 'used_at']));
     expect(apiTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'token_prefix', 'expires_at', 'revoked_at', 'last_used_at']));
     expect(articleIndexNames).toContain('idx_articles_owner_published_id');
@@ -144,14 +147,17 @@ describe('database migrations', () => {
     const userColumns = migratedDb.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
     const articleColumns = migratedDb.prepare('PRAGMA table_info(articles)').all().map((column) => column.name);
     const apiTokenColumns = migratedDb.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
+    const userSourceColumns = migratedDb.prepare('PRAGMA table_info(user_sources)').all().map((column) => column.name);
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('21');
+    expect(migratedVersion).toBe('23');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
+    expect(settingsColumns).toContain('source_setup_completed');
     expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
     expect(apiTokenColumns).toContain('token_hash');
+    expect(userSourceColumns).toContain('icon_url');
   });
 
   test('opens an existing database already on the current schema version', () => {
@@ -256,12 +262,13 @@ describe('database migrations', () => {
     const articleAiState = migratedDb.prepare('SELECT ai_topics_processed_at AS processedAt, ai_topics_status AS status FROM articles WHERE id = ?').get('article-1');
     const passwordSetupTokenColumns = migratedDb.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column) => column.name);
     const apiTokenColumns = migratedDb.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
+    const userSourceColumns = migratedDb.prepare('PRAGMA table_info(user_sources)').all().map((column) => column.name);
 
     migratedDb.close();
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('21');
+    expect(migratedVersion).toBe('23');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -269,6 +276,7 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('compact_news_cards_mode');
     expect(settingsColumns).toContain('reader_text_size');
     expect(settingsColumns).toContain('theme_mode');
+    expect(settingsColumns).toContain('source_setup_completed');
     expect(userColumns).toContain('role');
     expect(userColumns).toContain('last_login_at');
     expect(userColumns).toContain('last_activity_at');
@@ -276,6 +284,7 @@ describe('database migrations', () => {
     expect(userColumns).toContain('public_api_last_used_at');
     expect(passwordSetupTokenColumns).toContain('token_hash');
     expect(apiTokenColumns).toContain('token_hash');
+    expect(userSourceColumns).toContain('icon_url');
   });
 
   test('rejects databases on an older schema version', () => {

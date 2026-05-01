@@ -38,6 +38,7 @@ function getAvailableSources(userContext = {}, userSources = null) {
         id: group.id,
         name: group.name,
         language: group.language,
+        iconUrl: group.iconUrl || '',
         subSources: group.subSources.map((subSource) => ({ ...subSource }))
       });
       return;
@@ -88,6 +89,7 @@ function buildSourceCatalogResponse(availableSources = []) {
     id: source.id,
     name: source.name,
     language: source.language || null,
+    iconUrl: source.iconUrl || '',
     subSources: Array.isArray(source.subSources) ? source.subSources : []
   }));
 }

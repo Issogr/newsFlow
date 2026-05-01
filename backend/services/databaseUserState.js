@@ -3,7 +3,8 @@ const { parseJsonArray } = require('../utils/json');
 function mapUserSourceRow(row) {
   return {
     ...row,
-    isActive: Boolean(row.isActive)
+    isActive: Boolean(row.isActive),
+    iconUrl: row.iconUrl || ''
   };
 }
 
@@ -18,6 +19,7 @@ const USER_SETTINGS_COLUMNS = [
   'reader_panel_position',
   'reader_text_size',
   'last_seen_release_notes_version',
+  'source_setup_completed',
   'default_source_ids',
   'excluded_sub_source_ids',
   'updated_at'
@@ -45,6 +47,7 @@ function getUserSettingsValues(userId, settings = {}, updatedAt = new Date().toI
     settings.readerPanelPosition || 'right',
     settings.readerTextSize || 'medium',
     settings.lastSeenReleaseNotesVersion || '',
+    settings.sourceSetupCompleted === false ? 0 : 1,
     JSON.stringify(settings.excludedSourceIds || []),
     JSON.stringify(settings.excludedSubSourceIds || []),
     updatedAt
@@ -65,10 +68,11 @@ function createUserStateRepository({ getDb }) {
               show_news_images AS showNewsImages,
              compact_news_cards AS compactNewsCards,
              compact_news_cards_mode AS compactNewsCardsMode,
-             reader_panel_position AS readerPanelPosition,
-             reader_text_size AS readerTextSize,
-             last_seen_release_notes_version AS lastSeenReleaseNotesVersion,
-             default_source_ids AS excludedSourceIds,
+              reader_panel_position AS readerPanelPosition,
+              reader_text_size AS readerTextSize,
+              last_seen_release_notes_version AS lastSeenReleaseNotesVersion,
+              source_setup_completed AS sourceSetupCompleted,
+              default_source_ids AS excludedSourceIds,
              excluded_sub_source_ids AS excludedSubSourceIds,
              updated_at AS updatedAt
       FROM user_settings
@@ -84,6 +88,7 @@ function createUserStateRepository({ getDb }) {
         showNewsImages: row.showNewsImages !== false && row.showNewsImages !== 0,
         compactNewsCards: Boolean(row.compactNewsCards),
         compactNewsCardsMode: row.compactNewsCardsMode || (row.compactNewsCards ? 'everywhere' : 'off'),
+        sourceSetupCompleted: row.sourceSetupCompleted !== false && row.sourceSetupCompleted !== 0,
         excludedSourceIds: parseJsonArray(row.excludedSourceIds),
         excludedSubSourceIds: parseJsonArray(row.excludedSubSourceIds)
       };
@@ -103,7 +108,7 @@ function createUserStateRepository({ getDb }) {
     }
 
     return getDb().prepare(`
-      SELECT id, user_id AS userId, name, url, language,
+      SELECT id, user_id AS userId, name, url, language, icon_url AS iconUrl,
              is_active AS isActive, created_at AS createdAt,
              updated_at AS updatedAt, validated_at AS validatedAt
       FROM user_sources
@@ -114,7 +119,7 @@ function createUserStateRepository({ getDb }) {
 
   function listAllActiveUserSources() {
     return getDb().prepare(`
-      SELECT id, user_id AS userId, name, url, language,
+      SELECT id, user_id AS userId, name, url, language, icon_url AS iconUrl,
              is_active AS isActive, created_at AS createdAt,
              updated_at AS updatedAt, validated_at AS validatedAt
       FROM user_sources
@@ -126,14 +131,15 @@ function createUserStateRepository({ getDb }) {
   function createUserSource(source = {}) {
     getDb().prepare(`
       INSERT INTO user_sources (
-        id, user_id, name, url, language, is_active, created_at, updated_at, validated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, user_id, name, url, language, icon_url, is_active, created_at, updated_at, validated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       source.id,
       source.userId,
       source.name,
       source.url,
       source.language || 'it',
+      source.iconUrl || '',
       source.isActive ? 1 : 0,
       source.createdAt,
       source.updatedAt,
@@ -147,7 +153,7 @@ function createUserStateRepository({ getDb }) {
     }
 
     const row = getDb().prepare(`
-      SELECT id, user_id AS userId, name, url, language,
+      SELECT id, user_id AS userId, name, url, language, icon_url AS iconUrl,
              is_active AS isActive, created_at AS createdAt,
              updated_at AS updatedAt, validated_at AS validatedAt
       FROM user_sources
@@ -167,6 +173,7 @@ function createUserStateRepository({ getDb }) {
       SET name = ?,
           url = ?,
           language = ?,
+          icon_url = ?,
           is_active = ?,
           updated_at = ?,
           validated_at = ?
@@ -175,6 +182,7 @@ function createUserStateRepository({ getDb }) {
       updates.name,
       updates.url,
       updates.language,
+      updates.iconUrl || '',
       updates.isActive !== false ? 1 : 0,
       updates.updatedAt,
       updates.validatedAt || null,
@@ -276,8 +284,8 @@ function createUserStateRepository({ getDb }) {
     const now = new Date().toISOString();
     const insertSourceStmt = database.prepare(`
       INSERT INTO user_sources (
-        id, user_id, name, url, language, is_active, created_at, updated_at, validated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, user_id, name, url, language, icon_url, is_active, created_at, updated_at, validated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const upsertSettingsStmt = database.prepare(USER_SETTINGS_UPSERT_SQL);
 
@@ -306,6 +314,7 @@ function createUserStateRepository({ getDb }) {
           source.name,
           source.url,
           source.language || 'it',
+          source.iconUrl || '',
           source.isActive ? 1 : 0,
           source.createdAt,
           source.updatedAt,

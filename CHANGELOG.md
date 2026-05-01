@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.13.4
+
+- added a one-time built-in RSS source setup step for newly registered users, persisted with `source_setup_completed`, so unselected configured source groups are saved as exclusions before the first feed load while existing users keep their current setup
+- exposed the configured source catalog in authenticated user payloads so first-run source selection does not require an initial news query
+- added explicit reusable `iconUrl` metadata to configured source catalog responses and custom user sources, including a `user_sources.icon_url` schema migration, so source favicons can be reused outside the onboarding wizard
+- derived and persisted favicon URLs when custom RSS feeds are added, updated, exported, or imported while preserving the existing source validation flow
+
 ## 3.2.13.3
 
 - kept normal feed reads read-only by moving article cleanup out of the cached request path, queued manual source refreshes asynchronously, and sent a completion refresh event so users are not blocked by slow RSS sources

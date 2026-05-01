@@ -172,7 +172,9 @@ function App() {
       user: payload.user,
       settings: payload.settings,
       limits: payload.limits,
-      customSources: payload.customSources
+      sourceCatalog: payload.sourceCatalog || [],
+      customSources: payload.customSources,
+      apiToken: payload.apiToken || null
     });
     setAuthError(null);
   }, []);

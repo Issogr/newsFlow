@@ -243,7 +243,20 @@ export const translations = {
     readerUnavailable: 'Reader mode is not available for this article.',
     readerFallback: 'Showing fallback text extracted from the feed.',
     readTime: ({ minutes }) => `${minutes} min read`,
-    sourceVersions: 'Source versions'
+    sourceVersions: 'Source versions',
+    sourceSetupEyebrow: 'First setup',
+    sourceSetupTitle: 'Choose your news sources',
+    sourceSetupSubtitle: 'Pick the built-in RSS sources you want active. Everything you leave unchecked will be excluded, and you can change this later in Settings.',
+    sourceSetupSelectedCount: ({ count }) => `${count} selected`,
+    sourceSetupSelectAll: 'Select all',
+    sourceSetupClear: 'Clear',
+    sourceSetupSubSourceSelectedCount: ({ selected, count }) => `${selected} of ${count} feeds selected`,
+    sourceSetupSelectSource: 'Select all feeds',
+    sourceSetupClearSource: 'Clear feeds',
+    sourceSetupExpandSource: ({ name }) => `Expand ${name} feeds`,
+    sourceSetupCollapseSource: ({ name }) => `Collapse ${name} feeds`,
+    sourceSetupPickOne: 'Select at least one source to start your feed.',
+    sourceSetupContinue: 'Start reading'
   },
   it: {
     pageTitle: 'News Flow',
@@ -486,7 +499,20 @@ export const translations = {
     readerUnavailable: 'La modalita lettura non e disponibile per questo articolo.',
     readerFallback: 'Mostro il testo di fallback estratto dal feed.',
     readTime: ({ minutes }) => `${minutes} min di lettura`,
-    sourceVersions: 'Versioni fonte'
+    sourceVersions: 'Versioni fonte',
+    sourceSetupEyebrow: 'Prima configurazione',
+    sourceSetupTitle: 'Scegli le fonti news',
+    sourceSetupSubtitle: 'Seleziona le fonti RSS integrate che vuoi attivare. Quelle non selezionate verranno escluse e potrai modificarle in seguito dalle Impostazioni.',
+    sourceSetupSelectedCount: ({ count }) => `${count} selezionate`,
+    sourceSetupSelectAll: 'Seleziona tutte',
+    sourceSetupClear: 'Svuota',
+    sourceSetupSubSourceSelectedCount: ({ selected, count }) => `${selected} di ${count} feed selezionati`,
+    sourceSetupSelectSource: 'Seleziona tutti i feed',
+    sourceSetupClearSource: 'Svuota feed',
+    sourceSetupExpandSource: ({ name }) => `Espandi feed ${name}`,
+    sourceSetupCollapseSource: ({ name }) => `Comprimi feed ${name}`,
+    sourceSetupPickOne: 'Seleziona almeno una fonte per iniziare il feed.',
+    sourceSetupContinue: 'Inizia a leggere'
   }
 };
 

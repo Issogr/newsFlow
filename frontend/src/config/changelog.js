@@ -1,15 +1,12 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.2.13.3',
+  version: '3.2.13.4',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '⚡ Feed refreshes start faster, handle slow sources better, and keep long sessions focused on the newest stories.',
-      '🗞️ Related articles are grouped into cleaner story cards again, with steadier pagination, reconnects, and search behavior.',
-      '📖 Reader mode remembers opened articles, stays lighter during long sessions, and avoids stale edge-case errors.',
-      '🛡️ Settings, custom sources, language storage, sessions, and proxy handling are safer in more edge cases.',
-      '📎 Feedback uploads, sharing, release notes, API reads, and release checks are more reliable and easier to maintain.',
+      '🧭 New accounts now start with a simple source picker, so each feed begins with only the built-in RSS sources the user wants active.',
+      '🔖 Source icons now travel with built-in and custom RSS sources, making the source picker easier to scan and ready for reuse elsewhere.',
     ]
   },
   it: {
@@ -17,11 +14,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '⚡ Gli aggiornamenti del feed partono piu rapidamente, gestiscono meglio le fonti lente e mantengono in vista le notizie piu recenti nelle sessioni lunghe.',
-      '🗞️ Gli articoli collegati tornano in card storia piu pulite, con paginazione, riconnessioni e ricerca piu stabili.',
-      '📖 La modalita lettura ricorda gli articoli gia aperti, resta piu leggera nelle sessioni lunghe e evita errori rimasti in pagina.',
-      '🛡️ Impostazioni, fonti personalizzate, lingua, sessioni e proxy sono piu sicuri in piu casi limite.',
-      '📎 Feedback, condivisione, note di rilascio, letture API e controlli di release sono piu affidabili e semplici da mantenere.',
+      '🧭 I nuovi account partono con una scelta semplice delle fonti, cosi il feed include solo gli RSS integrati che l\'utente vuole attivare.',
+      '🔖 Le icone delle fonti ora accompagnano gli RSS integrati e personalizzati, rendendo la scelta piu immediata e riutilizzabile altrove.',
     ]
   }
 };

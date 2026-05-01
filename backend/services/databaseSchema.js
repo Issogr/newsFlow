@@ -1,5 +1,7 @@
+const { getProviderIconUrl } = require('../utils/sourceIcons');
+
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 21;
+  const CURRENT_SCHEMA_VERSION = 23;
 
   function initializeSchema(database) {
     database.exec(`
@@ -138,6 +140,7 @@ function createDatabaseSchema({ logger }) {
         reader_panel_position TEXT NOT NULL DEFAULT 'right',
         reader_text_size TEXT NOT NULL DEFAULT 'medium',
         last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
+        source_setup_completed INTEGER NOT NULL DEFAULT 1,
         default_source_ids TEXT NOT NULL DEFAULT '[]',
         excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -150,6 +153,7 @@ function createDatabaseSchema({ logger }) {
         name TEXT NOT NULL,
         url TEXT NOT NULL,
         language TEXT NOT NULL DEFAULT 'it',
+        icon_url TEXT NOT NULL DEFAULT '',
         is_active INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -227,6 +231,7 @@ function createDatabaseSchema({ logger }) {
     }
 
     const userSettingsColumns = getColumnNames(database, 'user_settings');
+    const userSourcesColumns = getColumnNames(database, 'user_sources');
     const userColumns = getColumnNames(database, 'users');
     const articleColumns = getColumnNames(database, 'articles');
     const articleTopicColumns = getColumnNames(database, 'article_topics');
@@ -253,6 +258,14 @@ function createDatabaseSchema({ logger }) {
 
     if (!articleTopicColumns.has('source') || !articleTopicColumns.has('confidence') || !articleTopicColumns.has('evidence') || !articleTopicColumns.has('reason_code')) {
       return 20;
+    }
+
+    if (tableExists(database, 'user_settings') && !userSettingsColumns.has('source_setup_completed')) {
+      return 21;
+    }
+
+    if (tableExists(database, 'user_sources') && !userSourcesColumns.has('icon_url')) {
+      return 22;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -420,8 +433,52 @@ function createDatabaseSchema({ logger }) {
         `);
       }
 
-      setCurrentSchemaVersion(database);
+      setCurrentSchemaVersion(database, 21);
       logger.info('Migrated DB schema from version 20 to 21');
+      migrateSchema(database, 21);
+      return;
+    }
+
+    if (currentVersion === 21) {
+      const settingsColumns = getColumnNames(database, 'user_settings');
+      if (!settingsColumns.has('source_setup_completed')) {
+        database.exec(`
+          ALTER TABLE user_settings
+          ADD COLUMN source_setup_completed INTEGER NOT NULL DEFAULT 1
+        `);
+      }
+
+      setCurrentSchemaVersion(database);
+      logger.info('Migrated DB schema from version 21 to 22');
+      migrateSchema(database, 22);
+      return;
+    }
+
+    if (currentVersion === 22) {
+      const userSourcesColumns = getColumnNames(database, 'user_sources');
+      if (!userSourcesColumns.has('icon_url')) {
+        database.exec(`
+          ALTER TABLE user_sources
+          ADD COLUMN icon_url TEXT NOT NULL DEFAULT ''
+        `);
+      }
+
+      const existingSources = database.prepare(`
+        SELECT id, url
+        FROM user_sources
+        WHERE icon_url = ''
+      `).all();
+      const updateSourceIcon = database.prepare(`
+        UPDATE user_sources
+        SET icon_url = ?
+        WHERE id = ?
+      `);
+      existingSources.forEach((source) => {
+        updateSourceIcon.run(getProviderIconUrl(source.url), source.id);
+      });
+
+      setCurrentSchemaVersion(database);
+      logger.info('Migrated DB schema from version 22 to 23');
       return;
     }
 

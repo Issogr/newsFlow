@@ -154,6 +154,27 @@ describe('userService imports', () => {
     });
   });
 
+  test('marks newly registered users for one-time source setup', async () => {
+    const authPayload = await userService.registerUser({ username: 'setup-user', password: 'secret123' });
+
+    expect(authPayload.settings).toMatchObject({
+      sourceSetupCompleted: false,
+      excludedSourceIds: [],
+      excludedSubSourceIds: []
+    });
+    expect(authPayload.sourceCatalog.length).toBeGreaterThan(0);
+
+    const updated = userService.updateUserSettings(authPayload.user.id, {
+      sourceSetupCompleted: true,
+      excludedSourceIds: [authPayload.sourceCatalog[0].id]
+    });
+
+    expect(updated).toMatchObject({
+      sourceSetupCompleted: true,
+      excludedSourceIds: [authPayload.sourceCatalog[0].id]
+    });
+  });
+
   test('requires a minimum password length during registration', async () => {
     await expect(userService.registerUser({ username: 'carol', password: 'short' })).rejects.toMatchObject({
       status: 400,
@@ -181,10 +202,12 @@ describe('userService imports', () => {
   test('updates custom-source metadata without revalidating the unchanged RSS URL', async () => {
     const authPayload = await userService.registerUser({ username: 'source-owner', password: 'secret123' });
 
-    rssParser.validateFeedUrl.mockResolvedValueOnce({ title: 'Original Feed', language: 'en', itemCount: 4 });
+    rssParser.validateFeedUrl.mockResolvedValueOnce({ title: 'Original Feed', siteUrl: 'https://example.com', language: 'en', itemCount: 4 });
     const source = await userService.addUserSource(authPayload.user.id, {
       url: 'https://example.com/feed.xml'
     });
+
+    expect(source.iconUrl).toBe('https://example.com/favicon.ico');
 
     rssParser.validateFeedUrl.mockClear();
     rssParser.validateFeedUrl.mockRejectedValue(new Error('upstream offline'));
@@ -198,6 +221,7 @@ describe('userService imports', () => {
     expect(updated).toMatchObject({
       name: 'Renamed Feed',
       url: 'https://example.com/feed.xml',
+      iconUrl: 'https://example.com/favicon.ico',
       isActive: false
     });
   });

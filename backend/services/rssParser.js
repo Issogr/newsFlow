@@ -476,6 +476,7 @@ module.exports = {
     const feed = await parser.parseString(xml);
     return {
       title: sanitizeHtml(feed?.title || ''),
+      siteUrl: normalizeImageUrl(feed?.link || '', url) || '',
       language: detectFeedLanguage(feed),
       itemCount: Array.isArray(feed?.items) ? feed.items.length : 0
     };

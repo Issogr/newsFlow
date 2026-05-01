@@ -1,11 +1,12 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import NewsAggregator from './NewsAggregator';
-import { fetchNews, isRequestCanceled } from '../services/api';
+import { fetchNews, isRequestCanceled, updateUserSettings } from '../services/api';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 
 vi.mock('../services/api', () => ({
   fetchNews: vi.fn(),
+  updateUserSettings: vi.fn(),
   isRequestCanceled: vi.fn((error) => error?.code === 'ERR_CANCELED')
 }));
 
@@ -188,6 +189,56 @@ describe('NewsAggregator', () => {
       expect(screen.queryByText('Old headline')).not.toBeInTheDocument();
     });
     expect(isRequestCanceled).not.toHaveBeenCalled();
+  });
+
+  test('shows one-time source setup and excludes unselected sources and sub-feeds', async () => {
+    const onUserUpdate = jest.fn();
+    const setupUser = {
+      ...currentUser,
+      settings: {
+        ...currentUser.settings,
+        sourceSetupCompleted: false
+      },
+      sourceCatalog: [
+        { id: 'ansa.it', name: 'ANSA', subSources: [{ id: 'ansa_home', label: 'Home' }, { id: 'ansa_mondo', label: 'Mondo' }] },
+        { id: 'repubblica.it', name: 'La Repubblica', subSources: [] }
+      ]
+    };
+
+    updateUserSettings.mockResolvedValueOnce({
+      settings: {
+        ...setupUser.settings,
+        sourceSetupCompleted: true,
+        excludedSourceIds: ['repubblica.it'],
+        excludedSubSourceIds: ['ansa_mondo']
+      }
+    });
+
+    await renderNewsAggregator({ currentUser: setupUser, onUserUpdate });
+
+    expect(screen.getByRole('heading', { name: 'Choose your news sources' })).toBeInTheDocument();
+    expect(fetchNews).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Mondo/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand ANSA feeds' }));
+    fireEvent.click(screen.getByRole('button', { name: /Mondo/ }));
+    fireEvent.click(screen.getByRole('button', { name: /La Repubblica/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Start reading' }));
+    });
+
+    expect(updateUserSettings).toHaveBeenCalledWith({
+      excludedSourceIds: ['repubblica.it'],
+      excludedSubSourceIds: ['ansa_mondo'],
+      sourceSetupCompleted: true
+    });
+    expect(onUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      settings: expect.objectContaining({
+        sourceSetupCompleted: true,
+        excludedSourceIds: ['repubblica.it'],
+        excludedSubSourceIds: ['ansa_mondo']
+      })
+    }));
   });
 
   test('loads cached news on open without forcing a source refresh', async () => {

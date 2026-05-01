@@ -15,6 +15,7 @@ import ReaderPanel from './ReaderPanel';
 import BrandMark from './BrandMark';
 import FeedbackModal from './FeedbackModal';
 import SettingsPanel from './SettingsPanel';
+import SourceSetupWizard from './SourceSetupWizard';
 import useLatestRequest from '../hooks/useLatestRequest';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
@@ -69,6 +70,7 @@ const getSourceReloadSignature = (excludedSourceIds, excludedSubSourceIds, custo
 
 const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogVersion, onOpenReleaseNotes }) => {
   const preferredLanguage = currentUser?.settings?.defaultLanguage;
+  const needsSourceSetup = currentUser?.settings?.sourceSetupCompleted === false && !currentUser?.user?.isAdmin;
   const showNewsImages = currentUser?.settings?.showNewsImages !== false;
   const compactNewsCardsMode = currentUser?.settings?.compactNewsCardsMode
     || (currentUser?.settings?.compactNewsCards ? 'everywhere' : 'off');
@@ -92,7 +94,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [availableSources, setAvailableSources] = useState([]);
   const [sourceCatalog, setSourceCatalog] = useState([]);
   const [availableTopics, setAvailableTopics] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !needsSourceSetup);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
@@ -126,6 +128,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const retainedNewsLimitReached = news.length >= MAX_RETAINED_NEWS_GROUPS;
   const metaRef = useRef(meta);
   metaRef.current = meta;
+  const setupSourceCatalog = currentUser?.sourceCatalog || sourceCatalog;
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') {
@@ -380,17 +383,35 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   });
 
   useEffect(() => {
+    if (needsSourceSetup) {
+      sourceReloadSignatureRef.current = sourceReloadSignature;
+      return;
+    }
+
     if (sourceReloadSignature === sourceReloadSignatureRef.current) {
       return;
     }
 
     sourceReloadSignatureRef.current = sourceReloadSignature;
     loadNews({ page: 1, append: false });
-  }, [loadNews, sourceReloadSignature]);
+  }, [loadNews, needsSourceSetup, sourceReloadSignature]);
 
   useEffect(() => {
+    if (needsSourceSetup) {
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     loadNews({ page: 1, append: false });
-  }, [loadNews]);
+  }, [loadNews, needsSourceSetup]);
+
+  const handleSourceSetupComplete = useCallback((settings) => {
+    onUserUpdate({
+      ...currentUser,
+      settings
+    });
+  }, [currentUser, onUserUpdate]);
 
   const toggleFilter = useCallback((type, value) => {
     setActiveFilters((current) => {
@@ -652,6 +673,15 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           t={t}
           feedbackLimits={currentUser?.limits}
           onClose={() => setFeedbackOpen(false)}
+        />
+      )}
+
+      {needsSourceSetup && (
+        <SourceSetupWizard
+          t={t}
+          sources={setupSourceCatalog}
+          currentSettings={currentUser.settings}
+          onComplete={handleSourceSetupComplete}
         />
       )}
 

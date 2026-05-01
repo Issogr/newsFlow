@@ -19,10 +19,11 @@ describe('sourceCatalog domain grouping', () => {
 
     expect(abcGroup).toMatchObject({
       id: 'abcnews.com',
-      name: 'ABC News'
+      name: 'ABC News',
+      iconUrl: 'https://abcnews.go.com/favicon.ico'
     });
     expect(abcGroup.subSources).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'abc-us', label: 'US Headlines' }),
+      expect.objectContaining({ id: 'abc-us', label: 'US Headlines', iconUrl: 'https://abcnews.go.com/favicon.ico' }),
       expect.objectContaining({ id: 'abc-world', label: 'World' }),
       expect.objectContaining({ id: 'abc-politics', label: 'Politics' })
     ]));
