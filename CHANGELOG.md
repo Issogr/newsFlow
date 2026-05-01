@@ -6,6 +6,7 @@
 - exposed the configured source catalog in authenticated user payloads so first-run source selection does not require an initial news query
 - added explicit reusable `iconUrl` metadata to configured source catalog responses and custom user sources, including a `user_sources.icon_url` schema migration, so source favicons can be reused outside the onboarding wizard
 - derived and persisted favicon URLs when custom RSS feeds are added, updated, exported, or imported while preserving the existing source validation flow
+- rendered source favicons in source filter chips and settings source controls, backed by shared frontend icon fallback handling and `iconUrl` in source stats
 
 ## 3.2.13.3
 

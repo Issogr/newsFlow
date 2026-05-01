@@ -1273,6 +1273,7 @@ function createArticleRepository({
       id: source.id,
       name: source.name,
       language: source.language,
+      iconUrl: source.iconUrl || '',
       count: aggregatedRows.get(source.id)?.count || 0
     }));
 

@@ -1,36 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Check, ChevronDown, Newspaper, RefreshCw } from 'lucide-react';
+import SourceIcon from './SourceIcon';
 import useLockBodyScroll from '../hooks/useLockBodyScroll';
 import { updateUserSettings } from '../services/api';
 
 const hasSelectableSubSources = (source) => Array.isArray(source.subSources) && source.subSources.length > 1;
-
-const getSourceInitial = (name = '') => String(name || '?').trim().charAt(0).toUpperCase() || '?';
-
-const ProviderIcon = ({ source, sizeClassName = 'h-8 w-8' }) => {
-  const [failed, setFailed] = useState(false);
-  const iconUrl = source?.iconUrl || '';
-
-  if (!iconUrl || failed) {
-    return (
-      <span className={`inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xs font-semibold text-slate-600 ${sizeClassName}`}>
-        {getSourceInitial(source?.name)}
-      </span>
-    );
-  }
-
-  return (
-    <span className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white ${sizeClassName}`}>
-      <img
-        src={iconUrl}
-        alt=""
-        className="h-5 w-5 object-contain"
-        loading="lazy"
-        onError={() => setFailed(true)}
-      />
-    </span>
-  );
-};
 
 const getSelectableIds = (sources = []) => {
   return sources.flatMap((source) => (
@@ -209,7 +183,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                         aria-label={expanded ? t('sourceSetupCollapseSource', { name: source.name }) : t('sourceSetupExpandSource', { name: source.name })}
                       >
                         <ChevronDown className={`mt-0.5 h-4 w-4 shrink-0 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
-                        <ProviderIcon source={source} />
+                        <SourceIcon source={source} className="h-8 w-8 rounded-xl" imageClassName="h-5 w-5" />
                         <span className="min-w-0">
                           <span className="block text-sm font-semibold text-slate-900">{source.name}</span>
                           <span className="mt-1 block text-xs text-slate-500">{t('sourceSetupSubSourceSelectedCount', { selected: selectedSubSourceCount, count: sourceSelectionIds.length })}</span>
@@ -237,7 +211,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                             >
                               <span className="min-w-0">
                                 <span className="flex min-w-0 items-center gap-2">
-                                  <ProviderIcon source={{ ...source, iconUrl: subSource.iconUrl || source.iconUrl }} sizeClassName="h-7 w-7" />
+                                  <SourceIcon source={{ ...source, iconUrl: subSource.iconUrl || source.iconUrl }} />
                                   <span className="block truncate text-sm font-medium">{subSource.label || subSource.name}</span>
                                 </span>
                                 <span className="mt-0.5 block truncate text-xs text-slate-500">{source.name}</span>
@@ -263,7 +237,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                   className={`flex w-full items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left transition-colors ${selected ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
                 >
                   <span className="flex min-w-0 items-center gap-3">
-                    <ProviderIcon source={source} />
+                    <SourceIcon source={source} className="h-8 w-8 rounded-xl" imageClassName="h-5 w-5" />
                     <span className="block truncate text-sm font-semibold">{source.name}</span>
                   </span>
                   <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pencil, Plus, Rss, Trash2 } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
+import SourceIcon from '../SourceIcon';
 
 const SettingsCustomSourcesSection = ({
   t,
@@ -89,17 +90,20 @@ const SettingsCustomSourcesSection = ({
                   </div>
                 ) : (
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium text-slate-800">{source.name}</p>
-                        {source.language ? (
-                          <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                            {source.language}
-                          </span>
-                        ) : null}
+                      <div className="min-w-0 flex flex-1 items-start gap-3">
+                        <SourceIcon source={source} className="mt-0.5 h-8 w-8" imageClassName="h-5 w-5" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium text-slate-800">{source.name}</p>
+                            {source.language ? (
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                                {source.language}
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 break-all text-sm text-slate-500">{source.url}</p>
+                        </div>
                       </div>
-                      <p className="mt-1 break-all text-sm text-slate-500">{source.url}</p>
-                    </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <button
                         type="button"
