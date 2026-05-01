@@ -1,6 +1,6 @@
 {
   "name": "newsflow-bff",
-  "version": "3.2.13.4",
+  "version": "3.3",
   "description": "Browser-facing BFF for News Flow",
   "main": "server.js",
   "scripts": {

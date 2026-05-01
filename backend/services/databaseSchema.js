@@ -1,7 +1,19 @@
 const { getProviderIconUrl } = require('../utils/sourceIcons');
+const configuredSources = require('../config/newsSources');
+const { normalizeArticleUrl } = require('../utils/articleIdentity');
+const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 23;
+  const CURRENT_SCHEMA_VERSION = 24;
+  const DEFAULT_SOURCE_REVIEW_VERSION = 24;
+
+  function getAllConfiguredSourceGroupIds() {
+    return getConfiguredSourceGroups().map((source) => source.id);
+  }
+
+  function getConfiguredSourceUrlKeys() {
+    return new Set(configuredSources.map((source) => normalizeArticleUrl(source.url || '') || String(source.url || '').trim()).filter(Boolean));
+  }
 
   function initializeSchema(database) {
     database.exec(`
@@ -268,7 +280,7 @@ function createDatabaseSchema({ logger }) {
       return 22;
     }
 
-    return CURRENT_SCHEMA_VERSION;
+    return 23;
   }
 
   function setCurrentSchemaVersion(database, version = CURRENT_SCHEMA_VERSION) {
@@ -477,8 +489,59 @@ function createDatabaseSchema({ logger }) {
         updateSourceIcon.run(getProviderIconUrl(source.url), source.id);
       });
 
-      setCurrentSchemaVersion(database);
+      setCurrentSchemaVersion(database, 23);
       logger.info('Migrated DB schema from version 22 to 23');
+      migrateSchema(database, 23);
+      return;
+    }
+
+    if (currentVersion === 23) {
+      const now = new Date().toISOString();
+      const excludedDefaultSourceIds = JSON.stringify(getAllConfiguredSourceGroupIds());
+      const configuredSourceUrlKeys = getConfiguredSourceUrlKeys();
+      const duplicateUserSources = database.prepare(`
+        SELECT id, user_id AS userId, url
+        FROM user_sources
+      `).all().filter((source) => {
+        const urlKey = normalizeArticleUrl(source.url || '') || String(source.url || '').trim();
+        return configuredSourceUrlKeys.has(urlKey);
+      });
+
+      const transaction = database.transaction(() => {
+        const deleteArticleSearch = database.prepare(`
+          DELETE FROM article_search
+          WHERE article_id IN (
+            SELECT id FROM articles WHERE owner_user_id = ? AND source_id = ?
+          )
+        `);
+        const deleteArticles = database.prepare(`
+          DELETE FROM articles
+          WHERE owner_user_id = ? AND source_id = ?
+        `);
+        const deleteUserSource = database.prepare(`
+          DELETE FROM user_sources
+          WHERE user_id = ? AND id = ?
+        `);
+
+        duplicateUserSources.forEach((source) => {
+          deleteArticleSearch.run(source.userId, source.id);
+          deleteArticles.run(source.userId, source.id);
+          deleteUserSource.run(source.userId, source.id);
+        });
+
+        database.prepare(`
+          UPDATE user_settings
+          SET source_setup_completed = 0,
+              default_source_ids = ?,
+              excluded_sub_source_ids = '[]',
+              updated_at = ?
+        `).run(excludedDefaultSourceIds, now);
+      });
+
+      transaction();
+
+      setCurrentSchemaVersion(database);
+      logger.info(`Migrated DB schema from version 23 to 24; reset source setup for ${DEFAULT_SOURCE_REVIEW_VERSION} and removed ${duplicateUserSources.length} duplicate custom sources`);
       return;
     }
 

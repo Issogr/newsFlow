@@ -197,11 +197,13 @@ describe('NewsAggregator', () => {
       ...currentUser,
       settings: {
         ...currentUser.settings,
-        sourceSetupCompleted: false
+        sourceSetupCompleted: false,
+        excludedSourceIds: ['ansa.it', 'repubblica.it', 'bbc.co.uk']
       },
       sourceCatalog: [
-        { id: 'ansa.it', name: 'ANSA', subSources: [{ id: 'ansa_home', label: 'Home' }, { id: 'ansa_mondo', label: 'Mondo' }] },
-        { id: 'repubblica.it', name: 'La Repubblica', subSources: [] }
+        { id: 'ansa.it', name: 'ANSA', language: 'it', subSources: [{ id: 'ansa_home', label: 'Home' }, { id: 'ansa_mondo', label: 'Mondo' }] },
+        { id: 'repubblica.it', name: 'La Repubblica', language: 'it', subSources: [] },
+        { id: 'bbc.co.uk', name: 'BBC News', language: 'en', subSources: [] }
       ]
     };
 
@@ -209,7 +211,7 @@ describe('NewsAggregator', () => {
       settings: {
         ...setupUser.settings,
         sourceSetupCompleted: true,
-        excludedSourceIds: ['repubblica.it'],
+        excludedSourceIds: ['repubblica.it', 'bbc.co.uk'],
         excludedSubSourceIds: ['ansa_mondo']
       }
     });
@@ -217,25 +219,28 @@ describe('NewsAggregator', () => {
     await renderNewsAggregator({ currentUser: setupUser, onUserUpdate });
 
     expect(screen.getByRole('heading', { name: 'Choose your news sources' })).toBeInTheDocument();
+    expect(screen.getByText('This only updates your built-in RSS source selection. Your custom sources and account settings are preserved.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Italian sources' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'English sources' })).toBeInTheDocument();
     expect(fetchNews).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /Mondo/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start reading' })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand ANSA feeds' }));
-    fireEvent.click(screen.getByRole('button', { name: /Mondo/ }));
-    fireEvent.click(screen.getByRole('button', { name: /La Repubblica/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Home/ }));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Start reading' }));
     });
 
     expect(updateUserSettings).toHaveBeenCalledWith({
-      excludedSourceIds: ['repubblica.it'],
+      excludedSourceIds: ['repubblica.it', 'bbc.co.uk'],
       excludedSubSourceIds: ['ansa_mondo'],
       sourceSetupCompleted: true
     });
     expect(onUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
       settings: expect.objectContaining({
         sourceSetupCompleted: true,
-        excludedSourceIds: ['repubblica.it'],
+        excludedSourceIds: ['repubblica.it', 'bbc.co.uk'],
         excludedSubSourceIds: ['ansa_mondo']
       })
     }));

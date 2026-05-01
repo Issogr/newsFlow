@@ -75,7 +75,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('23');
+    expect(migrationVersion).toBe('24');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -151,7 +151,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('23');
+    expect(migratedVersion).toBe('24');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
@@ -268,7 +268,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('23');
+    expect(migratedVersion).toBe('24');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -285,6 +285,106 @@ describe('database migrations', () => {
     expect(passwordSetupTokenColumns).toContain('token_hash');
     expect(apiTokenColumns).toContain('token_hash');
     expect(userSourceColumns).toContain('icon_url');
+  });
+
+  test('migrates version 23 by forcing source review and removing custom duplicates of built-in feeds', () => {
+    const now = new Date().toISOString();
+    const duplicateBuiltInSource = configuredSources.find((source) => source.id === 'ilpost') || configuredSources[0];
+
+    database = require('./database');
+    const sqlite = database.getDb();
+
+    database.createUser({
+      id: 'user-1',
+      username: 'alice',
+      passwordHash: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    database.upsertUserSettings('user-1', {
+      defaultLanguage: 'en',
+      articleRetentionHours: 24,
+      recentHours: 3,
+      readerPanelPosition: 'right',
+      readerTextSize: 'medium',
+      sourceSetupCompleted: true,
+      excludedSourceIds: [],
+      excludedSubSourceIds: ['ansa_mondo']
+    });
+    database.createUserSource({
+      id: 'custom-duplicate',
+      userId: 'user-1',
+      name: duplicateBuiltInSource.name,
+      url: duplicateBuiltInSource.url,
+      language: duplicateBuiltInSource.language,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      validatedAt: now
+    });
+    database.createUserSource({
+      id: 'custom-private',
+      userId: 'user-1',
+      name: 'Private Feed',
+      url: 'https://example.com/private.xml',
+      language: 'en',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      validatedAt: now
+    });
+    database.upsertArticles([
+      {
+        id: 'duplicate-private-article',
+        sourceId: 'custom-duplicate',
+        source: duplicateBuiltInSource.name,
+        ownerUserId: 'user-1',
+        title: 'Duplicate private article',
+        description: 'Duplicate custom source article',
+        content: 'Duplicate body',
+        url: 'https://example.com/duplicate-private',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'kept-private-article',
+        sourceId: 'custom-private',
+        source: 'Private Feed',
+        ownerUserId: 'user-1',
+        title: 'Private article',
+        description: 'Private custom source article',
+        content: 'Private body',
+        url: 'https://example.com/private-article',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+    sqlite.prepare(`
+      UPDATE app_meta
+      SET value = '23'
+      WHERE key = 'migration_version'
+    `).run();
+
+    database.closeDb();
+    jest.resetModules();
+    database = require('./database');
+    database.getDb();
+
+    const migratedVersion = database.getDb().prepare(`
+      SELECT value
+      FROM app_meta
+      WHERE key = 'migration_version'
+    `).get()?.value;
+    const settings = database.getUserSettings('user-1');
+    const sourceIds = database.listUserSources('user-1').map((source) => source.id);
+    const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
+
+    expect(migratedVersion).toBe('24');
+    expect(settings.sourceSetupCompleted).toBe(false);
+    expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
+    expect(settings.excludedSubSourceIds).toEqual([]);
+    expect(sourceIds).toEqual(['custom-private']);
+    expect(articleIds).toEqual(['kept-private-article']);
   });
 
   test('rejects databases on an older schema version', () => {
