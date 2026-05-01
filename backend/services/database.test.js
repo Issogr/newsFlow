@@ -67,32 +67,38 @@ describe('database migrations', () => {
     const settingsColumns = sqlite.prepare('PRAGMA table_info(user_settings)').all().map((column) => column.name);
     const articleColumns = sqlite.prepare('PRAGMA table_info(articles)').all().map((column) => column.name);
     const userColumns = sqlite.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
+    const userSourceColumns = sqlite.prepare('PRAGMA table_info(user_sources)').all().map((column) => column.name);
     const passwordSetupTokenColumns = sqlite.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column) => column.name);
     const apiTokenColumns = sqlite.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
+    const articleIndexNames = sqlite.prepare('PRAGMA index_list(articles)').all().map((index) => index.name);
+    const topicIndexNames = sqlite.prepare('PRAGMA index_list(article_topics)').all().map((index) => index.name);
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('21');
+    expect(migrationVersion).toBe('24');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'source', 'confidence', 'evidence', 'reason_code', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
-    expect(settingsColumns).toContain('auto_refresh_enabled');
     expect(settingsColumns).toContain('show_news_images');
     expect(settingsColumns).toContain('compact_news_cards');
     expect(settingsColumns).toContain('compact_news_cards_mode');
     expect(settingsColumns).toContain('reader_text_size');
     expect(settingsColumns).toContain('reader_panel_position');
     expect(settingsColumns).toContain('last_seen_release_notes_version');
+    expect(settingsColumns).toContain('source_setup_completed');
     expect(userColumns).toContain('role');
     expect(userColumns).toContain('last_login_at');
     expect(userColumns).toContain('last_activity_at');
     expect(userColumns).toContain('public_api_request_count');
     expect(userColumns).toContain('public_api_last_used_at');
+    expect(userSourceColumns).toContain('icon_url');
     expect(passwordSetupTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'purpose', 'expires_at', 'used_at']));
     expect(apiTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'token_prefix', 'expires_at', 'revoked_at', 'last_used_at']));
+    expect(articleIndexNames).toContain('idx_articles_owner_published_id');
+    expect(topicIndexNames).toContain('idx_article_topics_topic_article');
   });
 
   test('migrates an unversioned legacy database instead of marking it current', () => {
@@ -116,8 +122,7 @@ describe('database migrations', () => {
         theme_mode TEXT NOT NULL DEFAULT 'system',
         article_retention_hours INTEGER NOT NULL DEFAULT 24,
         recent_hours INTEGER NOT NULL DEFAULT 3,
-        auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
-        show_news_images INTEGER NOT NULL DEFAULT 1,
+      show_news_images INTEGER NOT NULL DEFAULT 1,
         reader_panel_position TEXT NOT NULL DEFAULT 'right',
         reader_text_size TEXT NOT NULL DEFAULT 'medium',
         last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
@@ -142,14 +147,17 @@ describe('database migrations', () => {
     const userColumns = migratedDb.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
     const articleColumns = migratedDb.prepare('PRAGMA table_info(articles)').all().map((column) => column.name);
     const apiTokenColumns = migratedDb.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
+    const userSourceColumns = migratedDb.prepare('PRAGMA table_info(user_sources)').all().map((column) => column.name);
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('21');
+    expect(migratedVersion).toBe('24');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
+    expect(settingsColumns).toContain('source_setup_completed');
     expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
     expect(apiTokenColumns).toContain('token_hash');
+    expect(userSourceColumns).toContain('icon_url');
   });
 
   test('opens an existing database already on the current schema version', () => {
@@ -192,8 +200,7 @@ describe('database migrations', () => {
         theme_mode TEXT NOT NULL DEFAULT 'system',
         article_retention_hours INTEGER NOT NULL DEFAULT 24,
         recent_hours INTEGER NOT NULL DEFAULT 3,
-        auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
-        show_news_images INTEGER NOT NULL DEFAULT 1,
+      show_news_images INTEGER NOT NULL DEFAULT 1,
         compact_news_cards INTEGER NOT NULL DEFAULT 0,
         reader_panel_position TEXT NOT NULL DEFAULT 'right',
         reader_text_size TEXT NOT NULL DEFAULT 'medium',
@@ -255,12 +262,13 @@ describe('database migrations', () => {
     const articleAiState = migratedDb.prepare('SELECT ai_topics_processed_at AS processedAt, ai_topics_status AS status FROM articles WHERE id = ?').get('article-1');
     const passwordSetupTokenColumns = migratedDb.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column) => column.name);
     const apiTokenColumns = migratedDb.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
+    const userSourceColumns = migratedDb.prepare('PRAGMA table_info(user_sources)').all().map((column) => column.name);
 
     migratedDb.close();
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('21');
+    expect(migratedVersion).toBe('24');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -268,6 +276,7 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('compact_news_cards_mode');
     expect(settingsColumns).toContain('reader_text_size');
     expect(settingsColumns).toContain('theme_mode');
+    expect(settingsColumns).toContain('source_setup_completed');
     expect(userColumns).toContain('role');
     expect(userColumns).toContain('last_login_at');
     expect(userColumns).toContain('last_activity_at');
@@ -275,6 +284,107 @@ describe('database migrations', () => {
     expect(userColumns).toContain('public_api_last_used_at');
     expect(passwordSetupTokenColumns).toContain('token_hash');
     expect(apiTokenColumns).toContain('token_hash');
+    expect(userSourceColumns).toContain('icon_url');
+  });
+
+  test('migrates version 23 by forcing source review and removing custom duplicates of built-in feeds', () => {
+    const now = new Date().toISOString();
+    const duplicateBuiltInSource = configuredSources.find((source) => source.id === 'ilpost') || configuredSources[0];
+
+    database = require('./database');
+    const sqlite = database.getDb();
+
+    database.createUser({
+      id: 'user-1',
+      username: 'alice',
+      passwordHash: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    database.upsertUserSettings('user-1', {
+      defaultLanguage: 'en',
+      articleRetentionHours: 24,
+      recentHours: 3,
+      readerPanelPosition: 'right',
+      readerTextSize: 'medium',
+      sourceSetupCompleted: true,
+      excludedSourceIds: [],
+      excludedSubSourceIds: ['ansa_mondo']
+    });
+    database.createUserSource({
+      id: 'custom-duplicate',
+      userId: 'user-1',
+      name: duplicateBuiltInSource.name,
+      url: duplicateBuiltInSource.url,
+      language: duplicateBuiltInSource.language,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      validatedAt: now
+    });
+    database.createUserSource({
+      id: 'custom-private',
+      userId: 'user-1',
+      name: 'Private Feed',
+      url: 'https://example.com/private.xml',
+      language: 'en',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      validatedAt: now
+    });
+    database.upsertArticles([
+      {
+        id: 'duplicate-private-article',
+        sourceId: 'custom-duplicate',
+        source: duplicateBuiltInSource.name,
+        ownerUserId: 'user-1',
+        title: 'Duplicate private article',
+        description: 'Duplicate custom source article',
+        content: 'Duplicate body',
+        url: 'https://example.com/duplicate-private',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'kept-private-article',
+        sourceId: 'custom-private',
+        source: 'Private Feed',
+        ownerUserId: 'user-1',
+        title: 'Private article',
+        description: 'Private custom source article',
+        content: 'Private body',
+        url: 'https://example.com/private-article',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+    sqlite.prepare(`
+      UPDATE app_meta
+      SET value = '23'
+      WHERE key = 'migration_version'
+    `).run();
+
+    database.closeDb();
+    jest.resetModules();
+    database = require('./database');
+    database.getDb();
+
+    const migratedVersion = database.getDb().prepare(`
+      SELECT value
+      FROM app_meta
+      WHERE key = 'migration_version'
+    `).get()?.value;
+    const settings = database.getUserSettings('user-1');
+    const sourceIds = database.listUserSources('user-1').map((source) => source.id);
+    const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
+
+    expect(migratedVersion).toBe('24');
+    expect(settings.sourceSetupCompleted).toBe(false);
+    expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
+    expect(settings.excludedSubSourceIds).toEqual([]);
+    expect(sourceIds).toEqual(['custom-private']);
+    expect(articleIds).toEqual(['kept-private-article']);
   });
 
   test('rejects databases on an older schema version', () => {
@@ -325,7 +435,7 @@ describe('database queries and user data', () => {
         id: 'global-1',
         sourceId: primarySource.id,
         source: primarySource.name,
-        title: 'Economy outlook improves',
+        title: 'Economy outlook improves after COVID-19',
         description: 'Global market coverage',
         content: 'Economy content body',
         url: 'https://example.com/global-1',
@@ -387,9 +497,14 @@ describe('database queries and user data', () => {
 
     const visibleForUser = database.getArticles({}, { userId: 'user-1', maxArticleAgeHours: 24 });
     expect(visibleForUser.map((article) => article.id)).toEqual(['private-1', 'global-2', 'global-1']);
+    expect(database.getArticleById('private-1', { userId: 'user-1', maxArticleAgeHours: 24 })).toEqual(expect.objectContaining({
+      id: 'private-1',
+      ownerUserId: 'user-1'
+    }));
     expect(visibleForUser[0]).toEqual(expect.objectContaining({
       rawSourceId: 'custom-1',
-      rawSource: 'Private Feed'
+      rawSource: 'Private Feed',
+      ownerUserId: 'user-1'
     }));
 
     const excludedFiltered = database.getArticles({}, { userId: 'user-1', excludedSourceIds: [secondarySourceFamilyId], maxArticleAgeHours: 24 });
@@ -397,6 +512,9 @@ describe('database queries and user data', () => {
 
     const searchFiltered = database.getArticles({ search: 'outlook' }, { userId: 'user-1', maxArticleAgeHours: 24 });
     expect(searchFiltered.map((article) => article.id)).toEqual(['global-1']);
+
+    const hyphenSearchFiltered = database.getArticles({ search: 'covid-19' }, { userId: 'user-1', maxArticleAgeHours: 24 });
+    expect(hyphenSearchFiltered.map((article) => article.id)).toEqual(['global-1']);
 
     const topicFiltered = database.getArticles({ topics: ['Economia'] }, { userId: 'user-1', maxArticleAgeHours: 24 });
     expect(topicFiltered.map((article) => article.id)).toEqual(['private-1', 'global-1']);
@@ -760,7 +878,6 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      autoRefreshEnabled: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'everywhere',
       readerPanelPosition: 'left',
@@ -775,7 +892,6 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      autoRefreshEnabled: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'everywhere',
       readerPanelPosition: 'left',
@@ -915,19 +1031,17 @@ describe('database queries and user data', () => {
         default_language,
         article_retention_hours,
         recent_hours,
-        auto_refresh_enabled,
         reader_panel_position,
         last_seen_release_notes_version,
         default_source_ids,
         excluded_sub_source_ids,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       'user-1',
       'en',
       12,
       2,
-      1,
       'right',
       '3.2.3',
       '{bad json',
@@ -1137,7 +1251,6 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 24,
       recentHours: 3,
-      autoRefreshEnabled: false,
       readerPanelPosition: 'center',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: ['retired-source', primarySourceFamilyId, 'custom-1'],
@@ -1230,7 +1343,6 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      autoRefreshEnabled: false,
       readerPanelPosition: 'left',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: [primarySourceFamilyId],
@@ -1265,7 +1377,6 @@ describe('database queries and user data', () => {
         defaultLanguage: 'it',
         articleRetentionHours: 24,
         recentHours: 3,
-        autoRefreshEnabled: false,
         readerPanelPosition: 'center',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: ['bbc'],
@@ -1285,7 +1396,6 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       articleRetentionHours: 12,
       recentHours: 2,
-      autoRefreshEnabled: false,
       readerPanelPosition: 'left',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: [primarySourceFamilyId]

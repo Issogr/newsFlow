@@ -1,5 +1,6 @@
 const logger = require('../utils/logger');
 const topicNormalizer = require('./topicNormalizer');
+const { mapSettledWithConcurrency } = require('../utils/concurrency');
 
 const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_OPENROUTER_MODEL = 'qwen/qwen3.5-9b';
@@ -109,35 +110,6 @@ function chunkItems(items = [], size = DEFAULT_BATCH_SIZE) {
     chunks.push(items.slice(index, index + size));
   }
   return chunks;
-}
-
-async function mapWithConcurrency(items = [], concurrency = DEFAULT_BATCH_CONCURRENCY, mapper) {
-  const results = new Array(items.length);
-  let nextIndex = 0;
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const currentIndex = nextIndex;
-      nextIndex += 1;
-
-      try {
-        results[currentIndex] = {
-          ok: true,
-          value: await mapper(items[currentIndex], currentIndex)
-        };
-      } catch (error) {
-        logger.warn(`AI topic batch failed: ${summarizeAiError(error)}`);
-        results[currentIndex] = {
-          ok: false,
-          value: new Map()
-        };
-      }
-    }
-  }
-
-  const workerCount = Math.min(Math.max(1, concurrency), items.length);
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
-  return results;
 }
 
 function isTimeoutError(error) {
@@ -356,17 +328,6 @@ function normalizeClassifierDetails(payload, allowedIds = new Set(), articlesByI
   return result;
 }
 
-function normalizeClassifierResult(payload, allowedIds = new Set(), articlesById = null) {
-  const detailsByArticleId = normalizeClassifierDetails(payload, allowedIds, articlesById);
-  const result = new Map();
-
-  detailsByArticleId.forEach((details, articleId) => {
-    result.set(articleId, details.map((entry) => entry.topic));
-  });
-
-  return result;
-}
-
 function extractContentPart(value) {
   if (!value) {
     return '';
@@ -472,22 +433,6 @@ async function classifyBatch(batch, config, context = {}) {
   return result;
 }
 
-async function classifyTopicsForArticles(articles = []) {
-  const detailsByArticleId = await classifyTopicDetailsForArticles(articles);
-  const result = new Map();
-
-  detailsByArticleId.forEach((details, articleId) => {
-    result.set(articleId, details.map((entry) => entry.topic));
-  });
-
-  return result;
-}
-
-async function classifyTopicDetailsForArticles(articles = []) {
-  const status = await classifyTopicDetailsForArticlesWithStatus(articles);
-  return status.topicsByArticleId;
-}
-
 async function classifyTopicDetailsForArticlesWithStatus(articles = []) {
   const config = getConfig();
   if (!Array.isArray(articles) || articles.length === 0) {
@@ -518,7 +463,7 @@ async function classifyTopicDetailsForArticlesWithStatus(articles = []) {
 
   const batches = chunkItems(limitedArticles, config.batchSize);
   logger.info(`AI topic detection started: model=${config.model}, articles=${limitedArticles.length}, batches=${batches.length}`);
-  const batchResults = await mapWithConcurrency(batches, config.batchConcurrency, (batch, batchIndex) => classifyBatch(batch, config, {
+  const batchResults = await mapSettledWithConcurrency(batches, config.batchConcurrency, (batch, batchIndex) => classifyBatch(batch, config, {
     batchIndex,
     batchCount: batches.length
   }));
@@ -526,7 +471,8 @@ async function classifyTopicDetailsForArticlesWithStatus(articles = []) {
   const failedArticleIds = [];
 
   batchResults.forEach((batchResult, index) => {
-    if (!batchResult?.ok) {
+    if (batchResult?.status === 'rejected') {
+      logger.warn(`AI topic batch failed: ${summarizeAiError(batchResult.reason)}`);
       failedArticleIds.push(...batches[index].map((article) => article?.id).filter(Boolean));
       return;
     }
@@ -550,8 +496,6 @@ function isAiTopicDetectionAvailable() {
 }
 
 module.exports = {
-  classifyTopicsForArticles,
-  classifyTopicDetailsForArticles,
   classifyTopicDetailsForArticlesWithStatus,
   isAiTopicDetectionAvailable,
   _buildArticlePayload: buildArticlePayload,
@@ -561,7 +505,6 @@ module.exports = {
   _extractAssistantContent: extractAssistantContent,
   _isAiArticleDebugLoggingEnabled: isAiArticleDebugLoggingEnabled,
   _normalizeClassifierDetails: normalizeClassifierDetails,
-  _normalizeClassifierResult: normalizeClassifierResult,
   _parseJsonContent: parseJsonContent,
   _summarizeResponseShape: summarizeResponseShape,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader

@@ -15,6 +15,7 @@ import ReaderPanel from './ReaderPanel';
 import BrandMark from './BrandMark';
 import FeedbackModal from './FeedbackModal';
 import SettingsPanel from './SettingsPanel';
+import SourceSetupWizard from './SourceSetupWizard';
 import useLatestRequest from '../hooks/useLatestRequest';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
@@ -27,25 +28,11 @@ import TopNavActionButton from './TopNavActionButton';
 
 const PAGE_SIZE = 12;
 const MAX_TOPIC_RELOAD_PAGE_SIZE = 30;
+const MAX_RETAINED_NEWS_GROUPS = 72;
 const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 const BACK_TO_TOP_THRESHOLD = 280;
 const TOP_NAV_SHRINK_THRESHOLD = 28;
-const COMPACT_CARD_DESKTOP_QUERY = '(min-width: 768px)';
-
-function resolveCompactNewsCardsEnabled(mode, isDesktop) {
-  switch (mode) {
-    case 'mobile':
-      return !isDesktop;
-    case 'desktop':
-      return isDesktop;
-    case 'everywhere':
-      return true;
-    default:
-      return false;
-  }
-}
-
 const mergeGroups = (primaryGroups, secondaryGroups) => {
   const merged = new Map();
 
@@ -63,22 +50,13 @@ const appendUniqueGroups = (currentGroups, incomingGroups) => mergeGroups(curren
 const getSourceReloadSignature = (excludedSourceIds, excludedSubSourceIds, customSources) => JSON.stringify({
   excludedSourceIds,
   excludedSubSourceIds,
-  customSources: (customSources || []).map((source) => [source.id, source.url])
+  customSources: (customSources || []).map((source) => [source.id, source.name, source.url, source.language, source.isActive !== false])
 });
 
 const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogVersion, onOpenReleaseNotes }) => {
   const preferredLanguage = currentUser?.settings?.defaultLanguage;
+  const needsSourceSetup = currentUser?.settings?.sourceSetupCompleted === false && !currentUser?.user?.isAdmin;
   const showNewsImages = currentUser?.settings?.showNewsImages !== false;
-  const compactNewsCardsMode = currentUser?.settings?.compactNewsCardsMode
-    || (currentUser?.settings?.compactNewsCards ? 'everywhere' : 'off');
-  const [isDesktopViewport, setIsDesktopViewport] = useState(() => {
-    if (typeof window.matchMedia !== 'function') {
-      return true;
-    }
-
-    return window.matchMedia(COMPACT_CARD_DESKTOP_QUERY).matches;
-  });
-  const compactNewsCards = resolveCompactNewsCardsEnabled(compactNewsCardsMode, isDesktopViewport);
   const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
   const t = useMemo(() => createTranslator(locale), [locale]);
   const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
@@ -91,7 +69,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [availableSources, setAvailableSources] = useState([]);
   const [sourceCatalog, setSourceCatalog] = useState([]);
   const [availableTopics, setAvailableTopics] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !needsSourceSetup);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
@@ -122,26 +100,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [currentUser?.customSources, excludedSourceIds, excludedSubSourceIds]);
   const sourceReloadSignatureRef = useRef(sourceReloadSignature);
   visibleNewsCountRef.current = news.length;
+  const retainedNewsLimitReached = news.length >= MAX_RETAINED_NEWS_GROUPS;
   const metaRef = useRef(meta);
   metaRef.current = meta;
+  const setupSourceCatalog = currentUser?.sourceCatalog || sourceCatalog;
 
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') {
-      return undefined;
-    }
-
-    const mediaQuery = window.matchMedia(COMPACT_CARD_DESKTOP_QUERY);
-    const handleChange = (event) => {
-      setIsDesktopViewport(event.matches);
-    };
-
-    setIsDesktopViewport(mediaQuery.matches);
-    mediaQuery.addEventListener('change', handleChange);
-
-    return () => {
-      mediaQuery.removeEventListener('change', handleChange);
-    };
-  }, []);
   const visibleAvailableSources = useMemo(() => {
     return availableSources.filter((source) => !excludedSourceIds.includes(source.id));
   }, [availableSources, excludedSourceIds]);
@@ -159,7 +122,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
   useEffect(() => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    try {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch {
+      // Keep the runtime locale even when browser storage is unavailable.
+    }
     document.documentElement.lang = locale;
   }, [locale]);
 
@@ -204,10 +171,17 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, []);
 
   useEffect(() => {
-    setActiveFilters((current) => ({
-      ...current,
-      sourceIds: current.sourceIds.filter((sourceId) => !excludedSourceIds.includes(sourceId))
-    }));
+    setActiveFilters((current) => {
+      const nextSourceIds = current.sourceIds.filter((sourceId) => !excludedSourceIds.includes(sourceId));
+      if (nextSourceIds.length === current.sourceIds.length) {
+        return current;
+      }
+
+      return {
+        ...current,
+        sourceIds: nextSourceIds
+      };
+    });
   }, [excludedSourceIds]);
 
   useEffect(() => {
@@ -303,6 +277,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           nextNews = appendUniqueGroups(nextNews, preservedTail).slice(0, current.length);
         }
 
+        if (nextNews.length > MAX_RETAINED_NEWS_GROUPS) {
+          nextNews = nextNews.slice(0, MAX_RETAINED_NEWS_GROUPS);
+        }
+
         visibleNewsCountRef.current = nextNews.length;
         preservedNewsCountRef.current = nextNews.length;
         return nextNews;
@@ -363,17 +341,35 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   });
 
   useEffect(() => {
+    if (needsSourceSetup) {
+      sourceReloadSignatureRef.current = sourceReloadSignature;
+      return;
+    }
+
     if (sourceReloadSignature === sourceReloadSignatureRef.current) {
       return;
     }
 
     sourceReloadSignatureRef.current = sourceReloadSignature;
     loadNews({ page: 1, append: false });
-  }, [loadNews, sourceReloadSignature]);
+  }, [loadNews, needsSourceSetup, sourceReloadSignature]);
 
   useEffect(() => {
+    if (needsSourceSetup) {
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     loadNews({ page: 1, append: false });
-  }, [loadNews]);
+  }, [loadNews, needsSourceSetup]);
+
+  const handleSourceSetupComplete = useCallback((settings) => {
+    onUserUpdate({
+      ...currentUser,
+      settings
+    });
+  }, [currentUser, onUserUpdate]);
 
   const toggleFilter = useCallback((type, value) => {
     setActiveFilters((current) => {
@@ -571,7 +567,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   <NewsCard
                     group={group}
                     showImages={showNewsImages}
-                    compact={compactNewsCards}
                     locale={locale}
                     t={t}
                     onOpenReader={openReader}
@@ -581,7 +576,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
             </div>
 
             <div className="mt-8 flex justify-center">
-              {meta?.hasMore ? (
+              {meta?.hasMore && !retainedNewsLimitReached ? (
                 <button
                   type="button"
                   onClick={() => loadNews(
@@ -612,7 +607,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           group={readerState.group}
           initialArticleId={readerState.articleId}
           readerPosition={currentUser?.settings?.readerPanelPosition || 'right'}
-          locale={locale}
           t={t}
           currentUser={currentUser}
           onClose={closeReader}
@@ -636,6 +630,15 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           t={t}
           feedbackLimits={currentUser?.limits}
           onClose={() => setFeedbackOpen(false)}
+        />
+      )}
+
+      {needsSourceSetup && (
+        <SourceSetupWizard
+          t={t}
+          sources={setupSourceCatalog}
+          currentSettings={currentUser.settings}
+          onComplete={handleSourceSetupComplete}
         />
       )}
 

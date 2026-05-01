@@ -42,8 +42,27 @@ describe('useTopicRefreshSocket', () => {
     expect(socket.emit).toHaveBeenCalledWith('subscribe:filters', subscription);
     expect(onNewsUpdate).toHaveBeenCalledTimes(1);
     expect(onNewsUpdate).toHaveBeenCalledWith(expect.objectContaining({ groupIds: ['group-1'] }));
-    expect(onTopicRefresh).toHaveBeenCalledTimes(1);
+    expect(onTopicRefresh).toHaveBeenCalledTimes(2);
+    expect(onTopicRefresh).toHaveBeenCalledWith({ refresh: true, reason: 'news' });
     expect(onTopicRefresh).toHaveBeenCalledWith({ refresh: true, reason: 'topics' });
+  });
+
+  test('resubscribes current filters after socket reconnect', () => {
+    const subscription = { search: 'markets', topics: ['Economy'] };
+
+    const { rerender } = renderHook(({ nextSubscription }) => useTopicRefreshSocket({
+      onTopicRefresh: vi.fn(),
+      subscription: nextSubscription
+    }), {
+      initialProps: { nextSubscription: subscription }
+    });
+
+    const updatedSubscription = { search: 'science', topics: ['Science'] };
+    rerender({ nextSubscription: updatedSubscription });
+
+    handlers.get('connect')();
+
+    expect(socket.emit).toHaveBeenLastCalledWith('subscribe:filters', updatedSubscription);
   });
 
   test('disconnects on unmount', () => {
@@ -51,6 +70,7 @@ describe('useTopicRefreshSocket', () => {
 
     unmount();
 
+    expect(socket.off).toHaveBeenCalledWith('connect', expect.any(Function));
     expect(socket.off).toHaveBeenCalledWith('news:update', expect.any(Function));
     expect(socket.disconnect).toHaveBeenCalledTimes(1);
   });

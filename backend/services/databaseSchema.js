@@ -1,5 +1,19 @@
+const { getProviderIconUrl } = require('../utils/sourceIcons');
+const configuredSources = require('../config/newsSources');
+const { normalizeArticleUrl } = require('../utils/articleIdentity');
+const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
+
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 21;
+  const CURRENT_SCHEMA_VERSION = 24;
+  const DEFAULT_SOURCE_REVIEW_VERSION = 24;
+
+  function getAllConfiguredSourceGroupIds() {
+    return getConfiguredSourceGroups().map((source) => source.id);
+  }
+
+  function getConfiguredSourceUrlKeys() {
+    return new Set(configuredSources.map((source) => normalizeArticleUrl(source.url || '') || String(source.url || '').trim()).filter(Boolean));
+  }
 
   function initializeSchema(database) {
     database.exec(`
@@ -27,6 +41,7 @@ function createDatabaseSchema({ logger }) {
       CREATE INDEX IF NOT EXISTS idx_articles_source_id ON articles (source_id);
       CREATE INDEX IF NOT EXISTS idx_articles_source_name ON articles (source_name);
       CREATE INDEX IF NOT EXISTS idx_articles_owner_user_id ON articles (owner_user_id);
+      CREATE INDEX IF NOT EXISTS idx_articles_owner_published_id ON articles (owner_user_id, published_at DESC, id DESC);
       CREATE INDEX IF NOT EXISTS idx_articles_canonical_url ON articles (canonical_url);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_owner_source_canonical_url
       ON articles (COALESCE(owner_user_id, ''), source_id, canonical_url)
@@ -45,6 +60,7 @@ function createDatabaseSchema({ logger }) {
       );
 
       CREATE INDEX IF NOT EXISTS idx_article_topics_topic ON article_topics (topic);
+      CREATE INDEX IF NOT EXISTS idx_article_topics_topic_article ON article_topics (topic, article_id);
 
       CREATE TABLE IF NOT EXISTS ingestion_runs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,13 +146,13 @@ function createDatabaseSchema({ logger }) {
         theme_mode TEXT NOT NULL DEFAULT 'system',
         article_retention_hours INTEGER NOT NULL DEFAULT 24,
         recent_hours INTEGER NOT NULL DEFAULT 3,
-        auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
         show_news_images INTEGER NOT NULL DEFAULT 1,
         compact_news_cards INTEGER NOT NULL DEFAULT 0,
         compact_news_cards_mode TEXT NOT NULL DEFAULT 'off',
         reader_panel_position TEXT NOT NULL DEFAULT 'right',
         reader_text_size TEXT NOT NULL DEFAULT 'medium',
         last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
+        source_setup_completed INTEGER NOT NULL DEFAULT 1,
         default_source_ids TEXT NOT NULL DEFAULT '[]',
         excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -149,6 +165,7 @@ function createDatabaseSchema({ logger }) {
         name TEXT NOT NULL,
         url TEXT NOT NULL,
         language TEXT NOT NULL DEFAULT 'it',
+        icon_url TEXT NOT NULL DEFAULT '',
         is_active INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -226,6 +243,7 @@ function createDatabaseSchema({ logger }) {
     }
 
     const userSettingsColumns = getColumnNames(database, 'user_settings');
+    const userSourcesColumns = getColumnNames(database, 'user_sources');
     const userColumns = getColumnNames(database, 'users');
     const articleColumns = getColumnNames(database, 'articles');
     const articleTopicColumns = getColumnNames(database, 'article_topics');
@@ -254,15 +272,23 @@ function createDatabaseSchema({ logger }) {
       return 20;
     }
 
-    return CURRENT_SCHEMA_VERSION;
+    if (tableExists(database, 'user_settings') && !userSettingsColumns.has('source_setup_completed')) {
+      return 21;
+    }
+
+    if (tableExists(database, 'user_sources') && !userSourcesColumns.has('icon_url')) {
+      return 22;
+    }
+
+    return 23;
   }
 
-  function setCurrentSchemaVersion(database) {
+  function setCurrentSchemaVersion(database, version = CURRENT_SCHEMA_VERSION) {
     database.prepare(`
       INSERT INTO app_meta (key, value)
       VALUES ('migration_version', ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
-    `).run(String(CURRENT_SCHEMA_VERSION));
+    `).run(String(version));
   }
 
   function migrateSchema(database, currentVersion) {
@@ -300,21 +326,28 @@ function createDatabaseSchema({ logger }) {
     }
 
     if (currentVersion === 16) {
-      database.exec(`
-        ALTER TABLE user_settings
-        ADD COLUMN compact_news_cards INTEGER NOT NULL DEFAULT 0
-      `);
+      const settingsColumns = getColumnNames(database, 'user_settings');
+      if (!settingsColumns.has('compact_news_cards')) {
+        database.exec(`
+          ALTER TABLE user_settings
+          ADD COLUMN compact_news_cards INTEGER NOT NULL DEFAULT 0
+        `);
+      }
 
+      setCurrentSchemaVersion(database, 17);
       logger.info('Migrated DB schema from version 16 to 17');
       migrateSchema(database, 17);
       return;
     }
 
     if (currentVersion === 17) {
-      database.exec(`
-        ALTER TABLE user_settings
-        ADD COLUMN compact_news_cards_mode TEXT NOT NULL DEFAULT 'off'
-      `);
+      const settingsColumns = getColumnNames(database, 'user_settings');
+      if (!settingsColumns.has('compact_news_cards_mode')) {
+        database.exec(`
+          ALTER TABLE user_settings
+          ADD COLUMN compact_news_cards_mode TEXT NOT NULL DEFAULT 'off'
+        `);
+      }
       database.exec(`
         UPDATE user_settings
         SET compact_news_cards_mode = CASE
@@ -323,36 +356,33 @@ function createDatabaseSchema({ logger }) {
         END
       `);
 
-      database.prepare(`
-        INSERT INTO app_meta (key, value)
-        VALUES ('migration_version', '18')
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value
-      `).run();
+      setCurrentSchemaVersion(database, 18);
       logger.info('Migrated DB schema from version 17 to 18');
       migrateSchema(database, 18);
       return;
     }
 
     if (currentVersion === 18) {
-      database.exec(`
-        ALTER TABLE users
-        ADD COLUMN public_api_request_count INTEGER NOT NULL DEFAULT 0
-      `);
-      database.exec(`
-        ALTER TABLE users
-        ADD COLUMN public_api_last_used_at TEXT
-      `);
+      const userColumns = getColumnNames(database, 'users');
+      if (!userColumns.has('public_api_request_count')) {
+        database.exec(`
+          ALTER TABLE users
+          ADD COLUMN public_api_request_count INTEGER NOT NULL DEFAULT 0
+        `);
+      }
+      if (!userColumns.has('public_api_last_used_at')) {
+        database.exec(`
+          ALTER TABLE users
+          ADD COLUMN public_api_last_used_at TEXT
+        `);
+      }
       database.exec(`
         UPDATE api_tokens
         SET created_by_ip = NULL,
             last_used_ip = NULL
       `);
 
-      database.prepare(`
-        INSERT INTO app_meta (key, value)
-        VALUES ('migration_version', '19')
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value
-      `).run();
+      setCurrentSchemaVersion(database, 19);
       logger.info('Migrated DB schema from version 18 to 19');
       migrateSchema(database, 19);
       return;
@@ -382,7 +412,7 @@ function createDatabaseSchema({ logger }) {
         CREATE INDEX IF NOT EXISTS idx_articles_ai_topics_processed_at ON articles (ai_topics_processed_at)
       `);
 
-      setCurrentSchemaVersion(database);
+      setCurrentSchemaVersion(database, 20);
       logger.info('Migrated DB schema from version 19 to 20');
       migrateSchema(database, 20);
       return;
@@ -415,8 +445,103 @@ function createDatabaseSchema({ logger }) {
         `);
       }
 
-      setCurrentSchemaVersion(database);
+      setCurrentSchemaVersion(database, 21);
       logger.info('Migrated DB schema from version 20 to 21');
+      migrateSchema(database, 21);
+      return;
+    }
+
+    if (currentVersion === 21) {
+      const settingsColumns = getColumnNames(database, 'user_settings');
+      if (!settingsColumns.has('source_setup_completed')) {
+        database.exec(`
+          ALTER TABLE user_settings
+          ADD COLUMN source_setup_completed INTEGER NOT NULL DEFAULT 1
+        `);
+      }
+
+      setCurrentSchemaVersion(database);
+      logger.info('Migrated DB schema from version 21 to 22');
+      migrateSchema(database, 22);
+      return;
+    }
+
+    if (currentVersion === 22) {
+      const userSourcesColumns = getColumnNames(database, 'user_sources');
+      if (!userSourcesColumns.has('icon_url')) {
+        database.exec(`
+          ALTER TABLE user_sources
+          ADD COLUMN icon_url TEXT NOT NULL DEFAULT ''
+        `);
+      }
+
+      const existingSources = database.prepare(`
+        SELECT id, url
+        FROM user_sources
+        WHERE icon_url = ''
+      `).all();
+      const updateSourceIcon = database.prepare(`
+        UPDATE user_sources
+        SET icon_url = ?
+        WHERE id = ?
+      `);
+      existingSources.forEach((source) => {
+        updateSourceIcon.run(getProviderIconUrl(source.url), source.id);
+      });
+
+      setCurrentSchemaVersion(database, 23);
+      logger.info('Migrated DB schema from version 22 to 23');
+      migrateSchema(database, 23);
+      return;
+    }
+
+    if (currentVersion === 23) {
+      const now = new Date().toISOString();
+      const excludedDefaultSourceIds = JSON.stringify(getAllConfiguredSourceGroupIds());
+      const configuredSourceUrlKeys = getConfiguredSourceUrlKeys();
+      const duplicateUserSources = database.prepare(`
+        SELECT id, user_id AS userId, url
+        FROM user_sources
+      `).all().filter((source) => {
+        const urlKey = normalizeArticleUrl(source.url || '') || String(source.url || '').trim();
+        return configuredSourceUrlKeys.has(urlKey);
+      });
+
+      const transaction = database.transaction(() => {
+        const deleteArticleSearch = database.prepare(`
+          DELETE FROM article_search
+          WHERE article_id IN (
+            SELECT id FROM articles WHERE owner_user_id = ? AND source_id = ?
+          )
+        `);
+        const deleteArticles = database.prepare(`
+          DELETE FROM articles
+          WHERE owner_user_id = ? AND source_id = ?
+        `);
+        const deleteUserSource = database.prepare(`
+          DELETE FROM user_sources
+          WHERE user_id = ? AND id = ?
+        `);
+
+        duplicateUserSources.forEach((source) => {
+          deleteArticleSearch.run(source.userId, source.id);
+          deleteArticles.run(source.userId, source.id);
+          deleteUserSource.run(source.userId, source.id);
+        });
+
+        database.prepare(`
+          UPDATE user_settings
+          SET source_setup_completed = 0,
+              default_source_ids = ?,
+              excluded_sub_source_ids = '[]',
+              updated_at = ?
+        `).run(excludedDefaultSourceIds, now);
+      });
+
+      transaction();
+
+      setCurrentSchemaVersion(database);
+      logger.info(`Migrated DB schema from version 23 to 24; reset source setup for ${DEFAULT_SOURCE_REVIEW_VERSION} and removed ${duplicateUserSources.length} duplicate custom sources`);
       return;
     }
 

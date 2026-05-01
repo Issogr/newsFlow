@@ -1,418 +1,45 @@
-const fs = require('fs');
-const crypto = require('crypto');
 const http = require('http');
 const path = require('path');
 const express = require('express');
 const axios = require('axios');
-const cookie = require('cookie');
-const cookieSignature = require('cookie-signature');
 const helmet = require('helmet');
-const Database = require('better-sqlite3');
-const session = require('express-session');
-const SqliteStoreFactory = require('better-sqlite3-session-store')(session);
+
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const { parseIntegerEnv } = require('./lib/env');
+const {
+  BACKEND_SESSION_COOKIE_NAME,
+  BFF_SESSION_COOKIE_NAME,
+  SESSION_SCHEMA_VERSION,
+  clearBffSessionCookie,
+  encryptBackendSessionCookie,
+  extractBackendSessionCookie,
+  getBffSessionSecret,
+  getInternalProxyToken,
+  isValidSessionPayload,
+  parseCookieHeader,
+  serializeCookie,
+  unsignSessionId
+} = require('./lib/sessionPolicy');
+const {
+  buildSessionMiddleware,
+  createSessionStore,
+  destroySession,
+  destroyStoredSessionsByUserId,
+  getBackendSessionCookieFromRequest,
+  loadUpgradeSession,
+  normalizeSessionState,
+  persistSessionUserId,
+  upsertStoredSessionUser
+} = require('./lib/sessionStore');
+const {
+  applySanitizedForwardedHeaders,
+  copyBackendResponseHeaders,
+  extractDeletedAdminUserId,
+  serveSpaIndex
+} = require('./lib/proxyHelpers');
 
-const BACKEND_SESSION_COOKIE_NAME = 'newsflow_session';
-const BFF_SESSION_COOKIE_NAME = 'newsflow_bff_session';
 const DEFAULT_FRONTEND_DIST_DIR = path.join(__dirname, 'public');
-const DEFAULT_SESSION_DB_PATH = path.join(__dirname, 'data', 'sessions.sqlite');
-const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '30', 10);
-const SESSION_TTL_MS = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
-const SESSION_STORE_CLEAR_INTERVAL_MS = parseInt(process.env.SESSION_STORE_CLEAR_INTERVAL_MS || '300000', 10);
-const SESSION_SCHEMA_VERSION = 1;
-const DEFAULT_BFF_SESSION_SECRET = 'development-only-change-me';
-const DEFAULT_INTERNAL_PROXY_TOKEN = 'development-only-change-me';
-const UPSTREAM_TIMEOUT_MS = parseInt(process.env.BFF_UPSTREAM_TIMEOUT_MS || '30000', 10);
-
-function readConfiguredSecret(name, developmentFallback) {
-  const configured = String(process.env[name] || '').trim();
-  const isProduction = process.env.NODE_ENV === 'production';
-
-  if (configured) {
-    if (isProduction && configured === developmentFallback) {
-      throw new Error(`${name} must not use the development default in production.`);
-    }
-
-    return configured;
-  }
-
-  if (isProduction) {
-    throw new Error(`${name} is required in production.`);
-  }
-
-  return developmentFallback;
-}
-
-function getBffSessionSecret() {
-  return readConfiguredSecret('BFF_SESSION_SECRET', DEFAULT_BFF_SESSION_SECRET);
-}
-
-function getInternalProxyToken() {
-  return readConfiguredSecret('INTERNAL_PROXY_TOKEN', DEFAULT_INTERNAL_PROXY_TOKEN);
-}
-
-function getSessionEncryptionKey() {
-  return crypto.createHash('sha256').update(getBffSessionSecret()).digest();
-}
-
-function encryptBackendSessionCookie(value) {
-  const rawValue = String(value || '').trim();
-  if (!rawValue) {
-    return '';
-  }
-
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', getSessionEncryptionKey(), iv);
-  const encrypted = Buffer.concat([cipher.update(rawValue, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-
-  return [
-    'enc',
-    'v1',
-    iv.toString('base64url'),
-    tag.toString('base64url'),
-    encrypted.toString('base64url'),
-  ].join(':');
-}
-
-function decryptBackendSessionCookie(value) {
-  const storedValue = String(value || '').trim();
-  if (!storedValue || !storedValue.startsWith('enc:v1:')) {
-    return storedValue;
-  }
-
-  const [, , ivValue, tagValue, encryptedValue] = storedValue.split(':');
-  if (!ivValue || !tagValue || !encryptedValue) {
-    return '';
-  }
-
-  try {
-    const decipher = crypto.createDecipheriv('aes-256-gcm', getSessionEncryptionKey(), Buffer.from(ivValue, 'base64url'));
-    decipher.setAuthTag(Buffer.from(tagValue, 'base64url'));
-    return Buffer.concat([
-      decipher.update(Buffer.from(encryptedValue, 'base64url')),
-      decipher.final(),
-    ]).toString('utf8');
-  } catch {
-    return '';
-  }
-}
-
-function parseCookieHeader(cookieHeader) {
-  if (!cookieHeader || typeof cookieHeader !== 'string') {
-    return {};
-  }
-
-  return cookie.parse(cookieHeader);
-}
-
-function serializeCookie(name, value, options = {}) {
-  return cookie.serialize(name, value, options);
-}
-
-function getCookieSecureSetting() {
-  if (process.env.COOKIE_SECURE === 'true') {
-    return true;
-  }
-
-  if (process.env.COOKIE_SECURE === 'false') {
-    return false;
-  }
-
-  return 'auto';
-}
-
-function getSessionCookieOptions() {
-  return {
-    httpOnly: true,
-    sameSite: 'strict',
-    secure: getCookieSecureSetting(),
-    path: '/',
-    maxAge: SESSION_TTL_MS,
-  };
-}
-
-function getCookieClearOptions() {
-  return {
-    httpOnly: true,
-    sameSite: 'strict',
-    path: '/',
-    maxAge: 0,
-  };
-}
-
-function clearBffSessionCookie(res) {
-  res.append('Set-Cookie', serializeCookie(BFF_SESSION_COOKIE_NAME, '', getCookieClearOptions()));
-}
-
-function extractBackendSessionCookie(setCookieHeader) {
-  const values = Array.isArray(setCookieHeader)
-    ? setCookieHeader
-    : (setCookieHeader ? [setCookieHeader] : []);
-
-  const rawCookie = values.find((entry) => String(entry || '').startsWith(`${BACKEND_SESSION_COOKIE_NAME}=`));
-
-  if (!rawCookie) {
-    return '';
-  }
-
-  return rawCookie.split(';')[0];
-}
-
-function copyBackendResponseHeaders(res, headers = {}) {
-  Object.entries(headers).forEach(([name, value]) => {
-    const lowerName = String(name || '').toLowerCase();
-
-    if (lowerName === 'set-cookie' || lowerName === 'transfer-encoding' || lowerName === 'content-length' || lowerName === 'connection') {
-      return;
-    }
-
-    if (value !== undefined) {
-      res.setHeader(name, value);
-    }
-  });
-}
-
-function serveSpaIndex(frontendDistDir, res) {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.sendFile(path.join(frontendDistDir, 'index.html'));
-}
-
-function ensureSessionDbDirectory(sessionDbPath) {
-  fs.mkdirSync(path.dirname(sessionDbPath), { recursive: true });
-}
-
-function createSessionStore(options = {}) {
-  const sessionDbPath = options.sessionDbPath || process.env.BFF_SESSION_DB_PATH || DEFAULT_SESSION_DB_PATH;
-  ensureSessionDbDirectory(sessionDbPath);
-
-  const db = new Database(sessionDbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
-  db.pragma('foreign_keys = ON');
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS session_users (
-      sid TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_session_users_user_id ON session_users (user_id);
-  `);
-
-  const BaseSqliteStore = SqliteStoreFactory;
-  class ManagedSqliteStore extends BaseSqliteStore {
-    startInterval() {
-      this.cleanupInterval = setInterval(this.clearExpiredSessions.bind(this), this.expired.intervalMs);
-      this.cleanupInterval?.unref?.();
-    }
-
-    stopCleanupInterval() {
-      if (this.cleanupInterval) {
-        clearInterval(this.cleanupInterval);
-        this.cleanupInterval = null;
-      }
-    }
-
-    clearExpiredSessions() {
-      super.clearExpiredSessions();
-      cleanupStoredSessionUsers(db);
-    }
-  }
-
-  const store = new ManagedSqliteStore({
-      client: db,
-      expired: {
-        clear: true,
-        intervalMs: SESSION_STORE_CLEAR_INTERVAL_MS,
-      },
-    });
-
-  return { store, db };
-}
-
-function cleanupStoredSessionUsers(sessionDb) {
-  if (!sessionDb) {
-    return 0;
-  }
-
-  return sessionDb.prepare(`
-    DELETE FROM session_users
-    WHERE NOT EXISTS (
-      SELECT 1
-      FROM sessions
-      WHERE sessions.sid = session_users.sid
-    )
-  `).run().changes;
-}
-
-function destroyStoredSessionsByUserId(sessionStore, sessionDb, userId) {
-  if (!sessionStore || !sessionDb || !userId) {
-    return 0;
-  }
-
-  const matchingSessionIds = sessionDb.prepare(`
-    SELECT sid
-    FROM session_users
-    WHERE user_id = ?
-  `).all(userId).map((row) => row.sid);
-
-  matchingSessionIds.forEach((sid) => {
-    sessionStore.destroy(sid, () => {});
-  });
-
-  sessionDb.prepare('DELETE FROM session_users WHERE user_id = ?').run(userId);
-
-  return matchingSessionIds.length;
-}
-
-function upsertStoredSessionUser(sessionDb, sid, userId) {
-  if (!sessionDb || !sid || !userId) {
-    return;
-  }
-
-  sessionDb.prepare(`
-    INSERT INTO session_users (sid, user_id)
-    VALUES (?, ?)
-    ON CONFLICT(sid) DO UPDATE SET user_id = excluded.user_id
-  `).run(sid, userId);
-}
-
-function removeStoredSessionUser(sessionDb, sid) {
-  if (!sessionDb || !sid) {
-    return;
-  }
-
-  sessionDb.prepare('DELETE FROM session_users WHERE sid = ?').run(sid);
-}
-
-function extractDeletedAdminUserId(req, statusCode) {
-  if (String(req.method || '').toUpperCase() !== 'DELETE' || statusCode < 200 || statusCode >= 300) {
-    return '';
-  }
-
-  const rawPath = String(req.originalUrl || req.url || '');
-  const match = rawPath.match(/^\/api\/admin\/users\/([^/?#]+)$/);
-  return match?.[1] || '';
-}
-
-function destroySession(req, sessionDb = null) {
-  if (!req.session) {
-    return Promise.resolve();
-  }
-
-  const sessionId = req.sessionID;
-
-  return new Promise((resolve) => {
-    req.session.destroy(() => {
-      removeStoredSessionUser(sessionDb, sessionId);
-      resolve();
-    });
-  });
-}
-
-function isValidSessionPayload(sessionData) {
-  if (!sessionData || typeof sessionData !== 'object') {
-    return false;
-  }
-
-  const backendSessionCookie = decryptBackendSessionCookie(sessionData.backendSessionCookie || '');
-  return sessionData.version === SESSION_SCHEMA_VERSION
-    && backendSessionCookie.startsWith(`${BACKEND_SESSION_COOKIE_NAME}=`);
-}
-
-function buildSessionMiddleware(store) {
-  return session({
-    name: BFF_SESSION_COOKIE_NAME,
-    store,
-    secret: getBffSessionSecret(),
-    resave: false,
-    saveUninitialized: false,
-    rolling: true,
-    unset: 'destroy',
-    cookie: getSessionCookieOptions(),
-  });
-}
-
-function normalizeSessionState(req, res, next, sessionDb = null) {
-  if (!req.session) {
-    next();
-    return;
-  }
-
-  const hasSessionData = Boolean(req.session.version || req.session.backendSessionCookie);
-  if (!hasSessionData) {
-    next();
-    return;
-  }
-
-  if (isValidSessionPayload(req.session)) {
-    next();
-    return;
-  }
-
-  destroySession(req, sessionDb).then(() => {
-    clearBffSessionCookie(res);
-    next();
-  });
-}
-
-function unsignSessionId(rawCookieValue, secret) {
-  const normalized = String(rawCookieValue || '').trim();
-
-  if (!normalized) {
-    return '';
-  }
-
-  const signedValue = normalized.startsWith('s:') ? normalized.slice(2) : normalized;
-  const unsigned = cookieSignature.unsign(signedValue, secret);
-  return unsigned === false ? '' : unsigned;
-}
-
-function loadUpgradeSession(req, sessionStore, secret) {
-  const cookies = parseCookieHeader(req.headers.cookie);
-  const sessionId = unsignSessionId(cookies[BFF_SESSION_COOKIE_NAME], secret);
-
-  if (!sessionId) {
-    return Promise.resolve(null);
-  }
-
-  return new Promise((resolve) => {
-    sessionStore.get(sessionId, (error, sessionData) => {
-      if (error || !isValidSessionPayload(sessionData)) {
-        if (sessionData) {
-          sessionStore.destroy(sessionId, () => resolve(null));
-          return;
-        }
-
-        resolve(null);
-        return;
-      }
-
-      req.session = sessionData;
-      req.sessionID = sessionId;
-      resolve(sessionData);
-    });
-  });
-}
-
-function getBackendSessionCookieFromRequest(req) {
-  return decryptBackendSessionCookie(req.session?.backendSessionCookie || '');
-}
-
-async function persistSessionUserId(req, userId, sessionDb = null) {
-  if (!req.session || !userId || req.session.userId === userId) {
-    if (req.session && userId) {
-      upsertStoredSessionUser(sessionDb, req.sessionID, userId);
-    }
-    return;
-  }
-
-  req.session.userId = userId;
-  await new Promise((resolve, reject) => {
-    req.session.save((error) => (error ? reject(error) : resolve()));
-  });
-  upsertStoredSessionUser(sessionDb, req.sessionID, userId);
-}
+const UPSTREAM_TIMEOUT_MS = parseIntegerEnv('BFF_UPSTREAM_TIMEOUT_MS', 30000, { min: 1000 });
 
 function createApp(options = {}) {
   const backendBaseUrl = String(options.backendBaseUrl || process.env.BACKEND_BASE_URL || 'http://backend:5000').trim().replace(/\/+$/, '');
@@ -421,7 +48,7 @@ function createApp(options = {}) {
   const createdSessionStore = options.sessionStoreBundle || createSessionStore(options);
   const sessionStore = createdSessionStore.store;
   const sessionDb = createdSessionStore.db;
-  const sessionMiddleware = options.sessionMiddleware || buildSessionMiddleware(sessionStore);
+  const sessionMiddleware = options.sessionMiddleware || buildSessionMiddleware(sessionStore, getBffSessionSecret());
   const backendHttp = options.backendHttp || axios.create({
     baseURL: backendBaseUrl,
     timeout: UPSTREAM_TIMEOUT_MS,
@@ -460,8 +87,8 @@ function createApp(options = {}) {
         ? req.get(name)
         : req.headers?.[String(name || '').toLowerCase()]
     );
-    const forwardedFor = String(Array.isArray(req.ips) && req.ips.length > 0 ? req.ips.join(', ') : (req.ip || req.socket?.remoteAddress || '')).trim();
-    const forwardedProto = String(req.protocol || (req.socket?.encrypted ? 'https' : 'http')).trim();
+    const forwardedFor = String(req.ip || req.socket?.remoteAddress || '').trim();
+    const forwardedProto = req.protocol || (req.socket?.encrypted ? 'https' : 'http');
     const host = String(getHeader('host') || '').trim();
 
     return {
@@ -482,6 +109,9 @@ function createApp(options = {}) {
 
   function applyBackendSessionProxyHeaders(proxyReq, req) {
     stripClientCredentials(proxyReq);
+    proxyReq.removeHeader('x-forwarded-for');
+    proxyReq.removeHeader('x-forwarded-host');
+    proxyReq.removeHeader('x-forwarded-proto');
     Object.entries(buildInternalHeaders(req)).forEach(([name, value]) => {
       proxyReq.setHeader(name, value);
     });
@@ -507,6 +137,27 @@ function createApp(options = {}) {
         code: 'UNAUTHORIZED',
       },
     });
+  }
+
+  function handleProxyError(error, req, res) {
+    if (typeof res?.setHeader !== 'function' || typeof res?.end !== 'function') {
+      res?.destroy?.();
+      return;
+    }
+
+    if (!res || res.headersSent) {
+      res?.destroy?.();
+      return;
+    }
+
+    res.statusCode = 502;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify({
+      error: {
+        message: 'Unable to reach the application backend.',
+        code: 'BFF_UPSTREAM_ERROR',
+      },
+    }));
   }
 
   async function forwardInternalRequest(req, res, { pathName, method = req.method, payload = undefined, params = req.query, backendSessionCookie = '' }) {
@@ -569,20 +220,22 @@ function createApp(options = {}) {
   const publicApiProxy = createProxyMiddleware({
     target: `${backendBaseUrl}/api/public`,
     changeOrigin: false,
-    xfwd: true,
+    xfwd: false,
     timeout: UPSTREAM_TIMEOUT_MS,
     proxyTimeout: UPSTREAM_TIMEOUT_MS,
     on: {
-      proxyReq: (proxyReq) => {
+      proxyReq: (proxyReq, req) => {
         proxyReq.removeHeader('cookie');
+        applySanitizedForwardedHeaders(proxyReq, req);
       },
+      error: handleProxyError,
     },
   });
 
   const appApiProxy = createProxyMiddleware({
     target: `${backendBaseUrl}/internal-api`,
     changeOrigin: false,
-    xfwd: true,
+    xfwd: false,
     timeout: UPSTREAM_TIMEOUT_MS,
     proxyTimeout: UPSTREAM_TIMEOUT_MS,
     on: {
@@ -594,7 +247,7 @@ function createApp(options = {}) {
 
         if (proxyRes.statusCode === 401) {
           clearBffSessionCookie(res);
-          req.session?.destroy?.(() => {});
+          destroySession(req, sessionDb).catch(() => {});
           return;
         }
 
@@ -603,13 +256,14 @@ function createApp(options = {}) {
           destroyStoredSessionsByUserId(sessionStore, sessionDb, deletedUserId);
         }
       },
+      error: handleProxyError,
     },
   });
 
   const socketProxy = createProxyMiddleware({
     target: backendBaseUrl,
     changeOrigin: false,
-    xfwd: true,
+    xfwd: false,
     ws: true,
     pathRewrite: (proxyPath, req) => req.originalUrl || proxyPath,
     timeout: UPSTREAM_TIMEOUT_MS,
@@ -621,6 +275,7 @@ function createApp(options = {}) {
       proxyReqWs: (proxyReq, req) => {
         applyBackendSessionProxyHeaders(proxyReq, req);
       },
+      error: handleProxyError,
     },
   });
 
@@ -811,7 +466,7 @@ function createServer(options = {}) {
 }
 
 if (require.main === module) {
-  const port = parseInt(process.env.PORT || '80', 10);
+  const port = parseIntegerEnv('PORT', 80, { min: 1, max: 65535 });
   const server = createServer();
 
   server.listen(port, () => {
@@ -827,6 +482,7 @@ module.exports = {
   createServer,
   createSessionStore,
   destroyStoredSessionsByUserId,
+  encryptBackendSessionCookie,
   getBffSessionSecret,
   getInternalProxyToken,
   isValidSessionPayload,

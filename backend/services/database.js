@@ -10,6 +10,7 @@ const createDatabaseSchema = require('./databaseSchema');
 const createUserStateRepository = require('./databaseUserState');
 const {
   buildDomainSourceGroups,
+  getCanonicalSourceIconUrl,
   getCanonicalSourceId,
   getCanonicalSourceName,
   getConfiguredSourceGroupIds,
@@ -82,12 +83,14 @@ function getResolvedSourceAliases(sourceId, sourceName, userId, customSourceGrou
 function getResolvedSourceMetadata(sourceId, sourceName, userId, customSourceGroups = null) {
   const configuredSourceId = getCanonicalSourceId(sourceId, sourceName);
   const configuredSourceName = getCanonicalSourceName(sourceId, sourceName);
+  const configuredSourceIconUrl = getCanonicalSourceIconUrl(sourceId, sourceName);
   const configuredSubSource = getSourceVariantLabel(sourceId, sourceName);
 
   if (configuredSourceId !== sourceId || configuredSourceName !== sourceName || configuredSubSource) {
     return {
       sourceId: configuredSourceId,
       sourceName: configuredSourceName,
+      sourceIconUrl: configuredSourceIconUrl,
       subSource: configuredSubSource
     };
   }
@@ -97,6 +100,7 @@ function getResolvedSourceMetadata(sourceId, sourceName, userId, customSourceGro
     return {
       sourceId,
       sourceName,
+      sourceIconUrl: '',
       subSource: null
     };
   }
@@ -104,6 +108,7 @@ function getResolvedSourceMetadata(sourceId, sourceName, userId, customSourceGro
   return {
     sourceId: customSourceGroup.id,
     sourceName: customSourceGroup.name,
+    sourceIconUrl: customSourceGroup.iconUrl || '',
     subSource: customSourceGroup.subSources.length > 1
       ? (customSourceGroup.subSources.find((subSource) => subSource.id === sourceId)?.label || null)
       : null

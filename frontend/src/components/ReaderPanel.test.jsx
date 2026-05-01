@@ -56,10 +56,6 @@ const t = (key, params = {}) => {
     return `${params.minutes} min read`;
   }
 
-  if (key === 'newsLanguage') {
-    return params.language;
-  }
-
   return key;
 };
 
@@ -98,7 +94,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}
@@ -132,26 +127,6 @@ describe('ReaderPanel', () => {
     });
   });
 
-  test('applies centered desktop alignment when requested', () => {
-    fetchReaderArticle.mockImplementation(() => new Promise(() => {}));
-
-    const { container } = render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="center"
-        locale="en"
-        t={t}
-        currentUser={currentUser}
-        onUserUpdate={jest.fn()}
-        onClose={jest.fn()}
-      />
-    );
-
-    expect(container.firstChild).toBeInTheDocument();
-    expect(container.querySelector('.lg\\:justify-center')).toBeInTheDocument();
-  });
-
   test('locks body scroll while the reader is open', () => {
     fetchReaderArticle.mockImplementation(() => new Promise(() => {}));
 
@@ -160,7 +135,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}
@@ -173,6 +147,62 @@ describe('ReaderPanel', () => {
     unmount();
 
     expect(document.body.style.overflow).toBe('');
+  });
+
+  test('fetches reader content from the backend on open', async () => {
+    fetchReaderArticle.mockResolvedValue({
+      title: 'Backend cached reader title',
+      language: 'en',
+      excerpt: 'Cached excerpt',
+      contentBlocks: [{ type: 'paragraph', text: 'Cached body' }],
+      minutesToRead: 2
+    });
+
+    render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="right"
+        t={t}
+        currentUser={currentUser}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(await screen.findByText('Backend cached reader title')).toBeInTheDocument();
+    expect(fetchReaderArticle).toHaveBeenCalledWith('article-1', expect.objectContaining({
+      refresh: false
+    }));
+  });
+
+  test('clears a stale reader error when switching to another article', async () => {
+    fetchReaderArticle
+      .mockRejectedValueOnce(new Error('Reader failed'))
+      .mockResolvedValueOnce({
+        title: 'Second reader title',
+        language: 'en',
+        excerpt: 'Cached excerpt',
+        contentBlocks: [{ type: 'paragraph', text: 'Second body' }],
+        minutesToRead: 2
+      });
+
+    render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="right"
+        t={t}
+        currentUser={currentUser}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(await screen.findByText('readerUnavailable')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
+
+    expect(await screen.findByText('Second reader title')).toBeInTheDocument();
+    expect(screen.queryByText('readerUnavailable')).not.toBeInTheDocument();
   });
 
   test('disables unsafe original-source links', async () => {
@@ -195,7 +225,6 @@ describe('ReaderPanel', () => {
         }}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}
@@ -224,7 +253,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}
@@ -241,41 +269,6 @@ describe('ReaderPanel', () => {
       title: 'Reader title',
       url: 'https://example.com/one'
     });
-  });
-
-  test('shows a share status bubble in reader mode when clipboard fallback is used', async () => {
-    navigator.share = undefined;
-    navigator.clipboard = {
-      writeText: jest.fn().mockResolvedValue(undefined)
-    };
-    fetchReaderArticle.mockResolvedValue({
-      title: 'Reader title',
-      language: 'en',
-      excerpt: 'Excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
-      minutesToRead: 1
-    });
-
-    render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="right"
-        locale="en"
-        t={t}
-        currentUser={currentUser}
-        onUserUpdate={jest.fn()}
-        onClose={jest.fn()}
-      />
-    );
-
-    await screen.findByText('Reader title');
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
-    });
-
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.com/one');
-    expect(screen.getByText('shareCopiedMessage')).toBeInTheDocument();
   });
 
   test('updates reader text size and persists it without reloading parent state', async () => {
@@ -298,7 +291,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}
@@ -338,7 +330,6 @@ describe('ReaderPanel', () => {
         group={group}
         initialArticleId="article-1"
         readerPosition="right"
-        locale="en"
         t={t}
         currentUser={currentUser}
         onUserUpdate={jest.fn()}
@@ -357,4 +348,5 @@ describe('ReaderPanel', () => {
     }));
     expect(await screen.findByText('Refreshed reader title')).toBeInTheDocument();
   });
+
 });

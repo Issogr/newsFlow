@@ -1,4 +1,5 @@
 const configuredSources = require('../config/newsSources');
+const { getProviderIconUrl } = require('./sourceIcons');
 
 const MULTI_LEVEL_PUBLIC_SUFFIX_MARKERS = new Set(['ac', 'co', 'com', 'edu', 'gov', 'net', 'org']);
 
@@ -130,11 +131,13 @@ function buildDomainSourceGroups(sources = [], options = {}) {
         name: groupName,
         language,
         domain: group.domain,
+        iconUrl: group.sources.find((source) => source.iconUrl)?.iconUrl || getProviderIconUrl(group.domain),
         subSources: group.sources.map((source) => ({
           id: source.id,
           name: source.name,
           label: deriveSubSourceLabel(source, groupName, group.sources.length),
-          language: source.language || null
+          language: source.language || null,
+          iconUrl: source.iconUrl || getProviderIconUrl(source.url || group.domain)
         })),
         memberIds: new Set(group.sources.map((source) => source.id)),
         memberNames: new Set(group.sources.map((source) => source.name)),
@@ -165,6 +168,7 @@ function getConfiguredSourceGroups() {
     id: group.id,
     name: group.name,
     language: group.language,
+    iconUrl: group.iconUrl || '',
     subSources: group.subSources.map((subSource) => ({ ...subSource }))
   }));
 }
@@ -200,6 +204,10 @@ function getCanonicalSourceId(sourceId, sourceName) {
 
 function getCanonicalSourceName(sourceId, sourceName) {
   return resolveConfiguredSourceGroup(sourceId, sourceName)?.name || sourceName;
+}
+
+function getCanonicalSourceIconUrl(sourceId, sourceName) {
+  return resolveConfiguredSourceGroup(sourceId, sourceName)?.iconUrl || '';
 }
 
 function getSourceVariantLabel(sourceId, sourceName) {
@@ -249,6 +257,7 @@ module.exports = {
   getConfiguredSourceGroups,
   getCanonicalSourceId,
   getCanonicalSourceName,
+  getCanonicalSourceIconUrl,
   getSourceVariantLabel,
   getSourceAliases,
   getRawConfiguredSourceIds,

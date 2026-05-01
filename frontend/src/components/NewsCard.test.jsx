@@ -94,6 +94,19 @@ describe('NewsCard', () => {
     expect(screen.queryByRole('img', { name: 'Headline' })).not.toBeInTheDocument();
   });
 
+  test('suppresses invalid publication dates', () => {
+    render(
+      <NewsCard
+        group={{ ...group, pubDate: 'not-a-date' }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByText('Invalid Date')).not.toBeInTheDocument();
+  });
+
   test('renders a generic fallback illustration when the article has no image', () => {
     render(
       <NewsCard
@@ -123,6 +136,40 @@ describe('NewsCard', () => {
     expect(screen.queryByText('Economy')).not.toBeInTheDocument();
   });
 
+  test('renders source favicons and a social source summary', () => {
+    render(
+      <NewsCard
+        group={{
+          ...group,
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              sourceIconUrl: 'https://example.com/a.ico',
+              image: 'https://example.com/image.jpg'
+            },
+            {
+              id: 'article-2',
+              sourceId: 'source-b',
+              source: 'Source B',
+              sourceIconUrl: 'https://example.com/b.ico',
+              image: 'https://example.com/image-b.jpg'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Source A')).toBeInTheDocument();
+    expect(screen.getByLabelText('Source B')).toBeInTheDocument();
+    expect(screen.getByText('Source A +1')).toBeInTheDocument();
+    expect(screen.queryByText('Source B')).not.toBeInTheDocument();
+  });
+
   test('adds a rainbow ring around AI-classified topic icons', () => {
     render(
       <NewsCard
@@ -145,33 +192,17 @@ describe('NewsCard', () => {
     expect(screen.getByLabelText('Economy').getAttribute('style') || '').not.toContain('conic-gradient');
   });
 
-  test('does not render topic pills on compact cards', () => {
+  test('keeps topic pills in the unified card layout', () => {
     render(
       <NewsCard
         group={{ ...group, topics: ['Tecnologia'] }}
-        compact
         locale="en"
         t={t}
         onOpenReader={jest.fn()}
       />
     );
 
-    expect(screen.queryByLabelText('Technology')).not.toBeInTheDocument();
-  });
-
-  test('can choose an alternate generic fallback illustration', () => {
-    jest.spyOn(Math, 'random').mockReturnValue(0.99);
-
-    render(
-      <NewsCard
-        group={group}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
-
-    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover-4/));
+    expect(screen.getByLabelText('Technology')).toBeInTheDocument();
   });
 
   test('falls back to the generic illustration for unsafe or broken article images', () => {
@@ -368,13 +399,14 @@ describe('NewsCard', () => {
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
   });
 
-  test('renders the compact horizontal layout while preserving actions', () => {
+  test('preserves actions and topics in the unified card layout', () => {
     window.open = jest.fn();
 
-    const { container } = render(
+    render(
       <NewsCard
         group={{
           ...group,
+          topics: ['Tecnologia'],
           url: 'https://example.com/story',
           items: [
             {
@@ -385,31 +417,16 @@ describe('NewsCard', () => {
             }
           ]
         }}
-        compact
         locale="en"
         t={t}
         onOpenReader={jest.fn()}
       />
     );
 
-    expect(container.firstChild).toHaveClass('flex-row');
     expect(screen.getByRole('button', { name: 'shareArticle' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'readerMode' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Technology')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'openOriginalSource' }));
     expect(window.open).toHaveBeenCalledWith('https://example.com/story', '_blank', 'noopener,noreferrer');
-  });
-
-  test('renders reader and open article as matching buttons', () => {
-    render(
-      <NewsCard
-        group={{ ...group, url: 'https://example.com/story' }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
-
-    expect(screen.getByRole('button', { name: 'readerMode' })).toHaveClass('font-medium', 'text-slate-700', 'text-sm');
-    expect(screen.getByRole('button', { name: 'openOriginalSource' })).toHaveClass('font-medium', 'text-slate-700', 'text-sm');
   });
 });

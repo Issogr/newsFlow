@@ -1,6 +1,6 @@
 {
   "name": "newsflow-frontend",
-  "version": "3.2.13.2",
+  "version": "3.3",
   "private": true,
   "dependencies": {
     "axios": "^1.15.2",
@@ -12,6 +12,7 @@
   "scripts": {
     "start": "vite",
     "build": "vite build",
+    "lint": "eslint .",
     "preview": "vite preview",
     "test": "node scripts/run-vitest.js"
   },
@@ -32,10 +33,11 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",
-    "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^10.2.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^26.1.0",
     "tailwindcss": "^4.2.4",
     "vite": "^8.0.10",

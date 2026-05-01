@@ -28,7 +28,6 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     setDefaultLanguage,
     setThemeMode,
     setShowNewsImages,
-    setCompactNewsCardsMode,
     setReaderPanelPosition,
     setReaderTextSize,
     updateNumericSetting,
@@ -82,7 +81,6 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               onDefaultLanguageChange={setDefaultLanguage}
               onThemeModeChange={setThemeMode}
               onShowNewsImagesChange={setShowNewsImages}
-              onCompactNewsCardsModeChange={setCompactNewsCardsMode}
               onReaderPanelPositionChange={setReaderPanelPosition}
               onReaderTextSizeChange={setReaderTextSize}
               onNumericSettingChange={updateNumericSetting}

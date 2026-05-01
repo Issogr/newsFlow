@@ -18,7 +18,9 @@ const {
 const { asyncHandler, createError } = require('../utils/errorHandler');
 const { sanitizeParam, sanitizeQuery, validateParam, sanitizeBody } = require('../utils/inputValidator');
 const { requireAuthenticatedUser, requireAdminUser, SESSION_COOKIE_NAME } = require('../utils/auth');
+const { parseIntegerEnv } = require('../utils/env');
 const { parseNewsQuery } = require('../utils/newsQuery');
+const { buildUserContext } = require('../utils/userContext');
 
 const router = express.Router();
 
@@ -70,7 +72,7 @@ const passwordSetupRateLimit = rateLimit({
 });
 
 function getSessionCookieOptions() {
-  const ttlDays = parseInt(process.env.SESSION_TTL_DAYS || '30', 10);
+  const ttlDays = parseIntegerEnv('SESSION_TTL_DAYS', 30, { min: 1 });
   const appBaseUrl = String(process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim();
   const secure = process.env.COOKIE_SECURE === 'true'
     || (process.env.COOKIE_SECURE !== 'false' && appBaseUrl.startsWith('https://'));
@@ -167,13 +169,7 @@ function handleFeedbackUpload(req, res, next) {
 
 function getUserContext(req) {
   const settings = userService.getUserSettings(req.user.id);
-  return {
-    userId: req.user.id,
-    articleRetentionHours: settings.articleRetentionHours,
-    excludedSourceIds: settings.excludedSourceIds,
-    excludedSubSourceIds: settings.excludedSubSourceIds,
-    settings
-  };
+  return buildUserContext(req.user.id, settings);
 }
 
 router.post('/auth/register', [authRateLimit, sanitizeBody(['username'])], asyncHandler(async (req, res) => {

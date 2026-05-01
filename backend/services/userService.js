@@ -3,13 +3,16 @@ const database = require('./database');
 const rssParser = require('./rssParser');
 const websocketService = require('./websocketService');
 const { createError } = require('../utils/errorHandler');
+const { mapWithConcurrency } = require('../utils/concurrency');
+const { parseIntegerEnv } = require('../utils/env');
+const { getProviderIconUrl } = require('../utils/sourceIcons');
 const {
   MAX_FEEDBACK_DESCRIPTION_LENGTH,
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_TITLE_LENGTH,
   MAX_FEEDBACK_VIDEO_BYTES,
 } = require('../utils/feedback');
-const { getConfiguredSourceGroupIds, getGroupedConfiguredSourceIds } = require('../utils/sourceCatalog');
+const { getConfiguredSourceGroupIds, getConfiguredSourceGroups, getGroupedConfiguredSourceIds } = require('../utils/sourceCatalog');
 const {
   hashPassword,
   verifyPassword,
@@ -20,15 +23,17 @@ const {
   API_TOKEN_TTL_DAYS
 } = require('../utils/auth');
 
-const GLOBAL_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
+const GLOBAL_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
 const MAX_RECENT_HOURS = 3;
 const MIN_PASSWORD_LENGTH = 8;
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().slice(0, 40) || 'admin';
-const PASSWORD_SETUP_TTL_MINUTES = parseInt(process.env.PASSWORD_SETUP_TTL_MINUTES || '60', 10);
-const ADMIN_BOOTSTRAP_TTL_MINUTES = parseInt(process.env.ADMIN_BOOTSTRAP_TTL_MINUTES || '30', 10);
-const ONLINE_ACTIVITY_WINDOW_MINUTES = parseInt(process.env.ONLINE_ACTIVITY_WINDOW_MINUTES || '5', 10);
-const ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS = parseInt(process.env.ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS || '5000', 10);
-const ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD = parseInt(process.env.ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD || '100', 10);
+const PASSWORD_SETUP_TTL_MINUTES = parseIntegerEnv('PASSWORD_SETUP_TTL_MINUTES', 60, { min: 1 });
+const ADMIN_BOOTSTRAP_TTL_MINUTES = parseIntegerEnv('ADMIN_BOOTSTRAP_TTL_MINUTES', 30, { min: 1 });
+const ONLINE_ACTIVITY_WINDOW_MINUTES = parseIntegerEnv('ONLINE_ACTIVITY_WINDOW_MINUTES', 5, { min: 0 });
+const ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS = parseIntegerEnv('ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS', 5000, { min: 1000 });
+const ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD = parseIntegerEnv('ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD', 100, { min: 1 });
+const AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS = parseIntegerEnv('AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS', 5000, { min: 1000 });
+const AUTHENTICATED_PUBLIC_USAGE_FLUSH_THRESHOLD = parseIntegerEnv('AUTHENTICATED_PUBLIC_USAGE_FLUSH_THRESHOLD', 50, { min: 1 });
 const SUPPORTED_LANGUAGES = new Set(['auto', 'it', 'en']);
 const SUPPORTED_THEME_MODES = new Set(['system', 'light', 'dark']);
 const SUPPORTED_READER_PANEL_POSITIONS = new Set(['left', 'center', 'right']);
@@ -36,10 +41,55 @@ const SUPPORTED_READER_TEXT_SIZES = new Set(['small', 'medium', 'large']);
 
 let pendingAnonymousPublicApiRequests = 0;
 let lastAnonymousPublicApiUsageFlushAt = Date.now();
+let pendingAuthenticatedPublicApiRequests = new Map();
+let pendingAuthenticatedPublicApiRequestCount = 0;
+let lastAuthenticatedPublicApiUsageFlushAt = Date.now();
+
+function flushAuthenticatedPublicApiUsage({ force = false } = {}) {
+  if (pendingAuthenticatedPublicApiRequestCount <= 0) {
+    return 0;
+  }
+
+  const now = Date.now();
+  if (
+    !force
+    && pendingAuthenticatedPublicApiRequestCount < AUTHENTICATED_PUBLIC_USAGE_FLUSH_THRESHOLD
+    && now - lastAuthenticatedPublicApiUsageFlushAt < AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS
+  ) {
+    return 0;
+  }
+
+  const pendingEntries = [...pendingAuthenticatedPublicApiRequests.entries()];
+  const flushedCount = pendingAuthenticatedPublicApiRequestCount;
+
+  pendingAuthenticatedPublicApiRequests = new Map();
+  pendingAuthenticatedPublicApiRequestCount = 0;
+  lastAuthenticatedPublicApiUsageFlushAt = now;
+
+  try {
+    pendingEntries.forEach(([userId, usage]) => {
+      database.incrementUserPublicApiUsage(userId, usage.usedAt, usage.count);
+    });
+  } catch (error) {
+    pendingEntries.forEach(([userId, usage]) => {
+      const current = pendingAuthenticatedPublicApiRequests.get(userId) || { count: 0, usedAt: usage.usedAt };
+      pendingAuthenticatedPublicApiRequests.set(userId, {
+        count: current.count + usage.count,
+        usedAt: current.usedAt > usage.usedAt ? current.usedAt : usage.usedAt
+      });
+      pendingAuthenticatedPublicApiRequestCount += usage.count;
+    });
+    throw error;
+  }
+
+  return flushedCount;
+}
 
 function flushAnonymousPublicApiUsage({ force = false } = {}) {
+  const flushedAuthenticatedCount = flushAuthenticatedPublicApiUsage({ force });
+
   if (pendingAnonymousPublicApiRequests <= 0) {
-    return 0;
+    return flushedAuthenticatedCount;
   }
 
   const now = Date.now();
@@ -48,7 +98,7 @@ function flushAnonymousPublicApiUsage({ force = false } = {}) {
     && pendingAnonymousPublicApiRequests < ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD
     && now - lastAnonymousPublicApiUsageFlushAt < ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS
   ) {
-    return 0;
+    return flushedAuthenticatedCount;
   }
 
   const incrementBy = pendingAnonymousPublicApiRequests;
@@ -60,7 +110,7 @@ function flushAnonymousPublicApiUsage({ force = false } = {}) {
     pendingAnonymousPublicApiRequests += incrementBy;
     throw error;
   }
-  return incrementBy;
+  return incrementBy + flushedAuthenticatedCount;
 }
 
 function createId() {
@@ -225,19 +275,19 @@ function ensureAdminAccount() {
   return database.findUserById(adminUser.id);
 }
 
-function getDefaultSettings() {
+function getDefaultSettings(overrides = {}) {
   return {
     defaultLanguage: 'auto',
     themeMode: 'system',
     articleRetentionHours: GLOBAL_RETENTION_HOURS,
     recentHours: MAX_RECENT_HOURS,
-    autoRefreshEnabled: true,
     showNewsImages: true,
     compactNewsCards: false,
     compactNewsCardsMode: 'off',
     readerPanelPosition: 'right',
     readerTextSize: 'medium',
     lastSeenReleaseNotesVersion: '',
+    sourceSetupCompleted: overrides.sourceSetupCompleted !== false,
     excludedSourceIds: [],
     excludedSubSourceIds: []
   };
@@ -270,6 +320,7 @@ function buildAuthResponse(user, sessionToken) {
     user: buildUserPayload(user),
     settings: getUserSettings(user.id),
     limits: getUserLimits(),
+    sourceCatalog: getConfiguredSourceGroups(),
     customSources: database.listUserSources(user.id),
     apiToken: getUserApiToken(user.id)
   };
@@ -324,9 +375,6 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     themeMode: normalizeThemeMode(payload.themeMode || currentSettings.themeMode),
     articleRetentionHours,
     recentHours,
-    autoRefreshEnabled: typeof payload.autoRefreshEnabled === 'boolean'
-      ? payload.autoRefreshEnabled
-      : currentSettings.autoRefreshEnabled !== false,
     showNewsImages: typeof payload.showNewsImages === 'boolean'
       ? payload.showNewsImages
       : currentSettings.showNewsImages !== false,
@@ -349,6 +397,9 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     lastSeenReleaseNotesVersion: Object.prototype.hasOwnProperty.call(payload, 'lastSeenReleaseNotesVersion')
       ? normalizeReleaseNotesVersion(payload.lastSeenReleaseNotesVersion)
       : normalizeReleaseNotesVersion(currentSettings.lastSeenReleaseNotesVersion),
+    sourceSetupCompleted: typeof payload.sourceSetupCompleted === 'boolean'
+      ? payload.sourceSetupCompleted
+      : currentSettings.sourceSetupCompleted !== false,
     excludedSourceIds: Array.isArray(overrides.excludedSourceIds)
       ? overrides.excludedSourceIds
       : (Array.isArray(payload.excludedSourceIds)
@@ -360,23 +411,6 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
         ? payload.excludedSubSourceIds.filter(Boolean).slice(0, 60)
         : currentSettings.excludedSubSourceIds)
   };
-}
-
-async function mapWithConcurrency(items = [], concurrency = 4, iteratee = async (item) => item) {
-  const results = [];
-  let nextIndex = 0;
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const currentIndex = nextIndex;
-      nextIndex += 1;
-      results[currentIndex] = await iteratee(items[currentIndex], currentIndex);
-    }
-  }
-
-  const workerCount = Math.min(Math.max(1, concurrency), items.length);
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
-  return results;
 }
 
 async function registerUser(payload = {}) {
@@ -407,7 +441,7 @@ async function registerUser(payload = {}) {
   };
 
   database.createUser(user);
-  database.upsertUserSettings(user.id, getDefaultSettings());
+  database.upsertUserSettings(user.id, getDefaultSettings({ sourceSetupCompleted: false }));
   database.updateUserLogin(user.id, now);
 
   const sessionToken = generateSessionToken();
@@ -457,6 +491,7 @@ function getCurrentUser(userId) {
     user: buildUserPayload(user),
     settings: getUserSettings(userId),
     limits: getUserLimits(),
+    sourceCatalog: getConfiguredSourceGroups(),
     customSources: database.listUserSources(userId),
     apiToken: getUserApiToken(userId)
   };
@@ -533,6 +568,7 @@ async function addUserSource(userId, payload = {}) {
     name,
     url,
     language,
+    iconUrl: preview.iconUrl,
     isActive: true,
     createdAt: now,
     updatedAt: now,
@@ -561,14 +597,17 @@ async function updateUserSource(userId, sourceId, payload = {}) {
   if (!url) {
     throw createError(400, 'RSS URL is required', 'INVALID_SOURCE_PAYLOAD');
   }
+  const urlChanged = url !== existingSource.url;
+  const preview = urlChanged ? await previewUserSource({ url }) : null;
 
-  const preview = await previewUserSource({ url });
   const nextSource = {
-    name: String(payload.name || preview.name || existingSource.name).trim().slice(0, 80),
+    name: String(payload.name || preview?.name || existingSource.name).trim().slice(0, 80),
     url,
-    language: String(payload.language || preview.language || existingSource.language).trim().toLowerCase().slice(0, 5) || existingSource.language,
+    language: String(payload.language || preview?.language || existingSource.language).trim().toLowerCase().slice(0, 5) || existingSource.language,
+    iconUrl: urlChanged ? preview?.iconUrl || getProviderIconUrl(url) : existingSource.iconUrl || getProviderIconUrl(url),
+    isActive: typeof payload.isActive === 'boolean' ? payload.isActive : existingSource.isActive !== false,
     updatedAt: new Date().toISOString(),
-    validatedAt: new Date().toISOString()
+    validatedAt: urlChanged ? new Date().toISOString() : existingSource.validatedAt
   };
 
   if (!nextSource.name) {
@@ -599,6 +638,7 @@ async function previewUserSource(payload = {}) {
     const preview = await rssParser.validateFeedUrl(url);
     return {
       name: preview.title || '',
+      iconUrl: getProviderIconUrl(preview.siteUrl || url),
       language: preview.language || 'it',
       itemCount: preview.itemCount || 0
     };
@@ -627,7 +667,6 @@ function exportUserSettings(userId) {
       themeMode: settings.themeMode || 'system',
       articleRetentionHours: settings.articleRetentionHours,
       recentHours: settings.recentHours,
-      autoRefreshEnabled: settings.autoRefreshEnabled !== false,
       showNewsImages: settings.showNewsImages !== false,
       compactNewsCards: settings.compactNewsCards === true,
       compactNewsCardsMode: normalizeCompactNewsCardsMode(settings.compactNewsCardsMode, settings.compactNewsCards === true ? 'everywhere' : 'off'),
@@ -641,6 +680,8 @@ function exportUserSettings(userId) {
       name: source.name,
       url: source.url,
       language: source.language,
+      iconUrl: source.iconUrl || getProviderIconUrl(source.url),
+      isActive: source.isActive !== false,
       isExcluded: settings.excludedSourceIds.includes(source.id)
     }))
   };
@@ -760,7 +801,13 @@ function listUsersForAdmin() {
 
 function recordPublicApiRequestUsage({ authenticated = false, userId = null, usedAt = new Date().toISOString() } = {}) {
   if (authenticated && userId) {
-    database.incrementUserPublicApiUsage(userId, usedAt);
+    const current = pendingAuthenticatedPublicApiRequests.get(userId) || { count: 0, usedAt };
+    pendingAuthenticatedPublicApiRequests.set(userId, {
+      count: current.count + 1,
+      usedAt: current.usedAt > usedAt ? current.usedAt : usedAt
+    });
+    pendingAuthenticatedPublicApiRequestCount += 1;
+    flushAuthenticatedPublicApiUsage();
     return;
   }
 
@@ -854,7 +901,8 @@ async function importUserSettings(userId, payload = {}) {
       name: String(source.name).trim().slice(0, 80),
       url: String(source.url).trim(),
       language: String(source.language || 'it').trim().toLowerCase().slice(0, 5) || 'it',
-      isActive: true,
+      iconUrl: getProviderIconUrl(source.url),
+      isActive: source.isActive !== false,
       createdAt: now,
       updatedAt: now,
       validatedAt: now,

@@ -102,7 +102,6 @@ describe('API auth and user flows', () => {
         defaultLanguage: 'auto',
         articleRetentionHours: 24,
         recentHours: 3,
-        autoRefreshEnabled: true,
         showNewsImages: true,
         compactNewsCards: false,
         compactNewsCardsMode: 'off',
@@ -341,7 +340,6 @@ describe('API auth and user flows', () => {
         themeMode: 'dark',
         articleRetentionHours: 999,
         recentHours: 999,
-        autoRefreshEnabled: false,
         showNewsImages: false,
         compactNewsCardsMode: 'desktop',
         readerPanelPosition: 'left',
@@ -359,7 +357,6 @@ describe('API auth and user flows', () => {
         themeMode: 'dark',
         articleRetentionHours: 24,
         recentHours: 3,
-        autoRefreshEnabled: false,
         showNewsImages: false,
         compactNewsCards: true,
         compactNewsCardsMode: 'desktop',
@@ -414,6 +411,7 @@ describe('API auth and user flows', () => {
   });
 
   test('serves public cached news anonymously without user context', async () => {
+    const usageSpy = jest.spyOn(userService, 'recordPublicApiRequestUsage');
     newsService.getCachedNewsFeed.mockResolvedValueOnce({
       items: [],
       meta: { hasMore: false },
@@ -436,6 +434,18 @@ describe('API auth and user flows', () => {
       mode: 'anonymous',
       cachedOnly: true
     });
+    expect(usageSpy).toHaveBeenCalledWith({ authenticated: false, userId: null });
+  });
+
+  test('does not record public API usage when cached news lookup fails', async () => {
+    const usageSpy = jest.spyOn(userService, 'recordPublicApiRequestUsage');
+    newsService.getCachedNewsFeed.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await request(app)
+      .get('/api/public/news')
+      .expect(500);
+
+    expect(usageSpy).not.toHaveBeenCalled();
   });
 
   test('only includes public API filter metadata when explicitly requested', async () => {
@@ -452,6 +462,34 @@ describe('API auth and user flows', () => {
 
     expect(newsService.getCachedNewsFeed.mock.calls[0][0]).toEqual(expect.objectContaining({
       includeFilters: true
+    }));
+  });
+
+  test('normalizes unsafe public news pagination before querying cached news', async () => {
+    newsService.getCachedNewsFeed.mockResolvedValue({
+      items: [],
+      meta: { hasMore: false },
+      filters: null
+    });
+
+    await request(app)
+      .get('/api/public/news')
+      .query({ page: '1e309', pageSize: '1e309' })
+      .expect(200);
+
+    expect(newsService.getCachedNewsFeed.mock.calls[0][0]).toEqual(expect.objectContaining({
+      page: 1,
+      pageSize: 12
+    }));
+
+    await request(app)
+      .get('/api/public/news')
+      .query({ page: '999999', pageSize: '999999' })
+      .expect(200);
+
+    expect(newsService.getCachedNewsFeed.mock.calls[1][0]).toEqual(expect.objectContaining({
+      page: 1000,
+      pageSize: 30
     }));
   });
 
@@ -482,6 +520,10 @@ describe('API auth and user flows', () => {
       mode: 'token',
       cachedOnly: true
     });
+
+    expect(database.findUserById(registerResponse.body.user.id).publicApiRequestCount).toBe(0);
+    userService.flushAnonymousPublicApiUsage({ force: true });
+    require('../utils/auth').flushApiTokenUsage({ force: true });
 
     const usageRow = database.getDb().prepare(`
       SELECT public_api_request_count AS publicApiRequestCount,
@@ -794,7 +836,6 @@ describe('API auth and user flows', () => {
           defaultLanguage: 'en',
           articleRetentionHours: 12,
           recentHours: 2,
-          autoRefreshEnabled: false,
           showNewsImages: false,
           compactNewsCards: true,
           compactNewsCardsMode: 'desktop',
@@ -821,7 +862,6 @@ describe('API auth and user flows', () => {
           defaultLanguage: 'en',
           articleRetentionHours: 12,
           recentHours: 2,
-          autoRefreshEnabled: false,
           showNewsImages: false,
           compactNewsCards: true,
           compactNewsCardsMode: 'desktop',

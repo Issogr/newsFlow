@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 /**
  * Custom hook that detects clicks outside an element
@@ -6,6 +6,12 @@ import { useEffect } from 'react';
  * @param {Function} handler - Function to call when clicking outside
  */
 export function useOnClickOutside(ref, handler) {
+  const handlerRef = useRef(handler);
+
+  useEffect(() => {
+    handlerRef.current = handler;
+  }, [handler]);
+
   useEffect(() => {
     const listener = (event) => {
       // Do nothing when the click is inside the element
@@ -13,7 +19,7 @@ export function useOnClickOutside(ref, handler) {
         return;
       }
       
-      handler(event);
+      handlerRef.current(event);
     };
     
     document.addEventListener('mousedown', listener);
@@ -23,5 +29,5 @@ export function useOnClickOutside(ref, handler) {
       document.removeEventListener('mousedown', listener);
       document.removeEventListener('touchstart', listener);
     };
-  }, [ref, handler]);
+  }, [ref]);
 }

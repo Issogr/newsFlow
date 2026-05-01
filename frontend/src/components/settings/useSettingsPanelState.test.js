@@ -5,7 +5,8 @@ import {
   createApiToken,
   deleteUserSource,
   revokeApiToken,
-  updateUserSource
+  updateUserSource,
+  updateUserSettings
 } from '../../services/api';
 
 vi.mock('../../services/api', () => ({
@@ -26,7 +27,6 @@ const baseCurrentUser = {
     themeMode: 'system',
     articleRetentionHours: 24,
     recentHours: 3,
-    autoRefreshEnabled: true,
     showNewsImages: true,
     compactNewsCards: false,
     compactNewsCardsMode: 'off',
@@ -174,5 +174,34 @@ describe('useSettingsPanelState', () => {
       settings: expect.objectContaining({ defaultLanguage: 'en', excludedSourceIds: [] }),
       customSources: []
     }));
+  });
+
+  test('saves only changed settings to avoid stale full-snapshot overwrites', async () => {
+    const onClose = jest.fn();
+    const onUserUpdate = jest.fn();
+    updateUserSettings.mockResolvedValue({
+      settings: {
+        ...baseCurrentUser.settings,
+        defaultLanguage: 'it'
+      }
+    });
+
+    const { result } = renderHook(() => useSettingsPanelState({
+      currentUser: baseCurrentUser,
+      availableSources: [],
+      onClose,
+      onUserUpdate
+    }));
+
+    act(() => {
+      result.current.setDefaultLanguage('it');
+    });
+
+    await act(async () => {
+      await result.current.handleSave();
+    });
+
+    expect(updateUserSettings).toHaveBeenCalledWith({ defaultLanguage: 'it' });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

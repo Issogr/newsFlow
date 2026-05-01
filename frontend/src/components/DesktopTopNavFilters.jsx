@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React from 'react';
 import {
   Clock3,
   Rss,
@@ -7,6 +7,7 @@ import {
   X,
 } from 'lucide-react';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
+import useFilterSurfaceState from '../hooks/useFilterSurfaceState';
 import { SourceFilterList, TopicFilterList } from './FilterOptionLists';
 import TopNavActionButton from './TopNavActionButton';
 
@@ -23,6 +24,7 @@ function TopFilterBubble({ children, open, compact }) {
           : 'pointer-events-none -translate-y-2 opacity-0'
       }`}
       aria-hidden={!open}
+      inert={open ? undefined : ''}
     >
       <div className="max-h-[var(--top-bubble-max-height)] overflow-y-auto overscroll-contain p-4" style={{ '--top-bubble-max-height': TOP_BUBBLE_MAX_HEIGHT }}>
         {children}
@@ -48,74 +50,19 @@ const DesktopTopNavFilters = ({
   closeSignal = 0,
   compact = false,
 }) => {
-  const [openBubble, setOpenBubble] = useState(null);
-  const [searchMode, setSearchMode] = useState(false);
-  const searchInputRef = useRef(null);
-  const wrapperRef = useRef(null);
-  const ignoreNextToggleClickRef = useRef(false);
+  const {
+    closeAll,
+    handleBubbleButtonClick,
+    handleBubbleButtonPress,
+    handleEnterSearch,
+    handleExitSearch,
+    openBubble,
+    searchInputRef,
+    searchMode,
+    surfaceRef,
+  } = useFilterSurfaceState({ onOpenSurface, onSearchClear, closeSignal });
 
-  const closeBubbles = useCallback(() => setOpenBubble(null), []);
-
-  const handleToggleBubble = useCallback((name) => {
-    setSearchMode(false);
-    onOpenSurface?.();
-    setOpenBubble((current) => (current === name ? null : name));
-  }, [onOpenSurface]);
-
-  const handleBubbleButtonPress = useCallback((event, name) => {
-    event.preventDefault();
-    event.stopPropagation();
-    ignoreNextToggleClickRef.current = true;
-    handleToggleBubble(name);
-  }, [handleToggleBubble]);
-
-  const handleBubbleButtonClick = useCallback((event, name) => {
-    event.stopPropagation();
-    if (ignoreNextToggleClickRef.current) {
-      ignoreNextToggleClickRef.current = false;
-      return;
-    }
-
-    handleToggleBubble(name);
-  }, [handleToggleBubble]);
-
-  const handleEnterSearch = useCallback(() => {
-    closeBubbles();
-    onOpenSurface?.();
-    setSearchMode(true);
-  }, [closeBubbles, onOpenSurface]);
-
-  const handleExitSearch = useCallback(() => {
-    setSearchMode(false);
-    onSearchClear();
-  }, [onSearchClear]);
-
-  useOnClickOutside(wrapperRef, () => {
-    closeBubbles();
-    setSearchMode(false);
-  });
-
-  useEffect(() => {
-    if (searchMode && searchInputRef.current) {
-      searchInputRef.current.focus();
-    }
-  }, [searchMode]);
-
-  useEffect(() => {
-    closeBubbles();
-    setSearchMode(false);
-  }, [closeBubbles, closeSignal]);
-
-  useEffect(() => {
-    if (!openBubble) {
-      return undefined;
-    }
-
-    const handleScroll = () => setOpenBubble(null);
-    window.addEventListener('scroll', handleScroll, { passive: true });
-
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [openBubble]);
+  useOnClickOutside(surfaceRef, () => closeAll({ closeSearch: true }));
 
   const sourceCount = activeFilters.sourceIds.length;
   const topicCount = activeFilters.topics.length;
@@ -123,7 +70,7 @@ const DesktopTopNavFilters = ({
   const searchCount = search ? 1 : 0;
 
   return (
-    <div ref={wrapperRef} className="relative hidden md:block">
+    <div ref={surfaceRef} className="relative hidden md:block">
       <TopFilterBubble open={openBubble === 'sources'} compact={compact}>
         <SourceFilterList
           sources={visibleSources}

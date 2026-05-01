@@ -1,5 +1,53 @@
 # Changelog
 
+## 3.3
+
+- refreshed news cards into a single social-style layout that keeps source icons, dates, topics, sharing, reader mode, original links, and image-disable behavior without a separate compact card style
+- refreshed the built-in RSS catalog by keeping ANSA and Il Sole 24 Ore economy/finance, adding Il Post, Open, Il Fatto Quotidiano, Fanpage, Wired Italia, BBC News, The Verge, and The Guardian, removing older unused defaults, and asking every user to reselect sources from an initially disabled catalog
+- removed custom RSS sources that duplicate newly built-in feed URLs during migration so users do not keep two copies of the same provider
+- made feed pagination operate on grouped story cards instead of raw articles, so pages stay filled consistently and related articles are not split by the underlying article cursor
+- counted public API usage only after cached feed reads complete successfully, avoiding inflated usage totals from failed requests
+- split BFF session, cookie, and proxy helper code into focused modules and removed an unused grouping helper to reduce drift in security-sensitive paths
+
+## 3.2.13.4
+
+- added a one-time built-in RSS source setup step for newly registered users, persisted with `source_setup_completed`, so unselected configured source groups are saved as exclusions before the first feed load while existing users keep their current setup
+- exposed the configured source catalog in authenticated user payloads so first-run source selection does not require an initial news query
+- added explicit reusable `iconUrl` metadata to configured source catalog responses and custom user sources, including a `user_sources.icon_url` schema migration, so source favicons can be reused outside the onboarding wizard
+- derived and persisted favicon URLs when custom RSS feeds are added, updated, exported, or imported while preserving the existing source validation flow
+- rendered source favicons in source filter chips and settings source controls, backed by shared frontend icon fallback handling and `iconUrl` in source stats
+- replaced NewsCard source text pills with a top-left stacked favicon overlay and hydrated article payloads with `sourceIconUrl` so multi-source story cards can show one provider icon per source
+
+## 3.2.13.3
+
+- kept normal feed reads read-only by moving article cleanup out of the cached request path, queued manual source refreshes asynchronously, and sent a completion refresh event so users are not blocked by slow RSS sources
+- restored story grouping for matching articles across sources, batching related cards by normalized URL/title windows while preserving cursor pagination over the underlying articles
+- reduced public API SQLite write pressure by batching authenticated usage counters and API-token last-used updates, matching the existing anonymous usage buffering model
+- made custom-source metadata edits independent from upstream RSS availability when the source URL is unchanged, and guarded locale persistence when browser storage is unavailable
+- closed audit findings around AI topic caps, env parsing, BFF forwarded headers, stale BFF session-user rows, and hop-by-hop response headers so edge-case runtime behavior is safer and more predictable
+- reduced duplicated/dead code across release-note dismissal, sharing status, backend user contexts, JSON parsing, AI classifier exports, reader props, and stale i18n metadata
+- optimized removed-source cleanup and chunked article/topic ID lookups to avoid broad per-row SQLite work and oversized `IN` queries as data grows
+- hardened news pagination parsing against non-finite or excessive page values before SQLite queries, added hot-path article/topic indexes, and removed the stale unused `MAX_SCAN_ARTICLES` runtime setting
+- reduced duplicate feed loads, preserved filtered WebSocket subscriptions across reconnects, cleared stale reader-mode errors when cached content is available, encoded reader article ids in client routes, and flushed buffered anonymous public API counters during graceful shutdown
+- hardened feed search, retention parsing, private-source metadata, and public feed pagination metadata so edge-case queries and API responses stay predictable
+- reduced scheduled RSS refresh latency by skipping article-page image fallback fetches during ingestion while preserving normal RSS-provided images
+- tightened the BFF trust boundary by deriving forwarded headers from the direct socket, rejecting plaintext backend-session payloads, refreshing WebSocket-authenticated sessions, and making the direct Compose BFF avoid proxy-header trust
+- stopped long feed sessions from offering Load more once the retained-card cap is reached, preventing discarded extra page fetches
+- added a real frontend ESLint hooks lint script and shared filter-surface state between desktop and mobile controls to reduce behavior drift
+- made authenticated feed filter metadata explicit instead of defaulting every news read into source/topic aggregate queries, reducing SQLite work for item-only requests while keeping the frontend filter catalog opt-in
+- preserved reader-mode article content across close/reopen cycles and capped retained feed groups in long sessions to reduce repeated reader extraction and oversized browser renders
+- corrected long-session feed retention so appended pagination keeps the newest groups instead of dropping the top of the feed once the retained-card cap is reached
+- bounded reader-mode article payload caching, removed fragile multipart feedback headers, and made hidden filter/search panels inert so keyboard focus cannot enter invisible controls
+- made settings saves patch only changed fields so stale Settings drafts no longer overwrite reader-size or release-note preferences changed elsewhere in the session
+- improved ingestion failure accounting by letting RSS parse failures reach the ingestion runner, marking tracked runs as degraded on partial failures, and failing all-source outages instead of recording misleading success
+- persisted failed AI topic-processing attempts so repeatedly failing articles do not stay indefinitely pending across refreshes
+- avoided unnecessary article FTS rewrites when an upsert does not change searchable text, reducing write pressure during ingestion
+- reduced ingestion duplicate-matching query pressure by prefetching canonical/title candidates per owner/source group and consolidated duplicated user-settings upsert mapping
+- preserved custom-source active state through update/export/import paths instead of forcing imported sources active
+- fixed schema migration version tracking so partially completed migrations cannot mark the database as current before later schema steps finish
+- hardened the public API proxy path by rebuilding forwarded headers at the BFF boundary instead of passing caller-supplied forwarding metadata to backend rate limits
+- consolidated backend bounded-concurrency helpers, added structured BFF proxy errors, fixed the BFF multi-arch Docker dependency stage, waited for a healthy backend in Compose, routed dev API traffic through the BFF, and added release-workflow validation before image publishing
+
 ## 3.2.13.2
 
 - reworked topic badge colors into a softer pastel palette with stronger per-topic separation so Politics, Economy, Technology, Science, Sport, Culture, Health, Local news, Entertainment, World, Climate, and Security remain easy to distinguish at a glance
@@ -20,8 +68,8 @@
 
 ## 3.2.13.1
 
-- broadcast a lightweight live feed reload after background AI topic-classification runs finish so topic pills, AI-classified topic markers, and topic-filtered results refresh without a manual page reload when live auto refresh is active
-- changed the initial app feed load to detect when an open-triggered assigned-source refresh is still running and perform one automatic follow-up reload, so users without live auto refresh are less likely to stay on stale cached news until they refresh manually
+- broadcast a lightweight live feed reload after background AI topic-classification runs finish so topic pills, AI-classified topic markers, and topic-filtered results refresh without a manual page reload when live updates are active
+- changed the initial app feed load to detect when an open-triggered assigned-source refresh is still running and perform one automatic follow-up reload, so users in manual-refresh mode are less likely to stay on stale cached news until they refresh manually
 - tightened article deduplication for sibling source variants by reusing an existing recent article when the same source family republishes the same normalized title under a different URL, reducing fake new-article inserts and unnecessary AI topic-classifier work
 - preserved the user's viewport during live auto-refresh feed updates, compensating scroll position both when new article cards are prepended and when topic-refresh reloads update the current feed so readers are not yanked back to the top
 - added an opt-in `AI_TOPIC_DEBUG_LOG_ARTICLES` backend environment flag for local Docker Compose runs so development logs can show which article ids and titles each AI topic-classification batch processed without enabling that extra detail by default
@@ -152,7 +200,7 @@
 - simplified the reader toolbar by moving `Share` into a compact top-left icon action, replacing the text-size dropdown with a `- aA +` stepper, and removing extra header actions that competed with the reading flow
 - widened the reader content column, tightened the side gutters, and fixed dark-mode header/title surfaces so the reading panel uses more space without losing its calm layout
 - added a direct reader shortcut on news cards so a double click on desktop or double tap on mobile over the image or title now opens reader mode without needing the footer button
-- aligned the `Auto refresh news` and `Show card images` settings rows with the rest of the preferences UI and replaced the plain checkboxes with compact state pills that fit the refreshed settings visual language better
+- aligned the image-display settings row with the rest of the preferences UI and replaced plain checkboxes with compact state pills that fit the refreshed settings visual language better
 - removed the temporary `news_aggregator` rename migration code and the legacy DB schema upgrade ladder so startup and persistence handling now target only the current `newsflow` naming and schema baseline
 - changed the default scheduled ingestion interval from 5 minutes to 15 minutes to reduce upstream request pressure while keeping news reasonably fresh by default
 
@@ -180,7 +228,7 @@
 
 ## 3.2.6.1
 
-- simplified manual refresh behavior again by removing the refresh-button pending-update hint and keeping the button as a straightforward reload action when auto refresh is off
+- simplified manual refresh behavior again by removing the refresh-button pending-update hint and keeping the button as a straightforward reload action
 - refined the sticky search-and-filter surface so the dropdown now feels like a connected extension of the main bubble, animates open more smoothly, and can scroll internally when filters exceed the viewport height
 - adjusted news-card action buttons so `Reader` and `Share` use the same compact icon treatment on both desktop and mobile, while `Open article` remains the primary action
 
@@ -197,7 +245,7 @@
 - fixed live-update pagination drift by adding cursor-based news loading so prepended real-time groups no longer break `Load more` ordering or cause duplicate-heavy paging
 - reduced feed-query overhead and improved pagination accuracy by avoiding repeated intermediate resorting in grouped queries and by returning `hasMore` only when another page is actually reachable
 - reduced WebSocket fanout work by batching sockets with identical subscriptions and bounded browser-side live-update dedupe tracking so long-running tabs no longer retain every seen group id forever
-- fixed manual-refresh mode so the app still listens for live updates with auto refresh disabled, allowing the refresh button indicator to signal newly available news again
+- fixed manual-refresh mode so the app still listens for live updates, allowing the refresh button indicator to signal newly available news again
 - added a clear-search control inside the main search field and removed the `Updated` status chip from the header area to simplify the top-bar UI
 - removed the manual `Refresh reader` action from reader mode so the reading toolbar stays focused on opening the original article
 - moved filters directly below the search bar, made the search-and-filter controls sticky for easier access while scrolling, and prevented the expanded filter panel from pushing page content down

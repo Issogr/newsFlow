@@ -23,7 +23,7 @@ services:
       - INTERNAL_SERVICE_NAME=${INTERNAL_SERVICE_NAME:-bff}
       - ALLOWED_ORIGINS=http://localhost,http://localhost:80,http://127.0.0.1,http://127.0.0.1:80,@local-network
       - TRUST_PROXY=true
-      - APP_BASE_URL=http://localhost
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
       - NEWS_DB_PATH=/usr/src/app/data/news.db
       - ADMIN_USERNAME=admin
       # Performance tuning variables
@@ -44,7 +44,6 @@ services:
       - SCRAPE_INTERVAL_MS=900000   # Balanced scraping interval (15 min)
       - SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES=${SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES:-5}
       - ARTICLE_RETENTION_HOURS=24  # Delete articles and cache entries older than 24 hours
-      - MAX_SCAN_ARTICLES=600       # Maximum number of articles to scan for grouped queries
       # WebSocket configuration
       - WS_PING_TIMEOUT=60000       # WebSocket ping timeout (ms)
       - WS_PING_INTERVAL=25000      # Interval between WebSocket pings (ms)
@@ -89,13 +88,13 @@ services:
       - BFF_SESSION_SECRET=${BFF_SESSION_SECRET:?BFF_SESSION_SECRET must be set}
       - INTERNAL_SERVICE_NAME=${INTERNAL_SERVICE_NAME:-bff}
       - BACKEND_BASE_URL=http://backend:5000
-      - APP_BASE_URL=http://localhost
-      - TRUST_PROXY=true
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
+      - TRUST_PROXY=false
     depends_on:
       init-permissions:
         condition: service_completed_successfully
       backend:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - bff-data:/app/bff/data
     networks:

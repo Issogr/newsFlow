@@ -2,6 +2,12 @@ jest.mock('axios', () => ({
   get: jest.fn()
 }));
 
+jest.mock('dns', () => ({
+  promises: {
+    lookup: jest.fn()
+  }
+}));
+
 jest.mock('../utils/logger', () => ({
   info: jest.fn(),
   warn: jest.fn(),
@@ -9,11 +15,66 @@ jest.mock('../utils/logger', () => ({
   debug: jest.fn()
 }));
 
+const { Readable } = require('stream');
+const axios = require('axios');
+const dns = require('dns').promises;
 const rssParser = require('./rssParser');
 
 describe('rssParser article ids', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   afterAll(() => {
     rssParser.shutdown();
+  });
+
+  test('fetches feeds with browser-like RSS request headers', async () => {
+    dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    axios.get.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: Readable.from([`
+        <rss version="2.0">
+          <channel>
+            <title>Example</title>
+            <item>
+              <title>Story</title>
+              <link>https://example.com/story</link>
+              <pubDate>Fri, 01 May 2026 10:00:00 GMT</pubDate>
+            </item>
+          </channel>
+        </rss>
+      `])
+    });
+
+    await expect(rssParser.parseFeed(
+      { id: 'example', name: 'Example', url: 'https://example.com/feed' },
+      { imageFallback: false, throwOnError: true }
+    )).resolves.toHaveLength(1);
+
+    expect(axios.get.mock.calls[0][1].headers).toMatchObject({
+      'User-Agent': expect.stringContaining('Mozilla/5.0'),
+      Accept: expect.stringContaining('application/rss+xml'),
+      'Sec-Fetch-Mode': 'cors'
+    });
+    expect(axios.get.mock.calls[0][1].headers).not.toHaveProperty('Accept-Language');
+  });
+
+  test('does not retry permanent feed fetch failures', async () => {
+    dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    axios.get.mockResolvedValue({
+      status: 403,
+      headers: {},
+      data: Readable.from(['Forbidden'])
+    });
+
+    await expect(rssParser.parseFeed(
+      { id: 'forbidden', name: 'Forbidden', url: 'https://forbidden.example/feed' },
+      { throwOnError: true }
+    )).rejects.toMatchObject({ status: 403 });
+
+    expect(axios.get).toHaveBeenCalledTimes(1);
   });
 
   test('keeps the same id when the guid is stable but pubDate changes', () => {

@@ -2,20 +2,21 @@ const rssParser = require('./rssParser');
 const database = require('./database');
 const logger = require('../utils/logger');
 const websocketService = require('./websocketService');
+const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const {
-  classifyTopicDetailsForArticles,
   classifyTopicDetailsForArticlesWithStatus,
   isAiTopicDetectionAvailable
 } = require('./aiTopicClassifier');
 const { createError } = require('../utils/errorHandler');
+const { parseIntegerEnv } = require('../utils/env');
 const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const {
   normalizeIncomingArticles,
   buildInsertedGroupsByOwner
 } = require('./newsAggregatorGrouping');
 
-const ARTICLE_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
-const RSS_INGESTION_CONCURRENCY = Math.max(1, parseInt(process.env.RSS_INGESTION_CONCURRENCY || '8', 10) || 8);
+const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24, { min: 0 });
+const RSS_INGESTION_CONCURRENCY = parseIntegerEnv('RSS_INGESTION_CONCURRENCY', 8, { min: 1 });
 const pendingAiTopicProcessingIds = new Set();
 
 function filterArticlesWithinRetention(articles = []) {
@@ -44,34 +45,6 @@ function filterArticlesWithinRetention(articles = []) {
 
     return publishedAt >= cutoff;
   });
-}
-
-async function mapSettledWithConcurrency(items = [], concurrency = RSS_INGESTION_CONCURRENCY, mapper) {
-  const results = new Array(items.length);
-  let nextIndex = 0;
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const currentIndex = nextIndex;
-      nextIndex += 1;
-
-      try {
-        results[currentIndex] = {
-          status: 'fulfilled',
-          value: await mapper(items[currentIndex], currentIndex)
-        };
-      } catch (reason) {
-        results[currentIndex] = {
-          status: 'rejected',
-          reason
-        };
-      }
-    }
-  }
-
-  const workerCount = Math.min(Math.max(1, concurrency), items.length);
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
-  return results;
 }
 
 function purgeExpiredArticles() {
@@ -163,7 +136,10 @@ function buildSourceFetchTasks(sourceConfigs = []) {
 }
 
 async function fetchSourceTask(task) {
-  const parsedArticles = await rssParser.parseFeed(task.fetchSource);
+  const parsedArticles = await rssParser.parseFeed(task.fetchSource, {
+    imageFallback: false,
+    throwOnError: true
+  });
 
   if (!task.fanOut) {
     return parsedArticles;
@@ -201,18 +177,13 @@ async function processAiTopicsForPendingArticles(articles = []) {
   };
 
   try {
-    const classification = typeof classifyTopicDetailsForArticlesWithStatus === 'function'
-      ? await classifyTopicDetailsForArticlesWithStatus(articles)
-      : {
-        topicsByArticleId: await classifyTopicDetailsForArticles(articles),
-        attemptedArticleIds: articleIds,
-        failedArticleIds: []
-      };
+    const classification = await classifyTopicDetailsForArticlesWithStatus(articles);
     const topicsByArticleId = classification.topicsByArticleId || new Map();
     const attemptedArticleIds = Array.isArray(classification.attemptedArticleIds)
       ? classification.attemptedArticleIds
       : articleIds;
     const failedArticleIds = new Set(classification.failedArticleIds || []);
+    const cappedArticleIds = new Set(classification.cappedArticleIds || []);
     const classifiedIds = [];
     const topicEntries = [];
 
@@ -236,8 +207,11 @@ async function processAiTopicsForPendingArticles(articles = []) {
       attemptedArticleIds.filter((articleId) => !classifiedIds.includes(articleId) && !failedArticleIds.has(articleId)),
       'no_topics'
     );
+    database.markArticlesAiTopicProcessing([...failedArticleIds], 'failed');
+    database.markArticlesAiTopicProcessing([...cappedArticleIds], 'deferred');
   } catch (error) {
     logger.warn(`Background AI topic processing failed: ${error.message}`);
+    database.markArticlesAiTopicProcessing(articleIds, 'failed');
   } finally {
     articleIds.forEach((articleId) => pendingAiTopicProcessingIds.delete(articleId));
   }
@@ -330,12 +304,17 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
 
     const sourceFetchTasks = buildSourceFetchTasks(sourceConfigs);
     const results = await mapSettledWithConcurrency(sourceFetchTasks, RSS_INGESTION_CONCURRENCY, fetchSourceTask);
+    const failedResults = results.filter((result) => result.status === 'rejected');
     const fetchedArticles = results
       .filter((result) => result.status === 'fulfilled')
       .flatMap((result) => result.value);
     const normalizedArticles = normalizeIncomingArticles(fetchedArticles);
 
     if (failWhenEmpty && normalizedArticles.length === 0 && database.countArticles() === 0) {
+      throw createError(503, 'Unable to connect to news feeds. Please try again later.', 'CONNECTION_ERROR');
+    }
+
+    if (sourceFetchTasks.length > 0 && failedResults.length === sourceFetchTasks.length) {
       throw createError(503, 'Unable to connect to news feeds. Please try again later.', 'CONNECTION_ERROR');
     }
 
@@ -362,10 +341,13 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
 
     if (ingestionRun) {
       database.completeIngestionRun(ingestionRun.id, {
-        status: 'completed',
+        status: failedResults.length > 0 ? 'degraded' : 'completed',
         fetchedCount: payload.fetchedCount,
         insertedCount: payload.insertedCount,
-        updatedCount: payload.updatedCount
+        updatedCount: payload.updatedCount,
+        errorMessage: failedResults.length > 0
+          ? `${failedResults.length} of ${sourceFetchTasks.length} feeds failed`
+          : null
       });
     }
 

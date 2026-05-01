@@ -6,6 +6,7 @@ const { asyncHandler } = require('../utils/errorHandler');
 const { sanitizeQuery } = require('../utils/inputValidator');
 const { resolveOptionalExternalApiPrincipal } = require('../utils/auth');
 const { parseNewsQuery } = require('../utils/newsQuery');
+const { buildUserContext } = require('../utils/userContext');
 
 const router = express.Router();
 
@@ -63,22 +64,11 @@ const authenticatedPublicNewsRateLimit = rateLimit({
 function getExternalUserContext(req) {
   const userId = req.externalApi?.user?.id;
   if (!userId) {
-    return {
-      userId: null,
-      articleRetentionHours: null,
-      excludedSourceIds: [],
-      excludedSubSourceIds: []
-    };
+    return buildUserContext(null);
   }
 
   const settings = userService.getUserSettings(userId);
-  return {
-    userId,
-    articleRetentionHours: settings.articleRetentionHours,
-    excludedSourceIds: settings.excludedSourceIds,
-    excludedSubSourceIds: settings.excludedSubSourceIds,
-    settings
-  };
+  return buildUserContext(userId, settings);
 }
 
 const preAuthPublicNewsRateLimit = rateLimit({
@@ -106,11 +96,11 @@ router.get('/news', [
 ], asyncHandler(async (req, res) => {
   const filters = parseNewsQuery(req.query);
   filters.includeFilters = req.query.includeFilters === 'true';
+  const result = await newsService.getCachedNewsFeed(filters, getExternalUserContext(req));
   userService.recordPublicApiRequestUsage({
     authenticated: Boolean(req.externalApi?.authenticated),
     userId: req.externalApi?.user?.id || null
   });
-  const result = await newsService.getCachedNewsFeed(filters, getExternalUserContext(req));
 
   res.json({
     ...result,

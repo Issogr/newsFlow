@@ -52,7 +52,6 @@ describe('userService imports', () => {
         themeMode: 'dark',
         articleRetentionHours: 12,
         recentHours: 2,
-        autoRefreshEnabled: false,
         showNewsImages: false,
         compactNewsCards: true,
         compactNewsCardsMode: 'everywhere',
@@ -77,7 +76,6 @@ describe('userService imports', () => {
         themeMode: 'dark',
         articleRetentionHours: 12,
         recentHours: 2,
-        autoRefreshEnabled: false,
         showNewsImages: false,
         compactNewsCards: true,
         compactNewsCardsMode: 'everywhere',
@@ -100,7 +98,6 @@ describe('userService imports', () => {
       themeMode: 'dark',
       articleRetentionHours: 12,
       recentHours: 2,
-      autoRefreshEnabled: false,
       showNewsImages: false,
       readerPanelPosition: 'left',
       readerTextSize: 'large',
@@ -118,7 +115,6 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      autoRefreshEnabled: false,
       recentHours: 2,
       readerTextSize: 'small'
     });
@@ -130,7 +126,6 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      autoRefreshEnabled: false,
       recentHours: 2,
       readerTextSize: 'small'
     });
@@ -140,7 +135,6 @@ describe('userService imports', () => {
     expect(importedState.settings).toMatchObject({
       themeMode: 'dark',
       showNewsImages: false,
-      autoRefreshEnabled: false,
       recentHours: 2,
       readerTextSize: 'small'
     });
@@ -149,7 +143,6 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      autoRefreshEnabled: false,
       recentHours: 2
     });
   });
@@ -158,6 +151,27 @@ describe('userService imports', () => {
     await expect(userService.registerUser({ username: 'bob', password: '' })).rejects.toMatchObject({
       status: 400,
       code: 'INVALID_PASSWORD'
+    });
+  });
+
+  test('marks newly registered users for one-time source setup', async () => {
+    const authPayload = await userService.registerUser({ username: 'setup-user', password: 'secret123' });
+
+    expect(authPayload.settings).toMatchObject({
+      sourceSetupCompleted: false,
+      excludedSourceIds: [],
+      excludedSubSourceIds: []
+    });
+    expect(authPayload.sourceCatalog.length).toBeGreaterThan(0);
+
+    const updated = userService.updateUserSettings(authPayload.user.id, {
+      sourceSetupCompleted: true,
+      excludedSourceIds: [authPayload.sourceCatalog[0].id]
+    });
+
+    expect(updated).toMatchObject({
+      sourceSetupCompleted: true,
+      excludedSourceIds: [authPayload.sourceCatalog[0].id]
     });
   });
 
@@ -182,6 +196,50 @@ describe('userService imports', () => {
     await expect(userService.loginUser({ username: 'legacy-user', password: 'anything' })).rejects.toMatchObject({
       status: 401,
       code: 'UNAUTHORIZED'
+    });
+  });
+
+  test('updates custom-source metadata without revalidating the unchanged RSS URL', async () => {
+    const authPayload = await userService.registerUser({ username: 'source-owner', password: 'secret123' });
+
+    rssParser.validateFeedUrl.mockResolvedValueOnce({ title: 'Original Feed', siteUrl: 'https://example.com', language: 'en', itemCount: 4 });
+    const source = await userService.addUserSource(authPayload.user.id, {
+      url: 'https://example.com/feed.xml'
+    });
+
+    expect(source.iconUrl).toBe('https://example.com/favicon.ico');
+
+    rssParser.validateFeedUrl.mockClear();
+    rssParser.validateFeedUrl.mockRejectedValue(new Error('upstream offline'));
+
+    const updated = await userService.updateUserSource(authPayload.user.id, source.id, {
+      name: 'Renamed Feed',
+      isActive: false
+    });
+
+    expect(rssParser.validateFeedUrl).not.toHaveBeenCalled();
+    expect(updated).toMatchObject({
+      name: 'Renamed Feed',
+      url: 'https://example.com/feed.xml',
+      iconUrl: 'https://example.com/favicon.ico',
+      isActive: false
+    });
+  });
+
+  test('batches authenticated public API usage until an explicit flush', async () => {
+    const authPayload = await userService.registerUser({ username: 'api-user', password: 'secret123' });
+    const userId = authPayload.user.id;
+
+    userService.recordPublicApiRequestUsage({ authenticated: true, userId, usedAt: '2026-03-07T10:00:00.000Z' });
+    userService.recordPublicApiRequestUsage({ authenticated: true, userId, usedAt: '2026-03-07T10:01:00.000Z' });
+
+    expect(database.findUserById(userId).publicApiRequestCount).toBe(0);
+
+    userService.flushAnonymousPublicApiUsage({ force: true });
+
+    expect(database.findUserById(userId)).toMatchObject({
+      publicApiRequestCount: 2,
+      publicApiLastUsedAt: '2026-03-07T10:01:00.000Z'
     });
   });
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock3, Globe2, Image as ImageIcon, MonitorSmartphone, PanelRightOpen, Radio, RectangleHorizontal, TimerReset, Type } from 'lucide-react';
+import { Clock3, Globe2, Image as ImageIcon, MonitorSmartphone, PanelRightOpen, Radio, TimerReset, Type } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORDER } from '../../config/readerTextSize';
 
@@ -10,7 +10,6 @@ const SettingsPreferencesSection = ({
   onDefaultLanguageChange,
   onThemeModeChange,
   onShowNewsImagesChange,
-  onCompactNewsCardsModeChange,
   onReaderPanelPositionChange,
   onReaderTextSizeChange,
   onNumericSettingChange
@@ -150,23 +149,6 @@ const SettingsPreferencesSection = ({
             </span>
           </button>
         </div>
-
-        <label className="block">
-          <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
-            <RectangleHorizontal className="h-4 w-4 text-cyan-600" />
-            {t('compactNewsCardsSetting')}
-          </span>
-          <select
-            value={settings.compactNewsCardsMode || 'off'}
-            onChange={(event) => onCompactNewsCardsModeChange(event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-          >
-            <option value="off">{t('compactNewsCardsModeOff')}</option>
-            <option value="mobile">{t('compactNewsCardsModeMobile')}</option>
-            <option value="desktop">{t('compactNewsCardsModeDesktop')}</option>
-            <option value="everywhere">{t('compactNewsCardsModeEverywhere')}</option>
-          </select>
-        </label>
       </div>
     </SettingsSectionCard>
   );

@@ -13,12 +13,14 @@ const newsService = require('./services/newsAggregator');
 const rssParser = require('./services/rssParser');
 const userService = require('./services/userService');
 const { errorMiddleware, createError } = require('./utils/errorHandler');
+const { parseIntegerEnv } = require('./utils/env');
 const { getAllowedOrigins, isOriginAllowed } = require('./utils/networkConfig');
 const { hasTrustedInternalService } = require('./utils/internalRequestGate');
+const { flushApiTokenUsage } = require('./utils/auth');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const SERVER_TIMEOUT = parseInt(process.env.SERVER_TIMEOUT || '60000', 10);
+const SERVER_TIMEOUT = parseIntegerEnv('SERVER_TIMEOUT', 60000, { min: 1000 });
 const allowedOrigins = getAllowedOrigins();
 
 function redactSensitiveValues(value) {
@@ -155,6 +157,12 @@ server.headersTimeout = 66000;
 process.on('SIGTERM', () => {
   logger.info('SIGTERM ricevuto. Shutdown graceful in corso...');
   newsService.stopScheduler();
+  try {
+    userService.flushAnonymousPublicApiUsage({ force: true });
+    flushApiTokenUsage({ force: true });
+  } catch (error) {
+    logger.warn(`Public API usage flush failed during shutdown: ${error.message}`);
+  }
   rssParser.shutdown();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 10000);

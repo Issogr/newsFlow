@@ -5,7 +5,7 @@ const path = require('path');
 const express = require('express');
 const cookieSignature = require('cookie-signature');
 const request = require('supertest');
-const { createApp, getBffSessionSecret, isValidSessionPayload, unsignSessionId } = require('./server');
+const { createApp, encryptBackendSessionCookie, getBffSessionSecret, isValidSessionPayload, unsignSessionId } = require('./server');
 
 function createFrontendDist() {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'newsflow-bff-frontend-'));
@@ -49,6 +49,7 @@ describe('bff server', () => {
     process.env.INTERNAL_PROXY_TOKEN = 'test-proxy-token';
     process.env.INTERNAL_SERVICE_NAME = 'bff';
     process.env.SESSION_STORE_CLEAR_INTERVAL_MS = '0';
+    process.env.TRUST_PROXY = 'true';
 
     const backendApp = express();
     backendApp.use(express.json());
@@ -90,6 +91,10 @@ describe('bff server', () => {
       res.json({ user });
     });
 
+    backendApp.get('/internal-api/broken-stream', (req, res) => {
+      req.socket.destroy();
+    });
+
     backendApp.delete('/internal-api/admin/users/:userId', (req, res) => {
       lastBackendHeaders = req.headers;
       const actingUser = backendSessions.get(String(req.headers.cookie || ''));
@@ -121,6 +126,7 @@ describe('bff server', () => {
     });
 
     backendApp.get('/api/public/ping', (req, res) => {
+      lastBackendHeaders = req.headers;
       res.json({ ok: true });
     });
 
@@ -156,6 +162,7 @@ describe('bff server', () => {
     delete process.env.INTERNAL_PROXY_TOKEN;
     delete process.env.INTERNAL_SERVICE_NAME;
     delete process.env.SESSION_STORE_CLEAR_INTERVAL_MS;
+    delete process.env.TRUST_PROXY;
     if (originalNodeEnv === undefined) {
       delete process.env.NODE_ENV;
     } else {
@@ -358,6 +365,42 @@ describe('bff server', () => {
     expect(response.body).toEqual({ ok: true });
   });
 
+  test('rebuilds forwarded headers on public API routes from trusted request values', async () => {
+    await request(app)
+      .get('/api/public/ping')
+      .set('X-Forwarded-For', '203.0.113.99')
+      .set('X-Forwarded-Host', 'evil.example')
+      .set('X-Forwarded-Proto', 'https')
+      .expect(200);
+
+    expect(lastBackendHeaders['x-forwarded-for']).toContain('203.0.113.99');
+    expect(lastBackendHeaders['x-forwarded-host']).not.toBe('evil.example');
+    expect(lastBackendHeaders['x-forwarded-proto']).toBe('https');
+  });
+
+  test('rebuilds forwarded headers on authenticated app routes from trusted request values', async () => {
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', '203.0.113.99')
+      .set('X-Forwarded-Host', 'evil.example')
+      .set('X-Forwarded-Proto', 'https')
+      .send({ username: 'alice', password: 'secret123' })
+      .expect(200);
+    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+
+    await request(app)
+      .get('/api/me')
+      .set('Cookie', bffSessionCookie)
+      .set('X-Forwarded-For', '203.0.113.99')
+      .set('X-Forwarded-Host', 'evil.example')
+      .set('X-Forwarded-Proto', 'https')
+      .expect(200);
+
+    expect(lastBackendHeaders['x-forwarded-for']).toContain('203.0.113.99');
+    expect(lastBackendHeaders['x-forwarded-host']).not.toBe('evil.example');
+    expect(lastBackendHeaders['x-forwarded-proto']).toBe('https');
+  });
+
   test('streams multipart feedback through the authenticated app proxy', async () => {
     const loginResponse = await request(app)
       .post('/api/auth/login')
@@ -395,6 +438,24 @@ describe('bff server', () => {
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
   });
 
+  test('returns structured JSON when the app proxy fails upstream', async () => {
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'alice', password: 'secret123' })
+      .expect(200);
+    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+
+    const response = await request(app)
+      .get('/api/broken-stream')
+      .set('Cookie', bffSessionCookie)
+      .expect(502);
+
+    expect(response.body.error).toEqual({
+      message: 'Unable to reach the application backend.',
+      code: 'BFF_UPSTREAM_ERROR',
+    });
+  });
+
   test('requires a non-default BFF session secret in production', () => {
     process.env.NODE_ENV = 'production';
     delete process.env.BFF_SESSION_SECRET;
@@ -412,7 +473,10 @@ describe('bff server', () => {
   });
 
   test('validates the stored session payload schema version', () => {
-    expect(isValidSessionPayload({ version: 1, backendSessionCookie: 'newsflow_session=abc' })).toBe(true);
+    const encryptedCookie = encryptBackendSessionCookie('newsflow_session=abc');
+
+    expect(isValidSessionPayload({ version: 1, backendSessionCookie: encryptedCookie })).toBe(true);
+    expect(isValidSessionPayload({ version: 1, backendSessionCookie: 'newsflow_session=abc' })).toBe(false);
     expect(isValidSessionPayload({ version: 2, backendSessionCookie: 'newsflow_session=abc' })).toBe(false);
     expect(isValidSessionPayload({ version: 1, backendSessionCookie: '' })).toBe(false);
   });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { getLocalizedTopic } from '../i18n';
 import { getTopicPresentation } from '../topicPresentation';
+import SourceIcon from './SourceIcon';
 
 export function SourceFilterList({ sources, activeSourceIds, emptyLabel, onToggleSource }) {
   if (sources.length === 0) {
@@ -16,12 +17,13 @@ export function SourceFilterList({ sources, activeSourceIds, emptyLabel, onToggl
             key={source.id}
             type="button"
             onClick={() => onToggleSource(source.id)}
-            className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-3 text-sm font-medium transition-colors ${
               isActive
-                ? 'bg-sky-600 text-white shadow-sm'
-                : 'bg-sky-100 text-sky-900 hover:bg-sky-200'
+                ? 'border-sky-600 bg-sky-600 text-white shadow-sm'
+                : 'border-sky-200 bg-white text-sky-900 hover:border-sky-300 hover:bg-sky-50'
             }`}
           >
+            <SourceIcon source={source} />
             <span>{source.name}</span>
             {source.count > 0 && (
               <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-sky-700'}`}>

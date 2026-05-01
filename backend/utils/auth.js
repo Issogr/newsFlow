@@ -2,18 +2,24 @@ const crypto = require('crypto');
 const { promisify } = require('util');
 const database = require('../services/database');
 const { createError } = require('./errorHandler');
+const { parseIntegerEnv } = require('./env');
 
-const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '30', 10);
+const SESSION_TTL_DAYS = parseIntegerEnv('SESSION_TTL_DAYS', 30, { min: 1 });
 const API_TOKEN_TTL_DAYS = 30;
-const SESSION_PURGE_INTERVAL_MS = parseInt(process.env.SESSION_PURGE_INTERVAL_MS || '300000', 10);
+const SESSION_PURGE_INTERVAL_MS = parseIntegerEnv('SESSION_PURGE_INTERVAL_MS', 300000, { min: 1000 });
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase() || 'admin';
-const USER_ACTIVITY_TOUCH_INTERVAL_SECONDS = parseInt(process.env.USER_ACTIVITY_TOUCH_INTERVAL_SECONDS || '60', 10);
-const SESSION_REFRESH_WINDOW_MS = parseInt(process.env.SESSION_REFRESH_WINDOW_MS || String(24 * 60 * 60 * 1000), 10);
+const USER_ACTIVITY_TOUCH_INTERVAL_SECONDS = parseIntegerEnv('USER_ACTIVITY_TOUCH_INTERVAL_SECONDS', 60, { min: 0 });
+const SESSION_REFRESH_WINDOW_MS = parseIntegerEnv('SESSION_REFRESH_WINDOW_MS', 24 * 60 * 60 * 1000, { min: 0 });
+const API_TOKEN_USAGE_FLUSH_INTERVAL_MS = parseIntegerEnv('API_TOKEN_USAGE_FLUSH_INTERVAL_MS', 5000, { min: 1000 });
+const API_TOKEN_USAGE_FLUSH_THRESHOLD = parseIntegerEnv('API_TOKEN_USAGE_FLUSH_THRESHOLD', 50, { min: 1 });
 const SESSION_COOKIE_NAME = 'newsflow_session';
 const scryptAsync = promisify(crypto.scrypt);
 
 let lastSessionPurgeAt = 0;
 let lastApiTokenPurgeAt = 0;
+let pendingApiTokenUsage = new Map();
+let pendingApiTokenUsageCount = 0;
+let lastApiTokenUsageFlushAt = Date.now();
 
 function extractBearerToken(authorizationHeader) {
   if (!authorizationHeader || typeof authorizationHeader !== 'string') {
@@ -198,6 +204,54 @@ function purgeExpiredApiTokensIfNeeded(now = Date.now()) {
   return purgedCount;
 }
 
+function flushApiTokenUsage({ force = false } = {}) {
+  if (pendingApiTokenUsageCount <= 0) {
+    return 0;
+  }
+
+  const now = Date.now();
+  if (
+    !force
+    && pendingApiTokenUsageCount < API_TOKEN_USAGE_FLUSH_THRESHOLD
+    && now - lastApiTokenUsageFlushAt < API_TOKEN_USAGE_FLUSH_INTERVAL_MS
+  ) {
+    return 0;
+  }
+
+  const pendingEntries = [...pendingApiTokenUsage.entries()];
+  const flushedCount = pendingApiTokenUsageCount;
+
+  pendingApiTokenUsage = new Map();
+  pendingApiTokenUsageCount = 0;
+  lastApiTokenUsageFlushAt = now;
+
+  try {
+    pendingEntries.forEach(([tokenId, usedAt]) => {
+      database.touchApiTokenUsage(tokenId, usedAt);
+    });
+  } catch (error) {
+    pendingEntries.forEach(([tokenId, usedAt]) => {
+      const currentUsedAt = pendingApiTokenUsage.get(tokenId);
+      pendingApiTokenUsage.set(tokenId, currentUsedAt && currentUsedAt > usedAt ? currentUsedAt : usedAt);
+      pendingApiTokenUsageCount += 1;
+    });
+    throw error;
+  }
+
+  return flushedCount;
+}
+
+function recordApiTokenUsage(tokenId, usedAt = new Date().toISOString()) {
+  if (!tokenId) {
+    return;
+  }
+
+  const currentUsedAt = pendingApiTokenUsage.get(tokenId);
+  pendingApiTokenUsage.set(tokenId, currentUsedAt && currentUsedAt > usedAt ? currentUsedAt : usedAt);
+  pendingApiTokenUsageCount += 1;
+  flushApiTokenUsage();
+}
+
 function requireAuthenticatedUser(req, res, next) {
   try {
     req.user = resolveAuthenticatedSession({
@@ -236,7 +290,7 @@ function resolveAuthenticatedApiToken({ headers = {} } = {}) {
     throw createError(401, 'API token expired or invalid', 'UNAUTHORIZED');
   }
 
-  database.touchApiTokenUsage(tokenRecord.id, new Date().toISOString());
+  recordApiTokenUsage(tokenRecord.id, new Date().toISOString());
 
   return {
     token: rawToken,
@@ -281,6 +335,7 @@ module.exports = {
   resolveAuthenticatedSession,
   purgeExpiredSessionsIfNeeded,
   purgeExpiredApiTokensIfNeeded,
+  flushApiTokenUsage,
   extractBearerToken,
   safeTokenCompare,
   hashPassword,

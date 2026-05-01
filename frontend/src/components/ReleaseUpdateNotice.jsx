@@ -1,43 +1,26 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Sparkles, X } from 'lucide-react';
 
 const DEFAULT_DURATION_MS = 30000;
-const TICK_INTERVAL_MS = 100;
 const ENTRY_DELAY_MS = 16;
 
 const ReleaseUpdateNotice = ({ t, releaseNotes, durationMs = DEFAULT_DURATION_MS, onOpen, onExpire, onDismiss }) => {
-  const [remainingMs, setRemainingMs] = useState(durationMs);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    setRemainingMs(durationMs);
     setIsVisible(false);
     const frameTimeoutId = window.setTimeout(() => {
       setIsVisible(true);
     }, ENTRY_DELAY_MS);
-    const startedAt = Date.now();
     const timeoutId = window.setTimeout(() => {
       onExpire();
     }, durationMs);
-    const intervalId = window.setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      setRemainingMs(Math.max(0, durationMs - elapsed));
-    }, TICK_INTERVAL_MS);
 
     return () => {
       window.clearTimeout(frameTimeoutId);
       window.clearTimeout(timeoutId);
-      window.clearInterval(intervalId);
     };
   }, [durationMs, onExpire, releaseNotes.version]);
-
-  const progress = useMemo(() => {
-    if (!durationMs) {
-      return 0;
-    }
-
-    return Math.max(0, Math.min(1, remainingMs / durationMs));
-  }, [durationMs, remainingMs]);
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4 sm:top-5">
@@ -82,8 +65,12 @@ const ReleaseUpdateNotice = ({ t, releaseNotes, durationMs = DEFAULT_DURATION_MS
 
         <div className="absolute inset-x-4 bottom-2 h-1 overflow-hidden rounded-full bg-slate-100 sm:inset-x-5">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-sky-400 via-sky-500 to-sky-600 transition-transform duration-100 ease-linear"
-            style={{ transform: `scaleX(${progress})`, transformOrigin: 'right center' }}
+            className="h-full rounded-full bg-gradient-to-r from-sky-400 via-sky-500 to-sky-600 transition-transform ease-linear"
+            style={{
+              transform: isVisible ? 'scaleX(0)' : 'scaleX(1)',
+              transformOrigin: 'right center',
+              transitionDuration: `${durationMs}ms`,
+            }}
           />
         </div>
       </div>

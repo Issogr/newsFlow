@@ -1,17 +1,5 @@
 const { getCurrentPublicationDay, normalizePublicationDate } = require('../utils/publicationDate');
-
-function parseJsonArray(value) {
-  if (!value) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+const { parseJsonArray } = require('../utils/json');
 
 function createArticleRepository({
   getDb,
@@ -132,7 +120,7 @@ function createArticleRepository({
   function buildSearchQuery(search) {
     const tokens = String(search || '')
       .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s-]+/gu, ' ')
+      .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
       .split(/\s+/)
       .map((token) => token.trim())
       .filter((token) => token.length > 1)
@@ -224,6 +212,7 @@ function createArticleRepository({
         a.image,
         a.author,
         a.language,
+        a.owner_user_id AS ownerUserId,
         a.published_at AS pubDate
       FROM articles a
       ${joins.join('\n')}
@@ -237,107 +226,289 @@ function createArticleRepository({
     return { sql, params };
   }
 
-  function getArticleRowsByCanonicalSource(database, sourceId, sourceName, ownerUserId, canonicalUrl) {
-    if (!canonicalUrl) {
-      return [];
-    }
-
-    const aliases = getResolvedSourceAliases(sourceId, sourceName, ownerUserId || null);
-    const sourceClauses = [];
-    const sourceParams = [];
-
-    if (aliases.ids.length > 0) {
-      sourceClauses.push(`source_id IN (${aliases.ids.map(() => '?').join(', ')})`);
-      sourceParams.push(...aliases.ids);
-    }
-
-    if (aliases.names.length > 0) {
-      sourceClauses.push(`source_name IN (${aliases.names.map(() => '?').join(', ')})`);
-      sourceParams.push(...aliases.names);
-    }
-
-    if (sourceClauses.length === 0) {
-      return [];
-    }
-
-    return database.prepare(`
-      SELECT id
-      FROM articles
-      WHERE canonical_url = ?
-        AND COALESCE(owner_user_id, '') = ?
-        AND (${sourceClauses.join(' OR ')})
-      ORDER BY datetime(updated_at) DESC, datetime(published_at) DESC, datetime(created_at) DESC, id DESC
-    `).all(canonicalUrl, ownerUserId || '', ...sourceParams);
-  }
-
   function normalizeArticleTitle(title) {
     return normalizeIdentityText(title, { lowercase: true });
   }
 
-  function getArticleRowsByApproximateSourceTitle(database, sourceId, sourceName, ownerUserId, title, publishedAt) {
-    const normalizedTitle = normalizeArticleTitle(title);
-    const publishedTimestamp = Date.parse(publishedAt || '');
+  function sortDuplicateRows(rows = []) {
+    return [...rows].sort((left, right) => String(right.updatedAt || right.createdAt || right.id || '').localeCompare(
+      String(left.updatedAt || left.createdAt || left.id || '')
+    ));
+  }
 
-    if (!normalizedTitle || Number.isNaN(publishedTimestamp)) {
-      return [];
+  function sourceMatchesAliases(row, aliases) {
+    return aliases.ids.includes(row.sourceId) || aliases.names.includes(row.sourceName);
+  }
+
+  function getAliasKey(ownerUserId, aliases) {
+    return [ownerUserId || '', aliases.ids.join('\u0001'), aliases.names.join('\u0001')].join('\u0000');
+  }
+
+  function createArticleDuplicateLookup(database, articles = [], existingIdSet = new Set()) {
+    const aliasCache = new Map();
+    const infoByArticle = new WeakMap();
+    const canonicalRowsByKey = new Map();
+    const titleRowsByAliasKey = new Map();
+    const titleGroupRanges = new Map();
+
+    function getAliases(sourceId, sourceName, ownerUserId) {
+      const cacheKey = [ownerUserId || '', sourceId || '', sourceName || ''].join('\u0000');
+      if (!aliasCache.has(cacheKey)) {
+        aliasCache.set(cacheKey, getResolvedSourceAliases(sourceId, sourceName, ownerUserId || null));
+      }
+
+      return aliasCache.get(cacheKey);
     }
 
-    const aliases = getResolvedSourceAliases(sourceId, sourceName, ownerUserId || null);
-    const sourceClauses = [];
-    const sourceParams = [];
+    function buildInfo(article) {
+      const sourceId = article.rawSourceId || article.sourceId;
+      const sourceName = article.rawSource || article.source;
+      const ownerUserId = article.ownerUserId || '';
+      const aliases = getAliases(sourceId, sourceName, ownerUserId);
+      const canonicalUrl = normalizeArticleUrl(article.canonicalUrl || article.url || '');
+      const normalizedTitle = normalizeArticleTitle(article.title);
+      const publishedTimestamp = Date.parse(article.pubDate || '');
+      const info = {
+        sourceId,
+        sourceName,
+        ownerUserId,
+        aliases,
+        aliasKey: getAliasKey(ownerUserId, aliases),
+        canonicalKey: `${ownerUserId}\u0000${canonicalUrl}`,
+        canonicalUrl,
+        normalizedTitle,
+        publishedTimestamp
+      };
 
-    if (aliases.ids.length > 0) {
-      sourceClauses.push(`source_id IN (${aliases.ids.map(() => '?').join(', ')})`);
-      sourceParams.push(...aliases.ids);
+      infoByArticle.set(article, info);
+      return info;
     }
 
-    if (aliases.names.length > 0) {
-      sourceClauses.push(`source_name IN (${aliases.names.map(() => '?').join(', ')})`);
-      sourceParams.push(...aliases.names);
+    function getInfo(article) {
+      return infoByArticle.get(article) || buildInfo(article);
     }
 
-    if (sourceClauses.length === 0) {
-      return [];
+    function addCanonicalCandidate(info, row) {
+      if (!info.canonicalUrl || !sourceMatchesAliases(row, info.aliases)) {
+        return;
+      }
+
+      const rows = canonicalRowsByKey.get(info.canonicalKey) || [];
+      if (!rows.some((candidate) => candidate.id === row.id)) {
+        rows.push(row);
+        canonicalRowsByKey.set(info.canonicalKey, rows);
+      }
     }
 
-    const publishedAfter = new Date(publishedTimestamp - TITLE_DEDUPE_WINDOW_MS).toISOString();
-    const publishedBefore = new Date(publishedTimestamp + TITLE_DEDUPE_WINDOW_MS).toISOString();
-    const rows = database.prepare(`
-      SELECT id, title, published_at AS publishedAt, updated_at AS updatedAt, created_at AS createdAt
-      FROM articles
-      WHERE COALESCE(owner_user_id, '') = ?
-        AND (${sourceClauses.join(' OR ')})
-        AND published_at BETWEEN ? AND ?
-      ORDER BY datetime(updated_at) DESC, datetime(published_at) DESC, datetime(created_at) DESC, id DESC
-    `).all(ownerUserId || '', ...sourceParams, publishedAfter, publishedBefore);
+    function addTitleCandidate(info, row) {
+      if (!info.normalizedTitle || Number.isNaN(info.publishedTimestamp) || !sourceMatchesAliases(row, info.aliases)) {
+        return;
+      }
 
-    return rows
-      .filter((row) => normalizeArticleTitle(row.title) === normalizedTitle)
-      .sort((left, right) => {
-        const leftDiff = Math.abs(Date.parse(left.publishedAt || '') - publishedTimestamp);
-        const rightDiff = Math.abs(Date.parse(right.publishedAt || '') - publishedTimestamp);
+      const rows = titleRowsByAliasKey.get(info.aliasKey) || [];
+      if (!rows.some((candidate) => candidate.id === row.id)) {
+        rows.push(row);
+        titleRowsByAliasKey.set(info.aliasKey, rows);
+      }
+    }
 
-        if (leftDiff !== rightDiff) {
-          return leftDiff - rightDiff;
+    articles.forEach((article) => {
+      const info = buildInfo(article);
+      if (existingIdSet.has(article.id)) {
+        return;
+      }
+
+      if (info.canonicalUrl) {
+        canonicalRowsByKey.set(info.canonicalKey, []);
+      }
+
+      if (info.normalizedTitle && !Number.isNaN(info.publishedTimestamp) && (info.aliases.ids.length > 0 || info.aliases.names.length > 0)) {
+        const range = titleGroupRanges.get(info.aliasKey) || {
+          ownerUserId: info.ownerUserId,
+          aliases: info.aliases,
+          publishedAfter: info.publishedTimestamp - TITLE_DEDUPE_WINDOW_MS,
+          publishedBefore: info.publishedTimestamp + TITLE_DEDUPE_WINDOW_MS
+        };
+        range.publishedAfter = Math.min(range.publishedAfter, info.publishedTimestamp - TITLE_DEDUPE_WINDOW_MS);
+        range.publishedBefore = Math.max(range.publishedBefore, info.publishedTimestamp + TITLE_DEDUPE_WINDOW_MS);
+        titleGroupRanges.set(info.aliasKey, range);
+      }
+    });
+
+    const canonicalUrlsByOwner = new Map();
+    canonicalRowsByKey.forEach((rows, key) => {
+      const [ownerUserId, canonicalUrl] = key.split('\u0000');
+      const urls = canonicalUrlsByOwner.get(ownerUserId) || [];
+      urls.push(canonicalUrl);
+      canonicalUrlsByOwner.set(ownerUserId, urls);
+      canonicalRowsByKey.set(key, rows);
+    });
+
+    canonicalUrlsByOwner.forEach((urls, ownerUserId) => {
+      chunkValues([...new Set(urls)]).forEach((urlChunk) => {
+        database.prepare(`
+          SELECT id, source_id AS sourceId, source_name AS sourceName, canonical_url AS canonicalUrl,
+                 published_at AS publishedAt, updated_at AS updatedAt, created_at AS createdAt
+          FROM articles
+          WHERE COALESCE(owner_user_id, '') = ?
+            AND canonical_url IN (${urlChunk.map(() => '?').join(', ')})
+          ORDER BY datetime(updated_at) DESC, datetime(published_at) DESC, datetime(created_at) DESC, id DESC
+        `).all(ownerUserId, ...urlChunk).forEach((row) => {
+          const key = `${ownerUserId}\u0000${row.canonicalUrl}`;
+          const rows = canonicalRowsByKey.get(key);
+          if (rows) {
+            rows.push(row);
+          }
+        });
+      });
+    });
+
+    const titleRangesByOwner = new Map();
+    titleGroupRanges.forEach((range, aliasKey) => {
+      if (range.aliases.ids.length === 0 && range.aliases.names.length === 0) {
+        titleRowsByAliasKey.set(aliasKey, []);
+        return;
+      }
+
+      const ownerRanges = titleRangesByOwner.get(range.ownerUserId) || [];
+      ownerRanges.push({ aliasKey, range });
+      titleRangesByOwner.set(range.ownerUserId, ownerRanges);
+    });
+
+    titleRangesByOwner.forEach((ownerRanges, ownerUserId) => {
+      const sourceIds = new Set();
+      const sourceNames = new Set();
+      let publishedAfter = Infinity;
+      let publishedBefore = -Infinity;
+
+      ownerRanges.forEach(({ range }) => {
+        range.aliases.ids.forEach((id) => sourceIds.add(id));
+        range.aliases.names.forEach((name) => sourceNames.add(name));
+        publishedAfter = Math.min(publishedAfter, range.publishedAfter);
+        publishedBefore = Math.max(publishedBefore, range.publishedBefore);
+      });
+
+      const sourceClauses = [];
+      const sourceParams = [];
+      const sourceIdList = [...sourceIds];
+      const sourceNameList = [...sourceNames];
+
+      if (sourceIdList.length > 0) {
+        sourceClauses.push(`source_id IN (${sourceIdList.map(() => '?').join(', ')})`);
+        sourceParams.push(...sourceIdList);
+      }
+
+      if (sourceNameList.length > 0) {
+        sourceClauses.push(`source_name IN (${sourceNameList.map(() => '?').join(', ')})`);
+        sourceParams.push(...sourceNameList);
+      }
+
+      const candidateRows = database.prepare(`
+        SELECT id, source_id AS sourceId, source_name AS sourceName, title,
+               published_at AS publishedAt, updated_at AS updatedAt, created_at AS createdAt
+        FROM articles
+        WHERE COALESCE(owner_user_id, '') = ?
+          AND (${sourceClauses.join(' OR ')})
+          AND published_at BETWEEN ? AND ?
+        ORDER BY datetime(updated_at) DESC, datetime(published_at) DESC, datetime(created_at) DESC, id DESC
+      `).all(
+        ownerUserId,
+        ...sourceParams,
+        new Date(publishedAfter).toISOString(),
+        new Date(publishedBefore).toISOString()
+      );
+
+      ownerRanges.forEach(({ aliasKey, range }) => {
+        titleRowsByAliasKey.set(aliasKey, candidateRows.filter((row) => {
+          const rowTimestamp = Date.parse(row.publishedAt || '');
+          return sourceMatchesAliases(row, range.aliases)
+            && Number.isFinite(rowTimestamp)
+            && rowTimestamp >= range.publishedAfter
+            && rowTimestamp <= range.publishedBefore;
+        }));
+      });
+    });
+
+    return {
+      getInfo,
+      getCanonicalMatches(article) {
+        const info = getInfo(article);
+        if (!info.canonicalUrl) {
+          return [];
         }
 
-        return String(right.updatedAt || right.createdAt || right.id || '').localeCompare(
-          String(left.updatedAt || left.createdAt || left.id || '')
-        );
-      });
+        return sortDuplicateRows((canonicalRowsByKey.get(info.canonicalKey) || []).filter((row) => sourceMatchesAliases(row, info.aliases)));
+      },
+      getTitleMatches(article) {
+        const info = getInfo(article);
+        if (!info.normalizedTitle || Number.isNaN(info.publishedTimestamp)) {
+          return [];
+        }
+
+        return (titleRowsByAliasKey.get(info.aliasKey) || [])
+          .filter((row) => {
+            const rowTimestamp = Date.parse(row.publishedAt || '');
+            return normalizeArticleTitle(row.title) === info.normalizedTitle
+              && Number.isFinite(rowTimestamp)
+              && Math.abs(rowTimestamp - info.publishedTimestamp) <= TITLE_DEDUPE_WINDOW_MS;
+          })
+          .sort((left, right) => {
+            const leftDiff = Math.abs(Date.parse(left.publishedAt || '') - info.publishedTimestamp);
+            const rightDiff = Math.abs(Date.parse(right.publishedAt || '') - info.publishedTimestamp);
+            if (leftDiff !== rightDiff) {
+              return leftDiff - rightDiff;
+            }
+
+            return String(right.updatedAt || right.createdAt || right.id || '').localeCompare(
+              String(left.updatedAt || left.createdAt || left.id || '')
+            );
+          });
+      },
+      forgetIds(ids = []) {
+        const deletedIds = new Set(ids.filter(Boolean));
+        if (deletedIds.size === 0) {
+          return;
+        }
+
+        canonicalRowsByKey.forEach((rows, key) => {
+          canonicalRowsByKey.set(key, rows.filter((row) => !deletedIds.has(row.id)));
+        });
+        titleRowsByAliasKey.forEach((rows, key) => {
+          titleRowsByAliasKey.set(key, rows.filter((row) => !deletedIds.has(row.id)));
+        });
+      },
+      rememberArticle(article) {
+        const info = getInfo(article);
+        const row = {
+          id: article.id,
+          sourceId: article.rawSourceId || article.sourceId,
+          sourceName: article.rawSource || article.source,
+          title: article.title,
+          publishedAt: article.pubDate,
+          updatedAt: article.updatedAt || new Date().toISOString(),
+          createdAt: article.createdAt || new Date().toISOString()
+        };
+
+        addCanonicalCandidate(info, row);
+        addTitleCandidate(info, row);
+      }
+    };
   }
 
   function getTopicDetailsByArticleIds(articleIds) {
-    if (!Array.isArray(articleIds) || articleIds.length === 0) {
+    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    if (normalizedArticleIds.length === 0) {
       return new Map();
     }
 
-    const rows = getDb().prepare(`
-      SELECT article_id AS articleId, topic, source, confidence, evidence, reason_code AS reasonCode
-      FROM article_topics
-      WHERE article_id IN (${articleIds.map(() => '?').join(', ')})
-      ORDER BY topic ASC
-    `).all(...articleIds);
+    const rows = chunkValues(normalizedArticleIds).flatMap((ids) => {
+      return getDb().prepare(`
+        SELECT article_id AS articleId, topic, source, confidence, evidence, reason_code AS reasonCode
+        FROM article_topics
+        WHERE article_id IN (${ids.map(() => '?').join(', ')})
+        ORDER BY topic ASC
+      `).all(...ids);
+    });
 
     const topicDetailsMap = new Map();
     rows.forEach((row) => {
@@ -382,6 +553,7 @@ function createArticleRepository({
         rawSource: row.source,
         sourceId: sourceMetadata.sourceId,
         source: sourceMetadata.sourceName,
+        sourceIconUrl: sourceMetadata.sourceIconUrl || '',
         subSource: sourceMetadata.subSource,
         topics: topicDetails.map((entry) => entry.topic),
         topicDetails
@@ -492,6 +664,15 @@ function createArticleRepository({
       VALUES (?, ?, ?, ?)
     `);
     const deleteArticleStmt = database.prepare('DELETE FROM articles WHERE id = ?');
+    const existingSearchableFields = new Map(
+      chunkValues(articles.map((article) => article.id).filter(Boolean)).flatMap((articleIds) => {
+        return database.prepare(`
+          SELECT id, title, description, content
+          FROM articles
+          WHERE id IN (${articleIds.map(() => '?').join(', ')})
+        `).all(...articleIds).map((row) => [row.id, row]);
+      })
+    );
     const existingIdSet = new Set(
       chunkValues(articles.map((article) => article.id).filter(Boolean)).flatMap((articleIds) => {
         return database.prepare(`
@@ -501,6 +682,7 @@ function createArticleRepository({
         `).all(...articleIds).map((row) => row.id);
       })
     );
+    const duplicateLookup = createArticleDuplicateLookup(database, articles, existingIdSet);
 
     const transaction = database.transaction((items) => {
       const insertedIds = [];
@@ -509,20 +691,14 @@ function createArticleRepository({
       items.forEach((article) => {
         const storedSourceId = article.rawSourceId || article.sourceId;
         const storedSourceName = article.rawSource || article.source;
-        const canonicalUrl = normalizeArticleUrl(article.canonicalUrl || article.url || '');
-        const canonicalMatches = getArticleRowsByCanonicalSource(database, storedSourceId, storedSourceName, article.ownerUserId || '', canonicalUrl);
+        const lookupInfo = duplicateLookup.getInfo(article);
+        const canonicalUrl = lookupInfo.canonicalUrl;
+        const canonicalMatches = duplicateLookup.getCanonicalMatches(article);
         const canonicalMatch = !existingIdSet.has(article.id)
           ? canonicalMatches.find((row) => row.id !== article.id)
           : null;
         const titleMatches = !existingIdSet.has(article.id) && !canonicalMatch
-          ? getArticleRowsByApproximateSourceTitle(
-              database,
-              storedSourceId,
-              storedSourceName,
-              article.ownerUserId || '',
-              article.title,
-              article.pubDate
-            )
+          ? duplicateLookup.getTitleMatches(article)
           : [];
         const titleMatch = titleMatches.find((row) => row.id !== article.id) || null;
         const persistedArticleId = existingIdSet.has(article.id) ? article.id : (canonicalMatch?.id || titleMatch?.id || article.id);
@@ -541,6 +717,7 @@ function createArticleRepository({
           deleteArticleStmt.run(duplicateId);
           existingIdSet.delete(duplicateId);
         });
+        duplicateLookup.forgetIds(duplicateIds);
 
         upsertStmt.run(
           persistedArticleId,
@@ -560,8 +737,16 @@ function createArticleRepository({
           now
         );
 
-        deleteSearchStmt.run(persistedArticleId);
-        insertSearchStmt.run(persistedArticleId, article.title, article.description || '', article.content || '');
+        const previousSearchableFields = existingSearchableFields.get(persistedArticleId);
+        const searchableFieldsChanged = !previousSearchableFields
+          || previousSearchableFields.title !== article.title
+          || previousSearchableFields.description !== (article.description || '')
+          || previousSearchableFields.content !== (article.content || '');
+
+        if (searchableFieldsChanged) {
+          deleteSearchStmt.run(persistedArticleId);
+          insertSearchStmt.run(persistedArticleId, article.title, article.description || '', article.content || '');
+        }
 
         if (exists) {
           updatedIds.push(persistedArticleId);
@@ -569,6 +754,7 @@ function createArticleRepository({
           insertedIds.push(persistedArticleId);
           existingIdSet.add(persistedArticleId);
         }
+        duplicateLookup.rememberArticle(article);
       });
 
       return {
@@ -809,55 +995,63 @@ function createArticleRepository({
   }
 
   function getArticlesByIds(articleIds = [], options = {}) {
-    if (!Array.isArray(articleIds) || articleIds.length === 0) {
+    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    if (normalizedArticleIds.length === 0) {
       return [];
     }
 
-    const params = [...articleIds];
-    const where = [`a.id IN (${articleIds.map(() => '?').join(', ')})`];
-    const scopeFilter = buildScopeFilter(options, 'a');
-    const retentionFilter = buildRetentionFilter(options, 'a');
-    const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
-    const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
-    const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
+    const rows = chunkValues(normalizedArticleIds).flatMap((ids) => {
+      const params = [...ids];
+      const where = [`a.id IN (${ids.map(() => '?').join(', ')})`];
+      const scopeFilter = buildScopeFilter(options, 'a');
+      const retentionFilter = buildRetentionFilter(options, 'a');
+      const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
+      const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
+      const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
 
-    where.push(scopeFilter.clause);
-    params.push(...scopeFilter.params);
-    where.push(publishedBeforeNowFilter.clause);
-    params.push(...publishedBeforeNowFilter.params);
+      where.push(scopeFilter.clause);
+      params.push(...scopeFilter.params);
+      where.push(publishedBeforeNowFilter.clause);
+      params.push(...publishedBeforeNowFilter.params);
 
-    if (retentionFilter) {
-      where.push(retentionFilter.clause);
-      params.push(...retentionFilter.params);
-    }
+      if (retentionFilter) {
+        where.push(retentionFilter.clause);
+        params.push(...retentionFilter.params);
+      }
 
-    if (excludedSourceFilter) {
-      where.push(excludedSourceFilter.clause);
-      params.push(...excludedSourceFilter.params);
-    }
+      if (excludedSourceFilter) {
+        where.push(excludedSourceFilter.clause);
+        params.push(...excludedSourceFilter.params);
+      }
 
-    if (excludedSubSourceFilter) {
-      where.push(excludedSubSourceFilter.clause);
-      params.push(...excludedSubSourceFilter.params);
-    }
+      if (excludedSubSourceFilter) {
+        where.push(excludedSubSourceFilter.clause);
+        params.push(...excludedSubSourceFilter.params);
+      }
 
-    const rows = getDb().prepare(`
-      SELECT
-        a.id,
-        a.source_id AS sourceId,
-        a.source_name AS source,
-        a.title,
-        a.description,
-        a.content,
-        a.url,
-        a.image,
-        a.author,
-        a.language,
-        a.published_at AS pubDate
-      FROM articles a
-      WHERE ${where.join(' AND ')}
-      ORDER BY a.published_at DESC, a.id DESC
-    `).all(...params);
+      return getDb().prepare(`
+        SELECT
+          a.id,
+          a.source_id AS sourceId,
+          a.source_name AS source,
+          a.owner_user_id AS ownerUserId,
+          a.title,
+          a.description,
+          a.content,
+          a.url,
+          a.image,
+          a.author,
+          a.language,
+          a.published_at AS pubDate
+        FROM articles a
+        WHERE ${where.join(' AND ')}
+      `).all(...params);
+    });
+
+    rows.sort((left, right) => {
+      const publishedComparison = String(right.pubDate || '').localeCompare(String(left.pubDate || ''));
+      return publishedComparison || String(right.id || '').localeCompare(String(left.id || ''));
+    });
 
     return hydrateArticleRows(rows, options);
   }
@@ -935,34 +1129,20 @@ function createArticleRepository({
 
   function cleanupRemovedConfiguredSourceData() {
     const database = getDb();
-    const rawConfiguredSourceIds = getRawConfiguredSourceIds();
+    const retainedGlobalSourceIds = [...new Set([
+      ...getRawConfiguredSourceIds(),
+      ...getConfiguredSourceGroupIds(),
+      ...getLegacyConfiguredSourceGroupIds(),
+    ])];
     const configuredSourceGroupIds = getConfiguredSourceGroupIds();
-    const legacyConfiguredSourceGroupIds = getLegacyConfiguredSourceGroupIds();
     const groupedConfiguredSourceIds = getGroupedConfiguredSourceIds();
-    const selectGlobalArticles = database.prepare(`
-      SELECT id, source_id AS sourceId, source_name AS sourceName
-      FROM articles
-      WHERE owner_user_id IS NULL
-    `);
-    const deleteSearchEntries = database.prepare(`
-      DELETE FROM article_search
-      WHERE article_id = ?
-    `);
-    const deleteArticle = database.prepare(`
-      DELETE FROM articles
-      WHERE id = ?
-    `);
     const selectSettings = database.prepare(`
       SELECT user_id AS userId,
              default_source_ids AS excludedSourceIds,
              excluded_sub_source_ids AS excludedSubSourceIds
       FROM user_settings
     `);
-    const selectUserSourceIds = database.prepare(`
-      SELECT id
-      FROM user_sources
-      WHERE user_id = ?
-    `);
+    const selectUserSourceIds = database.prepare('SELECT user_id AS userId, id FROM user_sources');
     const updateSettings = database.prepare(`
       UPDATE user_settings
       SET default_source_ids = ?,
@@ -972,24 +1152,39 @@ function createArticleRepository({
     `);
 
     const transaction = database.transaction(() => {
-      let removedArticles = 0;
       let updatedSettings = 0;
       const now = new Date().toISOString();
+      const retainedPlaceholders = retainedGlobalSourceIds.map(() => '?').join(', ');
+      const removedArticleFilter = retainedGlobalSourceIds.length > 0
+        ? `owner_user_id IS NULL AND source_id NOT IN (${retainedPlaceholders})`
+        : 'owner_user_id IS NULL';
+      const deleteSearchEntries = database.prepare(`
+        DELETE FROM article_search
+        WHERE article_id IN (
+          SELECT id
+          FROM articles
+          WHERE ${removedArticleFilter}
+        )
+      `);
+      const deleteArticles = database.prepare(`
+        DELETE FROM articles
+        WHERE ${removedArticleFilter}
+      `);
+      const customSourceIdsByUserId = new Map();
 
-      selectGlobalArticles.all().forEach((article) => {
-        if (rawConfiguredSourceIds.has(article.sourceId) || configuredSourceGroupIds.has(article.sourceId) || legacyConfiguredSourceGroupIds.has(article.sourceId)) {
-          return;
-        }
-
-        deleteSearchEntries.run(article.id);
-        deleteArticle.run(article.id);
-        removedArticles += 1;
+      selectUserSourceIds.all().forEach((source) => {
+        const sourceIds = customSourceIdsByUserId.get(source.userId) || new Set();
+        sourceIds.add(source.id);
+        customSourceIdsByUserId.set(source.userId, sourceIds);
       });
+
+      deleteSearchEntries.run(...retainedGlobalSourceIds);
+      const removedArticles = deleteArticles.run(...retainedGlobalSourceIds).changes;
 
       selectSettings.all().forEach((row) => {
         const excludedSourceIds = parseJsonArray(row.excludedSourceIds);
         const excludedSubSourceIds = parseJsonArray(row.excludedSubSourceIds);
-        const customSourceIds = new Set(selectUserSourceIds.all(row.userId).map((source) => source.id));
+        const customSourceIds = customSourceIdsByUserId.get(row.userId) || new Set();
         const nextExcludedSourceIds = excludedSourceIds.filter((sourceId) => {
           return configuredSourceGroupIds.has(sourceId) || customSourceIds.has(sourceId);
         });
@@ -1079,6 +1274,7 @@ function createArticleRepository({
       id: source.id,
       name: source.name,
       language: source.language,
+      iconUrl: source.iconUrl || '',
       count: aggregatedRows.get(source.id)?.count || 0
     }));
 

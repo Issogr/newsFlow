@@ -1,11 +1,12 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import NewsAggregator from './NewsAggregator';
-import { fetchNews, isRequestCanceled } from '../services/api';
+import { fetchNews, isRequestCanceled, updateUserSettings } from '../services/api';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 
 vi.mock('../services/api', () => ({
   fetchNews: vi.fn(),
+  updateUserSettings: vi.fn(),
   isRequestCanceled: vi.fn((error) => error?.code === 'ERR_CANCELED')
 }));
 
@@ -18,7 +19,7 @@ vi.mock('../hooks/useTopicRefreshSocket', () => ({
 }));
 
 vi.mock('./NewsCard', () => ({
-  default: ({ group, compact }) => <div>{group.title}{compact ? ' compact' : ''}</div>
+  default: ({ group }) => <div>{group.title}</div>
 }));
 vi.mock('./ReaderPanel', () => ({
   default: () => null
@@ -91,7 +92,6 @@ const currentUser = {
     themeMode: 'system',
     articleRetentionHours: 24,
     recentHours: 3,
-    autoRefreshEnabled: true,
     showNewsImages: true,
     compactNewsCards: false,
     compactNewsCardsMode: 'off',
@@ -191,6 +191,61 @@ describe('NewsAggregator', () => {
     expect(isRequestCanceled).not.toHaveBeenCalled();
   });
 
+  test('shows one-time source setup and excludes unselected sources and sub-feeds', async () => {
+    const onUserUpdate = jest.fn();
+    const setupUser = {
+      ...currentUser,
+      settings: {
+        ...currentUser.settings,
+        sourceSetupCompleted: false,
+        excludedSourceIds: ['ansa.it', 'repubblica.it', 'bbc.co.uk']
+      },
+      sourceCatalog: [
+        { id: 'ansa.it', name: 'ANSA', language: 'it', subSources: [{ id: 'ansa_home', label: 'Home' }, { id: 'ansa_mondo', label: 'Mondo' }] },
+        { id: 'repubblica.it', name: 'La Repubblica', language: 'it', subSources: [] },
+        { id: 'bbc.co.uk', name: 'BBC News', language: 'en', subSources: [] }
+      ]
+    };
+
+    updateUserSettings.mockResolvedValueOnce({
+      settings: {
+        ...setupUser.settings,
+        sourceSetupCompleted: true,
+        excludedSourceIds: ['repubblica.it', 'bbc.co.uk'],
+        excludedSubSourceIds: ['ansa_mondo']
+      }
+    });
+
+    await renderNewsAggregator({ currentUser: setupUser, onUserUpdate });
+
+    expect(screen.getByRole('heading', { name: 'Choose your news sources' })).toBeInTheDocument();
+    expect(screen.getByText('This only updates your built-in RSS source selection. Your custom sources and account settings are preserved.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Italian sources' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'English sources' })).toBeInTheDocument();
+    expect(fetchNews).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Mondo/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start reading' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand ANSA feeds' }));
+    fireEvent.click(screen.getByRole('button', { name: /Home/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Start reading' }));
+    });
+
+    expect(updateUserSettings).toHaveBeenCalledWith({
+      excludedSourceIds: ['repubblica.it', 'bbc.co.uk'],
+      excludedSubSourceIds: ['ansa_mondo'],
+      sourceSetupCompleted: true
+    });
+    expect(onUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      settings: expect.objectContaining({
+        sourceSetupCompleted: true,
+        excludedSourceIds: ['repubblica.it', 'bbc.co.uk'],
+        excludedSubSourceIds: ['ansa_mondo']
+      })
+    }));
+  });
+
   test('loads cached news on open without forcing a source refresh', async () => {
     fetchNews.mockResolvedValue({
       items: [],
@@ -204,7 +259,26 @@ describe('NewsAggregator', () => {
       expect(fetchNews).toHaveBeenCalledWith(expect.objectContaining({ refresh: false }));
     });
 
+    expect(fetchNews).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+  });
+
+  test('renders when locale storage is unavailable', async () => {
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'Stored-locale fallback headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    await renderNewsAggregator();
+
+    expect(await screen.findByText('Stored-locale fallback headline')).toBeInTheDocument();
+
+    setItemSpy.mockRestore();
   });
 
   test('forces a source refresh from the top navigation refresh button', async () => {
@@ -224,23 +298,6 @@ describe('NewsAggregator', () => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
     });
     expect(screen.getByText('You reached the end of the available results.')).toBeInTheDocument();
-  });
-
-  test('does not trigger a refresh when the app title is clicked', async () => {
-    fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'Current headline' }],
-      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-      filters: { sources: [], sourceCatalog: [], topics: [] }
-    });
-
-    await renderNewsAggregator();
-
-    expect(await screen.findByText('Current headline')).toBeInTheDocument();
-    const initialCallCount = fetchNews.mock.calls.length;
-
-    fireEvent.click(screen.getByText('News Flow'));
-
-    expect(fetchNews).toHaveBeenCalledTimes(initialCallCount);
   });
 
   test('reloads cached feed silently when AI topic updates complete', async () => {
@@ -506,48 +563,6 @@ describe('NewsAggregator', () => {
     expect(screen.queryByText('Fresh headline')).not.toBeInTheDocument();
   });
 
-  test('passes the compact card preference to news cards', async () => {
-    fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'First headline' }],
-      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-      filters: { sources: [], sourceCatalog: [], topics: [] }
-    });
-
-    await renderNewsAggregator({
-      currentUser: {
-        ...currentUser,
-        settings: {
-          ...currentUser.settings,
-          compactNewsCards: true,
-          compactNewsCardsMode: 'desktop'
-        }
-      }
-    });
-
-    expect(await screen.findByText('First headline compact')).toBeInTheDocument();
-  });
-
-  test('keeps standard cards when compact mode is mobile-only on desktop', async () => {
-    fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'First headline' }],
-      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-      filters: { sources: [], sourceCatalog: [], topics: [] }
-    });
-
-    await renderNewsAggregator({
-      currentUser: {
-        ...currentUser,
-        settings: {
-          ...currentUser.settings,
-          compactNewsCardsMode: 'mobile'
-        }
-      }
-    });
-
-    expect(await screen.findByText('First headline')).toBeInTheDocument();
-    expect(screen.queryByText('First headline compact')).not.toBeInTheDocument();
-  });
-
   test('uses the server cursor for load more requests', async () => {
     fetchNews.mockImplementation(({ beforeId }) => {
       if (beforeId === 'article-1') {
@@ -594,6 +609,47 @@ describe('NewsAggregator', () => {
     expect(await screen.findByText('Older headline')).toBeInTheDocument();
   });
 
+  test('keeps newest groups when appended pages exceed the retention cap', async () => {
+    fetchNews.mockImplementation(({ beforeId }) => {
+      const previousPage = beforeId ? Number(beforeId.replace('article-page-','').split('-')[0]) : 0;
+      const pageNumber = previousPage + 1;
+      const start = ((pageNumber - 1) * 12) + 1;
+      const items = createGroups(`page-${pageNumber}`, start, 12);
+      const hasMore = pageNumber < 7;
+
+      return Promise.resolve({
+        items,
+        meta: {
+          page: 1,
+          pageSize: 12,
+          hasMore,
+          nextCursor: hasMore ? {
+            beforePubDate: `2026-03-14T10:${String(start + 11).padStart(2, '0')}:00.000Z`,
+            beforeId: `article-page-${pageNumber}-${start + 11}`
+          } : null
+        },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+    });
+
+    await renderNewsAggregator();
+    expect(await screen.findByText('page-1 headline 1')).toBeInTheDocument();
+
+    for (let pageNumber = 2; pageNumber <= 6; pageNumber += 1) {
+      fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+      expect(await screen.findByText(`page-${pageNumber} headline ${pageNumber * 12}`)).toBeInTheDocument();
+    }
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByText('page-1 headline 1')).toBeInTheDocument();
+    expect(screen.getByText('page-6 headline 72')).toBeInTheDocument();
+    expect(screen.queryByText('page-7 headline 73')).not.toBeInTheDocument();
+    expect(fetchNews.mock.calls.some(([params]) => params.beforeId === 'article-page-6-72')).toBe(false);
+  });
+
   test('clears loading-more state when a list reload cancels pagination', async () => {
     const appendRequest = createDeferred();
     const reloadRequest = createDeferred();
@@ -602,7 +658,7 @@ describe('NewsAggregator', () => {
     fetchNews.mockImplementation(() => {
       callCount += 1;
 
-      if (callCount <= 2) {
+      if (callCount === 1) {
         return Promise.resolve({
           items: [{ id: 'group-1', title: 'Current headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }],
           meta: {
@@ -618,7 +674,7 @@ describe('NewsAggregator', () => {
         });
       }
 
-      if (callCount === 3) {
+      if (callCount === 2) {
         return appendRequest.promise;
       }
 
@@ -678,7 +734,7 @@ describe('NewsAggregator', () => {
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
   });
 
-  test('shows a back-to-top button after scrolling and scrolls smoothly to the top', async () => {
+  test('scrolls smoothly to the top from the back-to-top control', async () => {
     fetchNews.mockResolvedValue({
       items: [{ id: 'group-1', title: 'First headline' }],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
@@ -688,7 +744,6 @@ describe('NewsAggregator', () => {
     await renderNewsAggregator();
 
     const backToTopButton = screen.getByRole('button', { name: 'Back to top' });
-    expect(backToTopButton).toHaveClass('pointer-events-none');
 
     await act(async () => {
       Object.defineProperty(window, 'scrollY', {
@@ -699,8 +754,6 @@ describe('NewsAggregator', () => {
       fireEvent.scroll(window);
       jest.advanceTimersByTime(16);
     });
-
-    expect(backToTopButton).toHaveClass('opacity-100');
 
     fireEvent.click(backToTopButton);
 

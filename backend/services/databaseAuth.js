@@ -238,17 +238,19 @@ function createAuthRepository({ getDb }) {
     `).run(usedAt, tokenId).changes;
   }
 
-  function incrementUserPublicApiUsage(userId, usedAt) {
+  function incrementUserPublicApiUsage(userId, usedAt, amount = 1) {
     if (!userId || !usedAt) {
       return 0;
     }
 
+    const incrementBy = Math.max(1, Math.floor(Number(amount) || 1));
+
     return getDb().prepare(`
       UPDATE users
-      SET public_api_request_count = public_api_request_count + 1,
+      SET public_api_request_count = public_api_request_count + ?,
           public_api_last_used_at = ?
       WHERE id = ?
-    `).run(usedAt, userId).changes;
+    `).run(incrementBy, usedAt, userId).changes;
   }
 
   function getAnonymousPublicApiRequestCount() {

@@ -6,19 +6,28 @@ const { sanitizeHtml } = require('../utils/inputValidator');
 const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
 const { normalizePublicationDate } = require('../utils/publicationDate');
 const { fetchSafeTextUrl } = require('../utils/urlSafety');
+const { parseIntegerEnv } = require('../utils/env');
 
-const MAX_ARTICLES_PER_SOURCE = parseInt(process.env.MAX_ARTICLES_PER_SOURCE || '25', 10);
-const RSS_MAX_RETRIES = parseInt(process.env.RSS_MAX_RETRIES || '4', 10);
-const RSS_RETRY_DELAY = parseInt(process.env.RSS_RETRY_DELAY || '1500', 10);
-const RSS_TIMEOUT = parseInt(process.env.RSS_TIMEOUT || '15000', 10);
-const CACHE_TTL = parseInt(process.env.RSS_CACHE_TTL || '60000', 10);
-const MAX_CACHE_ENTRIES = parseInt(process.env.RSS_CACHE_MAX_ENTRIES || '200', 10);
-const ARTICLE_IMAGE_TIMEOUT = parseInt(process.env.ARTICLE_IMAGE_TIMEOUT || '8000', 10);
-const ARTICLE_IMAGE_CACHE_TTL = parseInt(process.env.ARTICLE_IMAGE_CACHE_TTL || String(6 * 60 * 60 * 1000), 10);
-const ARTICLE_IMAGE_CACHE_MAX_ENTRIES = parseInt(process.env.ARTICLE_IMAGE_CACHE_MAX_ENTRIES || '500', 10);
-const ARTICLE_IMAGE_FALLBACK_LIMIT = parseInt(process.env.ARTICLE_IMAGE_FALLBACK_LIMIT || '4', 10);
-const RSS_MAX_RESPONSE_BYTES = parseInt(process.env.RSS_MAX_RESPONSE_BYTES || '1048576', 10);
-const ARTICLE_IMAGE_MAX_RESPONSE_BYTES = parseInt(process.env.ARTICLE_IMAGE_MAX_RESPONSE_BYTES || '524288', 10);
+const MAX_ARTICLES_PER_SOURCE = parseIntegerEnv('MAX_ARTICLES_PER_SOURCE', 25, { min: 1 });
+const RSS_MAX_RETRIES = parseIntegerEnv('RSS_MAX_RETRIES', 4, { min: 1 });
+const RSS_RETRY_DELAY = parseIntegerEnv('RSS_RETRY_DELAY', 1500, { min: 0 });
+const RSS_TIMEOUT = parseIntegerEnv('RSS_TIMEOUT', 15000, { min: 1 });
+const CACHE_TTL = parseIntegerEnv('RSS_CACHE_TTL', 60000, { min: 0 });
+const MAX_CACHE_ENTRIES = parseIntegerEnv('RSS_CACHE_MAX_ENTRIES', 200, { min: 0 });
+const ARTICLE_IMAGE_TIMEOUT = parseIntegerEnv('ARTICLE_IMAGE_TIMEOUT', 8000, { min: 1 });
+const ARTICLE_IMAGE_CACHE_TTL = parseIntegerEnv('ARTICLE_IMAGE_CACHE_TTL', 6 * 60 * 60 * 1000, { min: 0 });
+const ARTICLE_IMAGE_CACHE_MAX_ENTRIES = parseIntegerEnv('ARTICLE_IMAGE_CACHE_MAX_ENTRIES', 500, { min: 0 });
+const ARTICLE_IMAGE_FALLBACK_LIMIT = parseIntegerEnv('ARTICLE_IMAGE_FALLBACK_LIMIT', 4, { min: 0 });
+const RSS_MAX_RESPONSE_BYTES = parseIntegerEnv('RSS_MAX_RESPONSE_BYTES', 1048576, { min: 1 });
+const ARTICLE_IMAGE_MAX_RESPONSE_BYTES = parseIntegerEnv('ARTICLE_IMAGE_MAX_RESPONSE_BYTES', 524288, { min: 1 });
+
+const RSS_REQUEST_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 NewsFlow/2.0',
+  Accept: 'application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8, text/html;q=0.7, */*;q=0.5',
+  'Sec-Fetch-Mode': 'cors',
+  'Cache-Control': 'no-cache',
+  Pragma: 'no-cache'
+};
 
 const parser = new RSSParser({
   customFields: {
@@ -31,9 +40,7 @@ const parser = new RSSParser({
     ]
   },
   timeout: RSS_TIMEOUT,
-  headers: {
-    'User-Agent': 'newsflow/2.0 (+https://localhost)'
-  }
+  headers: RSS_REQUEST_HEADERS
 });
 
 const responseCache = new Map();
@@ -320,6 +327,15 @@ function extractImageFromArticleHtml(html, pageUrl = '') {
   return extractImageFromHtml(html, pageUrl);
 }
 
+function isRetryableFetchError(error) {
+  const status = Number(error?.status);
+  if (!Number.isFinite(status)) {
+    return true;
+  }
+
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
 async function fetchArticleImage(url) {
   if (!url) {
     return null;
@@ -388,10 +404,7 @@ async function fetchFeedXml(url) {
       const response = await fetchSafeTextUrl(url, {
         timeout: RSS_TIMEOUT,
         maxResponseBytes: RSS_MAX_RESPONSE_BYTES,
-        headers: {
-          'User-Agent': 'newsflow/2.0 (+https://localhost)',
-          Accept: 'application/rss+xml, application/xml, text/xml, */*'
-        }
+        headers: RSS_REQUEST_HEADERS
       });
 
       responseCache.set(url, {
@@ -403,7 +416,7 @@ async function fetchFeedXml(url) {
       return response.data;
     } catch (error) {
       lastError = error;
-      if (attempt === RSS_MAX_RETRIES) {
+      if (attempt === RSS_MAX_RETRIES || !isRetryableFetchError(error)) {
         break;
       }
 
@@ -416,7 +429,7 @@ async function fetchFeedXml(url) {
   throw lastError;
 }
 
-async function parseFeed(source) {
+async function parseFeed(source, options = {}) {
   const url = source.url || '';
   if (!url) {
     return [];
@@ -452,11 +465,17 @@ async function parseFeed(source) {
         };
       });
 
-    await enrichArticlesWithImages(normalizedItems);
+    if (options.imageFallback !== false) {
+      await enrichArticlesWithImages(normalizedItems);
+    }
 
     return normalizedItems;
   } catch (error) {
     logger.error(`Failed to parse RSS feed ${source.name} (${url}): ${summarizeErrorMessage(error)}`);
+    if (options.throwOnError) {
+      throw error;
+    }
+
     return [];
   }
 }
@@ -469,6 +488,7 @@ module.exports = {
     const feed = await parser.parseString(xml);
     return {
       title: sanitizeHtml(feed?.title || ''),
+      siteUrl: normalizeImageUrl(feed?.link || '', url) || '',
       language: detectFeedLanguage(feed),
       itemCount: Array.isArray(feed?.items) ? feed.items.length : 0
     };

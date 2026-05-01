@@ -1,6 +1,7 @@
 const logger = require('../utils/logger');
 const { getAllowedOrigins, isOriginAllowed } = require('../utils/networkConfig');
 const { hasTrustedInternalService } = require('../utils/internalRequestGate');
+const { parseIntegerEnv } = require('../utils/env');
 const database = require('./database');
 const { resolveAuthenticatedSession } = require('../utils/auth');
 
@@ -84,8 +85,8 @@ function initialize(server) {
       methods: ['GET', 'POST'],
       credentials: true
     },
-    pingTimeout: parseInt(process.env.WS_PING_TIMEOUT || '60000', 10),
-    pingInterval: parseInt(process.env.WS_PING_INTERVAL || '25000', 10),
+    pingTimeout: parseIntegerEnv('WS_PING_TIMEOUT', 60000, { min: 1000 }),
+    pingInterval: parseIntegerEnv('WS_PING_INTERVAL', 25000, { min: 1000 }),
     transports: ['websocket', 'polling'],
     allowRequest: (req, callback) => {
       if (!hasTrustedInternalService(req.headers)) {

@@ -3,7 +3,7 @@ var mockApiConfig;
 var responseErrorHandler;
 
 import axios from 'axios';
-import { AUTH_EXPIRED_EVENT, fetchNews, fetchReaderArticle } from './api';
+import { AUTH_EXPIRED_EVENT, fetchNews, fetchReaderArticle, submitFeedback } from './api';
 
 vi.mock('axios', () => {
   const axios = {
@@ -58,6 +58,18 @@ describe('api service', () => {
     });
   });
 
+  test('encodes reader article ids in route paths', async () => {
+    mockApi.get.mockResolvedValue({
+      data: { articleId: 'source/article 1' }
+    });
+
+    await fetchReaderArticle('source/article 1');
+
+    expect(mockApi.get).toHaveBeenCalledWith('/articles/source%2Farticle%201/reader', expect.objectContaining({
+      timeout: 30000
+    }));
+  });
+
   test('targets the browser-facing BFF API namespace', () => {
     expect(mockApiConfig).toEqual(expect.objectContaining({
       baseURL: '/api',
@@ -73,6 +85,21 @@ describe('api service', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/news', expect.objectContaining({
       params: expect.objectContaining({ refresh: 'true' })
     }));
+  });
+
+  test('lets the browser set multipart feedback boundaries', async () => {
+    mockApi.post.mockResolvedValue({ data: { success: true } });
+    const attachment = new File(['image'], 'screenshot.png', { type: 'image/png' });
+
+    await submitFeedback({
+      category: 'bug',
+      title: 'Upload bug',
+      description: 'The attachment should upload.',
+      attachment
+    });
+
+    expect(mockApi.post).toHaveBeenCalledWith('/me/feedback', expect.any(FormData));
+    expect(mockApiConfig.headers?.['Content-Type']).toBeUndefined();
   });
 
   test('broadcasts auth expiry when a non-auth request returns 401', async () => {

@@ -18,17 +18,7 @@ function notifyAuthExpired() {
 const api = axios.create({
   baseURL: '/api',
   timeout: 15000,
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
-
-api.interceptors.request.use((config) => {
-  const nextConfig = { ...config };
-  nextConfig.headers = nextConfig.headers || {};
-
-  return nextConfig;
+  withCredentials: true
 });
 
 api.interceptors.response.use(
@@ -84,11 +74,6 @@ export const fetchCurrentUser = async () => {
   return response.data;
 };
 
-export const fetchApiTokenStatus = async () => {
-  const response = await api.get('/me/api-token');
-  return response.data;
-};
-
 export const createApiToken = async (payload = {}) => {
   const response = await api.post('/me/api-token', payload);
   return response.data;
@@ -114,11 +99,7 @@ export const submitFeedback = async ({ category, title, description, attachment 
     formData.append('attachment', attachment);
   }
 
-  const response = await api.post('/me/feedback', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  });
+  const response = await api.post('/me/feedback', formData);
   return response.data;
 };
 
@@ -205,8 +186,8 @@ export const fetchNews = async ({
     params.refresh = 'true';
   }
 
-  if (!includeFilters) {
-    params.includeFilters = 'false';
+  if (includeFilters) {
+    params.includeFilters = 'true';
   }
 
   const response = await api.get('/news', { params, signal });
@@ -214,7 +195,7 @@ export const fetchNews = async ({
 };
 
 export const fetchReaderArticle = async (articleId, { refresh = false, signal } = {}) => {
-  const response = await api.get(`/articles/${articleId}/reader`, {
+  const response = await api.get(`/articles/${encodeURIComponent(articleId)}/reader`, {
     params: refresh ? { refresh: 'true' } : undefined,
     signal,
     timeout: READER_REQUEST_TIMEOUT_MS

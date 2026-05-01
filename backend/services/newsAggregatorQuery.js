@@ -1,8 +1,11 @@
 const database = require('./database');
 const newsSources = require('../config/newsSources');
 const { buildDomainSourceGroups, getConfiguredSourceGroups } = require('../utils/sourceCatalog');
-const { createStandaloneGroup } = require('./newsAggregatorGrouping');
-const ARTICLE_RETENTION_HOURS = parseInt(process.env.ARTICLE_RETENTION_HOURS || '24', 10);
+const { groupSimilarNews } = require('./newsAggregatorGrouping');
+const { parseIntegerEnv } = require('../utils/env');
+
+const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
+const GROUP_PAGINATION_ARTICLE_BATCH_SIZE = 250;
 
 function expandConfiguredSources() {
   return newsSources;
@@ -36,6 +39,7 @@ function getAvailableSources(userContext = {}, userSources = null) {
         id: group.id,
         name: group.name,
         language: group.language,
+        iconUrl: group.iconUrl || '',
         subSources: group.subSources.map((subSource) => ({ ...subSource }))
       });
       return;
@@ -69,8 +73,8 @@ function getQueryOptions(userContext = {}) {
   };
 }
 
-function buildNextCursor(items = []) {
-  const lastItem = items[items.length - 1];
+function buildNextCursor(groups = []) {
+  const lastItem = groups[groups.length - 1];
   if (!lastItem?.pubDate || !lastItem?.id) {
     return null;
   }
@@ -81,11 +85,80 @@ function buildNextCursor(items = []) {
   };
 }
 
+function compareFeedPosition(left = {}, right = {}) {
+  const pubDateComparison = String(right.pubDate || '').localeCompare(String(left.pubDate || ''));
+  return pubDateComparison || String(right.id || '').localeCompare(String(left.id || ''));
+}
+
+function isBeforeCursor(group = {}, cursor = {}) {
+  if (!cursor.beforePubDate) {
+    return true;
+  }
+
+  const groupPubDate = String(group.pubDate || '');
+  const cursorPubDate = String(cursor.beforePubDate || '');
+  if (groupPubDate < cursorPubDate) {
+    return true;
+  }
+
+  if (groupPubDate > cursorPubDate) {
+    return false;
+  }
+
+  return !cursor.beforeId || String(group.id || '') < String(cursor.beforeId || '');
+}
+
+function getGroupPageStart(groups = [], filters = {}, page = 1, pageSize = 12) {
+  if (filters.beforePubDate || filters.beforeId) {
+    return groups.findIndex((group) => isBeforeCursor(group, filters));
+  }
+
+  return (page - 1) * pageSize;
+}
+
+function fetchAllMatchingArticles(filters = {}, queryOptions = {}) {
+  const articles = [];
+  let cursor = {
+    beforePubDate: '',
+    beforeId: ''
+  };
+  let hasMoreArticles = true;
+
+  while (hasMoreArticles) {
+    const batch = database.getArticles({
+      search: filters.search,
+      sourceIds: filters.sourceIds,
+      topics: filters.topics,
+      recentHours: filters.recentHours,
+      beforePubDate: cursor.beforePubDate,
+      beforeId: cursor.beforeId,
+      limit: GROUP_PAGINATION_ARTICLE_BATCH_SIZE + 1,
+      offset: 0
+    }, queryOptions);
+    const pageArticles = batch.length > GROUP_PAGINATION_ARTICLE_BATCH_SIZE
+      ? batch.slice(0, GROUP_PAGINATION_ARTICLE_BATCH_SIZE)
+      : batch;
+
+    articles.push(...pageArticles);
+    hasMoreArticles = batch.length > GROUP_PAGINATION_ARTICLE_BATCH_SIZE;
+
+    const nextCursor = buildNextCursor(pageArticles);
+    if (!hasMoreArticles || !nextCursor) {
+      break;
+    }
+
+    cursor = nextCursor;
+  }
+
+  return articles;
+}
+
 function buildSourceCatalogResponse(availableSources = []) {
   return availableSources.map((source) => ({
     id: source.id,
     name: source.name,
     language: source.language || null,
+    iconUrl: source.iconUrl || '',
     subSources: Array.isArray(source.subSources) ? source.subSources : []
   }));
 }
@@ -110,30 +183,24 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
 
   const page = Math.max(1, Number(filters.page) || 1);
   const pageSize = Math.max(1, Math.min(Number(filters.pageSize) || 12, 30));
-  const usesCursor = Boolean(filters.beforePubDate || filters.beforeId);
-  const articles = database.getArticles({
-    search: filters.search,
-    sourceIds: filters.sourceIds,
-    topics: filters.topics,
-    recentHours: filters.recentHours,
-    beforePubDate: filters.beforePubDate,
-    beforeId: filters.beforeId,
-    limit: pageSize + 1,
-    offset: usesCursor ? 0 : (page - 1) * pageSize
-  }, queryOptions);
-  const hasMore = articles.length > pageSize;
-  const pageArticles = hasMore ? articles.slice(0, pageSize) : articles;
+  const articles = fetchAllMatchingArticles(filters, queryOptions);
+  const allGroups = groupSimilarNews(articles).sort(compareFeedPosition);
+  const pageStart = getGroupPageStart(allGroups, filters, page, pageSize);
+  const safePageStart = pageStart < 0 ? allGroups.length : pageStart;
+  const pageGroups = allGroups.slice(safePageStart, safePageStart + pageSize);
+  const hasMore = allGroups.length > safePageStart + pageSize;
   const latestIngestion = database.getLatestIngestionRun();
   const includeFilters = filters.includeFilters !== false;
 
   return {
-    items: pageArticles.map((article) => createStandaloneGroup(article)),
+    items: pageGroups,
     meta: {
       page,
       pageSize,
       hasMore,
-      nextCursor: hasMore ? buildNextCursor(pageArticles) : null,
-      totalGroups: !hasMore && !filters.beforePubDate && !filters.beforeId ? pageArticles.length : null,
+      nextCursor: hasMore ? buildNextCursor(pageGroups) : null,
+      returnedGroups: pageGroups.length,
+      totalGroups: null,
       scannedArticles: articles.length,
       lastRefreshAt: getLastRefreshAt(),
       ingestion: latestIngestion,
