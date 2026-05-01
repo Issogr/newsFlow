@@ -26,6 +26,7 @@ ENV PORT=80
 COPY --from=bff-deps /app/bff/node_modules ./node_modules
 COPY bff/package*.json ./
 COPY bff/server.js ./server.js
+COPY bff/lib ./lib
 COPY --from=frontend-build /app/frontend/dist ./public
 RUN mkdir -p data && chown -R node:node /app/bff
 
