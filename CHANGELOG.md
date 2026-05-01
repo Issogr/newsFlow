@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.3.1
+
+- fixed mobile news cards so feed items stay within the viewport and card images no longer resize unexpectedly while scrolling
+
 ## 3.3
 
 - refreshed news cards into a single social-style layout that keeps source icons, dates, topics, sharing, reader mode, original links, and image-disable behavior without a separate compact card style

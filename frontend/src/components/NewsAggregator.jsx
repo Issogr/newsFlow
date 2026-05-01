@@ -396,7 +396,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
+    <div className="min-h-screen overflow-x-hidden bg-slate-100 text-slate-900">
       <header className={`sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md transition-shadow duration-200 ${topNavCompact ? 'shadow-md' : 'shadow-sm'}`}>
         <div className={`mx-auto flex max-w-7xl flex-col px-4 transition-all duration-200 lg:px-6 ${topNavCompact ? 'gap-2 py-2.5' : 'gap-4 py-5'}`}>
           <div className="flex items-center justify-between gap-3">
@@ -534,7 +534,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-4 pb-24 md:pb-10 lg:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-4 pb-24 md:pb-10 lg:px-6">
         {loading && !loadingMore ? (
           <div className="flex h-64 flex-col items-center justify-center gap-3">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
@@ -561,9 +561,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
               </div>
             )}
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {news.map((group) => (
-                <div key={group.id}>
+                <div key={group.id} className="min-w-0">
                   <NewsCard
                     group={group}
                     showImages={showNewsImages}
