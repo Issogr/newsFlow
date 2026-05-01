@@ -139,6 +139,11 @@ function getCookieSecureSetting() {
     return false;
   }
 
+  const appBaseUrl = String(process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim();
+  if (appBaseUrl.startsWith('https://')) {
+    return true;
+  }
+
   return 'auto';
 }
 

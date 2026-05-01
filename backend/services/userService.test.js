@@ -177,4 +177,45 @@ describe('userService imports', () => {
       code: 'UNAUTHORIZED'
     });
   });
+
+  test('updates custom-source metadata without revalidating the unchanged RSS URL', async () => {
+    const authPayload = await userService.registerUser({ username: 'source-owner', password: 'secret123' });
+
+    rssParser.validateFeedUrl.mockResolvedValueOnce({ title: 'Original Feed', language: 'en', itemCount: 4 });
+    const source = await userService.addUserSource(authPayload.user.id, {
+      url: 'https://example.com/feed.xml'
+    });
+
+    rssParser.validateFeedUrl.mockClear();
+    rssParser.validateFeedUrl.mockRejectedValue(new Error('upstream offline'));
+
+    const updated = await userService.updateUserSource(authPayload.user.id, source.id, {
+      name: 'Renamed Feed',
+      isActive: false
+    });
+
+    expect(rssParser.validateFeedUrl).not.toHaveBeenCalled();
+    expect(updated).toMatchObject({
+      name: 'Renamed Feed',
+      url: 'https://example.com/feed.xml',
+      isActive: false
+    });
+  });
+
+  test('batches authenticated public API usage until an explicit flush', async () => {
+    const authPayload = await userService.registerUser({ username: 'api-user', password: 'secret123' });
+    const userId = authPayload.user.id;
+
+    userService.recordPublicApiRequestUsage({ authenticated: true, userId, usedAt: '2026-03-07T10:00:00.000Z' });
+    userService.recordPublicApiRequestUsage({ authenticated: true, userId, usedAt: '2026-03-07T10:01:00.000Z' });
+
+    expect(database.findUserById(userId).publicApiRequestCount).toBe(0);
+
+    userService.flushAnonymousPublicApiUsage({ force: true });
+
+    expect(database.findUserById(userId)).toMatchObject({
+      publicApiRequestCount: 2,
+      publicApiLastUsedAt: '2026-03-07T10:01:00.000Z'
+    });
+  });
 });

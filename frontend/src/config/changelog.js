@@ -5,6 +5,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
+      '⚡ Feed refreshes now start quickly and update the cached feed when the source refresh finishes, so slow RSS sources no longer block the app.',
+      '🗞️ Related articles from different sources are grouped into cleaner story cards again.',
+      '🛡️ Custom source edits and language storage are more resilient when an RSS site or browser storage is temporarily unavailable.',
       '🧹 A code audit cleaned up duplicated and stale paths so sharing, release notes, reader mode, and API reads stay easier to keep consistent.',
       '🛡️ Runtime edge cases are safer, including feed settings, proxy headers, session cleanup, and AI topic batches that hit their processing cap.',
       '🧯 Feed pagination, reconnects, and reader-mode edge cases are steadier, with fewer duplicate loads and fewer stale errors.',
@@ -25,6 +28,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
+      '⚡ Gli aggiornamenti del feed partono subito e ricaricano la cache quando le fonti hanno finito, cosi le RSS lente non bloccano piu l app.',
+      '🗞️ Gli articoli collegati da fonti diverse tornano a essere raccolti in card storia piu pulite.',
+      '🛡️ Le modifiche alle fonti personalizzate e il salvataggio della lingua sono piu robusti quando un sito RSS o lo storage del browser non risponde.',
       '🧹 Un audit del codice ha ripulito percorsi duplicati o non piu usati, cosi condivisione, note di rilascio, lettura e API restano piu coerenti.',
       '🛡️ I casi limite di runtime sono piu sicuri, incluse impostazioni feed, header proxy, pulizia sessioni e batch AI che raggiungono il limite.',
       '🧯 Paginazione del feed, riconnessioni e casi limite della modalita lettura sono piu stabili, con meno caricamenti duplicati e meno errori rimasti in pagina.',

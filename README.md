@@ -288,9 +288,9 @@ Scheduled ingestion refreshes only sources assigned to recently active users.
 - Default sources are considered assigned when a user has not excluded the source family or subsource.
 - Custom sources are assigned to their owning user.
 - Normal app feed loads read cached articles without triggering upstream RSS requests.
-- Clicking the top-navbar refresh button refreshes the user's assigned default and custom sources, then reads the updated feed.
+- Clicking the top-navbar refresh button queues a refresh for the user's assigned default and custom sources, returns the cached feed immediately, then reloads the cached feed when the refresh completes.
 - AI topic completion can update the visible cached feed automatically, but this does not trigger another RSS/source refresh.
-- If another `/news` request arrives while that manual refresh is still running, it waits for the in-flight refresh before reading the feed.
+- If another `/news` request arrives while that manual refresh is still running, it keeps serving cached articles and reports the refresh as pending.
 - If the database is empty, the backend still seeds the default source set so first-run startup has data.
 
 ### Shared Custom RSS URLs

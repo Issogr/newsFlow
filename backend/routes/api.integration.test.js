@@ -508,6 +508,10 @@ describe('API auth and user flows', () => {
       cachedOnly: true
     });
 
+    expect(database.findUserById(registerResponse.body.user.id).publicApiRequestCount).toBe(0);
+    userService.flushAnonymousPublicApiUsage({ force: true });
+    require('../utils/auth').flushApiTokenUsage({ force: true });
+
     const usageRow = database.getDb().prepare(`
       SELECT public_api_request_count AS publicApiRequestCount,
              public_api_last_used_at AS publicApiLastUsedAt

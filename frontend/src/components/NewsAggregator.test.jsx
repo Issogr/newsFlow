@@ -207,6 +207,24 @@ describe('NewsAggregator', () => {
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
   });
 
+  test('renders when locale storage is unavailable', async () => {
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'Stored-locale fallback headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    await renderNewsAggregator();
+
+    expect(await screen.findByText('Stored-locale fallback headline')).toBeInTheDocument();
+
+    setItemSpy.mockRestore();
+  });
+
   test('forces a source refresh from the top navigation refresh button', async () => {
     fetchNews.mockResolvedValue({
       items: [{ id: 'group-1', title: 'Current headline' }],

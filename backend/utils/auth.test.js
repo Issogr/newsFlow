@@ -108,4 +108,33 @@ describe('auth session cleanup throttling', () => {
       expect(databaseMock.touchUserActivity).toHaveBeenCalledWith('user-1', expect.any(String), expect.any(Number));
     });
   });
+
+  test('batches API token usage updates until flush', () => {
+    jest.resetModules();
+
+    const databaseMock = {
+      findActiveApiTokenByHash: jest.fn(() => ({
+        id: 'token-1',
+        userId: 'user-1',
+        username: 'alice',
+        expiresAt: new Date(Date.now() + (60 * 60 * 1000)).toISOString()
+      })),
+      touchApiTokenUsage: jest.fn(() => 1),
+      purgeExpiredApiTokens: jest.fn(() => 0)
+    };
+
+    jest.doMock('../services/database', () => databaseMock);
+
+    jest.isolateModules(() => {
+      const auth = require('./auth');
+
+      auth.resolveAuthenticatedApiToken({ headers: { authorization: 'Bearer nfapi_secret' } });
+
+      expect(databaseMock.touchApiTokenUsage).not.toHaveBeenCalled();
+
+      auth.flushApiTokenUsage({ force: true });
+
+      expect(databaseMock.touchApiTokenUsage).toHaveBeenCalledWith('token-1', expect.any(String));
+    });
+  });
 });

@@ -2,6 +2,10 @@
 
 ## 3.2.13.3
 
+- kept normal feed reads read-only by moving article cleanup out of the cached request path, queued manual source refreshes asynchronously, and sent a completion refresh event so users are not blocked by slow RSS sources
+- restored story grouping for matching articles across sources, batching related cards by normalized URL/title windows while preserving cursor pagination over the underlying articles
+- reduced public API SQLite write pressure by batching authenticated usage counters and API-token last-used updates, matching the existing anonymous usage buffering model
+- made custom-source metadata edits independent from upstream RSS availability when the source URL is unchanged, and guarded locale persistence when browser storage is unavailable
 - closed audit findings around AI topic caps, env parsing, BFF forwarded headers, stale BFF session-user rows, and hop-by-hop response headers so edge-case runtime behavior is safer and more predictable
 - reduced duplicated/dead code across release-note dismissal, sharing status, backend user contexts, JSON parsing, AI classifier exports, reader props, and stale i18n metadata
 - optimized removed-source cleanup and chunked article/topic ID lookups to avoid broad per-row SQLite work and oversized `IN` queries as data grows

@@ -1,7 +1,7 @@
 const database = require('./database');
 const newsSources = require('../config/newsSources');
 const { buildDomainSourceGroups, getConfiguredSourceGroups } = require('../utils/sourceCatalog');
-const { createStandaloneGroup } = require('./newsAggregatorGrouping');
+const { groupSimilarNews } = require('./newsAggregatorGrouping');
 const { parseIntegerEnv } = require('../utils/env');
 
 const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
@@ -125,17 +125,18 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   }, queryOptions);
   const hasMore = articles.length > pageSize;
   const pageArticles = hasMore ? articles.slice(0, pageSize) : articles;
+  const groups = groupSimilarNews(pageArticles);
   const latestIngestion = database.getLatestIngestionRun();
   const includeFilters = filters.includeFilters !== false;
 
   return {
-    items: pageArticles.map((article) => createStandaloneGroup(article)),
+    items: groups,
     meta: {
       page,
       pageSize,
       hasMore,
       nextCursor: hasMore ? buildNextCursor(pageArticles) : null,
-      returnedGroups: pageArticles.length,
+      returnedGroups: groups.length,
       totalGroups: null,
       scannedArticles: articles.length,
       lastRefreshAt: getLastRefreshAt(),

@@ -42,7 +42,8 @@ describe('useTopicRefreshSocket', () => {
     expect(socket.emit).toHaveBeenCalledWith('subscribe:filters', subscription);
     expect(onNewsUpdate).toHaveBeenCalledTimes(1);
     expect(onNewsUpdate).toHaveBeenCalledWith(expect.objectContaining({ groupIds: ['group-1'] }));
-    expect(onTopicRefresh).toHaveBeenCalledTimes(1);
+    expect(onTopicRefresh).toHaveBeenCalledTimes(2);
+    expect(onTopicRefresh).toHaveBeenCalledWith({ refresh: true, reason: 'news' });
     expect(onTopicRefresh).toHaveBeenCalledWith({ refresh: true, reason: 'topics' });
   });
 

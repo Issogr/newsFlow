@@ -42,7 +42,7 @@ const useTopicRefreshSocket = ({
     socketRef.current = socket;
 
     const handleNewsUpdate = (payload) => {
-      if (payload?.refresh === true && payload.reason === 'topics') {
+      if (payload?.refresh === true) {
         topicRefreshCallbackRef.current?.(payload);
         return;
       }

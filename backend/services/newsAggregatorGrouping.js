@@ -7,6 +7,11 @@ const {
 } = require('../utils/sourceCatalog');
 const { normalizeArticleUrl } = require('../utils/articleIdentity');
 
+const TITLE_GROUP_WINDOW_MS = 12 * 60 * 60 * 1000;
+const TITLE_STOP_WORDS = new Set([
+  'a', 'ad', 'al', 'alla', 'and', 'con', 'da', 'dal', 'dalla', 'de', 'del', 'della', 'di', 'e', 'for', 'from', 'il', 'in', 'la', 'le', 'lo', 'of', 'on', 'per', 'the', 'to', 'un', 'una', 'with'
+]);
+
 function getStableArticleKey(item) {
   if (!item || typeof item !== 'object') {
     return '';
@@ -47,12 +52,145 @@ function createStandaloneGroup(item) {
   };
 }
 
+function normalizeTitleKey(title = '') {
+  return String(title || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 2 && !TITLE_STOP_WORDS.has(token))
+    .slice(0, 12)
+    .join(' ');
+}
+
+function getArticleTimestamp(item = {}) {
+  const parsed = Date.parse(item.pubDate || '');
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getGroupOwnerKey(item = {}) {
+  return item.ownerUserId || '';
+}
+
+function getCanonicalGroupKey(item = {}) {
+  const canonicalUrl = normalizeArticleUrl(item.canonicalUrl || item.url || '');
+  return canonicalUrl ? `url:${getGroupOwnerKey(item)}:${canonicalUrl}` : '';
+}
+
+function getTitleGroupKey(item = {}) {
+  const titleKey = normalizeTitleKey(item.title);
+  return titleKey ? `title:${getGroupOwnerKey(item)}:${titleKey}` : '';
+}
+
+function canGroupByTitle(item, group) {
+  if (!group || getGroupOwnerKey(item) !== group.ownerKey) {
+    return false;
+  }
+
+  const itemTimestamp = getArticleTimestamp(item);
+  if (!itemTimestamp || !group.latestTimestamp) {
+    return false;
+  }
+
+  return Math.abs(group.latestTimestamp - itemTimestamp) <= TITLE_GROUP_WINDOW_MS;
+}
+
+function addUniqueTopicDetails(topicMap, entries = []) {
+  entries.forEach((entry) => {
+    const topic = String(entry?.topic || entry || '').trim();
+    if (!topic) {
+      return;
+    }
+
+    const key = topic.toLowerCase();
+    const current = topicMap.get(key);
+    const nextEntry = entry && typeof entry === 'object' ? { ...entry, topic } : { topic };
+
+    if (!current || nextEntry.source === 'ai') {
+      topicMap.set(key, nextEntry);
+    }
+  });
+}
+
+function createGroupFromItems(items = []) {
+  const sortedItems = [...items].sort((left, right) => getArticleTimestamp(right) - getArticleTimestamp(left));
+  const primaryItem = sortedItems[0];
+
+  if (!primaryItem) {
+    return null;
+  }
+
+  const sourceNames = new Set();
+  const topicMap = new Map();
+
+  sortedItems.forEach((item) => {
+    if (item.source) {
+      sourceNames.add(item.source);
+    }
+
+    addUniqueTopicDetails(topicMap, item.topicDetails || []);
+    addUniqueTopicDetails(topicMap, item.topics || []);
+  });
+
+  const topicDetails = [...topicMap.values()];
+
+  return {
+    id: buildStableGroupId(sortedItems),
+    items: sortedItems,
+    ownerUserId: primaryItem.ownerUserId || null,
+    sources: [...sourceNames],
+    title: primaryItem.title,
+    description: primaryItem.description,
+    pubDate: primaryItem.pubDate,
+    topics: topicDetails.map((entry) => entry.topic),
+    topicDetails,
+    url: primaryItem.url
+  };
+}
+
 function groupSimilarNews(newsItems) {
-  return sortGroupsByPubDate(
-    (Array.isArray(newsItems) ? newsItems : [])
-      .filter((item) => item?.title)
-      .map((item) => createStandaloneGroup(item))
-  );
+  const groups = [];
+  const groupsByCanonicalKey = new Map();
+  const groupsByTitleKey = new Map();
+
+  (Array.isArray(newsItems) ? newsItems : [])
+    .filter((item) => item?.title)
+    .forEach((item) => {
+      const canonicalKey = getCanonicalGroupKey(item);
+      const titleKey = getTitleGroupKey(item);
+      let group = canonicalKey ? groupsByCanonicalKey.get(canonicalKey) : null;
+
+      if (!group && titleKey) {
+        const titleCandidate = groupsByTitleKey.get(titleKey);
+        if (canGroupByTitle(item, titleCandidate)) {
+          group = titleCandidate;
+        }
+      }
+
+      if (!group) {
+        group = {
+          ownerKey: getGroupOwnerKey(item),
+          latestTimestamp: getArticleTimestamp(item),
+          items: []
+        };
+        groups.push(group);
+      }
+
+      group.items.push(item);
+      group.latestTimestamp = Math.max(group.latestTimestamp || 0, getArticleTimestamp(item));
+
+      if (canonicalKey) {
+        groupsByCanonicalKey.set(canonicalKey, group);
+      }
+
+      if (titleKey) {
+        groupsByTitleKey.set(titleKey, group);
+      }
+    });
+
+  return sortGroupsByPubDate(groups.map((group) => createGroupFromItems(group.items)).filter(Boolean));
 }
 
 function getArticleQualityScore(article = {}) {

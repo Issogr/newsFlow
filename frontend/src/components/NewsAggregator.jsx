@@ -161,7 +161,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
   useEffect(() => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    try {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch {
+      // Keep the runtime locale even when browser storage is unavailable.
+    }
     document.documentElement.lang = locale;
   }, [locale]);
 

@@ -11,10 +11,10 @@ const {
   getCanonicalSourceId
 } = require('../utils/sourceCatalog');
 const {
-  purgeExpiredArticles,
   createEmptyRefreshPayload,
   ingestSourceConfigs
 } = require('./newsAggregatorIngestion');
+const websocketService = require('./websocketService');
 const { parseIntegerEnv } = require('../utils/env');
 
 const SCRAPE_INTERVAL_MS = parseIntegerEnv('SCRAPE_INTERVAL_MS', 900000, { min: 1000 });
@@ -136,6 +136,10 @@ function getUserAssignedSourceConfigs(userContext = {}) {
 function startUserAssignedSourceRefresh(userContext = {}, options = {}) {
   const userId = userContext.userId;
 
+  if (userId && userImmediateRefreshPromises.has(userId)) {
+    return userImmediateRefreshPromises.get(userId);
+  }
+
   if (!userId || (!options.force && usersRefreshedSinceScheduledIngestion.has(userId))) {
     return createEmptyRefreshPayload(getLastRefreshAt());
   }
@@ -148,13 +152,19 @@ function startUserAssignedSourceRefresh(userContext = {}, options = {}) {
       return createEmptyRefreshPayload(getLastRefreshAt());
     }
 
-    return ingestSourceConfigs(sourceConfigs, {
+    const payload = await ingestSourceConfigs(sourceConfigs, {
       broadcast: options.broadcast === true,
       includeMaintenance: false,
       failWhenEmpty: false,
       updateRefreshTimestamp: true,
       trackIngestionRun: false
     }, getIngestionRuntime());
+
+    if (options.broadcastRefreshOnCompletion === true) {
+      websocketService.broadcastFeedRefresh({ userIds: [userId], reason: 'news' });
+    }
+
+    return payload;
   }).catch((error) => {
     logger.warn(`Immediate assigned-source refresh failed for user ${userId}: ${error.message}`);
     return createEmptyRefreshPayload(getLastRefreshAt());
@@ -244,8 +254,6 @@ async function refreshUserSources(userId, options = {}) {
 }
 
 async function ensureSeedData() {
-  purgeExpiredArticles();
-
   if (database.countArticles() > 0) {
     return;
   }
@@ -257,9 +265,7 @@ async function getNewsFeed(filters = {}, userContext = {}) {
   await ensureSeedData();
 
   if (filters.refresh) {
-    await startUserAssignedSourceRefresh(userContext, { broadcast: false, force: true });
-  } else if (userImmediateRefreshPromises.has(userContext.userId)) {
-    await waitForExistingUserAssignedSourceRefresh(userContext);
+    startUserAssignedSourceRefresh(userContext, { broadcast: false, force: true, broadcastRefreshOnCompletion: true });
   }
 
   return buildNewsFeed(filters, userContext, {

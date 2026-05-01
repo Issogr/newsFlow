@@ -16,6 +16,7 @@ const { errorMiddleware, createError } = require('./utils/errorHandler');
 const { parseIntegerEnv } = require('./utils/env');
 const { getAllowedOrigins, isOriginAllowed } = require('./utils/networkConfig');
 const { hasTrustedInternalService } = require('./utils/internalRequestGate');
+const { flushApiTokenUsage } = require('./utils/auth');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -158,8 +159,9 @@ process.on('SIGTERM', () => {
   newsService.stopScheduler();
   try {
     userService.flushAnonymousPublicApiUsage({ force: true });
+    flushApiTokenUsage({ force: true });
   } catch (error) {
-    logger.warn(`Anonymous public API usage flush failed during shutdown: ${error.message}`);
+    logger.warn(`Public API usage flush failed during shutdown: ${error.message}`);
   }
   rssParser.shutdown();
   server.close(() => process.exit(0));

@@ -31,6 +31,8 @@ const ADMIN_BOOTSTRAP_TTL_MINUTES = parseIntegerEnv('ADMIN_BOOTSTRAP_TTL_MINUTES
 const ONLINE_ACTIVITY_WINDOW_MINUTES = parseIntegerEnv('ONLINE_ACTIVITY_WINDOW_MINUTES', 5, { min: 0 });
 const ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS = parseIntegerEnv('ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS', 5000, { min: 1000 });
 const ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD = parseIntegerEnv('ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD', 100, { min: 1 });
+const AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS = parseIntegerEnv('AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS', 5000, { min: 1000 });
+const AUTHENTICATED_PUBLIC_USAGE_FLUSH_THRESHOLD = parseIntegerEnv('AUTHENTICATED_PUBLIC_USAGE_FLUSH_THRESHOLD', 50, { min: 1 });
 const SUPPORTED_LANGUAGES = new Set(['auto', 'it', 'en']);
 const SUPPORTED_THEME_MODES = new Set(['system', 'light', 'dark']);
 const SUPPORTED_READER_PANEL_POSITIONS = new Set(['left', 'center', 'right']);
@@ -38,10 +40,55 @@ const SUPPORTED_READER_TEXT_SIZES = new Set(['small', 'medium', 'large']);
 
 let pendingAnonymousPublicApiRequests = 0;
 let lastAnonymousPublicApiUsageFlushAt = Date.now();
+let pendingAuthenticatedPublicApiRequests = new Map();
+let pendingAuthenticatedPublicApiRequestCount = 0;
+let lastAuthenticatedPublicApiUsageFlushAt = Date.now();
+
+function flushAuthenticatedPublicApiUsage({ force = false } = {}) {
+  if (pendingAuthenticatedPublicApiRequestCount <= 0) {
+    return 0;
+  }
+
+  const now = Date.now();
+  if (
+    !force
+    && pendingAuthenticatedPublicApiRequestCount < AUTHENTICATED_PUBLIC_USAGE_FLUSH_THRESHOLD
+    && now - lastAuthenticatedPublicApiUsageFlushAt < AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS
+  ) {
+    return 0;
+  }
+
+  const pendingEntries = [...pendingAuthenticatedPublicApiRequests.entries()];
+  const flushedCount = pendingAuthenticatedPublicApiRequestCount;
+
+  pendingAuthenticatedPublicApiRequests = new Map();
+  pendingAuthenticatedPublicApiRequestCount = 0;
+  lastAuthenticatedPublicApiUsageFlushAt = now;
+
+  try {
+    pendingEntries.forEach(([userId, usage]) => {
+      database.incrementUserPublicApiUsage(userId, usage.usedAt, usage.count);
+    });
+  } catch (error) {
+    pendingEntries.forEach(([userId, usage]) => {
+      const current = pendingAuthenticatedPublicApiRequests.get(userId) || { count: 0, usedAt: usage.usedAt };
+      pendingAuthenticatedPublicApiRequests.set(userId, {
+        count: current.count + usage.count,
+        usedAt: current.usedAt > usage.usedAt ? current.usedAt : usage.usedAt
+      });
+      pendingAuthenticatedPublicApiRequestCount += usage.count;
+    });
+    throw error;
+  }
+
+  return flushedCount;
+}
 
 function flushAnonymousPublicApiUsage({ force = false } = {}) {
+  const flushedAuthenticatedCount = flushAuthenticatedPublicApiUsage({ force });
+
   if (pendingAnonymousPublicApiRequests <= 0) {
-    return 0;
+    return flushedAuthenticatedCount;
   }
 
   const now = Date.now();
@@ -50,7 +97,7 @@ function flushAnonymousPublicApiUsage({ force = false } = {}) {
     && pendingAnonymousPublicApiRequests < ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD
     && now - lastAnonymousPublicApiUsageFlushAt < ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS
   ) {
-    return 0;
+    return flushedAuthenticatedCount;
   }
 
   const incrementBy = pendingAnonymousPublicApiRequests;
@@ -62,7 +109,7 @@ function flushAnonymousPublicApiUsage({ force = false } = {}) {
     pendingAnonymousPublicApiRequests += incrementBy;
     throw error;
   }
-  return incrementBy;
+  return incrementBy + flushedAuthenticatedCount;
 }
 
 function createId() {
@@ -542,15 +589,16 @@ async function updateUserSource(userId, sourceId, payload = {}) {
   if (!url) {
     throw createError(400, 'RSS URL is required', 'INVALID_SOURCE_PAYLOAD');
   }
+  const urlChanged = url !== existingSource.url;
+  const preview = urlChanged ? await previewUserSource({ url }) : null;
 
-  const preview = await previewUserSource({ url });
   const nextSource = {
-    name: String(payload.name || preview.name || existingSource.name).trim().slice(0, 80),
+    name: String(payload.name || preview?.name || existingSource.name).trim().slice(0, 80),
     url,
-    language: String(payload.language || preview.language || existingSource.language).trim().toLowerCase().slice(0, 5) || existingSource.language,
+    language: String(payload.language || preview?.language || existingSource.language).trim().toLowerCase().slice(0, 5) || existingSource.language,
     isActive: typeof payload.isActive === 'boolean' ? payload.isActive : existingSource.isActive !== false,
     updatedAt: new Date().toISOString(),
-    validatedAt: new Date().toISOString()
+    validatedAt: urlChanged ? new Date().toISOString() : existingSource.validatedAt
   };
 
   if (!nextSource.name) {
@@ -742,7 +790,13 @@ function listUsersForAdmin() {
 
 function recordPublicApiRequestUsage({ authenticated = false, userId = null, usedAt = new Date().toISOString() } = {}) {
   if (authenticated && userId) {
-    database.incrementUserPublicApiUsage(userId, usedAt);
+    const current = pendingAuthenticatedPublicApiRequests.get(userId) || { count: 0, usedAt };
+    pendingAuthenticatedPublicApiRequests.set(userId, {
+      count: current.count + 1,
+      usedAt: current.usedAt > usedAt ? current.usedAt : usedAt
+    });
+    pendingAuthenticatedPublicApiRequestCount += 1;
+    flushAuthenticatedPublicApiUsage();
     return;
   }
 

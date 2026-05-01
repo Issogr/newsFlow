@@ -234,25 +234,39 @@ describe('newsAggregator service flows', () => {
     expect(rssParser.parseFeed).not.toHaveBeenCalled();
   });
 
-  test('getNewsFeed refreshes assigned sources before reading articles when requested', async () => {
+  test('getNewsFeed reads cached articles without running maintenance writes', async () => {
+    await newsAggregator.getNewsFeed({}, { userId: 'user-1' });
+
+    expect(database.normalizeFuturePublicationDates).not.toHaveBeenCalled();
+    expect(database.deleteArticlesOlderThan).not.toHaveBeenCalled();
+  });
+
+  test('getNewsFeed queues assigned-source refresh without blocking cached reads', async () => {
     const allDefaultSourceGroupIds = [...new Set(newsAggregator.newsSources.map((source) => getCanonicalSourceId(source.id, source.name)))];
     const userContext = { userId: 'user-1', excludedSourceIds: allDefaultSourceGroupIds, excludedSubSourceIds: [] };
     const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
+    const parseRelease = createDeferred();
+
     database.listUserSources.mockReturnValue([customSource]);
-    database.getArticles.mockImplementation(() => {
-      expect(rssParser.parseFeed).toHaveBeenCalledWith(expect.objectContaining({ id: 'custom-1' }), {
-        imageFallback: false,
-        throwOnError: true
-      });
+    rssParser.parseFeed.mockImplementation(async (source) => {
+      if (source.id !== 'custom-1') {
+        return [];
+      }
+
+      await parseRelease.promise;
       return [];
     });
 
     const result = await newsAggregator.getNewsFeed({ refresh: true }, userContext);
 
-    expect(result.meta.pendingUserRefresh).toBe(false);
+    expect(database.getArticles).toHaveBeenCalled();
+    expect(result.meta.pendingUserRefresh).toBe(true);
+
+    parseRelease.resolve();
+    await Promise.resolve();
   });
 
-  test('getNewsFeed waits for an existing manual assigned-source refresh before reading feed', async () => {
+  test('getNewsFeed does not wait for an existing manual assigned-source refresh before reading feed', async () => {
     const allDefaultSourceGroupIds = [...new Set(newsAggregator.newsSources.map((source) => getCanonicalSourceId(source.id, source.name)))];
     const userContext = { userId: 'user-1', excludedSourceIds: allDefaultSourceGroupIds, excludedSubSourceIds: [] };
     const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
@@ -275,18 +289,50 @@ describe('newsAggregator service flows', () => {
     await parseStarted;
 
     expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(true);
-    expect(database.getArticles).not.toHaveBeenCalled();
+    await refreshRequest;
+    expect(database.getArticles).toHaveBeenCalledTimes(1);
 
-    const secondFeed = newsAggregator.getNewsFeed({}, userContext);
-    await Promise.resolve();
+    const secondFeed = await newsAggregator.getNewsFeed({}, userContext);
 
-    expect(database.getArticles).not.toHaveBeenCalled();
+    expect(secondFeed.meta.pendingUserRefresh).toBe(true);
+    expect(database.getArticles).toHaveBeenCalledTimes(2);
 
     parseRelease.resolve();
-    await refreshRequest;
-    await secondFeed;
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
 
-    expect(database.getArticles).toHaveBeenCalledTimes(2);
+    expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(false);
+  });
+
+  test('getNewsFeed groups matching articles into one story group', async () => {
+    database.getArticles.mockReturnValue([
+      {
+        id: 'article-1',
+        sourceId: 'source-a',
+        source: 'Source A',
+        title: 'Shared market story',
+        description: 'First version',
+        pubDate: '2026-03-07T10:00:00.000Z',
+        url: 'https://a.example.com/shared-market-story',
+        topics: ['Economia']
+      },
+      {
+        id: 'article-2',
+        sourceId: 'source-b',
+        source: 'Source B',
+        title: 'Shared market story',
+        description: 'Second version',
+        pubDate: '2026-03-07T09:30:00.000Z',
+        url: 'https://b.example.com/shared-market-story',
+        topics: ['Economia']
+      }
+    ]);
+
+    const result = await newsAggregator.getNewsFeed({ pageSize: 2 }, { userId: 'user-1' });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ title: 'Shared market story' });
+    expect(result.items[0].items.map((item) => item.id)).toEqual(['article-1', 'article-2']);
+    expect(result.meta.returnedGroups).toBe(1);
   });
 
   test('ingestAllNews stores topics and broadcasts global and private groups separately', async () => {
