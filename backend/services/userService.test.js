@@ -1,6 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { hashSessionToken } = require('../utils/auth');
 
 function createTempDbPath() {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'news-user-service-test-'));
@@ -234,6 +235,50 @@ describe('userService imports', () => {
     await expect(userService.loginUser({ username: 'legacy-user', password: 'anything' })).rejects.toMatchObject({
       status: 401,
       code: 'UNAUTHORIZED'
+    });
+  });
+
+  test('does not allow password setup links for Clerk-only temporary accounts', async () => {
+    const clerkAuth = userService.loginWithClerkIdentity({
+      providerUserId: 'user_clerk_blocked',
+      email: 'blocked@example.com',
+      username: 'blocked-clerk-user'
+    });
+
+    try {
+      userService.createUserPasswordSetupLink('admin-user-id', clerkAuth.user.id);
+      throw new Error('Expected Clerk-only account password setup to be rejected');
+    } catch (error) {
+      expect(error).toMatchObject({
+        status: 403,
+        code: 'CLERK_ONLY_ACCOUNT_PASSWORD_DISABLED'
+      });
+    }
+  });
+
+  test('does not complete password setup for Clerk-only temporary accounts', async () => {
+    const clerkAuth = userService.loginWithClerkIdentity({
+      providerUserId: 'user_clerk_token_blocked',
+      email: 'token-blocked@example.com',
+      username: 'token-blocked-clerk-user'
+    });
+    const rawToken = 'clerk-password-setup-token';
+    const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + (60 * 60 * 1000)).toISOString();
+
+    database.createPasswordSetupToken({
+      userId: clerkAuth.user.id,
+      tokenHash: hashSessionToken(rawToken),
+      purpose: 'password-setup',
+      createdByUserId: null,
+      createdAt: now,
+      expiresAt,
+      usedAt: null
+    });
+
+    await expect(userService.completePasswordSetup({ token: rawToken, password: 'renewed123' })).rejects.toMatchObject({
+      status: 403,
+      code: 'CLERK_ONLY_ACCOUNT_PASSWORD_DISABLED'
     });
   });
 

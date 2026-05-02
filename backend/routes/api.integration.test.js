@@ -216,6 +216,29 @@ describe('API auth and user flows', () => {
     });
   });
 
+  test('does not allow admin password setup links for Clerk-only temporary accounts', async () => {
+    const bootstrap = userService.ensureAdminBootstrap();
+    const adminSetupResponse = await request(app)
+      .post('/api/auth/password-setup/complete')
+      .send({ token: bootstrap.token, password: 'secret123' })
+      .expect(200);
+    const adminSessionCookie = getSessionCookie(adminSetupResponse);
+    const clerkAuth = userService.loginWithClerkIdentity({
+      providerUserId: 'user_clerk_no_local_password',
+      email: 'clerk-no-local@example.com',
+      username: 'clerk-no-local'
+    });
+
+    const response = await request(app)
+      .post(`/api/admin/users/${clerkAuth.user.id}/password-setup-link`)
+      .set('Cookie', adminSessionCookie)
+      .expect(403);
+
+    expect(response.body.error).toMatchObject({
+      code: 'CLERK_ONLY_ACCOUNT_PASSWORD_DISABLED'
+    });
+  });
+
   test('rejects registration with a short password', async () => {
     const response = await request(app)
       .post('/api/auth/register')

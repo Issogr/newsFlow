@@ -351,6 +351,28 @@ function buildUserPayload(user) {
   };
 }
 
+function isClerkOnlyPasswordlessUser({ userId = '', passwordHash = null } = {}) {
+  if (!userId || passwordHash) {
+    return false;
+  }
+
+  return Boolean(database.findUserAuthIdentityByUserProvider(userId, 'clerk'));
+}
+
+function assertLocalPasswordCanBeEnabled({ userId = '', passwordHash = null, purpose = '' } = {}) {
+  if (purpose === 'admin-bootstrap') {
+    return;
+  }
+
+  if (isClerkOnlyPasswordlessUser({ userId, passwordHash })) {
+    throw createError(
+      403,
+      'Clerk-only accounts must be merged with an existing local account before local password login can be enabled',
+      'CLERK_ONLY_ACCOUNT_PASSWORD_DISABLED'
+    );
+  }
+}
+
 function createUserSessionForAuthResponse(userId, now = new Date().toISOString()) {
   const sessionToken = generateSessionToken();
 
@@ -908,6 +930,12 @@ async function completePasswordSetup(payload = {}) {
   const user = database.getDb().transaction(() => {
     const tokenRecord = getPasswordSetupTokenRecord(rawToken);
 
+    assertLocalPasswordCanBeEnabled({
+      userId: tokenRecord.userId,
+      passwordHash: tokenRecord.passwordHash,
+      purpose: tokenRecord.purpose
+    });
+
     const markedUsed = database.markPasswordSetupTokenUsed(tokenHash, now);
     if (!markedUsed) {
       throw createError(410, 'Password setup link has already been used', 'INVALID_PASSWORD_SETUP_TOKEN');
@@ -989,6 +1017,12 @@ function createUserPasswordSetupLink(adminUserId, targetUserId) {
   if (!targetUser) {
     throw createError(404, 'User not found', 'RESOURCE_NOT_FOUND');
   }
+
+  assertLocalPasswordCanBeEnabled({
+    userId: targetUser.id,
+    passwordHash: targetUser.passwordHash,
+    purpose: 'password-setup'
+  });
 
   database.deleteUnusedPasswordSetupTokens({ userId: targetUser.id, purpose: 'password-setup' });
 
