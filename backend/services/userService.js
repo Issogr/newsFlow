@@ -121,6 +121,39 @@ function sanitizeUsername(username) {
   return String(username || '').trim().slice(0, 40);
 }
 
+function normalizeExternalProvider(provider) {
+  return String(provider || '').trim().toLowerCase().slice(0, 32);
+}
+
+function sanitizeExternalUsernamePart(value) {
+  return String(value || '')
+    .trim()
+    .replace(/@.*$/, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 28);
+}
+
+function createUniqueExternalUsername(identity = {}) {
+  const base = sanitizeExternalUsernamePart(
+    identity.username
+    || identity.email
+    || identity.name
+    || identity.providerUserId
+  ) || 'clerk-user';
+  const safeBase = base.length >= 3 ? base : `clerk-${base}`;
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const suffix = attempt === 0 ? '' : `-${attempt + 1}`;
+    const username = `${safeBase}${suffix}`.slice(0, 40);
+    if (!database.findUserByUsername(username)) {
+      return username;
+    }
+  }
+
+  return `clerk-${createId().slice(0, 16)}`;
+}
+
 function normalizeLanguage(language) {
   const value = String(language || 'auto').trim().toLowerCase();
   return SUPPORTED_LANGUAGES.has(value) ? value : 'auto';
@@ -307,11 +340,29 @@ function getUserSettings(userId) {
 }
 
 function buildUserPayload(user) {
+  const authProviders = database.listUserAuthIdentities(user.id).map((identity) => identity.provider);
+
   return {
     id: user.id,
     username: user.username,
-    isAdmin: String(user.username || '').toLowerCase() === ADMIN_USERNAME.toLowerCase()
+    isAdmin: String(user.username || '').toLowerCase() === ADMIN_USERNAME.toLowerCase(),
+    passwordConfigured: user.passwordConfigured !== false && Boolean(user.passwordHash || user.passwordConfigured),
+    authProviders
   };
+}
+
+function createUserSessionForAuthResponse(userId, now = new Date().toISOString()) {
+  const sessionToken = generateSessionToken();
+
+  database.createUserSession({
+    tokenHash: hashSessionToken(sessionToken),
+    userId,
+    createdAt: now,
+    expiresAt: createSessionExpiryDate()
+  });
+  database.updateUserLogin(userId, now);
+
+  return sessionToken;
 }
 
 function buildAuthResponse(user, sessionToken) {
@@ -475,6 +526,124 @@ async function loginUser(payload = {}) {
   database.updateUserLogin(user.id, now);
 
   return buildAuthResponse(user, sessionToken);
+}
+
+function validateClerkIdentity(identity = {}) {
+  const provider = normalizeExternalProvider(identity.provider || 'clerk');
+  const providerUserId = String(identity.providerUserId || '').trim().slice(0, 128);
+
+  if (provider !== 'clerk' || !providerUserId) {
+    throw createError(400, 'Invalid Clerk identity', 'INVALID_CLERK_IDENTITY');
+  }
+
+  return {
+    provider,
+    providerUserId,
+    email: String(identity.email || '').trim().toLowerCase().slice(0, 320),
+    username: String(identity.username || '').trim().slice(0, 80),
+    name: String(identity.name || '').trim().slice(0, 120)
+  };
+}
+
+function loginWithClerkIdentity(payload = {}) {
+  const identity = validateClerkIdentity(payload);
+  const now = new Date().toISOString();
+
+  const user = database.getDb().transaction(() => {
+    const existingIdentity = database.findUserAuthIdentity(identity.provider, identity.providerUserId);
+    if (existingIdentity) {
+      database.upsertUserAuthIdentity({
+        ...identity,
+        userId: existingIdentity.userId,
+        createdAt: existingIdentity.createdAt,
+        updatedAt: now,
+        lastLoginAt: now
+      });
+      return database.findUserById(existingIdentity.userId);
+    }
+
+    const nextUser = {
+      id: createId(),
+      username: createUniqueExternalUsername(identity),
+      passwordHash: null,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    database.createUser(nextUser);
+    database.upsertUserSettings(nextUser.id, getDefaultSettings({ sourceSetupCompleted: false }));
+    database.upsertUserAuthIdentity({
+      ...identity,
+      userId: nextUser.id,
+      createdAt: now,
+      updatedAt: now,
+      lastLoginAt: now
+    });
+
+    return database.findUserById(nextUser.id);
+  })();
+
+  const sessionToken = createUserSessionForAuthResponse(user.id, now);
+  return buildAuthResponse(user, sessionToken);
+}
+
+async function mergeCurrentUserWithLocalAccount(currentUserId, payload = {}) {
+  const currentUser = database.findUserById(currentUserId);
+  if (!currentUser) {
+    throw createError(401, 'Authentication required', 'UNAUTHORIZED');
+  }
+
+  const currentClerkIdentity = database.findUserAuthIdentityByUserProvider(currentUserId, 'clerk');
+  if (!currentClerkIdentity) {
+    throw createError(400, 'Current account is not authenticated with Clerk', 'CLERK_IDENTITY_REQUIRED');
+  }
+
+  const username = sanitizeUsername(payload.username);
+  const password = String(payload.password || '');
+  const localUser = database.findUserByUsername(username);
+  if (!localUser || !(await verifyPassword(password, localUser.passwordHash))) {
+    throw createError(401, 'Invalid username or password', 'UNAUTHORIZED');
+  }
+
+  const now = new Date().toISOString();
+  const sessionToken = generateSessionToken();
+  const targetUser = database.getDb().transaction(() => {
+    const existingTargetClerkIdentity = database.findUserAuthIdentityByUserProvider(localUser.id, 'clerk');
+    if (
+      existingTargetClerkIdentity
+      && existingTargetClerkIdentity.providerUserId !== currentClerkIdentity.providerUserId
+    ) {
+      throw createError(409, 'Local account is already linked to another Clerk account', 'CLERK_ACCOUNT_ALREADY_LINKED');
+    }
+
+    database.upsertUserAuthIdentity({
+      provider: currentClerkIdentity.provider,
+      providerUserId: currentClerkIdentity.providerUserId,
+      userId: localUser.id,
+      email: currentClerkIdentity.email,
+      createdAt: currentClerkIdentity.createdAt,
+      updatedAt: now,
+      lastLoginAt: now
+    });
+
+    database.deleteSessionsByUserId(currentUserId);
+    if (currentUserId !== localUser.id) {
+      database.deleteAllUserSources(currentUserId);
+      database.deleteUser(currentUserId);
+    }
+
+    database.createUserSession({
+      tokenHash: hashSessionToken(sessionToken),
+      userId: localUser.id,
+      createdAt: now,
+      expiresAt: createSessionExpiryDate()
+    });
+    database.updateUserLogin(localUser.id, now);
+
+    return database.findUserById(localUser.id);
+  })();
+
+  return buildAuthResponse(targetUser, sessionToken);
 }
 
 function logoutUser(sessionToken) {
@@ -934,6 +1103,8 @@ async function importUserSettings(userId, payload = {}) {
 module.exports = {
   registerUser,
   loginUser,
+  loginWithClerkIdentity,
+  mergeCurrentUserWithLocalAccount,
   logoutUser,
   getCurrentUser,
   getUserSettings,

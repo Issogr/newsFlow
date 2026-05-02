@@ -39,6 +39,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     handleImport,
     handleCreateApiToken,
     handleRevokeApiToken,
+    handleMergeClerkWithLocalAccount,
     handleAddSource,
     startEditSource,
     cancelEditSource,
@@ -129,6 +130,8 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               onImport={handleImport}
               onCreateApiToken={handleCreateApiToken}
               onRevokeApiToken={handleRevokeApiToken}
+              showClerkMerge={(currentUser.user.authProviders || []).includes('clerk') && !currentUser.user.passwordConfigured}
+              onMergeClerkWithLocalAccount={handleMergeClerkWithLocalAccount}
             />
           </div>
         </div>

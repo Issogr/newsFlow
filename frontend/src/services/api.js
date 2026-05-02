@@ -52,6 +52,16 @@ export const loginUser = async ({ username, password }) => {
   return response.data;
 };
 
+export const loginWithClerkToken = async (token) => {
+  const response = await api.post('/auth/clerk', { token });
+  return response.data;
+};
+
+export const mergeClerkWithLocalAccount = async ({ username, password }) => {
+  const response = await api.post('/auth/clerk/merge-local', { username, password });
+  return response.data;
+};
+
 export const validatePasswordSetupToken = async (token) => {
   const response = await api.get('/auth/password-setup/validate', {
     params: { token }

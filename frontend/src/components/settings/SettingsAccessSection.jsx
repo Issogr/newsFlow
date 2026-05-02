@@ -1,5 +1,5 @@
-import React from 'react';
-import { Download, ExternalLink, KeyRound, ShieldCheck, Upload } from 'lucide-react';
+import React, { useState } from 'react';
+import { Download, ExternalLink, Fingerprint, KeyRound, ShieldCheck, Upload } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 
 const SettingsAccessSection = ({
@@ -9,19 +9,87 @@ const SettingsAccessSection = ({
   apiToken,
   newApiToken,
   settingsLimits,
+  showClerkMerge = false,
   onExport,
   onImportClick,
   onImport,
   onCreateApiToken,
-  onRevokeApiToken
+  onRevokeApiToken,
+  onMergeClerkWithLocalAccount
 }) => {
+  const [mergeForm, setMergeForm] = useState({ username: '', password: '' });
+  const [mergeSucceeded, setMergeSucceeded] = useState(false);
+
+  const handleMergeSubmit = async (event) => {
+    event.preventDefault();
+    setMergeSucceeded(false);
+
+    const response = await onMergeClerkWithLocalAccount?.(mergeForm);
+    if (response) {
+      setMergeSucceeded(true);
+      setMergeForm({ username: '', password: '' });
+    }
+  };
+
   return (
     <SettingsSectionCard
       icon={ShieldCheck}
       title={t('settingsAccessSectionTitle')}
       description={t('settingsAccessSectionDescription')}
       iconToneClassName="bg-emerald-100 text-emerald-700"
-    >
+      >
+      {showClerkMerge ? (
+        <form onSubmit={handleMergeSubmit} className="rounded-[1.5rem] border border-violet-200 bg-violet-50 p-4">
+          <div className="space-y-3">
+            <p className="flex items-center gap-2 text-sm font-semibold text-violet-950">
+              <Fingerprint className="h-4 w-4 text-violet-700" />
+              {t('clerkMergeTitle')}
+            </p>
+            <p className="max-w-2xl text-sm text-violet-900/80">{t('clerkMergeHelp')}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-violet-800">{t('username')}</span>
+                <input
+                  value={mergeForm.username}
+                  onChange={(event) => {
+                    setMergeForm((current) => ({ ...current, username: event.target.value }));
+                    setMergeSucceeded(false);
+                  }}
+                  className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-violet-400"
+                  required
+                  minLength={3}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-violet-800">{t('password')}</span>
+                <input
+                  type="password"
+                  value={mergeForm.password}
+                  onChange={(event) => {
+                    setMergeForm((current) => ({ ...current, password: event.target.value }));
+                    setMergeSucceeded(false);
+                  }}
+                  className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-violet-400"
+                  required
+                />
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-xl bg-violet-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-700 disabled:opacity-60"
+            >
+              {t('clerkMergeAction')}
+            </button>
+            {mergeSucceeded ? (
+              <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+                {t('clerkMergeSuccess')}
+              </p>
+            ) : null}
+          </div>
+        </form>
+      ) : null}
+
       <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
         <div className="space-y-4">
           <div className="space-y-3">

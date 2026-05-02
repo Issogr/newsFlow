@@ -37,6 +37,7 @@ const {
   extractDeletedAdminUserId,
   serveSpaIndex
 } = require('./lib/proxyHelpers');
+const { mapClerkPayloadToIdentity, verifyClerkSessionToken } = require('./lib/clerkAuth');
 
 const DEFAULT_FRONTEND_DIST_DIR = path.join(__dirname, 'public');
 const UPSTREAM_TIMEOUT_MS = parseIntegerEnv('BFF_UPSTREAM_TIMEOUT_MS', 30000, { min: 1000 });
@@ -70,11 +71,11 @@ function createApp(options = {}) {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
+        scriptSrc: ["'self'", 'https://*.clerk.accounts.dev', 'https://*.clerk.com'],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'", 'ws:', 'wss:'],
-        frameSrc: ["'none'"],
+        connectSrc: ["'self'", 'ws:', 'wss:', 'https://*.clerk.accounts.dev', 'https://*.clerk.com'],
+        frameSrc: ['https://*.clerk.accounts.dev', 'https://*.clerk.com'],
         objectSrc: ["'none'"],
       },
     },
@@ -177,6 +178,24 @@ function createApp(options = {}) {
     return response;
   }
 
+  async function persistBackendSessionFromResponse(req, response) {
+    const backendSessionCookie = extractBackendSessionCookie(response.headers['set-cookie']);
+
+    if (!backendSessionCookie) {
+      return false;
+    }
+
+    req.session.version = SESSION_SCHEMA_VERSION;
+    req.session.backendSessionCookie = encryptBackendSessionCookie(backendSessionCookie);
+    req.session.userId = response.data?.user?.id || req.session.userId || '';
+    req.session.createdAt = req.session.createdAt || new Date().toISOString();
+    await new Promise((resolve, reject) => {
+      req.session.save((error) => (error ? reject(error) : resolve()));
+    });
+    upsertStoredSessionUser(sessionDb, req.sessionID, req.session.userId);
+    return true;
+  }
+
   async function handleSessionAuthRequest(req, res, next, pathName) {
     try {
       const response = await backendHttp.request({
@@ -187,10 +206,8 @@ function createApp(options = {}) {
         headers: buildInternalHeaders(req),
       });
 
-      const backendSessionCookie = extractBackendSessionCookie(response.headers['set-cookie']);
-
       if (response.status >= 200 && response.status < 300) {
-        if (!backendSessionCookie) {
+        if (!(await persistBackendSessionFromResponse(req, response))) {
           res.status(502).json({
             error: {
               message: 'Authentication bridge failed to establish a backend session.',
@@ -199,15 +216,6 @@ function createApp(options = {}) {
           });
           return;
         }
-
-        req.session.version = SESSION_SCHEMA_VERSION;
-        req.session.backendSessionCookie = encryptBackendSessionCookie(backendSessionCookie);
-        req.session.userId = response.data?.user?.id || req.session.userId || '';
-        req.session.createdAt = req.session.createdAt || new Date().toISOString();
-        await new Promise((resolve, reject) => {
-          req.session.save((error) => (error ? reject(error) : resolve()));
-        });
-        upsertStoredSessionUser(sessionDb, req.sessionID, req.session.userId);
       }
 
       copyBackendResponseHeaders(res, response.headers);
@@ -322,6 +330,83 @@ function createApp(options = {}) {
 
   app.post('/api/auth/login', jsonParser, (req, res, next) => {
     handleSessionAuthRequest(req, res, next, '/auth/login');
+  });
+
+  app.post('/api/auth/clerk', jsonParser, async (req, res, next) => {
+    try {
+      const clerkPayload = await verifyClerkSessionToken(req.body?.token);
+      const response = await backendHttp.request({
+        url: '/internal-api/auth/clerk',
+        method: 'POST',
+        data: mapClerkPayloadToIdentity(clerkPayload),
+        headers: buildInternalHeaders(req),
+      });
+
+      if (response.status >= 200 && response.status < 300) {
+        if (!(await persistBackendSessionFromResponse(req, response))) {
+          res.status(502).json({
+            error: {
+              message: 'Authentication bridge failed to establish a backend session.',
+              code: 'BFF_SESSION_ERROR',
+            },
+          });
+          return;
+        }
+      }
+
+      copyBackendResponseHeaders(res, response.headers);
+      res.status(response.status).send(response.data);
+    } catch (error) {
+      res.status(401).json({
+        error: {
+          message: error.message || 'Invalid Clerk authentication',
+          code: 'INVALID_CLERK_AUTH',
+        },
+      });
+    }
+  });
+
+  app.post('/api/auth/clerk/merge-local', jsonParser, async (req, res, next) => {
+    try {
+      const backendSessionCookie = getBackendSessionCookieFromRequest(req);
+      if (!backendSessionCookie) {
+        clearBffSessionCookie(res);
+        res.status(401).json({
+          error: {
+            message: 'Authentication required',
+            code: 'UNAUTHORIZED',
+          },
+        });
+        return;
+      }
+
+      const response = await backendHttp.request({
+        url: '/internal-api/auth/clerk/merge-local',
+        method: 'POST',
+        data: req.body || {},
+        headers: {
+          ...buildInternalHeaders(req),
+          Cookie: backendSessionCookie,
+        },
+      });
+
+      if (response.status >= 200 && response.status < 300) {
+        if (!(await persistBackendSessionFromResponse(req, response))) {
+          res.status(502).json({
+            error: {
+              message: 'Authentication bridge failed to establish a backend session.',
+              code: 'BFF_SESSION_ERROR',
+            },
+          });
+          return;
+        }
+      }
+
+      copyBackendResponseHeaders(res, response.headers);
+      res.status(response.status).send(response.data);
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get('/api/auth/password-setup/validate', async (req, res, next) => {

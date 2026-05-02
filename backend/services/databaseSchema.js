@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 24;
+    const CURRENT_SCHEMA_VERSION = 25;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getAllConfiguredSourceGroupIds() {
@@ -101,6 +101,20 @@ function createDatabaseSchema({ logger }) {
 
       CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions (user_id);
       CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions (expires_at);
+
+      CREATE TABLE IF NOT EXISTS user_auth_identities (
+        provider TEXT NOT NULL,
+        provider_user_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        email TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_login_at TEXT,
+        PRIMARY KEY (provider, provider_user_id),
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_user_auth_identities_user_id ON user_auth_identities (user_id);
 
       CREATE TABLE IF NOT EXISTS api_tokens (
         id TEXT PRIMARY KEY,
@@ -280,7 +294,11 @@ function createDatabaseSchema({ logger }) {
       return 22;
     }
 
-    return 23;
+    if (!tableExists(database, 'user_auth_identities')) {
+      return 24;
+    }
+
+    return 25;
   }
 
   function setCurrentSchemaVersion(database, version = CURRENT_SCHEMA_VERSION) {
@@ -460,7 +478,7 @@ function createDatabaseSchema({ logger }) {
         `);
       }
 
-      setCurrentSchemaVersion(database);
+      setCurrentSchemaVersion(database, 22);
       logger.info('Migrated DB schema from version 21 to 22');
       migrateSchema(database, 22);
       return;
@@ -540,8 +558,31 @@ function createDatabaseSchema({ logger }) {
 
       transaction();
 
-      setCurrentSchemaVersion(database);
+      setCurrentSchemaVersion(database, 24);
       logger.info(`Migrated DB schema from version 23 to 24; reset source setup for ${DEFAULT_SOURCE_REVIEW_VERSION} and removed ${duplicateUserSources.length} duplicate custom sources`);
+      migrateSchema(database, 24);
+      return;
+    }
+
+    if (currentVersion === 24) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS user_auth_identities (
+          provider TEXT NOT NULL,
+          provider_user_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          email TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          last_login_at TEXT,
+          PRIMARY KEY (provider, provider_user_id),
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_user_auth_identities_user_id ON user_auth_identities (user_id);
+      `);
+
+      setCurrentSchemaVersion(database);
+      logger.info('Migrated DB schema from version 24 to 25');
       return;
     }
 

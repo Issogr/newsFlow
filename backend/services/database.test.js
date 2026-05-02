@@ -75,7 +75,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('24');
+    expect(migrationVersion).toBe('25');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -151,7 +151,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('24');
+    expect(migratedVersion).toBe('25');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
@@ -268,7 +268,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('24');
+    expect(migratedVersion).toBe('25');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -379,7 +379,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
 
-    expect(migratedVersion).toBe('24');
+    expect(migratedVersion).toBe('25');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);

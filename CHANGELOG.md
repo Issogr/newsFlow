@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.4
+
+- added side-by-side Clerk authentication without removing the existing local username/password login flow
+- added a Clerk account-linking flow that asks the user to authenticate again with the existing local account before unifying identities, so the original local account remains the canonical account and keeps its settings, sources, and data
+- kept browser authentication behind the existing BFF/backend session boundary by validating Clerk tokens at the BFF, creating the same internal backend session shape used by local auth, and persisting external identities in a dedicated schema migration
+- added frontend Clerk sign-in entry points plus a settings action for temporary Clerk-only accounts to merge into an existing local account after password verification
+
 ## 3.3.2
 
 - fixed mobile news cards so feed items stay within the viewport and card images no longer resize unexpectedly while scrolling

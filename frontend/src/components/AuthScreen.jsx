@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { ExternalLink, LogIn, UserPlus } from 'lucide-react';
+import { ExternalLink, Fingerprint, LogIn, UserPlus } from 'lucide-react';
 import BrandMark from './BrandMark';
 
 const MIN_PASSWORD_LENGTH = 8;
 
-const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
+const AuthScreen = ({ t, onLogin, onRegister, onClerkLogin, clerkAvailable = false, busy, error }) => {
   const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -105,6 +105,25 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
             <p className="text-sm text-slate-500">{t('authSubtitle')}</p>
           </div>
         </div>
+
+        {clerkAvailable ? (
+          <div className="mb-5 space-y-3">
+            <button
+              type="button"
+              onClick={onClerkLogin}
+              disabled={busy}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-900 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Fingerprint className="h-4 w-4" />
+              {t('clerkLoginAction')}
+            </button>
+            <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-[0.14em] text-slate-400">
+              <span className="h-px flex-1 bg-slate-200" />
+              <span>{t('authOrLocal')}</span>
+              <span className="h-px flex-1 bg-slate-200" />
+            </div>
+          </div>
+        ) : null}
 
         <div className="mb-6 grid grid-cols-2 rounded-2xl bg-slate-100 p-1 text-sm font-medium">
           <button

@@ -95,7 +95,9 @@ describe('API auth and user flows', () => {
     expect(registerResponse.body.user).toEqual({
       id: expect.any(String),
       username: 'alice',
-      isAdmin: false
+      isAdmin: false,
+      passwordConfigured: true,
+      authProviders: []
     });
     expect(registerResponse.body).toMatchObject({
       settings: {

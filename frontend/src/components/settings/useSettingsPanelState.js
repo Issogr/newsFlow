@@ -5,6 +5,7 @@ import {
   deleteUserSource,
   exportUserSettings,
   importUserSettings,
+  mergeClerkWithLocalAccount,
   revokeApiToken,
   updateUserSource,
   updateUserSettings
@@ -245,6 +246,19 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     });
   }, [currentUser, onUserUpdate, runSavingAction]);
 
+  const handleMergeClerkWithLocalAccount = useCallback(async (credentials) => {
+    return runSavingAction(async () => {
+      const response = await mergeClerkWithLocalAccount(credentials);
+      setStoredReaderTextSizePreference(response.settings.readerTextSize);
+      setSettings(getInitialSettings(response));
+      setCustomSources(response.customSources || []);
+      setApiToken(response.apiToken || null);
+      setNewApiToken('');
+      onUserUpdate(response);
+      return response;
+    });
+  }, [onUserUpdate, runSavingAction]);
+
   const handleExport = useCallback(async () => {
     await runSavingAction(async () => {
       const payload = await exportUserSettings();
@@ -375,6 +389,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     handleImport,
     handleCreateApiToken,
     handleRevokeApiToken,
+    handleMergeClerkWithLocalAccount,
     handleAddSource,
     startEditSource,
     cancelEditSource,

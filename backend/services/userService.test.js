@@ -175,6 +175,44 @@ describe('userService imports', () => {
     });
   });
 
+  test('merges a Clerk account into a verified local account and keeps local settings', async () => {
+    const localAuth = await userService.registerUser({ username: 'local-user', password: 'secret123' });
+    const localSettings = userService.updateUserSettings(localAuth.user.id, {
+      themeMode: 'dark',
+      sourceSetupCompleted: true
+    });
+
+    const clerkAuth = userService.loginWithClerkIdentity({
+      providerUserId: 'user_clerk_123',
+      email: 'clerk@example.com',
+      username: 'clerk-user'
+    });
+
+    expect(clerkAuth.user).toMatchObject({
+      authProviders: ['clerk'],
+      passwordConfigured: false
+    });
+    expect(clerkAuth.user.id).not.toBe(localAuth.user.id);
+
+    const merged = await userService.mergeCurrentUserWithLocalAccount(clerkAuth.user.id, {
+      username: 'local-user',
+      password: 'secret123'
+    });
+
+    expect(merged.user).toMatchObject({
+      id: localAuth.user.id,
+      username: 'local-user',
+      passwordConfigured: true,
+      authProviders: ['clerk']
+    });
+    expect(merged.settings).toMatchObject({
+      themeMode: localSettings.themeMode,
+      sourceSetupCompleted: true
+    });
+    expect(database.findUserById(clerkAuth.user.id)).toBeNull();
+    expect(database.findUserAuthIdentity('clerk', 'user_clerk_123').userId).toBe(localAuth.user.id);
+  });
+
   test('requires a minimum password length during registration', async () => {
     await expect(userService.registerUser({ username: 'carol', password: 'short' })).rejects.toMatchObject({
       status: 400,

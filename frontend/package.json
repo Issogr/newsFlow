@@ -1,8 +1,9 @@
 {
   "name": "newsflow-frontend",
-  "version": "3.3.2",
+  "version": "3.4",
   "private": true,
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.6",
     "axios": "^1.15.2",
     "lucide-react": "^0.298.0",
     "react": "^18.3.1",

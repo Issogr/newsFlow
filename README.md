@@ -48,7 +48,9 @@
 ## Quick Start
 
 ```bash
-INTERNAL_PROXY_TOKEN=<change-me> BFF_SESSION_SECRET=<change-me> docker compose up --build -d
+INTERNAL_PROXY_TOKEN=<change-me> BFF_SESSION_SECRET=<change-me> \
+VITE_CLERK_PUBLISHABLE_KEY=<change-me> CLERK_ISSUER_URL=<change-me> \
+docker compose up --build -d
 ```
 
 Open `http://localhost`.
@@ -119,6 +121,10 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `BFF_SESSION_DB_PATH` | `bff/data/sessions.sqlite` | SQLite path used by the BFF persistent session store |
 | `INTERNAL_SERVICE_NAME` | `bff` | Expected internal caller name for backend app-private traffic |
 | `APP_BASE_URL` | `http://localhost` | Public BFF or app URL for generated setup links and secure-cookie decisions |
+| `VITE_CLERK_PUBLISHABLE_KEY` | unset | Clerk frontend publishable key baked into the built SPA during the BFF image build |
+| `CLERK_ISSUER_URL` | unset | Clerk issuer URL used by the BFF to validate Clerk session JWTs |
+| `CLERK_JWKS_URL` | derived from `CLERK_ISSUER_URL` when unset | Optional explicit Clerk JWKS URL override for JWT signature verification |
+| `CLERK_AUDIENCE` | unset | Optional comma-separated JWT audience allowlist enforced by the BFF for Clerk tokens |
 | `FRONTEND_BASE_URL` | unset | Fallback alias for `APP_BASE_URL` |
 | `PASSWORD_SETUP_TTL_MINUTES` | `60` | User password setup or reset link lifetime |
 | `ADMIN_BOOTSTRAP_TTL_MINUTES` | `30` | Admin bootstrap link lifetime |
@@ -242,6 +248,10 @@ Use `docker compose logs -f backend` to follow these messages while debugging.
 - Do not commit the production value to the repository.
 - `BFF_SESSION_SECRET` is the secret used by the BFF session middleware to sign the browser-facing session cookie.
 - Set a stable `BFF_SESSION_SECRET` value in production so browser sessions survive BFF restarts and browser reopen flows.
+- `VITE_CLERK_PUBLISHABLE_KEY` is a frontend build-time variable, so changing it requires rebuilding the BFF image with `docker compose up --build`.
+- `CLERK_ISSUER_URL` is required on the BFF when Clerk sign-in should be enabled in containers.
+- `CLERK_JWKS_URL` is optional when the issuer already exposes the standard `/.well-known/jwks.json` endpoint.
+- `CLERK_AUDIENCE` is optional and can be used to pin accepted Clerk token audiences.
 - `INTERNAL_SERVICE_NAME` is not a secret. It is an identifier the backend expects from the trusted internal caller.
 - Keep `INTERNAL_SERVICE_NAME=bff` unless you intentionally rename the BFF service and update both sides together.
 
@@ -267,6 +277,11 @@ Example shell export before `docker compose up`:
 export INTERNAL_PROXY_TOKEN="$(openssl rand -hex 32)"
 export BFF_SESSION_SECRET="$(openssl rand -hex 32)"
 export INTERNAL_SERVICE_NAME="bff"
+export VITE_CLERK_PUBLISHABLE_KEY="<your-clerk-publishable-key>"
+export CLERK_ISSUER_URL="https://<your-clerk-domain>"
+# Optional:
+# export CLERK_JWKS_URL="https://<your-clerk-domain>/.well-known/jwks.json"
+# export CLERK_AUDIENCE="<your-audience>"
 docker compose up --build -d
 ```
 

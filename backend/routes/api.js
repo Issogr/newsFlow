@@ -186,6 +186,20 @@ router.post('/auth/login', [authRateLimit, sanitizeBody(['username'])], asyncHan
   res.json(safeResult);
 }));
 
+router.post('/auth/clerk', authRateLimit, asyncHandler(async (req, res) => {
+  const result = userService.loginWithClerkIdentity(req.body || {});
+  setSessionCookie(res, result.token);
+  const { token, ...safeResult } = result;
+  res.json(safeResult);
+}));
+
+router.post('/auth/clerk/merge-local', [requireAuthenticatedUser, authRateLimit, sanitizeBody(['username'])], asyncHandler(async (req, res) => {
+  const result = await userService.mergeCurrentUserWithLocalAccount(req.user.id, req.body || {});
+  setSessionCookie(res, result.token);
+  const { token, ...safeResult } = result;
+  res.json(safeResult);
+}));
+
 router.get('/auth/password-setup/validate', [passwordSetupRateLimit, sanitizeQuery('token')], asyncHandler(async (req, res) => {
   const details = userService.getPasswordSetupTokenDetails(req.query.token);
   res.json(details);

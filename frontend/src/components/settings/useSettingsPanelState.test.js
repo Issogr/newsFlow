@@ -15,6 +15,7 @@ vi.mock('../../services/api', () => ({
   deleteUserSource: vi.fn(),
   exportUserSettings: vi.fn(),
   importUserSettings: vi.fn(),
+  mergeClerkWithLocalAccount: vi.fn(),
   revokeApiToken: vi.fn(),
   updateUserSource: vi.fn(),
   updateUserSettings: vi.fn()

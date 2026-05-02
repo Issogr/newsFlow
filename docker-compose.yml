@@ -79,6 +79,8 @@ services:
     build:
       context: .
       dockerfile: bff/Dockerfile
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}
     container_name: newsflow-bff
     ports:
       - "80:80"
@@ -89,6 +91,9 @@ services:
       - INTERNAL_SERVICE_NAME=${INTERNAL_SERVICE_NAME:-bff}
       - BACKEND_BASE_URL=http://backend:5000
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
+      - CLERK_ISSUER_URL=${CLERK_ISSUER_URL:-}
+      - CLERK_JWKS_URL=${CLERK_JWKS_URL:-}
+      - CLERK_AUDIENCE=${CLERK_AUDIENCE:-}
       - TRUST_PROXY=false
     depends_on:
       init-permissions:

@@ -6,6 +6,7 @@ import {
   AUTH_EXPIRED_EVENT,
   completePasswordSetup,
   fetchCurrentUser,
+  mergeClerkWithLocalAccount,
   updateUserSettings,
   validatePasswordSetupToken
 } from './services/api';
@@ -18,6 +19,8 @@ vi.mock('./services/api', () => ({
   fetchCurrentUser: vi.fn(),
   fetchAdminUsers: vi.fn(),
   loginUser: vi.fn(),
+  loginWithClerkToken: vi.fn(),
+  mergeClerkWithLocalAccount: vi.fn(),
   logoutUser: vi.fn(),
   createAdminPasswordSetupLink: vi.fn(),
   registerUser: vi.fn(),
@@ -40,7 +43,7 @@ vi.mock('./components/AdminDashboard', () => ({
 
 function createCurrentUser(settings = {}) {
   return {
-    user: { username: 'alice', isAdmin: false },
+    user: { id: 'user-1', username: 'alice', isAdmin: false, passwordConfigured: true, authProviders: [] },
     settings: {
       defaultLanguage: 'en',
       themeMode: 'system',
@@ -95,6 +98,82 @@ describe('App', () => {
     render(<App />);
 
     expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
+  });
+
+  test('shows a merge prompt immediately for Clerk-only accounts', async () => {
+    fetchCurrentUser.mockResolvedValue({
+      ...createCurrentUser({ lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION }),
+      user: {
+        id: 'clerk-user-1',
+        username: 'clerk-temp',
+        isAdmin: false,
+        passwordConfigured: false,
+        authProviders: ['clerk']
+      }
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('Unify with a local account')).toBeInTheDocument();
+    expect(screen.getByText('After signing in with Clerk, log in to the local account you want to keep. Its settings and sources become the unified account.')).toBeInTheDocument();
+  });
+
+  test('can dismiss the Clerk merge prompt for the current session', async () => {
+    fetchCurrentUser.mockResolvedValue({
+      ...createCurrentUser({ lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION }),
+      user: {
+        id: 'clerk-user-1',
+        username: 'clerk-temp',
+        isAdmin: false,
+        passwordConfigured: false,
+        authProviders: ['clerk']
+      }
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('Unify with a local account')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Unify with a local account')).not.toBeInTheDocument();
+    });
+  });
+
+  test('merges a Clerk-only account from the prompt', async () => {
+    fetchCurrentUser.mockResolvedValue({
+      ...createCurrentUser({ lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION }),
+      user: {
+        id: 'clerk-user-1',
+        username: 'clerk-temp',
+        isAdmin: false,
+        passwordConfigured: false,
+        authProviders: ['clerk']
+      }
+    });
+    mergeClerkWithLocalAccount.mockResolvedValue({
+      ...createCurrentUser({ lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION }),
+      user: {
+        username: 'alice',
+        isAdmin: false,
+        passwordConfigured: true,
+        authProviders: ['clerk']
+      }
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('Unify with a local account')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'alice' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Unify accounts' }));
+
+    await waitFor(() => {
+      expect(mergeClerkWithLocalAccount).toHaveBeenCalledWith({ username: 'alice', password: 'secret123' });
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Unify with a local account')).not.toBeInTheDocument();
+    });
   });
 
   test('renders the admin dashboard instead of the news home for admin sessions', async () => {

@@ -137,6 +137,96 @@ function createAuthRepository({ getDb }) {
     `).run(session.tokenHash, session.userId, session.createdAt, session.expiresAt);
   }
 
+  function mapUserAuthIdentityRow(row) {
+    if (!row) {
+      return null;
+    }
+
+    return {
+      provider: row.provider,
+      providerUserId: row.providerUserId,
+      userId: row.userId,
+      email: row.email || '',
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      lastLoginAt: row.lastLoginAt || null,
+      username: row.username || null
+    };
+  }
+
+  function findUserAuthIdentity(provider, providerUserId) {
+    if (!provider || !providerUserId) {
+      return null;
+    }
+
+    return mapUserAuthIdentityRow(getDb().prepare(`
+      SELECT user_auth_identities.provider,
+             user_auth_identities.provider_user_id AS providerUserId,
+             user_auth_identities.user_id AS userId,
+             user_auth_identities.email,
+             user_auth_identities.created_at AS createdAt,
+             user_auth_identities.updated_at AS updatedAt,
+             user_auth_identities.last_login_at AS lastLoginAt,
+             users.username AS username
+      FROM user_auth_identities
+      JOIN users ON users.id = user_auth_identities.user_id
+      WHERE user_auth_identities.provider = ?
+        AND user_auth_identities.provider_user_id = ?
+    `).get(provider, providerUserId));
+  }
+
+  function findUserAuthIdentityByUserProvider(userId, provider) {
+    if (!userId || !provider) {
+      return null;
+    }
+
+    return mapUserAuthIdentityRow(getDb().prepare(`
+      SELECT provider, provider_user_id AS providerUserId, user_id AS userId,
+             email, created_at AS createdAt, updated_at AS updatedAt, last_login_at AS lastLoginAt
+      FROM user_auth_identities
+      WHERE user_id = ? AND provider = ?
+      ORDER BY datetime(created_at) ASC
+      LIMIT 1
+    `).get(userId, provider));
+  }
+
+  function listUserAuthIdentities(userId) {
+    if (!userId) {
+      return [];
+    }
+
+    return getDb().prepare(`
+      SELECT provider, provider_user_id AS providerUserId, user_id AS userId,
+             email, created_at AS createdAt, updated_at AS updatedAt, last_login_at AS lastLoginAt
+      FROM user_auth_identities
+      WHERE user_id = ?
+      ORDER BY provider ASC, datetime(created_at) ASC
+    `).all(userId).map(mapUserAuthIdentityRow);
+  }
+
+  function upsertUserAuthIdentity(identity = {}) {
+    getDb().prepare(`
+      INSERT INTO user_auth_identities (
+        provider, provider_user_id, user_id, email, created_at, updated_at, last_login_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(provider, provider_user_id) DO UPDATE SET
+        user_id = excluded.user_id,
+        email = excluded.email,
+        updated_at = excluded.updated_at,
+        last_login_at = excluded.last_login_at
+    `).run(
+      identity.provider,
+      identity.providerUserId,
+      identity.userId,
+      identity.email || null,
+      identity.createdAt,
+      identity.updatedAt,
+      identity.lastLoginAt || null
+    );
+
+    return findUserAuthIdentity(identity.provider, identity.providerUserId);
+  }
+
   function createApiToken(token = {}) {
     getDb().prepare(`
       INSERT INTO api_tokens (
@@ -435,6 +525,10 @@ function createAuthRepository({ getDb }) {
     getAnonymousPublicApiRequestCount,
     incrementAnonymousPublicApiRequestCount,
     createUserSession,
+    findUserAuthIdentity,
+    findUserAuthIdentityByUserProvider,
+    listUserAuthIdentities,
+    upsertUserAuthIdentity,
     createApiToken,
     findSessionByTokenHash,
     refreshSessionExpiry,

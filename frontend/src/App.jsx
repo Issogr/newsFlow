@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import NewsAggregator from './components/NewsAggregator';
 import AdminDashboard from './components/AdminDashboard';
 import ApiDocsPage from './components/ApiDocsPage';
 import AuthScreen from './components/AuthScreen';
+import ClerkMergePromptModal from './components/ClerkMergePromptModal';
 import LegalPolicyPage from './components/LegalPolicyPage';
 import PasswordSetupScreen from './components/PasswordSetupScreen';
 import ReleaseNotesModal from './components/ReleaseNotesModal';
@@ -13,6 +14,8 @@ import {
   AUTH_EXPIRED_EVENT,
   fetchCurrentUser,
   loginUser,
+  loginWithClerkToken,
+  mergeClerkWithLocalAccount,
   logoutUser,
   registerUser,
   updateUserSettings
@@ -30,7 +33,17 @@ function resolveAppliedTheme(themeMode, mediaQuery) {
   return mediaQuery?.matches ? 'dark' : 'light';
 }
 
-function App() {
+const defaultClerkAuth = {
+  enabled: false,
+  isLoaded: true,
+  isSignedIn: false,
+  getToken: async () => '',
+  openSignIn: async () => {},
+  signOut: async () => {},
+  user: null
+};
+
+function App({ clerkAuth = defaultClerkAuth }) {
   const [locationState, setLocationState] = useState(() => ({
     pathname: window.location.pathname,
     search: window.location.search
@@ -38,6 +51,8 @@ function App() {
   const [authData, setAuthData] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
+  const [dismissedClerkMergeUserId, setDismissedClerkMergeUserId] = useState('');
+  const clerkBridgeAttemptedRef = useRef(false);
   const [loadingSession, setLoadingSession] = useState(() => {
     const pathname = window.location.pathname;
     return pathname !== '/password/setup'
@@ -88,6 +103,13 @@ function App() {
     && releaseNotesState.hiddenVersion !== releaseNotes.version
     && releaseNotesState.noticeHiddenVersion !== releaseNotes.version
     && !releaseNotesState.modalOpen
+  );
+  const shouldShowClerkMergePrompt = Boolean(
+    authData
+    && !authData?.user?.isAdmin
+    && (authData?.user?.authProviders || []).includes('clerk')
+    && !authData?.user?.passwordConfigured
+    && dismissedClerkMergeUserId !== authData?.user?.id
   );
 
   const loadSession = useCallback(async () => {
@@ -179,6 +201,61 @@ function App() {
     setAuthError(null);
   }, []);
 
+  const finalizeClerkLogin = useCallback(async (token) => {
+    await loginWithClerkToken(token);
+    return fetchCurrentUser();
+  }, []);
+
+  useEffect(() => {
+    if (!clerkAuth.isSignedIn) {
+      clerkBridgeAttemptedRef.current = false;
+    }
+
+    if (
+      !clerkAuth.enabled
+      || !clerkAuth.isLoaded
+      || !clerkAuth.isSignedIn
+      || clerkBridgeAttemptedRef.current
+      || authData
+      || loadingSession
+      || authBusy
+    ) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    clerkBridgeAttemptedRef.current = true;
+
+    const bridgeClerkSession = async () => {
+      setAuthBusy(true);
+      setAuthError(null);
+      try {
+        const token = await clerkAuth.getToken();
+        if (!token) {
+          throw new Error('Clerk session token is not available');
+        }
+
+        const payload = await finalizeClerkLogin(token);
+        if (!cancelled) {
+          handleAuthSuccess(payload);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setAuthError(error);
+        }
+      } finally {
+        if (!cancelled) {
+          setAuthBusy(false);
+        }
+      }
+    };
+
+    bridgeClerkSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [authBusy, authData, clerkAuth, finalizeClerkLogin, handleAuthSuccess, loadingSession]);
+
   const handlePasswordSetupComplete = useCallback(async (payload) => {
     window.history.replaceState({}, '', '/');
     setLocationState({ pathname: window.location.pathname, search: window.location.search });
@@ -209,6 +286,53 @@ function App() {
     }
   }, [handleAuthSuccess]);
 
+  const handleClerkLogin = useCallback(async () => {
+    setAuthError(null);
+
+    if (!clerkAuth.enabled) {
+      return;
+    }
+
+    if (!clerkAuth.isSignedIn) {
+      await clerkAuth.openSignIn({
+        afterSignInUrl: window.location.href,
+        redirectUrl: window.location.href
+      });
+      return;
+    }
+
+    setAuthBusy(true);
+    try {
+      const token = await clerkAuth.getToken();
+      if (!token) {
+        throw new Error('Clerk session token is not available');
+      }
+      handleAuthSuccess(await finalizeClerkLogin(token));
+    } catch (error) {
+      setAuthError(error);
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [clerkAuth, finalizeClerkLogin, handleAuthSuccess]);
+
+  const handleDismissClerkMergePrompt = useCallback(() => {
+    if (authData?.user?.id) {
+      setDismissedClerkMergeUserId(authData.user.id);
+    }
+  }, [authData?.user?.id]);
+
+  const handleMergeClerkAccount = useCallback(async (credentials) => {
+    setAuthBusy(true);
+    try {
+      const payload = await mergeClerkWithLocalAccount(credentials);
+      setDismissedClerkMergeUserId('');
+      handleAuthSuccess(payload);
+      return payload;
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [handleAuthSuccess]);
+
   const handleLogout = useCallback(async () => {
     try {
       await logoutUser();
@@ -216,9 +340,17 @@ function App() {
       // ignore logout errors during local cleanup
     }
 
+    if (clerkAuth.enabled && clerkAuth.isSignedIn) {
+      try {
+        await clerkAuth.signOut();
+      } catch {
+        // keep local logout deterministic even if Clerk is temporarily unavailable
+      }
+    }
+
     setAuthData(null);
     setAuthError(null);
-  }, []);
+  }, [clerkAuth]);
 
   const handleUserSettingsUpdate = useCallback((settings) => {
     setAuthData((current) => (current ? {
@@ -306,6 +438,8 @@ function App() {
           error={authError}
           onLogin={handleLogin}
           onRegister={handleRegister}
+          onClerkLogin={handleClerkLogin}
+          clerkAvailable={clerkAuth.enabled}
         />
       </div>
     );
@@ -344,6 +478,14 @@ function App() {
           releaseNotes={releaseNotes}
           saving={releaseNotesState.saving}
           onDismiss={handleDismissReleaseNotes}
+        />
+      )}
+      {shouldShowClerkMergePrompt && (
+        <ClerkMergePromptModal
+          t={t}
+          busy={authBusy}
+          onDismiss={handleDismissClerkMergePrompt}
+          onSubmit={handleMergeClerkAccount}
         />
       )}
     </div>
