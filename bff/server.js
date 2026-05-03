@@ -76,6 +76,7 @@ function createApp(options = {}) {
         imgSrc: ["'self'", 'data:', 'https:'],
         connectSrc: ["'self'", 'ws:', 'wss:', 'https://*.clerk.accounts.dev', 'https://*.clerk.com'],
         frameSrc: ['https://*.clerk.accounts.dev', 'https://*.clerk.com'],
+        workerSrc: ["'self'", 'blob:'],
         objectSrc: ["'none'"],
       },
     },

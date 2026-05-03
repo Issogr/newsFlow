@@ -33,12 +33,19 @@ function resolveAppliedTheme(themeMode, mediaQuery) {
   return mediaQuery?.matches ? 'dark' : 'light';
 }
 
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 const defaultClerkAuth = {
   enabled: false,
   isLoaded: true,
   isSignedIn: false,
+  completeGoogleSignInRedirect: async () => '/',
   getToken: async () => '',
-  openSignIn: async () => {},
+  startGoogleSignIn: async () => {},
   signOut: async () => {},
   user: null
 };
@@ -51,12 +58,14 @@ function App({ clerkAuth = defaultClerkAuth }) {
   const [authData, setAuthData] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
+  const [googleRedirectState, setGoogleRedirectState] = useState({ busy: false, error: '' });
   const [dismissedClerkMergeUserId, setDismissedClerkMergeUserId] = useState('');
   const clerkBridgeAttemptedRef = useRef(false);
   const [loadingSession, setLoadingSession] = useState(() => {
     const pathname = window.location.pathname;
     return pathname !== '/password/setup'
       && pathname !== '/admin/setup'
+      && pathname !== '/auth/google/callback'
       && pathname !== '/api/docs'
       && pathname !== '/api/docs/'
       && pathname !== '/privacy-policy'
@@ -85,6 +94,7 @@ function App({ clerkAuth = defaultClerkAuth }) {
     return new URLSearchParams(hash).get('token') || '';
   }, [locationState.search]);
   const isPasswordSetupRoute = locationState.pathname === '/password/setup' || locationState.pathname === '/admin/setup';
+  const isGoogleAuthCallbackRoute = locationState.pathname === '/auth/google/callback';
   const isApiDocsRoute = locationState.pathname === '/api/docs' || locationState.pathname === '/api/docs/';
   const isPrivacyPolicyRoute = locationState.pathname === '/privacy-policy';
   const isCookiePolicyRoute = locationState.pathname === '/cookie-policy';
@@ -113,7 +123,7 @@ function App({ clerkAuth = defaultClerkAuth }) {
   );
 
   const loadSession = useCallback(async () => {
-    if (isPasswordSetupRoute || isApiDocsRoute || isPrivacyPolicyRoute || isCookiePolicyRoute) {
+    if (isPasswordSetupRoute || isGoogleAuthCallbackRoute || isApiDocsRoute || isPrivacyPolicyRoute || isCookiePolicyRoute) {
       setLoadingSession(false);
       return;
     }
@@ -127,7 +137,7 @@ function App({ clerkAuth = defaultClerkAuth }) {
     } finally {
       setLoadingSession(false);
     }
-  }, [isApiDocsRoute, isCookiePolicyRoute, isPasswordSetupRoute, isPrivacyPolicyRoute]);
+  }, [isApiDocsRoute, isCookiePolicyRoute, isGoogleAuthCallbackRoute, isPasswordSetupRoute, isPrivacyPolicyRoute]);
 
   useEffect(() => {
     const syncLocationState = () => {
@@ -141,6 +151,85 @@ function App({ clerkAuth = defaultClerkAuth }) {
   useEffect(() => {
     loadSession();
   }, [loadSession]);
+
+  const handleAuthSuccess = useCallback((payload) => {
+    setAuthData({
+      user: payload.user,
+      settings: payload.settings,
+      limits: payload.limits,
+      sourceCatalog: payload.sourceCatalog || [],
+      customSources: payload.customSources,
+      apiToken: payload.apiToken || null
+    });
+    setAuthError(null);
+  }, []);
+
+  const finalizeClerkLogin = useCallback(async (token) => {
+    const bridgePayload = await loginWithClerkToken(token);
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await fetchCurrentUser();
+      } catch (error) {
+        if (attempt === 2) {
+          return bridgePayload;
+        }
+
+        await wait(150 * (attempt + 1));
+      }
+    }
+
+    return bridgePayload;
+  }, []);
+
+  useEffect(() => {
+    if (!isGoogleAuthCallbackRoute || !clerkAuth.enabled || googleRedirectState.busy) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const completeGoogleRedirect = async () => {
+      setGoogleRedirectState({ busy: true, error: '' });
+      try {
+        const redirectTarget = await clerkAuth.completeGoogleSignInRedirect();
+        let token = '';
+
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          token = await clerkAuth.getToken();
+          if (token) {
+            break;
+          }
+
+          await wait(100 * (attempt + 1));
+        }
+
+        if (!token) {
+          throw new Error('Clerk session token is not available');
+        }
+
+        const payload = await finalizeClerkLogin(token);
+        if (cancelled) {
+          return;
+        }
+
+        handleAuthSuccess(payload);
+        window.location.replace(redirectTarget || '/');
+      } catch (error) {
+        if (!cancelled) {
+          setGoogleRedirectState({
+            busy: false,
+            error: error?.message || t('authErrorGeneric')
+          });
+        }
+      }
+    };
+
+    completeGoogleRedirect();
+    return () => {
+      cancelled = true;
+    };
+  }, [clerkAuth, finalizeClerkLogin, googleRedirectState.busy, handleAuthSuccess, isGoogleAuthCallbackRoute, t]);
 
   useEffect(() => {
     const handleAuthExpired = () => {
@@ -189,23 +278,6 @@ function App({ clerkAuth = defaultClerkAuth }) {
     setReleaseNotesState({ hiddenVersion: '', noticeHiddenVersion: '', saving: false, modalOpen: false });
   }, [authData?.user?.id]);
 
-  const handleAuthSuccess = useCallback((payload) => {
-    setAuthData({
-      user: payload.user,
-      settings: payload.settings,
-      limits: payload.limits,
-      sourceCatalog: payload.sourceCatalog || [],
-      customSources: payload.customSources,
-      apiToken: payload.apiToken || null
-    });
-    setAuthError(null);
-  }, []);
-
-  const finalizeClerkLogin = useCallback(async (token) => {
-    await loginWithClerkToken(token);
-    return fetchCurrentUser();
-  }, []);
-
   useEffect(() => {
     if (!clerkAuth.isSignedIn) {
       clerkBridgeAttemptedRef.current = false;
@@ -214,6 +286,7 @@ function App({ clerkAuth = defaultClerkAuth }) {
     if (
       !clerkAuth.enabled
       || !clerkAuth.isLoaded
+      || isGoogleAuthCallbackRoute
       || !clerkAuth.isSignedIn
       || clerkBridgeAttemptedRef.current
       || authData
@@ -254,7 +327,7 @@ function App({ clerkAuth = defaultClerkAuth }) {
     return () => {
       cancelled = true;
     };
-  }, [authBusy, authData, clerkAuth, finalizeClerkLogin, handleAuthSuccess, loadingSession]);
+  }, [authBusy, authData, clerkAuth, finalizeClerkLogin, handleAuthSuccess, isGoogleAuthCallbackRoute, loadingSession]);
 
   const handlePasswordSetupComplete = useCallback(async (payload) => {
     window.history.replaceState({}, '', '/');
@@ -294,10 +367,7 @@ function App({ clerkAuth = defaultClerkAuth }) {
     }
 
     if (!clerkAuth.isSignedIn) {
-      await clerkAuth.openSignIn({
-        afterSignInUrl: window.location.href,
-        redirectUrl: window.location.href
-      });
+      await clerkAuth.startGoogleSignIn();
       return;
     }
 
@@ -425,6 +495,19 @@ function App({ clerkAuth = defaultClerkAuth }) {
           token={setupToken}
           onComplete={handlePasswordSetupComplete}
         />
+      </div>
+    );
+  }
+
+  if (isGoogleAuthCallbackRoute) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-10 text-slate-900">
+        <div className="w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl">
+          <h1 className="text-xl font-semibold text-slate-900">{t('googleAuthRedirectTitle')}</h1>
+          <p className="mt-3 text-sm text-slate-500">
+            {googleRedirectState.error || t('googleAuthRedirectBody')}
+          </p>
+        </div>
       </div>
     );
   }

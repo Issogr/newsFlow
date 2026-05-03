@@ -103,4 +103,23 @@ describe('AuthScreen', () => {
     expect(screen.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute('href', '/privacy-policy');
     expect(screen.getByRole('link', { name: 'Cookie Policy' })).toHaveAttribute('href', '/cookie-policy');
   });
+
+  test('shows a direct Google sign-in button when Clerk auth is available', () => {
+    const onClerkLogin = jest.fn();
+
+    render(
+      <AuthScreen
+        t={t}
+        onLogin={jest.fn()}
+        onRegister={jest.fn()}
+        onClerkLogin={onClerkLogin}
+        clerkAvailable
+        busy={false}
+        error={null}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    expect(onClerkLogin).toHaveBeenCalled();
+  });
 });

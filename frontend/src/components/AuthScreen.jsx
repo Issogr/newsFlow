@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ExternalLink, Fingerprint, LogIn, UserPlus } from 'lucide-react';
+import { ExternalLink, LogIn, UserPlus } from 'lucide-react';
 import BrandMark from './BrandMark';
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -112,10 +112,15 @@ const AuthScreen = ({ t, onLogin, onRegister, onClerkLogin, clerkAvailable = fal
               type="button"
               onClick={onClerkLogin}
               disabled={busy}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-900 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Fingerprint className="h-4 w-4" />
-              {t('clerkLoginAction')}
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 18 18" aria-hidden="true">
+                <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.56 2.68-3.86 2.68-6.62Z" />
+                <path fill="#34A853" d="M9 18c2.43 0 4.46-.8 5.95-2.18l-2.92-2.26c-.81.54-1.84.86-3.03.86-2.33 0-4.31-1.57-5.02-3.68H.96V13c1.48 2.94 4.52 5 8.04 5Z" />
+                <path fill="#FBBC05" d="M3.98 10.74A5.4 5.4 0 0 1 3.7 9c0-.6.1-1.18.28-1.74V5H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4l3.02-2.26Z" />
+                <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.33l2.58-2.58C13.45.9 11.42 0 9 0 5.48 0 2.44 2.06.96 5l3.02 2.26C4.69 5.15 6.67 3.58 9 3.58Z" />
+              </svg>
+              {t('googleLoginAction')}
             </button>
             <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-[0.14em] text-slate-400">
               <span className="h-px flex-1 bg-slate-200" />

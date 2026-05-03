@@ -11,7 +11,8 @@ const disabledClerkAuth = {
   isLoaded: true,
   isSignedIn: false,
   getToken: async () => '',
-  openSignIn: async () => {},
+  completeGoogleSignInRedirect: async () => {},
+  startGoogleSignIn: async () => {},
   signOut: async () => {},
   user: null
 };
@@ -21,14 +22,41 @@ function ClerkAppShell() {
   const clerk = useClerk();
   const { user } = useUser();
 
+  const startGoogleSignIn = async () => {
+    const signIn = clerk.client?.signIn;
+    if (!signIn) {
+      throw new Error('Clerk sign-in is not ready yet');
+    }
+
+    const currentUrl = window.location.href;
+    const callbackUrl = new URL('/auth/google/callback', window.location.origin).toString();
+    await signIn.authenticateWithRedirect({
+      strategy: 'oauth_google',
+      redirectUrl: callbackUrl,
+      redirectUrlComplete: currentUrl
+    });
+  };
+
+  const completeGoogleSignInRedirect = async () => {
+    let redirectTarget = '/';
+
+    await clerk.handleRedirectCallback({}, async (to) => {
+      redirectTarget = to || '/';
+      return Promise.resolve();
+    });
+
+    return redirectTarget;
+  };
+
   return (
     <App
       clerkAuth={{
         enabled: true,
         isLoaded,
         isSignedIn: Boolean(isSignedIn),
+        completeGoogleSignInRedirect,
         getToken,
-        openSignIn: clerk.openSignIn,
+        startGoogleSignIn,
         signOut: clerk.signOut,
         user
       }}
