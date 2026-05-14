@@ -75,7 +75,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('24');
+    expect(migrationVersion).toBe('25');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -89,6 +89,8 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('reader_panel_position');
     expect(settingsColumns).toContain('last_seen_release_notes_version');
     expect(settingsColumns).toContain('source_setup_completed');
+    expect(settingsColumns).toContain('excluded_source_ids');
+    expect(settingsColumns).not.toContain('default_source_ids');
     expect(userColumns).toContain('role');
     expect(userColumns).toContain('last_login_at');
     expect(userColumns).toContain('last_activity_at');
@@ -151,9 +153,11 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('24');
+    expect(migratedVersion).toBe('25');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
+    expect(settingsColumns).toContain('excluded_source_ids');
+    expect(settingsColumns).not.toContain('default_source_ids');
     expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
     expect(apiTokenColumns).toContain('token_hash');
@@ -268,7 +272,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('24');
+    expect(migratedVersion).toBe('25');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -277,6 +281,8 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('reader_text_size');
     expect(settingsColumns).toContain('theme_mode');
     expect(settingsColumns).toContain('source_setup_completed');
+    expect(settingsColumns).toContain('excluded_source_ids');
+    expect(settingsColumns).not.toContain('default_source_ids');
     expect(userColumns).toContain('role');
     expect(userColumns).toContain('last_login_at');
     expect(userColumns).toContain('last_activity_at');
@@ -379,7 +385,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
 
-    expect(migratedVersion).toBe('24');
+    expect(migratedVersion).toBe('25');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -521,6 +527,56 @@ describe('database queries and user data', () => {
 
     const recentFiltered = database.getArticles({ recentHours: 1 }, { userId: 'user-1', maxArticleAgeHours: 24 });
     expect(recentFiltered.map((article) => article.id)).toEqual(['private-1', 'global-2', 'global-1']);
+  });
+
+  test('uses article ids for stable same-timestamp cursor pagination', () => {
+    const pubDate = new Date().toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'article-c',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Story C',
+        description: 'Third story',
+        content: 'Body C',
+        url: 'https://example.com/c',
+        language: 'en',
+        pubDate
+      },
+      {
+        id: 'article-b',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Story B',
+        description: 'Second story',
+        content: 'Body B',
+        url: 'https://example.com/b',
+        language: 'en',
+        pubDate
+      },
+      {
+        id: 'article-a',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Story A',
+        description: 'First story',
+        content: 'Body A',
+        url: 'https://example.com/a',
+        language: 'en',
+        pubDate
+      }
+    ]);
+
+    const firstPage = database.getArticles({ limit: 1 }, { maxArticleAgeHours: 9999 });
+    const secondPage = database.getArticles({
+      beforePubDate: firstPage[0].pubDate,
+      beforeId: firstPage[0].id,
+      limit: 2
+    }, { maxArticleAgeHours: 9999 });
+
+    expect(firstPage.map((article) => article.id)).toEqual(['article-c']);
+    expect(secondPage.map((article) => article.id)).toEqual(['article-b', 'article-a']);
   });
 
   test('updates an existing same-source article when the canonical URL matches a new id', () => {
@@ -1033,7 +1089,7 @@ describe('database queries and user data', () => {
         recent_hours,
         reader_panel_position,
         last_seen_release_notes_version,
-        default_source_ids,
+        excluded_source_ids,
         excluded_sub_source_ids,
         updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)

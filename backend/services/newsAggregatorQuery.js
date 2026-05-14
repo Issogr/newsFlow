@@ -1,7 +1,7 @@
 const database = require('./database');
 const newsSources = require('../config/newsSources');
 const { buildDomainSourceGroups, getConfiguredSourceGroups } = require('../utils/sourceCatalog');
-const { groupSimilarNews } = require('./newsAggregatorGrouping');
+const { TITLE_GROUP_WINDOW_MS, groupSimilarNews } = require('./newsAggregatorGrouping');
 const { parseIntegerEnv } = require('../utils/env');
 
 const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
@@ -75,13 +75,13 @@ function getQueryOptions(userContext = {}) {
 
 function buildNextCursor(groups = []) {
   const lastItem = groups[groups.length - 1];
-  if (!lastItem?.pubDate || !lastItem?.id) {
+  if (!lastItem?.pubDate || !lastItem?.cursorId) {
     return null;
   }
 
   return {
     beforePubDate: lastItem.pubDate,
-    beforeId: lastItem.id
+    beforeId: lastItem.cursorId
   };
 }
 
@@ -90,39 +90,57 @@ function compareFeedPosition(left = {}, right = {}) {
   return pubDateComparison || String(right.id || '').localeCompare(String(left.id || ''));
 }
 
-function isBeforeCursor(group = {}, cursor = {}) {
-  if (!cursor.beforePubDate) {
-    return true;
+function getArticleCursor(articles = []) {
+  const lastArticle = articles[articles.length - 1];
+  if (!lastArticle?.pubDate || !lastArticle?.id) {
+    return null;
   }
 
-  const groupPubDate = String(group.pubDate || '');
-  const cursorPubDate = String(cursor.beforePubDate || '');
-  if (groupPubDate < cursorPubDate) {
-    return true;
+  return {
+    beforePubDate: lastArticle.pubDate,
+    beforeId: lastArticle.id
+  };
+}
+
+function getOldestReturnedGroupTimestamp(groups = [], pageStart = 0, pageSize = 12) {
+  const returnedGroups = groups.slice(pageStart, pageStart + pageSize);
+  if (returnedGroups.length === 0) {
+    return null;
   }
 
-  if (groupPubDate > cursorPubDate) {
+  return returnedGroups.reduce((oldestTimestamp, group) => {
+    const groupTimestamp = Date.parse(group.pubDate || '');
+    if (!Number.isFinite(groupTimestamp)) {
+      return oldestTimestamp;
+    }
+
+    return oldestTimestamp === null ? groupTimestamp : Math.min(oldestTimestamp, groupTimestamp);
+  }, null);
+}
+
+function hasScannedGroupingWindow(articles = [], groups = [], pageStart = 0, pageSize = 12) {
+  const oldestReturnedTimestamp = getOldestReturnedGroupTimestamp(groups, pageStart, pageSize);
+  const lastFetchedArticle = articles[articles.length - 1];
+  const lastFetchedTimestamp = Date.parse(lastFetchedArticle?.pubDate || '');
+
+  if (!Number.isFinite(oldestReturnedTimestamp) || !Number.isFinite(lastFetchedTimestamp)) {
     return false;
   }
 
-  return !cursor.beforeId || String(group.id || '') < String(cursor.beforeId || '');
+  return lastFetchedTimestamp < oldestReturnedTimestamp - TITLE_GROUP_WINDOW_MS;
 }
 
-function getGroupPageStart(groups = [], filters = {}, page = 1, pageSize = 12) {
-  if (filters.beforePubDate || filters.beforeId) {
-    return groups.findIndex((group) => isBeforeCursor(group, filters));
-  }
-
-  return (page - 1) * pageSize;
-}
-
-function fetchAllMatchingArticles(filters = {}, queryOptions = {}) {
+function fetchGroupedNewsPage(filters = {}, queryOptions = {}, page = 1, pageSize = 12) {
   const articles = [];
   let cursor = {
-    beforePubDate: '',
-    beforeId: ''
+    beforePubDate: filters.beforePubDate || '',
+    beforeId: filters.beforeId || ''
   };
   let hasMoreArticles = true;
+  let groups = [];
+  const cursorMode = Boolean(filters.beforePubDate || filters.beforeId);
+  const pageStart = cursorMode ? 0 : (page - 1) * pageSize;
+  const requiredGroups = pageStart + pageSize + 1;
 
   while (hasMoreArticles) {
     const batch = database.getArticles({
@@ -141,16 +159,34 @@ function fetchAllMatchingArticles(filters = {}, queryOptions = {}) {
 
     articles.push(...pageArticles);
     hasMoreArticles = batch.length > GROUP_PAGINATION_ARTICLE_BATCH_SIZE;
+    groups = groupSimilarNews(articles).sort(compareFeedPosition);
 
-    const nextCursor = buildNextCursor(pageArticles);
-    if (!hasMoreArticles || !nextCursor) {
+    if (!hasMoreArticles) {
+      break;
+    }
+
+    const hasEnoughGroups = groups.length >= requiredGroups;
+    if (hasEnoughGroups && hasScannedGroupingWindow(articles, groups, pageStart, pageSize)) {
+      break;
+    }
+
+    const nextCursor = getArticleCursor(pageArticles);
+    if (!nextCursor) {
       break;
     }
 
     cursor = nextCursor;
   }
 
-  return articles;
+  const safePageStart = pageStart < 0 ? groups.length : pageStart;
+  const pageGroups = groups.slice(safePageStart, safePageStart + pageSize);
+  const hasMore = groups.length > safePageStart + pageSize || hasMoreArticles;
+
+  return {
+    articles,
+    hasMore,
+    pageGroups
+  };
 }
 
 function buildSourceCatalogResponse(availableSources = []) {
@@ -184,12 +220,9 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
 
   const page = Math.max(1, Number(filters.page) || 1);
   const pageSize = Math.max(1, Math.min(Number(filters.pageSize) || 12, 30));
-  const articles = fetchAllMatchingArticles(filters, queryOptions);
-  const allGroups = groupSimilarNews(articles).sort(compareFeedPosition);
-  const pageStart = getGroupPageStart(allGroups, filters, page, pageSize);
-  const safePageStart = pageStart < 0 ? allGroups.length : pageStart;
-  const pageGroups = allGroups.slice(safePageStart, safePageStart + pageSize);
-  const hasMore = allGroups.length > safePageStart + pageSize;
+  const groupedPage = fetchGroupedNewsPage(filters, queryOptions, page, pageSize);
+  const pageGroups = groupedPage.pageGroups;
+  const hasMore = groupedPage.hasMore;
   const latestIngestion = database.getLatestIngestionRun();
   const includeFilters = filters.includeFilters !== false;
   const manualRefreshMeta = getManualRefreshMeta() || {};
@@ -203,7 +236,7 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
       nextCursor: hasMore ? buildNextCursor(pageGroups) : null,
       returnedGroups: pageGroups.length,
       totalGroups: null,
-      scannedArticles: articles.length,
+      scannedArticles: groupedPage.articles.length,
       lastRefreshAt: getLastRefreshAt(),
       ingestion: latestIngestion,
       pendingUserRefresh: isUserRefreshPending(),

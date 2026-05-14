@@ -11,6 +11,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '📱 Adding custom RSS sources is more reliable on mobile because new feeds are saved before their first refresh runs in the background.',
       '🛠️ Deleting users from the admin dashboard now updates the list immediately after a successful delete.',
       '🔄 Manual refresh now uses a short cooldown and shared source freshness guard to keep news timely without overloading RSS providers.',
+      '⚡ Feed pagination is faster and more stable on large feeds, especially when many stories share the same publication time.',
+      '🧭 Slow RSS sources no longer block unrelated user refreshes, and custom feed validation now fails faster when a provider does not respond.',
     ]
   },
   it: {
@@ -24,6 +26,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '📱 L\'aggiunta di fonti RSS personalizzate e piu affidabile su mobile perche le nuove fonti vengono salvate prima del primo refresh in background.',
       '🛠️ L\'eliminazione degli utenti dalla dashboard admin aggiorna subito la lista dopo una cancellazione riuscita.',
       '🔄 L\'aggiornamento manuale ora usa un breve cooldown e un controllo condiviso sulla freschezza delle fonti per mantenere le notizie tempestive senza sovraccaricare i provider RSS.',
+      '⚡ La paginazione del feed e piu veloce e stabile sui feed grandi, soprattutto quando molte storie hanno lo stesso orario di pubblicazione.',
+      '🧭 Le fonti RSS lente non bloccano piu gli aggiornamenti di altri utenti e la validazione dei feed personalizzati fallisce piu rapidamente quando un provider non risponde.',
     ]
   }
 };

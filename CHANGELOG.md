@@ -8,6 +8,10 @@
 - made custom RSS source creation return immediately after saving while refreshing the new feed in the background, avoiding apparent no-op adds on slow mobile connections
 - made admin user deletion update the dashboard immediately after a successful delete instead of depending on a follow-up list reload
 - added a five-minute manual refresh cooldown and shared source freshness guard so users can request recent news without overloading upstream RSS feeds
+- made feed pagination use stable article cursors and stop scanning once enough grouped story cards are available, reducing work on large feeds while avoiding skipped same-time stories
+- let independent user source refreshes run without waiting behind unrelated refresh work, improving responsiveness when one RSS source is slow
+- shortened interactive RSS validation retries and timeouts so adding or importing slow custom feeds fails faster instead of continuing behind timed-out client requests
+- renamed the persisted source-exclusion settings column and fixed migration version sequencing so database upgrades cannot mark later schema work complete too early
 
 ## 3.3.2
 

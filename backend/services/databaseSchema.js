@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 24;
+  const CURRENT_SCHEMA_VERSION = 25;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getAllConfiguredSourceGroupIds() {
@@ -153,7 +153,7 @@ function createDatabaseSchema({ logger }) {
         reader_text_size TEXT NOT NULL DEFAULT 'medium',
         last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
         source_setup_completed INTEGER NOT NULL DEFAULT 1,
-        default_source_ids TEXT NOT NULL DEFAULT '[]',
+        excluded_source_ids TEXT NOT NULL DEFAULT '[]',
         excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
@@ -280,7 +280,11 @@ function createDatabaseSchema({ logger }) {
       return 22;
     }
 
-    return 23;
+    if (tableExists(database, 'user_settings') && !userSettingsColumns.has('excluded_source_ids')) {
+      return 24;
+    }
+
+    return 24;
   }
 
   function setCurrentSchemaVersion(database, version = CURRENT_SCHEMA_VERSION) {
@@ -460,7 +464,7 @@ function createDatabaseSchema({ logger }) {
         `);
       }
 
-      setCurrentSchemaVersion(database);
+      setCurrentSchemaVersion(database, 22);
       logger.info('Migrated DB schema from version 21 to 22');
       migrateSchema(database, 22);
       return;
@@ -506,6 +510,9 @@ function createDatabaseSchema({ logger }) {
         const urlKey = normalizeArticleUrl(source.url || '') || String(source.url || '').trim();
         return configuredSourceUrlKeys.has(urlKey);
       });
+      const sourceExclusionColumn = getColumnNames(database, 'user_settings').has('excluded_source_ids')
+        ? 'excluded_source_ids'
+        : 'default_source_ids';
 
       const transaction = database.transaction(() => {
         const deleteArticleSearch = database.prepare(`
@@ -532,7 +539,7 @@ function createDatabaseSchema({ logger }) {
         database.prepare(`
           UPDATE user_settings
           SET source_setup_completed = 0,
-              default_source_ids = ?,
+              ${sourceExclusionColumn} = ?,
               excluded_sub_source_ids = '[]',
               updated_at = ?
         `).run(excludedDefaultSourceIds, now);
@@ -540,8 +547,25 @@ function createDatabaseSchema({ logger }) {
 
       transaction();
 
-      setCurrentSchemaVersion(database);
+      setCurrentSchemaVersion(database, 24);
       logger.info(`Migrated DB schema from version 23 to 24; reset source setup for ${DEFAULT_SOURCE_REVIEW_VERSION} and removed ${duplicateUserSources.length} duplicate custom sources`);
+      migrateSchema(database, 24);
+      return;
+    }
+
+    if (currentVersion === 24) {
+      const settingsColumns = getColumnNames(database, 'user_settings');
+      if (settingsColumns.has('default_source_ids') && !settingsColumns.has('excluded_source_ids')) {
+        database.exec('ALTER TABLE user_settings RENAME COLUMN default_source_ids TO excluded_source_ids');
+      } else if (!settingsColumns.has('excluded_source_ids')) {
+        database.exec(`
+          ALTER TABLE user_settings
+          ADD COLUMN excluded_source_ids TEXT NOT NULL DEFAULT '[]'
+        `);
+      }
+
+      setCurrentSchemaVersion(database);
+      logger.info('Migrated DB schema from version 24 to 25');
       return;
     }
 

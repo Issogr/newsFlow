@@ -126,6 +126,7 @@ function createGroupFromItems(items = []) {
 
   return {
     id: buildStableGroupId(sortedItems),
+    cursorId: primaryItem.id,
     items: sortedItems,
     ownerUserId: primaryItem.ownerUserId || null,
     sources: [...sourceNames],
@@ -270,6 +271,7 @@ function buildInsertedGroupsByOwner(normalizedArticles = [], insertedIds = []) {
 
 module.exports = {
   buildStableGroupId,
+  TITLE_GROUP_WINDOW_MS,
   sortGroupsByPubDate,
   groupSimilarNews,
   normalizeIncomingArticles,

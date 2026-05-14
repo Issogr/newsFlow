@@ -20,7 +20,7 @@ const USER_SETTINGS_COLUMNS = [
   'reader_text_size',
   'last_seen_release_notes_version',
   'source_setup_completed',
-  'default_source_ids',
+  'excluded_source_ids',
   'excluded_sub_source_ids',
   'updated_at'
 ];
@@ -72,7 +72,7 @@ function createUserStateRepository({ getDb }) {
               reader_text_size AS readerTextSize,
               last_seen_release_notes_version AS lastSeenReleaseNotesVersion,
               source_setup_completed AS sourceSetupCompleted,
-              default_source_ids AS excludedSourceIds,
+              excluded_source_ids AS excludedSourceIds,
              excluded_sub_source_ids AS excludedSubSourceIds,
              updated_at AS updatedAt
       FROM user_settings

@@ -28,7 +28,6 @@ const ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES = parseIntegerEnv(
 let refreshPromise = null;
 let lastRefreshAt = null;
 let schedulerHandle = null;
-let ingestionQueue = Promise.resolve();
 const usersRefreshedSinceScheduledIngestion = new Set();
 const userImmediateRefreshPromises = new Map();
 const userManualRefreshTimestamps = new Map();
@@ -39,15 +38,6 @@ function getLastRefreshAt() {
 
 function setLastRefreshAt(value) {
   lastRefreshAt = value;
-}
-
-function enqueueIngestionTask(task) {
-  const queuedTask = ingestionQueue
-    .catch(() => undefined)
-    .then(task);
-
-  ingestionQueue = queuedTask.catch(() => undefined);
-  return queuedTask;
 }
 
 function getIngestionRuntime() {
@@ -188,7 +178,7 @@ function startUserAssignedSourceRefresh(userContext = {}, options = {}) {
     userManualRefreshTimestamps.set(userId, Date.now());
   }
 
-  const refreshTask = enqueueIngestionTask(async () => {
+  const refreshTask = (async () => {
     const sourceConfigs = getUserAssignedSourceConfigs(userContext);
     if (sourceConfigs.length === 0) {
       return createEmptyRefreshPayload(getLastRefreshAt());
@@ -207,7 +197,7 @@ function startUserAssignedSourceRefresh(userContext = {}, options = {}) {
     }
 
     return payload;
-  }).catch((error) => {
+  })().catch((error) => {
     logger.warn(`Immediate assigned-source refresh failed for user ${userId}: ${error.message}`);
     return createEmptyRefreshPayload(getLastRefreshAt());
   }).finally(() => {
@@ -236,7 +226,7 @@ async function ingestAllNews(options = {}) {
     return refreshPromise;
   }
 
-  refreshPromise = enqueueIngestionTask(async () => {
+  refreshPromise = (async () => {
     try {
       const databaseIsEmpty = database.countArticles() === 0;
       const sourceConfigs = databaseIsEmpty
@@ -261,7 +251,7 @@ async function ingestAllNews(options = {}) {
       logger.error(`News ingestion failed: ${error.message}`);
       throw error.status ? error : createError(500, 'An error occurred while refreshing news.', 'SERVER_ERROR', error);
     }
-  }).finally(() => {
+  })().finally(() => {
     refreshPromise = null;
   });
 
@@ -273,7 +263,7 @@ async function refreshUserSources(userId, options = {}) {
     return createEmptyRefreshPayload(getLastRefreshAt());
   }
 
-  return enqueueIngestionTask(async () => {
+  return (async () => {
     const selectedSourceIds = Array.isArray(options.sourceIds) && options.sourceIds.length > 0
       ? new Set(options.sourceIds)
       : null;
@@ -293,7 +283,7 @@ async function refreshUserSources(userId, options = {}) {
       updateRefreshTimestamp: false,
       trackIngestionRun: false
     }, getIngestionRuntime());
-  });
+  })();
 }
 
 async function ensureSeedData() {

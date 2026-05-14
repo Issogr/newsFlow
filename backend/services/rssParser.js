@@ -12,6 +12,8 @@ const MAX_ARTICLES_PER_SOURCE = parseIntegerEnv('MAX_ARTICLES_PER_SOURCE', 25, {
 const RSS_MAX_RETRIES = parseIntegerEnv('RSS_MAX_RETRIES', 4, { min: 1 });
 const RSS_RETRY_DELAY = parseIntegerEnv('RSS_RETRY_DELAY', 1500, { min: 0 });
 const RSS_TIMEOUT = parseIntegerEnv('RSS_TIMEOUT', 15000, { min: 1 });
+const RSS_VALIDATION_MAX_RETRIES = parseIntegerEnv('RSS_VALIDATION_MAX_RETRIES', 2, { min: 1 });
+const RSS_VALIDATION_TIMEOUT = parseIntegerEnv('RSS_VALIDATION_TIMEOUT', 8000, { min: 1 });
 const CACHE_TTL = parseIntegerEnv('RSS_CACHE_TTL', 60000, { min: 0 });
 const MAX_CACHE_ENTRIES = parseIntegerEnv('RSS_CACHE_MAX_ENTRIES', 200, { min: 0 });
 const ARTICLE_IMAGE_TIMEOUT = parseIntegerEnv('ARTICLE_IMAGE_TIMEOUT', 8000, { min: 1 });
@@ -403,7 +405,7 @@ async function enrichArticlesWithImages(articles = []) {
   return articles;
 }
 
-async function fetchFeedXml(url) {
+async function fetchFeedXml(url, options = {}) {
   pruneResponseCache();
 
   const cached = responseCache.get(url);
@@ -412,11 +414,17 @@ async function fetchFeedXml(url) {
   }
 
   let lastError;
+  const maxRetries = Number.isFinite(options.maxRetries) && options.maxRetries > 0
+    ? Math.floor(options.maxRetries)
+    : RSS_MAX_RETRIES;
+  const timeout = Number.isFinite(options.timeout) && options.timeout > 0
+    ? Math.floor(options.timeout)
+    : RSS_TIMEOUT;
 
-  for (let attempt = 1; attempt <= RSS_MAX_RETRIES; attempt += 1) {
+  for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
     try {
       const response = await fetchSafeTextUrl(url, {
-        timeout: RSS_TIMEOUT,
+        timeout,
         maxResponseBytes: RSS_MAX_RESPONSE_BYTES,
         headers: RSS_REQUEST_HEADERS
       });
@@ -430,12 +438,12 @@ async function fetchFeedXml(url) {
       return response.data;
     } catch (error) {
       lastError = error;
-      if (attempt === RSS_MAX_RETRIES || !isRetryableFetchError(error)) {
+      if (attempt === maxRetries || !isRetryableFetchError(error)) {
         break;
       }
 
       const delay = RSS_RETRY_DELAY * attempt;
-      logger.warn(`Retry ${attempt}/${RSS_MAX_RETRIES} for ${url} after ${delay}ms`);
+      logger.warn(`Retry ${attempt}/${maxRetries} for ${url} after ${delay}ms`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
@@ -497,8 +505,11 @@ async function parseFeed(source, options = {}) {
 module.exports = {
   parseFeed,
   shutdown,
-  validateFeedUrl: async (url) => {
-    const xml = await fetchFeedXml(url);
+  validateFeedUrl: async (url, options = {}) => {
+    const xml = await fetchFeedXml(url, {
+      maxRetries: options.maxRetries || RSS_VALIDATION_MAX_RETRIES,
+      timeout: options.timeout || RSS_VALIDATION_TIMEOUT
+    });
     const feed = await parser.parseString(xml);
     return {
       title: sanitizeHtml(feed?.title || ''),

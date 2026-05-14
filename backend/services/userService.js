@@ -34,6 +34,8 @@ const ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS = parseIntegerEnv('ANONYMOUS_PUBL
 const ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD = parseIntegerEnv('ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD', 100, { min: 1 });
 const AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS = parseIntegerEnv('AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS', 5000, { min: 1000 });
 const AUTHENTICATED_PUBLIC_USAGE_FLUSH_THRESHOLD = parseIntegerEnv('AUTHENTICATED_PUBLIC_USAGE_FLUSH_THRESHOLD', 50, { min: 1 });
+const RSS_INTERACTIVE_VALIDATION_TIMEOUT = parseIntegerEnv('RSS_INTERACTIVE_VALIDATION_TIMEOUT', 8000, { min: 1 });
+const RSS_INTERACTIVE_VALIDATION_RETRIES = parseIntegerEnv('RSS_INTERACTIVE_VALIDATION_RETRIES', 2, { min: 1 });
 const SUPPORTED_LANGUAGES = new Set(['auto', 'it', 'en']);
 const SUPPORTED_THEME_MODES = new Set(['system', 'light', 'dark']);
 const SUPPORTED_READER_PANEL_POSITIONS = new Set(['left', 'center', 'right']);
@@ -635,7 +637,10 @@ async function previewUserSource(payload = {}) {
   }
 
   try {
-    const preview = await rssParser.validateFeedUrl(url);
+    const preview = await rssParser.validateFeedUrl(url, {
+      timeout: RSS_INTERACTIVE_VALIDATION_TIMEOUT,
+      maxRetries: RSS_INTERACTIVE_VALIDATION_RETRIES
+    });
     return {
       name: preview.title || '',
       iconUrl: getProviderIconUrl(preview.siteUrl || url),
@@ -887,7 +892,10 @@ async function importUserSettings(userId, payload = {}) {
     }
 
     try {
-      await rssParser.validateFeedUrl(url);
+      await rssParser.validateFeedUrl(url, {
+        timeout: RSS_INTERACTIVE_VALIDATION_TIMEOUT,
+        maxRetries: RSS_INTERACTIVE_VALIDATION_RETRIES
+      });
     } catch (error) {
       throw createError(400, `Imported RSS URL is not valid: ${url}`, 'INVALID_RSS_URL', error);
     }
