@@ -56,10 +56,12 @@ const aiTopicClassifier = require('./aiTopicClassifier');
 const newsAggregator = require('./newsAggregator');
 const { normalizeIncomingArticles } = require('./newsAggregatorGrouping');
 const {
+  ingestSourceConfigs,
   mapSettledWithConcurrency,
   scheduleAiTopicsForPendingArticles,
   _filterArticlesWithinRetention,
-  _resetPendingAiTopicProcessingIds
+  _resetPendingAiTopicProcessingIds,
+  _resetSourceFetchFreshness
 } = require('./newsAggregatorIngestion');
 const { getCanonicalSourceId, getCanonicalSourceName } = require('../utils/sourceCatalog');
 
@@ -91,6 +93,7 @@ describe('newsAggregator service flows', () => {
     jest.clearAllMocks();
     newsAggregator._resetImmediateRefreshState();
     _resetPendingAiTopicProcessingIds();
+    _resetSourceFetchFreshness();
     database.countArticles.mockReturnValue(1);
     database.deleteArticlesOlderThan.mockReturnValue(0);
     database.normalizeFuturePublicationDates.mockReturnValue(0);
@@ -345,6 +348,28 @@ describe('newsAggregator service flows', () => {
     await new Promise((resolve) => { setTimeout(resolve, 0); });
 
     expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(false);
+  });
+
+  test('manual refresh enforces a per-user cooldown after a refresh starts', async () => {
+    const allDefaultSourceGroupIds = [...new Set(newsAggregator.newsSources.map((source) => getCanonicalSourceId(source.id, source.name)))];
+    const userContext = { userId: 'user-1', excludedSourceIds: allDefaultSourceGroupIds, excludedSubSourceIds: [] };
+    const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
+
+    database.listUserSources.mockReturnValue([customSource]);
+    rssParser.parseFeed.mockResolvedValue([]);
+
+    await newsAggregator.getNewsFeed({ refresh: true }, userContext);
+    await newsAggregator._waitForExistingUserAssignedSourceRefresh(userContext);
+
+    const secondResult = await newsAggregator.getNewsFeed({ refresh: true }, userContext);
+
+    expect(rssParser.parseFeed).toHaveBeenCalledTimes(1);
+    expect(secondResult.meta).toEqual(expect.objectContaining({
+      manualRefreshAllowed: false,
+      manualRefreshCooldownSeconds: expect.any(Number),
+      manualRefreshAllowedAt: expect.any(String)
+    }));
+    expect(secondResult.meta.manualRefreshCooldownSeconds).toBeGreaterThan(0);
   });
 
   test('getNewsFeed groups matching articles into one story group', async () => {
@@ -658,6 +683,23 @@ describe('newsAggregator service flows', () => {
         ownerUserId: 'user-2'
       })
     ]));
+  });
+
+  test('skips upstream source fetches inside the freshness window', async () => {
+    const source = { id: 'source-a', name: 'Source A', url: 'https://example.com/feed.xml', language: 'en' };
+    let lastRefreshAt = null;
+    const runtime = {
+      getLastRefreshAt: () => lastRefreshAt,
+      setLastRefreshAt: (value) => { lastRefreshAt = value; }
+    };
+
+    rssParser.parseFeed.mockResolvedValue([{ id: 'article-1', sourceId: 'source-a', source: 'Source A', title: 'Fresh story', pubDate: recentIso({ hoursAgo: 1 }), url: 'https://example.com/story' }]);
+    database.upsertArticles.mockReturnValue({ insertedIds: ['article-1'], insertedCount: 1, updatedCount: 0 });
+
+    await ingestSourceConfigs([source], { sourceFetchFreshnessMs: 300000 }, runtime);
+    await ingestSourceConfigs([{ ...source, id: 'source-b', name: 'Source B' }], { sourceFetchFreshnessMs: 300000 }, runtime);
+
+    expect(rssParser.parseFeed).toHaveBeenCalledTimes(1);
   });
 
   test('normalizes duplicate sibling subfeed articles into one incoming article', () => {

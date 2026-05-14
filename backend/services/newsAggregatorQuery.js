@@ -167,6 +167,7 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   const {
     ensureSeedData = async () => {},
     getLastRefreshAt = () => null,
+    getManualRefreshMeta = () => ({}),
     isUserRefreshPending = () => false
   } = runtime;
 
@@ -191,6 +192,7 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   const hasMore = allGroups.length > safePageStart + pageSize;
   const latestIngestion = database.getLatestIngestionRun();
   const includeFilters = filters.includeFilters !== false;
+  const manualRefreshMeta = getManualRefreshMeta() || {};
 
   return {
     items: pageGroups,
@@ -204,7 +206,8 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
       scannedArticles: articles.length,
       lastRefreshAt: getLastRefreshAt(),
       ingestion: latestIngestion,
-      pendingUserRefresh: isUserRefreshPending()
+      pendingUserRefresh: isUserRefreshPending(),
+      ...manualRefreshMeta
     },
     filters: includeFilters ? {
       sources: database.getSourceStats(availableSources, queryOptions),

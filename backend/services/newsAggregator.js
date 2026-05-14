@@ -18,6 +18,7 @@ const websocketService = require('./websocketService');
 const { parseIntegerEnv } = require('../utils/env');
 
 const SCRAPE_INTERVAL_MS = parseIntegerEnv('SCRAPE_INTERVAL_MS', 900000, { min: 1000 });
+const MANUAL_REFRESH_COOLDOWN_MS = parseIntegerEnv('MANUAL_REFRESH_COOLDOWN_MS', 5 * 60 * 1000, { min: 0 });
 const ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES = parseIntegerEnv(
   'SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES',
   parseIntegerEnv('ONLINE_ACTIVITY_WINDOW_MINUTES', 5, { min: 0 }),
@@ -30,6 +31,7 @@ let schedulerHandle = null;
 let ingestionQueue = Promise.resolve();
 const usersRefreshedSinceScheduledIngestion = new Set();
 const userImmediateRefreshPromises = new Map();
+const userManualRefreshTimestamps = new Map();
 
 function getLastRefreshAt() {
   return lastRefreshAt;
@@ -57,6 +59,38 @@ function getIngestionRuntime() {
 
 function hasPendingUserAssignedSourceRefresh(userContext = {}) {
   return Boolean(userContext.userId) && userImmediateRefreshPromises.has(userContext.userId);
+}
+
+function getManualRefreshAllowedAt(userId, referenceTime = Date.now()) {
+  if (!userId || !Number.isFinite(MANUAL_REFRESH_COOLDOWN_MS) || MANUAL_REFRESH_COOLDOWN_MS <= 0) {
+    return null;
+  }
+
+  const lastRefreshAt = userManualRefreshTimestamps.get(userId);
+  if (!Number.isFinite(lastRefreshAt)) {
+    return null;
+  }
+
+  const allowedAt = lastRefreshAt + MANUAL_REFRESH_COOLDOWN_MS;
+  return allowedAt > referenceTime ? new Date(allowedAt).toISOString() : null;
+}
+
+function getManualRefreshMeta(userContext = {}, referenceTime = Date.now()) {
+  const allowedAt = getManualRefreshAllowedAt(userContext.userId, referenceTime);
+  const allowedAtTime = allowedAt ? Date.parse(allowedAt) : NaN;
+  const cooldownSeconds = Number.isFinite(allowedAtTime)
+    ? Math.max(0, Math.ceil((allowedAtTime - referenceTime) / 1000))
+    : 0;
+
+  return {
+    manualRefreshCooldownSeconds: cooldownSeconds,
+    manualRefreshAllowedAt: allowedAt,
+    manualRefreshAllowed: cooldownSeconds <= 0
+  };
+}
+
+function canStartManualRefresh(userId, referenceTime = Date.now()) {
+  return !getManualRefreshAllowedAt(userId, referenceTime);
 }
 
 function isRecentlyActive(user, referenceTime = Date.now()) {
@@ -135,6 +169,7 @@ function getUserAssignedSourceConfigs(userContext = {}) {
 
 function startUserAssignedSourceRefresh(userContext = {}, options = {}) {
   const userId = userContext.userId;
+  const manual = options.manual === true;
 
   if (userId && userImmediateRefreshPromises.has(userId)) {
     return userImmediateRefreshPromises.get(userId);
@@ -144,7 +179,14 @@ function startUserAssignedSourceRefresh(userContext = {}, options = {}) {
     return createEmptyRefreshPayload(getLastRefreshAt());
   }
 
+  if (manual && !canStartManualRefresh(userId)) {
+    return createEmptyRefreshPayload(getLastRefreshAt());
+  }
+
   usersRefreshedSinceScheduledIngestion.add(userId);
+  if (manual && Number.isFinite(MANUAL_REFRESH_COOLDOWN_MS) && MANUAL_REFRESH_COOLDOWN_MS > 0) {
+    userManualRefreshTimestamps.set(userId, Date.now());
+  }
 
   const refreshTask = enqueueIngestionTask(async () => {
     const sourceConfigs = getUserAssignedSourceConfigs(userContext);
@@ -247,6 +289,7 @@ async function refreshUserSources(userId, options = {}) {
       broadcast: options.broadcast === true,
       includeMaintenance: false,
       failWhenEmpty: false,
+      bypassSourceFreshness: options.bypassSourceFreshness !== false,
       updateRefreshTimestamp: false,
       trackIngestionRun: false
     }, getIngestionRuntime());
@@ -265,13 +308,14 @@ async function getNewsFeed(filters = {}, userContext = {}) {
   await ensureSeedData();
 
   if (filters.refresh) {
-    startUserAssignedSourceRefresh(userContext, { broadcast: false, force: true, broadcastRefreshOnCompletion: true });
+    startUserAssignedSourceRefresh(userContext, { broadcast: false, force: true, manual: true, broadcastRefreshOnCompletion: true });
   }
 
   return buildNewsFeed(filters, userContext, {
     ensureSeedData: async () => {},
     getLastRefreshAt,
-    isUserRefreshPending: () => hasPendingUserAssignedSourceRefresh(userContext)
+    isUserRefreshPending: () => hasPendingUserAssignedSourceRefresh(userContext),
+    getManualRefreshMeta: () => getManualRefreshMeta(userContext)
   });
 }
 
@@ -309,6 +353,7 @@ function stopScheduler() {
 function resetImmediateRefreshState() {
   usersRefreshedSinceScheduledIngestion.clear();
   userImmediateRefreshPromises.clear();
+  userManualRefreshTimestamps.clear();
 }
 
 process.on('exit', stopScheduler);
@@ -325,6 +370,8 @@ module.exports = {
   _getUserAssignedSourceConfigs: getUserAssignedSourceConfigs,
   _isConfiguredSourceAssignedToSettings: isConfiguredSourceAssignedToSettings,
   _isRecentlyActive: isRecentlyActive,
+  _getManualRefreshMeta: getManualRefreshMeta,
+  _userManualRefreshTimestamps: userManualRefreshTimestamps,
   _hasPendingUserAssignedSourceRefresh: hasPendingUserAssignedSourceRefresh,
   _startUserAssignedSourceRefresh: startUserAssignedSourceRefresh,
   _waitForExistingUserAssignedSourceRefresh: waitForExistingUserAssignedSourceRefresh,

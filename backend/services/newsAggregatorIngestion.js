@@ -17,7 +17,9 @@ const {
 
 const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24, { min: 0 });
 const RSS_INGESTION_CONCURRENCY = parseIntegerEnv('RSS_INGESTION_CONCURRENCY', 8, { min: 1 });
+const SOURCE_FETCH_FRESHNESS_MS = parseIntegerEnv('SOURCE_FETCH_FRESHNESS_MS', 5 * 60 * 1000, { min: 0 });
 const pendingAiTopicProcessingIds = new Set();
+const sourceFetchTimestamps = new Map();
 
 function filterArticlesWithinRetention(articles = []) {
   if (!Array.isArray(articles) || articles.length === 0) {
@@ -92,6 +94,27 @@ function normalizeSourceFetchUrl(url) {
   return normalizeArticleUrl(url || '') || String(url || '').trim();
 }
 
+function getSourceFetchKey(source = {}) {
+  return normalizeSourceFetchUrl(source.url) || source.id || '';
+}
+
+function isSourceFetchFresh(source = {}, freshnessMs = SOURCE_FETCH_FRESHNESS_MS, referenceTime = Date.now()) {
+  if (!Number.isFinite(freshnessMs) || freshnessMs <= 0) {
+    return false;
+  }
+
+  const fetchKey = getSourceFetchKey(source);
+  const lastFetchedAt = fetchKey ? sourceFetchTimestamps.get(fetchKey) : null;
+  return Number.isFinite(lastFetchedAt) && referenceTime - lastFetchedAt < freshnessMs;
+}
+
+function markSourceFetched(source = {}, referenceTime = Date.now()) {
+  const fetchKey = getSourceFetchKey(source);
+  if (fetchKey) {
+    sourceFetchTimestamps.set(fetchKey, referenceTime);
+  }
+}
+
 function cloneArticleForSource(article = {}, source = {}) {
   const clonedArticle = {
     ...article,
@@ -135,11 +158,22 @@ function buildSourceFetchTasks(sourceConfigs = []) {
   return [...tasks, ...userSourceGroups.values()];
 }
 
-async function fetchSourceTask(task) {
+async function fetchSourceTask(task, options = {}) {
+  const {
+    bypassSourceFreshness = false,
+    sourceFetchFreshnessMs = SOURCE_FETCH_FRESHNESS_MS
+  } = options;
+
+  if (!bypassSourceFreshness && isSourceFetchFresh(task.fetchSource, sourceFetchFreshnessMs)) {
+    return [];
+  }
+
   const parsedArticles = await rssParser.parseFeed(task.fetchSource, {
     imageFallback: Boolean(task.fetchSource?.ownerUserId),
     throwOnError: true
   });
+
+  markSourceFetched(task.fetchSource);
 
   if (!task.fanOut) {
     return parsedArticles;
@@ -250,6 +284,10 @@ function resetPendingAiTopicProcessingIds() {
   pendingAiTopicProcessingIds.clear();
 }
 
+function resetSourceFetchFreshness() {
+  sourceFetchTimestamps.clear();
+}
+
 function mergeNormalizedArticleTopics(normalizedArticles = []) {
   const pendingArticleIdSet = new Set(
     database.getArticleIdsPendingAiTopicProcessing(normalizedArticles.map((article) => article.id))
@@ -287,6 +325,8 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
     broadcast = true,
     includeMaintenance = false,
     failWhenEmpty = false,
+    bypassSourceFreshness = false,
+    sourceFetchFreshnessMs = SOURCE_FETCH_FRESHNESS_MS,
     updateRefreshTimestamp = false,
     trackIngestionRun = false
   } = options;
@@ -303,7 +343,10 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
     }
 
     const sourceFetchTasks = buildSourceFetchTasks(sourceConfigs);
-    const results = await mapSettledWithConcurrency(sourceFetchTasks, RSS_INGESTION_CONCURRENCY, fetchSourceTask);
+    const results = await mapSettledWithConcurrency(sourceFetchTasks, RSS_INGESTION_CONCURRENCY, (task) => fetchSourceTask(task, {
+      bypassSourceFreshness: bypassSourceFreshness || failWhenEmpty,
+      sourceFetchFreshnessMs
+    }));
     const failedResults = results.filter((result) => result.status === 'rejected');
     const fetchedArticles = results
       .filter((result) => result.status === 'fulfilled')
@@ -374,6 +417,8 @@ module.exports = {
   scheduleAiTopicsForPendingArticles,
   _filterArticlesWithinRetention: filterArticlesWithinRetention,
   _resetPendingAiTopicProcessingIds: resetPendingAiTopicProcessingIds,
+  _resetSourceFetchFreshness: resetSourceFetchFreshness,
+  _sourceFetchTimestamps: sourceFetchTimestamps,
   buildSourceFetchTasks,
   cloneArticleForSource
 };
