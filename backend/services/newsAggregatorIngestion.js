@@ -137,7 +137,7 @@ function buildSourceFetchTasks(sourceConfigs = []) {
 
 async function fetchSourceTask(task) {
   const parsedArticles = await rssParser.parseFeed(task.fetchSource, {
-    imageFallback: false,
+    imageFallback: Boolean(task.fetchSource?.ownerUserId),
     throwOnError: true
   });
 

@@ -643,6 +643,7 @@ describe('newsAggregator service flows', () => {
 
     const sharedFetchCalls = rssParser.parseFeed.mock.calls.filter(([source]) => source.url === sharedUrl);
     expect(sharedFetchCalls).toHaveLength(1);
+    expect(sharedFetchCalls[0][1]).toEqual({ imageFallback: true, throwOnError: true });
     expect(database.upsertArticles).toHaveBeenCalledWith(expect.arrayContaining([
       expect.objectContaining({
         id: 'custom-user-1:https://example.com/story',
@@ -758,7 +759,7 @@ describe('newsAggregator service flows', () => {
       name: 'Beta Feed',
       ownerUserId: 'user-1'
     }), {
-      imageFallback: false,
+      imageFallback: true,
       throwOnError: true
     });
     expect(database.createIngestionRun).not.toHaveBeenCalled();

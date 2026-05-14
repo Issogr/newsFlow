@@ -4,6 +4,7 @@
 
 - removed Fanpage from the built-in RSS source catalog because it was creating feed problems
 - prevented animated GIFs from being used as news card cover images
+- restored cover image extraction for custom RSS sources whose feeds only expose images on article pages
 
 ## 3.3.2
 
