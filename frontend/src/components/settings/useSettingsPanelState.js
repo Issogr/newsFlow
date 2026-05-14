@@ -51,6 +51,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   const [customSources, setCustomSources] = useState(currentUser.customSources || []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [sourceError, setSourceError] = useState(null);
   const [apiToken, setApiToken] = useState(currentUser.apiToken || null);
   const [newApiToken, setNewApiToken] = useState('');
   const [sourceForm, setSourceForm] = useState(createInitialSourceForm);
@@ -86,6 +87,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     setCustomSources(currentUser.customSources || []);
     setApiToken(currentUser.apiToken || null);
     setNewApiToken('');
+    setSourceError(null);
     setSourceForm(createInitialSourceForm());
     setEditingSourceId('');
     setEditingSourceForm(createInitialEditingSourceForm());
@@ -110,14 +112,17 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     });
   }, [currentUser, onUserUpdate]);
 
-  const runSavingAction = useCallback(async (action) => {
+  const runSavingAction = useCallback(async (action, options = {}) => {
     setSaving(true);
     setError(null);
 
     try {
       return await action();
     } catch (requestError) {
-      setError(requestError);
+      if (options.globalError !== false) {
+        setError(requestError);
+      }
+      options.onError?.(requestError);
       return null;
     } finally {
       setSaving(false);
@@ -293,13 +298,14 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
 
   const handleAddSource = useCallback(async (event) => {
     event.preventDefault();
+    setSourceError(null);
 
     await runSavingAction(async () => {
       const response = await addUserSource(sourceForm);
       const nextCustomSources = [response.source, ...customSources];
       setSourceForm(createInitialSourceForm());
       syncCustomSourcesState(nextCustomSources);
-    });
+    }, { globalError: false, onError: setSourceError });
   }, [customSources, runSavingAction, sourceForm, syncCustomSourcesState]);
 
   const startEditSource = useCallback((source) => {
@@ -317,6 +323,8 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   }, []);
 
   const handleUpdateSource = useCallback(async (sourceId) => {
+    setSourceError(null);
+
     await runSavingAction(async () => {
       const response = await updateUserSource(sourceId, editingSourceForm);
       const nextCustomSources = customSources.map((source) => (
@@ -324,7 +332,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
       ));
       syncCustomSourcesState(nextCustomSources);
       cancelEditSource();
-    });
+    }, { globalError: false, onError: setSourceError });
   }, [cancelEditSource, customSources, editingSourceForm, runSavingAction, syncCustomSourcesState]);
 
   const handleDeleteSource = useCallback(async (sourceId) => {
@@ -347,6 +355,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   return {
     saving,
     error,
+    sourceError,
     settings,
     apiToken,
     newApiToken,

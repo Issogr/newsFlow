@@ -85,6 +85,29 @@ describe('useSettingsPanelState', () => {
     }));
   });
 
+  test('surfaces source add failures near the custom source form', async () => {
+    const requestError = new Error('The request timed out. Please try again in a few seconds.');
+    addUserSource.mockRejectedValue(requestError);
+
+    const { result } = renderHook(() => useSettingsPanelState({
+      currentUser: baseCurrentUser,
+      availableSources: [],
+      onClose: jest.fn(),
+      onUserUpdate: jest.fn()
+    }));
+
+    act(() => {
+      result.current.setSourceForm({ url: 'https://example.com/rss' });
+    });
+
+    await act(async () => {
+      await result.current.handleAddSource({ preventDefault: jest.fn() });
+    });
+
+    expect(result.current.sourceError).toBe(requestError);
+    expect(result.current.customSources).toEqual([]);
+  });
+
   test('keeps unsaved settings local when updating a source', async () => {
     const onUserUpdate = jest.fn();
     const currentUser = {

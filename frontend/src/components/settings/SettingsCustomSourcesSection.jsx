@@ -6,6 +6,7 @@ import SourceIcon from '../SourceIcon';
 const SettingsCustomSourcesSection = ({
   t,
   saving,
+  sourceError,
   customSources,
   sourceForm,
   editingSourceId,
@@ -29,6 +30,10 @@ const SettingsCustomSourcesSection = ({
       <div>
         <form onSubmit={onAddSource} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
           <input
+            type="url"
+            inputMode="url"
+            autoCapitalize="none"
+            autoCorrect="off"
             placeholder={t('rssUrl')}
             value={sourceForm.url}
             onChange={(event) => onSourceFormChange({ url: event.target.value })}
@@ -41,6 +46,11 @@ const SettingsCustomSourcesSection = ({
           </button>
         </form>
         <p className="mt-3 text-sm text-slate-500">{t('sourceAutoDetectedOnSave')}</p>
+        {sourceError ? (
+          <p className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {sourceError.message}
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-3 border-t border-slate-200 pt-4">

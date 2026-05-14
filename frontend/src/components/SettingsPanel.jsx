@@ -12,6 +12,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
   const {
     saving,
     error,
+    sourceError,
     settings,
     apiToken,
     newApiToken,
@@ -89,6 +90,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
             <SettingsCustomSourcesSection
               t={t}
               saving={saving}
+              sourceError={sourceError}
               customSources={customSources}
               sourceForm={sourceForm}
               editingSourceId={editingSourceId}
