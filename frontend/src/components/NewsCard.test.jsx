@@ -70,6 +70,35 @@ describe('NewsCard', () => {
     expect(screen.getByRole('img', { name: 'Headline' })).toHaveAttribute('src', 'https://example.com/image.jpg');
   });
 
+  test('skips gif article images when choosing the card cover', () => {
+    render(
+      <NewsCard
+        group={{
+          ...group,
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              image: 'https://example.com/animated.gif?width=640'
+            },
+            {
+              id: 'article-2',
+              sourceId: 'source-b',
+              source: 'Source B',
+              image: 'https://example.com/static.jpg'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByRole('img', { name: 'Headline' })).toHaveAttribute('src', 'https://example.com/static.jpg');
+  });
+
   test('does not render images when card images are disabled', () => {
     render(
       <NewsCard

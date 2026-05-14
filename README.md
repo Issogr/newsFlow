@@ -131,6 +131,8 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | --- | --- | --- |
 | `SCRAPE_INTERVAL_MS` | `900000` | Scheduled ingestion interval in ms |
 | `SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES` | `ONLINE_ACTIVITY_WINDOW_MINUTES` or `5` | Recent-activity window used to decide which users have assigned sources eligible for scheduled refresh |
+| `MANUAL_REFRESH_COOLDOWN_MS` | `300000` | Per-user backend cooldown for manual refresh attempts; repeated clicks keep serving cached feed data |
+| `SOURCE_FETCH_FRESHNESS_MS` | `300000` | Shared upstream RSS freshness window that skips refetching a source recently fetched by any refresh path |
 | `ARTICLE_RETENTION_HOURS` | `24` | Article and reader-cache retention window in hours |
 | `MAX_ARTICLES_PER_SOURCE` | `25` | Max parsed items per feed |
 | `RSS_MAX_RETRIES` | `4` | Feed retry attempts for transient failures |
@@ -288,7 +290,9 @@ Scheduled ingestion refreshes only sources assigned to recently active users.
 - Default sources are considered assigned when a user has not excluded the source family or subsource.
 - Custom sources are assigned to their owning user.
 - Normal app feed loads read cached articles without triggering upstream RSS requests.
-- Clicking the top-navbar refresh button queues a refresh for the user's assigned default and custom sources, returns the cached feed immediately, then reloads the cached feed when the refresh completes.
+- Clicking the top-navbar refresh button returns the cached feed immediately and queues a refresh for the user's assigned default and custom sources when the backend cooldown allows it.
+- Repeated manual refresh clicks during `MANUAL_REFRESH_COOLDOWN_MS` keep serving cached data and do not start another upstream refresh.
+- Upstream RSS fetches are shared-throttled by `SOURCE_FETCH_FRESHNESS_MS`, so if any user recently fetched a source, another refresh can reuse the cached database state instead of hitting that RSS endpoint again.
 - AI topic completion can update the visible cached feed automatically, but this does not trigger another RSS/source refresh.
 - If another `/news` request arrives while that manual refresh is still running, it keeps serving cached articles and reports the refresh as pending.
 - If the database is empty, the backend still seeds the default source set so first-run startup has data.

@@ -21,8 +21,20 @@ const { requireAuthenticatedUser, requireAdminUser, SESSION_COOKIE_NAME } = requ
 const { parseIntegerEnv } = require('../utils/env');
 const { parseNewsQuery } = require('../utils/newsQuery');
 const { buildUserContext } = require('../utils/userContext');
+const logger = require('../utils/logger');
 
 const router = express.Router();
+
+function refreshUserSourceInBackground(userId, sourceId) {
+  try {
+    Promise.resolve(newsService.refreshUserSources(userId, { sourceIds: [sourceId], broadcast: true }))
+      .catch((error) => {
+        logger.warn(`Custom source refresh failed for ${sourceId}: ${error.message}`);
+      });
+  } catch (error) {
+    logger.warn(`Custom source refresh failed for ${sourceId}: ${error.message}`);
+  }
+}
 
 const feedbackRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -277,7 +289,7 @@ router.post('/me/settings/import', requireAuthenticatedUser, asyncHandler(async 
 
 router.post('/me/sources', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   const source = await userService.addUserSource(req.user.id, req.body || {});
-  await newsService.refreshUserSources(req.user.id, { sourceIds: [source.id], broadcast: false });
+  refreshUserSourceInBackground(req.user.id, source.id);
   res.status(201).json({ success: true, source });
 }));
 
@@ -287,7 +299,7 @@ router.patch('/me/sources/:sourceId', [
   sanitizeParam('sourceId')
 ], asyncHandler(async (req, res) => {
   const source = await userService.updateUserSource(req.user.id, req.params.sourceId, req.body || {});
-  await newsService.refreshUserSources(req.user.id, { sourceIds: [source.id], broadcast: false });
+  refreshUserSourceInBackground(req.user.id, source.id);
   res.json({ success: true, source });
 }));
 

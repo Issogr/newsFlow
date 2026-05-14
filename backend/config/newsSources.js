@@ -1,7 +1,6 @@
 const SOURCE_ICONS = {
   ansa: 'https://www.ansa.it/favicon.ico',
   bbc: 'https://www.bbc.co.uk/favicon.ico',
-  fanpage: 'https://www.fanpage.it/favicon.ico',
   guardian: 'https://www.theguardian.com/favicon.ico',
   ilfattoquotidiano: 'https://www.ilfattoquotidiano.it/favicon.ico',
   ilpost: 'https://www.ilpost.it/favicon.ico',
@@ -23,7 +22,6 @@ module.exports = [
   { id: 'ilpost', name: 'Il Post', url: 'https://www.ilpost.it/feed', iconUrl: SOURCE_ICONS.ilpost, type: 'rss', language: 'it' },
   { id: 'open', name: 'Open', url: 'https://www.open.online/feed/', iconUrl: SOURCE_ICONS.open, type: 'rss', language: 'it' },
   { id: 'ilfattoquotidiano', name: 'Il Fatto Quotidiano', url: 'https://www.ilfattoquotidiano.it/feed/', iconUrl: SOURCE_ICONS.ilfattoquotidiano, type: 'rss', language: 'it' },
-  { id: 'fanpage', name: 'Fanpage', url: 'https://www.fanpage.it/feed/', iconUrl: SOURCE_ICONS.fanpage, type: 'rss', language: 'it' },
   { id: 'wired_italia', name: 'Wired Italia', url: 'https://www.wired.it/feed/rss', iconUrl: SOURCE_ICONS.wired, type: 'rss', language: 'it' },
   { id: 'bbc_home', name: 'BBC News - Home', groupId: 'bbc', groupName: 'BBC News', subSource: 'Home', url: 'https://feeds.bbci.co.uk/news/rss.xml', iconUrl: SOURCE_ICONS.bbc, type: 'rss', language: 'en' },
   { id: 'bbc_world', name: 'BBC News - World', groupId: 'bbc', groupName: 'BBC News', subSource: 'World', url: 'https://feeds.bbci.co.uk/news/world/rss.xml', iconUrl: SOURCE_ICONS.bbc, type: 'rss', language: 'en' },

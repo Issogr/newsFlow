@@ -711,8 +711,47 @@ describe('API auth and user flows', () => {
     expect(currentUserResponse.body.customSources).toEqual([]);
     expect(rssParser.validateFeedUrl).toHaveBeenCalledTimes(2);
     expect(newsService.refreshUserSources).toHaveBeenCalledTimes(2);
-    expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(1, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: false }));
-    expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(2, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: false }));
+    expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(1, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: true }));
+    expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(2, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: true }));
+  });
+
+  test('keeps custom source creation successful when the immediate refresh fails', async () => {
+    rssParser.validateFeedUrl.mockResolvedValue({ title: 'Slow Feed', language: 'en', itemCount: 10 });
+    newsService.refreshUserSources.mockRejectedValueOnce(new Error('refresh timed out'));
+
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'source-refresh-user', password: 'secret123' })
+      .expect(201);
+
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    const addResponse = await request(app)
+      .post('/api/me/sources')
+      .set('Cookie', sessionCookie)
+      .send({ url: 'https://example.com/slow-feed.xml' })
+      .expect(201);
+
+    expect(addResponse.body).toMatchObject({
+      success: true,
+      source: {
+        name: 'Slow Feed',
+        url: 'https://example.com/slow-feed.xml'
+      }
+    });
+
+    const currentUserResponse = await request(app)
+      .get('/api/me')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(currentUserResponse.body.customSources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: addResponse.body.source.id, name: 'Slow Feed' })
+    ]));
+    expect(newsService.refreshUserSources).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      sourceIds: [addResponse.body.source.id],
+      broadcast: true
+    }));
   });
 
   test('submits authenticated feedback with an optional screenshot', async () => {

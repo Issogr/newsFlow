@@ -300,6 +300,34 @@ describe('NewsAggregator', () => {
     expect(screen.getByText('You reached the end of the available results.')).toBeInTheDocument();
   });
 
+  test('keeps manual refresh clickable while the server cooldown is active', async () => {
+    const allowedAt = new Date(Date.now() + (5 * 60 * 1000)).toISOString();
+
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'Current headline' }],
+      meta: {
+        page: 1,
+        pageSize: 12,
+        hasMore: false,
+        totalGroups: 1,
+        manualRefreshAllowedAt: allowedAt,
+        manualRefreshAllowed: false,
+        manualRefreshCooldownSeconds: 300
+      },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    await renderNewsAggregator();
+
+    const refreshButton = await screen.findByRole('button', { name: 'Refresh' });
+
+    expect(refreshButton).toBeEnabled();
+    fireEvent.click(refreshButton);
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
+    });
+  });
+
   test('reloads cached feed silently when AI topic updates complete', async () => {
     let onTopicRefresh;
 

@@ -1138,14 +1138,14 @@ function createArticleRepository({
     const groupedConfiguredSourceIds = getGroupedConfiguredSourceIds();
     const selectSettings = database.prepare(`
       SELECT user_id AS userId,
-             default_source_ids AS excludedSourceIds,
+             excluded_source_ids AS excludedSourceIds,
              excluded_sub_source_ids AS excludedSubSourceIds
       FROM user_settings
     `);
     const selectUserSourceIds = database.prepare('SELECT user_id AS userId, id FROM user_sources');
     const updateSettings = database.prepare(`
       UPDATE user_settings
-      SET default_source_ids = ?,
+      SET excluded_source_ids = ?,
           excluded_sub_source_ids = ?,
           updated_at = ?
       WHERE user_id = ?

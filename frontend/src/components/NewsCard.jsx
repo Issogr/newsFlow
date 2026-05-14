@@ -31,6 +31,14 @@ function isGenericNewsCover(imageUrl) {
   return GENERIC_NEWS_COVERS.includes(imageUrl);
 }
 
+function isGifImageUrl(imageUrl) {
+  try {
+    return new URL(String(imageUrl || '')).pathname.toLowerCase().endsWith('.gif');
+  } catch {
+    return false;
+  }
+}
+
 function getSourceEntries(group) {
   const sourceMap = new Map();
 
@@ -78,8 +86,14 @@ function getTopicEntries(group) {
 }
 
 function getGroupImageUrl(group) {
-  const rawImageUrl = (group?.items || []).map((item) => item?.image).find(Boolean);
-  return getSafeExternalUrl(rawImageUrl);
+  for (const item of group?.items || []) {
+    const safeImageUrl = getSafeExternalUrl(item?.image);
+    if (safeImageUrl && !isGifImageUrl(safeImageUrl)) {
+      return safeImageUrl;
+    }
+  }
+
+  return '';
 }
 
 function formatPublicationDate(dateString, locale) {
@@ -271,7 +285,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
   );
 
   return (
-    <article className="relative flex h-full min-h-[18rem] w-full min-w-0 flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-xl sm:transition-[box-shadow,transform] sm:hover:-translate-y-0.5">
+    <article className="relative flex h-full min-h-[18rem] w-full min-w-0 flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-xl">
       <div className="flex min-w-0 items-center gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
         {sourceIconStack}
         <div className="min-w-0 flex-1">

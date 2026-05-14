@@ -207,6 +207,10 @@ describe('userService imports', () => {
       url: 'https://example.com/feed.xml'
     });
 
+    expect(rssParser.validateFeedUrl).toHaveBeenCalledWith('https://example.com/feed.xml', expect.objectContaining({
+      maxRetries: 2,
+      timeout: 8000
+    }));
     expect(source.iconUrl).toBe('https://example.com/favicon.ico');
 
     rssParser.validateFeedUrl.mockClear();

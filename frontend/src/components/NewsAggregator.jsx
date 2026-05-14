@@ -110,6 +110,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [availableSources, excludedSourceIds]);
   const isFeedRefreshActive = loading || loadingMore;
   const pendingNewsCount = pendingNewsGroupIds.length;
+  const manualRefreshPending = Boolean(meta?.pendingUserRefresh);
+  const refreshDisabled = isFeedRefreshActive || manualRefreshPending;
+  const refreshTitle = manualRefreshPending
+    ? t('refreshPendingTitle')
+    : t('refresh');
   const socketSubscription = useMemo(() => ({
     search: debouncedSearch,
     sourceIds: activeFilters.sourceIds,
@@ -436,9 +441,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   icon={RefreshCw}
                   label={t('refresh')}
                   onClick={() => loadNews({ page: 1, append: false, forceRefresh: true })}
-                  disabled={isFeedRefreshActive}
-                  aria-label={t('refresh')}
-                  iconClassName={isFeedRefreshActive ? 'animate-spin' : ''}
+                  disabled={refreshDisabled}
+                  aria-label={refreshTitle}
+                  title={refreshTitle}
+                  iconClassName={isFeedRefreshActive || manualRefreshPending ? 'animate-spin' : ''}
                 />
               </div>
 

@@ -148,6 +148,20 @@ describe('rssParser article ids', () => {
     )).toBe('https://www.example.com/images/story.jpg');
   });
 
+  test('skips gif images when selecting article covers', () => {
+    expect(rssParser._getImageUrl({
+      media: [
+        { $: { url: 'https://example.com/animated.gif?size=large' } },
+        { $: { url: 'https://example.com/static.jpg' } }
+      ]
+    })).toBe('https://example.com/static.jpg');
+
+    expect(rssParser._extractImageFromHtml(
+      '<figure><img src="/animated.gif" /><img src="/images/story.jpg" /></figure>',
+      'https://www.example.com/article'
+    )).toBe('https://www.example.com/images/story.jpg');
+  });
+
   test('extracts article images from og:image metadata', () => {
     const html = '<html><head><meta property="og:image" content="/media/story.jpg" /></head></html>';
 

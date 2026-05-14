@@ -56,10 +56,12 @@ const aiTopicClassifier = require('./aiTopicClassifier');
 const newsAggregator = require('./newsAggregator');
 const { normalizeIncomingArticles } = require('./newsAggregatorGrouping');
 const {
+  ingestSourceConfigs,
   mapSettledWithConcurrency,
   scheduleAiTopicsForPendingArticles,
   _filterArticlesWithinRetention,
-  _resetPendingAiTopicProcessingIds
+  _resetPendingAiTopicProcessingIds,
+  _resetSourceFetchFreshness
 } = require('./newsAggregatorIngestion');
 const { getCanonicalSourceId, getCanonicalSourceName } = require('../utils/sourceCatalog');
 
@@ -91,6 +93,7 @@ describe('newsAggregator service flows', () => {
     jest.clearAllMocks();
     newsAggregator._resetImmediateRefreshState();
     _resetPendingAiTopicProcessingIds();
+    _resetSourceFetchFreshness();
     database.countArticles.mockReturnValue(1);
     database.deleteArticlesOlderThan.mockReturnValue(0);
     database.normalizeFuturePublicationDates.mockReturnValue(0);
@@ -159,7 +162,7 @@ describe('newsAggregator service flows', () => {
       totalGroups: null,
       nextCursor: {
         beforePubDate: '2026-03-07T10:00:00.000Z',
-        beforeId: expect.any(String)
+        beforeId: 'global-1'
       },
       scannedArticles: 2,
       ingestion: { id: 7, status: 'completed' }
@@ -182,7 +185,7 @@ describe('newsAggregator service flows', () => {
     }), expect.objectContaining({ userId: 'user-1' }));
   });
 
-  test('getNewsFeed resolves cursor pagination after story grouping', async () => {
+  test('getNewsFeed passes article cursors to the database query', async () => {
     database.getArticles.mockReturnValue([]);
 
     await newsAggregator.getNewsFeed({
@@ -193,11 +196,35 @@ describe('newsAggregator service flows', () => {
     }, { userId: 'user-1' });
 
     expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({
-      beforePubDate: '',
-      beforeId: '',
+      beforePubDate: '2026-03-07T10:00:00.000Z',
+      beforeId: 'article-1',
       limit: 251,
       offset: 0
     }), expect.objectContaining({ userId: 'user-1' }));
+  });
+
+  test('getNewsFeed stops scanning once it has enough complete grouped stories', async () => {
+    const articles = Array.from({ length: 251 }, (_, index) => ({
+      id: `article-${index + 1}`,
+      sourceId: 'source-a',
+      source: 'Source A',
+      title: `Unique headline ${index + 1}`,
+      description: `Story ${index + 1}`,
+      pubDate: new Date(Date.parse('2026-03-07T10:00:00.000Z') - (index * 60 * 60 * 1000)).toISOString(),
+      url: `https://example.com/story-${index + 1}`,
+      topics: ['Economia']
+    }));
+
+    database.getArticles.mockReturnValueOnce(articles);
+
+    const result = await newsAggregator.getNewsFeed({ page: 1, pageSize: 12 }, { userId: 'user-1' });
+
+    expect(database.getArticles).toHaveBeenCalledTimes(1);
+    expect(result.items).toHaveLength(12);
+    expect(result.meta).toEqual(expect.objectContaining({
+      hasMore: true,
+      scannedArticles: 250
+    }));
   });
 
   test('getNewsFeed paginates complete story groups instead of raw articles', async () => {
@@ -345,6 +372,60 @@ describe('newsAggregator service flows', () => {
     await new Promise((resolve) => { setTimeout(resolve, 0); });
 
     expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(false);
+  });
+
+  test('user source refreshes are not blocked by another user refresh in progress', async () => {
+    const slowSource = { id: 'slow-source', name: 'Slow Feed', url: 'https://example.com/slow.xml', language: 'en', userId: 'user-1', isActive: true };
+    const fastSource = { id: 'fast-source', name: 'Fast Feed', url: 'https://example.com/fast.xml', language: 'en', userId: 'user-2', isActive: true };
+    const slowRelease = createDeferred();
+    let resolveSlowStarted;
+    const slowStarted = new Promise((resolve) => { resolveSlowStarted = resolve; });
+
+    database.listUserSources.mockImplementation((userId) => {
+      if (userId === 'user-1') return [slowSource];
+      if (userId === 'user-2') return [fastSource];
+      return [];
+    });
+    rssParser.parseFeed.mockImplementation(async (source) => {
+      if (source.id === 'slow-source') {
+        resolveSlowStarted();
+        await slowRelease.promise;
+        return [];
+      }
+
+      return [];
+    });
+
+    const slowRefresh = newsAggregator._startUserAssignedSourceRefresh({ userId: 'user-1', excludedSourceIds: [], excludedSubSourceIds: [] }, { force: true });
+    await slowStarted;
+
+    await expect(newsAggregator.refreshUserSources('user-2')).resolves.toMatchObject({ success: true });
+    expect(rssParser.parseFeed).toHaveBeenCalledWith(expect.objectContaining({ id: 'fast-source' }), expect.any(Object));
+
+    slowRelease.resolve();
+    await slowRefresh;
+  });
+
+  test('manual refresh enforces a per-user cooldown after a refresh starts', async () => {
+    const allDefaultSourceGroupIds = [...new Set(newsAggregator.newsSources.map((source) => getCanonicalSourceId(source.id, source.name)))];
+    const userContext = { userId: 'user-1', excludedSourceIds: allDefaultSourceGroupIds, excludedSubSourceIds: [] };
+    const customSource = { id: 'custom-1', name: 'User Feed', url: 'https://example.com/user.xml', language: 'en', userId: 'user-1', isActive: true };
+
+    database.listUserSources.mockReturnValue([customSource]);
+    rssParser.parseFeed.mockResolvedValue([]);
+
+    await newsAggregator.getNewsFeed({ refresh: true }, userContext);
+    await newsAggregator._waitForExistingUserAssignedSourceRefresh(userContext);
+
+    const secondResult = await newsAggregator.getNewsFeed({ refresh: true }, userContext);
+
+    expect(rssParser.parseFeed).toHaveBeenCalledTimes(1);
+    expect(secondResult.meta).toEqual(expect.objectContaining({
+      manualRefreshAllowed: false,
+      manualRefreshCooldownSeconds: expect.any(Number),
+      manualRefreshAllowedAt: expect.any(String)
+    }));
+    expect(secondResult.meta.manualRefreshCooldownSeconds).toBeGreaterThan(0);
   });
 
   test('getNewsFeed groups matching articles into one story group', async () => {
@@ -643,6 +724,7 @@ describe('newsAggregator service flows', () => {
 
     const sharedFetchCalls = rssParser.parseFeed.mock.calls.filter(([source]) => source.url === sharedUrl);
     expect(sharedFetchCalls).toHaveLength(1);
+    expect(sharedFetchCalls[0][1]).toEqual({ imageFallback: true, throwOnError: true });
     expect(database.upsertArticles).toHaveBeenCalledWith(expect.arrayContaining([
       expect.objectContaining({
         id: 'custom-user-1:https://example.com/story',
@@ -657,6 +739,23 @@ describe('newsAggregator service flows', () => {
         ownerUserId: 'user-2'
       })
     ]));
+  });
+
+  test('skips upstream source fetches inside the freshness window', async () => {
+    const source = { id: 'source-a', name: 'Source A', url: 'https://example.com/feed.xml', language: 'en' };
+    let lastRefreshAt = null;
+    const runtime = {
+      getLastRefreshAt: () => lastRefreshAt,
+      setLastRefreshAt: (value) => { lastRefreshAt = value; }
+    };
+
+    rssParser.parseFeed.mockResolvedValue([{ id: 'article-1', sourceId: 'source-a', source: 'Source A', title: 'Fresh story', pubDate: recentIso({ hoursAgo: 1 }), url: 'https://example.com/story' }]);
+    database.upsertArticles.mockReturnValue({ insertedIds: ['article-1'], insertedCount: 1, updatedCount: 0 });
+
+    await ingestSourceConfigs([source], { sourceFetchFreshnessMs: 300000 }, runtime);
+    await ingestSourceConfigs([{ ...source, id: 'source-b', name: 'Source B' }], { sourceFetchFreshnessMs: 300000 }, runtime);
+
+    expect(rssParser.parseFeed).toHaveBeenCalledTimes(1);
   });
 
   test('normalizes duplicate sibling subfeed articles into one incoming article', () => {
@@ -758,7 +857,7 @@ describe('newsAggregator service flows', () => {
       name: 'Beta Feed',
       ownerUserId: 'user-1'
     }), {
-      imageFallback: false,
+      imageFallback: true,
       throwOnError: true
     });
     expect(database.createIngestionRun).not.toHaveBeenCalled();
