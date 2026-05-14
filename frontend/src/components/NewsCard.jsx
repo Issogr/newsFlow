@@ -285,7 +285,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
   );
 
   return (
-    <article className="relative flex h-full min-h-[18rem] w-full min-w-0 flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-xl sm:transition-[box-shadow,transform] sm:hover:-translate-y-0.5">
+    <article className="relative flex h-full min-h-[18rem] w-full min-w-0 flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-xl">
       <div className="flex min-w-0 items-center gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
         {sourceIconStack}
         <div className="min-w-0 flex-1">
