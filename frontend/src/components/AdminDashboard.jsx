@@ -201,8 +201,15 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
         return;
       }
 
+      setUsers((currentUsers) => currentUsers.filter((currentUserItem) => currentUserItem.id !== user.id));
+      setSummary((currentSummary) => ({
+        ...currentSummary,
+        totalUsers: Math.max(0, Number(currentSummary.totalUsers || 0) - 1),
+        onlineUsers: user.isOnline ? Math.max(0, Number(currentSummary.onlineUsers || 0) - 1) : currentSummary.onlineUsers,
+        activeUsers: user.isActive ? Math.max(0, Number(currentSummary.activeUsers || 0) - 1) : currentSummary.activeUsers,
+      }));
       setLatestGeneratedLink((current) => (current?.userId === user.id ? null : current));
-      await loadUsers();
+      loadUsers({ showRefreshingIndicator: true });
     } catch (requestError) {
       if (isMountedRef.current) {
         setError(requestError.message || t('genericError'));

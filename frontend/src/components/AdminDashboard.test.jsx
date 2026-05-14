@@ -184,6 +184,59 @@ describe('AdminDashboard', () => {
       expect(deleteAdminUser).toHaveBeenCalledWith('user-1');
     });
     expect(window.confirm).toHaveBeenCalledWith('Delete alice? This cannot be undone.');
+    await waitFor(() => {
+      expect(screen.queryByText('alice')).not.toBeInTheDocument();
+    });
+  });
+
+  test('removes a deleted user locally even when the follow-up reload fails', async () => {
+    fetchAdminUsers
+      .mockResolvedValueOnce({
+        summary: {
+          totalUsers: 2,
+          onlineUsers: 0,
+          activeUsers: 1,
+          anonymousPublicApiRequests: 0,
+          onlineWindowMinutes: 5
+        },
+        users: [
+          {
+            id: 'admin-id',
+            username: 'admin',
+            isAdmin: true,
+            isOnline: false,
+            passwordConfigured: true,
+            createdAt: '2026-03-27T10:00:00.000Z',
+            lastLoginAt: '2026-03-27T11:00:00.000Z',
+            lastActivityAt: '2026-03-27T11:02:00.000Z'
+          },
+          {
+            id: 'user-1',
+            username: 'alice',
+            isAdmin: false,
+            isOnline: false,
+            passwordConfigured: true,
+            publicApiRequestCount: 0,
+            publicApiLastUsedAt: null,
+            createdAt: '2026-03-27T10:00:00.000Z',
+            lastLoginAt: '2026-03-27T11:00:00.000Z',
+            lastActivityAt: '2026-03-27T11:02:00.000Z'
+          }
+        ]
+      })
+      .mockRejectedValueOnce(new Error('Reload failed'));
+    deleteAdminUser.mockResolvedValue({ success: true });
+
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={jest.fn()} onUserUpdate={jest.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(deleteAdminUser).toHaveBeenCalledWith('user-1');
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('alice')).not.toBeInTheDocument();
+    });
   });
 
   test('toggles the admin theme with the header button', async () => {
