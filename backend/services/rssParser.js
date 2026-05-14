@@ -216,6 +216,19 @@ function normalizeImageUrl(rawUrl, baseUrl = '') {
   }
 }
 
+function isGifImageUrl(url) {
+  try {
+    return new URL(String(url || '')).pathname.toLowerCase().endsWith('.gif');
+  } catch {
+    return false;
+  }
+}
+
+function normalizeCoverImageUrl(rawUrl, baseUrl = '') {
+  const normalized = normalizeImageUrl(rawUrl, baseUrl);
+  return normalized && !isGifImageUrl(normalized) ? normalized : null;
+}
+
 function extractFirstSrcsetUrl(value) {
   if (!value) {
     return null;
@@ -232,7 +245,7 @@ function findFirstImageUrl(value) {
   }
 
   if (typeof value === 'string') {
-    return normalizeImageUrl(value);
+    return normalizeCoverImageUrl(value);
   }
 
   if (Array.isArray(value)) {
@@ -260,7 +273,7 @@ function findFirstImageUrl(value) {
     ];
 
     for (const candidate of directCandidates) {
-      const normalized = normalizeImageUrl(candidate);
+      const normalized = normalizeCoverImageUrl(candidate);
       if (normalized) {
         return normalized;
       }
@@ -275,12 +288,11 @@ function extractImageFromHtml(html, baseUrl = '') {
     return null;
   }
 
-  const imageTagMatch = html.match(/<img[^>]*>/i);
-  if (!imageTagMatch) {
+  const imageTagMatches = html.match(/<img[^>]*>/gi);
+  if (!imageTagMatches) {
     return null;
   }
 
-  const imageTag = imageTagMatch[0];
   const attributePatterns = [
     /data-lazy-src=["']([^"']+)["']/i,
     /data-src=["']([^"']+)["']/i,
@@ -289,13 +301,15 @@ function extractImageFromHtml(html, baseUrl = '') {
     /src=["']([^"']+)["']/i
   ];
 
-  for (const pattern of attributePatterns) {
-    const match = imageTag.match(pattern);
-    const rawValue = pattern.source.includes('srcset=') ? extractFirstSrcsetUrl(match?.[1]) : match?.[1];
-    const normalized = normalizeImageUrl(rawValue, baseUrl);
+  for (const imageTag of imageTagMatches) {
+    for (const pattern of attributePatterns) {
+      const match = imageTag.match(pattern);
+      const rawValue = pattern.source.includes('srcset=') ? extractFirstSrcsetUrl(match?.[1]) : match?.[1];
+      const normalized = normalizeCoverImageUrl(rawValue, baseUrl);
 
-    if (normalized) {
-      return normalized;
+      if (normalized) {
+        return normalized;
+      }
     }
   }
 
@@ -318,7 +332,7 @@ function extractImageFromArticleHtml(html, pageUrl = '') {
 
   for (const pattern of metaPatterns) {
     const match = html.match(pattern);
-    const normalized = normalizeImageUrl(match?.[1], pageUrl);
+    const normalized = normalizeCoverImageUrl(match?.[1], pageUrl);
     if (normalized) {
       return normalized;
     }

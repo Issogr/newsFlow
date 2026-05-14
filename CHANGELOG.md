@@ -3,6 +3,7 @@
 ## 3.3.3
 
 - removed Fanpage from the built-in RSS source catalog because it was creating feed problems
+- prevented animated GIFs from being used as news card cover images
 
 ## 3.3.2
 

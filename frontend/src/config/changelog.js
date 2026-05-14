@@ -6,6 +6,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     intro: 'A quick summary of the latest update.',
     items: [
       '🌍 Fanpage was removed from the built-in RSS catalog because it was creating feed problems.',
+      '🖼️ Animated GIFs are no longer used as news card cover images.',
     ]
   },
   it: {
@@ -14,6 +15,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
       '🌍 Fanpage e stata rimossa dal catalogo RSS integrato perche creava problemi nel feed.',
+      '🖼️ Le GIF animate non vengono piu usate come immagini di copertina delle notizie.',
     ]
   }
 };

@@ -31,6 +31,14 @@ function isGenericNewsCover(imageUrl) {
   return GENERIC_NEWS_COVERS.includes(imageUrl);
 }
 
+function isGifImageUrl(imageUrl) {
+  try {
+    return new URL(String(imageUrl || '')).pathname.toLowerCase().endsWith('.gif');
+  } catch {
+    return false;
+  }
+}
+
 function getSourceEntries(group) {
   const sourceMap = new Map();
 
@@ -78,8 +86,14 @@ function getTopicEntries(group) {
 }
 
 function getGroupImageUrl(group) {
-  const rawImageUrl = (group?.items || []).map((item) => item?.image).find(Boolean);
-  return getSafeExternalUrl(rawImageUrl);
+  for (const item of group?.items || []) {
+    const safeImageUrl = getSafeExternalUrl(item?.image);
+    if (safeImageUrl && !isGifImageUrl(safeImageUrl)) {
+      return safeImageUrl;
+    }
+  }
+
+  return '';
 }
 
 function formatPublicationDate(dateString, locale) {
