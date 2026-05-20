@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.4.0
+
 ## 3.3.3
 
 - removed Fanpage from the built-in RSS source catalog because it was creating feed problems
