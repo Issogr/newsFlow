@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const READER_REQUEST_TIMEOUT_MS = 30000;
+const FEEDBACK_REQUEST_TIMEOUT_MS = 60000;
 export const AUTH_EXPIRED_EVENT = 'newsflow:auth-expired';
 
 function isAuthRoute(url = '') {
@@ -99,7 +100,9 @@ export const submitFeedback = async ({ category, title, description, attachment 
     formData.append('attachment', attachment);
   }
 
-  const response = await api.post('/me/feedback', formData);
+  const response = await api.post('/me/feedback', formData, {
+    timeout: FEEDBACK_REQUEST_TIMEOUT_MS
+  });
   return response.data;
 };
 

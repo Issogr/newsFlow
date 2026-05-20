@@ -4,13 +4,17 @@ export const CURRENT_CHANGELOG_ENTRY = {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
-    items: []
+    items: [
+      '📎 Feedback media uploads now have more time to complete and show clearer timeout or connection errors when something goes wrong.',
+    ]
   },
   it: {
     eyebrow: 'Ultimo aggiornamento',
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
-    items: []
+    items: [
+      '📎 Gli allegati media nei feedback ora hanno piu tempo per completare il caricamento e mostrano errori piu chiari in caso di timeout o problemi di connessione.',
+    ]
   }
 };
 

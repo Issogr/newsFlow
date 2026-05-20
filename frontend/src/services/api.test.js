@@ -98,7 +98,9 @@ describe('api service', () => {
       attachment
     });
 
-    expect(mockApi.post).toHaveBeenCalledWith('/me/feedback', expect.any(FormData));
+    expect(mockApi.post).toHaveBeenCalledWith('/me/feedback', expect.any(FormData), {
+      timeout: 60000
+    });
     expect(mockApiConfig.headers?.['Content-Type']).toBeUndefined();
   });
 

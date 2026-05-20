@@ -2,6 +2,8 @@
 
 ## 3.4.0
 
+- gave feedback media uploads a longer timeout and clearer timeout/network errors so larger attachments fail with an actionable message instead of a generic one
+
 ## 3.3.3
 
 - removed Fanpage from the built-in RSS source catalog because it was creating feed problems
