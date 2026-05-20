@@ -4,6 +4,8 @@
 
 - added a Read later view with per-card save/remove controls so saved articles stay available outside the normal feed retention window
 - gave feedback media uploads a longer timeout and clearer timeout/network errors so larger attachments fail with an actionable message instead of a generic one
+- preserved saved articles, reader content, and cached feed items when editing custom RSS source metadata without changing its URL
+- hardened reader and proxy edge cases so temporary reader extraction failures do not poison the cache and public API responses cannot set backend cookies through the BFF
 
 ## 3.3.3
 
