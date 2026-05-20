@@ -175,6 +175,32 @@ describe('ReaderPanel', () => {
     }));
   });
 
+  test('ignores malformed reader list blocks without crashing', async () => {
+    fetchReaderArticle.mockResolvedValue({
+      title: 'Reader title',
+      language: 'en',
+      excerpt: 'Excerpt',
+      contentBlocks: [
+        { type: 'paragraph', text: 'Visible body' },
+        { type: 'unordered-list', items: null }
+      ],
+      minutesToRead: 1
+    });
+
+    render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="right"
+        t={t}
+        currentUser={currentUser}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(await screen.findByText('Visible body')).toBeInTheDocument();
+  });
+
   test('clears a stale reader error when switching to another article', async () => {
     fetchReaderArticle
       .mockRejectedValueOnce(new Error('Reader failed'))

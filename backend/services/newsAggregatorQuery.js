@@ -6,6 +6,7 @@ const { parseIntegerEnv } = require('../utils/env');
 
 const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
 const GROUP_PAGINATION_ARTICLE_BATCH_SIZE = 250;
+const READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE = 250;
 
 function expandConfiguredSources() {
   return newsSources;
@@ -131,6 +132,53 @@ function buildReadLaterGroup(group = {}) {
     readLater: true,
     readLaterArticleIds: (group.items || []).map((item) => item.id).filter(Boolean),
     readLaterSavedAt: savedAt
+  };
+}
+
+function fetchGroupedReadLaterPage(filters = {}, queryOptions = {}, page = 1, pageSize = 12) {
+  const articles = [];
+  let offset = 0;
+  let hasMoreArticles = true;
+  let groups = [];
+  const pageStart = (page - 1) * pageSize;
+  const requiredGroups = pageStart + pageSize + 1;
+
+  while (hasMoreArticles) {
+    const batch = database.getReadLaterArticles(queryOptions.userId, {
+      search: filters.search,
+      sourceIds: filters.sourceIds,
+      topics: filters.topics,
+      limit: READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE + 1,
+      offset
+    }, queryOptions);
+
+    const pageArticles = batch.length > READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE
+      ? batch.slice(0, READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE)
+      : batch;
+
+    articles.push(...pageArticles);
+    hasMoreArticles = batch.length > READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE;
+    groups = groupSimilarNews(articles)
+      .map(buildReadLaterGroup)
+      .sort(compareReadLaterPosition);
+
+    if (!hasMoreArticles || groups.length >= requiredGroups) {
+      break;
+    }
+
+    offset += pageArticles.length;
+    if (pageArticles.length === 0) {
+      break;
+    }
+  }
+
+  const pageGroups = groups.slice(pageStart, pageStart + pageSize);
+
+  return {
+    articles,
+    hasMore: groups.length > pageStart + pageSize || hasMoreArticles,
+    pageGroups,
+    totalGroups: hasMoreArticles ? null : groups.length
   };
 }
 
@@ -311,25 +359,19 @@ async function getReadLaterFeed(filters = {}, userContext = {}) {
 
   const page = Math.max(1, Number(filters.page) || 1);
   const pageSize = Math.max(1, Math.min(Number(filters.pageSize) || 12, 30));
-  const pageStart = (page - 1) * pageSize;
-  const articles = database.getReadLaterArticles(userId, filters, queryOptions);
-  const grouped = groupSimilarNews(articles)
-    .map(buildReadLaterGroup)
-    .sort(compareReadLaterPosition);
-  const pageGroups = grouped.slice(pageStart, pageStart + pageSize);
-  const hasMore = grouped.length > pageStart + pageSize;
   const includeFilters = filters.includeFilters !== false;
+  const groupedPage = fetchGroupedReadLaterPage(filters, queryOptions, page, pageSize);
 
   return {
-    items: pageGroups,
+    items: groupedPage.pageGroups,
     meta: {
       page,
       pageSize,
-      hasMore,
+      hasMore: groupedPage.hasMore,
       nextCursor: null,
-      returnedGroups: pageGroups.length,
-      totalGroups: grouped.length,
-      scannedArticles: articles.length,
+      returnedGroups: groupedPage.pageGroups.length,
+      totalGroups: groupedPage.totalGroups,
+      scannedArticles: groupedPage.articles.length,
       readLater: true
     },
     filters: includeFilters ? {

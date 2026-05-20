@@ -93,8 +93,6 @@ const currentUser = {
     articleRetentionHours: 24,
     recentHours: 3,
     showNewsImages: true,
-    compactNewsCards: false,
-    compactNewsCardsMode: 'off',
     readerPanelPosition: 'right',
     readerTextSize: 'medium',
     excludedSourceIds: [],

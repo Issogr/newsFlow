@@ -314,7 +314,6 @@ async function getReaderArticle(articleId, options = {}) {
     logger.debug(`Reader mode extraction fell back for ${article.url}: ${summarizeErrorMessage(error)}`);
 
     const fallbackPayload = buildFallbackPayload(article);
-    database.upsertReaderCache(articleId, fallbackPayload);
     return {
       ...fallbackPayload,
       cached: false,

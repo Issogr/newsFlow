@@ -625,7 +625,9 @@ async function updateUserSource(userId, sourceId, payload = {}) {
     throw error;
   }
 
-  database.deleteArticlesForUserSource(userId, sourceId);
+  if (urlChanged) {
+    database.deleteArticlesForUserSource(userId, sourceId);
+  }
   return database.findUserSourceById(userId, sourceId);
 }
 

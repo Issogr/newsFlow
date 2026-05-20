@@ -127,6 +127,7 @@ describe('bff server', () => {
 
     backendApp.get('/api/public/ping', (req, res) => {
       lastBackendHeaders = req.headers;
+      res.cookie('newsflow_session', 'backend-public-cookie', { httpOnly: true, path: '/' });
       res.json({ ok: true });
     });
 
@@ -363,6 +364,7 @@ describe('bff server', () => {
       .expect(200);
 
     expect(response.body).toEqual({ ok: true });
+    expect(response.headers['set-cookie']).toBeUndefined();
   });
 
   test('rebuilds forwarded headers on public API routes from trusted request values', async () => {

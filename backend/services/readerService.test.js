@@ -123,10 +123,7 @@ describe('readerService', () => {
       excerpt: article.description,
       paragraphs: ['Short description', 'Fallback body paragraph.']
     });
-    expect(database.upsertReaderCache).toHaveBeenCalledWith(article.id, expect.objectContaining({
-      title: article.title,
-      contentText: expect.stringContaining('Fallback body paragraph.')
-    }));
+    expect(database.upsertReaderCache).not.toHaveBeenCalled();
     expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('Reader mode extraction fell back'));
   });
 

@@ -50,12 +50,17 @@ function renderReaderBlock(block, index, readerTextStyles) {
 
   if (block.type === 'unordered-list' || block.type === 'ordered-list') {
     const ListTag = block.type === 'ordered-list' ? 'ol' : 'ul';
+    const items = Array.isArray(block.items) ? block.items : [];
+    if (items.length === 0) {
+      return null;
+    }
+
     return (
       <ListTag
         key={`${block.type}-${index}`}
         className={`space-y-3 pl-6 ${readerTextStyles.list} ${block.type === 'ordered-list' ? 'list-decimal' : 'list-disc'}`}
       >
-        {block.items.map((item, itemIndex) => (
+        {items.map((item, itemIndex) => (
           <li key={`${block.type}-${index}-${itemIndex}`}>{item}</li>
         ))}
       </ListTag>

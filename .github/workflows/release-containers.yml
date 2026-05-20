@@ -92,7 +92,8 @@ jobs:
             echo "is_main=true" >> "$GITHUB_OUTPUT"
           else
             echo "is_main=false" >> "$GITHUB_OUTPUT"
-            echo "Tag $GITHUB_REF_NAME does not point to a commit on main. Skipping publish."
+            echo "Tag $GITHUB_REF_NAME does not point to a commit on main. Refusing to publish."
+            exit 1
           fi
 
       - name: Set up QEMU

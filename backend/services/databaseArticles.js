@@ -112,7 +112,7 @@ function createArticleRepository({
       recentHours: Number.isFinite(filters.recentHours) ? filters.recentHours : null,
       beforePubDate: typeof filters.beforePubDate === 'string' && filters.beforePubDate.trim() ? filters.beforePubDate.trim() : '',
       beforeId: typeof filters.beforeId === 'string' && filters.beforeId.trim() ? filters.beforeId.trim() : '',
-      limit: Math.max(1, Math.min(Number(filters.limit) || 50, 250)),
+      limit: Math.max(1, Math.min(Number(filters.limit) || 50, 251)),
       offset: Math.max(0, Number(filters.offset) || 0)
     };
   }
@@ -1206,7 +1206,7 @@ function createArticleRepository({
       return [];
     }
 
-    const state = buildFilterState({ ...filters, limit: 1000, offset: 0 });
+    const state = buildFilterState(filters);
     const params = [normalizedUserId];
     const joins = ['JOIN user_read_later_articles rl ON rl.article_id = a.id'];
     const where = ['rl.user_id = ?'];
@@ -1259,8 +1259,8 @@ function createArticleRepository({
       ${joins.join('\n')}
       WHERE ${where.join(' AND ')}
       ORDER BY rl.saved_at DESC, a.id DESC
-      LIMIT ?
-    `).all(...params, state.limit);
+      LIMIT ? OFFSET ?
+    `).all(...params, state.limit, state.offset);
 
     return hydrateArticleRows(rows, { ...options, userId: normalizedUserId });
   }
