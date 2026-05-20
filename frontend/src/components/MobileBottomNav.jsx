@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Bookmark,
   Clock3,
   Rss,
   Search,
@@ -43,6 +44,8 @@ const MobileBottomNav = ({
   onToggleRecent,
   onSearchChange,
   onSearchClear,
+  activeView = 'news',
+  onViewChange,
   visible = true,
 }) => {
   const [keyboardOffset, setKeyboardOffset] = useState(0);
@@ -87,6 +90,7 @@ const MobileBottomNav = ({
   const topicCount = activeFilters.topics.length;
   const timeCount = showRecentOnly ? 1 : 0;
   const searchCount = search ? 1 : 0;
+  const readLaterActive = activeView === 'readLater';
 
   return (
     <div
@@ -127,7 +131,7 @@ const MobileBottomNav = ({
         <div className="overflow-hidden rounded-full border border-slate-200 bg-white/95 shadow-md backdrop-blur-md">
           <div className="relative h-[3.95rem] overflow-hidden">
           <div
-            className={`absolute inset-0 grid grid-cols-4 transition-all duration-300 ease-out ${
+            className={`absolute inset-0 grid grid-cols-5 transition-all duration-300 ease-out ${
               searchMode
                 ? 'pointer-events-none -translate-x-8 scale-95 opacity-0 blur-sm'
                 : 'translate-x-0 scale-100 opacity-100 blur-0'
@@ -187,6 +191,22 @@ const MobileBottomNav = ({
                 )}
               </div>
               <span className="h-3.5 text-center text-[10px] font-medium leading-none">{t('latestHours', { hours: recentHours })}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onViewChange?.(readLaterActive ? 'news' : 'readLater')}
+              className={`relative flex h-full flex-col items-center justify-center gap-0.5 px-1 transition-colors ${
+                readLaterActive ? 'text-amber-600' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <div className="relative flex h-5 w-5 items-center justify-center">
+                <Bookmark className="h-5 w-5" />
+                {readLaterActive && (
+                  <span className="absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-white" />
+                )}
+              </div>
+              <span className="h-3.5 text-center text-[10px] font-medium leading-none">{t('readLaterShort')}</span>
             </button>
 
             <button

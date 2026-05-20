@@ -3,7 +3,7 @@ var mockApiConfig;
 var responseErrorHandler;
 
 import axios from 'axios';
-import { AUTH_EXPIRED_EVENT, fetchNews, fetchReaderArticle, submitFeedback } from './api';
+import { AUTH_EXPIRED_EVENT, fetchNews, fetchReadLaterNews, fetchReaderArticle, removeReadLaterArticles, saveReadLaterArticles, submitFeedback } from './api';
 
 vi.mock('axios', () => {
   const axios = {
@@ -102,6 +102,28 @@ describe('api service', () => {
       timeout: 60000
     });
     expect(mockApiConfig.headers?.['Content-Type']).toBeUndefined();
+  });
+
+  test('uses read-later endpoints for saved article lists and toggles', async () => {
+    mockApi.get.mockResolvedValue({ data: { items: [] } });
+    mockApi.post.mockResolvedValue({ data: { success: true } });
+
+    await fetchReadLaterNews({ page: 2, sourceIds: ['source-a'], topics: ['Tecnologia'] });
+    await saveReadLaterArticles(['article-1']);
+    await removeReadLaterArticles(['article-1']);
+
+    expect(mockApi.get).toHaveBeenCalledWith('/read-later', {
+      params: {
+        page: 2,
+        pageSize: 12,
+        sources: 'source-a',
+        topics: 'Tecnologia',
+        includeFilters: 'true'
+      },
+      signal: undefined
+    });
+    expect(mockApi.post).toHaveBeenCalledWith('/me/read-later', { articleIds: ['article-1'] });
+    expect(mockApi.post).toHaveBeenCalledWith('/me/read-later/remove', { articleIds: ['article-1'] });
   });
 
   test('broadcasts auth expiry when a non-auth request returns 401', async () => {

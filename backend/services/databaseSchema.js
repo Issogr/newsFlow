@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 25;
+  const CURRENT_SCHEMA_VERSION = 26;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getAllConfiguredSourceGroupIds() {
@@ -191,6 +191,21 @@ function createDatabaseSchema({ logger }) {
         FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS user_read_later_articles (
+        user_id TEXT NOT NULL,
+        article_id TEXT NOT NULL,
+        saved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, article_id),
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_user_read_later_user_saved
+      ON user_read_later_articles (user_id, saved_at DESC, article_id DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_user_read_later_article
+      ON user_read_later_articles (article_id);
+
       CREATE VIRTUAL TABLE IF NOT EXISTS article_search USING fts5(
         article_id UNINDEXED,
         title,
@@ -284,7 +299,11 @@ function createDatabaseSchema({ logger }) {
       return 24;
     }
 
-    return 24;
+    if (!tableExists(database, 'user_read_later_articles')) {
+      return 25;
+    }
+
+    return CURRENT_SCHEMA_VERSION;
   }
 
   function setCurrentSchemaVersion(database, version = CURRENT_SCHEMA_VERSION) {
@@ -564,8 +583,32 @@ function createDatabaseSchema({ logger }) {
         `);
       }
 
-      setCurrentSchemaVersion(database);
+      setCurrentSchemaVersion(database, 25);
       logger.info('Migrated DB schema from version 24 to 25');
+      migrateSchema(database, 25);
+      return;
+    }
+
+    if (currentVersion === 25) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS user_read_later_articles (
+          user_id TEXT NOT NULL,
+          article_id TEXT NOT NULL,
+          saved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (user_id, article_id),
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+          FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_user_read_later_user_saved
+        ON user_read_later_articles (user_id, saved_at DESC, article_id DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_user_read_later_article
+        ON user_read_later_articles (article_id);
+      `);
+
+      setCurrentSchemaVersion(database);
+      logger.info('Migrated DB schema from version 25 to 26');
       return;
     }
 

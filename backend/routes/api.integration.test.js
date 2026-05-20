@@ -54,6 +54,9 @@ describe('API auth and user flows', () => {
     jest.doMock('../services/newsAggregator', () => ({
       ingestAllNews: jest.fn().mockResolvedValue({ success: true }),
       getNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
+      getReadLaterFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
+      saveReadLaterArticles: jest.fn().mockReturnValue({ success: true, readLater: true, articleIds: ['article-1'], savedCount: 1 }),
+      removeReadLaterArticles: jest.fn().mockReturnValue({ success: true, readLater: false, articleIds: ['article-1'], removedCount: 1, deletedExpiredArticleCount: 0 }),
       getCachedNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       refreshUserSources: jest.fn().mockResolvedValue({ success: true }),
       startScheduler: jest.fn(),
@@ -826,6 +829,46 @@ describe('API auth and user flows', () => {
         size: videoBuffer.length
       })
     }));
+  });
+
+  test('lists and toggles authenticated read-later articles', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'read-later-user', password: 'secret123' })
+      .expect(201);
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    await request(app)
+      .post('/api/me/read-later')
+      .set('Cookie', sessionCookie)
+      .send({ articleIds: ['article-1'] })
+      .expect(201);
+
+    expect(newsService.saveReadLaterArticles).toHaveBeenCalledWith(expect.objectContaining({
+      userId: registerResponse.body.user.id
+    }), ['article-1']);
+
+    await request(app)
+      .get('/api/read-later')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(newsService.getReadLaterFeed).toHaveBeenCalledWith(expect.objectContaining({
+      page: 1,
+      pageSize: 12
+    }), expect.objectContaining({
+      userId: registerResponse.body.user.id
+    }));
+
+    await request(app)
+      .post('/api/me/read-later/remove')
+      .set('Cookie', sessionCookie)
+      .send({ articleIds: ['article-1'] })
+      .expect(200);
+
+    expect(newsService.removeReadLaterArticles).toHaveBeenCalledWith(expect.objectContaining({
+      userId: registerResponse.body.user.id
+    }), ['article-1']);
   });
 
   test('rejects feedback submission with an invalid category', async () => {

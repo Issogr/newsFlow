@@ -234,6 +234,24 @@ describe('NewsCard', () => {
     expect(screen.getByLabelText('Technology')).toBeInTheDocument();
   });
 
+  test('toggles the read-later action from the card header', () => {
+    const onToggleReadLater = jest.fn();
+
+    render(
+      <NewsCard
+        group={group}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+        onToggleReadLater={onToggleReadLater}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'saveReadLater' }));
+
+    expect(onToggleReadLater).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }));
+  });
+
   test('falls back to the generic illustration for unsafe or broken article images', () => {
     const { rerender } = render(
       <NewsCard

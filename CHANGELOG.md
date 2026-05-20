@@ -2,6 +2,7 @@
 
 ## 3.4.0
 
+- added a Read later view with per-card save/remove controls so saved articles stay available outside the normal feed retention window
 - gave feedback media uploads a longer timeout and clearer timeout/network errors so larger attachments fail with an actionable message instead of a generic one
 
 ## 3.3.3

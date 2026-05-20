@@ -8,7 +8,7 @@ import {
   RefreshCw,
   User,
 } from 'lucide-react';
-import { fetchNews, isRequestCanceled } from '../services/api';
+import { fetchNews, fetchReadLaterNews, isRequestCanceled, removeReadLaterArticles, saveReadLaterArticles } from '../services/api';
 import ErrorMessage from './ErrorMessage';
 import NewsCard from './NewsCard';
 import ReaderPanel from './ReaderPanel';
@@ -76,6 +76,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeFilters, setActiveFilters] = useState(EMPTY_FILTERS);
   const [showRecentOnly, setShowRecentOnly] = useState(false);
+  const [activeView, setActiveView] = useState('news');
   const [readerState, setReaderState] = useState({ isOpen: false, group: null, articleId: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -85,6 +86,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(true);
   const [topNavCompact, setTopNavCompact] = useState(false);
+  const [readLaterUpdatingGroupIds, setReadLaterUpdatingGroupIds] = useState([]);
   const lastScrollY = useRef(0);
   const userMenuRef = useRef(null);
   const visibleNewsCountRef = useRef(0);
@@ -101,6 +103,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const sourceReloadSignatureRef = useRef(sourceReloadSignature);
   visibleNewsCountRef.current = news.length;
   const retainedNewsLimitReached = news.length >= MAX_RETAINED_NEWS_GROUPS;
+  const isReadLaterView = activeView === 'readLater';
   const metaRef = useRef(meta);
   metaRef.current = meta;
   const setupSourceCatalog = currentUser?.sourceCatalog || sourceCatalog;
@@ -111,7 +114,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const isFeedRefreshActive = loading || loadingMore;
   const pendingNewsCount = pendingNewsGroupIds.length;
   const manualRefreshPending = Boolean(meta?.pendingUserRefresh);
-  const refreshDisabled = isFeedRefreshActive || manualRefreshPending;
   const refreshTitle = manualRefreshPending
     ? t('refreshPendingTitle')
     : t('refresh');
@@ -224,16 +226,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       const responsePageSize = append
         ? PAGE_SIZE
         : Math.min(Math.max(PAGE_SIZE, minimumItemCount || PAGE_SIZE), MAX_TOPIC_RELOAD_PAGE_SIZE);
-      const response = await fetchNews({
+      const response = await (isReadLaterView ? fetchReadLaterNews : fetchNews)({
         page,
         pageSize: responsePageSize,
         search: debouncedSearch,
         sourceIds: activeFilters.sourceIds,
         topics: activeFilters.topics,
-        recentHours: showRecentOnly ? recentHours : null,
-        beforePubDate: append ? cursor?.beforePubDate : '',
-        beforeId: append ? cursor?.beforeId : '',
-        refresh: forceRefresh,
+        recentHours: !isReadLaterView && showRecentOnly ? recentHours : null,
+        beforePubDate: !isReadLaterView && append ? cursor?.beforePubDate : '',
+        beforeId: !isReadLaterView && append ? cursor?.beforeId : '',
+        refresh: !isReadLaterView && forceRefresh,
         includeFilters: !append,
         signal: request.signal
       });
@@ -248,6 +250,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
       while (
         !append
+        && !isReadLaterView
         && mergedItems.length < targetItemCount
         && nextMeta?.hasMore
         && nextMeta?.nextCursor
@@ -282,7 +285,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           nextNews = appendUniqueGroups(nextNews, preservedTail).slice(0, current.length);
         }
 
-        if (nextNews.length > MAX_RETAINED_NEWS_GROUPS) {
+        if (!isReadLaterView && nextNews.length > MAX_RETAINED_NEWS_GROUPS) {
           nextNews = nextNews.slice(0, MAX_RETAINED_NEWS_GROUPS);
         }
 
@@ -314,7 +317,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         setBusyState(false);
       }
     }
-  }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, recentHours, showRecentOnly, startListRequest, startPaginationRequest]);
+  }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, isReadLaterView, recentHours, showRecentOnly, startListRequest, startPaginationRequest]);
 
   const handleTopicRefresh = useCallback(() => {
     loadNews({
@@ -396,6 +399,34 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     setReaderState({ isOpen: false, group: null, articleId: null });
   }, []);
 
+  const handleToggleReadLater = useCallback(async (group) => {
+    const articleIds = (group?.readLater ? (group.readLaterArticleIds || []) : (group?.items || []).map((item) => item.id)).filter(Boolean);
+    if (!group?.id || articleIds.length === 0) {
+      return;
+    }
+
+    setReadLaterUpdatingGroupIds((current) => [...new Set([...current, group.id])]);
+    setError(null);
+
+    try {
+      if (group.readLater) {
+        await removeReadLaterArticles(articleIds);
+        setNews((current) => isReadLaterView
+          ? current.filter((item) => item.id !== group.id)
+          : current.map((item) => item.id === group.id ? { ...item, readLater: false, readLaterArticleIds: [] } : item));
+      } else {
+        await saveReadLaterArticles(articleIds);
+        setNews((current) => current.map((item) => item.id === group.id ? { ...item, readLater: true, readLaterArticleIds: articleIds } : item));
+      }
+    } catch (requestError) {
+      if (!isRequestCanceled(requestError)) {
+        setError(requestError);
+      }
+    } finally {
+      setReadLaterUpdatingGroupIds((current) => current.filter((groupId) => groupId !== group.id));
+    }
+  }, [isReadLaterView]);
+
   const scrollToTop = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
@@ -431,7 +462,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   setSearch('');
                   setDebouncedSearch('');
                 }}
+                onToggleReadLater={() => setActiveView((current) => current === 'readLater' ? 'news' : 'readLater')}
                 onOpenSurface={() => setUserMenuOpen(false)}
+                readLaterActive={isReadLaterView}
                 closeSignal={desktopFiltersCloseSignal}
                 compact={topNavCompact}
               />
@@ -441,10 +474,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   icon={RefreshCw}
                   label={t('refresh')}
                   onClick={() => loadNews({ page: 1, append: false, forceRefresh: true })}
-                  disabled={refreshDisabled}
+                  disabled={isFeedRefreshActive || (!isReadLaterView && manualRefreshPending)}
                   aria-label={refreshTitle}
                   title={refreshTitle}
-                  iconClassName={isFeedRefreshActive || manualRefreshPending ? 'animate-spin' : ''}
+                  iconClassName={isFeedRefreshActive || (!isReadLaterView && manualRefreshPending) ? 'animate-spin' : ''}
                 />
               </div>
 
@@ -549,12 +582,12 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           <ErrorMessage error={error} onRetry={() => loadNews({ page: 1, append: false, forceRefresh: true })} t={t} />
         ) : news.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-            <h2 className="text-xl font-semibold text-slate-800">{t('noNewsTitle')}</h2>
-            <p className="mt-2 text-slate-500">{t('noNewsText')}</p>
+            <h2 className="text-xl font-semibold text-slate-800">{isReadLaterView ? t('readLaterEmptyTitle') : t('noNewsTitle')}</h2>
+            <p className="mt-2 text-slate-500">{isReadLaterView ? t('readLaterEmptyText') : t('noNewsText')}</p>
           </div>
         ) : (
           <>
-            {pendingNewsCount > 0 && (
+            {!isReadLaterView && pendingNewsCount > 0 && (
               <div className="mb-4 flex justify-center">
                 <div
                   role="status"
@@ -576,13 +609,15 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                     locale={locale}
                     t={t}
                     onOpenReader={openReader}
+                    onToggleReadLater={handleToggleReadLater}
+                    readLaterUpdating={readLaterUpdatingGroupIds.includes(group.id)}
                   />
                 </div>
               ))}
             </div>
 
             <div className="mt-8 flex justify-center">
-              {meta?.hasMore && !retainedNewsLimitReached ? (
+              {meta?.hasMore && (isReadLaterView || !retainedNewsLimitReached) ? (
                 <button
                   type="button"
                   onClick={() => loadNews(
@@ -678,6 +713,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
             setSearch('');
             setDebouncedSearch('');
           }}
+          activeView={activeView}
+          onViewChange={setActiveView}
           visible={showMobileNav}
         />
       ) : null}

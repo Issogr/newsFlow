@@ -117,6 +117,10 @@ function createArticleRepository({
     };
   }
 
+  function normalizeArticleIds(articleIds = []) {
+    return [...new Set((Array.isArray(articleIds) ? articleIds : []).map((id) => String(id || '').trim()).filter(Boolean))];
+  }
+
   function buildSearchQuery(search) {
     const tokens = String(search || '')
       .toLowerCase()
@@ -995,7 +999,7 @@ function createArticleRepository({
   }
 
   function getArticlesByIds(articleIds = [], options = {}) {
-    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    const normalizedArticleIds = normalizeArticleIds(articleIds);
     if (normalizedArticleIds.length === 0) {
       return [];
     }
@@ -1056,6 +1060,211 @@ function createArticleRepository({
     return hydrateArticleRows(rows, options);
   }
 
+  function getReadLaterArticleIdSet(userId, articleIds = []) {
+    const normalizedUserId = String(userId || '').trim();
+    const normalizedArticleIds = normalizeArticleIds(articleIds);
+    if (!normalizedUserId || normalizedArticleIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = chunkValues(normalizedArticleIds).flatMap((ids) => {
+      return getDb().prepare(`
+        SELECT article_id AS articleId
+        FROM user_read_later_articles
+        WHERE user_id = ?
+          AND article_id IN (${ids.map(() => '?').join(', ')})
+      `).all(normalizedUserId, ...ids);
+    });
+
+    return new Set(rows.map((row) => row.articleId));
+  }
+
+  function isReadLaterArticle(userId, articleId) {
+    return getReadLaterArticleIdSet(userId, [articleId]).has(articleId);
+  }
+
+  function saveReadLaterArticles(userId, articleIds = [], options = {}) {
+    const normalizedUserId = String(userId || '').trim();
+    const normalizedArticleIds = normalizeArticleIds(articleIds);
+    if (!normalizedUserId || normalizedArticleIds.length === 0) {
+      return { savedArticleIds: [], savedCount: 0 };
+    }
+
+    const existingArticles = getArticlesByIds(normalizedArticleIds, {
+      ...options,
+      userId: normalizedUserId,
+      maxArticleAgeHours: null
+    });
+    const accessibleArticleIds = existingArticles.map((article) => article.id);
+    if (accessibleArticleIds.length === 0) {
+      return { savedArticleIds: [], savedCount: 0 };
+    }
+
+    const database = getDb();
+    const now = new Date().toISOString();
+    const insertStmt = database.prepare(`
+      INSERT OR IGNORE INTO user_read_later_articles (user_id, article_id, saved_at)
+      VALUES (?, ?, ?)
+    `);
+
+    const transaction = database.transaction((ids) => {
+      let savedCount = 0;
+      ids.forEach((articleId) => {
+        savedCount += insertStmt.run(normalizedUserId, articleId, now).changes;
+      });
+
+      return savedCount;
+    });
+
+    return {
+      savedArticleIds: accessibleArticleIds,
+      savedCount: transaction(accessibleArticleIds)
+    };
+  }
+
+  function cleanupExpiredUnsavedArticles(articleIds = [], isoTimestamp = '') {
+    const normalizedArticleIds = normalizeArticleIds(articleIds);
+    if (normalizedArticleIds.length === 0 || !isoTimestamp) {
+      return 0;
+    }
+
+    const database = getDb();
+    const deleteSearchEntries = database.prepare(`
+      DELETE FROM article_search
+      WHERE article_id IN (
+        SELECT id
+        FROM articles
+        WHERE id IN (${normalizedArticleIds.map(() => '?').join(', ')})
+          AND published_at < ?
+          AND NOT EXISTS (
+            SELECT 1
+            FROM user_read_later_articles
+            WHERE user_read_later_articles.article_id = articles.id
+          )
+      )
+    `);
+    const deleteArticles = database.prepare(`
+      DELETE FROM articles
+      WHERE id IN (${normalizedArticleIds.map(() => '?').join(', ')})
+        AND published_at < ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_read_later_articles
+          WHERE user_read_later_articles.article_id = articles.id
+        )
+    `);
+
+    const transaction = database.transaction((ids, threshold) => {
+      deleteSearchEntries.run(...ids, threshold);
+      return deleteArticles.run(...ids, threshold).changes;
+    });
+
+    return transaction(normalizedArticleIds, isoTimestamp);
+  }
+
+  function removeReadLaterArticles(userId, articleIds = [], options = {}) {
+    const normalizedUserId = String(userId || '').trim();
+    const normalizedArticleIds = normalizeArticleIds(articleIds);
+    if (!normalizedUserId || normalizedArticleIds.length === 0) {
+      return { removedArticleIds: [], removedCount: 0, deletedExpiredArticleCount: 0 };
+    }
+
+    const database = getDb();
+    const deleteStmt = database.prepare(`
+      DELETE FROM user_read_later_articles
+      WHERE user_id = ? AND article_id = ?
+    `);
+    const transaction = database.transaction((ids) => {
+      const removedArticleIds = [];
+      let removedCount = 0;
+
+      ids.forEach((articleId) => {
+        const changes = deleteStmt.run(normalizedUserId, articleId).changes;
+        if (changes > 0) {
+          removedArticleIds.push(articleId);
+          removedCount += changes;
+        }
+      });
+
+      return { removedArticleIds, removedCount };
+    });
+    const result = transaction(normalizedArticleIds);
+    const maxArticleAgeHours = Number(options.maxArticleAgeHours);
+    const cutoff = Number.isFinite(maxArticleAgeHours) && maxArticleAgeHours > 0
+      ? new Date(Date.now() - (maxArticleAgeHours * 60 * 60 * 1000)).toISOString()
+      : '';
+
+    return {
+      ...result,
+      deletedExpiredArticleCount: cleanupExpiredUnsavedArticles(result.removedArticleIds, cutoff)
+    };
+  }
+
+  function getReadLaterArticles(userId, filters = {}, options = {}) {
+    const normalizedUserId = String(userId || '').trim();
+    if (!normalizedUserId) {
+      return [];
+    }
+
+    const state = buildFilterState({ ...filters, limit: 1000, offset: 0 });
+    const params = [normalizedUserId];
+    const joins = ['JOIN user_read_later_articles rl ON rl.article_id = a.id'];
+    const where = ['rl.user_id = ?'];
+    const searchQuery = buildSearchQuery(state.search);
+    const scopeFilter = buildScopeFilter({ ...options, userId: normalizedUserId }, 'a');
+    const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
+
+    where.push(scopeFilter.clause);
+    params.push(...scopeFilter.params);
+    where.push(publishedBeforeNowFilter.clause);
+    params.push(...publishedBeforeNowFilter.params);
+
+    if (searchQuery) {
+      joins.push('JOIN article_search ON article_search.article_id = a.id');
+      where.push('article_search MATCH ?');
+      params.push(searchQuery);
+    }
+
+    if (state.sourceIds.length > 0) {
+      const sourceFilter = getSourceFilterClauses(state.sourceIds, { ...options, userId: normalizedUserId });
+      where.push(`(${sourceFilter.clause})`);
+      params.push(...sourceFilter.params);
+    }
+
+    if (state.topics.length > 0) {
+      where.push(`a.id IN (
+        SELECT article_id
+        FROM article_topics
+        WHERE topic IN (${state.topics.map(() => '?').join(', ')})
+      )`);
+      params.push(...state.topics);
+    }
+
+    const rows = getDb().prepare(`
+      SELECT
+        a.id,
+        a.source_id AS sourceId,
+        a.source_name AS source,
+        a.title,
+        a.description,
+        a.content,
+        a.url,
+        a.image,
+        a.author,
+        a.language,
+        a.owner_user_id AS ownerUserId,
+        a.published_at AS pubDate,
+        rl.saved_at AS readLaterSavedAt
+      FROM articles a
+      ${joins.join('\n')}
+      WHERE ${where.join(' AND ')}
+      ORDER BY rl.saved_at DESC, a.id DESC
+      LIMIT ?
+    `).all(...params, state.limit);
+
+    return hydrateArticleRows(rows, { ...options, userId: normalizedUserId });
+  }
+
   function countArticles(options = {}) {
     const scopeFilter = buildScopeFilter(options, 'articles');
     const retentionFilter = buildRetentionFilter(options, 'articles');
@@ -1100,12 +1309,22 @@ function createArticleRepository({
       WHERE article_id IN (
         SELECT id
         FROM articles
-        WHERE published_at < ?
-      )
+          WHERE published_at < ?
+            AND NOT EXISTS (
+              SELECT 1
+              FROM user_read_later_articles
+              WHERE user_read_later_articles.article_id = articles.id
+            )
+        )
     `);
     const deleteArticles = database.prepare(`
       DELETE FROM articles
       WHERE published_at < ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_read_later_articles
+          WHERE user_read_later_articles.article_id = articles.id
+        )
     `);
 
     const transaction = database.transaction((threshold) => {
@@ -1407,6 +1626,11 @@ function createArticleRepository({
     getArticles,
     getArticleById,
     getArticlesByIds,
+    getReadLaterArticles,
+    getReadLaterArticleIdSet,
+    isReadLaterArticle,
+    saveReadLaterArticles,
+    removeReadLaterArticles,
     getArticleIdsPendingAiTopicProcessing,
     getTopicClassificationReport,
     markArticlesAiTopicProcessing,

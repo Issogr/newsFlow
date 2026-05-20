@@ -1,6 +1,8 @@
 import React, { memo, useEffect, useRef, useState } from 'react';
 import {
   BookOpenText,
+  Bookmark,
+  BookmarkCheck,
   ExternalLink,
   Share2,
 } from 'lucide-react';
@@ -95,7 +97,7 @@ function getGroupImageUrl(group) {
   return '';
 }
 
-const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) => {
+const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onToggleReadLater, readLaterUpdating = false }) => {
   const hasItems = Boolean(group?.items?.length);
 
   const sourceEntries = getSourceEntries(group);
@@ -241,12 +243,22 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
     ? `${sourceEntries[0].name}${sourceEntries.length > 1 ? ` +${sourceEntries.length - 1}` : ''}`
     : '';
   const shareControls = (
-    <div className="relative flex items-center justify-end">
+    <div className="relative flex items-center justify-end gap-2">
       <ShareStatusBubble
         shareState={shareState}
         t={t}
-        className="share-status-pill-from-button mr-2 max-w-[min(16rem,calc(100vw-7rem))]"
+        className="share-status-pill-from-button mr-0 max-w-[min(16rem,calc(100vw-8rem))]"
       />
+      <button
+        type="button"
+        onClick={() => onToggleReadLater?.(group)}
+        disabled={readLaterUpdating}
+        className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border shadow-md transition-colors disabled:cursor-wait disabled:opacity-70 ${group.readLater ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100'}`}
+        aria-label={group.readLater ? t('removeReadLater') : t('saveReadLater')}
+        title={group.readLater ? t('removeReadLater') : t('saveReadLater')}
+      >
+        {group.readLater ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
+      </button>
       <button
         type="button"
         onClick={handleShare}

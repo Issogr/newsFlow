@@ -5,7 +5,8 @@ const {
   newsSources,
   expandConfiguredSources,
   expandUserSources,
-  getNewsFeed: buildNewsFeed
+  getNewsFeed: buildNewsFeed,
+  getReadLaterFeed: buildReadLaterFeed
 } = require('./newsAggregatorQuery');
 const {
   getCanonicalSourceId
@@ -18,6 +19,7 @@ const websocketService = require('./websocketService');
 const { parseIntegerEnv } = require('../utils/env');
 
 const SCRAPE_INTERVAL_MS = parseIntegerEnv('SCRAPE_INTERVAL_MS', 900000, { min: 1000 });
+const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24, { min: 0 });
 const MANUAL_REFRESH_COOLDOWN_MS = parseIntegerEnv('MANUAL_REFRESH_COOLDOWN_MS', 5 * 60 * 1000, { min: 0 });
 const ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES = parseIntegerEnv(
   'SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES',
@@ -317,6 +319,56 @@ async function getCachedNewsFeed(filters = {}, userContext = {}) {
   });
 }
 
+function normalizeReadLaterArticleIds(articleIds = []) {
+  return [...new Set((Array.isArray(articleIds) ? articleIds : []).map((articleId) => String(articleId || '').trim()).filter(Boolean))].slice(0, 20);
+}
+
+async function getReadLaterFeed(filters = {}, userContext = {}) {
+  return buildReadLaterFeed(filters, userContext);
+}
+
+function saveReadLaterArticles(userContext = {}, articleIds = []) {
+  const userId = userContext.userId || null;
+  const normalizedArticleIds = normalizeReadLaterArticleIds(articleIds);
+  if (!userId || normalizedArticleIds.length === 0) {
+    throw createError(400, 'Choose at least one article to save.', 'INVALID_READ_LATER_PAYLOAD');
+  }
+
+  const result = database.saveReadLaterArticles(userId, normalizedArticleIds, userContext);
+  if (result.savedArticleIds.length === 0) {
+    throw createError(404, 'Article not found.', 'RESOURCE_NOT_FOUND');
+  }
+
+  return {
+    success: true,
+    readLater: true,
+    articleIds: result.savedArticleIds,
+    savedCount: result.savedCount
+  };
+}
+
+function removeReadLaterArticles(userContext = {}, articleIds = []) {
+  const userId = userContext.userId || null;
+  const normalizedArticleIds = normalizeReadLaterArticleIds(articleIds);
+  if (!userId || normalizedArticleIds.length === 0) {
+    throw createError(400, 'Choose at least one article to remove.', 'INVALID_READ_LATER_PAYLOAD');
+  }
+
+  const maxArticleAgeHours = Math.min(
+    ARTICLE_RETENTION_HOURS,
+    Number.isFinite(userContext.articleRetentionHours) ? userContext.articleRetentionHours : ARTICLE_RETENTION_HOURS
+  );
+  const result = database.removeReadLaterArticles(userId, normalizedArticleIds, { maxArticleAgeHours });
+
+  return {
+    success: true,
+    readLater: false,
+    articleIds: result.removedArticleIds,
+    removedCount: result.removedCount,
+    deletedExpiredArticleCount: result.deletedExpiredArticleCount
+  };
+}
+
 function startScheduler() {
   if (schedulerHandle) {
     return;
@@ -353,6 +405,9 @@ module.exports = {
   refreshUserSources,
   getNewsFeed,
   getCachedNewsFeed,
+  getReadLaterFeed,
+  saveReadLaterArticles,
+  removeReadLaterArticles,
   startScheduler,
   stopScheduler,
   newsSources,

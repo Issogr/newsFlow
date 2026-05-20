@@ -184,6 +184,14 @@ function getUserContext(req) {
   return buildUserContext(req.user.id, settings);
 }
 
+function getRequestArticleIds(req) {
+  const rawArticleIds = Array.isArray(req.body?.articleIds)
+    ? req.body.articleIds
+    : [req.body?.articleId];
+
+  return rawArticleIds.map((articleId) => String(articleId || '').trim()).filter(Boolean);
+}
+
 router.post('/auth/register', [authRateLimit, sanitizeBody(['username'])], asyncHandler(async (req, res) => {
   const result = await userService.registerUser(req.body || {});
   setSessionCookie(res, result.token);
@@ -356,12 +364,29 @@ router.get('/news', [requireAuthenticatedUser, sanitizeQuery('search'), sanitize
   res.json(result);
 }));
 
+router.get('/read-later', [requireAuthenticatedUser, sanitizeQuery('search')], asyncHandler(async (req, res) => {
+  const filters = parseNewsQuery(req.query);
+  const result = await newsService.getReadLaterFeed(filters, getUserContext(req));
+  res.json(result);
+}));
+
+router.post('/me/read-later', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+  const result = newsService.saveReadLaterArticles(getUserContext(req), getRequestArticleIds(req));
+  res.status(201).json(result);
+}));
+
+router.post('/me/read-later/remove', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+  const result = newsService.removeReadLaterArticles(getUserContext(req), getRequestArticleIds(req));
+  res.json(result);
+}));
+
 router.get('/articles/:articleId/reader', [
   requireAuthenticatedUser,
   validateParam('articleId', 'ID articolo non valido'),
   sanitizeParam('articleId')
 ], asyncHandler(async (req, res) => {
   const { articleId } = req.params;
+  const userContext = getUserContext(req);
 
   if (articleId.length < 5) {
     throw createError(400, 'ID articolo non valido', 'INVALID_ARTICLE_ID');
@@ -370,7 +395,7 @@ router.get('/articles/:articleId/reader', [
   const readerArticle = await readerService.getReaderArticle(articleId, {
     forceRefresh: req.query.refresh === 'true',
     userId: req.user.id,
-    maxArticleAgeHours: getUserContext(req).articleRetentionHours
+    maxArticleAgeHours: database.isReadLaterArticle(req.user.id, articleId) ? null : userContext.articleRetentionHours
   });
 
   res.json(readerArticle);

@@ -5,6 +5,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
+      '🔖 Save articles to Read later from each news card and open them from a dedicated view, even after they leave the normal feed window.',
       '📎 Feedback media uploads now have more time to complete and show clearer timeout or connection errors when something goes wrong.',
     ]
   },
@@ -13,6 +14,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
+      '🔖 Salva gli articoli in Leggi dopo da ogni scheda e ritrovali in una vista dedicata anche quando escono dal feed normale.',
       '📎 Gli allegati media nei feedback ora hanno piu tempo per completare il caricamento e mostrano errori piu chiari in caso di timeout o problemi di connessione.',
     ]
   }

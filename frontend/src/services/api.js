@@ -197,6 +197,47 @@ export const fetchNews = async ({
   return response.data;
 };
 
+export const fetchReadLaterNews = async ({
+  page = 1,
+  pageSize = 12,
+  search = '',
+  sourceIds = [],
+  topics = [],
+  includeFilters = true,
+  signal
+} = {}) => {
+  const params = { page, pageSize };
+
+  if (search?.trim()) {
+    params.search = search.trim();
+  }
+
+  if (Array.isArray(sourceIds) && sourceIds.length > 0) {
+    params.sources = sourceIds.join(',');
+  }
+
+  if (Array.isArray(topics) && topics.length > 0) {
+    params.topics = topics.join(',');
+  }
+
+  if (includeFilters) {
+    params.includeFilters = 'true';
+  }
+
+  const response = await api.get('/read-later', { params, signal });
+  return response.data;
+};
+
+export const saveReadLaterArticles = async (articleIds = []) => {
+  const response = await api.post('/me/read-later', { articleIds });
+  return response.data;
+};
+
+export const removeReadLaterArticles = async (articleIds = []) => {
+  const response = await api.post('/me/read-later/remove', { articleIds });
+  return response.data;
+};
+
 export const fetchReaderArticle = async (articleId, { refresh = false, signal } = {}) => {
   const response = await api.get(`/articles/${encodeURIComponent(articleId)}/reader`, {
     params: refresh ? { refresh: 'true' } : undefined,
