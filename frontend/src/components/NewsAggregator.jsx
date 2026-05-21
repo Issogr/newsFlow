@@ -89,13 +89,30 @@ function mergeGroupItems(primaryItems = [], secondaryItems = []) {
     }
 
     const existing = itemMap.get(key);
-    itemMap.set(key, existing ? { ...item, ...existing } : item);
+    itemMap.set(key, existing ? { ...existing, ...item } : item);
   });
 
   return [...itemMap.values()].sort((left, right) => {
     const dateComparison = String(right.pubDate || '').localeCompare(String(left.pubDate || ''));
     return dateComparison || String(right.id || '').localeCompare(String(left.id || ''));
   });
+}
+
+function groupSharesAnyKey(group, keySet) {
+  return [...getGroupMergeKeys(group)].some((key) => keySet.has(key));
+}
+
+function filterGroupsMatchingCurrent(currentGroups = [], incomingGroups = []) {
+  const currentKeys = new Set();
+  currentGroups.forEach((group) => {
+    getGroupMergeKeys(group).forEach((key) => currentKeys.add(key));
+  });
+
+  if (currentKeys.size === 0) {
+    return [];
+  }
+
+  return incomingGroups.filter((group) => groupSharesAnyKey(group, currentKeys));
 }
 
 function mergeGroupIntoTarget(targetGroup, incomingGroup) {
@@ -111,8 +128,8 @@ function mergeGroupIntoTarget(targetGroup, incomingGroup) {
 
   if (primaryItem) {
     targetGroup.cursorId = primaryItem.id || targetGroup.cursorId;
-    targetGroup.title = primaryItem.title || targetGroup.title;
-    targetGroup.description = primaryItem.description || targetGroup.description;
+    targetGroup.title = primaryItem.title || targetGroup.title || incomingGroup.title;
+    targetGroup.description = primaryItem.description || targetGroup.description || incomingGroup.description;
     targetGroup.pubDate = primaryItem.pubDate || targetGroup.pubDate;
     targetGroup.url = primaryItem.url || targetGroup.url;
   }
@@ -442,6 +459,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
       setNews((current) => {
         let nextNews = append ? appendUniqueGroups(current, response.items || []) : mergedItems;
+
+        if (!append && silent) {
+          nextNews = mergeGroups(current, filterGroupsMatchingCurrent(current, mergedItems));
+        }
 
         if (!append && silent && current.length > nextNews.length) {
           const preservedTail = current.slice(nextNews.length);

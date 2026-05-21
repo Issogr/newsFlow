@@ -89,11 +89,27 @@ function createGroups(prefix, start, count) {
   });
 }
 
+function createRetitledGroups(idPrefix, titlePrefix, start, count) {
+  return createGroups(idPrefix, start, count).map((group, index) => {
+    const number = start + index;
+    const title = `${titlePrefix} headline ${number}`;
+
+    return {
+      ...group,
+      title,
+      items: group.items.map((item) => ({
+        ...item,
+        title
+      }))
+    };
+  });
+}
+
 function createGroup(id, title, pubDate = '2026-03-14T10:00:00.000Z') {
   return {
     id,
     title,
-    items: [{ id: `article-${id}`, pubDate }]
+    items: [{ id: `article-${id}`, title, pubDate }]
   };
 }
 
@@ -536,6 +552,39 @@ describe('NewsAggregator', () => {
     }));
   });
 
+  test('does not add brand-new cards during silent topic reloads', async () => {
+    let onTopicRefresh;
+
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [createGroup('group-current', 'Current headline')],
+        meta: { page: 1, pageSize: 12, hasMore: true, totalGroups: 2 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockResolvedValueOnce({
+        items: [
+          createGroup('group-new', 'New automatic headline', '2026-03-14T11:00:00.000Z'),
+          createGroup('group-current', 'Current headline with AI topics')
+        ],
+        meta: { page: 1, pageSize: 12, hasMore: true, totalGroups: 2 },
+        filters: { sources: [], sourceCatalog: [], topics: ['Technology'] }
+      });
+
+    await renderNewsAggregator();
+    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('Current headline with AI topics')).toBeInTheDocument();
+    expect(screen.queryByText('New automatic headline')).not.toBeInTheDocument();
+  });
+
   test('clears manual refresh loading when a silent topic reload cancels it', async () => {
     let onTopicRefresh;
     const manualRefreshRequest = createDeferred();
@@ -599,7 +648,10 @@ describe('NewsAggregator', () => {
 
       if (pageSize === 13) {
         return Promise.resolve({
-          items: createGroups('refreshed', 1, 13),
+          items: [
+            ...createRetitledGroups('initial', 'refreshed', 1, 12),
+            ...createRetitledGroups('older', 'refreshed', 13, 1)
+          ],
           meta: { page: 1, pageSize: 13, hasMore: false, nextCursor: null },
           filters: { sources: [], sourceCatalog: [], topics: ['Technology'] }
         });
@@ -657,7 +709,10 @@ describe('NewsAggregator', () => {
 
       if (pageSize > 12) {
         return Promise.resolve({
-          items: createGroups('refreshed', 1, 13),
+          items: [
+            ...createRetitledGroups('initial', 'refreshed', 1, 12),
+            ...createRetitledGroups('older', 'refreshed', 13, 1)
+          ],
           meta: { page: 1, pageSize: 13, hasMore: false, nextCursor: null },
           filters: { sources: [], sourceCatalog: [], topics: [] }
         });
@@ -727,7 +782,7 @@ describe('NewsAggregator', () => {
 
       if (pageSize > 12) {
         return Promise.resolve({
-          items: createGroups('refreshed', 1, 12),
+          items: createRetitledGroups('initial', 'refreshed', 1, 12),
           meta: {
             page: 1,
             pageSize: 12,
@@ -896,6 +951,7 @@ describe('NewsAggregator', () => {
               items: [
                 {
                   id: 'article-older',
+                  title: 'Older duplicate headline',
                   sourceId: 'source-b',
                   source: 'Source B',
                   storyGroupId: 'ai-story-1',
@@ -918,6 +974,7 @@ describe('NewsAggregator', () => {
             items: [
               {
                 id: 'article-current',
+                title: 'Current merged headline',
                 sourceId: 'source-a',
                 source: 'Source A',
                 storyGroupId: 'ai-story-1',
