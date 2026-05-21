@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-build
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS frontend-build
 
 WORKDIR /app/frontend
 
@@ -8,20 +8,30 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM node:22-alpine AS bff-deps
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS bff-deps
+
+ARG TARGETARCH
 
 WORKDIR /app/bff
 
-RUN apk add --no-cache python3 make g++
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates python3 make g++ && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY bff/package*.json ./
-RUN npm ci --omit=dev
+RUN npm_arch="${TARGETARCH:-$(node -p 'process.arch')}" && \
+    if [ "$npm_arch" = "amd64" ]; then npm_arch="x64"; fi && \
+    npm_config_platform=linux npm_config_arch="$npm_arch" npm_config_libc=glibc npm ci --omit=dev --no-audit --no-fund
 
-FROM node:22-alpine
+FROM node:22-bookworm-slim
 
 WORKDIR /app/bff
 ENV NODE_ENV=production
 ENV PORT=80
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates wget && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=bff-deps /app/bff/node_modules ./node_modules
 COPY bff/package*.json ./
