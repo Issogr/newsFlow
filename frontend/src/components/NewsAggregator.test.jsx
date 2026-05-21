@@ -1,11 +1,15 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import NewsAggregator from './NewsAggregator';
-import { fetchNews, isRequestCanceled, updateUserSettings } from '../services/api';
+import { fetchNews, fetchThematicSummaries, isRequestCanceled, updateUserSettings } from '../services/api';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 
 vi.mock('../services/api', () => ({
   fetchNews: vi.fn(),
+  fetchReadLaterNews: vi.fn(),
+  fetchThematicSummaries: vi.fn(),
+  saveReadLaterArticles: vi.fn(),
+  removeReadLaterArticles: vi.fn(),
   updateUserSettings: vi.fn(),
   isRequestCanceled: vi.fn((error) => error?.code === 'ERR_CANCELED')
 }));
@@ -93,8 +97,6 @@ const currentUser = {
     articleRetentionHours: 24,
     recentHours: 3,
     showNewsImages: true,
-    compactNewsCards: false,
-    compactNewsCardsMode: 'off',
     readerPanelPosition: 'right',
     readerTextSize: 'medium',
     excludedSourceIds: [],
@@ -122,12 +124,14 @@ describe('NewsAggregator', () => {
     });
     window.scrollBy = jest.fn();
     window.scrollTo = jest.fn();
+    window.localStorage.clear();
     desktopMediaQuery = {
       matches: true,
       addEventListener: jest.fn(),
       removeEventListener: jest.fn()
     };
     window.matchMedia = jest.fn().mockImplementation(() => desktopMediaQuery);
+    fetchThematicSummaries.mockResolvedValue({ items: [] });
     useTopicRefreshSocket.mockImplementation(() => {});
   });
 
@@ -189,6 +193,162 @@ describe('NewsAggregator', () => {
       expect(screen.queryByText('Old headline')).not.toBeInTheDocument();
     });
     expect(isRequestCanceled).not.toHaveBeenCalled();
+  });
+
+  test('renders thematic summary stories and opens the summary panel', async () => {
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'Top headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    fetchThematicSummaries.mockResolvedValue({
+      items: [
+        {
+          id: 'summary-technology',
+          topicKey: 'technology',
+          topicLabel: 'Technology',
+          topics: ['Tecnologia'],
+          periodStart: '2026-05-21T07:00:00.000Z',
+          periodEnd: '2026-05-21T13:00:00.000Z',
+          title: 'Technology briefing',
+          summaryText: 'AI chips moved quickly during the window [1].',
+          titleByLocale: {
+            en: 'Technology briefing',
+            it: 'Sintesi tecnologia'
+          },
+          summaryTextByLocale: {
+            en: 'AI chips moved quickly during the window [1].',
+            it: 'I chip AI sono avanzati rapidamente nella finestra [1].'
+          },
+          articleCount: 1,
+          sources: [{ index: 1, articleId: 'article-1', title: 'AI chips accelerate', source: 'BBC', sourceIconUrl: 'https://example.com/favicon.ico', url: 'https://example.com/ai' }]
+        }
+      ]
+    });
+
+    await renderNewsAggregator({
+      currentUser: {
+        ...currentUser,
+        settings: {
+          ...currentUser.settings,
+          defaultLanguage: 'it'
+        }
+      }
+    });
+
+    const storyButton = await screen.findByRole('button', { name: 'Apri sintesi Tecnologia' });
+    expect(screen.queryByText('Storie per topic')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tecnologia')).not.toBeInTheDocument();
+
+    fireEvent.click(storyButton);
+
+    expect(screen.queryByText('Sintesi tecnologia')).not.toBeInTheDocument();
+    expect(screen.getByText('1 articolo valutato')).toBeInTheDocument();
+    expect(screen.queryByText('I chip AI sono avanzati rapidamente nella finestra [1].')).not.toBeInTheDocument();
+    expect(screen.getAllByText('BBC')).not.toHaveLength(0);
+    expect(screen.queryByText('AI chips accelerate')).not.toBeInTheDocument();
+  });
+
+  test('refreshes thematic stories when summary socket refresh arrives', async () => {
+    let onSummariesRefresh;
+
+    useTopicRefreshSocket.mockImplementation(({ onSummariesRefresh: handleSummariesRefresh }) => {
+      onSummariesRefresh = handleSummariesRefresh;
+    });
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'Top headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    fetchThematicSummaries
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'summary-science',
+            topicKey: 'science',
+            topicLabel: 'Science',
+            topics: ['Scienza'],
+            periodStart: '2026-05-21T07:00:00.000Z',
+            periodEnd: '2026-05-21T13:00:00.000Z',
+            titleByLocale: { en: 'Science briefing', it: 'Sintesi scienza' },
+            summaryTextByLocale: { en: 'Science update [1].', it: 'Aggiornamento scienza [1].' },
+            sources: []
+          }
+        ]
+      });
+
+    await renderNewsAggregator();
+    expect(screen.queryByRole('button', { name: 'Open Science summary' })).not.toBeInTheDocument();
+
+    await act(async () => {
+      await onSummariesRefresh({ refresh: true, reason: 'summaries' });
+    });
+
+    expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
+  });
+
+  test('ignores stale thematic summary responses after a newer refresh', async () => {
+    let onSummariesRefresh;
+    const firstSummariesRequest = createDeferred();
+    const secondSummariesRequest = createDeferred();
+
+    useTopicRefreshSocket.mockImplementation(({ onSummariesRefresh: handleSummariesRefresh }) => {
+      onSummariesRefresh = handleSummariesRefresh;
+    });
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'Top headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    fetchThematicSummaries
+      .mockImplementationOnce(() => firstSummariesRequest.promise)
+      .mockImplementationOnce(() => secondSummariesRequest.promise);
+
+    await renderNewsAggregator();
+
+    const refreshPromise = act(async () => {
+      await onSummariesRefresh({ refresh: true, reason: 'summaries' });
+    });
+    await resolveDeferred(secondSummariesRequest, {
+      items: [
+        {
+          id: 'summary-science',
+          topicKey: 'science',
+          topicLabel: 'Science',
+          topics: ['Scienza'],
+          periodStart: '2026-05-21T07:00:00.000Z',
+          periodEnd: '2026-05-21T13:00:00.000Z',
+          titleByLocale: { en: 'Science briefing', it: 'Sintesi scienza' },
+          summaryTextByLocale: { en: 'Science update [1].', it: 'Aggiornamento scienza [1].' },
+          sources: []
+        }
+      ]
+    });
+    await refreshPromise;
+
+    expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
+
+    await resolveDeferred(firstSummariesRequest, {
+      items: [
+        {
+          id: 'summary-technology',
+          topicKey: 'technology',
+          topicLabel: 'Technology',
+          topics: ['Tecnologia'],
+          periodStart: '2026-05-21T07:00:00.000Z',
+          periodEnd: '2026-05-21T13:00:00.000Z',
+          titleByLocale: { en: 'Technology briefing', it: 'Sintesi tecnologia' },
+          summaryTextByLocale: { en: 'Technology update [1].', it: 'Aggiornamento tecnologia [1].' },
+          sources: []
+        }
+      ]
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Open Technology summary' })).not.toBeInTheDocument();
+    });
   });
 
   test('shows one-time source setup and excludes unselected sources and sub-feeds', async () => {

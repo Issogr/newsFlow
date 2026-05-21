@@ -16,6 +16,10 @@ jest.mock('./database', () => ({
   mergeTopicsForArticles: jest.fn(() => 0),
   replaceTopicsForArticles: jest.fn(() => 0),
   getArticlesByIds: jest.fn(() => []),
+  getReadLaterArticleIdSet: jest.fn(() => new Set()),
+  getReadLaterArticles: jest.fn(() => []),
+  saveReadLaterArticles: jest.fn(() => ({ savedArticleIds: [], savedCount: 0 })),
+  removeReadLaterArticles: jest.fn(() => ({ removedArticleIds: [], removedCount: 0, deletedExpiredArticleCount: 0 })),
   getArticles: jest.fn(() => []),
   getLatestIngestionRun: jest.fn(() => null),
   getSourceStats: jest.fn(() => []),
@@ -47,6 +51,11 @@ jest.mock('./aiTopicClassifier', () => ({
     cappedArticleIds: []
   })),
   isAiTopicDetectionAvailable: jest.fn(() => true)
+}));
+
+jest.mock('./thematicSummaryService', () => ({
+  startScheduler: jest.fn(),
+  stopScheduler: jest.fn()
 }));
 
 const rssParser = require('./rssParser');
@@ -183,6 +192,57 @@ describe('newsAggregator service flows', () => {
       limit: 251,
       offset: 0
     }), expect.objectContaining({ userId: 'user-1' }));
+  });
+
+  test('getReadLaterFeed scans multiple article batches before reporting more pages', async () => {
+    const firstBatch = Array.from({ length: 250 }, (_, index) => ({
+      id: `saved-${index + 1}`,
+      sourceId: ansaSourceId,
+      source: 'ANSA',
+      title: `Saved story ${index + 1}`,
+      description: 'Saved article',
+      pubDate: recentIso({ hoursAgo: index * 100 }),
+      readLaterSavedAt: recentIso({ hoursAgo: index * 100 }),
+      url: `https://example.com/saved-${index + 1}`
+    }));
+    const sentinelArticle = {
+      id: 'saved-251',
+      sourceId: ansaSourceId,
+      source: 'ANSA',
+      title: 'Saved story 251',
+      description: 'Saved article',
+      pubDate: recentIso({ hoursAgo: 25100 }),
+      readLaterSavedAt: recentIso({ hoursAgo: 25100 }),
+      url: 'https://example.com/saved-251'
+    };
+    const secondBatch = Array.from({ length: 20 }, (_, index) => ({
+      id: `saved-next-${index + 1}`,
+      sourceId: ansaSourceId,
+      source: 'ANSA',
+      title: `Saved next story ${index + 1}`,
+      description: 'Saved article',
+      pubDate: recentIso({ hoursAgo: 30000 + index * 100 }),
+      readLaterSavedAt: recentIso({ hoursAgo: 30000 + index * 100 }),
+      url: `https://example.com/saved-next-${index + 1}`
+    }));
+
+    database.getReadLaterArticles
+      .mockReturnValueOnce([...firstBatch, sentinelArticle])
+      .mockReturnValueOnce(secondBatch);
+
+    const result = await newsAggregator.getReadLaterFeed({ page: 9, pageSize: 30 }, { userId: 'user-1' });
+
+    expect(result.items).toHaveLength(30);
+    expect(result.meta).toMatchObject({
+      page: 9,
+      pageSize: 30,
+      hasMore: false,
+      totalGroups: 270,
+      scannedArticles: 270,
+      readLater: true
+    });
+    expect(database.getReadLaterArticles).toHaveBeenNthCalledWith(1, 'user-1', expect.objectContaining({ limit: 251, offset: 0 }), expect.objectContaining({ userId: 'user-1' }));
+    expect(database.getReadLaterArticles).toHaveBeenNthCalledWith(2, 'user-1', expect.objectContaining({ limit: 251, offset: 250 }), expect.objectContaining({ userId: 'user-1' }));
   });
 
   test('getNewsFeed passes article cursors to the database query', async () => {

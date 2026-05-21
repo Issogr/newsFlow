@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const READER_REQUEST_TIMEOUT_MS = 30000;
+const FEEDBACK_REQUEST_TIMEOUT_MS = 60000;
 export const AUTH_EXPIRED_EVENT = 'newsflow:auth-expired';
 
 function isAuthRoute(url = '') {
@@ -99,7 +100,9 @@ export const submitFeedback = async ({ category, title, description, attachment 
     formData.append('attachment', attachment);
   }
 
-  const response = await api.post('/me/feedback', formData);
+  const response = await api.post('/me/feedback', formData, {
+    timeout: FEEDBACK_REQUEST_TIMEOUT_MS
+  });
   return response.data;
 };
 
@@ -191,6 +194,52 @@ export const fetchNews = async ({
   }
 
   const response = await api.get('/news', { params, signal });
+  return response.data;
+};
+
+export const fetchReadLaterNews = async ({
+  page = 1,
+  pageSize = 12,
+  search = '',
+  sourceIds = [],
+  topics = [],
+  includeFilters = true,
+  signal
+} = {}) => {
+  const params = { page, pageSize };
+
+  if (search?.trim()) {
+    params.search = search.trim();
+  }
+
+  if (Array.isArray(sourceIds) && sourceIds.length > 0) {
+    params.sources = sourceIds.join(',');
+  }
+
+  if (Array.isArray(topics) && topics.length > 0) {
+    params.topics = topics.join(',');
+  }
+
+  if (includeFilters) {
+    params.includeFilters = 'true';
+  }
+
+  const response = await api.get('/read-later', { params, signal });
+  return response.data;
+};
+
+export const fetchThematicSummaries = async ({ signal } = {}) => {
+  const response = await api.get('/thematic-summaries', { signal });
+  return response.data;
+};
+
+export const saveReadLaterArticles = async (articleIds = []) => {
+  const response = await api.post('/me/read-later', { articleIds });
+  return response.data;
+};
+
+export const removeReadLaterArticles = async (articleIds = []) => {
+  const response = await api.post('/me/read-later/remove', { articleIds });
   return response.data;
 };
 

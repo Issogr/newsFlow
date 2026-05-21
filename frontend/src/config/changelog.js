@@ -1,18 +1,15 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.3.3',
+  version: '3.4.0',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '🌍 Fanpage was removed from the built-in RSS catalog because it was creating feed problems.',
-      '🖼️ Animated GIFs are no longer used as news card cover images.',
-      '📰 Custom RSS sources can again load cover images from article pages when the feed omits image metadata.',
-      '📱 Adding custom RSS sources is more reliable on mobile because new feeds are saved before their first refresh runs in the background.',
-      '🛠️ Deleting users from the admin dashboard now updates the list immediately after a successful delete.',
-      '🔄 Manual refresh now uses a short cooldown and shared source freshness guard to keep news timely without overloading RSS providers.',
-      '⚡ Feed pagination is faster and more stable on large feeds, especially when many stories share the same publication time.',
-      '🧭 Slow RSS sources no longer block unrelated user refreshes, and custom feed validation now fails faster when a provider does not respond.',
+      '🔖 Save articles to Read later from each news card and open them from a dedicated view, even after they leave the normal feed window.',
+      '✨ Icon-only topic stories now open global AI briefings for Technology, Politics, Crime, Sport, Entertainment, and Science, generated at 07:00, 13:00, and 19:00 for the 19:00-07:00, 07:00-13:00, and 13:00-19:00 local-time windows.',
+      '🌐 Each briefing is generated in English and Italian, follows your app language, and turns inline citations into clickable source chips with publisher icons.',
+      '📎 Feedback media uploads now have more time to complete and show clearer timeout or connection errors when something goes wrong.',
+      '🛡️ Custom RSS edits and reader-mode edge cases are safer, preserving saved articles and avoiding stale fallback reader content.',
     ]
   },
   it: {
@@ -20,14 +17,11 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '🌍 Fanpage e stata rimossa dal catalogo RSS integrato perche creava problemi nel feed.',
-      '🖼️ Le GIF animate non vengono piu usate come immagini di copertina delle notizie.',
-      '📰 Le fonti RSS personalizzate possono di nuovo caricare le copertine dalle pagine degli articoli quando il feed non include metadati immagine.',
-      '📱 L\'aggiunta di fonti RSS personalizzate e piu affidabile su mobile perche le nuove fonti vengono salvate prima del primo refresh in background.',
-      '🛠️ L\'eliminazione degli utenti dalla dashboard admin aggiorna subito la lista dopo una cancellazione riuscita.',
-      '🔄 L\'aggiornamento manuale ora usa un breve cooldown e un controllo condiviso sulla freschezza delle fonti per mantenere le notizie tempestive senza sovraccaricare i provider RSS.',
-      '⚡ La paginazione del feed e piu veloce e stabile sui feed grandi, soprattutto quando molte storie hanno lo stesso orario di pubblicazione.',
-      '🧭 Le fonti RSS lente non bloccano piu gli aggiornamenti di altri utenti e la validazione dei feed personalizzati fallisce piu rapidamente quando un provider non risponde.',
+      '🔖 Salva gli articoli in Leggi dopo da ogni scheda e ritrovali in una vista dedicata anche quando escono dal feed normale.',
+      '✨ Le storie per topic solo icona aprono briefing AI globali per Tecnologia, Politica, Cronaca, Sport, Spettacolo e Scienza, generati alle 07:00, 13:00 e 19:00 per le finestre locali 19:00-07:00, 07:00-13:00 e 13:00-19:00.',
+      '🌐 Ogni briefing viene generato in inglese e italiano, segue la lingua dell\'app e trasforma le citazioni inline in chip sorgente cliccabili con icona dell\'editore.',
+      '📎 Gli allegati media nei feedback ora hanno piu tempo per completare il caricamento e mostrano errori piu chiari in caso di timeout o problemi di connessione.',
+      '🛡️ Le modifiche agli RSS personalizzati e i casi limite della modalita lettura sono piu sicuri: gli articoli salvati restano disponibili e i fallback temporanei non restano in cache.',
     ]
   }
 };

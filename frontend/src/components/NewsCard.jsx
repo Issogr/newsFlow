@@ -1,11 +1,12 @@
 import React, { memo, useEffect, useRef, useState } from 'react';
 import {
   BookOpenText,
-  CalendarDays,
+  Bookmark,
+  BookmarkCheck,
   ExternalLink,
   Share2,
 } from 'lucide-react';
-import { getDateLocale, getLocalizedTopic } from '../i18n';
+import { getLocalizedTopic } from '../i18n';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import genericNewsCover from '../assets/generic-news-cover.webp';
 import genericNewsCover2 from '../assets/generic-news-cover-2.webp';
@@ -96,30 +97,7 @@ function getGroupImageUrl(group) {
   return '';
 }
 
-function formatPublicationDate(dateString, locale) {
-  if (!dateString) {
-    return '';
-  }
-
-  try {
-    const parsedDate = new Date(dateString);
-    if (Number.isNaN(parsedDate.getTime())) {
-      return '';
-    }
-
-    return parsedDate.toLocaleDateString(getDateLocale(locale), {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  } catch {
-    return '';
-  }
-}
-
-const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) => {
+const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onToggleReadLater, readLaterUpdating = false }) => {
   const hasItems = Boolean(group?.items?.length);
 
   const sourceEntries = getSourceEntries(group);
@@ -204,7 +182,6 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
   const originalActionButtonClassName = 'inline-flex min-w-0 items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 no-underline shadow-sm transition-colors hover:bg-emerald-100';
   const disabledActionButtonClassName = 'inline-flex min-w-0 cursor-not-allowed items-center justify-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-400';
   const openOriginalSourceUnavailableMessage = t('openOriginalSourceUnavailable');
-  const publicationDate = formatPublicationDate(group.pubDate, locale);
 
   const actionButtons = (
     <div className="mt-auto px-4 pb-4 sm:px-5">
@@ -266,12 +243,22 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
     ? `${sourceEntries[0].name}${sourceEntries.length > 1 ? ` +${sourceEntries.length - 1}` : ''}`
     : '';
   const shareControls = (
-    <div className="relative flex items-center justify-end">
+    <div className="relative flex items-center justify-end gap-2">
       <ShareStatusBubble
         shareState={shareState}
         t={t}
-        className="share-status-pill-from-button mr-2 max-w-[min(16rem,calc(100vw-7rem))]"
+        className="share-status-pill-from-button mr-0 max-w-[min(16rem,calc(100vw-8rem))]"
       />
+      <button
+        type="button"
+        onClick={() => onToggleReadLater?.(group)}
+        disabled={readLaterUpdating}
+        className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border shadow-md transition-colors disabled:cursor-wait disabled:opacity-70 ${group.readLater ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100'}`}
+        aria-label={group.readLater ? t('removeReadLater') : t('saveReadLater')}
+        title={group.readLater ? t('removeReadLater') : t('saveReadLater')}
+      >
+        {group.readLater ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
+      </button>
       <button
         type="button"
         onClick={handleShare}
@@ -293,12 +280,6 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader }) =>
             <p className="truncate text-sm font-semibold text-slate-950">{sourceSummary}</p>
           ) : null}
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
-            {publicationDate ? (
-              <span className="inline-flex items-center gap-1.5">
-                <CalendarDays className="h-3.5 w-3.5 text-sky-600" aria-hidden="true" />
-                {publicationDate}
-              </span>
-            ) : null}
             {topicEntries.map(({ topic, source }) => {
               const { Icon, iconBadgeClassName } = getTopicPresentation(topic);
               const localizedTopic = getLocalizedTopic(topic, locale);

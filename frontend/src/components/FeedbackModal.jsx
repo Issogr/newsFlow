@@ -21,6 +21,14 @@ function getFriendlyFeedbackError(error, t) {
     return apiMessage;
   }
 
+  if (error?.code === 'ECONNABORTED') {
+    return t('feedbackErrorTimeout');
+  }
+
+  if (!error?.response) {
+    return t('feedbackErrorNetwork');
+  }
+
   return t('feedbackErrorGeneric');
 }
 

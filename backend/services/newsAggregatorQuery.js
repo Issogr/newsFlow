@@ -6,6 +6,7 @@ const { parseIntegerEnv } = require('../utils/env');
 
 const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
 const GROUP_PAGINATION_ARTICLE_BATCH_SIZE = 250;
+const READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE = 250;
 
 function expandConfiguredSources() {
   return newsSources;
@@ -88,6 +89,97 @@ function buildNextCursor(groups = []) {
 function compareFeedPosition(left = {}, right = {}) {
   const pubDateComparison = String(right.pubDate || '').localeCompare(String(left.pubDate || ''));
   return pubDateComparison || String(right.id || '').localeCompare(String(left.id || ''));
+}
+
+function annotateReadLaterGroups(groups = [], userId = null) {
+  if (!userId || groups.length === 0) {
+    return groups.map((group) => ({
+      ...group,
+      readLater: false,
+      readLaterArticleIds: []
+    }));
+  }
+
+  const articleIds = groups.flatMap((group) => (group.items || []).map((item) => item.id).filter(Boolean));
+  const readLaterArticleIds = database.getReadLaterArticleIdSet(userId, articleIds);
+
+  return groups.map((group) => {
+    const groupReadLaterArticleIds = (group.items || [])
+      .map((item) => item.id)
+      .filter((articleId) => readLaterArticleIds.has(articleId));
+
+    return {
+      ...group,
+      readLater: groupReadLaterArticleIds.length > 0,
+      readLaterArticleIds: groupReadLaterArticleIds
+    };
+  });
+}
+
+function compareReadLaterPosition(left = {}, right = {}) {
+  const savedComparison = String(right.readLaterSavedAt || '').localeCompare(String(left.readLaterSavedAt || ''));
+  return savedComparison || compareFeedPosition(left, right);
+}
+
+function buildReadLaterGroup(group = {}) {
+  const savedAt = (group.items || []).reduce((latest, item) => {
+    const itemSavedAt = String(item?.readLaterSavedAt || '');
+    return itemSavedAt > latest ? itemSavedAt : latest;
+  }, '');
+
+  return {
+    ...group,
+    readLater: true,
+    readLaterArticleIds: (group.items || []).map((item) => item.id).filter(Boolean),
+    readLaterSavedAt: savedAt
+  };
+}
+
+function fetchGroupedReadLaterPage(filters = {}, queryOptions = {}, page = 1, pageSize = 12) {
+  const articles = [];
+  let offset = 0;
+  let hasMoreArticles = true;
+  let groups = [];
+  const pageStart = (page - 1) * pageSize;
+  const requiredGroups = pageStart + pageSize + 1;
+
+  while (hasMoreArticles) {
+    const batch = database.getReadLaterArticles(queryOptions.userId, {
+      search: filters.search,
+      sourceIds: filters.sourceIds,
+      topics: filters.topics,
+      limit: READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE + 1,
+      offset
+    }, queryOptions);
+
+    const pageArticles = batch.length > READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE
+      ? batch.slice(0, READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE)
+      : batch;
+
+    articles.push(...pageArticles);
+    hasMoreArticles = batch.length > READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE;
+    groups = groupSimilarNews(articles)
+      .map(buildReadLaterGroup)
+      .sort(compareReadLaterPosition);
+
+    if (!hasMoreArticles || groups.length >= requiredGroups) {
+      break;
+    }
+
+    offset += pageArticles.length;
+    if (pageArticles.length === 0) {
+      break;
+    }
+  }
+
+  const pageGroups = groups.slice(pageStart, pageStart + pageSize);
+
+  return {
+    articles,
+    hasMore: groups.length > pageStart + pageSize || hasMoreArticles,
+    pageGroups,
+    totalGroups: hasMoreArticles ? null : groups.length
+  };
 }
 
 function getArticleCursor(articles = []) {
@@ -221,7 +313,7 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   const page = Math.max(1, Number(filters.page) || 1);
   const pageSize = Math.max(1, Math.min(Number(filters.pageSize) || 12, 30));
   const groupedPage = fetchGroupedNewsPage(filters, queryOptions, page, pageSize);
-  const pageGroups = groupedPage.pageGroups;
+  const pageGroups = annotateReadLaterGroups(groupedPage.pageGroups, userContext.userId || null);
   const hasMore = groupedPage.hasMore;
   const latestIngestion = database.getLatestIngestionRun();
   const includeFilters = filters.includeFilters !== false;
@@ -254,11 +346,51 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   };
 }
 
+async function getReadLaterFeed(filters = {}, userContext = {}) {
+  const userId = userContext.userId || null;
+  const userSources = userId ? database.listUserSources(userId) : [];
+  const customSourceGroups = buildDomainSourceGroups(userSources);
+  const queryOptions = {
+    userId,
+    customSourceGroups,
+    sourceMetadataCache: new Map()
+  };
+  const availableSources = getAvailableSources(userContext, userSources);
+
+  const page = Math.max(1, Number(filters.page) || 1);
+  const pageSize = Math.max(1, Math.min(Number(filters.pageSize) || 12, 30));
+  const includeFilters = filters.includeFilters !== false;
+  const groupedPage = fetchGroupedReadLaterPage(filters, queryOptions, page, pageSize);
+
+  return {
+    items: groupedPage.pageGroups,
+    meta: {
+      page,
+      pageSize,
+      hasMore: groupedPage.hasMore,
+      nextCursor: null,
+      returnedGroups: groupedPage.pageGroups.length,
+      totalGroups: groupedPage.totalGroups,
+      scannedArticles: groupedPage.articles.length,
+      readLater: true
+    },
+    filters: includeFilters ? {
+      sources: database.getSourceStats(availableSources, queryOptions),
+      sourceCatalog: buildSourceCatalogResponse(availableSources),
+      topics: database.getTopicStatsByFilters({
+        search: filters.search,
+        sourceIds: filters.sourceIds
+      }, 18, queryOptions)
+    } : null
+  };
+}
+
 module.exports = {
   newsSources,
   expandConfiguredSources,
   expandUserSources,
   getNewsFeed,
+  getReadLaterFeed,
   getQueryOptions,
   getAvailableSources
 };

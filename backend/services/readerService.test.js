@@ -39,6 +39,7 @@ describe('readerService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    readerService._clearRuntimeState();
     database.getArticleById.mockReturnValue(article);
     database.getReaderCache.mockReturnValue(null);
   });
@@ -123,11 +124,51 @@ describe('readerService', () => {
       excerpt: article.description,
       paragraphs: ['Short description', 'Fallback body paragraph.']
     });
-    expect(database.upsertReaderCache).toHaveBeenCalledWith(article.id, expect.objectContaining({
-      title: article.title,
-      contentText: expect.stringContaining('Fallback body paragraph.')
-    }));
+    expect(database.upsertReaderCache).not.toHaveBeenCalled();
     expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('Reader mode extraction fell back'));
+  });
+
+  test('uses a short fallback cache after extraction fails', async () => {
+    fetchSafeTextUrl.mockRejectedValue(new Error('Network failed'));
+
+    const firstPayload = await readerService.getReaderArticle(article.id, { userId: 'user-1' });
+    const secondPayload = await readerService.getReaderArticle(article.id, { userId: 'user-1' });
+
+    expect(firstPayload).toMatchObject({ fallback: true, cached: false });
+    expect(secondPayload).toMatchObject({ fallback: true, cached: false });
+    expect(fetchSafeTextUrl).toHaveBeenCalledTimes(1);
+  });
+
+  test('deduplicates concurrent extraction requests for the same article', async () => {
+    let resolveFetch;
+    const fetchPromise = new Promise((resolve) => {
+      resolveFetch = resolve;
+    });
+    fetchSafeTextUrl.mockReturnValue(fetchPromise);
+    Readability.mockImplementation(() => ({
+      parse: () => ({
+        title: 'Readable headline',
+        siteName: 'Readable Site',
+        byline: 'Readable Byline',
+        lang: 'en',
+        excerpt: 'Readable excerpt',
+        textContent: 'First paragraph. Second paragraph.',
+        content: '<h1>Readable headline</h1><p>First paragraph.</p><p>Second paragraph.</p>'
+      })
+    }));
+
+    const firstRequest = readerService.getReaderArticle(article.id, { userId: 'user-1' });
+    const secondRequest = readerService.getReaderArticle(article.id, { userId: 'user-1' });
+    resolveFetch({
+      data: '<html><body><article><h1>Readable headline</h1><p>First paragraph.</p><p>Second paragraph.</p></article></body></html>'
+    });
+
+    await expect(Promise.all([firstRequest, secondRequest])).resolves.toEqual([
+      expect.objectContaining({ articleId: article.id, title: 'Readable headline' }),
+      expect.objectContaining({ articleId: article.id, title: 'Readable headline' })
+    ]);
+    expect(fetchSafeTextUrl).toHaveBeenCalledTimes(1);
+    expect(database.upsertReaderCache).toHaveBeenCalledTimes(1);
   });
 
   test('falls back without fetching unsafe article destinations', async () => {

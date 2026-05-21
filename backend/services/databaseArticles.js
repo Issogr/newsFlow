@@ -112,9 +112,13 @@ function createArticleRepository({
       recentHours: Number.isFinite(filters.recentHours) ? filters.recentHours : null,
       beforePubDate: typeof filters.beforePubDate === 'string' && filters.beforePubDate.trim() ? filters.beforePubDate.trim() : '',
       beforeId: typeof filters.beforeId === 'string' && filters.beforeId.trim() ? filters.beforeId.trim() : '',
-      limit: Math.max(1, Math.min(Number(filters.limit) || 50, 250)),
+      limit: Math.max(1, Math.min(Number(filters.limit) || 50, 251)),
       offset: Math.max(0, Number(filters.offset) || 0)
     };
+  }
+
+  function normalizeArticleIds(articleIds = []) {
+    return [...new Set((Array.isArray(articleIds) ? articleIds : []).map((id) => String(id || '').trim()).filter(Boolean))];
   }
 
   function buildSearchQuery(search) {
@@ -995,7 +999,7 @@ function createArticleRepository({
   }
 
   function getArticlesByIds(articleIds = [], options = {}) {
-    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    const normalizedArticleIds = normalizeArticleIds(articleIds);
     if (normalizedArticleIds.length === 0) {
       return [];
     }
@@ -1056,6 +1060,442 @@ function createArticleRepository({
     return hydrateArticleRows(rows, options);
   }
 
+  function getReadLaterArticleIdSet(userId, articleIds = []) {
+    const normalizedUserId = String(userId || '').trim();
+    const normalizedArticleIds = normalizeArticleIds(articleIds);
+    if (!normalizedUserId || normalizedArticleIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = chunkValues(normalizedArticleIds).flatMap((ids) => {
+      return getDb().prepare(`
+        SELECT article_id AS articleId
+        FROM user_read_later_articles
+        WHERE user_id = ?
+          AND article_id IN (${ids.map(() => '?').join(', ')})
+      `).all(normalizedUserId, ...ids);
+    });
+
+    return new Set(rows.map((row) => row.articleId));
+  }
+
+  function isReadLaterArticle(userId, articleId) {
+    return getReadLaterArticleIdSet(userId, [articleId]).has(articleId);
+  }
+
+  function saveReadLaterArticles(userId, articleIds = [], options = {}) {
+    const normalizedUserId = String(userId || '').trim();
+    const normalizedArticleIds = normalizeArticleIds(articleIds);
+    if (!normalizedUserId || normalizedArticleIds.length === 0) {
+      return { savedArticleIds: [], savedCount: 0 };
+    }
+
+    const existingArticles = getArticlesByIds(normalizedArticleIds, {
+      ...options,
+      userId: normalizedUserId,
+      maxArticleAgeHours: null
+    });
+    const accessibleArticleIds = existingArticles.map((article) => article.id);
+    if (accessibleArticleIds.length === 0) {
+      return { savedArticleIds: [], savedCount: 0 };
+    }
+
+    const database = getDb();
+    const now = new Date().toISOString();
+    const insertStmt = database.prepare(`
+      INSERT OR IGNORE INTO user_read_later_articles (user_id, article_id, saved_at)
+      VALUES (?, ?, ?)
+    `);
+
+    const transaction = database.transaction((ids) => {
+      let savedCount = 0;
+      ids.forEach((articleId) => {
+        savedCount += insertStmt.run(normalizedUserId, articleId, now).changes;
+      });
+
+      return savedCount;
+    });
+
+    return {
+      savedArticleIds: accessibleArticleIds,
+      savedCount: transaction(accessibleArticleIds)
+    };
+  }
+
+  function cleanupExpiredUnsavedArticles(articleIds = [], isoTimestamp = '') {
+    const normalizedArticleIds = normalizeArticleIds(articleIds);
+    if (normalizedArticleIds.length === 0 || !isoTimestamp) {
+      return 0;
+    }
+
+    const database = getDb();
+    const deleteSearchEntries = database.prepare(`
+      DELETE FROM article_search
+      WHERE article_id IN (
+        SELECT id
+        FROM articles
+        WHERE id IN (${normalizedArticleIds.map(() => '?').join(', ')})
+          AND published_at < ?
+          AND NOT EXISTS (
+            SELECT 1
+            FROM user_read_later_articles
+            WHERE user_read_later_articles.article_id = articles.id
+          )
+      )
+    `);
+    const deleteArticles = database.prepare(`
+      DELETE FROM articles
+      WHERE id IN (${normalizedArticleIds.map(() => '?').join(', ')})
+        AND published_at < ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_read_later_articles
+          WHERE user_read_later_articles.article_id = articles.id
+        )
+    `);
+
+    const transaction = database.transaction((ids, threshold) => {
+      deleteSearchEntries.run(...ids, threshold);
+      return deleteArticles.run(...ids, threshold).changes;
+    });
+
+    return transaction(normalizedArticleIds, isoTimestamp);
+  }
+
+  function removeReadLaterArticles(userId, articleIds = [], options = {}) {
+    const normalizedUserId = String(userId || '').trim();
+    const normalizedArticleIds = normalizeArticleIds(articleIds);
+    if (!normalizedUserId || normalizedArticleIds.length === 0) {
+      return { removedArticleIds: [], removedCount: 0, deletedExpiredArticleCount: 0 };
+    }
+
+    const database = getDb();
+    const deleteStmt = database.prepare(`
+      DELETE FROM user_read_later_articles
+      WHERE user_id = ? AND article_id = ?
+    `);
+    const transaction = database.transaction((ids) => {
+      const removedArticleIds = [];
+      let removedCount = 0;
+
+      ids.forEach((articleId) => {
+        const changes = deleteStmt.run(normalizedUserId, articleId).changes;
+        if (changes > 0) {
+          removedArticleIds.push(articleId);
+          removedCount += changes;
+        }
+      });
+
+      return { removedArticleIds, removedCount };
+    });
+    const result = transaction(normalizedArticleIds);
+    const maxArticleAgeHours = Number(options.maxArticleAgeHours);
+    const cutoff = Number.isFinite(maxArticleAgeHours) && maxArticleAgeHours > 0
+      ? new Date(Date.now() - (maxArticleAgeHours * 60 * 60 * 1000)).toISOString()
+      : '';
+
+    return {
+      ...result,
+      deletedExpiredArticleCount: cleanupExpiredUnsavedArticles(result.removedArticleIds, cutoff)
+    };
+  }
+
+  function getReadLaterArticles(userId, filters = {}, options = {}) {
+    const normalizedUserId = String(userId || '').trim();
+    if (!normalizedUserId) {
+      return [];
+    }
+
+    const state = buildFilterState(filters);
+    const params = [normalizedUserId];
+    const joins = ['JOIN user_read_later_articles rl ON rl.article_id = a.id'];
+    const where = ['rl.user_id = ?'];
+    const searchQuery = buildSearchQuery(state.search);
+    const scopeFilter = buildScopeFilter({ ...options, userId: normalizedUserId }, 'a');
+    const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
+
+    where.push(scopeFilter.clause);
+    params.push(...scopeFilter.params);
+    where.push(publishedBeforeNowFilter.clause);
+    params.push(...publishedBeforeNowFilter.params);
+
+    if (searchQuery) {
+      joins.push('JOIN article_search ON article_search.article_id = a.id');
+      where.push('article_search MATCH ?');
+      params.push(searchQuery);
+    }
+
+    if (state.sourceIds.length > 0) {
+      const sourceFilter = getSourceFilterClauses(state.sourceIds, { ...options, userId: normalizedUserId });
+      where.push(`(${sourceFilter.clause})`);
+      params.push(...sourceFilter.params);
+    }
+
+    if (state.topics.length > 0) {
+      where.push(`a.id IN (
+        SELECT article_id
+        FROM article_topics
+        WHERE topic IN (${state.topics.map(() => '?').join(', ')})
+      )`);
+      params.push(...state.topics);
+    }
+
+    const rows = getDb().prepare(`
+      SELECT
+        a.id,
+        a.source_id AS sourceId,
+        a.source_name AS source,
+        a.title,
+        a.description,
+        a.content,
+        a.url,
+        a.image,
+        a.author,
+        a.language,
+        a.owner_user_id AS ownerUserId,
+        a.published_at AS pubDate,
+        rl.saved_at AS readLaterSavedAt
+      FROM articles a
+      ${joins.join('\n')}
+      WHERE ${where.join(' AND ')}
+      ORDER BY rl.saved_at DESC, a.id DESC
+      LIMIT ? OFFSET ?
+    `).all(...params, state.limit, state.offset);
+
+    return hydrateArticleRows(rows, { ...options, userId: normalizedUserId });
+  }
+
+  function getArticlesForThematicSummary({ topics = [], periodStart, periodEnd, limit = 80 } = {}) {
+    const normalizedTopics = [...new Set((Array.isArray(topics) ? topics : [])
+      .map((topic) => topicNormalizer.normalizeTopic(topic))
+      .filter((topic) => topic && topicNormalizer.isCanonicalTopic(topic)))];
+    const normalizedLimit = Math.max(1, Math.min(Number(limit) || 80, 200));
+
+    if (normalizedTopics.length === 0 || !periodStart || !periodEnd) {
+      return [];
+    }
+
+    const rows = getDb().prepare(`
+      SELECT DISTINCT
+        a.id,
+        a.source_id AS sourceId,
+        a.source_name AS source,
+        a.title,
+        a.description,
+        a.content,
+        a.url,
+        a.image,
+        a.author,
+        a.language,
+        a.owner_user_id AS ownerUserId,
+        a.published_at AS pubDate
+      FROM articles a
+      JOIN article_topics at ON at.article_id = a.id
+      WHERE a.owner_user_id IS NULL
+        AND a.published_at >= ?
+        AND a.published_at < ?
+        AND a.published_at <= ?
+        AND at.topic IN (${normalizedTopics.map(() => '?').join(', ')})
+      ORDER BY a.published_at DESC, a.id DESC
+      LIMIT ?
+    `).all(periodStart, periodEnd, new Date().toISOString(), ...normalizedTopics, normalizedLimit);
+
+    return hydrateArticleRows(rows, { userId: null });
+  }
+
+  function normalizeSummarySources(sources = []) {
+    if (!Array.isArray(sources)) {
+      return [];
+    }
+
+    return sources.map((source, index) => ({
+      index: Number(source?.index) || index + 1,
+      articleId: String(source?.articleId || '').trim(),
+      title: String(source?.title || '').trim().slice(0, 300),
+      source: String(source?.source || '').trim().slice(0, 120),
+      sourceIconUrl: String(source?.sourceIconUrl || '').trim().slice(0, 1000),
+      url: String(source?.url || '').trim().slice(0, 1000),
+      publishedAt: String(source?.publishedAt || '').trim()
+    })).filter((source) => source.articleId && source.title);
+  }
+
+  function normalizeSummaryPayload(summary = {}) {
+    const topicKey = String(summary.topicKey || '').trim();
+    const periodStart = String(summary.periodStart || '').trim();
+    const periodEnd = String(summary.periodEnd || '').trim();
+
+    if (!topicKey || !periodStart || !periodEnd) {
+      return null;
+    }
+
+    const id = String(summary.id || `${topicKey}:${periodStart}:${periodEnd}`).trim();
+    const titleByLocale = summary.titleByLocale && typeof summary.titleByLocale === 'object' ? summary.titleByLocale : {};
+    const summaryTextByLocale = summary.summaryTextByLocale && typeof summary.summaryTextByLocale === 'object' ? summary.summaryTextByLocale : {};
+    const titleEn = String(summary.titleEn || titleByLocale.en || summary.title || '').trim().slice(0, 180);
+    const titleIt = String(summary.titleIt || titleByLocale.it || titleEn || summary.title || '').trim().slice(0, 180);
+    const summaryTextEn = String(summary.summaryTextEn || summaryTextByLocale.en || summary.summaryText || '').trim();
+    const summaryTextIt = String(summary.summaryTextIt || summaryTextByLocale.it || summaryTextEn || summary.summaryText || '').trim();
+
+    return {
+      id,
+      topicKey,
+      topicLabel: String(summary.topicLabel || topicKey).trim().slice(0, 80),
+      topicsJson: JSON.stringify(Array.isArray(summary.topics) ? summary.topics : []),
+      periodStart,
+      periodEnd,
+      title: titleEn || titleIt,
+      summaryText: summaryTextEn || summaryTextIt,
+      titleEn,
+      summaryTextEn,
+      titleIt,
+      summaryTextIt,
+      sourcesJson: JSON.stringify(normalizeSummarySources(summary.sources || [])),
+      articleCount: Math.max(0, Number(summary.articleCount) || 0),
+      model: String(summary.model || '').trim().slice(0, 120),
+      status: String(summary.status || 'completed').trim().slice(0, 40),
+      errorMessage: summary.errorMessage ? String(summary.errorMessage).trim().slice(0, 1000) : null,
+      generatedAt: String(summary.generatedAt || new Date().toISOString()).trim()
+    };
+  }
+
+  function parseSummaryJson(value, fallback = []) {
+    try {
+      const parsed = JSON.parse(value || '');
+      return Array.isArray(parsed) ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function mapThematicSummaryRow(row) {
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      topicKey: row.topicKey,
+      topicLabel: row.topicLabel,
+      topics: parseSummaryJson(row.topicsJson),
+      periodStart: row.periodStart,
+      periodEnd: row.periodEnd,
+      title: row.titleEn || row.title || row.titleIt || '',
+      summaryText: row.summaryTextEn || row.summaryText || row.summaryTextIt || '',
+      titleByLocale: {
+        en: row.titleEn || row.title || row.titleIt || '',
+        it: row.titleIt || row.titleEn || row.title || ''
+      },
+      summaryTextByLocale: {
+        en: row.summaryTextEn || row.summaryText || row.summaryTextIt || '',
+        it: row.summaryTextIt || row.summaryTextEn || row.summaryText || ''
+      },
+      sources: parseSummaryJson(row.sourcesJson),
+      articleCount: row.articleCount,
+      model: row.model,
+      status: row.status,
+      errorMessage: row.errorMessage,
+      generatedAt: row.generatedAt
+    };
+  }
+
+  function upsertThematicSummary(summary = {}) {
+    const normalized = normalizeSummaryPayload(summary);
+    if (!normalized) {
+      return null;
+    }
+
+    getDb().prepare(`
+      INSERT INTO thematic_summaries (
+        id, topic_key, topic_label, topics_json, period_start, period_end, title,
+        summary_text, title_en, summary_text_en, title_it, summary_text_it,
+        sources_json, article_count, model, status, error_message, generated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(topic_key, period_start, period_end) DO UPDATE SET
+        topic_label = excluded.topic_label,
+        topics_json = excluded.topics_json,
+        title = excluded.title,
+        summary_text = excluded.summary_text,
+        title_en = excluded.title_en,
+        summary_text_en = excluded.summary_text_en,
+        title_it = excluded.title_it,
+        summary_text_it = excluded.summary_text_it,
+        sources_json = excluded.sources_json,
+        article_count = excluded.article_count,
+        model = excluded.model,
+        status = excluded.status,
+        error_message = excluded.error_message,
+        generated_at = excluded.generated_at
+    `).run(
+      normalized.id,
+      normalized.topicKey,
+      normalized.topicLabel,
+      normalized.topicsJson,
+      normalized.periodStart,
+      normalized.periodEnd,
+      normalized.title,
+      normalized.summaryText,
+      normalized.titleEn,
+      normalized.summaryTextEn,
+      normalized.titleIt,
+      normalized.summaryTextIt,
+      normalized.sourcesJson,
+      normalized.articleCount,
+      normalized.model,
+      normalized.status,
+      normalized.errorMessage,
+      normalized.generatedAt
+    );
+
+    return getThematicSummary(normalized.topicKey, normalized.periodStart, normalized.periodEnd);
+  }
+
+  function getThematicSummary(topicKey, periodStart, periodEnd) {
+    const row = getDb().prepare(`
+      SELECT id, topic_key AS topicKey, topic_label AS topicLabel, topics_json AS topicsJson,
+             period_start AS periodStart, period_end AS periodEnd, title, summary_text AS summaryText,
+             title_en AS titleEn, summary_text_en AS summaryTextEn,
+             title_it AS titleIt, summary_text_it AS summaryTextIt,
+             sources_json AS sourcesJson, article_count AS articleCount, model, status,
+             error_message AS errorMessage, generated_at AS generatedAt
+      FROM thematic_summaries
+      WHERE topic_key = ? AND period_start = ? AND period_end = ?
+      LIMIT 1
+    `).get(topicKey, periodStart, periodEnd);
+
+    return mapThematicSummaryRow(row);
+  }
+
+  function listLatestThematicSummaries(topicKeys = []) {
+    const normalizedTopicKeys = [...new Set((Array.isArray(topicKeys) ? topicKeys : [])
+      .map((topicKey) => String(topicKey || '').trim())
+      .filter(Boolean))];
+    if (normalizedTopicKeys.length === 0) {
+      return [];
+    }
+
+    const rows = getDb().prepare(`
+      SELECT id, topic_key AS topicKey, topic_label AS topicLabel, topics_json AS topicsJson,
+             period_start AS periodStart, period_end AS periodEnd, title, summary_text AS summaryText,
+             title_en AS titleEn, summary_text_en AS summaryTextEn,
+             title_it AS titleIt, summary_text_it AS summaryTextIt,
+             sources_json AS sourcesJson, article_count AS articleCount, model, status,
+             error_message AS errorMessage, generated_at AS generatedAt
+      FROM thematic_summaries ts
+      WHERE topic_key IN (${normalizedTopicKeys.map(() => '?').join(', ')})
+        AND period_end = (
+          SELECT MAX(period_end)
+          FROM thematic_summaries latest
+          WHERE latest.topic_key = ts.topic_key
+            AND latest.status = 'completed'
+        )
+        AND status = 'completed'
+      ORDER BY period_end DESC, topic_key ASC
+    `).all(...normalizedTopicKeys);
+
+    return rows.map(mapThematicSummaryRow).filter(Boolean);
+  }
+
   function countArticles(options = {}) {
     const scopeFilter = buildScopeFilter(options, 'articles');
     const retentionFilter = buildRetentionFilter(options, 'articles');
@@ -1100,12 +1540,22 @@ function createArticleRepository({
       WHERE article_id IN (
         SELECT id
         FROM articles
-        WHERE published_at < ?
-      )
+          WHERE published_at < ?
+            AND NOT EXISTS (
+              SELECT 1
+              FROM user_read_later_articles
+              WHERE user_read_later_articles.article_id = articles.id
+            )
+        )
     `);
     const deleteArticles = database.prepare(`
       DELETE FROM articles
       WHERE published_at < ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_read_later_articles
+          WHERE user_read_later_articles.article_id = articles.id
+        )
     `);
 
     const transaction = database.transaction((threshold) => {
@@ -1407,6 +1857,15 @@ function createArticleRepository({
     getArticles,
     getArticleById,
     getArticlesByIds,
+    getReadLaterArticles,
+    getArticlesForThematicSummary,
+    upsertThematicSummary,
+    getThematicSummary,
+    listLatestThematicSummaries,
+    getReadLaterArticleIdSet,
+    isReadLaterArticle,
+    saveReadLaterArticles,
+    removeReadLaterArticles,
     getArticleIdsPendingAiTopicProcessing,
     getTopicClassificationReport,
     markArticlesAiTopicProcessing,

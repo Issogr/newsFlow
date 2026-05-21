@@ -104,7 +104,7 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `LOG_LEVEL` | `debug` in development, `info` in production | Logger verbosity |
 | `NEWS_DB_PATH` | `backend/data/news.db` | SQLite file path |
 | `ALLOWED_ORIGINS` | empty | Comma-separated CORS allowlist |
-| `TRUST_PROXY` | auto in production | Explicit proxy trust toggle |
+| `TRUST_PROXY` | auto in production | Explicit backend/BFF proxy trust toggle; leave unset for production auto-detection |
 
 ### BFF, Auth, and Session
 
@@ -154,6 +154,18 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Max concurrent AI topic-classification requests during ingestion |
 | `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles classified by AI per refresh before falling back to local detection |
 | `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one AI topic-classification request, configurable up to 120 seconds for slower models |
+| `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for thematic summaries, independent from topic classification |
+| `AI_SUMMARY_GENERATION_ENABLED` | `auto` | Set to `false` to disable thematic summaries; `auto` enables them when `OPENROUTER_API_KEY` is present |
+| `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in, topic-tagged articles sent to one thematic summary request |
+| `AI_SUMMARY_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one thematic summary request, configurable up to 120 seconds |
+| `AI_SUMMARY_READER_PREWARM_ENABLED` | `auto` | Prewarm reader-mode cache before summary slots when summary generation is available; set to `false` to disable article-page extraction prewarm |
+| `AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE` | `30` | Minutes before a summary slot when reader-cache prewarm can start |
+| `AI_SUMMARY_READER_PREWARM_CONCURRENCY` | `2` | Max concurrent reader extraction requests during summary prewarm |
+| `AI_SUMMARY_READER_TEXT_MAX_CHARS` | `3000` | Max cached reader-text characters sent per article to the summary model |
+| `AI_SUMMARY_READER_TEXT_MIN_CHARS` | `250` | Minimum cached reader-text length considered useful for summary input |
+
+Thematic summaries are generated in both supported app languages, English and Italian; the frontend displays the version matching the current app language.
+Reader-mode extraction is prewarmed before summary slots when enabled, but summary generation itself only reads cached reader text and falls back to RSS title/description when cached text is missing or not useful.
 
 AI topic detection uses the official `@openrouter/sdk` package from the backend.
 

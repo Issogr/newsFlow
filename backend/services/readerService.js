@@ -9,9 +9,12 @@ const { parseIntegerEnv } = require('../utils/env');
 
 const READER_TIMEOUT = parseIntegerEnv('READER_TIMEOUT', 12000, { min: 1 });
 const READER_CACHE_TTL_MS = parseIntegerEnv('READER_CACHE_TTL_MS', 24 * 60 * 60 * 1000, { min: 0 });
+const READER_FALLBACK_CACHE_TTL_MS = parseIntegerEnv('READER_FALLBACK_CACHE_TTL_MS', 15 * 60 * 1000, { min: 0 });
 const READER_MAX_RESPONSE_BYTES = parseIntegerEnv('READER_MAX_RESPONSE_BYTES', 2097152, { min: 1 });
 const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'PRE']);
 const CONTAINER_TAGS = new Set(['ARTICLE', 'SECTION', 'DIV', 'MAIN']);
+const readerExtractionPromises = new Map();
+const readerFallbackCache = new Map();
 
 function normalizeText(text) {
   return String(text || '')
@@ -289,6 +292,70 @@ async function fetchReaderPayload(article) {
   });
 }
 
+function getCachedFallbackPayload(articleId) {
+  const cached = readerFallbackCache.get(articleId);
+  if (!cached) {
+    return null;
+  }
+
+  if (cached.expiresAt <= Date.now()) {
+    readerFallbackCache.delete(articleId);
+    return null;
+  }
+
+  return { ...cached.payload };
+}
+
+function setCachedFallbackPayload(articleId, payload) {
+  if (READER_FALLBACK_CACHE_TTL_MS <= 0) {
+    return;
+  }
+
+  readerFallbackCache.set(articleId, {
+    expiresAt: Date.now() + READER_FALLBACK_CACHE_TTL_MS,
+    payload: { ...payload }
+  });
+}
+
+async function loadFreshReaderPayload(articleId, article) {
+  try {
+    const payload = await fetchReaderPayload(article);
+    database.upsertReaderCache(articleId, payload);
+    readerFallbackCache.delete(articleId);
+    return payload;
+  } catch (error) {
+    logger.debug(`Reader mode extraction fell back for ${article.url}: ${summarizeErrorMessage(error)}`);
+
+    const fallbackPayload = {
+      ...buildFallbackPayload(article),
+      cached: false,
+      fallback: true
+    };
+    setCachedFallbackPayload(articleId, fallbackPayload);
+    return fallbackPayload;
+  }
+}
+
+function getOrCreateReaderExtractionPromise(articleId, article, { forceRefresh = false } = {}) {
+  if (!forceRefresh && readerExtractionPromises.has(articleId)) {
+    return readerExtractionPromises.get(articleId);
+  }
+
+  const extractionPromise = loadFreshReaderPayload(articleId, article)
+    .finally(() => {
+      if (readerExtractionPromises.get(articleId) === extractionPromise) {
+        readerExtractionPromises.delete(articleId);
+      }
+    });
+  readerExtractionPromises.set(articleId, extractionPromise);
+  return extractionPromise;
+}
+
+function clearRuntimeState() {
+  readerExtractionPromises.clear();
+  readerFallbackCache.clear();
+}
+
 async function getReaderArticle(articleId, options = {}) {
   const queryOptions = {
     userId: options.userId || null,
@@ -304,23 +371,14 @@ async function getReaderArticle(articleId, options = {}) {
     if (cached?.contentText) {
       return buildPayload(article, cached, true);
     }
+
+    const cachedFallback = getCachedFallbackPayload(articleId);
+    if (cachedFallback) {
+      return cachedFallback;
+    }
   }
 
-  try {
-    const payload = await fetchReaderPayload(article);
-    database.upsertReaderCache(articleId, payload);
-    return payload;
-  } catch (error) {
-    logger.debug(`Reader mode extraction fell back for ${article.url}: ${summarizeErrorMessage(error)}`);
-
-    const fallbackPayload = buildFallbackPayload(article);
-    database.upsertReaderCache(articleId, fallbackPayload);
-    return {
-      ...fallbackPayload,
-      cached: false,
-      fallback: true
-    };
-  }
+  return getOrCreateReaderExtractionPromise(articleId, article, { forceRefresh: options.forceRefresh });
 }
 
 module.exports = {
@@ -329,5 +387,6 @@ module.exports = {
   _splitParagraphs: splitParagraphs,
   _calculateMinutesToRead: calculateMinutesToRead,
   _buildBlocksFromHtml: buildBlocksFromHtml,
-  _blocksToText: blocksToText
+  _blocksToText: blocksToText,
+  _clearRuntimeState: clearRuntimeState
 };

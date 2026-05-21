@@ -213,6 +213,32 @@ describe('userService imports', () => {
     }));
     expect(source.iconUrl).toBe('https://example.com/favicon.ico');
 
+    database.upsertArticles([{
+      id: 'custom-article-1',
+      sourceId: source.id,
+      source: source.name,
+      ownerUserId: authPayload.user.id,
+      title: 'Custom article',
+      description: 'Source article',
+      content: 'Article body',
+      url: 'https://example.com/article-1',
+      language: 'en',
+      pubDate: new Date().toISOString()
+    }]);
+    database.saveReadLaterArticles(authPayload.user.id, ['custom-article-1'], { userId: authPayload.user.id });
+    database.upsertReaderCache('custom-article-1', {
+      url: 'https://example.com/article-1',
+      title: 'Custom article',
+      siteName: 'Example',
+      byline: '',
+      language: 'en',
+      excerpt: 'Source article',
+      contentText: 'Reader body',
+      contentBlocks: [{ type: 'paragraph', text: 'Reader body' }],
+      minutesToRead: 1,
+      fetchedAt: new Date().toISOString()
+    });
+
     rssParser.validateFeedUrl.mockClear();
     rssParser.validateFeedUrl.mockRejectedValue(new Error('upstream offline'));
 
@@ -228,6 +254,9 @@ describe('userService imports', () => {
       iconUrl: 'https://example.com/favicon.ico',
       isActive: false
     });
+    expect(database.getArticles({}, { userId: authPayload.user.id, maxArticleAgeHours: 9999 }).map((article) => article.id)).toContain('custom-article-1');
+    expect(database.isReadLaterArticle(authPayload.user.id, 'custom-article-1')).toBe(true);
+    expect(database.getReaderCache('custom-article-1', 60 * 60 * 1000)?.contentText).toBe('Reader body');
   });
 
   test('batches authenticated public API usage until an explicit flush', async () => {

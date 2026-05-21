@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Bookmark,
   Clock3,
   Rss,
   Search,
@@ -46,7 +47,9 @@ const DesktopTopNavFilters = ({
   onToggleRecent,
   onSearchChange,
   onSearchClear,
+  onToggleReadLater,
   onOpenSurface,
+  readLaterActive,
   closeSignal = 0,
   compact = false,
 }) => {
@@ -91,38 +94,49 @@ const DesktopTopNavFilters = ({
       </TopFilterBubble>
 
       {searchMode ? (
-        <div className="flex w-[min(32vw,25rem)] items-center gap-2 transition-all duration-200 ease-out">
-          <label className="group flex h-11 flex-1 items-center gap-2 rounded-full border border-slate-200/80 bg-gradient-to-r from-slate-50 to-white px-3.5 shadow-inner shadow-slate-200/60 transition-colors focus-within:border-sky-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100">
-            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm transition-colors group-focus-within:text-sky-600">
-              <Search className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <input
-              ref={searchInputRef}
-              type="search"
-              value={search}
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder={t('searchPlaceholder')}
-              className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:font-normal placeholder:text-slate-400"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={onSearchClear}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700"
-                aria-label={t('clearSearch')}
-              >
-                <X className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-            )}
-          </label>
-          <button
-            type="button"
-            onClick={handleExitSearch}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-sm transition-colors hover:bg-slate-700"
-            aria-label={t('cancel')}
-          >
-            <X className="h-[1.125rem] w-[1.125rem]" aria-hidden="true" />
-          </button>
+        <div className="flex items-center gap-1.5 transition-all duration-200 ease-out">
+          <TopNavActionButton
+            icon={Bookmark}
+            label={t('readLater')}
+            onClick={onToggleReadLater}
+            active={readLaterActive}
+            activeClassName="text-amber-600"
+            aria-label={t('readLater')}
+            title={t('readLater')}
+          />
+          <div className="flex w-[min(32vw,25rem)] items-center gap-2">
+            <label className="group flex h-11 flex-1 items-center gap-2 rounded-full border border-slate-200/80 bg-gradient-to-r from-slate-50 to-white px-3.5 shadow-inner shadow-slate-200/60 transition-colors focus-within:border-sky-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm transition-colors group-focus-within:text-sky-600">
+                <Search className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <input
+                ref={searchInputRef}
+                type="search"
+                value={search}
+                onChange={(event) => onSearchChange(event.target.value)}
+                placeholder={t('searchPlaceholder')}
+                className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:font-normal placeholder:text-slate-400"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={onSearchClear}
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700"
+                  aria-label={t('clearSearch')}
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </label>
+            <button
+              type="button"
+              onClick={handleExitSearch}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-sm transition-colors hover:bg-slate-700"
+              aria-label={t('cancel')}
+            >
+              <X className="h-[1.125rem] w-[1.125rem]" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       ) : (
         <div className="flex items-center gap-1.5">
@@ -160,6 +174,16 @@ const DesktopTopNavFilters = ({
             badge={timeCount > 0 ? '' : null}
             badgeClassName="bg-amber-500 text-white"
             labelClassName="whitespace-nowrap"
+          />
+
+          <TopNavActionButton
+            icon={Bookmark}
+            label={t('readLater')}
+            onClick={onToggleReadLater}
+            active={readLaterActive}
+            activeClassName="text-amber-600"
+            aria-label={t('readLater')}
+            title={t('readLater')}
           />
 
           <TopNavActionButton

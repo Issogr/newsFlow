@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.4.0
+
+- added a Read later view with per-card save/remove controls so saved articles stay available outside the normal feed retention window
+- added icon-only topic story circles above the feed for global thematic briefings across Technology, Politics, Crime, Sport, Entertainment, and Science, with per-user unread indicators
+- generate thematic briefings from built-in RSS articles only at `07:00`, `13:00`, and `19:00` local time, covering the `19:00 -> 07:00`, `07:00 -> 13:00`, and `13:00 -> 19:00` windows respectively, so summaries are shared platform-wide and independent from user filters, search, exclusions, or custom RSS feeds
+- produce each thematic briefing in English and Italian, showing the current app language and rendering inline citation numbers as clickable source chips with publisher icons
+- prewarm reader-mode extraction before scheduled summary slots so the LLM can use cached article text when available while falling back safely to RSS metadata without triggering reader extraction during generation
+- gave feedback media uploads a longer timeout and clearer timeout/network errors so larger attachments fail with an actionable message instead of a generic one
+- preserved saved articles, reader content, and cached feed items when editing custom RSS source metadata without changing its URL
+- hardened reader and proxy edge cases so temporary reader extraction failures do not poison the cache and public API responses cannot set backend cookies through the BFF
+
 ## 3.3.3
 
 - removed Fanpage from the built-in RSS source catalog because it was creating feed problems

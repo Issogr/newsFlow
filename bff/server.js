@@ -228,6 +228,9 @@ function createApp(options = {}) {
         proxyReq.removeHeader('cookie');
         applySanitizedForwardedHeaders(proxyReq, req);
       },
+      proxyRes: (proxyRes) => {
+        delete proxyRes.headers['set-cookie'];
+      },
       error: handleProxyError,
     },
   });

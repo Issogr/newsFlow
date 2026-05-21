@@ -19,7 +19,7 @@ export async function shareArticleUrl({ url, title = '' }) {
       await navigator.clipboard.writeText(url);
       return 'copied';
     } catch {
-      return 'failed';
+      // Some browsers expose clipboard but reject writes outside secure or granted contexts.
     }
   }
 

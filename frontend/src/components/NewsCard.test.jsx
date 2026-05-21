@@ -123,17 +123,17 @@ describe('NewsCard', () => {
     expect(screen.queryByRole('img', { name: 'Headline' })).not.toBeInTheDocument();
   });
 
-  test('suppresses invalid publication dates', () => {
+  test('does not render publication dates', () => {
     render(
       <NewsCard
-        group={{ ...group, pubDate: 'not-a-date' }}
+        group={group}
         locale="en"
         t={t}
         onOpenReader={jest.fn()}
       />
     );
 
-    expect(screen.queryByText('Invalid Date')).not.toBeInTheDocument();
+    expect(screen.queryByText(/2026/)).not.toBeInTheDocument();
   });
 
   test('renders a generic fallback illustration when the article has no image', () => {
@@ -232,6 +232,24 @@ describe('NewsCard', () => {
     );
 
     expect(screen.getByLabelText('Technology')).toBeInTheDocument();
+  });
+
+  test('toggles the read-later action from the card header', () => {
+    const onToggleReadLater = jest.fn();
+
+    render(
+      <NewsCard
+        group={group}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+        onToggleReadLater={onToggleReadLater}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'saveReadLater' }));
+
+    expect(onToggleReadLater).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }));
   });
 
   test('falls back to the generic illustration for unsafe or broken article images', () => {
