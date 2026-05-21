@@ -5,6 +5,7 @@ import {
   BookmarkCheck,
   ExternalLink,
   Share2,
+  Sparkles,
 } from 'lucide-react';
 import { getLocalizedTopic } from '../i18n';
 import { getSafeExternalUrl } from '../utils/urlSafety';
@@ -56,6 +57,28 @@ function getSourceEntries(group) {
   return [...sourceMap.values()];
 }
 
+function getGroupItemCount(group) {
+  const itemIds = new Set();
+
+  (group?.items || []).forEach((item) => {
+    const key = item?.id || item?.url || item?.title;
+    if (key) {
+      itemIds.add(key);
+    }
+  });
+
+  return itemIds.size;
+}
+
+function getSourceSummary(group, sourceEntries) {
+  if (!Array.isArray(sourceEntries) || sourceEntries.length === 0) {
+    return '';
+  }
+
+  const visibleCount = sourceEntries.length > 1 ? sourceEntries.length : Math.max(sourceEntries.length, getGroupItemCount(group));
+  return `${sourceEntries[0].name}${visibleCount > 1 ? ` +${visibleCount - 1}` : ''}`;
+}
+
 function getTopicEntries(group) {
   const topicMap = new Map();
   const addTopic = (entry) => {
@@ -97,6 +120,12 @@ function getGroupImageUrl(group) {
   return '';
 }
 
+function isAiGroupedStory(group) {
+  return (group?.items || []).some((item) => {
+    return item?.storyGroupId && String(item?.aiStoryGroupStatus || '').toLowerCase() === 'matched';
+  });
+}
+
 const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onToggleReadLater, readLaterUpdating = false }) => {
   const hasItems = Boolean(group?.items?.length);
 
@@ -104,6 +133,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   const topicEntries = getTopicEntries(group);
   const safeOriginalUrl = getSafeExternalUrl(group?.url);
   const safeImageUrl = showImages ? getGroupImageUrl(group) : '';
+  const aiGroupedStory = isAiGroupedStory(group);
   const [fallbackImageUrl, setFallbackImageUrl] = useState(getRandomGenericNewsCover);
   const [imageUrl, setImageUrl] = useState(showImages ? (safeImageUrl || fallbackImageUrl) : '');
   const { shareState, shareArticle } = useShareArticle();
@@ -239,9 +269,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       ) : null}
     </div>
   ) : null;
-  const sourceSummary = sourceEntries.length > 0
-    ? `${sourceEntries[0].name}${sourceEntries.length > 1 ? ` +${sourceEntries.length - 1}` : ''}`
-    : '';
+  const sourceSummary = getSourceSummary(group, sourceEntries);
   const shareControls = (
     <div className="relative flex items-center justify-end gap-2">
       <ShareStatusBubble
@@ -276,8 +304,24 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       <div className="flex min-w-0 items-center gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
         {sourceIconStack}
         <div className="min-w-0 flex-1">
-          {sourceSummary ? (
-            <p className="truncate text-sm font-semibold text-slate-950">{sourceSummary}</p>
+          {sourceSummary || aiGroupedStory ? (
+            <div className="flex min-w-0 items-center gap-2">
+              {sourceSummary ? (
+                <p className="truncate text-sm font-semibold text-slate-950">{sourceSummary}</p>
+              ) : null}
+              {aiGroupedStory ? (
+                <span
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full p-[1.5px] shadow-sm"
+                  style={{ backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)' }}
+                  aria-label={t('aiGroupedStory')}
+                  title={t('aiGroupedStory')}
+                >
+                  <span className="inline-flex h-full w-full items-center justify-center rounded-full bg-white text-violet-700">
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                </span>
+              ) : null}
+            </div>
           ) : null}
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
             {topicEntries.map(({ topic, source }) => {

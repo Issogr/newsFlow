@@ -127,6 +127,73 @@ describe('thematic summary reader prewarm', () => {
       maxArticleAgeHours: null
     });
   });
+
+  test('retains prewarm attempts only for the current and next summary windows', async () => {
+    jest.resetModules();
+    process.env = {
+      ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key',
+      AI_SUMMARY_READER_PREWARM_ENABLED: 'auto'
+    };
+
+    const article = {
+      id: 'article-1',
+      source: 'BBC',
+      title: 'Science update',
+      description: 'Short RSS text',
+      url: 'https://example.com/science',
+      pubDate: '2026-05-21T04:00:00.000Z',
+      topics: ['Scienza']
+    };
+    const databaseMock = {
+      getThematicSummary: jest.fn(),
+      listLatestThematicSummaries: jest.fn(() => []),
+      getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Scienza') ? [article] : []),
+      getReaderCache: jest.fn(() => null)
+    };
+    const readerServiceMock = {
+      getReaderArticle: jest.fn().mockResolvedValue({
+        articleId: 'article-1',
+        contentText: 'Useful reader content '.repeat(30),
+        fallback: false
+      })
+    };
+
+    jest.doMock('./database', () => databaseMock);
+    jest.doMock('./readerService', () => readerServiceMock);
+    jest.doMock('./websocketService', () => ({ broadcastFeedRefresh: jest.fn() }));
+    jest.doMock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() }));
+
+    const service = require('./thematicSummaryService');
+    const firstReference = new Date('2026-05-21T04:45:00.000Z');
+    const secondReference = new Date('2026-05-21T10:45:00.000Z');
+    const thirdReference = new Date('2026-05-21T16:45:00.000Z');
+
+    await service.prewarmReaderCacheForDueWindow({
+      force: true,
+      referenceDate: firstReference,
+      window: service._getNextDueWindow(firstReference)
+    });
+    await service.prewarmReaderCacheForDueWindow({
+      force: true,
+      referenceDate: secondReference,
+      window: service._getNextDueWindow(secondReference)
+    });
+
+    expect(service._getPrewarmAttemptWindowCount()).toBe(2);
+
+    service._prunePrewarmAttempts(thirdReference);
+
+    expect(service._getPrewarmAttemptWindowCount()).toBe(1);
+
+    await service.prewarmReaderCacheForDueWindow({
+      force: true,
+      referenceDate: thirdReference,
+      window: service._getNextDueWindow(thirdReference)
+    });
+
+    expect(service._getPrewarmAttemptWindowCount()).toBe(2);
+  });
 });
 
 describe('thematic summary generation retries', () => {
@@ -246,6 +313,58 @@ describe('thematic summary generation retries', () => {
     const result = await service.generateDueSummaries({ window: summaryWindow });
 
     expect(result.items).toEqual([existingSummary]);
+    expect(aiSummaryGeneratorMock.generateSummaryForArticles).not.toHaveBeenCalled();
+    expect(websocketServiceMock.broadcastFeedRefresh).not.toHaveBeenCalled();
+  });
+
+  test('does not retry recently failed summaries on every scheduler tick', async () => {
+    jest.resetModules();
+    process.env = {
+      ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key',
+      AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS: String(10 * 60 * 1000)
+    };
+
+    const summaryWindow = {
+      periodStart: '2026-05-20T17:00:00.000Z',
+      periodEnd: '2026-05-21T05:00:00.000Z'
+    };
+    const failedSummary = {
+      topicKey: 'technology',
+      status: 'failed',
+      periodStart: summaryWindow.periodStart,
+      periodEnd: summaryWindow.periodEnd,
+      generatedAt: '2026-05-21T05:00:00.000Z'
+    };
+    const databaseMock = {
+      getThematicSummary: jest.fn((topicKey) => (topicKey === 'technology' ? failedSummary : null)),
+      listLatestThematicSummaries: jest.fn(() => []),
+      getArticlesForThematicSummary: jest.fn(() => []),
+      getReaderCache: jest.fn(() => null),
+      upsertThematicSummary: jest.fn()
+    };
+    const aiSummaryGeneratorMock = {
+      isAiSummaryGenerationAvailable: jest.fn(() => true),
+      generateSummaryForArticles: jest.fn(),
+      _getConfig: jest.fn(() => ({ model: 'test-model' }))
+    };
+    const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
+
+    jest.doMock('./database', () => databaseMock);
+    jest.doMock('./aiSummaryGenerator', () => aiSummaryGeneratorMock);
+    jest.doMock('./readerService', () => ({ getReaderArticle: jest.fn() }));
+    jest.doMock('./websocketService', () => websocketServiceMock);
+    jest.doMock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() }));
+
+    const service = require('./thematicSummaryService');
+    const result = await service.generateDueSummaries({
+      window: summaryWindow,
+      referenceDate: new Date('2026-05-21T05:01:00.000Z')
+    });
+
+    expect(result.items).toEqual([]);
+    expect(databaseMock.getArticlesForThematicSummary).toHaveBeenCalled();
+    expect(databaseMock.getArticlesForThematicSummary).not.toHaveBeenCalledWith(expect.objectContaining({ topics: ['Tecnologia'] }));
     expect(aiSummaryGeneratorMock.generateSummaryForArticles).not.toHaveBeenCalled();
     expect(websocketServiceMock.broadcastFeedRefresh).not.toHaveBeenCalled();
   });

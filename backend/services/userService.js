@@ -119,6 +119,11 @@ function createId() {
   return crypto.randomBytes(16).toString('hex');
 }
 
+function isUniqueConstraintError(error) {
+  return String(error?.code || '').startsWith('SQLITE_CONSTRAINT')
+    || String(error?.message || '').toLowerCase().includes('unique constraint failed');
+}
+
 function sanitizeUsername(username) {
   return String(username || '').trim().slice(0, 40);
 }
@@ -434,25 +439,38 @@ async function registerUser(payload = {}) {
   }
 
   const now = new Date().toISOString();
+  const passwordHash = await hashPassword(password);
+  const sessionToken = generateSessionToken();
   const user = {
     id: createId(),
     username,
-    passwordHash: await hashPassword(password),
+    passwordHash,
     createdAt: now,
     updatedAt: now
   };
 
-  database.createUser(user);
-  database.upsertUserSettings(user.id, getDefaultSettings({ sourceSetupCompleted: false }));
-  database.updateUserLogin(user.id, now);
+  try {
+    database.getDb().transaction(() => {
+      if (database.findUserByUsername(username)) {
+        throw createError(409, 'Username already exists', 'USER_ALREADY_EXISTS');
+      }
 
-  const sessionToken = generateSessionToken();
-  database.createUserSession({
-    tokenHash: hashSessionToken(sessionToken),
-    userId: user.id,
-    createdAt: now,
-    expiresAt: createSessionExpiryDate()
-  });
+      database.createUser(user);
+      database.upsertUserSettings(user.id, getDefaultSettings({ sourceSetupCompleted: false }));
+      database.updateUserLogin(user.id, now);
+      database.createUserSession({
+        tokenHash: hashSessionToken(sessionToken),
+        userId: user.id,
+        createdAt: now,
+        expiresAt: createSessionExpiryDate()
+      });
+    })();
+  } catch (error) {
+    if (error.code === 'USER_ALREADY_EXISTS' || isUniqueConstraintError(error)) {
+      throw createError(409, 'Username already exists', 'USER_ALREADY_EXISTS');
+    }
+    throw error;
+  }
 
   return buildAuthResponse(user, sessionToken);
 }

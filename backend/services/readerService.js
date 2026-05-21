@@ -10,11 +10,17 @@ const { parseIntegerEnv } = require('../utils/env');
 const READER_TIMEOUT = parseIntegerEnv('READER_TIMEOUT', 12000, { min: 1 });
 const READER_CACHE_TTL_MS = parseIntegerEnv('READER_CACHE_TTL_MS', 24 * 60 * 60 * 1000, { min: 0 });
 const READER_FALLBACK_CACHE_TTL_MS = parseIntegerEnv('READER_FALLBACK_CACHE_TTL_MS', 15 * 60 * 1000, { min: 0 });
+const READER_FALLBACK_CACHE_PRUNE_INTERVAL_MS = parseIntegerEnv(
+  'READER_FALLBACK_CACHE_PRUNE_INTERVAL_MS',
+  Math.min(Math.max(READER_FALLBACK_CACHE_TTL_MS || 60 * 1000, 1000), 60 * 1000),
+  { min: 1000 }
+);
 const READER_MAX_RESPONSE_BYTES = parseIntegerEnv('READER_MAX_RESPONSE_BYTES', 2097152, { min: 1 });
 const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'PRE']);
 const CONTAINER_TAGS = new Set(['ARTICLE', 'SECTION', 'DIV', 'MAIN']);
 const readerExtractionPromises = new Map();
 const readerFallbackCache = new Map();
+let readerFallbackPruneHandle = null;
 
 function normalizeText(text) {
   return String(text || '')
@@ -306,15 +312,51 @@ function getCachedFallbackPayload(articleId) {
   return { ...cached.payload };
 }
 
+function pruneExpiredFallbackCache(now = Date.now()) {
+  let removedCount = 0;
+
+  readerFallbackCache.forEach((cached, articleId) => {
+    if (!cached || cached.expiresAt <= now) {
+      readerFallbackCache.delete(articleId);
+      removedCount += 1;
+    }
+  });
+
+  return removedCount;
+}
+
+function stopFallbackCachePruneInterval() {
+  if (readerFallbackPruneHandle) {
+    clearInterval(readerFallbackPruneHandle);
+    readerFallbackPruneHandle = null;
+  }
+}
+
+function ensureFallbackCachePruneInterval() {
+  if (readerFallbackPruneHandle || READER_FALLBACK_CACHE_TTL_MS <= 0) {
+    return;
+  }
+
+  readerFallbackPruneHandle = setInterval(() => {
+    pruneExpiredFallbackCache();
+    if (readerFallbackCache.size === 0) {
+      stopFallbackCachePruneInterval();
+    }
+  }, READER_FALLBACK_CACHE_PRUNE_INTERVAL_MS);
+  readerFallbackPruneHandle.unref?.();
+}
+
 function setCachedFallbackPayload(articleId, payload) {
   if (READER_FALLBACK_CACHE_TTL_MS <= 0) {
     return;
   }
 
+  pruneExpiredFallbackCache();
   readerFallbackCache.set(articleId, {
     expiresAt: Date.now() + READER_FALLBACK_CACHE_TTL_MS,
     payload: { ...payload }
   });
+  ensureFallbackCachePruneInterval();
 }
 
 async function loadFreshReaderPayload(articleId, article) {
@@ -354,6 +396,7 @@ function getOrCreateReaderExtractionPromise(articleId, article, { forceRefresh =
 function clearRuntimeState() {
   readerExtractionPromises.clear();
   readerFallbackCache.clear();
+  stopFallbackCachePruneInterval();
 }
 
 async function getReaderArticle(articleId, options = {}) {
@@ -388,5 +431,7 @@ module.exports = {
   _calculateMinutesToRead: calculateMinutesToRead,
   _buildBlocksFromHtml: buildBlocksFromHtml,
   _blocksToText: blocksToText,
-  _clearRuntimeState: clearRuntimeState
+  _clearRuntimeState: clearRuntimeState,
+  _getFallbackCacheSize: () => readerFallbackCache.size,
+  _pruneExpiredFallbackCache: pruneExpiredFallbackCache
 };

@@ -11,6 +11,7 @@ describe('useTopicRefreshSocket', () => {
   let socket;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     handlers = new Map();
     socket = {
       on: vi.fn((event, handler) => handlers.set(event, handler)),
@@ -71,6 +72,21 @@ describe('useTopicRefreshSocket', () => {
     handlers.get('connect')();
 
     expect(socket.emit).toHaveBeenLastCalledWith('subscribe:filters', updatedSubscription);
+  });
+
+  test('does not connect while disabled', () => {
+    const { rerender } = renderHook(({ enabled }) => useTopicRefreshSocket({
+      onTopicRefresh: vi.fn(),
+      enabled
+    }), {
+      initialProps: { enabled: false }
+    });
+
+    expect(io).not.toHaveBeenCalled();
+
+    rerender({ enabled: true });
+
+    expect(io).toHaveBeenCalledTimes(1);
   });
 
   test('disconnects on unmount', () => {

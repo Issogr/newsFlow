@@ -23,7 +23,7 @@ vi.mock('../hooks/useTopicRefreshSocket', () => ({
 }));
 
 vi.mock('./NewsCard', () => ({
-  default: ({ group }) => <div>{group.title}</div>
+  default: ({ group }) => group.renderNull ? null : <div>{group.title}</div>
 }));
 vi.mock('./ReaderPanel', () => ({
   default: () => null
@@ -87,6 +87,30 @@ function createGroups(prefix, start, count) {
       items: [{ id: `article-${prefix}-${number}`, pubDate: `2026-03-14T10:${String(number).padStart(2, '0')}:00.000Z` }]
     };
   });
+}
+
+function createRetitledGroups(idPrefix, titlePrefix, start, count) {
+  return createGroups(idPrefix, start, count).map((group, index) => {
+    const number = start + index;
+    const title = `${titlePrefix} headline ${number}`;
+
+    return {
+      ...group,
+      title,
+      items: group.items.map((item) => ({
+        ...item,
+        title
+      }))
+    };
+  });
+}
+
+function createGroup(id, title, pubDate = '2026-03-14T10:00:00.000Z') {
+  return {
+    id,
+    title,
+    items: [{ id: `article-${id}`, title, pubDate }]
+  };
 }
 
 const currentUser = {
@@ -159,7 +183,7 @@ describe('NewsAggregator', () => {
       }
 
       return Promise.resolve({
-        items: [{ id: 'new-group', title: 'New headline' }],
+        items: [createGroup('new-group', 'New headline')],
         meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
         filters: { sources: [], sourceCatalog: [], topics: [] }
       });
@@ -175,7 +199,7 @@ describe('NewsAggregator', () => {
     });
 
     await resolveDeferred(secondRequest, {
-      items: [{ id: 'new-group', title: 'New headline' }],
+      items: [createGroup('new-group', 'New headline')],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
       filters: { sources: [], sourceCatalog: [], topics: [] }
     });
@@ -183,7 +207,7 @@ describe('NewsAggregator', () => {
     expect(await screen.findByText('New headline')).toBeInTheDocument();
 
     await resolveDeferred(firstRequest, {
-      items: [{ id: 'old-group', title: 'Old headline' }],
+      items: [createGroup('old-group', 'Old headline')],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
       filters: { sources: [], sourceCatalog: [], topics: [] }
     });
@@ -197,7 +221,7 @@ describe('NewsAggregator', () => {
 
   test('renders thematic summary stories and opens the summary panel', async () => {
     fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'Top headline' }],
+      items: [createGroup('group-1', 'Top headline')],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
       filters: { sources: [], sourceCatalog: [], topics: [] }
     });
@@ -256,7 +280,7 @@ describe('NewsAggregator', () => {
       onSummariesRefresh = handleSummariesRefresh;
     });
     fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'Top headline' }],
+      items: [createGroup('group-1', 'Top headline')],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
       filters: { sources: [], sourceCatalog: [], topics: [] }
     });
@@ -297,7 +321,7 @@ describe('NewsAggregator', () => {
       onSummariesRefresh = handleSummariesRefresh;
     });
     fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'Top headline' }],
+      items: [createGroup('group-1', 'Top headline')],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
       filters: { sources: [], sourceCatalog: [], topics: [] }
     });
@@ -353,6 +377,7 @@ describe('NewsAggregator', () => {
 
   test('shows one-time source setup and excludes unselected sources and sub-feeds', async () => {
     const onUserUpdate = jest.fn();
+    let socketOptions;
     const setupUser = {
       ...currentUser,
       settings: {
@@ -375,6 +400,9 @@ describe('NewsAggregator', () => {
         excludedSubSourceIds: ['ansa_mondo']
       }
     });
+    useTopicRefreshSocket.mockImplementation((options) => {
+      socketOptions = options;
+    });
 
     await renderNewsAggregator({ currentUser: setupUser, onUserUpdate });
 
@@ -383,8 +411,16 @@ describe('NewsAggregator', () => {
     expect(screen.getByRole('heading', { name: 'Italian sources' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'English sources' })).toBeInTheDocument();
     expect(fetchNews).not.toHaveBeenCalled();
+    expect(socketOptions).toEqual(expect.objectContaining({ enabled: false }));
     expect(screen.queryByRole('button', { name: /Mondo/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start reading' })).toBeDisabled();
+
+    await act(async () => {
+      socketOptions.onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(fetchNews).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand ANSA feeds' }));
     fireEvent.click(screen.getByRole('button', { name: /Home/ }));
@@ -429,7 +465,7 @@ describe('NewsAggregator', () => {
     });
 
     fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'Stored-locale fallback headline' }],
+      items: [createGroup('group-1', 'Stored-locale fallback headline')],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
       filters: { sources: [], sourceCatalog: [], topics: [] }
     });
@@ -443,7 +479,7 @@ describe('NewsAggregator', () => {
 
   test('forces a source refresh and reloads existing thematic summaries from the top navigation refresh button', async () => {
     fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'Current headline' }],
+      items: [createGroup('group-1', 'Current headline')],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
       filters: { sources: [], sourceCatalog: [], topics: [] }
     });
@@ -465,7 +501,7 @@ describe('NewsAggregator', () => {
     const allowedAt = new Date(Date.now() + (5 * 60 * 1000)).toISOString();
 
     fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'Current headline' }],
+      items: [createGroup('group-1', 'Current headline')],
       meta: {
         page: 1,
         pageSize: 12,
@@ -497,12 +533,12 @@ describe('NewsAggregator', () => {
     });
     fetchNews
       .mockResolvedValueOnce({
-        items: [{ id: 'group-1', title: 'Fallback topic headline' }],
+        items: [createGroup('group-1', 'Fallback topic headline')],
         meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
         filters: { sources: [], sourceCatalog: [], topics: [] }
       })
       .mockResolvedValue({
-        items: [{ id: 'group-1', title: 'AI topic headline' }],
+        items: [createGroup('group-1', 'AI topic headline')],
         meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
         filters: { sources: [], sourceCatalog: [], topics: [] }
       });
@@ -528,6 +564,125 @@ describe('NewsAggregator', () => {
     }));
   });
 
+  test('does not add brand-new cards during silent topic reloads', async () => {
+    let onTopicRefresh;
+
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [createGroup('group-current', 'Current headline')],
+        meta: { page: 1, pageSize: 12, hasMore: true, totalGroups: 2 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockResolvedValueOnce({
+        items: [
+          createGroup('group-new', 'New automatic headline', '2026-03-14T11:00:00.000Z'),
+          createGroup('group-current', 'Current headline with AI topics')
+        ],
+        meta: { page: 1, pageSize: 12, hasMore: true, totalGroups: 2 },
+        filters: { sources: [], sourceCatalog: [], topics: ['Technology'] }
+      });
+
+    await renderNewsAggregator();
+    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('Current headline with AI topics')).toBeInTheDocument();
+    expect(screen.queryByText('New automatic headline')).not.toBeInTheDocument();
+  });
+
+  test('keeps pending new article notice after silent topic reloads', async () => {
+    let socketHandlers;
+
+    useTopicRefreshSocket.mockImplementation((handlers) => {
+      socketHandlers = handlers;
+    });
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [createGroup('group-current', 'Current headline')],
+        meta: { page: 1, pageSize: 12, hasMore: true, totalGroups: 2 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockResolvedValueOnce({
+        items: [
+          createGroup('group-new', 'New automatic headline', '2026-03-14T11:00:00.000Z'),
+          createGroup('group-current', 'Current headline with AI topics')
+        ],
+        meta: { page: 1, pageSize: 12, hasMore: true, totalGroups: 2 },
+        filters: { sources: [], sourceCatalog: [], topics: ['Technology'] }
+      });
+
+    await renderNewsAggregator();
+    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+
+    await act(async () => {
+      socketHandlers.onNewsUpdate({ count: 1, groupIds: ['group-new'] });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('1 new article available')).toBeInTheDocument();
+
+    await act(async () => {
+      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('Current headline with AI topics')).toBeInTheDocument();
+    expect(screen.queryByText('New automatic headline')).not.toBeInTheDocument();
+    expect(screen.getByText('1 new article available')).toBeInTheDocument();
+  });
+
+  test('clears manual refresh loading when a silent topic reload cancels it', async () => {
+    let onTopicRefresh;
+    const manualRefreshRequest = createDeferred();
+
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [createGroup('group-1', 'Current headline')],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockImplementationOnce(({ signal }) => {
+        signal.addEventListener('abort', () => {
+          manualRefreshRequest.reject(Object.assign(new Error('canceled'), { code: 'ERR_CANCELED' }));
+        });
+        return manualRefreshRequest.promise;
+      })
+      .mockResolvedValueOnce({
+        items: [createGroup('group-1', 'Silently reloaded headline')],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+
+    await renderNewsAggregator();
+    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
+    });
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('Silently reloaded headline')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+    });
+  });
+
   test('keeps loaded-more articles during silent AI topic reloads', async () => {
     let onTopicRefresh;
 
@@ -546,7 +701,10 @@ describe('NewsAggregator', () => {
 
       if (pageSize === 13) {
         return Promise.resolve({
-          items: createGroups('refreshed', 1, 13),
+          items: [
+            ...createRetitledGroups('initial', 'refreshed', 1, 12),
+            ...createRetitledGroups('older', 'refreshed', 13, 1)
+          ],
           meta: { page: 1, pageSize: 13, hasMore: false, nextCursor: null },
           filters: { sources: [], sourceCatalog: [], topics: ['Technology'] }
         });
@@ -604,7 +762,10 @@ describe('NewsAggregator', () => {
 
       if (pageSize > 12) {
         return Promise.resolve({
-          items: createGroups('refreshed', 1, 13),
+          items: [
+            ...createRetitledGroups('initial', 'refreshed', 1, 12),
+            ...createRetitledGroups('older', 'refreshed', 13, 1)
+          ],
           meta: { page: 1, pageSize: 13, hasMore: false, nextCursor: null },
           filters: { sources: [], sourceCatalog: [], topics: [] }
         });
@@ -674,7 +835,7 @@ describe('NewsAggregator', () => {
 
       if (pageSize > 12) {
         return Promise.resolve({
-          items: createGroups('refreshed', 1, 12),
+          items: createRetitledGroups('initial', 'refreshed', 1, 12),
           meta: {
             page: 1,
             pageSize: 12,
@@ -796,6 +957,111 @@ describe('NewsAggregator', () => {
       }));
     });
     expect(await screen.findByText('Older headline')).toBeInTheDocument();
+  });
+
+  test('does not leave an empty grid cell for groups without articles', async () => {
+    fetchNews.mockResolvedValue({
+      items: [
+        { id: 'empty-group', title: 'Empty headline', items: [] },
+        { id: 'visible-group', title: 'Visible headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }
+      ],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    const { container } = await renderNewsAggregator();
+
+    expect(await screen.findByText('Visible headline')).toBeInTheDocument();
+    expect(screen.queryByText('Empty headline')).not.toBeInTheDocument();
+    expect(container.querySelector('main .grid')?.children).toHaveLength(1);
+  });
+
+  test('does not leave an empty grid cell when a card returns null', async () => {
+    fetchNews.mockResolvedValue({
+      items: [
+        { id: 'hidden-group', title: 'Hidden headline', renderNull: true, items: [{ id: 'article-hidden', pubDate: '2026-03-14T10:00:00.000Z' }] },
+        { id: 'visible-group', title: 'Visible headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }
+      ],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    const { container } = await renderNewsAggregator();
+
+    expect(await screen.findByText('Visible headline')).toBeInTheDocument();
+    expect(screen.queryByText('Hidden headline')).not.toBeInTheDocument();
+    expect(container.querySelector('main .grid')?.children).toHaveLength(1);
+  });
+
+  test('merges appended groups that share an AI story id', async () => {
+    fetchNews.mockImplementation(({ beforeId }) => {
+      if (beforeId === 'article-current') {
+        return Promise.resolve({
+          items: [
+            {
+              id: 'group-older-duplicate',
+              title: 'Older duplicate headline',
+              items: [
+                {
+                  id: 'article-older',
+                  title: 'Older duplicate headline',
+                  sourceId: 'source-b',
+                  source: 'Source B',
+                  storyGroupId: 'ai-story-1',
+                  aiStoryGroupStatus: 'matched',
+                  pubDate: '2026-03-14T09:00:00.000Z'
+                }
+              ]
+            }
+          ],
+          meta: { page: 1, pageSize: 12, hasMore: false, nextCursor: null },
+          filters: { sources: [], sourceCatalog: [], topics: [] }
+        });
+      }
+
+      return Promise.resolve({
+        items: [
+          {
+            id: 'group-current',
+            title: 'Current merged headline',
+            items: [
+              {
+                id: 'article-current',
+                title: 'Current merged headline',
+                sourceId: 'source-a',
+                source: 'Source A',
+                storyGroupId: 'ai-story-1',
+                aiStoryGroupStatus: 'matched',
+                pubDate: '2026-03-14T10:00:00.000Z'
+              }
+            ]
+          }
+        ],
+        meta: {
+          page: 1,
+          pageSize: 12,
+          hasMore: true,
+          nextCursor: {
+            beforePubDate: '2026-03-14T10:00:00.000Z',
+            beforeId: 'article-current'
+          }
+        },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+    });
+
+    await renderNewsAggregator();
+    expect(await screen.findByText('Current merged headline')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
+        beforeId: 'article-current'
+      }));
+    });
+    expect(screen.getByText('Current merged headline')).toBeInTheDocument();
+    expect(screen.queryByText('Older duplicate headline')).not.toBeInTheDocument();
   });
 
   test('keeps newest groups when appended pages exceed the retention cap', async () => {
@@ -925,7 +1191,7 @@ describe('NewsAggregator', () => {
 
   test('scrolls smoothly to the top from the back-to-top control', async () => {
     fetchNews.mockResolvedValue({
-      items: [{ id: 'group-1', title: 'First headline' }],
+      items: [createGroup('group-1', 'First headline')],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
       filters: { sources: [], sourceCatalog: [], topics: [] }
     });

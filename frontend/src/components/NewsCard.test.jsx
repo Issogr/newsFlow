@@ -199,6 +199,79 @@ describe('NewsCard', () => {
     expect(screen.queryByText('Source B')).not.toBeInTheDocument();
   });
 
+  test('surfaces merged same-source versions in the source summary', () => {
+    render(
+      <NewsCard
+        group={{
+          ...group,
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              image: 'https://example.com/image.jpg'
+            },
+            {
+              id: 'article-2',
+              sourceId: 'source-a',
+              source: 'Source A',
+              image: 'https://example.com/image-b.jpg'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText('Source A +1')).toBeInTheDocument();
+  });
+
+  test('shows a rainbow sparkle badge for AI-grouped stories only', () => {
+    const { rerender } = render(
+      <NewsCard
+        group={{
+          ...group,
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              storyGroupId: 'ai-story-1',
+              aiStoryGroupStatus: 'matched'
+            },
+            {
+              id: 'article-2',
+              sourceId: 'source-b',
+              source: 'Source B',
+              storyGroupId: 'ai-story-1',
+              aiStoryGroupStatus: 'matched'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('aiGroupedStory')).toHaveStyle({
+      backgroundImage: expect.stringContaining('conic-gradient')
+    });
+
+    rerender(
+      <NewsCard
+        group={group}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByLabelText('aiGroupedStory')).not.toBeInTheDocument();
+  });
+
   test('adds a rainbow ring around AI-classified topic icons', () => {
     render(
       <NewsCard

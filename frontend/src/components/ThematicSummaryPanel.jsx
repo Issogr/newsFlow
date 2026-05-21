@@ -102,7 +102,7 @@ const ThematicSummaryPanel = ({ summary, locale, t, onClose }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/35 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 overflow-hidden overscroll-none bg-slate-950/35 backdrop-blur-sm">
       <button
         type="button"
         className="absolute inset-0 hidden cursor-default lg:block"
@@ -110,8 +110,8 @@ const ThematicSummaryPanel = ({ summary, locale, t, onClose }) => {
         onClick={onClose}
       />
 
-      <div className="relative flex h-full w-full justify-center">
-        <section className="flex h-full w-full flex-col bg-slate-50 shadow-2xl lg:my-4 lg:w-[min(64rem,calc(100vw-2.5rem))] lg:overflow-hidden lg:rounded-[2rem] lg:border lg:border-slate-200/80">
+      <div className="relative flex h-[100dvh] w-full justify-center overflow-hidden overscroll-none">
+        <section className="flex h-full w-full flex-col overflow-hidden bg-slate-50 shadow-2xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(64rem,calc(100vw-2rem))] lg:rounded-[2rem] lg:border lg:border-slate-200/80">
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-200/80 bg-white/85 px-5 py-4 backdrop-blur-md md:px-6">
             <div className="flex min-w-0 items-center gap-3">
               <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${primaryPresentation.iconBadgeClassName}`}>
@@ -133,7 +133,7 @@ const ThematicSummaryPanel = ({ summary, locale, t, onClose }) => {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto bg-slate-50 px-4 py-6 md:px-5 md:py-8 lg:px-6">
+          <div className="flex-1 overflow-y-auto overscroll-contain bg-slate-50 px-4 py-6 md:px-5 md:py-8 lg:px-6">
             <div className="mx-auto max-w-[54rem] space-y-5">
               <div className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">
                 <span className="inline-flex items-center justify-center gap-2">

@@ -268,6 +268,61 @@ describe('ReaderPanel', () => {
     expect(fetchReaderArticle).toHaveBeenCalledTimes(2);
   });
 
+  test('keeps same-source grouped articles selectable as separate versions', async () => {
+    fetchReaderArticle
+      .mockResolvedValueOnce({
+        title: 'First same-source reader title',
+        language: 'en',
+        excerpt: 'First excerpt',
+        contentBlocks: [{ type: 'paragraph', text: 'First body' }],
+        minutesToRead: 1
+      })
+      .mockResolvedValueOnce({
+        title: 'Second same-source reader title',
+        language: 'en',
+        excerpt: 'Second excerpt',
+        contentBlocks: [{ type: 'paragraph', text: 'Second body' }],
+        minutesToRead: 1
+      });
+
+    render(
+      <ReaderPanel
+        group={{
+          ...group,
+          items: [
+            {
+              ...group.items[0],
+              id: 'same-source-1',
+              sourceId: 'source-a',
+              source: 'Source A'
+            },
+            {
+              ...group.items[1],
+              id: 'same-source-2',
+              sourceId: 'source-a',
+              source: 'Source A'
+            }
+          ]
+        }}
+        initialArticleId="same-source-1"
+        readerPosition="right"
+        t={t}
+        currentUser={currentUser}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(await screen.findByText('First same-source reader title')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Source A #1' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Source A #2' }));
+
+    expect(await screen.findByText('Second same-source reader title')).toBeInTheDocument();
+    expect(fetchReaderArticle).toHaveBeenNthCalledWith(2, 'same-source-2', expect.objectContaining({
+      refresh: false
+    }));
+  });
+
   test('disables unsafe original-source links', async () => {
     fetchReaderArticle.mockResolvedValue({
       title: 'Unsafe reader title',

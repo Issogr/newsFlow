@@ -45,7 +45,7 @@ describe('aiTopicClassifier', () => {
   test('keeps the API key server-side while sending compact article payloads without RSS topics', async () => {
     chatSend.mockResolvedValue({
       choices: [
-        { message: { content: JSON.stringify({ topicsById: [{ id: 'article-1', topics: [{ topic: 'Technology', confidence: 0.9, evidence: ['AI chips'] }, { topic: 'rss', confidence: 0.8, evidence: ['AI chips'] }] }] }) } }
+        { message: { content: JSON.stringify({ topicsByRef: [{ ref: 1, topics: [{ topic: 'Technology', confidence: 0.9, evidence: ['AI chips'] }, { topic: 'rss', confidence: 0.8, evidence: ['AI chips'] }] }] }) } }
       ]
     });
 
@@ -64,6 +64,7 @@ describe('aiTopicClassifier', () => {
     const requestBody = chatSend.mock.calls[0][0].chatRequest;
     const requestOptions = chatSend.mock.calls[0][1];
     const prompt = requestBody.messages[1].content;
+    const promptPayload = JSON.parse(prompt.split('\n').at(-1));
 
     expect(status.topicsByArticleId.get('article-1').map((entry) => entry.topic)).toEqual(['Tecnologia']);
     expect(requestBody.model).toBe('qwen/qwen3.5-9b');
@@ -89,11 +90,18 @@ describe('aiTopicClassifier', () => {
     expect(prompt).toContain('air/compressed-air weapons');
     expect(prompt).toContain('prefer Cronaca');
     expect(prompt).toContain('confidence');
+    expect(prompt).toContain('Return refs, not article ids');
     expect(prompt).not.toContain('Evidence must be copied');
     expect(prompt).toContain('Return minified JSON only');
-    expect(prompt).toContain('Return one object for every provided id');
+    expect(prompt).toContain('omit that ref');
     expect(prompt).toContain('Do not use provider RSS categories');
     expect(prompt).toContain('Use only the title and short description');
+    expect(promptPayload.articles[0]).toEqual({
+      ref: 1,
+      title: 'AI chips arrive for data centers',
+      description: 'New hardware accelerates cloud workloads.'
+    });
+    expect(prompt).not.toContain('article-1');
     expect(prompt).not.toContain('Example Source');
     expect(prompt).not.toContain('rawTopics');
     expect(prompt).not.toContain('This full article body should not be sent');

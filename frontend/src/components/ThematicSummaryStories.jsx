@@ -1,4 +1,5 @@
 import React from 'react';
+import { Sparkles } from 'lucide-react';
 import { getTopicPresentation } from '../topicPresentation';
 import { getLocalizedThematicSummary } from '../utils/thematicSummaryLocale';
 
@@ -15,7 +16,7 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
 
   return (
     <section className="mb-5" aria-label={t('thematicSummariesTitle')}>
-      <div className="flex justify-center gap-3 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex justify-start gap-3 overflow-x-auto py-1 [scrollbar-width:none] md:justify-center [&::-webkit-scrollbar]:hidden">
         {summaries.map((summary) => {
           const localizedSummary = getLocalizedThematicSummary(summary, locale);
           const primaryPresentation = getTopicPresentation(summary.topics?.[0] || summary.topicLabel);
@@ -35,7 +36,15 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
                 <PrimaryIcon className="h-6 w-6" aria-hidden="true" />
               </span>
               {unread && (
-                <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-slate-100 bg-sky-500" aria-hidden="true" />
+                <span
+                  className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full p-[1.5px] shadow-sm"
+                  style={{ backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)' }}
+                  aria-hidden="true"
+                >
+                  <span className="inline-flex h-full w-full items-center justify-center rounded-full bg-white text-violet-700">
+                    <Sparkles className="h-3 w-3" aria-hidden="true" />
+                  </span>
+                </span>
               )}
             </button>
           );

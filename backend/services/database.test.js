@@ -73,14 +73,16 @@ describe('database migrations', () => {
     const readLaterColumns = sqlite.prepare('PRAGMA table_info(user_read_later_articles)').all().map((column) => column.name);
     const thematicSummaryColumns = sqlite.prepare('PRAGMA table_info(thematic_summaries)').all().map((column) => column.name);
     const articleIndexNames = sqlite.prepare('PRAGMA index_list(articles)').all().map((index) => index.name);
+    const userIndexNames = sqlite.prepare('PRAGMA index_list(users)').all().map((index) => index.name);
     const topicIndexNames = sqlite.prepare('PRAGMA index_list(article_topics)').all().map((index) => index.name);
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('28');
+    expect(migrationVersion).toBe('30');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
+    expect(articleColumns).toEqual(expect.arrayContaining(['story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model']));
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'source', 'confidence', 'evidence', 'reason_code', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
@@ -93,7 +95,7 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
     expect(settingsColumns).not.toContain('default_source_ids');
-    expect(userColumns).toContain('role');
+    expect(userColumns).not.toContain('role');
     expect(userColumns).toContain('last_login_at');
     expect(userColumns).toContain('last_activity_at');
     expect(userColumns).toContain('public_api_request_count');
@@ -104,6 +106,7 @@ describe('database migrations', () => {
     expect(readLaterColumns).toEqual(expect.arrayContaining(['user_id', 'article_id', 'saved_at']));
     expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['topic_key', 'period_start', 'period_end', 'summary_text', 'title_en', 'summary_text_en', 'title_it', 'summary_text_it', 'sources_json']));
     expect(articleIndexNames).toContain('idx_articles_owner_published_id');
+    expect(userIndexNames).toContain('idx_users_username_lower');
     expect(topicIndexNames).toContain('idx_article_topics_topic_article');
   });
 
@@ -157,13 +160,13 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('28');
+    expect(migratedVersion).toBe('30');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
     expect(settingsColumns).not.toContain('default_source_ids');
     expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
-    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
+    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model']));
     expect(apiTokenColumns).toContain('token_hash');
     expect(userSourceColumns).toContain('icon_url');
   });
@@ -276,8 +279,8 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('28');
-    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
+    expect(migratedVersion).toBe('30');
+    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
     expect(settingsColumns).toContain('compact_news_cards');
@@ -287,7 +290,7 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
     expect(settingsColumns).not.toContain('default_source_ids');
-    expect(userColumns).toContain('role');
+    expect(userColumns).not.toContain('role');
     expect(userColumns).toContain('last_login_at');
     expect(userColumns).toContain('last_activity_at');
     expect(userColumns).toContain('public_api_request_count');
@@ -389,7 +392,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
 
-    expect(migratedVersion).toBe('28');
+    expect(migratedVersion).toBe('30');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -621,6 +624,7 @@ describe('database queries and user data', () => {
     expect(articles[0]).toEqual(expect.objectContaining({
       id: 'article-1',
       title: 'Canonical story updated',
+      canonicalUrl: 'https://example.com/story',
       url: 'https://example.com/story?utm_source=homepage'
     }));
   });
@@ -960,6 +964,183 @@ describe('database queries and user data', () => {
     }));
   });
 
+  test('retries failed and deferred AI topic processing statuses', () => {
+    const now = new Date().toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'ai-failed-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Failed AI article',
+        description: 'Existing description',
+        content: '',
+        url: 'https://example.com/ai-failed-article',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'ai-deferred-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Deferred AI article',
+        description: 'Existing description',
+        content: '',
+        url: 'https://example.com/ai-deferred-article',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'ai-completed-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Completed AI article',
+        description: 'Existing description',
+        content: '',
+        url: 'https://example.com/ai-completed-article',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+
+    database.markArticlesAiTopicProcessing(['ai-failed-article'], 'failed');
+    database.markArticlesAiTopicProcessing(['ai-deferred-article'], 'deferred');
+    database.markArticlesAiTopicProcessing(['ai-completed-article'], 'completed');
+
+    expect(database.getArticleIdsPendingAiTopicProcessing([
+      'ai-failed-article',
+      'ai-deferred-article',
+      'ai-completed-article'
+    ])).toEqual(expect.arrayContaining(['ai-failed-article', 'ai-deferred-article']));
+    expect(database.getArticleIdsPendingAiTopicProcessing([
+      'ai-failed-article',
+      'ai-deferred-article',
+      'ai-completed-article'
+    ])).toHaveLength(2);
+  });
+
+  test('tracks AI story grouping assignments and candidate windows', () => {
+    const now = new Date('2026-03-15T14:30:00.000Z').toISOString();
+    const nearby = new Date('2026-03-15T13:45:00.000Z').toISOString();
+    const old = new Date('2026-03-10T14:30:00.000Z').toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'story-target',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Meloni meets Trump in Rome',
+        description: 'Talks focused on tariffs and Ukraine.',
+        content: '',
+        url: 'https://example.com/story-target',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'story-candidate',
+        sourceId: secondarySource.id,
+        source: secondarySource.name,
+        title: 'Tariffs and Ukraine at Trump Meloni summit',
+        description: 'The two leaders met in the Italian capital.',
+        content: '',
+        url: 'https://example.com/story-candidate',
+        language: 'en',
+        pubDate: nearby
+      },
+      {
+        id: 'old-story-candidate',
+        sourceId: secondarySource.id,
+        source: secondarySource.name,
+        title: 'Old unrelated story',
+        description: 'Too old for the matching window.',
+        content: '',
+        url: 'https://example.com/old-story-candidate',
+        language: 'en',
+        pubDate: old
+      }
+    ]);
+
+    expect(database.getArticleIdsPendingAiStoryGrouping(['story-target'])).toEqual(['story-target']);
+
+    const candidateSet = database.getAiStoryGroupingCandidateSet('story-target', { windowHours: 2 });
+    expect(candidateSet.target).toEqual(expect.objectContaining({ id: 'story-target' }));
+    expect(candidateSet.candidates.map((article) => article.id)).toEqual(['story-candidate']);
+
+    expect(database.assignArticlesToStoryGroup(['story-target', 'story-candidate'], 'ai-story-test', 'test-model')).toBe(2);
+    expect(database.getArticleIdsForStoryGroups(['ai-story-test'])).toEqual(expect.arrayContaining(['story-target', 'story-candidate']));
+    expect(database.getArticleIdsPendingAiStoryGrouping(['story-target', 'story-candidate'])).toEqual([]);
+    expect(database.getArticlesByIds(['story-target', 'story-candidate'], { maxArticleAgeHours: null })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'story-target', storyGroupId: 'ai-story-test', aiStoryGroupStatus: 'matched', aiStoryGroupModel: 'test-model' }),
+      expect.objectContaining({ id: 'story-candidate', storyGroupId: 'ai-story-test', aiStoryGroupStatus: 'matched', aiStoryGroupModel: 'test-model' })
+    ]));
+  });
+
+  test('moves read-later state and reader cache before deleting duplicate articles', () => {
+    const now = new Date('2026-03-15T14:30:00.000Z').toISOString();
+    const duplicateUpdatedAt = new Date('2026-03-15T14:00:00.000Z').toISOString();
+    const canonicalUrl = 'https://example.com/shared-story';
+
+    database.createUser({ id: 'user-1', username: 'alice', passwordHash: null, createdAt: now, updatedAt: now });
+    database.upsertArticles([
+      {
+        id: 'canonical-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Canonical story',
+        description: 'Canonical description',
+        content: '',
+        url: canonicalUrl,
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+    database.getDb().prepare(`
+      INSERT INTO articles (
+        id, source_id, source_name, owner_user_id, title, description, content, url,
+        canonical_url, image, author, language, published_at, created_at, updated_at
+      ) VALUES (?, ?, ?, NULL, ?, ?, '', ?, ?, NULL, NULL, 'en', ?, ?, ?)
+    `).run(
+      'duplicate-article',
+      'duplicate-source',
+      primarySource.name,
+      'Duplicate story',
+      'Duplicate description',
+      canonicalUrl,
+      canonicalUrl,
+      now,
+      duplicateUpdatedAt,
+      duplicateUpdatedAt
+    );
+    database.saveReadLaterArticles('user-1', ['duplicate-article']);
+    database.upsertReaderCache('duplicate-article', {
+      url: canonicalUrl,
+      title: 'Duplicate reader title',
+      contentText: 'Duplicate reader body',
+      fetchedAt: duplicateUpdatedAt
+    });
+
+    database.upsertArticles([
+      {
+        id: 'incoming-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Incoming story',
+        description: 'Incoming description',
+        content: '',
+        url: canonicalUrl,
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+
+    expect(database.getArticleById('duplicate-article', { maxArticleAgeHours: null })).toBeNull();
+    expect(database.getReadLaterArticleIdSet('user-1', ['canonical-article']).has('canonical-article')).toBe(true);
+    expect(database.getReaderCache('canonical-article')).toEqual(expect.objectContaining({
+      title: 'Duplicate reader title',
+      contentText: 'Duplicate reader body'
+    }));
+  });
+
   test('normalizes future publication dates on insert and during cleanup', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-03-15T14:30:00.000Z'));
 
@@ -1037,6 +1218,45 @@ describe('database queries and user data', () => {
       deletedExpiredArticleCount: 1
     }));
     expect(database.getArticleById('old-read-later-article', { maxArticleAgeHours: null })).toBeNull();
+  });
+
+  test('applies recent-hours filters to read-later articles', () => {
+    const nowMs = Date.parse('2026-03-15T14:30:00.000Z');
+
+    jest.useFakeTimers().setSystemTime(nowMs);
+
+    try {
+      database.createUser({ id: 'user-1', username: 'alice', passwordHash: null, createdAt: new Date(nowMs).toISOString(), updatedAt: new Date(nowMs).toISOString() });
+      database.upsertArticles([
+        {
+          id: 'recent-read-later-article',
+          sourceId: primarySource.id,
+          source: primarySource.name,
+          title: 'Recent saved story',
+          description: 'Recent saved description',
+          content: '',
+          url: 'https://example.com/recent-saved-story',
+          language: 'en',
+          pubDate: new Date(nowMs - (30 * 60 * 1000)).toISOString()
+        },
+        {
+          id: 'old-read-later-filtered-article',
+          sourceId: primarySource.id,
+          source: primarySource.name,
+          title: 'Old saved story',
+          description: 'Old saved description',
+          content: '',
+          url: 'https://example.com/old-saved-story-filtered',
+          language: 'en',
+          pubDate: new Date(nowMs - (5 * 60 * 60 * 1000)).toISOString()
+        }
+      ]);
+      database.saveReadLaterArticles('user-1', ['recent-read-later-article', 'old-read-later-filtered-article']);
+
+      expect(database.getReadLaterArticles('user-1', { recentHours: 1 }).map((article) => article.id)).toEqual(['recent-read-later-article']);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('persists settings and removes user-source articles when the source is deleted', () => {

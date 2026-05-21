@@ -67,6 +67,11 @@ function getCanonicalGroupKey(item = {}) {
   return canonicalUrl ? `url:${getGroupOwnerKey(item)}:${canonicalUrl}` : '';
 }
 
+function getStoryGroupKey(item = {}) {
+  const storyGroupId = String(item.storyGroupId || '').trim();
+  return storyGroupId ? `story:${getGroupOwnerKey(item)}:${storyGroupId}` : '';
+}
+
 function getTitleGroupKey(item = {}) {
   const titleKey = normalizeTitleKey(item.title);
   return titleKey ? `title:${getGroupOwnerKey(item)}:${titleKey}` : '';
@@ -83,6 +88,37 @@ function canGroupByTitle(item, group) {
   }
 
   return Math.abs(group.latestTimestamp - itemTimestamp) <= TITLE_GROUP_WINDOW_MS;
+}
+
+function addGroupCandidate(candidates, group) {
+  if (group && !candidates.includes(group)) {
+    candidates.push(group);
+  }
+}
+
+function remapGroupReferences(groupMaps, sourceGroup, targetGroup) {
+  groupMaps.forEach((groupMap) => {
+    groupMap.forEach((mappedGroup, key) => {
+      if (mappedGroup === sourceGroup) {
+        groupMap.set(key, targetGroup);
+      }
+    });
+  });
+}
+
+function mergeGroupIntoTarget(groups, groupMaps, targetGroup, sourceGroup) {
+  if (!targetGroup || !sourceGroup || targetGroup === sourceGroup) {
+    return;
+  }
+
+  targetGroup.items.push(...sourceGroup.items);
+  targetGroup.latestTimestamp = Math.max(targetGroup.latestTimestamp || 0, sourceGroup.latestTimestamp || 0);
+  remapGroupReferences(groupMaps, sourceGroup, targetGroup);
+
+  const sourceIndex = groups.indexOf(sourceGroup);
+  if (sourceIndex !== -1) {
+    groups.splice(sourceIndex, 1);
+  }
 }
 
 function addUniqueTopicDetails(topicMap, entries = []) {
@@ -141,22 +177,30 @@ function createGroupFromItems(items = []) {
 
 function groupSimilarNews(newsItems) {
   const groups = [];
+  const groupsByStoryKey = new Map();
   const groupsByCanonicalKey = new Map();
   const groupsByTitleKey = new Map();
+  const groupMaps = [groupsByStoryKey, groupsByCanonicalKey, groupsByTitleKey];
 
   (Array.isArray(newsItems) ? newsItems : [])
     .filter((item) => item?.title)
     .forEach((item) => {
+      const storyKey = getStoryGroupKey(item);
       const canonicalKey = getCanonicalGroupKey(item);
       const titleKey = getTitleGroupKey(item);
-      let group = canonicalKey ? groupsByCanonicalKey.get(canonicalKey) : null;
+      const groupCandidates = [];
 
-      if (!group && titleKey) {
+      addGroupCandidate(groupCandidates, storyKey ? groupsByStoryKey.get(storyKey) : null);
+      addGroupCandidate(groupCandidates, canonicalKey ? groupsByCanonicalKey.get(canonicalKey) : null);
+
+      if (titleKey) {
         const titleCandidate = groupsByTitleKey.get(titleKey);
         if (canGroupByTitle(item, titleCandidate)) {
-          group = titleCandidate;
+          addGroupCandidate(groupCandidates, titleCandidate);
         }
       }
+
+      let group = groupCandidates[0] || null;
 
       if (!group) {
         group = {
@@ -165,10 +209,18 @@ function groupSimilarNews(newsItems) {
           items: []
         };
         groups.push(group);
+      } else {
+        groupCandidates.slice(1).forEach((candidate) => {
+          mergeGroupIntoTarget(groups, groupMaps, group, candidate);
+        });
       }
 
       group.items.push(item);
       group.latestTimestamp = Math.max(group.latestTimestamp || 0, getArticleTimestamp(item));
+
+      if (storyKey) {
+        groupsByStoryKey.set(storyKey, group);
+      }
 
       if (canonicalKey) {
         groupsByCanonicalKey.set(canonicalKey, group);

@@ -495,7 +495,7 @@ describe('API auth and user flows', () => {
       .expect(200);
 
     expect(newsService.getCachedNewsFeed.mock.calls[1][0]).toEqual(expect.objectContaining({
-      page: 1000,
+      page: 20,
       pageSize: 30
     }));
   });

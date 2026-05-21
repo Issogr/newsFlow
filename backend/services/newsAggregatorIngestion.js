@@ -14,11 +14,18 @@ const {
   normalizeIncomingArticles,
   buildInsertedGroupsByOwner
 } = require('./newsAggregatorGrouping');
+const {
+  buildStoryGroupId,
+  findSimilarStoriesForArticle,
+  isAiStoryGroupingAvailable
+} = require('./aiStoryGrouper');
 
 const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24, { min: 0 });
 const RSS_INGESTION_CONCURRENCY = parseIntegerEnv('RSS_INGESTION_CONCURRENCY', 8, { min: 1 });
 const SOURCE_FETCH_FRESHNESS_MS = parseIntegerEnv('SOURCE_FETCH_FRESHNESS_MS', 5 * 60 * 1000, { min: 0 });
+const AI_STORY_GROUPING_CONCURRENCY = parseIntegerEnv('AI_STORY_GROUPING_CONCURRENCY', 1, { min: 1, max: 4 });
 const pendingAiTopicProcessingIds = new Set();
+const pendingAiStoryGroupingIds = new Set();
 const sourceFetchTimestamps = new Map();
 
 function filterArticlesWithinRetention(articles = []) {
@@ -280,8 +287,121 @@ function scheduleAiTopicsForPendingArticles(normalizedArticles = []) {
   }, 0);
 }
 
+async function processAiStoryGroupingForArticle(article = {}) {
+  const articleId = article?.id;
+  if (!articleId) {
+    return;
+  }
+
+  const candidateSet = database.getAiStoryGroupingCandidateSet(articleId, {
+    windowHours: 24,
+    limit: 16
+  });
+  const target = candidateSet.target || article;
+  const candidates = candidateSet.candidates || [];
+
+  if (candidates.length === 0) {
+    database.markArticlesAiStoryGrouping([articleId], 'no_candidates');
+    return;
+  }
+
+  const result = await findSimilarStoriesForArticle(target, candidates);
+  if (result.skipped === 'no_candidates') {
+    database.markArticlesAiStoryGrouping([articleId], 'no_candidates', result.model);
+    return;
+  }
+
+  const matches = result.matches || [];
+  if (matches.length === 0) {
+    database.markArticlesAiStoryGrouping([articleId], 'no_match', result.model);
+    return;
+  }
+
+  const matchedIds = matches.map((match) => match.articleId);
+  const matchedCandidates = candidates.filter((candidate) => matchedIds.includes(candidate.id));
+  const involvedStoryGroupIds = [...new Set([target, ...matchedCandidates]
+    .map((candidate) => String(candidate?.storyGroupId || '').trim())
+    .filter(Boolean))];
+  const existingGroupId = involvedStoryGroupIds[0] || '';
+  const groupedArticleIds = [...new Set([
+    articleId,
+    ...matchedIds,
+    ...database.getArticleIdsForStoryGroups(involvedStoryGroupIds, target?.ownerUserId || null)
+  ])];
+  const storyGroupId = existingGroupId || buildStoryGroupId(groupedArticleIds);
+  const affectedUserIds = [target, ...matchedCandidates]
+    .map((item) => item?.ownerUserId)
+    .filter(Boolean);
+
+  const updatedCount = database.assignArticlesToStoryGroup(groupedArticleIds, storyGroupId, result.model);
+  if (updatedCount > 0) {
+    websocketService.broadcastFeedRefresh({
+      userIds: affectedUserIds.length > 0 ? [...new Set(affectedUserIds)] : [],
+      reason: 'stories'
+    });
+  }
+}
+
+async function processAiStoryGroupingForPendingArticles(articles = []) {
+  if (!Array.isArray(articles) || articles.length === 0) {
+    return;
+  }
+
+  try {
+    const results = await mapSettledWithConcurrency(articles, AI_STORY_GROUPING_CONCURRENCY, processAiStoryGroupingForArticle);
+    const failedArticleIds = results
+      .map((result, index) => result.status === 'rejected' ? articles[index]?.id : null)
+      .filter(Boolean);
+
+    if (failedArticleIds.length > 0) {
+      results
+        .filter((result) => result.status === 'rejected')
+        .forEach((result) => logger.warn(`Background AI story grouping failed: ${result.reason?.message || result.reason}`));
+      database.markArticlesAiStoryGrouping(failedArticleIds, 'failed');
+    }
+  } catch (error) {
+    logger.warn(`Background AI story grouping failed: ${error.message}`);
+    database.markArticlesAiStoryGrouping(articles.map((article) => article.id).filter(Boolean), 'failed');
+  } finally {
+    articles.forEach((article) => pendingAiStoryGroupingIds.delete(article.id));
+  }
+}
+
+function scheduleAiStoryGroupingForPendingArticles(normalizedArticles = []) {
+  if (!Array.isArray(normalizedArticles) || normalizedArticles.length === 0 || !isAiStoryGroupingAvailable()) {
+    return;
+  }
+
+  const pendingArticleIds = database.getArticleIdsPendingAiStoryGrouping(normalizedArticles.map((article) => article.id));
+  if (pendingArticleIds.length === 0) {
+    return;
+  }
+
+  const pendingArticleIdSet = new Set(pendingArticleIds);
+  const pendingArticles = normalizedArticles.filter((article) => {
+    if (!pendingArticleIdSet.has(article.id) || pendingAiStoryGroupingIds.has(article.id)) {
+      return false;
+    }
+
+    pendingAiStoryGroupingIds.add(article.id);
+    return true;
+  });
+
+  if (pendingArticles.length === 0) {
+    return;
+  }
+
+  setTimeout(() => {
+    processAiStoryGroupingForPendingArticles(pendingArticles);
+  }, 0);
+}
+
 function resetPendingAiTopicProcessingIds() {
   pendingAiTopicProcessingIds.clear();
+}
+
+function resetPendingAiStoryGroupingIds() {
+  pendingAiStoryGroupingIds.clear();
 }
 
 function resetSourceFetchFreshness() {
@@ -305,6 +425,7 @@ async function persistNormalizedArticles(normalizedArticles = []) {
   const upsertResult = database.upsertArticles(normalizedArticles);
   mergeNormalizedArticleTopics(normalizedArticles);
   scheduleAiTopicsForPendingArticles(normalizedArticles);
+  scheduleAiStoryGroupingForPendingArticles(normalizedArticles);
   return upsertResult;
 }
 
@@ -415,8 +536,11 @@ module.exports = {
   mapSettledWithConcurrency,
   processAiTopicsForPendingArticles,
   scheduleAiTopicsForPendingArticles,
+  processAiStoryGroupingForPendingArticles,
+  scheduleAiStoryGroupingForPendingArticles,
   _filterArticlesWithinRetention: filterArticlesWithinRetention,
   _resetPendingAiTopicProcessingIds: resetPendingAiTopicProcessingIds,
+  _resetPendingAiStoryGroupingIds: resetPendingAiStoryGroupingIds,
   _resetSourceFetchFreshness: resetSourceFetchFreshness,
   _sourceFetchTimestamps: sourceFetchTimestamps,
   buildSourceFetchTasks,

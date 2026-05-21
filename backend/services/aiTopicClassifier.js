@@ -1,8 +1,14 @@
 const logger = require('../utils/logger');
 const topicNormalizer = require('./topicNormalizer');
 const { mapSettledWithConcurrency } = require('../utils/concurrency');
+const {
+  createOpenRouterClient,
+  extractAssistantContent,
+  getOpenRouterConfig,
+  parseJsonContent,
+  setOpenRouterSdkLoader
+} = require('./openRouterClient');
 
-const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_OPENROUTER_MODEL = 'qwen/qwen3.5-9b';
 const DEFAULT_BATCH_SIZE = 4;
 const DEFAULT_BATCH_CONCURRENCY = 1;
@@ -21,9 +27,6 @@ const TOPIC_GUIDANCE = [
   'Cronaca: incidents, crime, accidents, injuries, police, courts, public order. This is not limited to local news.',
   'Spettacolo: cinema, TV, music, celebrities, entertainment.'
 ];
-
-let openRouterSdkLoader = () => import('@openrouter/sdk');
-let openRouterSdkPromise = null;
 
 function isAiArticleDebugLoggingEnabled() {
   return ['1', 'true', 'yes', 'on'].includes(String(process.env.AI_TOPIC_DEBUG_LOG_ARTICLES || '').trim().toLowerCase());
@@ -55,30 +58,6 @@ function logBatchClassificationsForDebug(result = new Map(), articlesById = new 
   logger.info(`AI topic batch classifications (dev): model=${config.model}, items=${summary}`);
 }
 
-function setOpenRouterSdkLoader(loader) {
-  openRouterSdkLoader = loader || (() => import('@openrouter/sdk'));
-  openRouterSdkPromise = null;
-}
-
-async function loadOpenRouterSdk() {
-  if (!openRouterSdkPromise) {
-    openRouterSdkPromise = openRouterSdkLoader();
-  }
-
-  return openRouterSdkPromise;
-}
-
-async function createOpenRouterClient(config) {
-  const { OpenRouter } = await loadOpenRouterSdk();
-  return new OpenRouter({
-    apiKey: config.apiKey,
-    serverURL: config.baseUrl,
-    timeoutMs: config.timeoutMs,
-    httpReferer: String(process.env.APP_BASE_URL || 'http://localhost'),
-    appTitle: 'News Flow'
-  });
-}
-
 function getIntegerEnv(name, fallback, min, max) {
   const value = Number(process.env[name]);
   if (!Number.isFinite(value)) {
@@ -89,18 +68,20 @@ function getIntegerEnv(name, fallback, min, max) {
 }
 
 function getConfig() {
-  const apiKey = String(process.env.OPENROUTER_API_KEY || '').trim();
-  const enabledValue = String(process.env.AI_TOPIC_DETECTION_ENABLED || 'auto').trim().toLowerCase();
+  const openRouterConfig = getOpenRouterConfig({
+    enabledEnvName: 'AI_TOPIC_DETECTION_ENABLED',
+    modelEnvName: 'OPENROUTER_MODEL',
+    defaultModel: DEFAULT_OPENROUTER_MODEL,
+    timeoutEnvName: 'AI_TOPIC_REQUEST_TIMEOUT_MS',
+    defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
+    clampTimeout: true
+  });
 
   return {
-    apiKey,
-    enabled: enabledValue !== 'false' && Boolean(apiKey),
-    model: String(process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL).trim() || DEFAULT_OPENROUTER_MODEL,
-    baseUrl: String(process.env.OPENROUTER_BASE_URL || DEFAULT_OPENROUTER_BASE_URL).trim().replace(/\/+$/u, ''),
+    ...openRouterConfig,
     batchSize: getIntegerEnv('AI_TOPIC_BATCH_SIZE', DEFAULT_BATCH_SIZE, 1, 50),
     batchConcurrency: getIntegerEnv('AI_TOPIC_BATCH_CONCURRENCY', DEFAULT_BATCH_CONCURRENCY, 1, 4),
-    maxArticlesPerRefresh: getIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, 1, 1000),
-    timeoutMs: getIntegerEnv('AI_TOPIC_REQUEST_TIMEOUT_MS', DEFAULT_TIMEOUT_MS, 1000, 120000)
+    maxArticlesPerRefresh: getIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, 1, 1000)
   };
 }
 
@@ -135,9 +116,9 @@ function truncateText(value, maxLength) {
   return `${normalized.slice(0, maxLength - 3).trim()}...`;
 }
 
-function buildArticlePayload(article = {}) {
+function buildArticlePayload(article = {}, index = 0) {
   return {
-    id: String(article.id || '').trim(),
+    ref: index + 1,
     title: truncateText(article.title || '', 220),
     description: truncateText(article.description || '', 420)
   };
@@ -153,9 +134,10 @@ function buildPrompt(batch = []) {
     'Return minified JSON only. Do not use markdown fences, prose, or trailing explanations.',
     'If people are wounded, attacked, arrested, shot, or involved in a police/court incident, prefer Cronaca. If the same event is a demonstration or public ceremony, also consider Politica.',
     'Example: "A Roma due persone che partecipavano al corteo per il 25 aprile sono state ferite da colpi di pistola ad aria compressa" -> ["Cronaca", "Politica"], not Tecnologia.',
-    'Return strict JSON only with this shape: {"topicsById":[{"id":"article-id","topics":[{"topic":"Topic","confidence":0.82}]}]}',
+    'Each provided item has a numeric ref. Return refs, not article ids.',
+    'Return strict JSON only with this shape: {"topicsByRef":[{"ref":1,"topics":[{"topic":"Topic","confidence":0.82}]}]}',
     'Confidence must be between 0 and 1.',
-    'Return one object for every provided id. If truly impossible to classify an item, return an empty topics array for that item.',
+    'Return objects only for refs with one to three topics. If truly impossible to classify an item, omit that ref.',
     '',
     JSON.stringify({ articles: batch.map(buildArticlePayload) })
   ].join('\n');
@@ -165,35 +147,13 @@ function getCompletionTokenBudget(batchLength) {
   return Math.min(2000, 320 + (Math.max(1, batchLength) * 120));
 }
 
-function parseJsonContent(content) {
-  const rawContent = String(content || '').trim();
-  if (!rawContent) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(rawContent);
-  } catch {
-    const jsonMatch = rawContent.match(/\{[\s\S]*\}/u);
-
-    if (!jsonMatch) {
-      return null;
-    }
-
-    try {
-      return JSON.parse(jsonMatch[0]);
-    } catch {
-      return null;
-    }
-  }
-}
-
 function getClassifierEntries(payload) {
   if (Array.isArray(payload)) {
     return payload;
   }
 
   return [
+    payload?.topicsByRef,
     payload?.topicsById,
     payload?.results,
     payload?.classifications,
@@ -204,6 +164,22 @@ function getClassifierEntries(payload) {
 
 function getClassifierEntryId(entry = {}) {
   return String(entry.id || entry.articleId || entry.article_id || '').trim();
+}
+
+function getClassifierEntryRef(entry = {}) {
+  const rawRef = entry.ref ?? entry.articleRef ?? entry.article_ref ?? entry.index;
+  return String(rawRef || '').trim();
+}
+
+function resolveClassifierEntryId(entry = {}, allowedIds = new Set(), refToArticleId = null) {
+  const id = getClassifierEntryId(entry);
+  if (id && allowedIds.has(id)) {
+    return id;
+  }
+
+  const ref = getClassifierEntryRef(entry);
+  const mappedId = refToArticleId?.get(ref);
+  return mappedId && allowedIds.has(mappedId) ? mappedId : '';
 }
 
 function getClassifierEntryTopics(entry = {}) {
@@ -271,7 +247,7 @@ function evidenceMatchesArticle(evidence = [], article = null) {
   });
 }
 
-function summarizeClassifierResult(payload, allowedIds = new Set()) {
+function summarizeClassifierResult(payload, allowedIds = new Set(), refToArticleId = null) {
   if (!payload || typeof payload !== 'object') {
     return 'invalid_json';
   }
@@ -281,7 +257,7 @@ function summarizeClassifierResult(payload, allowedIds = new Set()) {
     return 'missing_topics_array';
   }
 
-  const validIdEntries = entries.filter((entry) => allowedIds.has(getClassifierEntryId(entry)));
+  const validIdEntries = entries.filter((entry) => resolveClassifierEntryId(entry, allowedIds, refToArticleId));
   if (validIdEntries.length === 0) {
     return `no_matching_article_ids entries=${entries.length}`;
   }
@@ -294,13 +270,13 @@ function summarizeClassifierResult(payload, allowedIds = new Set()) {
   return `unsupported_topics entries=${entries.length} validIds=${validIdEntries.length}`;
 }
 
-function normalizeClassifierDetails(payload, allowedIds = new Set(), articlesById = null) {
+function normalizeClassifierDetails(payload, allowedIds = new Set(), articlesById = null, refToArticleId = null) {
   const entries = getClassifierEntries(payload);
   const result = new Map();
 
   entries.forEach((entry) => {
-    const id = getClassifierEntryId(entry);
-    if (!id || !allowedIds.has(id)) {
+    const id = resolveClassifierEntryId(entry, allowedIds, refToArticleId);
+    if (!id) {
       return;
     }
 
@@ -328,39 +304,6 @@ function normalizeClassifierDetails(payload, allowedIds = new Set(), articlesByI
   return result;
 }
 
-function extractContentPart(value) {
-  if (!value) {
-    return '';
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(extractContentPart).filter(Boolean).join('\n');
-  }
-
-  if (typeof value === 'object') {
-    return extractContentPart(value.text || value.content || value.outputText || value.output_text);
-  }
-
-  return '';
-}
-
-function extractAssistantContent(response = {}) {
-  const choice = response.choices?.[0] || {};
-  return extractContentPart(
-    choice.message?.content
-      || choice.message?.text
-      || choice.text
-      || response.outputText
-      || response.output_text
-      || response.message?.content
-      || response.content
-  );
-}
-
 function summarizeResponseShape(response = {}) {
   const choice = response.choices?.[0] || {};
   const message = choice.message || {};
@@ -376,13 +319,14 @@ function summarizeResponseShape(response = {}) {
 async function classifyBatch(batch, config, context = {}) {
   const allowedIds = new Set(batch.map((article) => article.id).filter(Boolean));
   const articlesById = new Map(batch.map((article) => [article.id, article]));
+  const refToArticleId = new Map(batch.map((article, index) => [String(index + 1), article.id]));
   if (allowedIds.size === 0) {
     return new Map();
   }
 
   const startedAt = Date.now();
   logBatchArticlesForDebug(batch, config, context.batchIndex || 0, context.batchCount || 0);
-  const openRouter = await createOpenRouterClient(config);
+  const openRouter = context.openRouter || await createOpenRouterClient(config);
   const completionPromise = openRouter.chat.send({
     chatRequest: {
       model: config.model,
@@ -422,10 +366,10 @@ async function classifyBatch(batch, config, context = {}) {
 
   const content = extractAssistantContent(response);
   const payload = parseJsonContent(content);
-  const result = normalizeClassifierDetails(payload, allowedIds, articlesById);
+  const result = normalizeClassifierDetails(payload, allowedIds, articlesById, refToArticleId);
 
   if (result.size === 0) {
-    logger.warn(`AI topic batch produced no valid topics: reason=${summarizeClassifierResult(payload, allowedIds)}, responseChars=${content.length}, ${summarizeResponseShape(response)}`);
+    logger.warn(`AI topic batch produced no valid topics: reason=${summarizeClassifierResult(payload, allowedIds, refToArticleId)}, responseChars=${content.length}, ${summarizeResponseShape(response)}`);
   }
 
   logBatchClassificationsForDebug(result, articlesById, config);
@@ -462,10 +406,12 @@ async function classifyTopicDetailsForArticlesWithStatus(articles = []) {
   }
 
   const batches = chunkItems(limitedArticles, config.batchSize);
+  const openRouter = await createOpenRouterClient(config);
   logger.info(`AI topic detection started: model=${config.model}, articles=${limitedArticles.length}, batches=${batches.length}`);
   const batchResults = await mapSettledWithConcurrency(batches, config.batchConcurrency, (batch, batchIndex) => classifyBatch(batch, config, {
     batchIndex,
-    batchCount: batches.length
+    batchCount: batches.length,
+    openRouter
   }));
   const result = new Map();
   const failedArticleIds = [];

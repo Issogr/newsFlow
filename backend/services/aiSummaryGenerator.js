@@ -1,73 +1,73 @@
 const logger = require('../utils/logger');
 const { parseIntegerEnv } = require('../utils/env');
+const {
+  createOpenRouterClient,
+  extractAssistantContent,
+  getOpenRouterConfig,
+  parseJsonContent,
+  setOpenRouterSdkLoader
+} = require('./openRouterClient');
 
-const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_OPENROUTER_SUMMARY_MODEL = 'deepseek/deepseek-v4-flash';
 const DEFAULT_TIMEOUT_MS = 120000;
-
-let openRouterSdkLoader = () => import('@openrouter/sdk');
-let openRouterSdkPromise = null;
-
-function setOpenRouterSdkLoader(loader) {
-  openRouterSdkLoader = loader || (() => import('@openrouter/sdk'));
-  openRouterSdkPromise = null;
-}
-
-async function loadOpenRouterSdk() {
-  if (!openRouterSdkPromise) {
-    openRouterSdkPromise = openRouterSdkLoader();
-  }
-
-  return openRouterSdkPromise;
-}
+const DEFAULT_PROMPT_TEXT_BUDGET_CHARS = 30000;
+const MIN_ARTICLE_TEXT_CHARS = 220;
+const DEFAULT_READER_TEXT_MAX_CHARS = 3000;
+const DEFAULT_RSS_METADATA_MAX_CHARS = 520;
 
 function getConfig() {
-  const apiKey = String(process.env.OPENROUTER_API_KEY || '').trim();
-  const enabledValue = String(process.env.AI_SUMMARY_GENERATION_ENABLED || 'auto').trim().toLowerCase();
-
-  return {
-    apiKey,
-    enabled: enabledValue !== 'false' && Boolean(apiKey),
-    model: String(process.env.OPENROUTER_SUMMARY_MODEL || DEFAULT_OPENROUTER_SUMMARY_MODEL).trim() || DEFAULT_OPENROUTER_SUMMARY_MODEL,
-    baseUrl: String(process.env.OPENROUTER_BASE_URL || DEFAULT_OPENROUTER_BASE_URL).trim().replace(/\/+$/u, ''),
-    timeoutMs: parseIntegerEnv('AI_SUMMARY_REQUEST_TIMEOUT_MS', DEFAULT_TIMEOUT_MS, { min: 1000, max: 120000 })
-  };
-}
-
-async function createOpenRouterClient(config) {
-  const { OpenRouter } = await loadOpenRouterSdk();
-  return new OpenRouter({
-    apiKey: config.apiKey,
-    serverURL: config.baseUrl,
-    timeoutMs: config.timeoutMs,
-    httpReferer: String(process.env.APP_BASE_URL || 'http://localhost'),
-    appTitle: 'News Flow'
+  return getOpenRouterConfig({
+    enabledEnvName: 'AI_SUMMARY_GENERATION_ENABLED',
+    modelEnvName: 'OPENROUTER_SUMMARY_MODEL',
+    defaultModel: DEFAULT_OPENROUTER_SUMMARY_MODEL,
+    timeoutEnvName: 'AI_SUMMARY_REQUEST_TIMEOUT_MS',
+    defaultTimeoutMs: DEFAULT_TIMEOUT_MS
   });
 }
 
 function truncateText(value, maxLength) {
+  const limit = Math.max(0, Number(maxLength) || 0);
   const normalized = String(value || '').replace(/\s+/g, ' ').trim();
-  if (normalized.length <= maxLength) {
+  if (!limit || normalized.length <= limit) {
     return normalized;
   }
 
-  return `${normalized.slice(0, maxLength - 3).trim()}...`;
+  if (limit <= 3) {
+    return normalized.slice(0, limit).trim();
+  }
+
+  return `${normalized.slice(0, limit - 3).trim()}...`;
 }
 
-function buildArticlePayload(article = {}, index = 0) {
-  const readerText = truncateText(article.readerText || '', Number(article.readerTextMaxChars) || 3000);
+function getPromptTextBudgetChars() {
+  return parseIntegerEnv('AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS', DEFAULT_PROMPT_TEXT_BUDGET_CHARS, { min: 10000, max: 240000 });
+}
+
+function getArticleTextLimit(articleCount) {
+  return Math.max(MIN_ARTICLE_TEXT_CHARS, Math.floor(getPromptTextBudgetChars() / Math.max(1, Number(articleCount) || 1)));
+}
+
+function buildArticlePayload(article = {}, index = 0, options = {}) {
+  const articleTextLimit = Math.min(
+    Number(article.readerTextMaxChars) || DEFAULT_READER_TEXT_MAX_CHARS,
+    Number(options.articleTextLimit) || DEFAULT_READER_TEXT_MAX_CHARS
+  );
+  const readerText = truncateText(article.readerText || '', articleTextLimit);
+  const fallbackText = truncateText(article.description || article.content || '', Math.min(DEFAULT_RSS_METADATA_MAX_CHARS, articleTextLimit));
+
   return {
     ref: index + 1,
     title: truncateText(article.title || '', 220),
-    description: readerText || truncateText(article.description || article.content || '', 520),
+    description: readerText || fallbackText,
     contentType: readerText ? 'cached_reader_text' : 'rss_metadata',
     source: truncateText(article.source || article.rawSource || '', 120),
-    publishedAt: article.pubDate || '',
-    url: article.url || ''
+    publishedAt: article.pubDate || ''
   };
 }
 
 function buildPrompt(topicConfig = {}, articles = []) {
+  const articleTextLimit = getArticleTextLimit(articles.length);
+
   return [
     'Write concise, fluid news briefings for the requested topic using only the provided articles.',
     'The style should feel like a clean ChatGPT reading experience: clear context, compact paragraphs, no hype, no bullet spam.',
@@ -83,64 +83,9 @@ function buildPrompt(topicConfig = {}, articles = []) {
       canonicalTopics: topicConfig.topics || [],
       periodStart: topicConfig.periodStart,
       periodEnd: topicConfig.periodEnd,
-      articles: articles.map(buildArticlePayload)
+      articles: articles.map((article, index) => buildArticlePayload(article, index, { articleTextLimit }))
     })
   ].join('\n');
-}
-
-function extractContentPart(value) {
-  if (!value) {
-    return '';
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(extractContentPart).filter(Boolean).join('\n');
-  }
-
-  if (typeof value === 'object') {
-    return extractContentPart(value.text || value.content || value.outputText || value.output_text);
-  }
-
-  return '';
-}
-
-function extractAssistantContent(response = {}) {
-  const choice = response.choices?.[0] || {};
-  return extractContentPart(
-    choice.message?.content
-      || choice.message?.text
-      || choice.text
-      || response.outputText
-      || response.output_text
-      || response.message?.content
-      || response.content
-  );
-}
-
-function parseJsonContent(content) {
-  const rawContent = String(content || '').trim();
-  if (!rawContent) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(rawContent);
-  } catch {
-    const jsonMatch = rawContent.match(/\{[\s\S]*\}/u);
-    if (!jsonMatch) {
-      return null;
-    }
-
-    try {
-      return JSON.parse(jsonMatch[0]);
-    } catch {
-      return null;
-    }
-  }
 }
 
 function getCompletionTokenBudget(articleCount) {
@@ -268,6 +213,7 @@ module.exports = {
   generateSummaryForArticles,
   isAiSummaryGenerationAvailable,
   _buildPrompt: buildPrompt,
+  _getArticleTextLimit: getArticleTextLimit,
   _getConfig: getConfig,
   _parseJsonContent: parseJsonContent,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader

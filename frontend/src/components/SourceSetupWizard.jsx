@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, Newspaper, RefreshCw } from 'lucide-react';
 import SourceIcon from './SourceIcon';
 import useLockBodyScroll from '../hooks/useLockBodyScroll';
@@ -81,8 +81,17 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
   const [expandedSourceIds, setExpandedSourceIds] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const selectableSignature = allSelectableIds.join('\u0000');
 
   useLockBodyScroll();
+
+  useEffect(() => {
+    setSelectedIds((current) => {
+      const selectableIdSet = new Set(allSelectableIds);
+      const retained = current.filter((id) => selectableIdSet.has(id));
+      return retained.length > 0 ? retained : initialSelectedIds;
+    });
+  }, [allSelectableIds, initialSelectedIds, selectableSignature]);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedCount = selectedIds.length;

@@ -14,6 +14,7 @@ const SUMMARY_READER_PREWARM_MINUTES_BEFORE = parseIntegerEnv('AI_SUMMARY_READER
 const SUMMARY_READER_PREWARM_CONCURRENCY = parseIntegerEnv('AI_SUMMARY_READER_PREWARM_CONCURRENCY', 2, { min: 1, max: 8 });
 const SUMMARY_READER_TEXT_MAX_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MAX_CHARS', 3000, { min: 500, max: 12000 });
 const SUMMARY_READER_TEXT_MIN_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MIN_CHARS', 250, { min: 80, max: 2000 });
+const SUMMARY_FAILED_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
 
 const SUMMARY_TOPICS = [
   {
@@ -196,10 +197,44 @@ function getSummaryTopics() {
   return SUMMARY_TOPICS.map((topic) => ({ ...topic }));
 }
 
+function getRetainedPrewarmWindowEnds(referenceDate = new Date()) {
+  return new Set([
+    getLatestDueWindow(referenceDate).periodEnd,
+    getNextDueWindow(referenceDate).periodEnd
+  ]);
+}
+
+function prunePrewarmAttempts(referenceDate = new Date()) {
+  const retainedWindowEnds = getRetainedPrewarmWindowEnds(referenceDate);
+  let removedCount = 0;
+
+  attemptedPrewarmArticleIdsByWindow.forEach((attemptedIds, windowEnd) => {
+    if (!retainedWindowEnds.has(windowEnd)) {
+      attemptedPrewarmArticleIdsByWindow.delete(windowEnd);
+      removedCount += attemptedIds?.size || 0;
+    }
+  });
+
+  return { removedCount, retainedWindowEnds };
+}
+
 function buildSummaryId(topicKey, periodStart, periodEnd) {
   return [topicKey, periodStart, periodEnd]
     .join(':')
     .replace(/[^a-zA-Z0-9_-]+/g, '-');
+}
+
+function isFailedSummaryRetryDue(summary = {}, referenceDate = new Date()) {
+  if (summary.status !== 'failed' || SUMMARY_FAILED_RETRY_COOLDOWN_MS <= 0) {
+    return true;
+  }
+
+  const generatedAtTime = Date.parse(summary.generatedAt || '');
+  if (!Number.isFinite(generatedAtTime)) {
+    return true;
+  }
+
+  return new Date(referenceDate).getTime() - generatedAtTime >= SUMMARY_FAILED_RETRY_COOLDOWN_MS;
 }
 
 function buildSourceList(articles = []) {
@@ -277,7 +312,9 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
       return { skipped: true, reason: 'outside_window', attemptedCount: 0, window };
     }
 
-    const attemptedIds = attemptedPrewarmArticleIdsByWindow.get(window.periodEnd) || new Set();
+    const { retainedWindowEnds } = prunePrewarmAttempts(referenceDate);
+    const shouldRetainAttempts = retainedWindowEnds.has(window.periodEnd);
+    const attemptedIds = shouldRetainAttempts ? (attemptedPrewarmArticleIdsByWindow.get(window.periodEnd) || new Set()) : new Set();
     const candidates = getCandidateArticlesForWindow(window).filter((article) => {
       return article?.id && !attemptedIds.has(article.id) && !isUsefulReaderText(database.getReaderCache(article.id, null)?.contentText);
     });
@@ -287,7 +324,9 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
     }
 
     candidates.forEach((article) => attemptedIds.add(article.id));
-    attemptedPrewarmArticleIdsByWindow.set(window.periodEnd, attemptedIds);
+    if (shouldRetainAttempts) {
+      attemptedPrewarmArticleIdsByWindow.set(window.periodEnd, attemptedIds);
+    }
 
     const results = await mapSettledWithConcurrency(candidates, SUMMARY_READER_PREWARM_CONCURRENCY, async (article) => {
       const payload = await readerService.getReaderArticle(article.id, {
@@ -311,6 +350,10 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
   const existingSummary = database.getThematicSummary(topicConfig.key, window.periodStart, window.periodEnd);
   if (existingSummary?.status === 'completed' && options.force !== true) {
     return { summary: existingSummary, generatedNow: false };
+  }
+  if (existingSummary?.status === 'failed' && options.force !== true && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
+    logger.debug(`Thematic summary retry skipped during cooldown: topic=${topicConfig.key}, windowEnd=${window.periodEnd}`);
+    return { summary: null, generatedNow: false };
   }
 
   const articles = database.getArticlesForThematicSummary({
@@ -461,6 +504,7 @@ function stopScheduler() {
     clearInterval(schedulerHandle);
     schedulerHandle = null;
   }
+  attemptedPrewarmArticleIdsByWindow.clear();
 }
 
 module.exports = {
@@ -473,5 +517,7 @@ module.exports = {
   _getNextDueWindow: getNextDueWindow,
   _isReaderPrewarmEnabled: isReaderPrewarmEnabled,
   _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,
-  _getSummaryTopics: getSummaryTopics
+  _getSummaryTopics: getSummaryTopics,
+  _getPrewarmAttemptWindowCount: () => attemptedPrewarmArticleIdsByWindow.size,
+  _prunePrewarmAttempts: prunePrewarmAttempts
 };

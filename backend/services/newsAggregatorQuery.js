@@ -1,6 +1,7 @@
 const database = require('./database');
 const newsSources = require('../config/newsSources');
 const { buildDomainSourceGroups, getConfiguredSourceGroups } = require('../utils/sourceCatalog');
+const { MAX_NEWS_PAGE } = require('../utils/newsQuery');
 const { TITLE_GROUP_WINDOW_MS, groupSimilarNews } = require('./newsAggregatorGrouping');
 const { parseIntegerEnv } = require('../utils/env');
 
@@ -310,11 +311,12 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   };
   const availableSources = getAvailableSources(userContext, userSources);
 
-  const page = Math.max(1, Number(filters.page) || 1);
+  const page = Math.max(1, Math.min(Number(filters.page) || 1, MAX_NEWS_PAGE));
   const pageSize = Math.max(1, Math.min(Number(filters.pageSize) || 12, 30));
   const groupedPage = fetchGroupedNewsPage(filters, queryOptions, page, pageSize);
   const pageGroups = annotateReadLaterGroups(groupedPage.pageGroups, userContext.userId || null);
-  const hasMore = groupedPage.hasMore;
+  const cursorMode = Boolean(filters.beforePubDate || filters.beforeId);
+  const hasMore = !cursorMode && page >= MAX_NEWS_PAGE ? false : groupedPage.hasMore;
   const latestIngestion = database.getLatestIngestionRun();
   const includeFilters = filters.includeFilters !== false;
   const manualRefreshMeta = getManualRefreshMeta() || {};
@@ -357,17 +359,18 @@ async function getReadLaterFeed(filters = {}, userContext = {}) {
   };
   const availableSources = getAvailableSources(userContext, userSources);
 
-  const page = Math.max(1, Number(filters.page) || 1);
+  const page = Math.max(1, Math.min(Number(filters.page) || 1, MAX_NEWS_PAGE));
   const pageSize = Math.max(1, Math.min(Number(filters.pageSize) || 12, 30));
   const includeFilters = filters.includeFilters !== false;
   const groupedPage = fetchGroupedReadLaterPage(filters, queryOptions, page, pageSize);
+  const hasMore = page >= MAX_NEWS_PAGE ? false : groupedPage.hasMore;
 
   return {
     items: groupedPage.pageGroups,
     meta: {
       page,
       pageSize,
-      hasMore: groupedPage.hasMore,
+      hasMore,
       nextCursor: null,
       returnedGroups: groupedPage.pageGroups.length,
       totalGroups: groupedPage.totalGroups,

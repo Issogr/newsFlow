@@ -36,16 +36,150 @@ const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 const BACK_TO_TOP_THRESHOLD = 280;
 const TOP_NAV_SHRINK_THRESHOLD = 28;
 const READ_THEMATIC_SUMMARIES_STORAGE_PREFIX = 'newsflow-read-thematic-summaries';
-const mergeGroups = (primaryGroups, secondaryGroups) => {
-  const merged = new Map();
 
-  [...primaryGroups, ...secondaryGroups].forEach((group) => {
-    if (group?.id && !merged.has(group.id)) {
-      merged.set(group.id, group);
+function getGroupMergeKeys(group = {}) {
+  const keys = new Set();
+
+  if (group.id) {
+    keys.add(`group:${group.id}`);
+  }
+
+  (group.items || []).forEach((item) => {
+    const ownerKey = item?.ownerUserId || group.ownerUserId || '';
+    if (item?.id) {
+      keys.add(`article:${item.id}`);
+    }
+    if (item?.storyGroupId) {
+      keys.add(`story:${ownerKey}:${item.storyGroupId}`);
+    }
+    if (item?.canonicalUrl) {
+      keys.add(`url:${ownerKey}:${item.canonicalUrl}`);
     }
   });
 
-  return [...merged.values()];
+  return keys;
+}
+
+function cloneGroup(group) {
+  return {
+    ...group,
+    items: [...(group.items || [])],
+    sources: [...(group.sources || [])],
+    topics: [...(group.topics || [])],
+    topicDetails: [...(group.topicDetails || [])],
+    readLaterArticleIds: [...(group.readLaterArticleIds || [])]
+  };
+}
+
+function getGroupItemKey(item = {}) {
+  return item.id || item.canonicalUrl || item.url || item.title || '';
+}
+
+function mergeUniqueValues(...lists) {
+  return [...new Set(lists.flat().filter(Boolean))];
+}
+
+function mergeGroupItems(primaryItems = [], secondaryItems = []) {
+  const itemMap = new Map();
+
+  [...primaryItems, ...secondaryItems].forEach((item) => {
+    const key = getGroupItemKey(item);
+    if (!key) {
+      return;
+    }
+
+    const existing = itemMap.get(key);
+    itemMap.set(key, existing ? { ...existing, ...item } : item);
+  });
+
+  return [...itemMap.values()].sort((left, right) => {
+    const dateComparison = String(right.pubDate || '').localeCompare(String(left.pubDate || ''));
+    return dateComparison || String(right.id || '').localeCompare(String(left.id || ''));
+  });
+}
+
+function groupSharesAnyKey(group, keySet) {
+  return [...getGroupMergeKeys(group)].some((key) => keySet.has(key));
+}
+
+function filterGroupsMatchingCurrent(currentGroups = [], incomingGroups = []) {
+  const currentKeys = new Set();
+  currentGroups.forEach((group) => {
+    getGroupMergeKeys(group).forEach((key) => currentKeys.add(key));
+  });
+
+  if (currentKeys.size === 0) {
+    return [];
+  }
+
+  return incomingGroups.filter((group) => groupSharesAnyKey(group, currentKeys));
+}
+
+function mergeGroupIntoTarget(targetGroup, incomingGroup) {
+  const nextItems = mergeGroupItems(targetGroup.items, incomingGroup.items);
+  const primaryItem = nextItems[0] || null;
+
+  targetGroup.items = nextItems;
+  targetGroup.sources = mergeUniqueValues(targetGroup.sources || [], incomingGroup.sources || [], nextItems.map((item) => item.source));
+  targetGroup.topics = mergeUniqueValues(targetGroup.topics || [], incomingGroup.topics || [], nextItems.flatMap((item) => item.topics || []));
+  targetGroup.topicDetails = [...(targetGroup.topicDetails || []), ...(incomingGroup.topicDetails || [])];
+  targetGroup.readLater = Boolean(targetGroup.readLater || incomingGroup.readLater);
+  targetGroup.readLaterArticleIds = mergeUniqueValues(targetGroup.readLaterArticleIds || [], incomingGroup.readLaterArticleIds || []);
+
+  if (primaryItem) {
+    targetGroup.cursorId = primaryItem.id || targetGroup.cursorId;
+    targetGroup.title = primaryItem.title || targetGroup.title || incomingGroup.title;
+    targetGroup.description = primaryItem.description || targetGroup.description || incomingGroup.description;
+    targetGroup.pubDate = primaryItem.pubDate || targetGroup.pubDate;
+    targetGroup.url = primaryItem.url || targetGroup.url;
+  }
+}
+
+const mergeGroups = (primaryGroups, secondaryGroups) => {
+  const mergedGroups = [];
+  const groupByKey = new Map();
+
+  const remapGroup = (sourceGroup, targetGroup) => {
+    groupByKey.forEach((mappedGroup, key) => {
+      if (mappedGroup === sourceGroup) {
+        groupByKey.set(key, targetGroup);
+      }
+    });
+  };
+
+  const addGroupKeys = (group) => {
+    getGroupMergeKeys(group).forEach((key) => groupByKey.set(key, group));
+  };
+
+  [...primaryGroups, ...secondaryGroups].forEach((group) => {
+    if (!group) {
+      return;
+    }
+
+    const groupKeys = getGroupMergeKeys(group);
+    const candidates = [...new Set([...groupKeys].map((key) => groupByKey.get(key)).filter(Boolean))];
+    let targetGroup = candidates[0] || null;
+
+    if (!targetGroup) {
+      targetGroup = cloneGroup(group);
+      mergedGroups.push(targetGroup);
+    } else {
+      mergeGroupIntoTarget(targetGroup, group);
+    }
+
+    candidates.slice(1).forEach((candidate) => {
+      mergeGroupIntoTarget(targetGroup, candidate);
+      remapGroup(candidate, targetGroup);
+      const candidateIndex = mergedGroups.indexOf(candidate);
+      if (candidateIndex !== -1) {
+        mergedGroups.splice(candidateIndex, 1);
+      }
+    });
+
+    addGroupKeys(targetGroup);
+  });
+
+  return mergedGroups;
 };
 
 const appendUniqueGroups = (currentGroups, incomingGroups) => mergeGroups(currentGroups, incomingGroups);
@@ -120,6 +254,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const userMenuRef = useRef(null);
   const visibleNewsCountRef = useRef(0);
   const preservedNewsCountRef = useRef(0);
+  const activeListLoadingRequestIdRef = useRef(null);
   const recentHours = Math.max(
     settingsLimits.recentHours.min,
     Math.min(Number(currentUser?.settings?.recentHours) || settingsLimits.recentHours.max, settingsLimits.recentHours.max)
@@ -130,12 +265,15 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     return getSourceReloadSignature(excludedSourceIds, excludedSubSourceIds, currentUser?.customSources || []);
   }, [currentUser?.customSources, excludedSourceIds, excludedSubSourceIds]);
   const sourceReloadSignatureRef = useRef(sourceReloadSignature);
-  visibleNewsCountRef.current = news.length;
-  const retainedNewsLimitReached = news.length >= MAX_RETAINED_NEWS_GROUPS;
+  const visibleNews = useMemo(() => news.filter((group) => group?.items?.length > 0), [news]);
+  visibleNewsCountRef.current = visibleNews.length;
+  const retainedNewsLimitReached = visibleNews.length >= MAX_RETAINED_NEWS_GROUPS;
   const isReadLaterView = activeView === 'readLater';
   const metaRef = useRef(meta);
   metaRef.current = meta;
-  const setupSourceCatalog = currentUser?.sourceCatalog || sourceCatalog;
+  const setupSourceCatalog = Array.isArray(currentUser?.sourceCatalog) && currentUser.sourceCatalog.length > 0
+    ? currentUser.sourceCatalog
+    : sourceCatalog;
   const readThematicSummariesStorageKey = useMemo(() => getReadThematicSummariesStorageKey(currentUser), [currentUser]);
 
   const visibleAvailableSources = useMemo(() => {
@@ -243,6 +381,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   } = {}) {
     const setBusyState = append ? setLoadingMore : (silent ? () => {} : setLoading);
     const request = append ? startPaginationRequest() : startListRequest();
+    const tracksListLoading = !append && !silent;
+
+    if (tracksListLoading) {
+      activeListLoadingRequestIdRef.current = request.id;
+    } else if (!append && silent && activeListLoadingRequestIdRef.current !== null) {
+      activeListLoadingRequestIdRef.current = null;
+      setLoading(false);
+    }
 
     if (append) {
       preservedNewsCountRef.current = Math.max(preservedNewsCountRef.current || visibleNewsCountRef.current || PAGE_SIZE, visibleNewsCountRef.current || PAGE_SIZE) + PAGE_SIZE;
@@ -266,7 +412,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         search: debouncedSearch,
         sourceIds: activeFilters.sourceIds,
         topics: activeFilters.topics,
-        recentHours: !isReadLaterView && showRecentOnly ? recentHours : null,
+        recentHours: showRecentOnly ? recentHours : null,
         beforePubDate: !isReadLaterView && append ? cursor?.beforePubDate : '',
         beforeId: !isReadLaterView && append ? cursor?.beforeId : '',
         refresh: !isReadLaterView && forceRefresh,
@@ -314,6 +460,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       setNews((current) => {
         let nextNews = append ? appendUniqueGroups(current, response.items || []) : mergedItems;
 
+        if (!append && silent) {
+          nextNews = mergeGroups(current, filterGroupsMatchingCurrent(current, mergedItems));
+        }
+
         if (!append && silent && current.length > nextNews.length) {
           const preservedTail = current.slice(nextNews.length);
           nextNews = appendUniqueGroups(nextNews, preservedTail).slice(0, current.length);
@@ -334,7 +484,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
         return nextMeta;
       });
-      if (!append) {
+      if (!append && !silent) {
         setPendingNewsGroupIds([]);
       }
       if (response.filters) {
@@ -347,20 +497,27 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         setError(requestError);
       }
     } finally {
-      if (request.isLatest()) {
+      if (tracksListLoading && activeListLoadingRequestIdRef.current === request.id) {
+        activeListLoadingRequestIdRef.current = null;
+        setLoading(false);
+      } else if (!tracksListLoading && request.isLatest()) {
         setBusyState(false);
       }
     }
   }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, isReadLaterView, recentHours, showRecentOnly, startListRequest, startPaginationRequest]);
 
   const handleTopicRefresh = useCallback(() => {
+    if (needsSourceSetup) {
+      return;
+    }
+
     loadNews({
       page: 1,
       append: false,
       silent: true,
       minimumItemCount: Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current)
     });
-  }, [loadNews]);
+  }, [loadNews, needsSourceSetup]);
 
   const handleNewsUpdate = useCallback((payload = {}) => {
     const incomingGroupIds = (Array.isArray(payload.groupIds) ? payload.groupIds : []).filter(Boolean);
@@ -401,7 +558,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     onTopicRefresh: handleTopicRefresh,
     onSummariesRefresh: () => loadThematicSummaries(),
     onNewsUpdate: handleNewsUpdate,
-    subscription: socketSubscription
+    subscription: socketSubscription,
+    enabled: !needsSourceSetup
   });
 
   useEffect(() => {
@@ -672,7 +830,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           </div>
         ) : error ? (
           <ErrorMessage error={error} onRetry={() => loadNews({ page: 1, append: false, forceRefresh: true })} t={t} />
-        ) : news.length === 0 ? (
+        ) : visibleNews.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
             <h2 className="text-xl font-semibold text-slate-800">{isReadLaterView ? t('readLaterEmptyTitle') : t('noNewsTitle')}</h2>
             <p className="mt-2 text-slate-500">{isReadLaterView ? t('readLaterEmptyText') : t('noNewsText')}</p>
@@ -693,18 +851,17 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
             )}
 
             <div className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {news.map((group) => (
-                <div key={group.id} className="min-w-0">
-                  <NewsCard
-                    group={group}
-                    showImages={showNewsImages}
-                    locale={locale}
-                    t={t}
-                    onOpenReader={openReader}
-                    onToggleReadLater={handleToggleReadLater}
-                    readLaterUpdating={readLaterUpdatingGroupIds.includes(group.id)}
-                  />
-                </div>
+              {visibleNews.map((group) => (
+                <NewsCard
+                  key={group.id || group.cursorId || group.items?.[0]?.id}
+                  group={group}
+                  showImages={showNewsImages}
+                  locale={locale}
+                  t={t}
+                  onOpenReader={openReader}
+                  onToggleReadLater={handleToggleReadLater}
+                  readLaterUpdating={readLaterUpdatingGroupIds.includes(group.id)}
+                />
               ))}
             </div>
 

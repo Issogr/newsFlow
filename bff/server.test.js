@@ -5,7 +5,49 @@ const path = require('path');
 const express = require('express');
 const cookieSignature = require('cookie-signature');
 const request = require('supertest');
-const { createApp, encryptBackendSessionCookie, getBffSessionSecret, isValidSessionPayload, unsignSessionId } = require('./server');
+const { createApp, createServer, encryptBackendSessionCookie, getBffSessionSecret, isValidSessionPayload, unsignSessionId } = require('./server');
+
+async function listen(server) {
+  await new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
+}
+
+async function close(server) {
+  await new Promise((resolve) => {
+    server.close(resolve);
+  });
+}
+
+function requestUpgrade(server, { cookie = '', headers = {} } = {}) {
+  return new Promise((resolve, reject) => {
+    const { port } = server.address();
+    const req = http.request({
+      host: '127.0.0.1',
+      port,
+      path: '/socket.io/?EIO=4&transport=websocket',
+      headers: {
+        Connection: 'Upgrade',
+        Upgrade: 'websocket',
+        'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==',
+        'Sec-WebSocket-Version': '13',
+        ...(cookie ? { Cookie: cookie } : {}),
+        ...headers,
+      },
+    });
+
+    req.on('upgrade', (res, socket) => {
+      socket.destroy();
+      resolve({ statusCode: res.statusCode, headers: res.headers, upgraded: true });
+    });
+    req.on('response', (res) => {
+      res.resume();
+      res.on('end', () => resolve({ statusCode: res.statusCode, headers: res.headers, upgraded: false }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
 
 function createFrontendDist() {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'newsflow-bff-frontend-'));
@@ -438,6 +480,62 @@ describe('bff server', () => {
 
     expect(response.body.path).toBe('/socket.io/ping');
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
+  });
+
+  test('rejects unauthenticated raw socket upgrades before proxying to the backend', async () => {
+    const bffServer = createServer({ backendBaseUrl, frontendDistDir, sessionDbPath });
+    await listen(bffServer);
+
+    try {
+      const response = await requestUpgrade(bffServer);
+
+      expect(response).toEqual(expect.objectContaining({
+        statusCode: 401,
+        upgraded: false,
+      }));
+    } finally {
+      await close(bffServer);
+    }
+  });
+
+  test('proxies authenticated raw socket upgrades with sanitized session headers', async () => {
+    const bffServer = createServer({ backendBaseUrl, frontendDistDir, sessionDbPath });
+    let backendUpgradeHeaders = null;
+    backendServer.once('upgrade', (req, socket) => {
+      backendUpgradeHeaders = req.headers;
+      socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n');
+      socket.destroy();
+    });
+    await listen(bffServer);
+
+    try {
+      const loginResponse = await request(bffServer)
+        .post('/api/auth/login')
+        .send({ username: 'alice', password: 'secret123' })
+        .expect(200);
+      const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+
+      const response = await requestUpgrade(bffServer, {
+        cookie: bffSessionCookie,
+        headers: {
+          Authorization: 'Bearer hostile',
+          'x-session-token': 'hostile',
+          'x-newsflow-app': 'hostile',
+        },
+      });
+
+      expect(response).toEqual(expect.objectContaining({
+        statusCode: 101,
+        upgraded: true,
+      }));
+      expect(backendUpgradeHeaders.authorization).toBeUndefined();
+      expect(backendUpgradeHeaders['x-session-token']).toBeUndefined();
+      expect(backendUpgradeHeaders['x-newsflow-app']).toBeUndefined();
+      expect(backendUpgradeHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
+      expect(backendUpgradeHeaders['x-newsflow-proxy']).toBe('test-proxy-token');
+    } finally {
+      await close(bffServer);
+    }
   });
 
   test('returns structured JSON when the app proxy fails upstream', async () => {

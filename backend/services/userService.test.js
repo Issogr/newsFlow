@@ -182,6 +182,29 @@ describe('userService imports', () => {
     });
   });
 
+  test('rejects case-insensitive duplicate usernames during registration', async () => {
+    await userService.registerUser({ username: 'CaseUser', password: 'secret123' });
+
+    await expect(userService.registerUser({ username: 'caseuser', password: 'secret123' })).rejects.toMatchObject({
+      status: 409,
+      code: 'USER_ALREADY_EXISTS'
+    });
+  });
+
+  test('allows only one concurrent case-insensitive username variant', async () => {
+    const results = await Promise.allSettled([
+      userService.registerUser({ username: 'RaceUser', password: 'secret123' }),
+      userService.registerUser({ username: 'raceuser', password: 'secret123' })
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(results.find((result) => result.status === 'rejected').reason).toMatchObject({
+      status: 409,
+      code: 'USER_ALREADY_EXISTS'
+    });
+  });
+
   test('does not authenticate users without a stored password hash', async () => {
     const now = new Date().toISOString();
 
