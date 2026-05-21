@@ -1,6 +1,12 @@
 const aiSummaryGenerator = require('./aiSummaryGenerator');
 
 describe('aiSummaryGenerator', () => {
+  const originalEnv = process.env;
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
   test('uses cached reader text in the summary prompt when available', () => {
     const prompt = aiSummaryGenerator._buildPrompt({
       key: 'science',
@@ -28,5 +34,33 @@ describe('aiSummaryGenerator', () => {
       contentType: 'cached_reader_text'
     }));
     expect(payload.articles[0]).not.toHaveProperty('id');
+  });
+
+  test('keeps prompt article text within an adaptive budget', () => {
+    process.env = {
+      ...originalEnv,
+      AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS: '10000'
+    };
+    const articles = Array.from({ length: 40 }, (_, index) => ({
+      id: `article-${index}`,
+      title: `Article ${index}`,
+      description: 'RSS description',
+      readerText: 'Reader text with useful context. '.repeat(200),
+      source: 'BBC',
+      pubDate: '2026-05-21T08:00:00.000Z',
+      url: `https://example.com/article-${index}`
+    }));
+
+    const prompt = aiSummaryGenerator._buildPrompt({ key: 'science', label: 'Science' }, articles);
+    const payload = JSON.parse(prompt.split('\n').at(-1));
+
+    expect(aiSummaryGenerator._getArticleTextLimit(articles.length)).toBe(250);
+    expect(payload.articles).toHaveLength(40);
+    expect(payload.articles[0].description.length).toBeLessThanOrEqual(250);
+    expect(payload.articles[0]).not.toHaveProperty('url');
+  });
+
+  test('uses a conservative default text budget for large prompts', () => {
+    expect(aiSummaryGenerator._getArticleTextLimit(120)).toBe(250);
   });
 });

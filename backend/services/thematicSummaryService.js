@@ -14,6 +14,7 @@ const SUMMARY_READER_PREWARM_MINUTES_BEFORE = parseIntegerEnv('AI_SUMMARY_READER
 const SUMMARY_READER_PREWARM_CONCURRENCY = parseIntegerEnv('AI_SUMMARY_READER_PREWARM_CONCURRENCY', 2, { min: 1, max: 8 });
 const SUMMARY_READER_TEXT_MAX_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MAX_CHARS', 3000, { min: 500, max: 12000 });
 const SUMMARY_READER_TEXT_MIN_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MIN_CHARS', 250, { min: 80, max: 2000 });
+const SUMMARY_FAILED_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
 
 const SUMMARY_TOPICS = [
   {
@@ -223,6 +224,19 @@ function buildSummaryId(topicKey, periodStart, periodEnd) {
     .replace(/[^a-zA-Z0-9_-]+/g, '-');
 }
 
+function isFailedSummaryRetryDue(summary = {}, referenceDate = new Date()) {
+  if (summary.status !== 'failed' || SUMMARY_FAILED_RETRY_COOLDOWN_MS <= 0) {
+    return true;
+  }
+
+  const generatedAtTime = Date.parse(summary.generatedAt || '');
+  if (!Number.isFinite(generatedAtTime)) {
+    return true;
+  }
+
+  return new Date(referenceDate).getTime() - generatedAtTime >= SUMMARY_FAILED_RETRY_COOLDOWN_MS;
+}
+
 function buildSourceList(articles = []) {
   return articles.map((article, index) => ({
     index: index + 1,
@@ -336,6 +350,10 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
   const existingSummary = database.getThematicSummary(topicConfig.key, window.periodStart, window.periodEnd);
   if (existingSummary?.status === 'completed' && options.force !== true) {
     return { summary: existingSummary, generatedNow: false };
+  }
+  if (existingSummary?.status === 'failed' && options.force !== true && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
+    logger.debug(`Thematic summary retry skipped during cooldown: topic=${topicConfig.key}, windowEnd=${window.periodEnd}`);
+    return { summary: null, generatedNow: false };
   }
 
   const articles = database.getArticlesForThematicSummary({
