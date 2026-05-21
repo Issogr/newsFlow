@@ -16,7 +16,7 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
 
   return (
     <section className="mb-5" aria-label={t('thematicSummariesTitle')}>
-      <div className="flex justify-center gap-3 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex justify-start gap-3 overflow-x-auto py-1 [scrollbar-width:none] md:justify-center [&::-webkit-scrollbar]:hidden">
         {summaries.map((summary) => {
           const localizedSummary = getLocalizedThematicSummary(summary, locale);
           const primaryPresentation = getTopicPresentation(summary.topics?.[0] || summary.topicLabel);
