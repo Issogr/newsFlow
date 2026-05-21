@@ -22,6 +22,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const SERVER_TIMEOUT = parseIntegerEnv('SERVER_TIMEOUT', 60000, { min: 1000 });
 const allowedOrigins = getAllowedOrigins();
+const jsonParser = express.json({ limit: '1mb' });
+const urlencodedParser = express.urlencoded({ extended: true, limit: '1mb' });
 
 function redactSensitiveValues(value) {
   return String(value || '').replace(/([?&]token=)[^&\s]+/gi, '$1[REDACTED]');
@@ -67,8 +69,6 @@ app.use(cors({
   maxAge: 86400
 }));
 
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(morgan('combined', {
   stream: { write: (message) => logger.info(redactSensitiveValues(message.trim())) },
   skip: (req) => req.url === '/health'
@@ -100,7 +100,7 @@ function requireInternalAppRequest(req, res, next) {
 
 app.use('/internal-api', baseRateLimit);
 app.use('/internal-api', requireInternalAppRequest);
-app.use('/internal-api', internalApiRoutes);
+app.use('/internal-api', jsonParser, urlencodedParser, internalApiRoutes);
 app.use('/api/public', publicApiRoutes);
 
 app.get('/health', (req, res) => {

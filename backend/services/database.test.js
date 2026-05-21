@@ -960,6 +960,127 @@ describe('database queries and user data', () => {
     }));
   });
 
+  test('retries failed and deferred AI topic processing statuses', () => {
+    const now = new Date().toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'ai-failed-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Failed AI article',
+        description: 'Existing description',
+        content: '',
+        url: 'https://example.com/ai-failed-article',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'ai-deferred-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Deferred AI article',
+        description: 'Existing description',
+        content: '',
+        url: 'https://example.com/ai-deferred-article',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'ai-completed-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Completed AI article',
+        description: 'Existing description',
+        content: '',
+        url: 'https://example.com/ai-completed-article',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+
+    database.markArticlesAiTopicProcessing(['ai-failed-article'], 'failed');
+    database.markArticlesAiTopicProcessing(['ai-deferred-article'], 'deferred');
+    database.markArticlesAiTopicProcessing(['ai-completed-article'], 'completed');
+
+    expect(database.getArticleIdsPendingAiTopicProcessing([
+      'ai-failed-article',
+      'ai-deferred-article',
+      'ai-completed-article'
+    ])).toEqual(expect.arrayContaining(['ai-failed-article', 'ai-deferred-article']));
+    expect(database.getArticleIdsPendingAiTopicProcessing([
+      'ai-failed-article',
+      'ai-deferred-article',
+      'ai-completed-article'
+    ])).toHaveLength(2);
+  });
+
+  test('moves read-later state and reader cache before deleting duplicate articles', () => {
+    const now = new Date('2026-03-15T14:30:00.000Z').toISOString();
+    const duplicateUpdatedAt = new Date('2026-03-15T14:00:00.000Z').toISOString();
+    const canonicalUrl = 'https://example.com/shared-story';
+
+    database.createUser({ id: 'user-1', username: 'alice', passwordHash: null, createdAt: now, updatedAt: now });
+    database.upsertArticles([
+      {
+        id: 'canonical-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Canonical story',
+        description: 'Canonical description',
+        content: '',
+        url: canonicalUrl,
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+    database.getDb().prepare(`
+      INSERT INTO articles (
+        id, source_id, source_name, owner_user_id, title, description, content, url,
+        canonical_url, image, author, language, published_at, created_at, updated_at
+      ) VALUES (?, ?, ?, NULL, ?, ?, '', ?, ?, NULL, NULL, 'en', ?, ?, ?)
+    `).run(
+      'duplicate-article',
+      'duplicate-source',
+      primarySource.name,
+      'Duplicate story',
+      'Duplicate description',
+      canonicalUrl,
+      canonicalUrl,
+      now,
+      duplicateUpdatedAt,
+      duplicateUpdatedAt
+    );
+    database.saveReadLaterArticles('user-1', ['duplicate-article']);
+    database.upsertReaderCache('duplicate-article', {
+      url: canonicalUrl,
+      title: 'Duplicate reader title',
+      contentText: 'Duplicate reader body',
+      fetchedAt: duplicateUpdatedAt
+    });
+
+    database.upsertArticles([
+      {
+        id: 'incoming-article',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Incoming story',
+        description: 'Incoming description',
+        content: '',
+        url: canonicalUrl,
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+
+    expect(database.getArticleById('duplicate-article', { maxArticleAgeHours: null })).toBeNull();
+    expect(database.getReadLaterArticleIdSet('user-1', ['canonical-article']).has('canonical-article')).toBe(true);
+    expect(database.getReaderCache('canonical-article')).toEqual(expect.objectContaining({
+      title: 'Duplicate reader title',
+      contentText: 'Duplicate reader body'
+    }));
+  });
+
   test('normalizes future publication dates on insert and during cleanup', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-03-15T14:30:00.000Z'));
 
@@ -1037,6 +1158,45 @@ describe('database queries and user data', () => {
       deletedExpiredArticleCount: 1
     }));
     expect(database.getArticleById('old-read-later-article', { maxArticleAgeHours: null })).toBeNull();
+  });
+
+  test('applies recent-hours filters to read-later articles', () => {
+    const nowMs = Date.parse('2026-03-15T14:30:00.000Z');
+
+    jest.useFakeTimers().setSystemTime(nowMs);
+
+    try {
+      database.createUser({ id: 'user-1', username: 'alice', passwordHash: null, createdAt: new Date(nowMs).toISOString(), updatedAt: new Date(nowMs).toISOString() });
+      database.upsertArticles([
+        {
+          id: 'recent-read-later-article',
+          sourceId: primarySource.id,
+          source: primarySource.name,
+          title: 'Recent saved story',
+          description: 'Recent saved description',
+          content: '',
+          url: 'https://example.com/recent-saved-story',
+          language: 'en',
+          pubDate: new Date(nowMs - (30 * 60 * 1000)).toISOString()
+        },
+        {
+          id: 'old-read-later-filtered-article',
+          sourceId: primarySource.id,
+          source: primarySource.name,
+          title: 'Old saved story',
+          description: 'Old saved description',
+          content: '',
+          url: 'https://example.com/old-saved-story-filtered',
+          language: 'en',
+          pubDate: new Date(nowMs - (5 * 60 * 60 * 1000)).toISOString()
+        }
+      ]);
+      database.saveReadLaterArticles('user-1', ['recent-read-later-article', 'old-read-later-filtered-article']);
+
+      expect(database.getReadLaterArticles('user-1', { recentHours: 1 }).map((article) => article.id)).toEqual(['recent-read-later-article']);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('persists settings and removes user-source articles when the source is deleted', () => {

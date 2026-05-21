@@ -108,7 +108,7 @@ describe('api service', () => {
     mockApi.get.mockResolvedValue({ data: { items: [] } });
     mockApi.post.mockResolvedValue({ data: { success: true } });
 
-    await fetchReadLaterNews({ page: 2, sourceIds: ['source-a'], topics: ['Tecnologia'] });
+    await fetchReadLaterNews({ page: 2, sourceIds: ['source-a'], topics: ['Tecnologia'], recentHours: 2 });
     await saveReadLaterArticles(['article-1']);
     await removeReadLaterArticles(['article-1']);
 
@@ -118,6 +118,7 @@ describe('api service', () => {
         pageSize: 12,
         sources: 'source-a',
         topics: 'Tecnologia',
+        recentHours: 2,
         includeFilters: 'true'
       },
       signal: undefined

@@ -131,8 +131,8 @@ export const deleteUserSource = async (sourceId) => {
   return response.data;
 };
 
-export const fetchAdminUsers = async () => {
-  const response = await api.get('/admin/users');
+export const fetchAdminUsers = async ({ signal } = {}) => {
+  const response = await api.get('/admin/users', { signal });
   return response.data;
 };
 
@@ -203,6 +203,7 @@ export const fetchReadLaterNews = async ({
   search = '',
   sourceIds = [],
   topics = [],
+  recentHours = null,
   includeFilters = true,
   signal
 } = {}) => {
@@ -218,6 +219,10 @@ export const fetchReadLaterNews = async ({
 
   if (Array.isArray(topics) && topics.length > 0) {
     params.topics = topics.join(',');
+  }
+
+  if (Number.isFinite(recentHours) && recentHours > 0) {
+    params.recentHours = recentHours;
   }
 
   if (includeFilters) {

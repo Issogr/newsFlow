@@ -109,7 +109,7 @@ function createArticleRepository({
       search: typeof filters.search === 'string' ? filters.search.trim() : '',
       sourceIds: Array.isArray(filters.sourceIds) ? filters.sourceIds.filter(Boolean) : [],
       topics: Array.isArray(filters.topics) ? filters.topics.filter(Boolean) : [],
-      recentHours: Number.isFinite(filters.recentHours) ? filters.recentHours : null,
+      recentHours: Number.isFinite(filters.recentHours) && filters.recentHours > 0 ? filters.recentHours : null,
       beforePubDate: typeof filters.beforePubDate === 'string' && filters.beforePubDate.trim() ? filters.beforePubDate.trim() : '',
       beforeId: typeof filters.beforeId === 'string' && filters.beforeId.trim() ? filters.beforeId.trim() : '',
       limit: Math.max(1, Math.min(Number(filters.limit) || 50, 251)),
@@ -499,6 +499,72 @@ function createArticleRepository({
     };
   }
 
+  function transferDuplicateArticleReferences(database, duplicateId, persistedArticleId) {
+    if (!duplicateId || !persistedArticleId || duplicateId === persistedArticleId) {
+      return;
+    }
+
+    database.prepare(`
+      INSERT OR IGNORE INTO user_read_later_articles (user_id, article_id, saved_at)
+      SELECT user_id, ?, saved_at
+      FROM user_read_later_articles
+      WHERE article_id = ?
+    `).run(persistedArticleId, duplicateId);
+
+    database.prepare(`
+      UPDATE user_read_later_articles
+      SET saved_at = (
+        SELECT MAX(source.saved_at)
+        FROM user_read_later_articles source
+        WHERE source.user_id = user_read_later_articles.user_id
+          AND source.article_id IN (?, ?)
+      )
+      WHERE article_id = ?
+        AND user_id IN (
+          SELECT user_id
+          FROM user_read_later_articles
+          WHERE article_id = ?
+        )
+    `).run(persistedArticleId, duplicateId, persistedArticleId, duplicateId);
+
+    database.prepare(`
+      INSERT OR IGNORE INTO reader_cache (
+        article_id,
+        url,
+        title,
+        site_name,
+        byline,
+        language,
+        excerpt,
+        content_text,
+        content_blocks,
+        minutes_to_read,
+        fetched_at
+      )
+      SELECT ?, url, title, site_name, byline, language, excerpt, content_text, content_blocks, minutes_to_read, fetched_at
+      FROM reader_cache
+      WHERE article_id = ?
+    `).run(persistedArticleId, duplicateId);
+
+    database.prepare(`
+      UPDATE reader_cache
+      SET url = duplicate.url,
+          title = duplicate.title,
+          site_name = duplicate.site_name,
+          byline = duplicate.byline,
+          language = duplicate.language,
+          excerpt = duplicate.excerpt,
+          content_text = duplicate.content_text,
+          content_blocks = duplicate.content_blocks,
+          minutes_to_read = duplicate.minutes_to_read,
+          fetched_at = duplicate.fetched_at
+      FROM reader_cache duplicate
+      WHERE reader_cache.article_id = ?
+        AND duplicate.article_id = ?
+        AND duplicate.fetched_at > reader_cache.fetched_at
+    `).run(persistedArticleId, duplicateId);
+  }
+
   function getTopicDetailsByArticleIds(articleIds) {
     const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
     if (normalizedArticleIds.length === 0) {
@@ -717,6 +783,7 @@ function createArticleRepository({
         article.pubDate = normalizedPubDate;
 
         duplicateIds.forEach((duplicateId) => {
+          transferDuplicateArticleReferences(database, duplicateId, persistedArticleId);
           deleteSearchStmt.run(duplicateId);
           deleteArticleStmt.run(duplicateId);
           existingIdSet.delete(duplicateId);
@@ -783,7 +850,10 @@ function createArticleRepository({
         SELECT id
         FROM articles
         WHERE id IN (${ids.map(() => '?').join(', ')})
-          AND ai_topics_processed_at IS NULL
+          AND (
+            ai_topics_processed_at IS NULL
+            OR ai_topics_status IN ('failed', 'deferred')
+          )
       `).all(...ids).map((row) => row.id);
     });
   }
@@ -1238,6 +1308,12 @@ function createArticleRepository({
         WHERE topic IN (${state.topics.map(() => '?').join(', ')})
       )`);
       params.push(...state.topics);
+    }
+
+    if (state.recentHours) {
+      const recentThreshold = new Date(Date.now() - (state.recentHours * 60 * 60 * 1000)).toISOString();
+      where.push('a.published_at >= ?');
+      params.push(recentThreshold);
     }
 
     const rows = getDb().prepare(`

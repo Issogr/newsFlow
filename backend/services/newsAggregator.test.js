@@ -194,6 +194,35 @@ describe('newsAggregator service flows', () => {
     }), expect.objectContaining({ userId: 'user-1' }));
   });
 
+  test('getNewsFeed caps very deep page numbers', async () => {
+    database.getArticles.mockReturnValue([]);
+
+    const result = await newsAggregator.getNewsFeed({ page: 999, pageSize: 10 }, { userId: 'user-1' });
+
+    expect(result.meta.page).toBe(20);
+  });
+
+  test('getReadLaterFeed treats the maximum capped page as terminal', async () => {
+    database.getReadLaterArticles.mockReturnValue(Array.from({ length: 31 }, (_, index) => ({
+      id: `saved-${index + 1}`,
+      sourceId: ansaSourceId,
+      source: 'ANSA',
+      title: `Saved story ${index + 1}`,
+      description: 'Saved article',
+      pubDate: recentIso({ minutesAgo: index }),
+      readLaterSavedAt: recentIso({ minutesAgo: index }),
+      url: `https://example.com/saved-${index + 1}`
+    })));
+
+    const result = await newsAggregator.getReadLaterFeed({ page: 999, pageSize: 30 }, { userId: 'user-1' });
+
+    expect(result.meta).toEqual(expect.objectContaining({
+      page: 20,
+      hasMore: false,
+      readLater: true
+    }));
+  });
+
   test('getReadLaterFeed scans multiple article batches before reporting more pages', async () => {
     const firstBatch = Array.from({ length: 250 }, (_, index) => ({
       id: `saved-${index + 1}`,

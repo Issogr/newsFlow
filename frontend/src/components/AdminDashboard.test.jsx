@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AdminDashboard from './AdminDashboard';
 import { createTranslator } from '../i18n';
 import { createAdminPasswordSetupLink, deleteAdminUser, fetchAdminUsers, updateUserSettings } from '../services/api';
@@ -18,6 +18,41 @@ describe('AdminDashboard', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     window.confirm = jest.fn(() => true);
+  });
+
+  test('does not start overlapping user reloads while polling', async () => {
+    jest.useFakeTimers();
+    let resolveUsers;
+    fetchAdminUsers.mockImplementation(() => new Promise((resolve) => {
+      resolveUsers = resolve;
+    }));
+
+    try {
+      render(<AdminDashboard t={t} currentUser={currentUser} onLogout={jest.fn()} onUserUpdate={jest.fn()} />);
+
+      expect(fetchAdminUsers).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        jest.advanceTimersByTime(30000);
+      });
+
+      expect(fetchAdminUsers).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveUsers({
+          summary: { totalUsers: 1, onlineUsers: 0, activeUsers: 0, anonymousPublicApiRequests: 0, onlineWindowMinutes: 5 },
+          users: []
+        });
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(30000);
+      });
+
+      expect(fetchAdminUsers).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('shows the top bar, summary cards, and user table', async () => {

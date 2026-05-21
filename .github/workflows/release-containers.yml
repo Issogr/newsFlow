@@ -35,6 +35,10 @@ jobs:
         working-directory: backend
         run: npm test
 
+      - name: Audit backend production dependencies
+        working-directory: backend
+        run: npm audit --omit=dev
+
       - name: Install BFF dependencies
         working-directory: bff
         run: npm ci
@@ -46,6 +50,10 @@ jobs:
       - name: Test BFF
         working-directory: bff
         run: npm test
+
+      - name: Audit BFF production dependencies
+        working-directory: bff
+        run: npm audit --omit=dev
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -62,6 +70,10 @@ jobs:
       - name: Test frontend
         working-directory: frontend
         run: npm test
+
+      - name: Audit frontend production dependencies
+        working-directory: frontend
+        run: npm audit --omit=dev
 
   publish:
     name: Publish ${{ matrix.service }} image

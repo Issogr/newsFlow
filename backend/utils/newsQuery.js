@@ -1,4 +1,5 @@
-const MAX_NEWS_PAGE = 1000;
+const MAX_NEWS_PAGE = 20;
+const MAX_RECENT_HOURS = 24;
 
 function parseCsvParam(value) {
   if (!value) {
@@ -20,12 +21,25 @@ function parseBoundedPositiveInteger(value, fallback, max) {
   return Math.max(1, Math.min(Math.floor(parsed), max));
 }
 
+function parseOptionalBoundedPositiveInteger(value, max) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Math.min(Math.floor(parsed), max);
+}
+
 function parseNewsQuery(query = {}) {
   return {
     search: query.search || '',
     sourceIds: parseCsvParam(query.sources),
     topics: parseCsvParam(query.topics),
-    recentHours: query.recentHours ? Number(query.recentHours) : null,
+    recentHours: parseOptionalBoundedPositiveInteger(query.recentHours, MAX_RECENT_HOURS),
     beforePubDate: query.beforePubDate || '',
     beforeId: query.beforeId || '',
     page: parseBoundedPositiveInteger(query.page, 1, MAX_NEWS_PAGE),
@@ -37,7 +51,9 @@ function parseNewsQuery(query = {}) {
 
 module.exports = {
   MAX_NEWS_PAGE,
+  MAX_RECENT_HOURS,
   parseCsvParam,
   parseBoundedPositiveInteger,
+  parseOptionalBoundedPositiveInteger,
   parseNewsQuery,
 };

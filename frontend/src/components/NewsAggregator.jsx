@@ -135,7 +135,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const isReadLaterView = activeView === 'readLater';
   const metaRef = useRef(meta);
   metaRef.current = meta;
-  const setupSourceCatalog = currentUser?.sourceCatalog || sourceCatalog;
+  const setupSourceCatalog = Array.isArray(currentUser?.sourceCatalog) && currentUser.sourceCatalog.length > 0
+    ? currentUser.sourceCatalog
+    : sourceCatalog;
   const readThematicSummariesStorageKey = useMemo(() => getReadThematicSummariesStorageKey(currentUser), [currentUser]);
 
   const visibleAvailableSources = useMemo(() => {
@@ -266,7 +268,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         search: debouncedSearch,
         sourceIds: activeFilters.sourceIds,
         topics: activeFilters.topics,
-        recentHours: !isReadLaterView && showRecentOnly ? recentHours : null,
+        recentHours: showRecentOnly ? recentHours : null,
         beforePubDate: !isReadLaterView && append ? cursor?.beforePubDate : '',
         beforeId: !isReadLaterView && append ? cursor?.beforeId : '',
         refresh: !isReadLaterView && forceRefresh,

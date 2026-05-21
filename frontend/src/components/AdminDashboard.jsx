@@ -32,6 +32,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
   const hasLoadedRef = useRef(false);
   const isMountedRef = useRef(false);
   const latestRequestIdRef = useRef(0);
+  const usersRequestControllerRef = useRef(null);
   const copyTimeoutRef = useRef(null);
 
   useEffect(() => {
@@ -40,6 +41,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
     return () => {
       isMountedRef.current = false;
       latestRequestIdRef.current += 1;
+      usersRequestControllerRef.current?.abort();
       if (copyTimeoutRef.current) {
         window.clearTimeout(copyTimeoutRef.current);
       }
@@ -47,8 +49,14 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
   }, []);
 
   const loadUsers = useCallback(async ({ showRefreshingIndicator = false } = {}) => {
+    if (usersRequestControllerRef.current) {
+      return;
+    }
+
     const requestId = latestRequestIdRef.current + 1;
     latestRequestIdRef.current = requestId;
+    const controller = new AbortController();
+    usersRequestControllerRef.current = controller;
 
     if (!hasLoadedRef.current) {
       setLoading(true);
@@ -57,7 +65,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
     }
 
     try {
-      const response = await fetchAdminUsers();
+      const response = await fetchAdminUsers({ signal: controller.signal });
       if (!isMountedRef.current || latestRequestIdRef.current !== requestId) {
         return;
       }
@@ -67,10 +75,18 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
       setSummary(response.summary || { totalUsers: 0, onlineUsers: 0, activeUsers: 0, onlineWindowMinutes: 5 });
       setError('');
     } catch (requestError) {
+      if (requestError?.name === 'CanceledError' || requestError?.code === 'ERR_CANCELED') {
+        return;
+      }
+
       if (isMountedRef.current && latestRequestIdRef.current === requestId) {
         setError(requestError.message || t('genericError'));
       }
     } finally {
+      if (usersRequestControllerRef.current === controller) {
+        usersRequestControllerRef.current = null;
+      }
+
       if (isMountedRef.current && latestRequestIdRef.current === requestId) {
         setLoading(false);
       }
