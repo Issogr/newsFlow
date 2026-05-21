@@ -597,6 +597,52 @@ describe('NewsAggregator', () => {
     expect(screen.queryByText('New automatic headline')).not.toBeInTheDocument();
   });
 
+  test('adds brand-new cards when a manual refresh completion reload arrives', async () => {
+    let socketHandlers;
+
+    useTopicRefreshSocket.mockImplementation((handlers) => {
+      socketHandlers = handlers;
+    });
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [createGroup('group-current', 'Current headline')],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockResolvedValueOnce({
+        items: [createGroup('group-current', 'Current headline')],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1, pendingUserRefresh: true },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockResolvedValueOnce({
+        items: [
+          createGroup('group-new', 'Fresh manual refresh headline', '2026-03-14T11:00:00.000Z'),
+          createGroup('group-current', 'Current headline')
+        ],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 2 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+
+    await renderNewsAggregator();
+    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
+    });
+
+    await act(async () => {
+      socketHandlers.onTopicRefresh({ refresh: true, reason: 'news' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('Fresh manual refresh headline')).toBeInTheDocument();
+    expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
+      refresh: false,
+      includeFilters: true
+    }));
+  });
+
   test('keeps pending new article notice after silent topic reloads', async () => {
     let socketHandlers;
 
