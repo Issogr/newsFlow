@@ -111,7 +111,7 @@ const ThematicSummaryPanel = ({ summary, locale, t, onClose }) => {
       />
 
       <div className="relative flex h-[100dvh] w-full justify-center overflow-hidden overscroll-none">
-        <section className="flex h-full w-full flex-col overflow-hidden bg-slate-50 shadow-2xl lg:my-4 lg:w-[min(64rem,calc(100vw-2.5rem))] lg:rounded-[2rem] lg:border lg:border-slate-200/80">
+        <section className="flex h-full w-full flex-col overflow-hidden bg-slate-50 shadow-2xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(64rem,calc(100vw-2rem))] lg:rounded-[2rem] lg:border lg:border-slate-200/80">
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-200/80 bg-white/85 px-5 py-4 backdrop-blur-md md:px-6">
             <div className="flex min-w-0 items-center gap-3">
               <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${primaryPresentation.iconBadgeClassName}`}>

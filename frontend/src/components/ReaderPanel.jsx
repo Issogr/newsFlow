@@ -277,7 +277,7 @@ const ReaderPanel = ({
       />
 
       <div className={`relative flex h-full w-full ${desktopPositionClassName}`}>
-        <section className="flex h-full w-full flex-col bg-slate-50 shadow-2xl lg:my-4 lg:w-[min(72rem,calc(100vw-2.5rem))] lg:overflow-hidden lg:rounded-[2rem] lg:border lg:border-slate-200/80">
+        <section className="flex h-full w-full flex-col bg-slate-50 shadow-2xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(72rem,calc(100vw-2rem))] lg:overflow-hidden lg:rounded-[2rem] lg:border lg:border-slate-200/80">
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-200/80 bg-white/85 px-5 py-4 backdrop-blur-md md:px-6">
             <div className="flex items-center gap-2">
               <div className="relative inline-flex items-center">
