@@ -116,9 +116,9 @@ function truncateText(value, maxLength) {
   return `${normalized.slice(0, maxLength - 3).trim()}...`;
 }
 
-function buildArticlePayload(article = {}) {
+function buildArticlePayload(article = {}, index = 0) {
   return {
-    id: String(article.id || '').trim(),
+    ref: index + 1,
     title: truncateText(article.title || '', 220),
     description: truncateText(article.description || '', 420)
   };
@@ -134,9 +134,10 @@ function buildPrompt(batch = []) {
     'Return minified JSON only. Do not use markdown fences, prose, or trailing explanations.',
     'If people are wounded, attacked, arrested, shot, or involved in a police/court incident, prefer Cronaca. If the same event is a demonstration or public ceremony, also consider Politica.',
     'Example: "A Roma due persone che partecipavano al corteo per il 25 aprile sono state ferite da colpi di pistola ad aria compressa" -> ["Cronaca", "Politica"], not Tecnologia.',
-    'Return strict JSON only with this shape: {"topicsById":[{"id":"article-id","topics":[{"topic":"Topic","confidence":0.82}]}]}',
+    'Each provided item has a numeric ref. Return refs, not article ids.',
+    'Return strict JSON only with this shape: {"topicsByRef":[{"ref":1,"topics":[{"topic":"Topic","confidence":0.82}]}]}',
     'Confidence must be between 0 and 1.',
-    'Return one object for every provided id. If truly impossible to classify an item, return an empty topics array for that item.',
+    'Return objects only for refs with one to three topics. If truly impossible to classify an item, omit that ref.',
     '',
     JSON.stringify({ articles: batch.map(buildArticlePayload) })
   ].join('\n');
@@ -152,6 +153,7 @@ function getClassifierEntries(payload) {
   }
 
   return [
+    payload?.topicsByRef,
     payload?.topicsById,
     payload?.results,
     payload?.classifications,
@@ -162,6 +164,22 @@ function getClassifierEntries(payload) {
 
 function getClassifierEntryId(entry = {}) {
   return String(entry.id || entry.articleId || entry.article_id || '').trim();
+}
+
+function getClassifierEntryRef(entry = {}) {
+  const rawRef = entry.ref ?? entry.articleRef ?? entry.article_ref ?? entry.index;
+  return String(rawRef || '').trim();
+}
+
+function resolveClassifierEntryId(entry = {}, allowedIds = new Set(), refToArticleId = null) {
+  const id = getClassifierEntryId(entry);
+  if (id && allowedIds.has(id)) {
+    return id;
+  }
+
+  const ref = getClassifierEntryRef(entry);
+  const mappedId = refToArticleId?.get(ref);
+  return mappedId && allowedIds.has(mappedId) ? mappedId : '';
 }
 
 function getClassifierEntryTopics(entry = {}) {
@@ -229,7 +247,7 @@ function evidenceMatchesArticle(evidence = [], article = null) {
   });
 }
 
-function summarizeClassifierResult(payload, allowedIds = new Set()) {
+function summarizeClassifierResult(payload, allowedIds = new Set(), refToArticleId = null) {
   if (!payload || typeof payload !== 'object') {
     return 'invalid_json';
   }
@@ -239,7 +257,7 @@ function summarizeClassifierResult(payload, allowedIds = new Set()) {
     return 'missing_topics_array';
   }
 
-  const validIdEntries = entries.filter((entry) => allowedIds.has(getClassifierEntryId(entry)));
+  const validIdEntries = entries.filter((entry) => resolveClassifierEntryId(entry, allowedIds, refToArticleId));
   if (validIdEntries.length === 0) {
     return `no_matching_article_ids entries=${entries.length}`;
   }
@@ -252,13 +270,13 @@ function summarizeClassifierResult(payload, allowedIds = new Set()) {
   return `unsupported_topics entries=${entries.length} validIds=${validIdEntries.length}`;
 }
 
-function normalizeClassifierDetails(payload, allowedIds = new Set(), articlesById = null) {
+function normalizeClassifierDetails(payload, allowedIds = new Set(), articlesById = null, refToArticleId = null) {
   const entries = getClassifierEntries(payload);
   const result = new Map();
 
   entries.forEach((entry) => {
-    const id = getClassifierEntryId(entry);
-    if (!id || !allowedIds.has(id)) {
+    const id = resolveClassifierEntryId(entry, allowedIds, refToArticleId);
+    if (!id) {
       return;
     }
 
@@ -301,13 +319,14 @@ function summarizeResponseShape(response = {}) {
 async function classifyBatch(batch, config, context = {}) {
   const allowedIds = new Set(batch.map((article) => article.id).filter(Boolean));
   const articlesById = new Map(batch.map((article) => [article.id, article]));
+  const refToArticleId = new Map(batch.map((article, index) => [String(index + 1), article.id]));
   if (allowedIds.size === 0) {
     return new Map();
   }
 
   const startedAt = Date.now();
   logBatchArticlesForDebug(batch, config, context.batchIndex || 0, context.batchCount || 0);
-  const openRouter = await createOpenRouterClient(config);
+  const openRouter = context.openRouter || await createOpenRouterClient(config);
   const completionPromise = openRouter.chat.send({
     chatRequest: {
       model: config.model,
@@ -347,10 +366,10 @@ async function classifyBatch(batch, config, context = {}) {
 
   const content = extractAssistantContent(response);
   const payload = parseJsonContent(content);
-  const result = normalizeClassifierDetails(payload, allowedIds, articlesById);
+  const result = normalizeClassifierDetails(payload, allowedIds, articlesById, refToArticleId);
 
   if (result.size === 0) {
-    logger.warn(`AI topic batch produced no valid topics: reason=${summarizeClassifierResult(payload, allowedIds)}, responseChars=${content.length}, ${summarizeResponseShape(response)}`);
+    logger.warn(`AI topic batch produced no valid topics: reason=${summarizeClassifierResult(payload, allowedIds, refToArticleId)}, responseChars=${content.length}, ${summarizeResponseShape(response)}`);
   }
 
   logBatchClassificationsForDebug(result, articlesById, config);
@@ -387,10 +406,12 @@ async function classifyTopicDetailsForArticlesWithStatus(articles = []) {
   }
 
   const batches = chunkItems(limitedArticles, config.batchSize);
+  const openRouter = await createOpenRouterClient(config);
   logger.info(`AI topic detection started: model=${config.model}, articles=${limitedArticles.length}, batches=${batches.length}`);
   const batchResults = await mapSettledWithConcurrency(batches, config.batchConcurrency, (batch, batchIndex) => classifyBatch(batch, config, {
     batchIndex,
-    batchCount: batches.length
+    batchCount: batches.length,
+    openRouter
   }));
   const result = new Map();
   const failedArticleIds = [];
