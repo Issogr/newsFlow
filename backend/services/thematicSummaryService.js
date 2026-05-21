@@ -6,6 +6,7 @@ const websocketService = require('./websocketService');
 const { parseIntegerEnv } = require('../utils/env');
 const { mapSettledWithConcurrency } = require('../utils/concurrency');
 
+const DEFAULT_SUMMARY_TIME_ZONE = 'Europe/Rome';
 const SUMMARY_GENERATION_HOURS = [7, 13, 19];
 const SUMMARY_CHECK_INTERVAL_MS = parseIntegerEnv('THEMATIC_SUMMARY_CHECK_INTERVAL_MS', 60 * 1000, { min: 1000 });
 const SUMMARY_MAX_ARTICLES_PER_TOPIC = parseIntegerEnv('AI_SUMMARY_MAX_ARTICLES_PER_TOPIC', 120, { min: 1, max: 300 });
@@ -52,26 +53,99 @@ let generationPromise = null;
 let prewarmPromise = null;
 const attemptedPrewarmArticleIdsByWindow = new Map();
 
+function getConfiguredSummaryTimeZone() {
+  const configuredTimeZone = String(process.env.AI_SUMMARY_TIME_ZONE || DEFAULT_SUMMARY_TIME_ZONE).trim() || DEFAULT_SUMMARY_TIME_ZONE;
+
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: configuredTimeZone }).format(new Date());
+    return configuredTimeZone;
+  } catch {
+    logger.warn(`Invalid AI_SUMMARY_TIME_ZONE "${configuredTimeZone}"; falling back to ${DEFAULT_SUMMARY_TIME_ZONE}`);
+    return DEFAULT_SUMMARY_TIME_ZONE;
+  }
+}
+
+const SUMMARY_TIME_ZONE = getConfiguredSummaryTimeZone();
+
 function isReaderPrewarmEnabled() {
   const enabledValue = String(process.env.AI_SUMMARY_READER_PREWARM_ENABLED || 'auto').trim().toLowerCase();
   return enabledValue !== 'false' && aiSummaryGenerator.isAiSummaryGenerationAvailable();
 }
 
-function createLocalSlotDate(referenceDate, hour) {
-  const slotDate = new Date(referenceDate);
-  slotDate.setHours(hour, 0, 0, 0);
-  return slotDate;
+function getTimeZoneParts(date, timeZone = SUMMARY_TIME_ZONE) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return {
+    year: Number(byType.year),
+    month: Number(byType.month),
+    day: Number(byType.day),
+    hour: Number(byType.hour),
+    minute: Number(byType.minute),
+    second: Number(byType.second)
+  };
+}
+
+function getTimeZoneOffsetMs(date, timeZone = SUMMARY_TIME_ZONE) {
+  const parts = getTimeZoneParts(date, timeZone);
+  const localAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  return localAsUtc - date.getTime();
+}
+
+function zonedDateTimeToUtc({ year, month, day, hour = 0, minute = 0, second = 0 }, timeZone = SUMMARY_TIME_ZONE) {
+  const localAsUtc = Date.UTC(year, month - 1, day, hour, minute, second, 0);
+  let utcTime = localAsUtc;
+
+  for (let index = 0; index < 3; index += 1) {
+    const nextUtcTime = localAsUtc - getTimeZoneOffsetMs(new Date(utcTime), timeZone);
+    if (nextUtcTime === utcTime) {
+      break;
+    }
+    utcTime = nextUtcTime;
+  }
+
+  return new Date(utcTime);
+}
+
+function addCalendarDays({ year, month, day }, dayCount) {
+  const date = new Date(Date.UTC(year, month - 1, day + dayCount, 12, 0, 0, 0));
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate()
+  };
+}
+
+function createZonedSlotDate(localDate, hour, timeZone = SUMMARY_TIME_ZONE) {
+  return zonedDateTimeToUtc({
+    year: localDate.year,
+    month: localDate.month,
+    day: localDate.day,
+    hour,
+    minute: 0,
+    second: 0
+  }, timeZone);
 }
 
 function getLatestDueWindow(referenceDate = new Date()) {
   const reference = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
-  const todaySlots = SUMMARY_GENERATION_HOURS.map((hour) => createLocalSlotDate(reference, hour));
+  const localToday = getTimeZoneParts(reference, SUMMARY_TIME_ZONE);
+  const todaySlots = SUMMARY_GENERATION_HOURS.map((hour) => createZonedSlotDate(localToday, hour, SUMMARY_TIME_ZONE));
   const dueSlotIndex = todaySlots.findLastIndex((slotDate) => slotDate.getTime() <= reference.getTime());
 
   if (dueSlotIndex >= 0) {
     const periodEnd = todaySlots[dueSlotIndex];
     const periodStart = dueSlotIndex === 0
-      ? createLocalSlotDate(new Date(periodEnd.getTime() - 24 * 60 * 60 * 1000), SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1])
+      ? createZonedSlotDate(addCalendarDays(localToday, -1), SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1], SUMMARY_TIME_ZONE)
       : todaySlots[dueSlotIndex - 1];
 
     return {
@@ -80,9 +154,9 @@ function getLatestDueWindow(referenceDate = new Date()) {
     };
   }
 
-  const yesterday = new Date(reference.getTime() - 24 * 60 * 60 * 1000);
-  const periodEnd = createLocalSlotDate(yesterday, SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1]);
-  const periodStart = createLocalSlotDate(yesterday, SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 2]);
+  const yesterday = addCalendarDays(localToday, -1);
+  const periodEnd = createZonedSlotDate(yesterday, SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1], SUMMARY_TIME_ZONE);
+  const periodStart = createZonedSlotDate(yesterday, SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 2], SUMMARY_TIME_ZONE);
 
   return {
     periodStart: periodStart.toISOString(),
@@ -92,13 +166,14 @@ function getLatestDueWindow(referenceDate = new Date()) {
 
 function getNextDueWindow(referenceDate = new Date()) {
   const reference = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
-  const todaySlots = SUMMARY_GENERATION_HOURS.map((hour) => createLocalSlotDate(reference, hour));
+  const localToday = getTimeZoneParts(reference, SUMMARY_TIME_ZONE);
+  const todaySlots = SUMMARY_GENERATION_HOURS.map((hour) => createZonedSlotDate(localToday, hour, SUMMARY_TIME_ZONE));
   const nextSlotIndex = todaySlots.findIndex((slotDate) => slotDate.getTime() > reference.getTime());
 
   if (nextSlotIndex >= 0) {
     const periodEnd = todaySlots[nextSlotIndex];
     const periodStart = nextSlotIndex === 0
-      ? createLocalSlotDate(new Date(periodEnd.getTime() - 24 * 60 * 60 * 1000), SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1])
+      ? createZonedSlotDate(addCalendarDays(localToday, -1), SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1], SUMMARY_TIME_ZONE)
       : todaySlots[nextSlotIndex - 1];
 
     return {
@@ -107,9 +182,9 @@ function getNextDueWindow(referenceDate = new Date()) {
     };
   }
 
-  const tomorrow = new Date(reference.getTime() + 24 * 60 * 60 * 1000);
-  const periodStart = createLocalSlotDate(reference, SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1]);
-  const periodEnd = createLocalSlotDate(tomorrow, SUMMARY_GENERATION_HOURS[0]);
+  const tomorrow = addCalendarDays(localToday, 1);
+  const periodStart = createZonedSlotDate(localToday, SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1], SUMMARY_TIME_ZONE);
+  const periodEnd = createZonedSlotDate(tomorrow, SUMMARY_GENERATION_HOURS[0], SUMMARY_TIME_ZONE);
 
   return {
     periodStart: periodStart.toISOString(),
@@ -397,5 +472,6 @@ module.exports = {
   _getLatestDueWindow: getLatestDueWindow,
   _getNextDueWindow: getNextDueWindow,
   _isReaderPrewarmEnabled: isReaderPrewarmEnabled,
+  _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,
   _getSummaryTopics: getSummaryTopics
 };

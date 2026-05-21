@@ -441,7 +441,7 @@ describe('NewsAggregator', () => {
     setItemSpy.mockRestore();
   });
 
-  test('forces a source refresh from the top navigation refresh button', async () => {
+  test('forces a source refresh and reloads existing thematic summaries from the top navigation refresh button', async () => {
     fetchNews.mockResolvedValue({
       items: [{ id: 'group-1', title: 'Current headline' }],
       meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
@@ -457,6 +457,7 @@ describe('NewsAggregator', () => {
     await waitFor(() => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
     });
+    expect(fetchThematicSummaries).toHaveBeenCalledTimes(2);
     expect(screen.getByText('You reached the end of the available results.')).toBeInTheDocument();
   });
 

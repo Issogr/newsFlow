@@ -432,6 +432,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     loadThematicSummaries();
   }, [loadThematicSummaries]);
 
+  const handleManualRefresh = useCallback(() => {
+    loadNews({ page: 1, append: false, forceRefresh: true });
+    loadThematicSummaries();
+  }, [loadNews, loadThematicSummaries]);
+
   const handleSourceSetupComplete = useCallback((settings) => {
     onUserUpdate({
       ...currentUser,
@@ -550,7 +555,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 <TopNavActionButton
                   icon={RefreshCw}
                   label={t('refresh')}
-                  onClick={() => loadNews({ page: 1, append: false, forceRefresh: true })}
+                  onClick={handleManualRefresh}
                   disabled={isFeedRefreshActive || (!isReadLaterView && manualRefreshPending)}
                   aria-label={refreshTitle}
                   title={refreshTitle}
