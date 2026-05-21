@@ -11,8 +11,18 @@ permissions:
 
 jobs:
   validate:
-    name: Validate apps
+    name: Validate ${{ matrix.service }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: backend
+            working_directory: backend
+          - service: bff
+            working_directory: bff
+          - service: frontend
+            working_directory: frontend
 
     steps:
       - name: Checkout repository
@@ -22,57 +32,28 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: ${{ matrix.working_directory }}/package-lock.json
 
-      - name: Install backend dependencies
-        working-directory: backend
+      - name: Install dependencies
+        working-directory: ${{ matrix.working_directory }}
         run: npm ci
 
-      - name: Lint backend
-        working-directory: backend
-        run: npm run lint
-
-      - name: Test backend
-        working-directory: backend
-        run: npm test
-
-      - name: Audit backend production dependencies
-        working-directory: backend
-        run: npm audit --omit=dev
-
-      - name: Install BFF dependencies
-        working-directory: bff
-        run: npm ci
-
-      - name: Lint BFF
-        working-directory: bff
-        run: npm run lint
-
-      - name: Test BFF
-        working-directory: bff
-        run: npm test
-
-      - name: Audit BFF production dependencies
-        working-directory: bff
-        run: npm audit --omit=dev
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Lint frontend
-        working-directory: frontend
+      - name: Lint
+        working-directory: ${{ matrix.working_directory }}
         run: npm run lint
 
       - name: Build frontend
-        working-directory: frontend
+        if: matrix.service == 'frontend'
+        working-directory: ${{ matrix.working_directory }}
         run: npm run build
 
-      - name: Test frontend
-        working-directory: frontend
+      - name: Test
+        working-directory: ${{ matrix.working_directory }}
         run: npm test
 
-      - name: Audit frontend production dependencies
-        working-directory: frontend
+      - name: Audit production dependencies
+        working-directory: ${{ matrix.working_directory }}
         run: npm audit --omit=dev
 
   publish:

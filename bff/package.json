@@ -9,24 +9,31 @@
     "test": "NODE_OPTIONS=--no-experimental-webstorage jest"
   },
   "dependencies": {
-    "axios": "^1.15.2",
-    "better-sqlite3": "^12.9.0",
+    "axios": "^1.16.1",
+    "better-sqlite3": "^12.10.0",
     "better-sqlite3-session-store": "^0.1.0",
     "cookie": "^1.1.1",
     "cookie-signature": "^1.2.2",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "helmet": "^8.1.0",
-    "http-proxy-middleware": "^3.0.5"
+    "http-proxy-middleware": "^4.0.0"
   },
   "devDependencies": {
-    "jest": "^30.3.0",
+    "@babel/plugin-transform-modules-commonjs": "^7.28.6",
+    "jest": "^30.4.2",
     "supertest": "^7.2.2"
   },
   "engines": {
     "node": ">=20.0.0"
   },
   "jest": {
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "transform": {
+      "^.+\\.m?js$": "babel-jest"
+    },
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(http-proxy-middleware|httpxy|is-plain-obj)/)"
+    ]
   }
 }

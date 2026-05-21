@@ -1,5 +1,6 @@
 import React from 'react';
-import { Github, Settings, X } from 'lucide-react';
+import { Settings, X } from 'lucide-react';
+import GitHubIcon from './icons/GitHubIcon';
 import SettingsAccessSection from './settings/SettingsAccessSection';
 import SettingsCustomSourcesSection from './settings/SettingsCustomSourcesSection';
 import SettingsExclusionsSection from './settings/SettingsExclusionsSection';
@@ -144,7 +145,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               aria-label="GitHub"
               className="inline-flex items-center justify-center rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
             >
-              <Github className="h-5 w-5" />
+              <GitHubIcon className="h-5 w-5" />
             </a>
             <button
               type="button"

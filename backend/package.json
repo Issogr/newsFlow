@@ -11,15 +11,15 @@
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
-    "@openrouter/sdk": "^0.12.21",
-    "axios": "^1.15.2",
-    "better-sqlite3": "^12.9.0",
+    "@openrouter/sdk": "^0.12.35",
+    "axios": "^1.16.1",
+    "better-sqlite3": "^12.10.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.4.1",
     "helmet": "^8.1.0",
     "html-entities": "^2.6.0",
-    "jsdom": "^26.1.0",
+    "jsdom": "^29.1.1",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
     "rss-parser": "^3.13.0",
@@ -27,8 +27,10 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
-    "eslint": "^10.2.1",
-    "jest": "^30.3.0",
+    "@babel/plugin-transform-export-namespace-from": "^7.27.1",
+    "@babel/plugin-transform-modules-commonjs": "^7.28.6",
+    "eslint": "^10.4.0",
+    "jest": "^30.4.2",
     "nodemon": "^3.1.14",
     "supertest": "^7.2.2"
   },
@@ -37,6 +39,12 @@
   },
   "jest": {
     "testEnvironment": "node",
+    "transform": {
+      "^.+\\.m?js$": "babel-jest"
+    },
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(@asamuzakjp|@csstools|@exodus/bytes|entities|parse5)/)"
+    ],
     "collectCoverage": true,
     "coverageReporters": [
       "text",
