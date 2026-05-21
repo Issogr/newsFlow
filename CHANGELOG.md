@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.4.1
+
+- made the main refresh button reload already-generated thematic summaries together with the news feed, without triggering new AI summary generation
+- scheduled thematic summaries against the configured local timezone (`Europe/Rome` by default) so the `07:00`, `13:00`, and `19:00` slots run at the expected local time instead of the container UTC time
+
 ## 3.4.0
 
 - added a Read later view with per-card save/remove controls so saved articles stay available outside the normal feed retention window

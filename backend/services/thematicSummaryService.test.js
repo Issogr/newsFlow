@@ -1,32 +1,46 @@
 describe('thematicSummaryService', () => {
+  const originalEnv = process.env;
   let thematicSummaryService;
 
   beforeEach(() => {
     jest.resetModules();
+    process.env = {
+      ...originalEnv,
+      AI_SUMMARY_TIME_ZONE: 'Europe/Rome'
+    };
     thematicSummaryService = require('./thematicSummaryService');
   });
 
   afterEach(() => {
     thematicSummaryService.stopScheduler();
+    process.env = originalEnv;
   });
 
   test('builds the 07:00 window from the previous 19:00 slot', () => {
-    const window = thematicSummaryService._getLatestDueWindow(new Date(2026, 4, 21, 7, 5));
+    const window = thematicSummaryService._getLatestDueWindow(new Date('2026-05-21T05:05:00.000Z'));
 
     expect(window).toEqual({
-      periodStart: new Date(2026, 4, 20, 19, 0, 0, 0).toISOString(),
-      periodEnd: new Date(2026, 4, 21, 7, 0, 0, 0).toISOString()
+      periodStart: '2026-05-20T17:00:00.000Z',
+      periodEnd: '2026-05-21T05:00:00.000Z'
     });
   });
 
   test('builds the 13:00 and 19:00 same-day windows', () => {
-    expect(thematicSummaryService._getLatestDueWindow(new Date(2026, 4, 21, 13, 10))).toEqual({
-      periodStart: new Date(2026, 4, 21, 7, 0, 0, 0).toISOString(),
-      periodEnd: new Date(2026, 4, 21, 13, 0, 0, 0).toISOString()
+    expect(thematicSummaryService._getLatestDueWindow(new Date('2026-05-21T11:10:00.000Z'))).toEqual({
+      periodStart: '2026-05-21T05:00:00.000Z',
+      periodEnd: '2026-05-21T11:00:00.000Z'
     });
-    expect(thematicSummaryService._getLatestDueWindow(new Date(2026, 4, 21, 19, 1))).toEqual({
-      periodStart: new Date(2026, 4, 21, 13, 0, 0, 0).toISOString(),
-      periodEnd: new Date(2026, 4, 21, 19, 0, 0, 0).toISOString()
+    expect(thematicSummaryService._getLatestDueWindow(new Date('2026-05-21T17:01:00.000Z'))).toEqual({
+      periodStart: '2026-05-21T11:00:00.000Z',
+      periodEnd: '2026-05-21T17:00:00.000Z'
+    });
+  });
+
+  test('defaults summary scheduling to Europe/Rome instead of the container UTC clock', () => {
+    expect(thematicSummaryService._getSummaryTimeZone()).toBe('Europe/Rome');
+    expect(thematicSummaryService._getLatestDueWindow(new Date('2026-01-21T06:05:00.000Z'))).toEqual({
+      periodStart: '2026-01-20T18:00:00.000Z',
+      periodEnd: '2026-01-21T06:00:00.000Z'
     });
   });
 
@@ -37,13 +51,13 @@ describe('thematicSummaryService', () => {
   });
 
   test('builds the next due window for reader prewarm', () => {
-    expect(thematicSummaryService._getNextDueWindow(new Date(2026, 4, 21, 6, 30))).toEqual({
-      periodStart: new Date(2026, 4, 20, 19, 0, 0, 0).toISOString(),
-      periodEnd: new Date(2026, 4, 21, 7, 0, 0, 0).toISOString()
+    expect(thematicSummaryService._getNextDueWindow(new Date('2026-05-21T04:30:00.000Z'))).toEqual({
+      periodStart: '2026-05-20T17:00:00.000Z',
+      periodEnd: '2026-05-21T05:00:00.000Z'
     });
-    expect(thematicSummaryService._getNextDueWindow(new Date(2026, 4, 21, 20, 0))).toEqual({
-      periodStart: new Date(2026, 4, 21, 19, 0, 0, 0).toISOString(),
-      periodEnd: new Date(2026, 4, 22, 7, 0, 0, 0).toISOString()
+    expect(thematicSummaryService._getNextDueWindow(new Date('2026-05-21T18:00:00.000Z'))).toEqual({
+      periodStart: '2026-05-21T17:00:00.000Z',
+      periodEnd: '2026-05-22T05:00:00.000Z'
     });
   });
 });

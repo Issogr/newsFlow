@@ -156,6 +156,7 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one AI topic-classification request, configurable up to 120 seconds for slower models |
 | `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for thematic summaries, independent from topic classification |
 | `AI_SUMMARY_GENERATION_ENABLED` | `auto` | Set to `false` to disable thematic summaries; `auto` enables them when `OPENROUTER_API_KEY` is present |
+| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for thematic summary slots (`07:00`, `13:00`, `19:00`) regardless of the container/server UTC clock |
 | `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in, topic-tagged articles sent to one thematic summary request |
 | `AI_SUMMARY_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one thematic summary request, configurable up to 120 seconds |
 | `AI_SUMMARY_READER_PREWARM_ENABLED` | `auto` | Prewarm reader-mode cache before summary slots when summary generation is available; set to `false` to disable article-page extraction prewarm |
@@ -165,6 +166,7 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `AI_SUMMARY_READER_TEXT_MIN_CHARS` | `250` | Minimum cached reader-text length considered useful for summary input |
 
 Thematic summaries are generated in both supported app languages, English and Italian; the frontend displays the version matching the current app language.
+Summary slots use `AI_SUMMARY_TIME_ZONE`, so the default Docker setup generates the `07:00`, `13:00`, and `19:00` summaries at Italian local time instead of UTC.
 Reader-mode extraction is prewarmed before summary slots when enabled, but summary generation itself only reads cached reader text and falls back to RSS title/description when cached text is missing or not useful.
 
 AI topic detection uses the official `@openrouter/sdk` package from the backend.
