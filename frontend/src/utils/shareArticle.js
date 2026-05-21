@@ -20,6 +20,7 @@ export async function shareArticleUrl({ url, title = '' }) {
       return 'copied';
     } catch {
       // Some browsers expose clipboard but reject writes outside secure or granted contexts.
+      return 'failed';
     }
   }
 
