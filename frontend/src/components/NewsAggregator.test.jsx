@@ -494,7 +494,7 @@ describe('NewsAggregator', () => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
     });
     expect(fetchThematicSummaries).toHaveBeenCalledTimes(2);
-    expect(screen.getByText('You reached the end of the available results.')).toBeInTheDocument();
+    expect(await screen.findByText('You reached the end of the available results.')).toBeInTheDocument();
   });
 
   test('keeps manual refresh clickable while the server cooldown is active', async () => {
