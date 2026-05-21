@@ -5,7 +5,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '🧠 AI now helps group reworded RSS articles from different sources into one shared news card when they describe the same event.'
+      '🧠 AI now helps group reworded RSS articles from different sources into one shared news card when they describe the same event.',
+      '📱 Thematic summaries now stay properly full screen on mobile without revealing the news list while scrolling.'
     ]
   },
   it: {
@@ -13,7 +14,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '🧠 L\'AI ora aiuta a raggruppare in un\'unica news card articoli RSS riscritti da fonti diverse quando descrivono lo stesso evento.'
+      '🧠 L\'AI ora aiuta a raggruppare in un\'unica news card articoli RSS riscritti da fonti diverse quando descrivono lo stesso evento.',
+      '📱 Le sintesi tematiche ora restano correttamente a schermo intero su mobile senza mostrare la lista delle news durante lo scroll.'
     ]
   }
 };

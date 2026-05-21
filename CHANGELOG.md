@@ -3,6 +3,7 @@
 ## 3.4.2
 
 - added AI-assisted story grouping that can merge articles from different RSS sources when their titles and descriptions describe the same event, while keeping grouping decisions out of feed request latency
+- fixed mobile thematic summary panels so scrolling at the end of a summary no longer reveals the news list underneath
 
 ## 3.4.1
 
