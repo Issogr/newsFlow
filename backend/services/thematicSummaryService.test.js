@@ -84,7 +84,7 @@ describe('thematic summary reader prewarm', () => {
       title: 'Science update',
       description: 'Short RSS text',
       url: 'https://example.com/science',
-      pubDate: new Date(2026, 4, 21, 6, 0).toISOString(),
+      pubDate: '2026-05-21T04:00:00.000Z',
       topics: ['Scienza']
     };
     const databaseMock = {
@@ -107,17 +107,15 @@ describe('thematic summary reader prewarm', () => {
     jest.doMock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() }));
 
     const service = require('./thematicSummaryService');
-    const window = {
-      periodStart: new Date(2026, 4, 20, 19, 0).toISOString(),
-      periodEnd: new Date(2026, 4, 21, 7, 0).toISOString()
-    };
+    const firstReferenceDate = new Date('2026-05-21T04:45:00.000Z');
+    const window = service._getNextDueWindow(firstReferenceDate);
 
     await expect(service.prewarmReaderCacheForDueWindow({
-      referenceDate: new Date(2026, 4, 21, 6, 45),
+      referenceDate: firstReferenceDate,
       window
     })).resolves.toMatchObject({ attemptedCount: 1, cachedCount: 1 });
     await expect(service.prewarmReaderCacheForDueWindow({
-      referenceDate: new Date(2026, 4, 21, 6, 50),
+      referenceDate: new Date('2026-05-21T04:50:00.000Z'),
       window
     })).resolves.toMatchObject({ attemptedCount: 0 });
 
