@@ -101,7 +101,7 @@ describe('AdminDashboard', () => {
     expect(screen.getAllByText('Total accounts').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Anonymous API requests').length).toBeGreaterThan(0);
     expect(screen.getByText('Users')).toBeInTheDocument();
-    expect(screen.getByText('alice')).toBeInTheDocument();
+    expect(await screen.findByText('alice')).toBeInTheDocument();
     expect(screen.getByText('3 public API requests')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '🔑 Reset' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
