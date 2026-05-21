@@ -71,6 +71,10 @@ describe('API auth and user flows', () => {
       sendFeedback: jest.fn().mockResolvedValue({ messageId: 1 })
     }));
 
+    jest.doMock('../services/thematicSummaryService', () => ({
+      getLatestSummaries: jest.fn(() => ({ items: [], topics: [] }))
+    }));
+
     app = buildApiTestApp();
     database = require('../services/database');
     newsService = require('../services/newsAggregator');

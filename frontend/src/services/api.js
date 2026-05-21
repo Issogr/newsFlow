@@ -228,6 +228,11 @@ export const fetchReadLaterNews = async ({
   return response.data;
 };
 
+export const fetchThematicSummaries = async ({ signal } = {}) => {
+  const response = await api.get('/thematic-summaries', { signal });
+  return response.data;
+};
+
 export const saveReadLaterArticles = async (articleIds = []) => {
   const response = await api.post('/me/read-later', { articleIds });
   return response.data;

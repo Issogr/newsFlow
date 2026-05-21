@@ -4,6 +4,7 @@ const multer = require('multer');
 const newsService = require('../services/newsAggregator');
 const database = require('../services/database');
 const readerService = require('../services/readerService');
+const thematicSummaryService = require('../services/thematicSummaryService');
 const userService = require('../services/userService');
 const feedbackService = require('../services/feedbackService');
 const {
@@ -368,6 +369,10 @@ router.get('/read-later', [requireAuthenticatedUser, sanitizeQuery('search')], a
   const filters = parseNewsQuery(req.query);
   const result = await newsService.getReadLaterFeed(filters, getUserContext(req));
   res.json(result);
+}));
+
+router.get('/thematic-summaries', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+  res.json(thematicSummaryService.getLatestSummaries());
 }));
 
 router.post('/me/read-later', requireAuthenticatedUser, asyncHandler(async (req, res) => {

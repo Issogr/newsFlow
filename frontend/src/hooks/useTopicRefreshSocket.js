@@ -3,11 +3,13 @@ import { io } from 'socket.io-client';
 
 const useTopicRefreshSocket = ({
   onTopicRefresh,
+  onSummariesRefresh,
   onNewsUpdate,
   subscription = {},
   enabled = true
 }) => {
   const topicRefreshCallbackRef = useRef(onTopicRefresh);
+  const summariesRefreshCallbackRef = useRef(onSummariesRefresh);
   const newsUpdateCallbackRef = useRef(onNewsUpdate);
   const subscriptionRef = useRef(subscription);
   const socketRef = useRef(null);
@@ -15,6 +17,10 @@ const useTopicRefreshSocket = ({
   useEffect(() => {
     topicRefreshCallbackRef.current = onTopicRefresh;
   }, [onTopicRefresh]);
+
+  useEffect(() => {
+    summariesRefreshCallbackRef.current = onSummariesRefresh;
+  }, [onSummariesRefresh]);
 
   useEffect(() => {
     newsUpdateCallbackRef.current = onNewsUpdate;
@@ -43,6 +49,11 @@ const useTopicRefreshSocket = ({
 
     const handleNewsUpdate = (payload) => {
       if (payload?.refresh === true) {
+        if (payload.reason === 'summaries') {
+          summariesRefreshCallbackRef.current?.(payload);
+          return;
+        }
+
         topicRefreshCallbackRef.current?.(payload);
         return;
       }

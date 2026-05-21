@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 26;
+  const CURRENT_SCHEMA_VERSION = 28;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getAllConfiguredSourceGroupIds() {
@@ -206,6 +206,31 @@ function createDatabaseSchema({ logger }) {
       CREATE INDEX IF NOT EXISTS idx_user_read_later_article
       ON user_read_later_articles (article_id);
 
+      CREATE TABLE IF NOT EXISTS thematic_summaries (
+        id TEXT PRIMARY KEY,
+        topic_key TEXT NOT NULL,
+        topic_label TEXT NOT NULL,
+        topics_json TEXT NOT NULL DEFAULT '[]',
+        period_start TEXT NOT NULL,
+        period_end TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        summary_text TEXT NOT NULL DEFAULT '',
+        title_en TEXT NOT NULL DEFAULT '',
+        summary_text_en TEXT NOT NULL DEFAULT '',
+        title_it TEXT NOT NULL DEFAULT '',
+        summary_text_it TEXT NOT NULL DEFAULT '',
+        sources_json TEXT NOT NULL DEFAULT '[]',
+        article_count INTEGER NOT NULL DEFAULT 0,
+        model TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'completed',
+        error_message TEXT,
+        generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(topic_key, period_start, period_end)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_thematic_summaries_topic_period
+      ON thematic_summaries (topic_key, period_end DESC);
+
       CREATE VIRTUAL TABLE IF NOT EXISTS article_search USING fts5(
         article_id UNINDEXED,
         title,
@@ -301,6 +326,15 @@ function createDatabaseSchema({ logger }) {
 
     if (!tableExists(database, 'user_read_later_articles')) {
       return 25;
+    }
+
+    if (!tableExists(database, 'thematic_summaries')) {
+      return 26;
+    }
+
+    const thematicSummaryColumns = getColumnNames(database, 'thematic_summaries');
+    if (!thematicSummaryColumns.has('title_en') || !thematicSummaryColumns.has('summary_text_en') || !thematicSummaryColumns.has('title_it') || !thematicSummaryColumns.has('summary_text_it')) {
+      return 27;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -607,8 +641,70 @@ function createDatabaseSchema({ logger }) {
         ON user_read_later_articles (article_id);
       `);
 
-      setCurrentSchemaVersion(database);
+      setCurrentSchemaVersion(database, 26);
       logger.info('Migrated DB schema from version 25 to 26');
+      migrateSchema(database, 26);
+      return;
+    }
+
+    if (currentVersion === 26) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS thematic_summaries (
+          id TEXT PRIMARY KEY,
+          topic_key TEXT NOT NULL,
+          topic_label TEXT NOT NULL,
+          topics_json TEXT NOT NULL DEFAULT '[]',
+          period_start TEXT NOT NULL,
+          period_end TEXT NOT NULL,
+          title TEXT NOT NULL DEFAULT '',
+          summary_text TEXT NOT NULL DEFAULT '',
+          title_en TEXT NOT NULL DEFAULT '',
+          summary_text_en TEXT NOT NULL DEFAULT '',
+          title_it TEXT NOT NULL DEFAULT '',
+          summary_text_it TEXT NOT NULL DEFAULT '',
+          sources_json TEXT NOT NULL DEFAULT '[]',
+          article_count INTEGER NOT NULL DEFAULT 0,
+          model TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'completed',
+          error_message TEXT,
+          generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(topic_key, period_start, period_end)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_thematic_summaries_topic_period
+        ON thematic_summaries (topic_key, period_end DESC);
+      `);
+
+      setCurrentSchemaVersion(database, 27);
+      logger.info('Migrated DB schema from version 26 to 27');
+      migrateSchema(database, 27);
+      return;
+    }
+
+    if (currentVersion === 27) {
+      const summaryColumns = getColumnNames(database, 'thematic_summaries');
+      if (!summaryColumns.has('title_en')) {
+        database.exec("ALTER TABLE thematic_summaries ADD COLUMN title_en TEXT NOT NULL DEFAULT ''");
+      }
+      if (!summaryColumns.has('summary_text_en')) {
+        database.exec("ALTER TABLE thematic_summaries ADD COLUMN summary_text_en TEXT NOT NULL DEFAULT ''");
+      }
+      if (!summaryColumns.has('title_it')) {
+        database.exec("ALTER TABLE thematic_summaries ADD COLUMN title_it TEXT NOT NULL DEFAULT ''");
+      }
+      if (!summaryColumns.has('summary_text_it')) {
+        database.exec("ALTER TABLE thematic_summaries ADD COLUMN summary_text_it TEXT NOT NULL DEFAULT ''");
+      }
+      database.exec(`
+        UPDATE thematic_summaries
+        SET title_en = CASE WHEN title_en = '' THEN title ELSE title_en END,
+            summary_text_en = CASE WHEN summary_text_en = '' THEN summary_text ELSE summary_text_en END,
+            title_it = CASE WHEN title_it = '' THEN title ELSE title_it END,
+            summary_text_it = CASE WHEN summary_text_it = '' THEN summary_text ELSE summary_text_it END
+      `);
+
+      setCurrentSchemaVersion(database);
+      logger.info('Migrated DB schema from version 27 to 28');
       return;
     }
 

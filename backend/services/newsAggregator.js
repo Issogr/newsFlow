@@ -17,6 +17,7 @@ const {
 } = require('./newsAggregatorIngestion');
 const websocketService = require('./websocketService');
 const { parseIntegerEnv } = require('../utils/env');
+const thematicSummaryService = require('./thematicSummaryService');
 
 const SCRAPE_INTERVAL_MS = parseIntegerEnv('SCRAPE_INTERVAL_MS', 900000, { min: 1000 });
 const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24, { min: 0 });
@@ -383,6 +384,8 @@ function startScheduler() {
       logger.warn(`Scheduled ingestion failed: ${error.message}`);
     });
   }, SCRAPE_INTERVAL_MS);
+
+  thematicSummaryService.startScheduler();
 }
 
 function stopScheduler() {
@@ -390,6 +393,7 @@ function stopScheduler() {
     clearInterval(schedulerHandle);
     schedulerHandle = null;
   }
+  thematicSummaryService.stopScheduler();
 }
 
 function resetImmediateRefreshState() {

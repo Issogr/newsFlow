@@ -71,12 +71,13 @@ describe('database migrations', () => {
     const passwordSetupTokenColumns = sqlite.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column) => column.name);
     const apiTokenColumns = sqlite.prepare('PRAGMA table_info(api_tokens)').all().map((column) => column.name);
     const readLaterColumns = sqlite.prepare('PRAGMA table_info(user_read_later_articles)').all().map((column) => column.name);
+    const thematicSummaryColumns = sqlite.prepare('PRAGMA table_info(thematic_summaries)').all().map((column) => column.name);
     const articleIndexNames = sqlite.prepare('PRAGMA index_list(articles)').all().map((index) => index.name);
     const topicIndexNames = sqlite.prepare('PRAGMA index_list(article_topics)').all().map((index) => index.name);
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('26');
+    expect(migrationVersion).toBe('28');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -101,6 +102,7 @@ describe('database migrations', () => {
     expect(passwordSetupTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'purpose', 'expires_at', 'used_at']));
     expect(apiTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'token_prefix', 'expires_at', 'revoked_at', 'last_used_at']));
     expect(readLaterColumns).toEqual(expect.arrayContaining(['user_id', 'article_id', 'saved_at']));
+    expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['topic_key', 'period_start', 'period_end', 'summary_text', 'title_en', 'summary_text_en', 'title_it', 'summary_text_it', 'sources_json']));
     expect(articleIndexNames).toContain('idx_articles_owner_published_id');
     expect(topicIndexNames).toContain('idx_article_topics_topic_article');
   });
@@ -155,7 +157,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('26');
+    expect(migratedVersion).toBe('28');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
@@ -274,7 +276,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('26');
+    expect(migratedVersion).toBe('28');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -387,7 +389,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
 
-    expect(migratedVersion).toBe('26');
+    expect(migratedVersion).toBe('28');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -826,6 +828,89 @@ describe('database queries and user data', () => {
       id: 'existing-topic-article',
       topics: ['Tecnologia']
     }));
+  });
+
+  test('selects built-in tagged articles for thematic summaries and persists the generated summary', () => {
+    const windowStart = '2025-05-21T07:00:00.000Z';
+    const windowEnd = '2025-05-21T13:00:00.000Z';
+
+    database.upsertArticles([
+      {
+        id: 'summary-global-tech',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'AI chips accelerate',
+        description: 'Technology update',
+        content: '',
+        url: 'https://example.com/tech',
+        language: 'en',
+        pubDate: '2025-05-21T09:00:00.000Z'
+      },
+      {
+        id: 'summary-private-tech',
+        sourceId: 'custom-tech',
+        source: 'Private Tech',
+        ownerUserId: 'user-1',
+        title: 'Private AI note',
+        description: 'Should not be summarized globally',
+        content: '',
+        url: 'https://example.com/private-tech',
+        language: 'en',
+        pubDate: '2025-05-21T10:00:00.000Z'
+      },
+      {
+        id: 'summary-global-politics',
+        sourceId: secondarySource.id,
+        source: secondarySource.name,
+        title: 'Election update',
+        description: 'Politics update',
+        content: '',
+        url: 'https://example.com/politics',
+        language: 'en',
+        pubDate: '2025-05-21T11:00:00.000Z'
+      }
+    ]);
+    database.mergeTopicsForArticles([
+      { articleId: 'summary-global-tech', topics: ['Tecnologia'] },
+      { articleId: 'summary-private-tech', topics: ['Tecnologia'] },
+      { articleId: 'summary-global-politics', topics: ['Politica'] }
+    ]);
+
+    const articles = database.getArticlesForThematicSummary({
+      topics: ['Tecnologia'],
+      periodStart: windowStart,
+      periodEnd: windowEnd
+    });
+    const summary = database.upsertThematicSummary({
+      topicKey: 'technology',
+      topicLabel: 'Technology',
+      topics: ['Tecnologia'],
+      periodStart: windowStart,
+      periodEnd: windowEnd,
+      title: 'Technology briefing',
+      summaryText: 'AI chips accelerated during the window [1].',
+      titleByLocale: {
+        en: 'Technology briefing',
+        it: 'Sintesi tecnologia'
+      },
+      summaryTextByLocale: {
+        en: 'AI chips accelerated during the window [1].',
+        it: 'I chip AI hanno accelerato nella finestra [1].'
+      },
+      sources: [{ index: 1, articleId: 'summary-global-tech', title: 'AI chips accelerate', source: primarySource.name, url: 'https://example.com/tech' }],
+      articleCount: 1,
+      model: 'test-model'
+    });
+
+    expect(articles.map((article) => article.id)).toEqual(['summary-global-tech']);
+    expect(summary).toEqual(expect.objectContaining({
+      topicKey: 'technology',
+      title: 'Technology briefing',
+      titleByLocale: expect.objectContaining({ it: 'Sintesi tecnologia' }),
+      summaryTextByLocale: expect.objectContaining({ it: 'I chip AI hanno accelerato nella finestra [1].' }),
+      sources: [expect.objectContaining({ articleId: 'summary-global-tech' })]
+    }));
+    expect(database.listLatestThematicSummaries(['technology'])).toHaveLength(1);
   });
 
   test('tracks AI topic processing and replaces fallback topics', () => {

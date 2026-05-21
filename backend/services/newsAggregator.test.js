@@ -53,6 +53,11 @@ jest.mock('./aiTopicClassifier', () => ({
   isAiTopicDetectionAvailable: jest.fn(() => true)
 }));
 
+jest.mock('./thematicSummaryService', () => ({
+  startScheduler: jest.fn(),
+  stopScheduler: jest.fn()
+}));
+
 const rssParser = require('./rssParser');
 const database = require('./database');
 const websocketService = require('./websocketService');

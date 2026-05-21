@@ -8,7 +8,7 @@ import {
   RefreshCw,
   User,
 } from 'lucide-react';
-import { fetchNews, fetchReadLaterNews, isRequestCanceled, removeReadLaterArticles, saveReadLaterArticles } from '../services/api';
+import { fetchNews, fetchReadLaterNews, fetchThematicSummaries, isRequestCanceled, removeReadLaterArticles, saveReadLaterArticles } from '../services/api';
 import ErrorMessage from './ErrorMessage';
 import NewsCard from './NewsCard';
 import ReaderPanel from './ReaderPanel';
@@ -25,6 +25,8 @@ import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePrefer
 import MobileBottomNav from './MobileBottomNav';
 import DesktopTopNavFilters from './DesktopTopNavFilters';
 import TopNavActionButton from './TopNavActionButton';
+import ThematicSummaryStories from './ThematicSummaryStories';
+import ThematicSummaryPanel from './ThematicSummaryPanel';
 
 const PAGE_SIZE = 12;
 const MAX_TOPIC_RELOAD_PAGE_SIZE = 30;
@@ -33,6 +35,7 @@ const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 const BACK_TO_TOP_THRESHOLD = 280;
 const TOP_NAV_SHRINK_THRESHOLD = 28;
+const READ_THEMATIC_SUMMARIES_STORAGE_PREFIX = 'newsflow-read-thematic-summaries';
 const mergeGroups = (primaryGroups, secondaryGroups) => {
   const merged = new Map();
 
@@ -52,6 +55,28 @@ const getSourceReloadSignature = (excludedSourceIds, excludedSubSourceIds, custo
   excludedSubSourceIds,
   customSources: (customSources || []).map((source) => [source.id, source.name, source.url, source.language, source.isActive !== false])
 });
+
+function getReadThematicSummariesStorageKey(currentUser) {
+  const userKey = currentUser?.user?.id || currentUser?.user?.username || 'anonymous';
+  return `${READ_THEMATIC_SUMMARIES_STORAGE_PREFIX}:${userKey}`;
+}
+
+function getStoredReadThematicSummaryIds(storageKey) {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(storageKey) || '[]');
+    return Array.isArray(parsed) ? parsed.map((id) => String(id || '').trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function setStoredReadThematicSummaryIds(storageKey, summaryIds = []) {
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify([...new Set(summaryIds)]));
+  } catch {
+    // Keep unread indicators in memory when browser storage is unavailable.
+  }
+}
 
 const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogVersion, onOpenReleaseNotes }) => {
   const preferredLanguage = currentUser?.settings?.defaultLanguage;
@@ -78,6 +103,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [showRecentOnly, setShowRecentOnly] = useState(false);
   const [activeView, setActiveView] = useState('news');
   const [readerState, setReaderState] = useState({ isOpen: false, group: null, articleId: null });
+  const [thematicSummaries, setThematicSummaries] = useState([]);
+  const [selectedThematicSummary, setSelectedThematicSummary] = useState(null);
+  const [readThematicSummaryIds, setReadThematicSummaryIds] = useState(() => getStoredReadThematicSummaryIds(getReadThematicSummariesStorageKey(currentUser)));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -107,6 +135,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const metaRef = useRef(meta);
   metaRef.current = meta;
   const setupSourceCatalog = currentUser?.sourceCatalog || sourceCatalog;
+  const readThematicSummariesStorageKey = useMemo(() => getReadThematicSummariesStorageKey(currentUser), [currentUser]);
 
   const visibleAvailableSources = useMemo(() => {
     return availableSources.filter((source) => !excludedSourceIds.includes(source.id));
@@ -140,6 +169,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   useEffect(() => {
     setLocale(resolvePreferredLocale(preferredLanguage));
   }, [preferredLanguage]);
+
+  useEffect(() => {
+    setReadThematicSummaryIds(getStoredReadThematicSummaryIds(readThematicSummariesStorageKey));
+  }, [readThematicSummariesStorageKey]);
 
   useEffect(() => {
     setStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize || 'medium');
@@ -342,8 +375,25 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     });
   }, []);
 
+  const loadThematicSummaries = useCallback(async ({ signal } = {}) => {
+    if (needsSourceSetup) {
+      setThematicSummaries([]);
+      return;
+    }
+
+    try {
+      const response = await fetchThematicSummaries({ signal });
+      setThematicSummaries(response.items || []);
+    } catch (requestError) {
+      if (!isRequestCanceled(requestError)) {
+        setThematicSummaries([]);
+      }
+    }
+  }, [needsSourceSetup]);
+
   useTopicRefreshSocket({
     onTopicRefresh: handleTopicRefresh,
+    onSummariesRefresh: () => loadThematicSummaries(),
     onNewsUpdate: handleNewsUpdate,
     subscription: socketSubscription
   });
@@ -372,6 +422,13 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     loadNews({ page: 1, append: false });
   }, [loadNews, needsSourceSetup]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    loadThematicSummaries({ signal: controller.signal });
+
+    return () => controller.abort();
+  }, [loadThematicSummaries]);
+
   const handleSourceSetupComplete = useCallback((settings) => {
     onUserUpdate({
       ...currentUser,
@@ -398,6 +455,23 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const closeReader = useCallback(() => {
     setReaderState({ isOpen: false, group: null, articleId: null });
   }, []);
+
+  const openThematicSummary = useCallback((summary) => {
+    if (!summary?.id) {
+      return;
+    }
+
+    setSelectedThematicSummary(summary);
+    setReadThematicSummaryIds((current) => {
+      if (current.includes(summary.id)) {
+        return current;
+      }
+
+      const next = [...current, summary.id];
+      setStoredReadThematicSummaryIds(readThematicSummariesStorageKey, next);
+      return next;
+    });
+  }, [readThematicSummariesStorageKey]);
 
   const handleToggleReadLater = useCallback(async (group) => {
     const articleIds = (group?.readLater ? (group.readLaterArticleIds || []) : (group?.items || []).map((item) => item.id)).filter(Boolean);
@@ -574,6 +648,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       </header>
 
       <main className="mx-auto w-full max-w-7xl px-4 py-4 pb-24 md:pb-10 lg:px-6">
+        {!isReadLaterView && thematicSummaries.length > 0 && (
+          <ThematicSummaryStories
+            summaries={thematicSummaries}
+            locale={locale}
+            readSummaryIds={readThematicSummaryIds}
+            t={t}
+            onOpenSummary={openThematicSummary}
+          />
+        )}
+
         {loading && !loadingMore ? (
           <div className="flex h-64 flex-col items-center justify-center gap-3">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
@@ -654,6 +738,15 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         />
       )}
 
+      {selectedThematicSummary && (
+        <ThematicSummaryPanel
+          summary={selectedThematicSummary}
+          locale={locale}
+          t={t}
+          onClose={() => setSelectedThematicSummary(null)}
+        />
+      )}
+
       {settingsOpen && (
         <SettingsPanel
           t={t}
@@ -696,7 +789,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         <ArrowUp className="h-5 w-5" aria-hidden="true" />
       </button>
 
-      {!readerState.isOpen && !settingsOpen && !feedbackOpen ? (
+      {!readerState.isOpen && !selectedThematicSummary && !settingsOpen && !feedbackOpen ? (
         <MobileBottomNav
           visibleSources={visibleAvailableSources}
           availableTopics={availableTopics}
