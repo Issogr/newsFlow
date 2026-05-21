@@ -1,0 +1,88 @@
+describe('aiStoryGrouper', () => {
+  let aiStoryGrouper;
+  let sendMock;
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env.OPENROUTER_API_KEY = 'test-key';
+    process.env.OPENROUTER_SUMMARY_MODEL = 'test-summary-model';
+    sendMock = jest.fn(async () => ({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              matches: [
+                { id: 'candidate-1', confidence: 0.91, reason: 'same meeting and policy topics' },
+                { id: 'candidate-2', confidence: 0.5, reason: 'same broad topic only' }
+              ]
+            })
+          }
+        }
+      ]
+    }));
+    aiStoryGrouper = require('./aiStoryGrouper');
+    aiStoryGrouper._setOpenRouterSdkLoader(async () => ({
+      OpenRouter: jest.fn(() => ({
+        chat: { send: sendMock }
+      }))
+    }));
+  });
+
+  afterEach(() => {
+    delete process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_SUMMARY_MODEL;
+  });
+
+  test('uses the summary model to classify candidate story matches', async () => {
+    const result = await aiStoryGrouper.findSimilarStoriesForArticle({
+      id: 'target-1',
+      title: 'Meloni meets Trump in Rome',
+      description: 'Talks focused on tariffs and Ukraine.',
+      source: 'Source A',
+      pubDate: '2026-03-15T14:30:00.000Z'
+    }, [
+      {
+        id: 'candidate-1',
+        title: 'Tariffs and Ukraine at Trump Meloni summit',
+        description: 'The two leaders met in the Italian capital.',
+        source: 'Source B',
+        pubDate: '2026-03-15T14:10:00.000Z'
+      },
+      {
+        id: 'candidate-2',
+        title: 'Markets move after tariff remarks',
+        description: 'Investors reacted to new policy comments.',
+        source: 'Source C',
+        pubDate: '2026-03-15T14:20:00.000Z'
+      }
+    ]);
+
+    expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
+      chatRequest: expect.objectContaining({
+        model: 'test-summary-model',
+        responseFormat: { type: 'json_object' }
+      })
+    }), expect.any(Object));
+    expect(result).toEqual(expect.objectContaining({
+      model: 'test-summary-model',
+      matches: [{ articleId: 'candidate-1', confidence: 0.91, reason: 'same meeting and policy topics' }]
+    }));
+  });
+
+  test('filters candidates before calling the model', async () => {
+    const result = await aiStoryGrouper.findSimilarStoriesForArticle({
+      id: 'target-1',
+      title: 'Volcano eruption in Iceland',
+      description: 'Lava flows near Grindavik.'
+    }, [
+      {
+        id: 'candidate-1',
+        title: 'Football transfer market update',
+        description: 'A striker may join a new club.'
+      }
+    ]);
+
+    expect(result).toEqual(expect.objectContaining({ skipped: 'no_candidates', matches: [] }));
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+});

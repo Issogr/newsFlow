@@ -12,7 +12,11 @@ jest.mock('./database', () => ({
   cleanupRemovedConfiguredSourceData: jest.fn(() => ({ removedArticles: 0, updatedSettings: 0 })),
   upsertArticles: jest.fn(() => ({ insertedIds: [], insertedCount: 0, updatedCount: 0 })),
   getArticleIdsPendingAiTopicProcessing: jest.fn(() => []),
+  getArticleIdsPendingAiStoryGrouping: jest.fn(() => []),
   markArticlesAiTopicProcessing: jest.fn(() => 0),
+  markArticlesAiStoryGrouping: jest.fn(() => 0),
+  assignArticlesToStoryGroup: jest.fn(() => 0),
+  getAiStoryGroupingCandidateSet: jest.fn(() => ({ target: null, candidates: [] })),
   mergeTopicsForArticles: jest.fn(() => 0),
   replaceTopicsForArticles: jest.fn(() => 0),
   getArticlesByIds: jest.fn(() => []),
@@ -53,6 +57,12 @@ jest.mock('./aiTopicClassifier', () => ({
   isAiTopicDetectionAvailable: jest.fn(() => true)
 }));
 
+jest.mock('./aiStoryGrouper', () => ({
+  buildStoryGroupId: jest.fn((articleIds = []) => `ai-story-${articleIds.filter(Boolean).sort().join('-')}`),
+  findSimilarStoriesForArticle: jest.fn(async () => ({ matches: [], model: 'test-story-model' })),
+  isAiStoryGroupingAvailable: jest.fn(() => false)
+}));
+
 jest.mock('./thematicSummaryService', () => ({
   startScheduler: jest.fn(),
   stopScheduler: jest.fn()
@@ -62,14 +72,17 @@ const rssParser = require('./rssParser');
 const database = require('./database');
 const websocketService = require('./websocketService');
 const aiTopicClassifier = require('./aiTopicClassifier');
+const aiStoryGrouper = require('./aiStoryGrouper');
 const newsAggregator = require('./newsAggregator');
 const { normalizeIncomingArticles } = require('./newsAggregatorGrouping');
 const {
   ingestSourceConfigs,
   mapSettledWithConcurrency,
   scheduleAiTopicsForPendingArticles,
+  scheduleAiStoryGroupingForPendingArticles,
   _filterArticlesWithinRetention,
   _resetPendingAiTopicProcessingIds,
+  _resetPendingAiStoryGroupingIds,
   _resetSourceFetchFreshness
 } = require('./newsAggregatorIngestion');
 const { getCanonicalSourceId, getCanonicalSourceName } = require('../utils/sourceCatalog');
@@ -102,12 +115,14 @@ describe('newsAggregator service flows', () => {
     jest.clearAllMocks();
     newsAggregator._resetImmediateRefreshState();
     _resetPendingAiTopicProcessingIds();
+    _resetPendingAiStoryGroupingIds();
     _resetSourceFetchFreshness();
     database.countArticles.mockReturnValue(1);
     database.deleteArticlesOlderThan.mockReturnValue(0);
     database.normalizeFuturePublicationDates.mockReturnValue(0);
     database.cleanupRemovedConfiguredSourceData.mockReturnValue({ removedArticles: 0, updatedSettings: 0 });
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue([]);
+    database.getArticleIdsPendingAiStoryGrouping.mockReturnValue([]);
     database.getArticles.mockReturnValue([]);
     database.getLatestIngestionRun.mockReturnValue(null);
     database.getSourceStats.mockReturnValue([]);
@@ -118,6 +133,8 @@ describe('newsAggregator service flows', () => {
     database.listAllActiveUserSources.mockReturnValue([]);
     database.upsertArticles.mockReturnValue({ insertedIds: [], insertedCount: 0, updatedCount: 0 });
     aiTopicClassifier.isAiTopicDetectionAvailable.mockReturnValue(true);
+    aiStoryGrouper.findSimilarStoriesForArticle.mockResolvedValue({ matches: [], model: 'test-story-model' });
+    aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(false);
     aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockResolvedValue({
       topicsByArticleId: new Map(),
       attemptedArticleIds: [],
@@ -747,6 +764,41 @@ describe('newsAggregator service flows', () => {
 
     expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'no_topics');
     expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-2'], 'deferred');
+  });
+
+  test('AI story grouping assigns matched articles in the background', async () => {
+    const target = {
+      id: 'story-target',
+      sourceId: ansaSourceId,
+      source: 'ANSA',
+      title: 'Meloni meets Trump in Rome',
+      description: 'Talks focused on tariffs and Ukraine.',
+      pubDate: recentIso()
+    };
+    const candidate = {
+      id: 'story-candidate',
+      sourceId: 'source-b',
+      source: 'Source B',
+      title: 'Tariffs and Ukraine at Trump Meloni summit',
+      description: 'The two leaders met in the Italian capital.',
+      pubDate: recentIso({ minutesAgo: 10 })
+    };
+
+    aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(true);
+    database.getArticleIdsPendingAiStoryGrouping.mockReturnValue(['story-target']);
+    database.getAiStoryGroupingCandidateSet.mockReturnValue({ target, candidates: [candidate] });
+    aiStoryGrouper.findSimilarStoriesForArticle.mockResolvedValue({
+      matches: [{ articleId: 'story-candidate', confidence: 0.9 }],
+      model: 'test-story-model'
+    });
+    database.assignArticlesToStoryGroup.mockReturnValue(2);
+
+    scheduleAiStoryGroupingForPendingArticles([target]);
+    await flushBackgroundAiProcessing();
+
+    expect(database.getAiStoryGroupingCandidateSet).toHaveBeenCalledWith('story-target', expect.objectContaining({ windowHours: 24, limit: 16 }));
+    expect(database.assignArticlesToStoryGroup).toHaveBeenCalledWith(['story-target', 'story-candidate'], 'ai-story-story-candidate-story-target', 'test-story-model');
+    expect(websocketService.broadcastFeedRefresh).toHaveBeenCalledWith({ userIds: [], reason: 'stories' });
   });
 
   test('marks pending AI articles failed when background classification throws', async () => {

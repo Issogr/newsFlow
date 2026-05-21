@@ -4,13 +4,17 @@ export const CURRENT_CHANGELOG_ENTRY = {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
-    items: []
+    items: [
+      '🧠 AI now helps group reworded RSS articles from different sources into one shared news card when they describe the same event.'
+    ]
   },
   it: {
     eyebrow: 'Ultimo aggiornamento',
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
-    items: []
+    items: [
+      '🧠 L\'AI ora aiuta a raggruppare in un\'unica news card articoli RSS riscritti da fonti diverse quando descrivono lo stesso evento.'
+    ]
   }
 };
 

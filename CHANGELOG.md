@@ -2,6 +2,8 @@
 
 ## 3.4.2
 
+- added AI-assisted story grouping that can merge articles from different RSS sources when their titles and descriptions describe the same event, while keeping grouping decisions out of feed request latency
+
 ## 3.4.1
 
 - made the main refresh button reload already-generated thematic summaries together with the news feed, without triggering new AI summary generation

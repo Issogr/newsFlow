@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 28;
+  const CURRENT_SCHEMA_VERSION = 29;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getAllConfiguredSourceGroupIds() {
@@ -33,6 +33,10 @@ function createDatabaseSchema({ logger }) {
         published_at TEXT NOT NULL,
         ai_topics_processed_at TEXT,
         ai_topics_status TEXT,
+        story_group_id TEXT,
+        ai_story_group_processed_at TEXT,
+        ai_story_group_status TEXT,
+        ai_story_group_model TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -243,6 +247,9 @@ function createDatabaseSchema({ logger }) {
     if (getColumnNames(database, 'articles').has('ai_topics_processed_at')) {
       database.exec('CREATE INDEX IF NOT EXISTS idx_articles_ai_topics_processed_at ON articles (ai_topics_processed_at)');
     }
+    if (getColumnNames(database, 'articles').has('story_group_id')) {
+      database.exec('CREATE INDEX IF NOT EXISTS idx_articles_story_group_id ON articles (story_group_id)');
+    }
   }
 
   function getCurrentSchemaVersion(database) {
@@ -335,6 +342,10 @@ function createDatabaseSchema({ logger }) {
     const thematicSummaryColumns = getColumnNames(database, 'thematic_summaries');
     if (!thematicSummaryColumns.has('title_en') || !thematicSummaryColumns.has('summary_text_en') || !thematicSummaryColumns.has('title_it') || !thematicSummaryColumns.has('summary_text_it')) {
       return 27;
+    }
+
+    if (!articleColumns.has('story_group_id') || !articleColumns.has('ai_story_group_processed_at') || !articleColumns.has('ai_story_group_status') || !articleColumns.has('ai_story_group_model')) {
+      return 28;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -703,8 +714,30 @@ function createDatabaseSchema({ logger }) {
             summary_text_it = CASE WHEN summary_text_it = '' THEN summary_text ELSE summary_text_it END
       `);
 
-      setCurrentSchemaVersion(database);
+      setCurrentSchemaVersion(database, 28);
       logger.info('Migrated DB schema from version 27 to 28');
+      migrateSchema(database, 28);
+      return;
+    }
+
+    if (currentVersion === 28) {
+      const articleColumns = getColumnNames(database, 'articles');
+      if (!articleColumns.has('story_group_id')) {
+        database.exec('ALTER TABLE articles ADD COLUMN story_group_id TEXT');
+      }
+      if (!articleColumns.has('ai_story_group_processed_at')) {
+        database.exec('ALTER TABLE articles ADD COLUMN ai_story_group_processed_at TEXT');
+      }
+      if (!articleColumns.has('ai_story_group_status')) {
+        database.exec('ALTER TABLE articles ADD COLUMN ai_story_group_status TEXT');
+      }
+      if (!articleColumns.has('ai_story_group_model')) {
+        database.exec('ALTER TABLE articles ADD COLUMN ai_story_group_model TEXT');
+      }
+      database.exec('CREATE INDEX IF NOT EXISTS idx_articles_story_group_id ON articles (story_group_id)');
+
+      setCurrentSchemaVersion(database);
+      logger.info('Migrated DB schema from version 28 to 29');
       return;
     }
 

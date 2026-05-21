@@ -30,7 +30,32 @@ function getArticleSourceLabel(article) {
     return '';
   }
 
-  return article.source || article.rawSource || '';
+  const source = article.source || article.rawSource || '';
+  const subSource = article.subSource && article.subSource !== source ? article.subSource : '';
+  return source && subSource ? `${source} - ${subSource}` : (source || subSource);
+}
+
+function getSourceVersionItems(items = []) {
+  const articleItems = (Array.isArray(items) ? items : []).filter((item) => item?.id);
+  const labelCounts = new Map();
+  const labelIndexes = new Map();
+  const getVersionLabel = (item) => getArticleSourceLabel(item) || item.title || item.id;
+
+  articleItems.forEach((item) => {
+    const label = getVersionLabel(item);
+    labelCounts.set(label, (labelCounts.get(label) || 0) + 1);
+  });
+
+  return articleItems.map((item) => {
+    const label = getVersionLabel(item);
+    const index = (labelIndexes.get(label) || 0) + 1;
+    labelIndexes.set(label, index);
+
+    return {
+      item,
+      label: labelCounts.get(label) > 1 ? `${label} #${index}` : label
+    };
+  });
 }
 
 function renderReaderBlock(block, index, readerTextStyles) {
@@ -127,15 +152,7 @@ const ReaderPanel = ({
   }, [group?.items, selectedArticleId]);
 
   const sourceVersionItems = useMemo(() => {
-    const groupedItems = new Map();
-
-    (group?.items || []).forEach((item) => {
-      if (!groupedItems.has(item.sourceId)) {
-        groupedItems.set(item.sourceId, item);
-      }
-    });
-
-    return [...groupedItems.values()];
+    return getSourceVersionItems(group?.items || []);
   }, [group?.items]);
 
   const selectedReader = selectedArticleId ? readerByArticleId[selectedArticleId] : null;
@@ -340,11 +357,11 @@ const ReaderPanel = ({
                 {t('sourceVersions')}
               </p>
               <div className="flex flex-wrap gap-2">
-                {sourceVersionItems.map((item) => {
-                  const isActive = item.sourceId === selectedArticle?.sourceId;
+                {sourceVersionItems.map(({ item, label }) => {
+                  const isActive = item.id === selectedArticle?.id;
                   return (
                     <button
-                      key={item.sourceId}
+                      key={item.id}
                       type="button"
                       onClick={() => setSelectedArticleId(item.id)}
                       className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
@@ -353,7 +370,7 @@ const ReaderPanel = ({
                           : 'border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100'
                       }`}
                     >
-                      {getArticleSourceLabel(item)}
+                      {label}
                     </button>
                   );
                 })}

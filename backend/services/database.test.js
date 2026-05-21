@@ -77,10 +77,11 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('28');
+    expect(migrationVersion).toBe('29');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
+    expect(articleColumns).toEqual(expect.arrayContaining(['story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model']));
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'source', 'confidence', 'evidence', 'reason_code', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
@@ -157,13 +158,13 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('28');
+    expect(migratedVersion).toBe('29');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
     expect(settingsColumns).not.toContain('default_source_ids');
     expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
-    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
+    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model']));
     expect(apiTokenColumns).toContain('token_hash');
     expect(userSourceColumns).toContain('icon_url');
   });
@@ -276,8 +277,8 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('28');
-    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status']));
+    expect(migratedVersion).toBe('29');
+    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
     expect(settingsColumns).toContain('compact_news_cards');
@@ -389,7 +390,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
 
-    expect(migratedVersion).toBe('28');
+    expect(migratedVersion).toBe('29');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -621,6 +622,7 @@ describe('database queries and user data', () => {
     expect(articles[0]).toEqual(expect.objectContaining({
       id: 'article-1',
       title: 'Canonical story updated',
+      canonicalUrl: 'https://example.com/story',
       url: 'https://example.com/story?utm_source=homepage'
     }));
   });
@@ -1013,6 +1015,61 @@ describe('database queries and user data', () => {
       'ai-deferred-article',
       'ai-completed-article'
     ])).toHaveLength(2);
+  });
+
+  test('tracks AI story grouping assignments and candidate windows', () => {
+    const now = new Date('2026-03-15T14:30:00.000Z').toISOString();
+    const nearby = new Date('2026-03-15T13:45:00.000Z').toISOString();
+    const old = new Date('2026-03-10T14:30:00.000Z').toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'story-target',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Meloni meets Trump in Rome',
+        description: 'Talks focused on tariffs and Ukraine.',
+        content: '',
+        url: 'https://example.com/story-target',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'story-candidate',
+        sourceId: secondarySource.id,
+        source: secondarySource.name,
+        title: 'Tariffs and Ukraine at Trump Meloni summit',
+        description: 'The two leaders met in the Italian capital.',
+        content: '',
+        url: 'https://example.com/story-candidate',
+        language: 'en',
+        pubDate: nearby
+      },
+      {
+        id: 'old-story-candidate',
+        sourceId: secondarySource.id,
+        source: secondarySource.name,
+        title: 'Old unrelated story',
+        description: 'Too old for the matching window.',
+        content: '',
+        url: 'https://example.com/old-story-candidate',
+        language: 'en',
+        pubDate: old
+      }
+    ]);
+
+    expect(database.getArticleIdsPendingAiStoryGrouping(['story-target'])).toEqual(['story-target']);
+
+    const candidateSet = database.getAiStoryGroupingCandidateSet('story-target', { windowHours: 2 });
+    expect(candidateSet.target).toEqual(expect.objectContaining({ id: 'story-target' }));
+    expect(candidateSet.candidates.map((article) => article.id)).toEqual(['story-candidate']);
+
+    expect(database.assignArticlesToStoryGroup(['story-target', 'story-candidate'], 'ai-story-test', 'test-model')).toBe(2);
+    expect(database.getArticleIdsPendingAiStoryGrouping(['story-target', 'story-candidate'])).toEqual([]);
+    expect(database.getArticlesByIds(['story-target', 'story-candidate'], { maxArticleAgeHours: null })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'story-target', storyGroupId: 'ai-story-test', aiStoryGroupStatus: 'matched', aiStoryGroupModel: 'test-model' }),
+      expect.objectContaining({ id: 'story-candidate', storyGroupId: 'ai-story-test', aiStoryGroupStatus: 'matched', aiStoryGroupModel: 'test-model' })
+    ]));
   });
 
   test('moves read-later state and reader cache before deleting duplicate articles', () => {
