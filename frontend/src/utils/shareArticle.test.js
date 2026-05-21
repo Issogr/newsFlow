@@ -25,18 +25,20 @@ describe('shareArticleUrl', () => {
     });
   });
 
-  test('falls back to clipboard and reports clipboard failures', async () => {
+  test('falls back to clipboard and opens a new tab after clipboard failures', async () => {
     navigator.share = undefined;
     navigator.clipboard = {
       writeText: vi.fn().mockResolvedValue(undefined)
     };
+    window.open = vi.fn();
 
     await expect(shareArticleUrl({ url: 'https://example.com/story' })).resolves.toBe('copied');
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.com/story');
 
     navigator.clipboard.writeText.mockRejectedValueOnce(new Error('denied'));
 
-    await expect(shareArticleUrl({ url: 'https://example.com/story' })).resolves.toBe('failed');
+    await expect(shareArticleUrl({ url: 'https://example.com/story' })).resolves.toBe('opened');
+    expect(window.open).toHaveBeenCalledWith('https://example.com/story', '_blank', 'noopener,noreferrer');
   });
 
   test('falls back to opening a new tab when clipboard is unavailable', async () => {

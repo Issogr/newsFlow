@@ -234,8 +234,8 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
 
 async function generateSummaryForTopic(topicConfig, window, options = {}) {
   const existingSummary = database.getThematicSummary(topicConfig.key, window.periodStart, window.periodEnd);
-  if (existingSummary && options.force !== true) {
-    return existingSummary;
+  if (existingSummary?.status === 'completed' && options.force !== true) {
+    return { summary: existingSummary, generatedNow: false };
   }
 
   const articles = database.getArticlesForThematicSummary({
@@ -246,7 +246,7 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
   });
 
   if (articles.length === 0) {
-    return null;
+    return { summary: null, generatedNow: false };
   }
 
   const enrichedArticles = withCachedReaderText(articles);
@@ -271,18 +271,21 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
     }, enrichedArticles);
 
     if (!generated) {
-      return null;
+      return { summary: null, generatedNow: false };
     }
 
-    return database.upsertThematicSummary({
-      ...basePayload,
-      title: generated.title,
-      summaryText: generated.summaryText,
-      titleByLocale: generated.titleByLocale,
-      summaryTextByLocale: generated.summaryTextByLocale,
-      model: generated.model,
-      status: 'completed'
-    });
+    return {
+      summary: database.upsertThematicSummary({
+        ...basePayload,
+        title: generated.title,
+        summaryText: generated.summaryText,
+        titleByLocale: generated.titleByLocale,
+        summaryTextByLocale: generated.summaryTextByLocale,
+        model: generated.model,
+        status: 'completed'
+      }),
+      generatedNow: true
+    };
   } catch (error) {
     logger.warn(`Thematic summary generation failed: topic=${topicConfig.key}, windowEnd=${window.periodEnd}, error=${error.message}`);
     database.upsertThematicSummary({
@@ -293,7 +296,7 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
       status: 'failed',
       errorMessage: error.message
     });
-    return null;
+    return { summary: null, generatedNow: false };
   }
 }
 
@@ -305,6 +308,7 @@ async function generateDueSummaries(options = {}) {
   generationPromise = (async () => {
     const window = options.window || getLatestDueWindow(options.referenceDate || new Date());
     const summaries = [];
+    let generatedCount = 0;
 
     if (!aiSummaryGenerator.isAiSummaryGenerationAvailable()) {
       return {
@@ -314,14 +318,17 @@ async function generateDueSummaries(options = {}) {
     }
 
     for (const topicConfig of SUMMARY_TOPICS) {
-      const summary = await generateSummaryForTopic(topicConfig, window, options);
-      if (summary) {
-        summaries.push(summary);
+      const result = await generateSummaryForTopic(topicConfig, window, options);
+      if (result.summary?.status === 'completed') {
+        summaries.push(result.summary);
+      }
+      if (result.generatedNow) {
+        generatedCount += 1;
       }
     }
 
-    if (summaries.length > 0) {
-      logger.info(`Thematic summaries ready: windowEnd=${window.periodEnd}, count=${summaries.length}`);
+    if (generatedCount > 0) {
+      logger.info(`Thematic summaries ready: windowEnd=${window.periodEnd}, count=${generatedCount}`);
       if (options.broadcast !== false) {
         websocketService.broadcastFeedRefresh({ reason: 'summaries' });
       }

@@ -88,6 +88,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const scrollFrameRef = useRef(null);
   const { startLatestRequest: startListRequest } = useLatestRequest();
   const { startLatestRequest: startPaginationRequest, cancelLatestRequest: cancelPaginationRequest } = useLatestRequest();
+  const { startLatestRequest: startSummaryRequest, cancelLatestRequest: cancelSummaryRequest } = useLatestRequest();
 
   const [news, setNews] = useState([]);
   const [meta, setMeta] = useState(null);
@@ -375,21 +376,26 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     });
   }, []);
 
-  const loadThematicSummaries = useCallback(async ({ signal } = {}) => {
+  const loadThematicSummaries = useCallback(async () => {
     if (needsSourceSetup) {
+      cancelSummaryRequest();
       setThematicSummaries([]);
       return;
     }
 
+    const request = startSummaryRequest();
+
     try {
-      const response = await fetchThematicSummaries({ signal });
-      setThematicSummaries(response.items || []);
+      const response = await fetchThematicSummaries({ signal: request.signal });
+      if (request.isLatest()) {
+        setThematicSummaries(response.items || []);
+      }
     } catch (requestError) {
-      if (!isRequestCanceled(requestError)) {
+      if (!isRequestCanceled(requestError) && request.isLatest()) {
         setThematicSummaries([]);
       }
     }
-  }, [needsSourceSetup]);
+  }, [cancelSummaryRequest, needsSourceSetup, startSummaryRequest]);
 
   useTopicRefreshSocket({
     onTopicRefresh: handleTopicRefresh,
@@ -423,10 +429,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [loadNews, needsSourceSetup]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    loadThematicSummaries({ signal: controller.signal });
-
-    return () => controller.abort();
+    loadThematicSummaries();
   }, [loadThematicSummaries]);
 
   const handleSourceSetupComplete = useCallback((settings) => {

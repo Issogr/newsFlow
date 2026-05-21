@@ -36,6 +36,10 @@ describe('useTopicRefreshSocket', () => {
 
     renderHook(() => useTopicRefreshSocket({ onTopicRefresh, onSummariesRefresh, onNewsUpdate, subscription }));
 
+    expect(io).toHaveBeenCalledWith(window.location.origin, expect.not.objectContaining({
+      reconnectionAttempts: expect.any(Number)
+    }));
+
     handlers.get('news:update')({ refresh: true, reason: 'news' });
     handlers.get('news:update')({ count: 1, groupIds: ['group-1'], data: [{ id: 'group-1' }] });
     handlers.get('news:update')({ refresh: true, reason: 'topics' });

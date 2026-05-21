@@ -104,7 +104,7 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `LOG_LEVEL` | `debug` in development, `info` in production | Logger verbosity |
 | `NEWS_DB_PATH` | `backend/data/news.db` | SQLite file path |
 | `ALLOWED_ORIGINS` | empty | Comma-separated CORS allowlist |
-| `TRUST_PROXY` | auto in production | Explicit proxy trust toggle |
+| `TRUST_PROXY` | auto in production | Explicit backend/BFF proxy trust toggle; leave unset for production auto-detection |
 
 ### BFF, Auth, and Session
 

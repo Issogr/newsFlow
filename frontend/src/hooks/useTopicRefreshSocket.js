@@ -36,7 +36,6 @@ const useTopicRefreshSocket = ({
     }
 
     const socket = io(window.location.origin, {
-      reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 20000,

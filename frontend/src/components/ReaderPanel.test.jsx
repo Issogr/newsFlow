@@ -231,6 +231,43 @@ describe('ReaderPanel', () => {
     expect(screen.queryByText('readerUnavailable')).not.toBeInTheDocument();
   });
 
+  test('reuses cached reader content when returning to a source version', async () => {
+    fetchReaderArticle
+      .mockResolvedValueOnce({
+        title: 'First reader title',
+        language: 'en',
+        excerpt: 'First excerpt',
+        contentBlocks: [{ type: 'paragraph', text: 'First body' }],
+        minutesToRead: 1
+      })
+      .mockResolvedValueOnce({
+        title: 'Second reader title',
+        language: 'en',
+        excerpt: 'Second excerpt',
+        contentBlocks: [{ type: 'paragraph', text: 'Second body' }],
+        minutesToRead: 1
+      });
+
+    render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="right"
+        t={t}
+        currentUser={currentUser}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(await screen.findByText('First reader title')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
+    expect(await screen.findByText('Second reader title')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Source A' }));
+
+    expect(await screen.findByText('First reader title')).toBeInTheDocument();
+    expect(fetchReaderArticle).toHaveBeenCalledTimes(2);
+  });
+
   test('disables unsafe original-source links', async () => {
     fetchReaderArticle.mockResolvedValue({
       title: 'Unsafe reader title',
@@ -373,6 +410,39 @@ describe('ReaderPanel', () => {
       refresh: true
     }));
     expect(await screen.findByText('Refreshed reader title')).toBeInTheDocument();
+  });
+
+  test('keeps stale reader content visible when manual refresh fails', async () => {
+    fetchReaderArticle
+      .mockResolvedValueOnce({
+        title: 'Reader title',
+        language: 'en',
+        excerpt: 'Excerpt',
+        contentBlocks: [{ type: 'paragraph', text: 'Body' }],
+        minutesToRead: 1
+      })
+      .mockRejectedValueOnce(new Error('Refresh failed'));
+
+    render(
+      <ReaderPanel
+        group={group}
+        initialArticleId="article-1"
+        readerPosition="right"
+        t={t}
+        currentUser={currentUser}
+        onUserUpdate={jest.fn()}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(await screen.findByText('Reader title')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'refreshReader' }));
+    });
+
+    expect(screen.getByText('Reader title')).toBeInTheDocument();
+    expect(screen.getByText('readerUnavailable')).toBeInTheDocument();
   });
 
 });

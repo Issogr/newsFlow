@@ -145,6 +145,13 @@ const ReaderPanel = ({
       return;
     }
 
+    if (!forceRefresh && readerByArticleId[articleId]) {
+      resetLatestRequest();
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     setError(null);
 
     const request = startLatestRequest();
@@ -174,7 +181,7 @@ const ReaderPanel = ({
         setLoading(false);
       }
     }
-  }, [startLatestRequest]);
+  }, [readerByArticleId, resetLatestRequest, startLatestRequest]);
 
   useEffect(() => {
     if (selectedArticleId) {
@@ -384,7 +391,7 @@ const ReaderPanel = ({
                       {t('loadingReader')}
                     </p>
                   </div>
-                ) : error ? (
+                ) : error && !selectedReader ? (
                   <div className="rounded-[2rem] border border-red-200 bg-red-50/95 px-6 py-8 text-center text-red-700 shadow-sm">
                     <p className="inline-flex items-center gap-2 font-medium">
                       <AlertCircle className="h-4 w-4" />
@@ -393,6 +400,13 @@ const ReaderPanel = ({
                   </div>
                 ) : selectedReader ? (
                   <article className="rounded-[2rem] border border-stone-200/80 bg-white/95 px-6 py-8 shadow-[0_24px_70px_rgba(15,23,42,0.08)] md:px-10 md:py-10">
+                    {error && (
+                      <div className="mb-8 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-800 shadow-sm">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        {t('readerUnavailable')}
+                      </div>
+                    )}
+
                     {selectedReader.fallback && (
                       <div className="mb-8 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-800 shadow-sm">
                         <AlertTriangle className="h-4 w-4 shrink-0" />

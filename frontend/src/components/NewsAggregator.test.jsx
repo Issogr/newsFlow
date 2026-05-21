@@ -288,6 +288,69 @@ describe('NewsAggregator', () => {
     expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
   });
 
+  test('ignores stale thematic summary responses after a newer refresh', async () => {
+    let onSummariesRefresh;
+    const firstSummariesRequest = createDeferred();
+    const secondSummariesRequest = createDeferred();
+
+    useTopicRefreshSocket.mockImplementation(({ onSummariesRefresh: handleSummariesRefresh }) => {
+      onSummariesRefresh = handleSummariesRefresh;
+    });
+    fetchNews.mockResolvedValue({
+      items: [{ id: 'group-1', title: 'Top headline' }],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    fetchThematicSummaries
+      .mockImplementationOnce(() => firstSummariesRequest.promise)
+      .mockImplementationOnce(() => secondSummariesRequest.promise);
+
+    await renderNewsAggregator();
+
+    const refreshPromise = act(async () => {
+      await onSummariesRefresh({ refresh: true, reason: 'summaries' });
+    });
+    await resolveDeferred(secondSummariesRequest, {
+      items: [
+        {
+          id: 'summary-science',
+          topicKey: 'science',
+          topicLabel: 'Science',
+          topics: ['Scienza'],
+          periodStart: '2026-05-21T07:00:00.000Z',
+          periodEnd: '2026-05-21T13:00:00.000Z',
+          titleByLocale: { en: 'Science briefing', it: 'Sintesi scienza' },
+          summaryTextByLocale: { en: 'Science update [1].', it: 'Aggiornamento scienza [1].' },
+          sources: []
+        }
+      ]
+    });
+    await refreshPromise;
+
+    expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
+
+    await resolveDeferred(firstSummariesRequest, {
+      items: [
+        {
+          id: 'summary-technology',
+          topicKey: 'technology',
+          topicLabel: 'Technology',
+          topics: ['Tecnologia'],
+          periodStart: '2026-05-21T07:00:00.000Z',
+          periodEnd: '2026-05-21T13:00:00.000Z',
+          titleByLocale: { en: 'Technology briefing', it: 'Sintesi tecnologia' },
+          summaryTextByLocale: { en: 'Technology update [1].', it: 'Aggiornamento tecnologia [1].' },
+          sources: []
+        }
+      ]
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Open Technology summary' })).not.toBeInTheDocument();
+    });
+  });
+
   test('shows one-time source setup and excludes unselected sources and sub-feeds', async () => {
     const onUserUpdate = jest.fn();
     const setupUser = {
