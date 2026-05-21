@@ -3,6 +3,7 @@
 **/node_modules
 **/data
 **/coverage
+backend/
 .env
 .env.*
 **/.env
@@ -18,6 +19,11 @@ frontend/dist
 backend/coverage
 bff/coverage
 frontend/coverage
+bff/*.test.js
+bff/babel.config.cjs
+frontend/src/**/*.test.js
+frontend/src/**/*.test.jsx
+frontend/src/setupTests.js
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 # Build stage
 FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS build
 
@@ -14,7 +16,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Installa le dipendenze di produzione per la piattaforma target senza emulare npm sotto QEMU
-RUN npm_arch="${TARGETARCH:-$(node -p 'process.arch')}" && \
+RUN --mount=type=cache,id=newsflow-backend-npm,target=/root/.npm,sharing=locked \
+    npm_arch="${TARGETARCH:-$(node -p 'process.arch')}" && \
     if [ "$npm_arch" = "amd64" ]; then npm_arch="x64"; fi && \
     npm_config_platform=linux npm_config_arch="$npm_arch" npm_config_libc=glibc npm ci --omit=dev --no-audit --no-fund
 

@@ -1,9 +1,12 @@
+# syntax=docker/dockerfile:1.7
+
 FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS frontend-build
 
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
-RUN npm ci
+RUN --mount=type=cache,id=newsflow-frontend-npm,target=/root/.npm,sharing=locked \
+    npm ci --no-audit --no-fund
 
 COPY frontend/ ./
 RUN npm run build
@@ -19,7 +22,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY bff/package*.json ./
-RUN npm_arch="${TARGETARCH:-$(node -p 'process.arch')}" && \
+RUN --mount=type=cache,id=newsflow-bff-npm,target=/root/.npm,sharing=locked \
+    npm_arch="${TARGETARCH:-$(node -p 'process.arch')}" && \
     if [ "$npm_arch" = "amd64" ]; then npm_arch="x64"; fi && \
     npm_config_platform=linux npm_config_arch="$npm_arch" npm_config_libc=glibc npm ci --omit=dev --no-audit --no-fund
 
