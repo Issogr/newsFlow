@@ -237,6 +237,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const userMenuRef = useRef(null);
   const visibleNewsCountRef = useRef(0);
   const preservedNewsCountRef = useRef(0);
+  const activeListLoadingRequestIdRef = useRef(null);
   const recentHours = Math.max(
     settingsLimits.recentHours.min,
     Math.min(Number(currentUser?.settings?.recentHours) || settingsLimits.recentHours.max, settingsLimits.recentHours.max)
@@ -363,6 +364,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   } = {}) {
     const setBusyState = append ? setLoadingMore : (silent ? () => {} : setLoading);
     const request = append ? startPaginationRequest() : startListRequest();
+    const tracksListLoading = !append && !silent;
+
+    if (tracksListLoading) {
+      activeListLoadingRequestIdRef.current = request.id;
+    } else if (!append && silent && activeListLoadingRequestIdRef.current !== null) {
+      activeListLoadingRequestIdRef.current = null;
+      setLoading(false);
+    }
 
     if (append) {
       preservedNewsCountRef.current = Math.max(preservedNewsCountRef.current || visibleNewsCountRef.current || PAGE_SIZE, visibleNewsCountRef.current || PAGE_SIZE) + PAGE_SIZE;
@@ -467,7 +476,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         setError(requestError);
       }
     } finally {
-      if (request.isLatest()) {
+      if (tracksListLoading && activeListLoadingRequestIdRef.current === request.id) {
+        activeListLoadingRequestIdRef.current = null;
+        setLoading(false);
+      } else if (!tracksListLoading && request.isLatest()) {
         setBusyState(false);
       }
     }

@@ -536,6 +536,51 @@ describe('NewsAggregator', () => {
     }));
   });
 
+  test('clears manual refresh loading when a silent topic reload cancels it', async () => {
+    let onTopicRefresh;
+    const manualRefreshRequest = createDeferred();
+
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [createGroup('group-1', 'Current headline')],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockImplementationOnce(({ signal }) => {
+        signal.addEventListener('abort', () => {
+          manualRefreshRequest.reject(Object.assign(new Error('canceled'), { code: 'ERR_CANCELED' }));
+        });
+        return manualRefreshRequest.promise;
+      })
+      .mockResolvedValueOnce({
+        items: [createGroup('group-1', 'Silently reloaded headline')],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
+
+    await renderNewsAggregator();
+    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
+    });
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('Silently reloaded headline')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+    });
+  });
+
   test('keeps loaded-more articles during silent AI topic reloads', async () => {
     let onTopicRefresh;
 
