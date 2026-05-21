@@ -506,8 +506,13 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     }
   }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, isReadLaterView, recentHours, showRecentOnly, startListRequest, startPaginationRequest]);
 
-  const handleTopicRefresh = useCallback(() => {
+  const handleTopicRefresh = useCallback((payload = {}) => {
     if (needsSourceSetup) {
+      return;
+    }
+
+    if (payload.reason === 'news') {
+      loadNews({ page: 1, append: false });
       return;
     }
 
