@@ -484,7 +484,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
         return nextMeta;
       });
-      if (!append) {
+      if (!append && !silent) {
         setPendingNewsGroupIds([]);
       }
       if (response.filters) {
@@ -507,13 +507,17 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, isReadLaterView, recentHours, showRecentOnly, startListRequest, startPaginationRequest]);
 
   const handleTopicRefresh = useCallback(() => {
+    if (needsSourceSetup) {
+      return;
+    }
+
     loadNews({
       page: 1,
       append: false,
       silent: true,
       minimumItemCount: Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current)
     });
-  }, [loadNews]);
+  }, [loadNews, needsSourceSetup]);
 
   const handleNewsUpdate = useCallback((payload = {}) => {
     const incomingGroupIds = (Array.isArray(payload.groupIds) ? payload.groupIds : []).filter(Boolean);
@@ -554,7 +558,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     onTopicRefresh: handleTopicRefresh,
     onSummariesRefresh: () => loadThematicSummaries(),
     onNewsUpdate: handleNewsUpdate,
-    subscription: socketSubscription
+    subscription: socketSubscription,
+    enabled: !needsSourceSetup
   });
 
   useEffect(() => {

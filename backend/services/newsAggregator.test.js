@@ -16,6 +16,7 @@ jest.mock('./database', () => ({
   markArticlesAiTopicProcessing: jest.fn(() => 0),
   markArticlesAiStoryGrouping: jest.fn(() => 0),
   assignArticlesToStoryGroup: jest.fn(() => 0),
+  getArticleIdsForStoryGroups: jest.fn(() => []),
   getAiStoryGroupingCandidateSet: jest.fn(() => ({ target: null, candidates: [] })),
   mergeTopicsForArticles: jest.fn(() => 0),
   replaceTopicsForArticles: jest.fn(() => 0),
@@ -799,6 +800,55 @@ describe('newsAggregator service flows', () => {
     expect(database.getAiStoryGroupingCandidateSet).toHaveBeenCalledWith('story-target', expect.objectContaining({ windowHours: 24, limit: 16 }));
     expect(database.assignArticlesToStoryGroup).toHaveBeenCalledWith(['story-target', 'story-candidate'], 'ai-story-story-candidate-story-target', 'test-story-model');
     expect(websocketService.broadcastFeedRefresh).toHaveBeenCalledWith({ userIds: [], reason: 'stories' });
+  });
+
+  test('AI story grouping bridges all members of existing story groups', async () => {
+    const target = {
+      id: 'story-target',
+      title: 'Summit follow-up connects reports',
+      description: 'The latest report ties together both earlier story clusters.',
+      pubDate: recentIso()
+    };
+    const candidateA = {
+      id: 'story-candidate-a',
+      title: 'Earlier summit report',
+      description: 'First cluster member.',
+      storyGroupId: 'ai-story-a',
+      pubDate: recentIso({ minutesAgo: 10 })
+    };
+    const candidateB = {
+      id: 'story-candidate-b',
+      title: 'Second summit report',
+      description: 'Second cluster member.',
+      storyGroupId: 'ai-story-b',
+      pubDate: recentIso({ minutesAgo: 20 })
+    };
+
+    aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(true);
+    database.getArticleIdsPendingAiStoryGrouping.mockReturnValue(['story-target']);
+    database.getAiStoryGroupingCandidateSet.mockReturnValue({ target, candidates: [candidateA, candidateB] });
+    database.getArticleIdsForStoryGroups.mockReturnValue(['story-candidate-a', 'story-extra-a', 'story-candidate-b', 'story-extra-b']);
+    aiStoryGrouper.findSimilarStoriesForArticle.mockResolvedValue({
+      matches: [
+        { articleId: 'story-candidate-a', confidence: 0.9 },
+        { articleId: 'story-candidate-b', confidence: 0.88 }
+      ],
+      model: 'test-story-model'
+    });
+    database.assignArticlesToStoryGroup.mockReturnValue(5);
+
+    scheduleAiStoryGroupingForPendingArticles([target]);
+    await flushBackgroundAiProcessing();
+
+    expect(database.getArticleIdsForStoryGroups).toHaveBeenCalledWith(['ai-story-a', 'ai-story-b'], null);
+    expect(database.assignArticlesToStoryGroup).toHaveBeenCalledWith([
+      'story-target',
+      'story-candidate-a',
+      'story-candidate-b',
+      'story-extra-a',
+      'story-extra-b'
+    ], 'ai-story-a', 'test-story-model');
+    expect(aiStoryGrouper.buildStoryGroupId).not.toHaveBeenCalled();
   });
 
   test('marks pending AI articles failed when background classification throws', async () => {

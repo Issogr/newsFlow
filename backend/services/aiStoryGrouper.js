@@ -1,8 +1,13 @@
 const crypto = require('crypto');
 const logger = require('../utils/logger');
-const { parseIntegerEnv } = require('../utils/env');
+const {
+  createOpenRouterClient,
+  extractAssistantContent,
+  getOpenRouterConfig,
+  parseJsonContent,
+  setOpenRouterSdkLoader
+} = require('./openRouterClient');
 
-const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_OPENROUTER_SUMMARY_MODEL = 'deepseek/deepseek-v4-flash';
 const DEFAULT_TIMEOUT_MS = 120000;
 const MIN_MATCH_CONFIDENCE = 0.82;
@@ -10,43 +15,13 @@ const STORY_GROUP_TOKEN_STOP_WORDS = new Set([
   'a', 'ad', 'al', 'alla', 'and', 'con', 'da', 'dal', 'dalla', 'de', 'del', 'della', 'di', 'e', 'for', 'from', 'gli', 'il', 'in', 'la', 'le', 'lo', 'of', 'on', 'per', 'the', 'to', 'un', 'una', 'with'
 ]);
 
-let openRouterSdkLoader = () => import('@openrouter/sdk');
-let openRouterSdkPromise = null;
-
-function setOpenRouterSdkLoader(loader) {
-  openRouterSdkLoader = loader || (() => import('@openrouter/sdk'));
-  openRouterSdkPromise = null;
-}
-
-async function loadOpenRouterSdk() {
-  if (!openRouterSdkPromise) {
-    openRouterSdkPromise = openRouterSdkLoader();
-  }
-
-  return openRouterSdkPromise;
-}
-
 function getConfig() {
-  const apiKey = String(process.env.OPENROUTER_API_KEY || '').trim();
-  const enabledValue = String(process.env.AI_STORY_GROUPING_ENABLED || 'auto').trim().toLowerCase();
-
-  return {
-    apiKey,
-    enabled: enabledValue !== 'false' && Boolean(apiKey),
-    model: String(process.env.OPENROUTER_SUMMARY_MODEL || DEFAULT_OPENROUTER_SUMMARY_MODEL).trim() || DEFAULT_OPENROUTER_SUMMARY_MODEL,
-    baseUrl: String(process.env.OPENROUTER_BASE_URL || DEFAULT_OPENROUTER_BASE_URL).trim().replace(/\/+$/u, ''),
-    timeoutMs: parseIntegerEnv('AI_SUMMARY_REQUEST_TIMEOUT_MS', DEFAULT_TIMEOUT_MS, { min: 1000, max: 120000 })
-  };
-}
-
-async function createOpenRouterClient(config) {
-  const { OpenRouter } = await loadOpenRouterSdk();
-  return new OpenRouter({
-    apiKey: config.apiKey,
-    serverURL: config.baseUrl,
-    timeoutMs: config.timeoutMs,
-    httpReferer: String(process.env.APP_BASE_URL || 'http://localhost'),
-    appTitle: 'News Flow'
+  return getOpenRouterConfig({
+    enabledEnvName: 'AI_STORY_GROUPING_ENABLED',
+    modelEnvName: 'OPENROUTER_SUMMARY_MODEL',
+    defaultModel: DEFAULT_OPENROUTER_SUMMARY_MODEL,
+    timeoutEnvName: 'AI_SUMMARY_REQUEST_TIMEOUT_MS',
+    defaultTimeoutMs: DEFAULT_TIMEOUT_MS
   });
 }
 
@@ -137,61 +112,6 @@ function buildPrompt(target = {}, candidates = []) {
       candidates: candidates.map(buildArticlePayload)
     })
   ].join('\n');
-}
-
-function extractContentPart(value) {
-  if (!value) {
-    return '';
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(extractContentPart).filter(Boolean).join('\n');
-  }
-
-  if (typeof value === 'object') {
-    return extractContentPart(value.text || value.content || value.outputText || value.output_text);
-  }
-
-  return '';
-}
-
-function extractAssistantContent(response = {}) {
-  const choice = response.choices?.[0] || {};
-  return extractContentPart(
-    choice.message?.content
-      || choice.message?.text
-      || choice.text
-      || response.outputText
-      || response.output_text
-      || response.message?.content
-      || response.content
-  );
-}
-
-function parseJsonContent(content) {
-  const rawContent = String(content || '').trim();
-  if (!rawContent) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(rawContent);
-  } catch {
-    const jsonMatch = rawContent.match(/\{[\s\S]*\}/u);
-    if (!jsonMatch) {
-      return null;
-    }
-
-    try {
-      return JSON.parse(jsonMatch[0]);
-    } catch {
-      return null;
-    }
-  }
 }
 
 function normalizeMatches(payload = {}, candidateIds = new Set()) {

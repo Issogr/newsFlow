@@ -3,7 +3,7 @@ var mockApiConfig;
 var responseErrorHandler;
 
 import axios from 'axios';
-import { AUTH_EXPIRED_EVENT, fetchNews, fetchReadLaterNews, fetchReaderArticle, fetchThematicSummaries, removeReadLaterArticles, saveReadLaterArticles, submitFeedback } from './api';
+import { AUTH_EXPIRED_EVENT, fetchNews, fetchReadLaterNews, fetchReaderArticle, fetchThematicSummaries, isRequestCanceled, removeReadLaterArticles, saveReadLaterArticles, submitFeedback } from './api';
 
 vi.mock('axios', () => {
   const axios = {
@@ -38,6 +38,7 @@ vi.mock('axios', () => {
 describe('api service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    axios.isCancel.mockReturnValue(false);
     window.localStorage.clear();
   });
 
@@ -85,6 +86,34 @@ describe('api service', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/news', expect.objectContaining({
       params: expect.objectContaining({ refresh: 'true' })
     }));
+  });
+
+  test('builds news query params only from active filters', async () => {
+    mockApi.get.mockResolvedValue({ data: { items: [] } });
+
+    await fetchNews({
+      search: '  economy  ',
+      sourceIds: ['ansa', 'bbc'],
+      topics: ['Economy'],
+      recentHours: 0,
+      beforePubDate: '2026-05-21T10:00:00.000Z',
+      beforeId: 'article-10',
+      includeFilters: false,
+      signal: 'news-signal'
+    });
+
+    expect(mockApi.get).toHaveBeenCalledWith('/news', {
+      params: {
+        page: 1,
+        pageSize: 12,
+        search: 'economy',
+        sources: 'ansa,bbc',
+        topics: 'Economy',
+        beforePubDate: '2026-05-21T10:00:00.000Z',
+        beforeId: 'article-10'
+      },
+      signal: 'news-signal'
+    });
   });
 
   test('lets the browser set multipart feedback boundaries', async () => {
@@ -163,5 +192,24 @@ describe('api service', () => {
     expect(listener).not.toHaveBeenCalled();
 
     window.removeEventListener(AUTH_EXPIRED_EVENT, listener);
+  });
+
+  test.each([
+    ['timeout', { code: 'ECONNABORTED', config: { url: '/news' } }, 'The request timed out. Please try again in a few seconds.'],
+    ['network', { config: { url: '/news' } }, 'Unable to connect to the server. Check your connection.'],
+    ['rate limit', { response: { status: 429 }, config: { url: '/news' } }, 'Too many requests. Please wait a moment before trying again.']
+  ])('normalizes %s errors', async (label, error, message) => {
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+
+    expect(error.message).toBe(message);
+  });
+
+  test('recognizes axios and native cancellation errors', () => {
+    axios.isCancel.mockImplementation((error) => error?.axiosCancel === true);
+
+    expect(isRequestCanceled({ axiosCancel: true })).toBe(true);
+    expect(isRequestCanceled({ code: 'ERR_CANCELED' })).toBe(true);
+    expect(isRequestCanceled({ name: 'CanceledError' })).toBe(true);
+    expect(isRequestCanceled(new Error('other'))).toBe(false);
   });
 });

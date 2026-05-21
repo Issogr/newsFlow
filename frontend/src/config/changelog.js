@@ -6,7 +6,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     intro: 'A quick summary of the latest update.',
     items: [
       '🧠 AI now helps group reworded RSS articles from different sources into one shared news card when they describe the same event.',
-      '📱 Thematic summaries now stay properly full screen on mobile without revealing the news list while scrolling.'
+      '📱 Thematic summaries now stay properly full screen on mobile without revealing the news list while scrolling.',
+      '🔔 New-article notices now stay visible during background topic and story updates until you refresh.'
     ]
   },
   it: {
@@ -15,7 +16,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
       '🧠 L\'AI ora aiuta a raggruppare in un\'unica news card articoli RSS riscritti da fonti diverse quando descrivono lo stesso evento.',
-      '📱 Le sintesi tematiche ora restano correttamente a schermo intero su mobile senza mostrare la lista delle news durante lo scroll.'
+      '📱 Le sintesi tematiche ora restano correttamente a schermo intero su mobile senza mostrare la lista delle news durante lo scroll.',
+      '🔔 Gli avvisi di nuove notizie ora restano visibili durante gli aggiornamenti in background di topic e storie finche non aggiorni.'
     ]
   }
 };

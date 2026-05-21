@@ -377,6 +377,7 @@ describe('NewsAggregator', () => {
 
   test('shows one-time source setup and excludes unselected sources and sub-feeds', async () => {
     const onUserUpdate = jest.fn();
+    let socketOptions;
     const setupUser = {
       ...currentUser,
       settings: {
@@ -399,6 +400,9 @@ describe('NewsAggregator', () => {
         excludedSubSourceIds: ['ansa_mondo']
       }
     });
+    useTopicRefreshSocket.mockImplementation((options) => {
+      socketOptions = options;
+    });
 
     await renderNewsAggregator({ currentUser: setupUser, onUserUpdate });
 
@@ -407,8 +411,16 @@ describe('NewsAggregator', () => {
     expect(screen.getByRole('heading', { name: 'Italian sources' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'English sources' })).toBeInTheDocument();
     expect(fetchNews).not.toHaveBeenCalled();
+    expect(socketOptions).toEqual(expect.objectContaining({ enabled: false }));
     expect(screen.queryByRole('button', { name: /Mondo/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start reading' })).toBeDisabled();
+
+    await act(async () => {
+      socketOptions.onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(fetchNews).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand ANSA feeds' }));
     fireEvent.click(screen.getByRole('button', { name: /Home/ }));
@@ -583,6 +595,47 @@ describe('NewsAggregator', () => {
 
     expect(await screen.findByText('Current headline with AI topics')).toBeInTheDocument();
     expect(screen.queryByText('New automatic headline')).not.toBeInTheDocument();
+  });
+
+  test('keeps pending new article notice after silent topic reloads', async () => {
+    let socketHandlers;
+
+    useTopicRefreshSocket.mockImplementation((handlers) => {
+      socketHandlers = handlers;
+    });
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [createGroup('group-current', 'Current headline')],
+        meta: { page: 1, pageSize: 12, hasMore: true, totalGroups: 2 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockResolvedValueOnce({
+        items: [
+          createGroup('group-new', 'New automatic headline', '2026-03-14T11:00:00.000Z'),
+          createGroup('group-current', 'Current headline with AI topics')
+        ],
+        meta: { page: 1, pageSize: 12, hasMore: true, totalGroups: 2 },
+        filters: { sources: [], sourceCatalog: [], topics: ['Technology'] }
+      });
+
+    await renderNewsAggregator();
+    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+
+    await act(async () => {
+      socketHandlers.onNewsUpdate({ count: 1, groupIds: ['group-new'] });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('1 new article available')).toBeInTheDocument();
+
+    await act(async () => {
+      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('Current headline with AI topics')).toBeInTheDocument();
+    expect(screen.queryByText('New automatic headline')).not.toBeInTheDocument();
+    expect(screen.getByText('1 new article available')).toBeInTheDocument();
   });
 
   test('clears manual refresh loading when a silent topic reload cancels it', async () => {

@@ -319,8 +319,15 @@ async function processAiStoryGroupingForArticle(article = {}) {
 
   const matchedIds = matches.map((match) => match.articleId);
   const matchedCandidates = candidates.filter((candidate) => matchedIds.includes(candidate.id));
-  const existingGroupId = matchedCandidates.find((candidate) => candidate.storyGroupId)?.storyGroupId || '';
-  const groupedArticleIds = [articleId, ...matchedIds];
+  const involvedStoryGroupIds = [...new Set([target, ...matchedCandidates]
+    .map((candidate) => String(candidate?.storyGroupId || '').trim())
+    .filter(Boolean))];
+  const existingGroupId = involvedStoryGroupIds[0] || '';
+  const groupedArticleIds = [...new Set([
+    articleId,
+    ...matchedIds,
+    ...database.getArticleIdsForStoryGroups(involvedStoryGroupIds, target?.ownerUserId || null)
+  ])];
   const storyGroupId = existingGroupId || buildStoryGroupId(groupedArticleIds);
   const affectedUserIds = [target, ...matchedCandidates]
     .map((item) => item?.ownerUserId)

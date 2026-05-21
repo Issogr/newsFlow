@@ -962,6 +962,26 @@ function createArticleRepository({
     }, 0);
   }
 
+  function getArticleIdsForStoryGroups(storyGroupIds = [], ownerUserId = null) {
+    const normalizedStoryGroupIds = [...new Set((Array.isArray(storyGroupIds) ? storyGroupIds : [])
+      .map((storyGroupId) => String(storyGroupId || '').trim())
+      .filter(Boolean))];
+
+    if (normalizedStoryGroupIds.length === 0) {
+      return [];
+    }
+
+    const ownerKey = ownerUserId || '';
+    return chunkValues(normalizedStoryGroupIds).flatMap((ids) => {
+      return getDb().prepare(`
+        SELECT id
+        FROM articles
+        WHERE story_group_id IN (${ids.map(() => '?').join(', ')})
+          AND COALESCE(owner_user_id, '') = ?
+      `).all(...ids, ownerKey).map((row) => row.id);
+    });
+  }
+
   function getAiStoryGroupingCandidateSet(articleId, options = {}) {
     const normalizedArticleId = String(articleId || '').trim();
     if (!normalizedArticleId) {
@@ -2099,6 +2119,7 @@ function createArticleRepository({
     markArticlesAiTopicProcessing,
     markArticlesAiStoryGrouping,
     assignArticlesToStoryGroup,
+    getArticleIdsForStoryGroups,
     getAiStoryGroupingCandidateSet,
     mergeTopicsForArticle,
     mergeTopicsForArticles,

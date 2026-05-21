@@ -227,6 +227,7 @@ module.exports = {
   markArticlesAiTopicProcessing: articleRepository.markArticlesAiTopicProcessing,
   markArticlesAiStoryGrouping: articleRepository.markArticlesAiStoryGrouping,
   assignArticlesToStoryGroup: articleRepository.assignArticlesToStoryGroup,
+  getArticleIdsForStoryGroups: articleRepository.getArticleIdsForStoryGroups,
   getAiStoryGroupingCandidateSet: articleRepository.getAiStoryGroupingCandidateSet,
   mergeTopicsForArticle: articleRepository.mergeTopicsForArticle,
   mergeTopicsForArticles: articleRepository.mergeTopicsForArticles,

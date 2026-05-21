@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 29;
+  const CURRENT_SCHEMA_VERSION = 30;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getAllConfiguredSourceGroupIds() {
@@ -13,6 +13,23 @@ function createDatabaseSchema({ logger }) {
 
   function getConfiguredSourceUrlKeys() {
     return new Set(configuredSources.map((source) => normalizeArticleUrl(source.url || '') || String(source.url || '').trim()).filter(Boolean));
+  }
+
+  function ensureCaseInsensitiveUsernameUniqueness(database) {
+    const duplicateRows = database.prepare(`
+      SELECT lower(username) AS usernameKey, COUNT(*) AS count
+      FROM users
+      GROUP BY lower(username)
+      HAVING COUNT(*) > 1
+    `).all();
+
+    if (duplicateRows.length > 0) {
+      logger.warn(`Skipped case-insensitive username index because ${duplicateRows.length} duplicate username group(s) already exist`);
+      return false;
+    }
+
+    database.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (lower(username))');
+    return true;
   }
 
   function initializeSchema(database) {
@@ -86,7 +103,6 @@ function createDatabaseSchema({ logger }) {
         id TEXT PRIMARY KEY,
         username TEXT NOT NULL UNIQUE,
         password_hash TEXT,
-        role TEXT NOT NULL DEFAULT 'user',
         last_login_at TEXT,
         last_activity_at TEXT,
         public_api_request_count INTEGER NOT NULL DEFAULT 0,
@@ -243,6 +259,8 @@ function createDatabaseSchema({ logger }) {
         tokenize = 'unicode61 remove_diacritics 2'
       );
     `);
+
+    ensureCaseInsensitiveUsernameUniqueness(database);
 
     if (getColumnNames(database, 'articles').has('ai_topics_processed_at')) {
       database.exec('CREATE INDEX IF NOT EXISTS idx_articles_ai_topics_processed_at ON articles (ai_topics_processed_at)');
@@ -736,8 +754,21 @@ function createDatabaseSchema({ logger }) {
       }
       database.exec('CREATE INDEX IF NOT EXISTS idx_articles_story_group_id ON articles (story_group_id)');
 
-      setCurrentSchemaVersion(database);
+      setCurrentSchemaVersion(database, 29);
       logger.info('Migrated DB schema from version 28 to 29');
+      migrateSchema(database, 29);
+      return;
+    }
+
+    if (currentVersion === 29) {
+      const userColumns = getColumnNames(database, 'users');
+      if (userColumns.has('role')) {
+        database.exec('ALTER TABLE users DROP COLUMN role');
+      }
+      ensureCaseInsensitiveUsernameUniqueness(database);
+
+      setCurrentSchemaVersion(database, 30);
+      logger.info('Migrated DB schema from version 29 to 30');
       return;
     }
 

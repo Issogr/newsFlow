@@ -196,6 +196,27 @@ function getSummaryTopics() {
   return SUMMARY_TOPICS.map((topic) => ({ ...topic }));
 }
 
+function getRetainedPrewarmWindowEnds(referenceDate = new Date()) {
+  return new Set([
+    getLatestDueWindow(referenceDate).periodEnd,
+    getNextDueWindow(referenceDate).periodEnd
+  ]);
+}
+
+function prunePrewarmAttempts(referenceDate = new Date()) {
+  const retainedWindowEnds = getRetainedPrewarmWindowEnds(referenceDate);
+  let removedCount = 0;
+
+  attemptedPrewarmArticleIdsByWindow.forEach((attemptedIds, windowEnd) => {
+    if (!retainedWindowEnds.has(windowEnd)) {
+      attemptedPrewarmArticleIdsByWindow.delete(windowEnd);
+      removedCount += attemptedIds?.size || 0;
+    }
+  });
+
+  return { removedCount, retainedWindowEnds };
+}
+
 function buildSummaryId(topicKey, periodStart, periodEnd) {
   return [topicKey, periodStart, periodEnd]
     .join(':')
@@ -277,7 +298,9 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
       return { skipped: true, reason: 'outside_window', attemptedCount: 0, window };
     }
 
-    const attemptedIds = attemptedPrewarmArticleIdsByWindow.get(window.periodEnd) || new Set();
+    const { retainedWindowEnds } = prunePrewarmAttempts(referenceDate);
+    const shouldRetainAttempts = retainedWindowEnds.has(window.periodEnd);
+    const attemptedIds = shouldRetainAttempts ? (attemptedPrewarmArticleIdsByWindow.get(window.periodEnd) || new Set()) : new Set();
     const candidates = getCandidateArticlesForWindow(window).filter((article) => {
       return article?.id && !attemptedIds.has(article.id) && !isUsefulReaderText(database.getReaderCache(article.id, null)?.contentText);
     });
@@ -287,7 +310,9 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
     }
 
     candidates.forEach((article) => attemptedIds.add(article.id));
-    attemptedPrewarmArticleIdsByWindow.set(window.periodEnd, attemptedIds);
+    if (shouldRetainAttempts) {
+      attemptedPrewarmArticleIdsByWindow.set(window.periodEnd, attemptedIds);
+    }
 
     const results = await mapSettledWithConcurrency(candidates, SUMMARY_READER_PREWARM_CONCURRENCY, async (article) => {
       const payload = await readerService.getReaderArticle(article.id, {
@@ -461,6 +486,7 @@ function stopScheduler() {
     clearInterval(schedulerHandle);
     schedulerHandle = null;
   }
+  attemptedPrewarmArticleIdsByWindow.clear();
 }
 
 module.exports = {
@@ -473,5 +499,7 @@ module.exports = {
   _getNextDueWindow: getNextDueWindow,
   _isReaderPrewarmEnabled: isReaderPrewarmEnabled,
   _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,
-  _getSummaryTopics: getSummaryTopics
+  _getSummaryTopics: getSummaryTopics,
+  _getPrewarmAttemptWindowCount: () => attemptedPrewarmArticleIdsByWindow.size,
+  _prunePrewarmAttempts: prunePrewarmAttempts
 };

@@ -139,6 +139,16 @@ describe('readerService', () => {
     expect(fetchSafeTextUrl).toHaveBeenCalledTimes(1);
   });
 
+  test('prunes expired cold fallback cache entries', async () => {
+    fetchSafeTextUrl.mockRejectedValue(new Error('Network failed'));
+
+    await readerService.getReaderArticle(article.id, { userId: 'user-1' });
+
+    expect(readerService._getFallbackCacheSize()).toBe(1);
+    expect(readerService._pruneExpiredFallbackCache(Date.now() + (16 * 60 * 1000))).toBe(1);
+    expect(readerService._getFallbackCacheSize()).toBe(0);
+  });
+
   test('deduplicates concurrent extraction requests for the same article', async () => {
     let resolveFetch;
     const fetchPromise = new Promise((resolve) => {
