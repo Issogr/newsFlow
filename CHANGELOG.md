@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.4.2
+
 ## 3.4.1
 
 - made the main refresh button reload already-generated thematic summaries together with the news feed, without triggering new AI summary generation
