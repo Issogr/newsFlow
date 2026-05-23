@@ -159,7 +159,7 @@ describe('thematic summary podcast UI', () => {
     );
 
     expect(screen.getByText('Podcast briefing')).toBeInTheDocument();
-    expect(screen.getByText('Podcast del mattino')).toBeInTheDocument();
+    expect(screen.queryByText('Podcast del mattino')).not.toBeInTheDocument();
     expect(screen.getByText('Testo podcast italiano')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('0:00 / 0:02')).toBeInTheDocument());
     expect(fetch).toHaveBeenCalledWith('/api/podcast-summary/podcast-1/audio', expect.objectContaining({ cache: 'no-store', credentials: 'include' }));

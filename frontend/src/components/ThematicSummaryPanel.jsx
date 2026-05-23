@@ -170,7 +170,7 @@ const ThematicSummaryPanel = ({ summary, locale, t, onClose }) => {
                   </div>
                 )}
 
-                {isPodcast && localizedSummary.displayTitle && (
+                {!isPodcast && localizedSummary.displayTitle && (
                   <h3 className="mb-6 text-2xl font-semibold tracking-tight text-stone-950 md:text-3xl">{localizedSummary.displayTitle}</h3>
                 )}
 
