@@ -41,6 +41,12 @@ const {
 
 const DEFAULT_FRONTEND_DIST_DIR = path.join(__dirname, 'public');
 const UPSTREAM_TIMEOUT_MS = parseIntegerEnv('BFF_UPSTREAM_TIMEOUT_MS', 30000, { min: 1000 });
+const UPSTREAM_ERROR_RESPONSE = {
+  error: {
+    message: 'Unable to reach the application backend.',
+    code: 'BFF_UPSTREAM_ERROR',
+  },
+};
 
 function createApp(options = {}) {
   const backendBaseUrl = String(options.backendBaseUrl || process.env.BACKEND_BASE_URL || 'http://backend:5000').trim().replace(/\/+$/, '');
@@ -59,13 +65,7 @@ function createApp(options = {}) {
   const app = express();
   const jsonParser = express.json({ limit: '1mb' });
 
-  if (process.env.TRUST_PROXY === 'true') {
-    app.set('trust proxy', true);
-  } else if (process.env.TRUST_PROXY === 'false') {
-    app.set('trust proxy', false);
-  } else {
-    app.set('trust proxy', false);
-  }
+  app.set('trust proxy', process.env.TRUST_PROXY === 'true');
 
   app.use(helmet({
     contentSecurityPolicy: {
@@ -152,12 +152,7 @@ function createApp(options = {}) {
 
     res.statusCode = 502;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify({
-      error: {
-        message: 'Unable to reach the application backend.',
-        code: 'BFF_UPSTREAM_ERROR',
-      },
-    }));
+    res.end(JSON.stringify(UPSTREAM_ERROR_RESPONSE));
   }
 
   async function forwardInternalRequest(req, res, { pathName, method = req.method, payload = undefined, params = req.query, backendSessionCookie = '' }) {
@@ -432,12 +427,7 @@ function createApp(options = {}) {
       return;
     }
 
-    res.status(502).json({
-      error: {
-        message: 'Unable to reach the application backend.',
-        code: 'BFF_UPSTREAM_ERROR',
-      },
-    });
+    res.status(502).json(UPSTREAM_ERROR_RESPONSE);
   });
 
   return {

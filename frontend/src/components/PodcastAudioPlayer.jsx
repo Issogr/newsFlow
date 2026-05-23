@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, Pause, Play, RotateCcw, SkipForward } from 'lucide-react';
 
 function formatDuration(value) {
@@ -21,7 +21,7 @@ const PodcastAudioPlayer = ({ src, t }) => {
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const progress = useMemo(() => duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0, [currentTime, duration]);
+  const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
 
   useEffect(() => {
     const audio = audioRef.current;

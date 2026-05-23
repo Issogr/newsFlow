@@ -134,7 +134,6 @@ module.exports = {
   createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
-  parseBoundedIntegerEnv,
   parseJsonContent,
   setOpenRouterSdkLoader
 };

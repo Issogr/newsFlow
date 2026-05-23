@@ -122,6 +122,10 @@ function createArticleRepository({
     return [...new Set((Array.isArray(articleIds) ? articleIds : []).map((id) => String(id || '').trim()).filter(Boolean))];
   }
 
+  function uniqueTruthyArticleIds(articleIds = []) {
+    return [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+  }
+
   function buildSearchQuery(search) {
     const tokens = String(search || '')
       .toLowerCase()
@@ -876,7 +880,7 @@ function createArticleRepository({
   }
 
   function getArticleIdsPendingAiTopicProcessing(articleIds = []) {
-    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     if (normalizedArticleIds.length === 0) {
       return [];
     }
@@ -895,7 +899,7 @@ function createArticleRepository({
   }
 
   function markArticlesAiTopicProcessing(articleIds = [], status = 'completed') {
-    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     if (normalizedArticleIds.length === 0) {
       return 0;
     }
@@ -912,7 +916,7 @@ function createArticleRepository({
   }
 
   function getArticleIdsPendingAiStoryGrouping(articleIds = []) {
-    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     if (normalizedArticleIds.length === 0) {
       return [];
     }
@@ -931,7 +935,7 @@ function createArticleRepository({
   }
 
   function markArticlesAiStoryGrouping(articleIds = [], status = 'completed', model = '') {
-    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     if (normalizedArticleIds.length === 0) {
       return 0;
     }
@@ -949,7 +953,7 @@ function createArticleRepository({
   }
 
   function assignArticlesToStoryGroup(articleIds = [], storyGroupId = '', model = '') {
-    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     const normalizedStoryGroupId = String(storyGroupId || '').trim().slice(0, 160);
     if (normalizedArticleIds.length === 0 || !normalizedStoryGroupId) {
       return 0;

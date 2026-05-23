@@ -57,9 +57,5 @@ function parseNewsQuery(query = {}) {
 module.exports = {
   MAX_NEWS_PAGE,
   MAX_RECENT_HOURS,
-  parseCsvParam,
-  parseLimitedCsvParam,
-  parseBoundedPositiveInteger,
-  parseOptionalBoundedPositiveInteger,
   parseNewsQuery,
 };

@@ -371,7 +371,6 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
             alt={isGenericNewsCover(imageUrl) ? fallbackImageAlt : group.title}
             loading="lazy"
             className="block h-full w-full object-cover"
-            onDoubleClick={openReader}
             onError={() => {
               if (!showImages) {
                 setImageUrl('');

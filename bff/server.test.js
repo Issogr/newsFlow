@@ -66,6 +66,25 @@ function createSessionDbPath() {
   };
 }
 
+function getBffSessionCookie(response) {
+  const cookie = response.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+  expect(cookie).toContain('newsflow_bff_session=');
+  return cookie;
+}
+
+async function login(target, { username = 'alice', headers = {} } = {}) {
+  const response = await request(target)
+    .post('/api/auth/login')
+    .set(headers)
+    .send({ username, password: 'secret123' })
+    .expect(200);
+
+  return {
+    response,
+    cookie: getBffSessionCookie(response),
+  };
+}
+
 describe('bff server', () => {
   const originalNodeEnv = process.env.NODE_ENV;
   let backendServer;
@@ -217,14 +236,8 @@ describe('bff server', () => {
   });
 
   test('creates a persisted BFF session on login and uses it for proxied app requests', async () => {
-    const loginResponse = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'alice', password: 'secret123' })
-      .expect(200);
+    const { cookie: bffSessionCookie } = await login(app);
 
-    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
-
-    expect(bffSessionCookie).toContain('newsflow_bff_session=');
     expect(bffSessionCookie).not.toContain('newsflow_session=');
     expect(bffSessionCookie).not.toContain('backend-session-user-1');
     expect(sessionDb.prepare('SELECT sess FROM sessions').get().sess).not.toContain('backend-session-user-1');
@@ -280,12 +293,7 @@ describe('bff server', () => {
   });
 
   test('keeps the session valid after recreating the BFF app instance', async () => {
-    const loginResponse = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'alice', password: 'secret123' })
-      .expect(200);
-
-    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+    const { cookie: bffSessionCookie } = await login(app);
     sessionDb.close();
     sessionStore.stopCleanupInterval();
 
@@ -302,19 +310,14 @@ describe('bff server', () => {
   });
 
   test('clears the BFF session on logout', async () => {
-    const loginResponse = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'alice', password: 'secret123' })
-      .expect(200);
-
-    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+    const { cookie: bffSessionCookie } = await login(app);
 
     const logoutResponse = await request(app)
       .post('/api/auth/logout')
       .set('Cookie', bffSessionCookie)
       .expect(200);
 
-    expect(logoutResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='))).toContain('Max-Age=0');
+    expect(getBffSessionCookie(logoutResponse)).toContain('Max-Age=0');
 
     await request(app)
       .get('/api/me')
@@ -323,12 +326,7 @@ describe('bff server', () => {
   });
 
   test('clears the local BFF session when backend logout fails', async () => {
-    const loginResponse = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'alice', password: 'secret123' })
-      .expect(200);
-
-    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+    const { cookie: bffSessionCookie } = await login(app);
     logoutShouldFail = true;
 
     const logoutResponse = await request(app)
@@ -337,7 +335,7 @@ describe('bff server', () => {
       .expect(200);
 
     expect(logoutResponse.body).toEqual({ success: true });
-    expect(logoutResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='))).toContain('Max-Age=0');
+    expect(getBffSessionCookie(logoutResponse)).toContain('Max-Age=0');
 
     await request(app)
       .get('/api/me')
@@ -351,11 +349,7 @@ describe('bff server', () => {
       .set('x-session-token', 'backend-session-admin-id')
       .expect(401);
 
-    const adminLoginResponse = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'admin', password: 'secret123' })
-      .expect(200);
-    const adminBffSessionCookie = adminLoginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+    const { cookie: adminBffSessionCookie } = await login(app, { username: 'admin' });
 
     await request(app)
       .delete('/api/admin/users/user-1')
@@ -372,17 +366,8 @@ describe('bff server', () => {
   });
 
   test('removes persisted BFF sessions for a deleted user after an admin delete', async () => {
-    const aliceLoginResponse = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'alice', password: 'secret123' })
-      .expect(200);
-    const aliceBffSessionCookie = aliceLoginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
-
-    const adminLoginResponse = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'admin', password: 'secret123' })
-      .expect(200);
-    const adminBffSessionCookie = adminLoginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+    const { cookie: aliceBffSessionCookie } = await login(app);
+    const { cookie: adminBffSessionCookie } = await login(app, { username: 'admin' });
 
     expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(2);
 
@@ -402,10 +387,7 @@ describe('bff server', () => {
   });
 
   test('removes stale session_users rows when expired sessions are cleaned', async () => {
-    await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'alice', password: 'secret123' })
-      .expect(200);
+    await login(app);
 
     expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(1);
     expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users').get().count).toBe(1);
@@ -474,14 +456,13 @@ describe('bff server', () => {
   });
 
   test('rebuilds forwarded headers on authenticated app routes from trusted request values', async () => {
-    const loginResponse = await request(app)
-      .post('/api/auth/login')
-      .set('X-Forwarded-For', '203.0.113.99')
-      .set('X-Forwarded-Host', 'evil.example')
-      .set('X-Forwarded-Proto', 'https')
-      .send({ username: 'alice', password: 'secret123' })
-      .expect(200);
-    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+    const { cookie: bffSessionCookie } = await login(app, {
+      headers: {
+        'X-Forwarded-For': '203.0.113.99',
+        'X-Forwarded-Host': 'evil.example',
+        'X-Forwarded-Proto': 'https',
+      },
+    });
 
     await request(app)
       .get('/api/me')
@@ -497,11 +478,7 @@ describe('bff server', () => {
   });
 
   test('streams multipart feedback through the authenticated app proxy', async () => {
-    const loginResponse = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'alice', password: 'secret123' })
-      .expect(200);
-    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+    const { cookie: bffSessionCookie } = await login(app);
 
     const response = await request(app)
       .post('/api/me/feedback')
@@ -518,11 +495,7 @@ describe('bff server', () => {
   });
 
   test('proxies socket.io requests without duplicating the socket path', async () => {
-    const loginResponse = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'alice', password: 'secret123' })
-      .expect(200);
-    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+    const { cookie: bffSessionCookie } = await login(app);
 
     const response = await request(app)
       .get('/socket.io/ping')
@@ -560,11 +533,7 @@ describe('bff server', () => {
     await listen(bffServer);
 
     try {
-      const loginResponse = await request(bffServer)
-        .post('/api/auth/login')
-        .send({ username: 'alice', password: 'secret123' })
-        .expect(200);
-      const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+      const { cookie: bffSessionCookie } = await login(bffServer);
 
       const response = await requestUpgrade(bffServer, {
         cookie: bffSessionCookie,
@@ -590,11 +559,7 @@ describe('bff server', () => {
   });
 
   test('returns structured JSON when the app proxy fails upstream', async () => {
-    const loginResponse = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'alice', password: 'secret123' })
-      .expect(200);
-    const bffSessionCookie = loginResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='));
+    const { cookie: bffSessionCookie } = await login(app);
 
     const response = await request(app)
       .get('/api/broken-stream')

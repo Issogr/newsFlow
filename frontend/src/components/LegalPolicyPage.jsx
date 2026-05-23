@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import BrandMark from './BrandMark';
 
 const policyContent = {
@@ -205,7 +205,7 @@ const policyContent = {
 };
 
 const LegalPolicyPage = ({ policy = 'privacy' }) => {
-  const content = useMemo(() => policyContent[policy] || policyContent.privacy, [policy]);
+  const content = policyContent[policy] || policyContent.privacy;
 
   return (
     <div className="min-h-screen bg-white text-slate-900 sm:bg-slate-100 sm:px-4 sm:py-10">

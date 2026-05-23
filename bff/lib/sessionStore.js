@@ -69,8 +69,7 @@ function createSessionStore(options = {}) {
     CREATE INDEX IF NOT EXISTS idx_session_users_user_id ON session_users (user_id);
   `);
 
-  const BaseSqliteStore = SqliteStoreFactory;
-  class ManagedSqliteStore extends BaseSqliteStore {
+  class ManagedSqliteStore extends SqliteStoreFactory {
     startInterval() {
       this.cleanupInterval = setInterval(this.clearExpiredSessions.bind(this), this.expired.intervalMs);
       this.cleanupInterval?.unref?.();
