@@ -61,9 +61,8 @@ describe('aiSummaryGenerator', () => {
     expect(payload.articles).toHaveLength(40);
     expect(payload.articles[0].description.length).toBeLessThanOrEqual(250);
     expect(payload.articles[0]).not.toHaveProperty('url');
-  });
 
-  test('uses a conservative default text budget for large prompts', () => {
+    delete process.env.AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS;
     expect(aiSummaryGenerator._getArticleTextLimit(120)).toBe(250);
   });
 
@@ -87,29 +86,19 @@ describe('aiSummaryGenerator', () => {
     expect(normalized.summaryTextByLocale.it).toBe('I regolatori hanno discusso nuove regole sui chip [1].');
   });
 
-  test('uses the dedicated thematic summary model config', () => {
+  test.each([
+    ['configured thematic summary model', 'summary-model', 'summary-model'],
+    ['default thematic summary model', undefined, 'deepseek/deepseek-v4-flash']
+  ])('uses the %s', (label, configuredModel, expectedModel) => {
     process.env = {
       ...originalEnv,
       OPENROUTER_API_KEY: 'test-key',
-      OPENROUTER_SUMMARY_MODEL: 'summary-model'
+      OPENROUTER_SUMMARY_MODEL: configuredModel
     };
 
     expect(aiSummaryGenerator._getConfig()).toEqual(expect.objectContaining({
       enabled: true,
-      model: 'summary-model'
-    }));
-  });
-
-  test('defaults thematic summaries to deepseek flash when unset', () => {
-    process.env = {
-      ...originalEnv,
-      OPENROUTER_API_KEY: 'test-key',
-      OPENROUTER_SUMMARY_MODEL: undefined
-    };
-
-    expect(aiSummaryGenerator._getConfig()).toEqual(expect.objectContaining({
-      enabled: true,
-      model: 'deepseek/deepseek-v4-flash'
+      model: expectedModel
     }));
   });
 });

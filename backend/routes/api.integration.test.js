@@ -779,23 +779,46 @@ describe('API auth and user flows', () => {
     }));
   });
 
-  test('submits authenticated feedback with an optional screenshot', async () => {
+  test.each([
+    {
+      name: 'screenshot',
+      username: 'feedback-user',
+      category: 'bug',
+      title: 'Reader overlap on mobile',
+      description: 'The reader panel overlaps the sticky header on a narrow mobile viewport.',
+      attachment: {
+        buffer: Buffer.from('fake-image-content'),
+        filename: 'reader-mobile.png',
+        contentType: 'image/png'
+      }
+    },
+    {
+      name: 'small video',
+      username: 'feedback-video-user',
+      category: 'feedback',
+      title: 'Animation feels abrupt',
+      description: 'Short clip showing the abrupt transition in the filter drawer.',
+      attachment: {
+        buffer: Buffer.from('fake-video-content'),
+        filename: 'filters-transition.mp4',
+        contentType: 'video/mp4'
+      }
+    }
+  ])('submits authenticated feedback with a $name attachment', async ({ username, category, title, description, attachment }) => {
     const registerResponse = await request(app)
       .post('/api/auth/register')
-      .send({ username: 'feedback-user', password: 'secret123' })
+      .send({ username, password: 'secret123' })
       .expect(201);
-
-    const imageBuffer = Buffer.from('fake-image-content');
 
     const response = await request(app)
       .post('/api/me/feedback')
       .set('Cookie', getSessionCookie(registerResponse))
-      .field('category', 'bug')
-      .field('title', 'Reader overlap on mobile')
-      .field('description', 'The reader panel overlaps the sticky header on a narrow mobile viewport.')
-      .attach('attachment', imageBuffer, {
-        filename: 'reader-mobile.png',
-        contentType: 'image/png'
+      .field('category', category)
+      .field('title', title)
+      .field('description', description)
+      .attach('attachment', attachment.buffer, {
+        filename: attachment.filename,
+        contentType: attachment.contentType
       })
       .expect(201);
 
@@ -803,52 +826,15 @@ describe('API auth and user flows', () => {
     expect(feedbackService.sendFeedback).toHaveBeenCalledWith(expect.objectContaining({
       user: expect.objectContaining({
         id: registerResponse.body.user.id,
-        username: 'feedback-user'
+        username
       }),
-      category: 'bug',
-      title: 'Reader overlap on mobile',
-      description: 'The reader panel overlaps the sticky header on a narrow mobile viewport.',
+      category,
+      title,
+      description,
       attachment: expect.objectContaining({
-        originalname: 'reader-mobile.png',
-        mimetype: 'image/png',
-        size: imageBuffer.length
-      })
-    }));
-  });
-
-  test('submits authenticated feedback with a small video attachment', async () => {
-    const registerResponse = await request(app)
-      .post('/api/auth/register')
-      .send({ username: 'feedback-video-user', password: 'secret123' })
-      .expect(201);
-
-    const videoBuffer = Buffer.from('fake-video-content');
-
-    const response = await request(app)
-      .post('/api/me/feedback')
-      .set('Cookie', getSessionCookie(registerResponse))
-      .field('category', 'feedback')
-      .field('title', 'Animation feels abrupt')
-      .field('description', 'Short clip showing the abrupt transition in the filter drawer.')
-      .attach('attachment', videoBuffer, {
-        filename: 'filters-transition.mp4',
-        contentType: 'video/mp4'
-      })
-      .expect(201);
-
-    expect(response.body).toEqual({ success: true });
-    expect(feedbackService.sendFeedback).toHaveBeenLastCalledWith(expect.objectContaining({
-      user: expect.objectContaining({
-        id: registerResponse.body.user.id,
-        username: 'feedback-video-user'
-      }),
-      category: 'feedback',
-      title: 'Animation feels abrupt',
-      description: 'Short clip showing the abrupt transition in the filter drawer.',
-      attachment: expect.objectContaining({
-        originalname: 'filters-transition.mp4',
-        mimetype: 'video/mp4',
-        size: videoBuffer.length
+        originalname: attachment.filename,
+        mimetype: attachment.contentType,
+        size: attachment.buffer.length
       })
     }));
   });

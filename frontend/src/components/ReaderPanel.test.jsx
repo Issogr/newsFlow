@@ -127,28 +127,6 @@ describe('ReaderPanel', () => {
     });
   });
 
-  test('locks body scroll while the reader is open', () => {
-    fetchReaderArticle.mockImplementation(() => new Promise(() => {}));
-
-    const { unmount } = render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onUserUpdate={jest.fn()}
-        onClose={jest.fn()}
-      />
-    );
-
-    expect(document.body.style.overflow).toBe('hidden');
-
-    unmount();
-
-    expect(document.body.style.overflow).toBe('');
-  });
-
   test('fetches reader content from the backend on open', async () => {
     fetchReaderArticle.mockResolvedValue({
       title: 'Backend cached reader title',

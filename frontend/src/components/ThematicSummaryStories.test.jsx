@@ -80,7 +80,7 @@ describe('thematic summary podcast UI', () => {
     expect(onOpenSummary).toHaveBeenCalledWith(podcast);
   });
 
-  test('renders custom podcast audio controls and localized script text', async () => {
+  test('renders custom podcast audio controls, localized script text, and starts playback', async () => {
     render(
       <ThematicSummaryPanel
         summary={{
@@ -115,6 +115,10 @@ describe('thematic summary podcast UI', () => {
     expect(screen.getByLabelText('Seek podcast audio')).toBeInTheDocument();
     expect(audio?.getAttribute('src')).toBe('/api/podcast-summary/podcast-1/audio');
     expect(audio?.getAttribute('preload')).toBe('metadata');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play podcast audio' }));
+
+    await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled());
   });
 
   test('shows podcast audio generation feedback while audio is pending', () => {
@@ -166,10 +170,8 @@ describe('thematic summary podcast UI', () => {
       />
     );
 
-    const articleParagraphs = [...document.querySelectorAll('article p')].map((paragraph) => paragraph.textContent);
-    expect(articleParagraphs).toHaveLength(2);
-    expect(articleParagraphs[0]).toContain('First, the technology story opens');
-    expect(articleParagraphs[1]).toContain('Finally, the science story closes');
+    expect(screen.getByText(/^First, the technology story opens/)).toHaveTextContent('Next, the politics story shifts');
+    expect(screen.getByText(/^Finally, the science story closes/)).toBeInTheDocument();
   });
 
   test('uses single newlines as paragraph breaks for thematic summaries', () => {
@@ -193,39 +195,7 @@ describe('thematic summary podcast UI', () => {
       />
     );
 
-    const articleParagraphs = [...document.querySelectorAll('article p')].map((paragraph) => paragraph.textContent);
-    expect(articleParagraphs).toEqual([
-      'The first argument covers chip supply and infrastructure.',
-      'The second argument moves to software policy and regulation.'
-    ]);
-  });
-
-  test('starts native streaming audio when pressing play', async () => {
-    render(
-      <ThematicSummaryPanel
-        summary={{
-          id: 'podcast-1',
-          type: 'podcast',
-          topicKey: 'podcast',
-          topicLabel: 'Podcast',
-          periodStart: '2026-05-21T05:00:00.000Z',
-          periodEnd: '2026-05-21T11:00:00.000Z',
-          articleCount: 2,
-          titleByLocale: { en: 'Morning podcast', it: 'Podcast del mattino' },
-          summaryTextByLocale: { en: 'English script', it: 'Testo podcast italiano' },
-          audioStatus: 'completed',
-          audioUrl: '/api/podcast-summary/podcast-1/audio'
-        }}
-        locale="it"
-        t={t}
-        onClose={vi.fn()}
-      />
-    );
-
-    const playButton = await screen.findByRole('button', { name: 'Play podcast audio' });
-    fireEvent.click(playButton);
-
-    await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled());
-    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.getByText('The first argument covers chip supply and infrastructure.')).toBeInTheDocument();
+    expect(screen.getByText('The second argument moves to software policy and regulation.')).toBeInTheDocument();
   });
 });

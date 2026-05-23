@@ -228,7 +228,7 @@ describe('aiTopicClassifier', () => {
     expect(result.get('article-1').map((entry) => entry.topic)).toEqual(['Cronaca']);
   });
 
-  test('accepts common model response variants', () => {
+  test('accepts common model response, SDK content, and invalid JSON variants safely', () => {
     const result = aiTopicClassifier._normalizeClassifierDetails({
       results: [
         { articleId: 'article-1', category: 'Technology' },
@@ -238,9 +238,6 @@ describe('aiTopicClassifier', () => {
 
     expect(result.get('article-1').map((entry) => entry.topic)).toEqual(['Tecnologia']);
     expect(result.get('article-2').map((entry) => entry.topic)).toEqual(['Esteri']);
-  });
-
-  test('extracts assistant content from SDK response variants', () => {
     expect(aiTopicClassifier._extractAssistantContent({
       choices: [
         { message: { content: [{ type: 'text', text: '{"topicsById":[]}' }] } }
@@ -250,9 +247,7 @@ describe('aiTopicClassifier', () => {
     expect(aiTopicClassifier._extractAssistantContent({
       output_text: '{"topicsById":[]}'
     })).toBe('{"topicsById":[]}');
-  });
 
-  test('returns null instead of throwing on truncated JSON output', () => {
     expect(aiTopicClassifier._parseJsonContent('{"topicsById":[')).toBeNull();
     expect(aiTopicClassifier._parseJsonContent('```json\n{"topicsById":[{"id":"article-1"}]')).toBeNull();
   });

@@ -105,37 +105,41 @@ describe('aiPodcastGenerator', () => {
     });
   });
 
-  test('uses separate model configs for script generation and audio', () => {
+  test.each([
+    {
+      name: 'feature-specific model configs',
+      env: {
+        OPENROUTER_PODCAST_SCRIPT_MODEL: 'podcast-script-model',
+        OPENROUTER_PODCAST_AUDIO_MODEL: 'podcast-audio-model'
+      },
+      scriptModel: 'podcast-script-model',
+      ttsModel: 'podcast-audio-model',
+      enabled: true
+    },
+    {
+      name: 'requested defaults when feature-specific env vars are unset',
+      env: {
+        OPENROUTER_PODCAST_SCRIPT_MODEL: undefined,
+        OPENROUTER_PODCAST_AUDIO_MODEL: undefined
+      },
+      scriptModel: 'deepseek/deepseek-v4-flash',
+      ttsModel: 'google/gemini-3.1-flash-tts-preview',
+      enabled: true
+    }
+  ])('uses $name', ({ env, scriptModel, ttsModel, enabled }) => {
     process.env = {
       ...originalEnv,
       OPENROUTER_API_KEY: 'test-key',
-      OPENROUTER_PODCAST_SCRIPT_MODEL: 'podcast-script-model',
-      OPENROUTER_PODCAST_AUDIO_MODEL: 'podcast-audio-model'
+      ...env
     };
 
     expect(aiPodcastGenerator._getScriptConfig()).toEqual(expect.objectContaining({
-      enabled: true,
-      model: 'podcast-script-model'
+      enabled,
+      model: scriptModel
     }));
     expect(aiPodcastGenerator._getTtsConfig()).toEqual(expect.objectContaining({
-      enabled: true,
-      model: 'podcast-audio-model'
-    }));
-  });
-
-  test('uses requested default models when feature-specific env vars are unset', () => {
-    process.env = {
-      ...originalEnv,
-      OPENROUTER_API_KEY: 'test-key',
-      OPENROUTER_PODCAST_SCRIPT_MODEL: undefined,
-      OPENROUTER_PODCAST_AUDIO_MODEL: undefined
-    };
-
-    expect(aiPodcastGenerator._getScriptConfig()).toEqual(expect.objectContaining({
-      model: 'deepseek/deepseek-v4-flash'
-    }));
-    expect(aiPodcastGenerator._getTtsConfig()).toEqual(expect.objectContaining({
-      model: 'google/gemini-3.1-flash-tts-preview'
+      enabled,
+      model: ttsModel
     }));
   });
 

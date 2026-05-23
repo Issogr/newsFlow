@@ -1,17 +1,27 @@
 const { MAX_NEWS_PAGE, MAX_RECENT_HOURS, parseNewsQuery } = require('./newsQuery');
 
 describe('newsQuery', () => {
-  test('bounds page and recent-hours query parameters', () => {
-    expect(parseNewsQuery({ page: '1000', pageSize: '999', recentHours: '999' })).toEqual(expect.objectContaining({
+  test('parses feed query parameters while bounding pagination and optional recency', () => {
+    expect(parseNewsQuery({
+      page: '1000',
+      pageSize: '999',
+      recentHours: '999',
+      sources: 'ansa, bbc, ',
+      topics: 'Economia',
+      refresh: 'true',
+      includeFilters: 'true'
+    })).toEqual(expect.objectContaining({
       page: MAX_NEWS_PAGE,
       pageSize: 30,
-      recentHours: MAX_RECENT_HOURS
+      recentHours: MAX_RECENT_HOURS,
+      sourceIds: ['ansa', 'bbc'],
+      topics: ['Economia'],
+      refresh: true,
+      includeFilters: true
     }));
-  });
 
-  test('ignores invalid recent-hours query parameters', () => {
-    expect(parseNewsQuery({ recentHours: '-1' }).recentHours).toBeNull();
-    expect(parseNewsQuery({ recentHours: '0' }).recentHours).toBeNull();
-    expect(parseNewsQuery({ recentHours: 'not-a-number' }).recentHours).toBeNull();
+    ['-1', '0', 'not-a-number'].forEach((recentHours) => {
+      expect(parseNewsQuery({ recentHours }).recentHours).toBeNull();
+    });
   });
 });

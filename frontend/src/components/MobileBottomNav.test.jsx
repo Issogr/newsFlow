@@ -87,53 +87,39 @@ describe('MobileBottomNav', () => {
     expect(sourcesButton).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('toggles time filter when Time button is pressed', () => {
+  it('handles filter, time, and search interactions from the nav', () => {
     const onToggleRecent = vi.fn();
-    renderNav({ onToggleRecent });
-    fireEvent.click(getNavButton('Last 3 hours'));
-    expect(onToggleRecent).toHaveBeenCalled();
-  });
-
-  it('enters search mode when Search is pressed', () => {
-    renderNav();
-    fireEvent.click(getNavButton('Search'));
-    expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
-  });
-
-  it('exits search mode and clears search on Cancel', () => {
-    const onSearchClear = vi.fn();
-    renderNav({ onSearchClear, search: 'query' });
-    fireEvent.click(getNavButton('Search'));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(onSearchClear).toHaveBeenCalled();
-    expect(getNavButton('Sources')).toBeInTheDocument();
-  });
-
-  it('calls onToggleFilter when a source pill is clicked', () => {
     const onToggleFilter = vi.fn();
-    renderNav({ onToggleFilter });
-    fireEvent.click(getNavButton('Sources'));
-    fireEvent.click(screen.getByText('BBC'));
-    expect(onToggleFilter).toHaveBeenCalledWith('sourceIds', 's1');
-  });
-
-  it('calls onSearchChange when typing in search input', () => {
     const onSearchChange = vi.fn();
-    renderNav({ onSearchChange });
-    fireEvent.click(getNavButton('Search'));
-    const input = screen.getByPlaceholderText('Search...');
-    fireEvent.change(input, { target: { value: 'news' } });
-    expect(onSearchChange).toHaveBeenCalledWith('news');
-  });
+    const onSearchClear = vi.fn();
 
-  it('shows active badge counts on buttons', () => {
     renderNav({
       activeFilters: { sourceIds: ['s1'], topics: ['tech'] },
       showRecentOnly: true,
       search: 'query',
+      onToggleRecent,
+      onToggleFilter,
+      onSearchChange,
+      onSearchClear,
     });
+
     expect(getNavButton('Sources')).toHaveTextContent('1');
     expect(getNavButton('Topics')).toHaveTextContent('1');
+
+    fireEvent.click(getNavButton('Last 3 hours'));
+    expect(onToggleRecent).toHaveBeenCalled();
+
+    fireEvent.click(getNavButton('Sources'));
+    fireEvent.click(screen.getByText('BBC'));
+    expect(onToggleFilter).toHaveBeenCalledWith('sourceIds', 's1');
+
+    fireEvent.click(getNavButton('Search'));
+    const input = screen.getByPlaceholderText('Search...');
+    fireEvent.change(input, { target: { value: 'news' } });
+    expect(onSearchChange).toHaveBeenCalledWith('news');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onSearchClear).toHaveBeenCalled();
+    expect(getNavButton('Sources')).toBeInTheDocument();
   });
 });

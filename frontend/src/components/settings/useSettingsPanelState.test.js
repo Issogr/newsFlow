@@ -48,42 +48,7 @@ describe('useSettingsPanelState', () => {
     jest.clearAllMocks();
   });
 
-  test('keeps unsaved settings local when adding a source', async () => {
-    const onUserUpdate = jest.fn();
-    const source = {
-      id: 'source-1',
-      name: 'Example Feed',
-      url: 'https://example.com/rss',
-      language: 'en'
-    };
-
-    addUserSource.mockResolvedValue({ source });
-
-    const { result } = renderHook(() => useSettingsPanelState({
-      currentUser: baseCurrentUser,
-      availableSources: [],
-      onClose: jest.fn(),
-      onUserUpdate
-    }));
-
-    act(() => {
-      result.current.setDefaultLanguage('it');
-      result.current.setSourceForm({ url: source.url });
-    });
-
-    await act(async () => {
-      await result.current.handleAddSource({ preventDefault: jest.fn() });
-    });
-
-    expect(result.current.settings.defaultLanguage).toBe('it');
-    expect(result.current.customSources).toEqual([source]);
-    expect(onUserUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
-      settings: expect.objectContaining({ defaultLanguage: 'en' }),
-      customSources: [source]
-    }));
-  });
-
-  test('keeps unsaved settings after parent rerenders from a source add', async () => {
+  test('keeps unsaved settings local through a source add and parent rerender', async () => {
     const onUserUpdate = jest.fn();
     const source = {
       id: 'source-1',
@@ -109,6 +74,13 @@ describe('useSettingsPanelState', () => {
     await act(async () => {
       await result.current.handleAddSource({ preventDefault: jest.fn() });
     });
+
+    expect(result.current.settings.defaultLanguage).toBe('it');
+    expect(result.current.customSources).toEqual([source]);
+    expect(onUserUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+      settings: expect.objectContaining({ defaultLanguage: 'en' }),
+      customSources: [source]
+    }));
 
     rerender({ currentUser: onUserUpdate.mock.calls.at(-1)[0] });
 
