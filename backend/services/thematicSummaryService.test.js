@@ -304,7 +304,8 @@ describe('thematic summary generation retries', () => {
       upsertPodcastSummary: jest.fn(),
       getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Tecnologia') ? [dealArticle, article] : []),
       getReaderCache: jest.fn(() => null),
-      upsertThematicSummary: jest.fn(() => completedSummary)
+      upsertThematicSummary: jest.fn(() => completedSummary),
+      pruneSummaryHistory: jest.fn(() => ({ thematicSummaries: 1, podcastSummaries: 0 }))
     };
     const aiSummaryGeneratorMock = {
       isAiSummaryGenerationAvailable: jest.fn(() => true),
@@ -335,6 +336,11 @@ describe('thematic summary generation retries', () => {
       topicKey: 'technology',
       status: 'completed'
     }));
+    expect(databaseMock.pruneSummaryHistory).toHaveBeenCalledWith({
+      periodEnd: summaryWindow.periodEnd,
+      topicKeys: ['technology'],
+      podcast: false
+    });
     expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'summaries' });
   });
 
@@ -362,7 +368,8 @@ describe('thematic summary generation retries', () => {
       upsertPodcastSummary: jest.fn(),
       getArticlesForThematicSummary: jest.fn(() => []),
       getReaderCache: jest.fn(() => null),
-      upsertThematicSummary: jest.fn()
+      upsertThematicSummary: jest.fn(),
+      pruneSummaryHistory: jest.fn()
     };
     const aiSummaryGeneratorMock = {
       isAiSummaryGenerationAvailable: jest.fn(() => true),
@@ -380,6 +387,7 @@ describe('thematic summary generation retries', () => {
 
     expect(result.items).toEqual(expect.arrayContaining([existingSummary]));
     expect(aiSummaryGeneratorMock.generateSummaryForArticles).not.toHaveBeenCalled();
+    expect(databaseMock.pruneSummaryHistory).not.toHaveBeenCalled();
     expect(websocketServiceMock.broadcastFeedRefresh).not.toHaveBeenCalled();
   });
 

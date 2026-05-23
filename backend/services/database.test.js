@@ -1043,6 +1043,70 @@ describe('database queries and user data', () => {
     }));
   });
 
+  test('prunes old summary and podcast windows after replacements exist', () => {
+    const oldStart = '2025-05-20T17:00:00.000Z';
+    const oldEnd = '2025-05-21T05:00:00.000Z';
+    const currentStart = '2025-05-21T05:00:00.000Z';
+    const currentEnd = '2025-05-21T11:00:00.000Z';
+
+    database.upsertThematicSummary({
+      topicKey: 'technology',
+      topicLabel: 'Technology',
+      periodStart: oldStart,
+      periodEnd: oldEnd,
+      title: 'Old tech',
+      summaryText: 'Old technology summary'
+    });
+    database.upsertThematicSummary({
+      topicKey: 'politics',
+      topicLabel: 'Politics',
+      periodStart: oldStart,
+      periodEnd: oldEnd,
+      title: 'Old politics',
+      summaryText: 'Old politics summary'
+    });
+    database.upsertThematicSummary({
+      topicKey: 'technology',
+      topicLabel: 'Technology',
+      periodStart: currentStart,
+      periodEnd: currentEnd,
+      title: 'Current tech',
+      summaryText: 'Current technology summary'
+    });
+    database.upsertPodcastSummary({
+      id: 'old-podcast-summary',
+      periodStart: oldStart,
+      periodEnd: oldEnd,
+      title: 'Old podcast',
+      scriptText: 'Old podcast script',
+      audio: { data: Buffer.from('old-audio').toString('base64'), mimeType: 'audio/mpeg' },
+      audioStatus: 'completed'
+    });
+    database.upsertPodcastSummary({
+      id: 'current-podcast-summary',
+      periodStart: currentStart,
+      periodEnd: currentEnd,
+      title: 'Current podcast',
+      scriptText: 'Current podcast script',
+      audio: { data: Buffer.from('current-audio').toString('base64'), mimeType: 'audio/mpeg' },
+      audioStatus: 'completed'
+    });
+
+    expect(database.pruneSummaryHistory({
+      periodEnd: currentEnd,
+      topicKeys: ['technology'],
+      podcast: true
+    })).toEqual({ thematicSummaries: 1, podcastSummaries: 1 });
+
+    expect(database.getThematicSummary('technology', oldStart, oldEnd)).toBeNull();
+    expect(database.getThematicSummary('politics', oldStart, oldEnd)).toEqual(expect.objectContaining({ title: 'Old politics' }));
+    expect(database.getThematicSummary('technology', currentStart, currentEnd)).toEqual(expect.objectContaining({ title: 'Current tech' }));
+    expect(database.getPodcastSummary(oldStart, oldEnd)).toBeNull();
+    expect(database.getPodcastSummaryAudio('old-podcast-summary')).toBeNull();
+    expect(database.getPodcastSummary(currentStart, currentEnd)).toEqual(expect.objectContaining({ id: 'current-podcast-summary' }));
+    expect(database.getPodcastSummaryAudio('current-podcast-summary')).toEqual(expect.objectContaining({ data: Buffer.from('current-audio') }));
+  });
+
   test('tracks AI topic processing and replaces fallback topics', () => {
     const now = new Date().toISOString();
 

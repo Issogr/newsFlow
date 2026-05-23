@@ -2042,6 +2042,30 @@ function createArticleRepository({
     return rows.map(mapThematicSummaryRow).filter(Boolean);
   }
 
+  function pruneSummaryHistory(options = {}) {
+    const periodEnd = String(options.periodEnd || '').trim();
+    if (!periodEnd) {
+      return { thematicSummaries: 0, podcastSummaries: 0 };
+    }
+
+    const topicKeys = [...new Set((Array.isArray(options.topicKeys) ? options.topicKeys : [])
+      .map((topicKey) => String(topicKey || '').trim())
+      .filter(Boolean))];
+    const db = getDb();
+    const thematicSummaries = topicKeys.length > 0
+      ? db.prepare(`
+        DELETE FROM thematic_summaries
+        WHERE period_end < ?
+          AND topic_key IN (${topicKeys.map(() => '?').join(', ')})
+      `).run(periodEnd, ...topicKeys).changes
+      : 0;
+    const podcastSummaries = options.podcast === true
+      ? db.prepare('DELETE FROM podcast_summaries WHERE period_end < ?').run(periodEnd).changes
+      : 0;
+
+    return { thematicSummaries, podcastSummaries };
+  }
+
   function upsertPodcastSummary(summary = {}) {
     const normalized = normalizePodcastSummaryPayload(summary);
     if (!normalized) {
@@ -2537,6 +2561,7 @@ function createArticleRepository({
     upsertThematicSummary,
     getThematicSummary,
     listLatestThematicSummaries,
+    pruneSummaryHistory,
     upsertPodcastSummary,
     getPodcastSummary,
     getLatestPodcastSummary,

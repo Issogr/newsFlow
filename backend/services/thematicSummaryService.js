@@ -437,6 +437,17 @@ function broadcastSummariesRefresh(options = {}) {
   }
 }
 
+function pruneGeneratedSummaryHistory(options = {}) {
+  if (typeof database.pruneSummaryHistory !== 'function') {
+    return;
+  }
+
+  const result = database.pruneSummaryHistory(options);
+  if ((result?.thematicSummaries || 0) > 0 || (result?.podcastSummaries || 0) > 0) {
+    logger.info(`Pruned old AI summary history: thematic=${result.thematicSummaries || 0}, podcasts=${result.podcastSummaries || 0}, periodEnd=${options.periodEnd}`);
+  }
+}
+
 function getAudioRetryDelayMs(summary = {}) {
   if (PODCAST_TTS_RETRY_COOLDOWN_MS <= 0) {
     return 0;
@@ -802,6 +813,8 @@ async function generateDueSummaries(options = {}) {
     const window = options.window || getLatestDueWindow(options.referenceDate || new Date());
     const summaries = [];
     let generatedCount = 0;
+    const generatedTopicKeys = [];
+    let generatedPodcast = false;
     const canGenerateSummaries = aiSummaryGenerator.isAiSummaryGenerationAvailable();
 
     for (const topicConfig of SUMMARY_TOPICS) {
@@ -811,6 +824,9 @@ async function generateDueSummaries(options = {}) {
       }
       if (result.generatedNow) {
         generatedCount += 1;
+        if (TERMINAL_SUMMARY_STATUSES.has(result.summary?.status)) {
+          generatedTopicKeys.push(topicConfig.key);
+        }
       }
     }
 
@@ -820,9 +836,17 @@ async function generateDueSummaries(options = {}) {
     }
     if (podcastResult.generatedNow) {
       generatedCount += 1;
+      if (TERMINAL_SUMMARY_STATUSES.has(podcastResult.summary?.status)) {
+        generatedPodcast = true;
+      }
     }
 
     if (generatedCount > 0) {
+      pruneGeneratedSummaryHistory({
+        periodEnd: window.periodEnd,
+        topicKeys: generatedTopicKeys,
+        podcast: generatedPodcast
+      });
       logger.info(`Thematic summaries ready: windowEnd=${window.periodEnd}, count=${generatedCount}`);
       broadcastSummariesRefresh(options);
     }

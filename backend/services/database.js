@@ -218,6 +218,7 @@ module.exports = {
   upsertThematicSummary: articleRepository.upsertThematicSummary,
   getThematicSummary: articleRepository.getThematicSummary,
   listLatestThematicSummaries: articleRepository.listLatestThematicSummaries,
+  pruneSummaryHistory: articleRepository.pruneSummaryHistory,
   upsertPodcastSummary: articleRepository.upsertPodcastSummary,
   getPodcastSummary: articleRepository.getPodcastSummary,
   getLatestPodcastSummary: articleRepository.getLatestPodcastSummary,
