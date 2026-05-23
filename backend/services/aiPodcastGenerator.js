@@ -1,6 +1,7 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
 const { parseIntegerEnv } = require('../utils/env');
+const { removePromotionalSentences } = require('../utils/promotionalContent');
 const {
   createOpenRouterClient,
   extractAssistantContent,
@@ -142,7 +143,7 @@ function sanitizePodcastScript(script = '', locale = 'en') {
       .replace(/\b(?:morning|midday|noon|afternoon|evening|night|tonight)\s+(news\s+)?(briefing|update|podcast|roundup)\b/giu, 'news $2')
       .replace(/\b(news\s+)?(briefing|update|podcast|roundup)\s+(?:for|at|around|of)\s+(?:the\s+)?(?:morning|midday|noon|afternoon|evening|night)\b/giu, 'news $2');
 
-  return `${sanitizedIntro}${rest}`.trim();
+  return removePromotionalSentences(`${sanitizedIntro}${rest}`.trim());
 }
 
 function getCompletionTokenBudget(articleCount) {

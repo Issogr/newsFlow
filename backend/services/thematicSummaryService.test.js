@@ -57,6 +57,10 @@ describe('thematicSummaryService', () => {
       url: 'https://example.com/deals/govee-lg-oled-best-buy'
     })).toBe(true);
     expect(thematicSummaryService._isPromotionalDealArticle({
+      title: 'Twelve South AirFly Pro 2 reaches one of its best prices before summer travel',
+      description: 'The Bluetooth adapter lets travelers use wireless headphones with in-flight entertainment systems.'
+    })).toBe(true);
+    expect(thematicSummaryService._isPromotionalDealArticle({
       title: 'Inflation pressures household budgets as energy prices rise',
       description: 'Economists say the price increase is tied to lower supply and higher demand.'
     })).toBe(false);

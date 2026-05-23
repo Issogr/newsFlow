@@ -10,7 +10,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🔊 Italian audio playback is included when podcast TTS generation is available, using the Gemini TTS default configuration.',
       '🧹 AI summaries and podcast briefings now skip promotional shopping deals and affiliate-style sale posts.',
       '🕒 Podcast and summary titles no longer invent morning, noon, or evening labels from the coverage window.',
-      '📖 Dense summaries and podcast scripts are split into more readable paragraphs.'
+      '📖 Dense summaries and podcast scripts are split into more readable paragraphs.',
+      '🛒 Promotional product price-drop sentences are removed from generated summaries and podcast scripts.'
     ]
   },
   it: {
@@ -23,7 +24,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🔊 La riproduzione audio in italiano e inclusa quando la generazione TTS del podcast e disponibile, con la configurazione predefinita Gemini TTS.',
       '🧹 Le sintesi AI e i briefing podcast ora saltano offerte promozionali e articoli di vendita in stile affiliate.',
       '🕒 I titoli di podcast e sintesi non inventano piu etichette come mattina, mezzogiorno o sera dalla finestra coperta.',
-      '📖 Sintesi e testi podcast densi vengono divisi in paragrafi piu leggibili.'
+      '📖 Sintesi e testi podcast densi vengono divisi in paragrafi piu leggibili.',
+      '🛒 Le frasi promozionali su cali di prezzo dei prodotti vengono rimosse da sintesi e podcast.'
     ]
   }
 };

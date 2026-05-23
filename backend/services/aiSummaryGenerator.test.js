@@ -66,4 +66,24 @@ describe('aiSummaryGenerator', () => {
   test('uses a conservative default text budget for large prompts', () => {
     expect(aiSummaryGenerator._getArticleTextLimit(120)).toBe(250);
   });
+
+  test('removes promotional price-drop sentences from generated summaries', () => {
+    const normalized = aiSummaryGenerator._normalizeGeneratedSummary({
+      en: {
+        title: 'Technology briefing',
+        paragraphs: [
+          'Policy makers discussed chip rules [1]. The Twelve South AirFly Pro 2 Bluetooth adapter reached one of its best prices before summer travel.'
+        ]
+      },
+      it: {
+        title: 'Sintesi tecnologia',
+        paragraphs: [
+          'I regolatori hanno discusso nuove regole sui chip [1]. L\'adattatore Bluetooth AirFly Pro 2 ha raggiunto uno dei suoi prezzi migliori in vista dei viaggi estivi.'
+        ]
+      }
+    }, 'Technology');
+
+    expect(normalized.summaryTextByLocale.en).toBe('Policy makers discussed chip rules [1].');
+    expect(normalized.summaryTextByLocale.it).toBe('I regolatori hanno discusso nuove regole sui chip [1].');
+  });
 });

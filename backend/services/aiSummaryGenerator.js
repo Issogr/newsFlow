@@ -1,5 +1,6 @@
 const logger = require('../utils/logger');
 const { parseIntegerEnv } = require('../utils/env');
+const { removePromotionalSentences } = require('../utils/promotionalContent');
 const {
   createOpenRouterClient,
   extractAssistantContent,
@@ -108,8 +109,8 @@ function normalizeLocalizedSummary(payload = {}, locale, fallbackTitle = '') {
     ? localizedPayload.highlights
     : [];
   const summaryParts = [
-    ...paragraphs.map((paragraph) => String(paragraph || '').trim()).filter(Boolean),
-    ...highlights.map((highlight) => String(highlight || '').trim()).filter(Boolean)
+    ...paragraphs.map((paragraph) => removePromotionalSentences(paragraph)).filter(Boolean),
+    ...highlights.map((highlight) => removePromotionalSentences(highlight)).filter(Boolean)
   ];
   const summaryText = summaryParts.join('\n\n').trim();
 
@@ -217,6 +218,7 @@ module.exports = {
   _buildPrompt: buildPrompt,
   _getArticleTextLimit: getArticleTextLimit,
   _getConfig: getConfig,
+  _normalizeGeneratedSummary: normalizeGeneratedSummary,
   _parseJsonContent: parseJsonContent,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };

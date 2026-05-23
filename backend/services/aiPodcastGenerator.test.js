@@ -69,6 +69,22 @@ describe('aiPodcastGenerator', () => {
     expect(normalized.scriptTextByLocale.it).toBe('Benvenuti all\'aggiornamento delle notizie. Prima notizia.');
   });
 
+  test('removes promotional price-drop sentences from generated podcast scripts', () => {
+    const normalized = aiPodcastGenerator._normalizeGeneratedPodcast({
+      en: {
+        title: 'News briefing',
+        script: 'The opening story covers transport policy. Finally, for travelers, the Twelve South AirFly Pro 2 Bluetooth adapter reached one of its best prices before summer travel. The closing story covers science.'
+      },
+      it: {
+        title: 'Briefing notizie',
+        script: 'La prima notizia riguarda i trasporti. Infine, per i viaggiatori, l\'adattatore Bluetooth AirFly Pro 2 di Twelve South ha raggiunto uno dei suoi prezzi migliori in vista dei viaggi estivi. La chiusura riguarda la scienza.'
+      }
+    });
+
+    expect(normalized.scriptTextByLocale.en).toBe('The opening story covers transport policy. The closing story covers science.');
+    expect(normalized.scriptTextByLocale.it).toBe('La prima notizia riguarda i trasporti. La chiusura riguarda la scienza.');
+  });
+
   test('extracts base64 audio payloads from OpenRouter-style responses', () => {
     const audio = aiPodcastGenerator._extractAudioPayload({
       choices: [
