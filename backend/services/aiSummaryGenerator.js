@@ -78,7 +78,7 @@ function buildPrompt(topicConfig = {}, articles = []) {
     'Generate the briefing in both supported languages: English and Italian.',
     'Return minified JSON only. Do not use markdown fences or prose outside JSON.',
     'Return this exact shape: {"en":{"title":"Brief title","paragraphs":["paragraph with [1] citations"]},"it":{"title":"Titolo breve","paragraphs":["paragrafo con citazioni [1]"]}}.',
-    'Use two to four paragraphs per language. Keep each briefing easy to scan but written as prose.',
+    'Use two to four paragraphs per language. Start a new paragraph whenever the subject, argument, or subtopic changes. Keep each briefing easy to scan but written as prose.',
     '',
     JSON.stringify({
       topic: topicConfig.label || topicConfig.key,

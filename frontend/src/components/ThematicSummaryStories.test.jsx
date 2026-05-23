@@ -195,6 +195,63 @@ describe('thematic summary podcast UI', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  test('splits dense podcast scripts into readable paragraphs', () => {
+    render(
+      <ThematicSummaryPanel
+        summary={{
+          id: 'podcast-1',
+          type: 'podcast',
+          topicKey: 'podcast',
+          topicLabel: 'Podcast',
+          periodStart: '2026-05-21T05:00:00.000Z',
+          periodEnd: '2026-05-21T11:00:00.000Z',
+          articleCount: 3,
+          titleByLocale: { en: 'News podcast' },
+          summaryTextByLocale: {
+            en: 'First, the technology story opens with enough context to make this sentence intentionally long and representative of a dense generated podcast script. Next, the politics story shifts to a different subject with additional context and a second long sentence that should not be glued to every other item. Finally, the science story closes the briefing with one more detailed sentence so the renderer creates another paragraph.'
+          },
+          audioStatus: 'not_available'
+        }}
+        locale="en"
+        t={t}
+        onClose={vi.fn()}
+      />
+    );
+
+    const articleParagraphs = [...document.querySelectorAll('article p')].map((paragraph) => paragraph.textContent);
+    expect(articleParagraphs).toHaveLength(2);
+    expect(articleParagraphs[0]).toContain('First, the technology story opens');
+    expect(articleParagraphs[1]).toContain('Finally, the science story closes');
+  });
+
+  test('uses single newlines as paragraph breaks for thematic summaries', () => {
+    render(
+      <ThematicSummaryPanel
+        summary={{
+          id: 'summary-technology',
+          topicKey: 'technology',
+          topicLabel: 'Technology',
+          periodStart: '2026-05-21T05:00:00.000Z',
+          periodEnd: '2026-05-21T11:00:00.000Z',
+          articleCount: 2,
+          titleByLocale: { en: 'Technology briefing' },
+          summaryTextByLocale: {
+            en: 'The first argument covers chip supply and infrastructure.\nThe second argument moves to software policy and regulation.'
+          }
+        }}
+        locale="en"
+        t={t}
+        onClose={vi.fn()}
+      />
+    );
+
+    const articleParagraphs = [...document.querySelectorAll('article p')].map((paragraph) => paragraph.textContent);
+    expect(articleParagraphs).toEqual([
+      'The first argument covers chip supply and infrastructure.',
+      'The second argument moves to software policy and regulation.'
+    ]);
+  });
+
   test('starts decoded podcast audio when pressing play', async () => {
     render(
       <ThematicSummaryPanel

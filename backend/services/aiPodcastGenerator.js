@@ -97,6 +97,7 @@ function buildPrompt(window = {}, articles = []) {
     'Skip promotional shopping deals, coupon or affiliate sale posts, and product price-drop blurbs; do not read them as news.',
     'The schedule window is coverage metadata only. Do not name the title or opening after a time of day such as morning, noon, midday, afternoon, evening, night, mattina, mezzogiorno, pomeriggio, or sera.',
     'The script should feel natural when read aloud: quick introduction, fluid transitions, concise context, then a short closing.',
+    'Use short paragraphs separated by blank lines. Start a new paragraph after the intro, when changing story or subject, and before the closing.',
     'Do not invent facts, do not use outside knowledge, and do not add bracket citations because the script may be converted to speech.',
     'Mention source names naturally only when useful. Avoid bullet lists, markdown, stage directions, timestamps, and sound effects.',
     'Generate both supported languages: English and Italian. The Italian script will be used for text-to-speech audio.',

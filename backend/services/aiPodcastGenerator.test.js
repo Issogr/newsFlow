@@ -36,6 +36,7 @@ describe('aiPodcastGenerator', () => {
     expect(prompt).toContain('Generate both supported languages: English and Italian');
     expect(prompt).toContain('Skip promotional shopping deals');
     expect(prompt).toContain('Do not name the title or opening after a time of day');
+    expect(prompt).toContain('Use short paragraphs separated by blank lines');
     expect(payload.articles).toHaveLength(2);
     expect(payload.articles[0]).toEqual(expect.objectContaining({
       ref: 1,

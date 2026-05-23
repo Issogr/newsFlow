@@ -18,11 +18,50 @@ function formatSummaryDate(value, locale) {
   }).format(date);
 }
 
-function splitSummaryParagraphs(summaryText = '') {
-  return String(summaryText || '')
-    .split(/\n{2,}/u)
-    .map((paragraph) => paragraph.trim())
+function splitLongParagraph(paragraph = '', maxParagraphChars = 520) {
+  const normalizedParagraph = String(paragraph || '').replace(/\s+/g, ' ').trim();
+  if (!normalizedParagraph || normalizedParagraph.length <= maxParagraphChars) {
+    return normalizedParagraph ? [normalizedParagraph] : [];
+  }
+
+  const sentences = normalizedParagraph
+    .split(/(?<=[.!?])\s+(?=(?:["'“”‘’])?[A-ZÀ-ÖØ-Þ0-9])/u)
+    .map((sentence) => sentence.trim())
     .filter(Boolean);
+
+  if (sentences.length <= 1) {
+    return [normalizedParagraph];
+  }
+
+  const paragraphs = [];
+  let currentParagraph = '';
+
+  sentences.forEach((sentence) => {
+    const nextParagraph = currentParagraph ? `${currentParagraph} ${sentence}` : sentence;
+    if (currentParagraph && nextParagraph.length > maxParagraphChars) {
+      paragraphs.push(currentParagraph);
+      currentParagraph = sentence;
+      return;
+    }
+
+    currentParagraph = nextParagraph;
+  });
+
+  if (currentParagraph) {
+    paragraphs.push(currentParagraph);
+  }
+
+  return paragraphs;
+}
+
+function splitSummaryParagraphs(summaryText = '', options = {}) {
+  const maxParagraphChars = Number(options.maxParagraphChars) || 520;
+  return String(summaryText || '')
+    .replace(/\r\n?/g, '\n')
+    .split(/\n+/u)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .flatMap((paragraph) => splitLongParagraph(paragraph, maxParagraphChars));
 }
 
 function isPodcastSummary(summary = {}) {
@@ -81,9 +120,11 @@ function renderParagraphWithSources(paragraph, paragraphIndex, sourceByIndex) {
 
 const ThematicSummaryPanel = ({ summary, locale, t, onClose }) => {
   const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [locale, summary]);
-  const paragraphs = useMemo(() => splitSummaryParagraphs(localizedSummary.displaySummaryText), [localizedSummary.displaySummaryText]);
   const sourceByIndex = useMemo(() => new Map((summary?.sources || []).map((source) => [Number(source.index), source])), [summary?.sources]);
   const isPodcast = isPodcastSummary(summary);
+  const paragraphs = useMemo(() => {
+    return splitSummaryParagraphs(localizedSummary.displaySummaryText, { maxParagraphChars: isPodcast ? 380 : 520 });
+  }, [isPodcast, localizedSummary.displaySummaryText]);
   const primaryPresentation = getTopicPresentation(summary?.topicKey || summary?.topics?.[0] || summary?.topicLabel);
   const PrimaryIcon = primaryPresentation.Icon;
   const closeLabel = isPodcast ? t('closePodcastSummary') : t('closeThematicSummary');

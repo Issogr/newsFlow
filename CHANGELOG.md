@@ -9,6 +9,7 @@
 - surfaced podcast audio generation, completion, and failure state through summary refreshes instead of leaving retries silent
 - filtered promotional shopping deals and affiliate-style sale posts out of AI summaries and podcast briefings
 - kept podcast and summary titles/openings from inventing morning, noon, or evening labels from scheduled coverage windows
+- improved summary and podcast readability with paragraph breaks for dense generated text
 
 ## 3.4.2
 

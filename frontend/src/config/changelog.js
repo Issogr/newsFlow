@@ -9,7 +9,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🌍 Podcast scripts are available in English and Italian based on your app language.',
       '🔊 Italian audio playback is included when podcast TTS generation is available, using the Gemini TTS default configuration.',
       '🧹 AI summaries and podcast briefings now skip promotional shopping deals and affiliate-style sale posts.',
-      '🕒 Podcast and summary titles no longer invent morning, noon, or evening labels from the coverage window.'
+      '🕒 Podcast and summary titles no longer invent morning, noon, or evening labels from the coverage window.',
+      '📖 Dense summaries and podcast scripts are split into more readable paragraphs.'
     ]
   },
   it: {
@@ -21,7 +22,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🌍 I testi podcast sono disponibili in inglese e italiano in base alla lingua dell\'app.',
       '🔊 La riproduzione audio in italiano e inclusa quando la generazione TTS del podcast e disponibile, con la configurazione predefinita Gemini TTS.',
       '🧹 Le sintesi AI e i briefing podcast ora saltano offerte promozionali e articoli di vendita in stile affiliate.',
-      '🕒 I titoli di podcast e sintesi non inventano piu etichette come mattina, mezzogiorno o sera dalla finestra coperta.'
+      '🕒 I titoli di podcast e sintesi non inventano piu etichette come mattina, mezzogiorno o sera dalla finestra coperta.',
+      '📖 Sintesi e testi podcast densi vengono divisi in paragrafi piu leggibili.'
     ]
   }
 };

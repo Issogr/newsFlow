@@ -30,6 +30,7 @@ describe('aiSummaryGenerator', () => {
 
     expect(prompt).toContain('Exclude promotional shopping deals');
     expect(prompt).toContain('Do not name the title or opening after a time of day');
+    expect(prompt).toContain('Start a new paragraph whenever the subject, argument, or subtopic changes');
     expect(payload.articles[0]).toEqual(expect.objectContaining({
       ref: 1,
       description: 'Full cached reader text with significantly more useful article context.',
