@@ -18,6 +18,26 @@ const group = {
   ]
 };
 
+function createGroup(overrides = {}) {
+  return {
+    ...group,
+    ...overrides,
+    items: overrides.items || group.items
+  };
+}
+
+function renderNewsCard({ cardGroup = group, ...props } = {}) {
+  return render(
+    <NewsCard
+      group={cardGroup}
+      locale="en"
+      t={t}
+      onOpenReader={jest.fn()}
+      {...props}
+    />
+  );
+}
+
 describe('NewsCard', () => {
   const originalShare = navigator.share;
   const originalClipboard = navigator.clipboard;
@@ -33,14 +53,7 @@ describe('NewsCard', () => {
   test('opens a safe external url in a new tab', () => {
     window.open = jest.fn();
 
-    render(
-      <NewsCard
-        group={{ ...group, url: 'https://example.com/story' }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
     fireEvent.click(screen.getByRole('button', { name: 'openOriginalSource' }));
 
@@ -181,14 +194,7 @@ describe('NewsCard', () => {
   });
 
   test('renders icon-only topic pills on standard cards', () => {
-    render(
-      <NewsCard
-        group={{ ...group, topics: ['Tecnologia', 'Economia'] }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({ cardGroup: createGroup({ topics: ['Tecnologia', 'Economia'] }) });
 
     expect(screen.getByLabelText('Technology')).toBeInTheDocument();
     expect(screen.getByLabelText('Economy')).toBeInTheDocument();
@@ -304,15 +310,7 @@ describe('NewsCard', () => {
   test('toggles the read-later action from the card header', () => {
     const onToggleReadLater = jest.fn();
 
-    render(
-      <NewsCard
-        group={group}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-        onToggleReadLater={onToggleReadLater}
-      />
-    );
+    renderNewsCard({ onToggleReadLater });
 
     fireEvent.click(screen.getByRole('button', { name: 'saveReadLater' }));
 
@@ -320,14 +318,7 @@ describe('NewsCard', () => {
   });
 
   test('disables unsafe external links', () => {
-    render(
-      <NewsCard
-        group={{ ...group, url: 'javascript:alert(1)' }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({ cardGroup: createGroup({ url: 'javascript:alert(1)' }) });
 
     expect(screen.getByRole('button', { name: 'openOriginalSource' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'openOriginalSource' })).toHaveAttribute('title', 'openOriginalSourceUnavailable');
@@ -337,14 +328,7 @@ describe('NewsCard', () => {
   test('uses the native share action when available', async () => {
     navigator.share = jest.fn().mockResolvedValue(undefined);
 
-    render(
-      <NewsCard
-        group={{ ...group, url: 'https://example.com/story' }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
@@ -362,14 +346,7 @@ describe('NewsCard', () => {
       writeText: jest.fn().mockResolvedValue(undefined)
     };
 
-    render(
-      <NewsCard
-        group={{ ...group, url: 'https://example.com/story' }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
@@ -385,14 +362,7 @@ describe('NewsCard', () => {
       writeText: jest.fn().mockRejectedValue(new Error('denied'))
     };
 
-    render(
-      <NewsCard
-        group={{ ...group, url: 'https://example.com/story' }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));

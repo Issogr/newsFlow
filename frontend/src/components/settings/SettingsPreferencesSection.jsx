@@ -7,11 +7,7 @@ const SettingsPreferencesSection = ({
   t,
   settings,
   settingsLimits,
-  onDefaultLanguageChange,
-  onThemeModeChange,
-  onShowNewsImagesChange,
-  onReaderPanelPositionChange,
-  onReaderTextSizeChange,
+  onSettingChange,
   onNumericSettingChange
 }) => {
   const articleRetentionRange = `${settingsLimits.articleRetentionHours.min}-${settingsLimits.articleRetentionHours.max}h`;
@@ -28,7 +24,7 @@ const SettingsPreferencesSection = ({
           </span>
           <select
             value={settings.defaultLanguage}
-            onChange={(event) => onDefaultLanguageChange(event.target.value)}
+            onChange={(event) => onSettingChange('defaultLanguage', event.target.value)}
             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
           >
             <option value="auto">{t('useBrowserLanguage')}</option>
@@ -62,7 +58,7 @@ const SettingsPreferencesSection = ({
           </span>
           <select
             value={settings.themeMode || 'system'}
-            onChange={(event) => onThemeModeChange(event.target.value)}
+            onChange={(event) => onSettingChange('themeMode', event.target.value)}
             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
           >
             <option value="system">{t('themeModeSystem')}</option>
@@ -96,7 +92,7 @@ const SettingsPreferencesSection = ({
           </span>
           <select
             value={settings.readerPanelPosition || 'right'}
-            onChange={(event) => onReaderPanelPositionChange(event.target.value)}
+            onChange={(event) => onSettingChange('readerPanelPosition', event.target.value)}
             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
           >
             <option value="left">{t('readerPanelPositionLeft')}</option>
@@ -112,7 +108,7 @@ const SettingsPreferencesSection = ({
           </span>
           <select
             value={settings.readerTextSize || DEFAULT_READER_TEXT_SIZE}
-            onChange={(event) => onReaderTextSizeChange(event.target.value)}
+            onChange={(event) => onSettingChange('readerTextSize', event.target.value)}
             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
           >
             {READER_TEXT_SIZE_ORDER.map((size) => (
@@ -128,7 +124,7 @@ const SettingsPreferencesSection = ({
           </span>
           <button
             type="button"
-            onClick={() => onShowNewsImagesChange(!showNewsImagesEnabled)}
+            onClick={() => onSettingChange('showNewsImages', !showNewsImagesEnabled)}
             role="switch"
             aria-checked={showNewsImagesEnabled}
             aria-label={t('showNewsImagesSetting')}

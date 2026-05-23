@@ -1,6 +1,7 @@
 const logger = require('../utils/logger');
 const topicNormalizer = require('./topicNormalizer');
 const { mapSettledWithConcurrency } = require('../utils/concurrency');
+const { parseIntegerEnv } = require('../utils/env');
 const {
   createOpenRouterClient,
   extractAssistantContent,
@@ -58,15 +59,6 @@ function logBatchClassificationsForDebug(result = new Map(), articlesById = new 
   logger.info(`AI topic batch classifications (dev): model=${config.model}, items=${summary}`);
 }
 
-function getIntegerEnv(name, fallback, min, max) {
-  const value = Number(process.env[name]);
-  if (!Number.isFinite(value)) {
-    return fallback;
-  }
-
-  return Math.max(min, Math.min(Math.floor(value), max));
-}
-
 function getConfig() {
   const openRouterConfig = getOpenRouterConfig({
     enabledEnvName: 'AI_TOPIC_DETECTION_ENABLED',
@@ -79,9 +71,9 @@ function getConfig() {
 
   return {
     ...openRouterConfig,
-    batchSize: getIntegerEnv('AI_TOPIC_BATCH_SIZE', DEFAULT_BATCH_SIZE, 1, 50),
-    batchConcurrency: getIntegerEnv('AI_TOPIC_BATCH_CONCURRENCY', DEFAULT_BATCH_CONCURRENCY, 1, 4),
-    maxArticlesPerRefresh: getIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, 1, 1000)
+    batchSize: parseIntegerEnv('AI_TOPIC_BATCH_SIZE', DEFAULT_BATCH_SIZE, { min: 1, max: 50, clamp: true, strict: true }),
+    batchConcurrency: parseIntegerEnv('AI_TOPIC_BATCH_CONCURRENCY', DEFAULT_BATCH_CONCURRENCY, { min: 1, max: 4, clamp: true, strict: true }),
+    maxArticlesPerRefresh: parseIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, { min: 1, max: 1000, clamp: true, strict: true })
   };
 }
 
@@ -444,14 +436,11 @@ function isAiTopicDetectionAvailable() {
 module.exports = {
   classifyTopicDetailsForArticlesWithStatus,
   isAiTopicDetectionAvailable,
-  _buildArticlePayload: buildArticlePayload,
   _buildPrompt: buildPrompt,
   _getConfig: getConfig,
   _getCompletionTokenBudget: getCompletionTokenBudget,
   _extractAssistantContent: extractAssistantContent,
-  _isAiArticleDebugLoggingEnabled: isAiArticleDebugLoggingEnabled,
   _normalizeClassifierDetails: normalizeClassifierDetails,
   _parseJsonContent: parseJsonContent,
-  _summarizeResponseShape: summarizeResponseShape,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };

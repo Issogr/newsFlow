@@ -5,7 +5,13 @@ const path = require('path');
 const express = require('express');
 const cookieSignature = require('cookie-signature');
 const request = require('supertest');
-const { createApp, createServer, encryptBackendSessionCookie, getBffSessionSecret, isValidSessionPayload, unsignSessionId } = require('./server');
+const { createApp, createServer } = require('./server');
+const {
+  encryptBackendSessionCookie,
+  getBffSessionSecret,
+  isValidSessionPayload,
+  unsignSessionId
+} = require('./lib/sessionPolicy');
 
 async function listen(server) {
   await new Promise((resolve) => {
@@ -83,6 +89,39 @@ async function login(target, { username = 'alice', headers = {} } = {}) {
     response,
     cookie: getBffSessionCookie(response),
   };
+}
+
+function restoreEnvValue(name, value) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
+}
+
+async function withEnv(overrides, callback) {
+  const previousValues = Object.fromEntries(Object.keys(overrides).map((name) => [name, process.env[name]]));
+
+  Object.entries(overrides).forEach(([name, value]) => {
+    restoreEnvValue(name, value);
+  });
+
+  try {
+    return await callback();
+  } finally {
+    Object.entries(previousValues).forEach(([name, value]) => {
+      restoreEnvValue(name, value);
+    });
+  }
+}
+
+function cleanupCreatedApp(created, tempDir) {
+  created?.sessionStore?.stopCleanupInterval?.();
+  created?.sessionDb?.close?.();
+  if (tempDir) {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 }
 
 describe('bff server', () => {
@@ -423,36 +462,24 @@ describe('bff server', () => {
 
   test('does not trust caller forwarded headers unless explicitly configured', async () => {
     const directSession = createSessionDbPath();
-    const previousTrustProxy = process.env.TRUST_PROXY;
-    const previousNodeEnv = process.env.NODE_ENV;
-    delete process.env.TRUST_PROXY;
-    process.env.NODE_ENV = 'production';
-    const directApp = createApp({ backendBaseUrl, frontendDistDir, sessionDbPath: directSession.sessionDbPath });
 
-    try {
-      await request(directApp.app)
-        .get('/api/public/ping')
-        .set('X-Forwarded-For', '203.0.113.99')
-        .set('X-Forwarded-Proto', 'https')
-        .expect(200);
+    await withEnv({ TRUST_PROXY: undefined, NODE_ENV: 'production' }, async () => {
+      let directApp;
 
-      expect(lastBackendHeaders['x-forwarded-for']).not.toContain('203.0.113.99');
-      expect(lastBackendHeaders['x-forwarded-proto']).toBe('http');
-    } finally {
-      directApp.sessionStore.stopCleanupInterval();
-      directApp.sessionDb.close();
-      fs.rmSync(directSession.tempDir, { recursive: true, force: true });
-      if (previousTrustProxy === undefined) {
-        delete process.env.TRUST_PROXY;
-      } else {
-        process.env.TRUST_PROXY = previousTrustProxy;
+      try {
+        directApp = createApp({ backendBaseUrl, frontendDistDir, sessionDbPath: directSession.sessionDbPath });
+        await request(directApp.app)
+          .get('/api/public/ping')
+          .set('X-Forwarded-For', '203.0.113.99')
+          .set('X-Forwarded-Proto', 'https')
+          .expect(200);
+
+        expect(lastBackendHeaders['x-forwarded-for']).not.toContain('203.0.113.99');
+        expect(lastBackendHeaders['x-forwarded-proto']).toBe('http');
+      } finally {
+        cleanupCreatedApp(directApp, directSession.tempDir);
       }
-      if (previousNodeEnv === undefined) {
-        delete process.env.NODE_ENV;
-      } else {
-        process.env.NODE_ENV = previousNodeEnv;
-      }
-    }
+    });
   });
 
   test('rebuilds forwarded headers on authenticated app routes from trusted request values', async () => {

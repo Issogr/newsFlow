@@ -5,31 +5,13 @@ import {
   Rss,
   Search,
   Tags,
-  X,
 } from 'lucide-react';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import useFilterSurfaceState from '../hooks/useFilterSurfaceState';
+import { FilterBubble, FilterSearchInput } from './FilterSurfaceControls';
 import { SourceFilterList, TopicFilterList } from './FilterOptionLists';
 
 const BUBBLE_MAX_HEIGHT = 'min(50vh, 24rem)';
-
-function FilterBubble({ children, open }) {
-  return (
-    <div
-      className={`absolute bottom-full left-2 right-2 z-[60] mb-3 overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur-md transition-all duration-200 ease-out ${
-        open
-          ? 'pointer-events-auto translate-y-0 opacity-100'
-          : 'pointer-events-none translate-y-2 opacity-0'
-      }`}
-      aria-hidden={!open}
-      inert={open ? undefined : ''}
-    >
-      <div className="max-h-[var(--bubble-max-height)] overflow-y-auto overscroll-contain p-4" style={{ '--bubble-max-height': BUBBLE_MAX_HEIGHT }}>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 const MobileBottomNav = ({
   visibleSources,
@@ -106,6 +88,8 @@ const MobileBottomNav = ({
       >
         <FilterBubble
           open={openBubble === 'sources'}
+          maxHeight={BUBBLE_MAX_HEIGHT}
+          className="absolute bottom-full left-2 right-2 z-[60] mb-3 overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur-md"
         >
           <SourceFilterList
             sources={visibleSources}
@@ -117,6 +101,8 @@ const MobileBottomNav = ({
 
         <FilterBubble
           open={openBubble === 'topics'}
+          maxHeight={BUBBLE_MAX_HEIGHT}
+          className="absolute bottom-full left-2 right-2 z-[60] mb-3 overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur-md"
         >
           <TopicFilterList
             topics={availableTopics}
@@ -235,38 +221,18 @@ const MobileBottomNav = ({
             aria-hidden={!searchMode}
             inert={searchMode ? undefined : ''}
           >
-            <label className="group flex h-full flex-1 items-center gap-2 rounded-full border border-slate-200/80 bg-gradient-to-r from-slate-50 to-white px-3.5 shadow-inner shadow-slate-200/60 transition-colors focus-within:border-sky-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100">
-              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm transition-colors group-focus-within:text-sky-600">
-                <Search className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <input
-                ref={searchInputRef}
-                type="search"
-                value={search}
-                onChange={(event) => onSearchChange(event.target.value)}
-                placeholder={t('searchPlaceholder')}
-                tabIndex={searchMode ? 0 : -1}
-                className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:font-normal placeholder:text-slate-400"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={onSearchClear}
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700"
-                  aria-label={t('clearSearch')}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </label>
-            <button
-              type="button"
-              onClick={handleExitSearch}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-sm transition-colors hover:bg-slate-700"
-              aria-label={t('cancel')}
-            >
-              <X className="h-4.5 w-4.5" />
-            </button>
+            <FilterSearchInput
+              className="flex flex-1 items-center gap-2"
+              labelClassName="h-full"
+              inputTabIndex={searchMode ? 0 : -1}
+              cancelIconClassName="h-4.5 w-4.5"
+              onCancel={handleExitSearch}
+              onSearchChange={onSearchChange}
+              onSearchClear={onSearchClear}
+              search={search}
+              searchInputRef={searchInputRef}
+              t={t}
+            />
           </div>
         </div>
         </div>

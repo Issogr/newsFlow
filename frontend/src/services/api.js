@@ -146,20 +146,15 @@ export const deleteAdminUser = async (userId) => {
   return response.data;
 };
 
-export const fetchNews = async ({
+function buildFeedParams({
   page = 1,
   pageSize = 12,
   search = '',
   sourceIds = [],
   topics = [],
   recentHours = null,
-  beforePubDate = '',
-  beforeId = '',
-  excludeArticleIds = [],
-  refresh = false,
-  includeFilters = true,
-  signal
-} = {}) => {
+  includeFilters = true
+} = {}, options = {}) {
   const params = { page, pageSize };
 
   if (search?.trim()) {
@@ -174,9 +169,37 @@ export const fetchNews = async ({
     params.topics = topics.join(',');
   }
 
-  if (recentHours) {
+  const shouldIncludeRecentHours = options.truthyRecentHours
+    ? Boolean(recentHours)
+    : Number.isFinite(recentHours) && recentHours > 0;
+  if (shouldIncludeRecentHours) {
     params.recentHours = recentHours;
   }
+
+  if (includeFilters) {
+    params.includeFilters = 'true';
+  }
+
+  return params;
+}
+
+export const fetchNews = async ({
+  page = 1,
+  pageSize = 12,
+  search = '',
+  sourceIds = [],
+  topics = [],
+  recentHours = null,
+  beforePubDate = '',
+  beforeId = '',
+  excludeArticleIds = [],
+  refresh = false,
+  includeFilters = true,
+  signal
+} = {}) => {
+  const params = buildFeedParams({ page, pageSize, search, sourceIds, topics, recentHours, includeFilters }, {
+    truthyRecentHours: true
+  });
 
   if (beforePubDate) {
     params.beforePubDate = beforePubDate;
@@ -194,10 +217,6 @@ export const fetchNews = async ({
     params.refresh = 'true';
   }
 
-  if (includeFilters) {
-    params.includeFilters = 'true';
-  }
-
   const response = await api.get('/news', { params, signal });
   return response.data;
 };
@@ -212,27 +231,7 @@ export const fetchReadLaterNews = async ({
   includeFilters = true,
   signal
 } = {}) => {
-  const params = { page, pageSize };
-
-  if (search?.trim()) {
-    params.search = search.trim();
-  }
-
-  if (Array.isArray(sourceIds) && sourceIds.length > 0) {
-    params.sources = sourceIds.join(',');
-  }
-
-  if (Array.isArray(topics) && topics.length > 0) {
-    params.topics = topics.join(',');
-  }
-
-  if (Number.isFinite(recentHours) && recentHours > 0) {
-    params.recentHours = recentHours;
-  }
-
-  if (includeFilters) {
-    params.includeFilters = 'true';
-  }
+  const params = buildFeedParams({ page, pageSize, search, sourceIds, topics, recentHours, includeFilters });
 
   const response = await api.get('/read-later', { params, signal });
   return response.data;

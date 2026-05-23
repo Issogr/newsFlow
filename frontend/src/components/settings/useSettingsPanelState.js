@@ -129,47 +129,16 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     }
   }, []);
 
+  const setSetting = useCallback((key, value) => {
+    setSettings((current) => ({
+      ...current,
+      [key]: value
+    }));
+  }, []);
+
   const updateNumericSetting = useCallback((key, value, limits) => {
-    setSettings((current) => ({
-      ...current,
-      [key]: clampSettingValue(value, limits)
-    }));
-  }, []);
-
-  const setDefaultLanguage = useCallback((value) => {
-    setSettings((current) => ({
-      ...current,
-      defaultLanguage: value
-    }));
-  }, []);
-
-  const setThemeMode = useCallback((value) => {
-    setSettings((current) => ({
-      ...current,
-      themeMode: value
-    }));
-  }, []);
-
-  const setShowNewsImages = useCallback((value) => {
-    setSettings((current) => ({
-      ...current,
-      showNewsImages: Boolean(value)
-    }));
-  }, []);
-
-  const setReaderPanelPosition = useCallback((value) => {
-    setSettings((current) => ({
-      ...current,
-      readerPanelPosition: value
-    }));
-  }, []);
-
-  const setReaderTextSize = useCallback((value) => {
-    setSettings((current) => ({
-      ...current,
-      readerTextSize: value
-    }));
-  }, []);
+    setSetting(key, clampSettingValue(value, limits));
+  }, [setSetting]);
 
   const toggleExcludedSource = useCallback((sourceId) => {
     setSettings((current) => {
@@ -361,11 +330,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     excludedSubFeedCatalog,
     setSourceForm,
     setEditingSourceForm,
-    setDefaultLanguage,
-    setThemeMode,
-    setShowNewsImages,
-    setReaderPanelPosition,
-    setReaderTextSize,
+    setSetting,
     updateNumericSetting,
     toggleExcludedSource,
     toggleExcludedSubFeed,

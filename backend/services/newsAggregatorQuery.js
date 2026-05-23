@@ -9,6 +9,13 @@ const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
 const GROUP_PAGINATION_ARTICLE_BATCH_SIZE = 250;
 const READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE = 250;
 
+function getPagination(filters = {}) {
+  return {
+    page: Math.max(1, Math.min(Number(filters.page) || 1, MAX_NEWS_PAGE)),
+    pageSize: Math.max(1, Math.min(Number(filters.pageSize) || 12, 30))
+  };
+}
+
 function expandConfiguredSources() {
   return newsSources;
 }
@@ -322,8 +329,7 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   };
   const availableSources = getAvailableSources(userContext, userSources);
 
-  const page = Math.max(1, Math.min(Number(filters.page) || 1, MAX_NEWS_PAGE));
-  const pageSize = Math.max(1, Math.min(Number(filters.pageSize) || 12, 30));
+  const { page, pageSize } = getPagination(filters);
   const groupedPage = fetchGroupedNewsPage(filters, queryOptions, page, pageSize);
   const pageGroups = annotateReadLaterGroups(groupedPage.pageGroups, userContext.userId || null);
   const cursorMode = Boolean(filters.beforePubDate || filters.beforeId);
@@ -370,8 +376,7 @@ async function getReadLaterFeed(filters = {}, userContext = {}) {
   };
   const availableSources = getAvailableSources(userContext, userSources);
 
-  const page = Math.max(1, Math.min(Number(filters.page) || 1, MAX_NEWS_PAGE));
-  const pageSize = Math.max(1, Math.min(Number(filters.pageSize) || 12, 30));
+  const { page, pageSize } = getPagination(filters);
   const includeFilters = filters.includeFilters !== false;
   const groupedPage = fetchGroupedReadLaterPage(filters, queryOptions, page, pageSize);
   const hasMore = page >= MAX_NEWS_PAGE ? false : groupedPage.hasMore;

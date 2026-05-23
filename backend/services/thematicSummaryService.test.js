@@ -92,6 +92,41 @@ function mockAiPodcastGenerator(overrides = {}) {
   return mock;
 }
 
+function createLoggerMock() {
+  return { info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() };
+}
+
+function loadServiceWithMocks({
+  databaseMock,
+  aiSummaryGeneratorMock,
+  aiPodcastGeneratorOverrides,
+  readerServiceMock,
+  websocketServiceMock,
+  loggerMock
+} = {}) {
+  const mocks = {
+    aiPodcastGeneratorMock: mockAiPodcastGenerator(aiPodcastGeneratorOverrides),
+    readerServiceMock: readerServiceMock || { getReaderArticle: jest.fn() },
+    websocketServiceMock: websocketServiceMock || { broadcastFeedRefresh: jest.fn() },
+    loggerMock: loggerMock || createLoggerMock()
+  };
+
+  if (databaseMock) {
+    jest.doMock('./database', () => databaseMock);
+  }
+  if (aiSummaryGeneratorMock) {
+    jest.doMock('./aiSummaryGenerator', () => aiSummaryGeneratorMock);
+  }
+  jest.doMock('./readerService', () => mocks.readerServiceMock);
+  jest.doMock('./websocketService', () => mocks.websocketServiceMock);
+  jest.doMock('../utils/logger', () => mocks.loggerMock);
+
+  return {
+    service: require('./thematicSummaryService'),
+    ...mocks
+  };
+}
+
 describe('thematic summary reader prewarm', () => {
   const originalEnv = process.env;
 
@@ -131,12 +166,7 @@ describe('thematic summary reader prewarm', () => {
       })
     };
 
-    jest.doMock('./database', () => databaseMock);
-    jest.doMock('./readerService', () => readerServiceMock);
-    jest.doMock('./websocketService', () => ({ broadcastFeedRefresh: jest.fn() }));
-    jest.doMock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() }));
-
-    const service = require('./thematicSummaryService');
+    const { service } = loadServiceWithMocks({ databaseMock, readerServiceMock });
     const firstReferenceDate = new Date('2026-05-21T04:45:00.000Z');
     const window = service._getNextDueWindow(firstReferenceDate);
 
@@ -187,12 +217,7 @@ describe('thematic summary reader prewarm', () => {
       })
     };
 
-    jest.doMock('./database', () => databaseMock);
-    jest.doMock('./readerService', () => readerServiceMock);
-    jest.doMock('./websocketService', () => ({ broadcastFeedRefresh: jest.fn() }));
-    jest.doMock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() }));
-
-    const service = require('./thematicSummaryService');
+    const { service } = loadServiceWithMocks({ databaseMock, readerServiceMock });
     const firstReference = new Date('2026-05-21T04:45:00.000Z');
     const secondReference = new Date('2026-05-21T10:45:00.000Z');
     const thirdReference = new Date('2026-05-21T16:45:00.000Z');
@@ -292,14 +317,11 @@ describe('thematic summary generation retries', () => {
     };
     const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
 
-    jest.doMock('./database', () => databaseMock);
-    jest.doMock('./aiSummaryGenerator', () => aiSummaryGeneratorMock);
-    mockAiPodcastGenerator();
-    jest.doMock('./readerService', () => ({ getReaderArticle: jest.fn() }));
-    jest.doMock('./websocketService', () => websocketServiceMock);
-    jest.doMock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() }));
-
-    const service = require('./thematicSummaryService');
+    const { service } = loadServiceWithMocks({
+      databaseMock,
+      aiSummaryGeneratorMock,
+      websocketServiceMock
+    });
     const result = await service.generateDueSummaries({ window: summaryWindow });
 
     expect(result.items).toEqual([completedSummary]);
@@ -347,14 +369,11 @@ describe('thematic summary generation retries', () => {
     };
     const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
 
-    jest.doMock('./database', () => databaseMock);
-    jest.doMock('./aiSummaryGenerator', () => aiSummaryGeneratorMock);
-    mockAiPodcastGenerator();
-    jest.doMock('./readerService', () => ({ getReaderArticle: jest.fn() }));
-    jest.doMock('./websocketService', () => websocketServiceMock);
-    jest.doMock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() }));
-
-    const service = require('./thematicSummaryService');
+    const { service } = loadServiceWithMocks({
+      databaseMock,
+      aiSummaryGeneratorMock,
+      websocketServiceMock
+    });
     const result = await service.generateDueSummaries({ window: summaryWindow });
 
     expect(result.items).toEqual([existingSummary]);
@@ -397,14 +416,11 @@ describe('thematic summary generation retries', () => {
     };
     const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
 
-    jest.doMock('./database', () => databaseMock);
-    jest.doMock('./aiSummaryGenerator', () => aiSummaryGeneratorMock);
-    mockAiPodcastGenerator();
-    jest.doMock('./readerService', () => ({ getReaderArticle: jest.fn() }));
-    jest.doMock('./websocketService', () => websocketServiceMock);
-    jest.doMock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() }));
-
-    const service = require('./thematicSummaryService');
+    const { service } = loadServiceWithMocks({
+      databaseMock,
+      aiSummaryGeneratorMock,
+      websocketServiceMock
+    });
     const result = await service.generateDueSummaries({
       window: summaryWindow,
       referenceDate: new Date('2026-05-21T05:01:00.000Z')
@@ -463,29 +479,26 @@ describe('thematic summary generation retries', () => {
         : null),
       upsertPodcastSummary: jest.fn((payload) => ({ ...payload, type: 'podcast', status: 'completed' }))
     };
-    const aiPodcastGeneratorMock = mockAiPodcastGenerator({
-      generatePodcastForArticles: jest.fn().mockResolvedValue({
-        title: 'News podcast',
-        scriptText: 'English script',
-        titleByLocale: { en: 'News podcast', it: 'Podcast news' },
-        scriptTextByLocale: { en: 'English script', it: 'Testo italiano' },
-        model: 'test-summary-model',
-        audio: null,
-        audioStatus: 'not_available',
-        audioErrorMessage: ''
-      })
-    });
-
-    jest.doMock('./database', () => databaseMock);
-    jest.doMock('./aiSummaryGenerator', () => ({
+    const aiSummaryGeneratorMock = {
       isAiSummaryGenerationAvailable: jest.fn(() => true),
       _getConfig: jest.fn(() => ({ model: 'test-summary-model' }))
-    }));
-    jest.doMock('./readerService', () => ({ getReaderArticle: jest.fn() }));
-    jest.doMock('./websocketService', () => ({ broadcastFeedRefresh: jest.fn() }));
-    jest.doMock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() }));
-
-    const service = require('./thematicSummaryService');
+    };
+    const { service, aiPodcastGeneratorMock } = loadServiceWithMocks({
+      databaseMock,
+      aiSummaryGeneratorMock,
+      aiPodcastGeneratorOverrides: {
+        generatePodcastForArticles: jest.fn().mockResolvedValue({
+          title: 'News podcast',
+          scriptText: 'English script',
+          titleByLocale: { en: 'News podcast', it: 'Podcast news' },
+          scriptTextByLocale: { en: 'English script', it: 'Testo italiano' },
+          model: 'test-summary-model',
+          audio: null,
+          audioStatus: 'not_available',
+          audioErrorMessage: ''
+        })
+      }
+    });
     const result = await service._generatePodcastForWindow(summaryWindow);
 
     expect(result.generatedNow).toBe(true);
@@ -539,25 +552,22 @@ describe('thematic summary generation retries', () => {
       getReaderCache: jest.fn(() => null),
       upsertPodcastSummary: jest.fn(() => completedPodcast)
     };
-    const aiPodcastGeneratorMock = mockAiPodcastGenerator({
-      generateItalianAudio: jest.fn().mockResolvedValue({
-        data: Buffer.from('audio').toString('base64'),
-        mimeType: 'audio/mpeg',
-        model: 'test-tts-model',
-        voice: 'Charon'
-      })
-    });
-
-    jest.doMock('./database', () => databaseMock);
-    jest.doMock('./aiSummaryGenerator', () => ({
+    const aiSummaryGeneratorMock = {
       isAiSummaryGenerationAvailable: jest.fn(() => true),
       _getConfig: jest.fn(() => ({ model: 'test-summary-model' }))
-    }));
-    jest.doMock('./readerService', () => ({ getReaderArticle: jest.fn() }));
-    jest.doMock('./websocketService', () => ({ broadcastFeedRefresh: jest.fn() }));
-    jest.doMock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() }));
-
-    const service = require('./thematicSummaryService');
+    };
+    const { service, aiPodcastGeneratorMock } = loadServiceWithMocks({
+      databaseMock,
+      aiSummaryGeneratorMock,
+      aiPodcastGeneratorOverrides: {
+        generateItalianAudio: jest.fn().mockResolvedValue({
+          data: Buffer.from('audio').toString('base64'),
+          mimeType: 'audio/mpeg',
+          model: 'test-tts-model',
+          voice: 'Charon'
+        })
+      }
+    });
     const result = await service._generatePodcastForWindow(summaryWindow, {
       referenceDate: new Date('2026-05-21T05:20:00.000Z')
     });
@@ -606,21 +616,21 @@ describe('thematic summary generation retries', () => {
       getReaderCache: jest.fn(() => null),
       upsertPodcastSummary: jest.fn((payload) => ({ ...payload, type: 'podcast' }))
     };
-    const aiPodcastGeneratorMock = mockAiPodcastGenerator({
+    const aiPodcastGeneratorOverrides = {
       generateItalianAudio: jest.fn().mockRejectedValue(new Error('Provider rejected audio'))
-    });
+    };
     const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
 
-    jest.doMock('./database', () => databaseMock);
-    jest.doMock('./aiSummaryGenerator', () => ({
+    const aiSummaryGeneratorMock = {
       isAiSummaryGenerationAvailable: jest.fn(() => true),
       _getConfig: jest.fn(() => ({ model: 'test-summary-model' }))
-    }));
-    jest.doMock('./readerService', () => ({ getReaderArticle: jest.fn() }));
-    jest.doMock('./websocketService', () => websocketServiceMock);
-    jest.doMock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() }));
-
-    const service = require('./thematicSummaryService');
+    };
+    const { service, aiPodcastGeneratorMock } = loadServiceWithMocks({
+      databaseMock,
+      aiSummaryGeneratorMock,
+      aiPodcastGeneratorOverrides,
+      websocketServiceMock
+    });
     const result = await service._generatePodcastForWindow(summaryWindow);
 
     expect(result.summary).toEqual(expect.objectContaining({
@@ -678,25 +688,22 @@ describe('thematic summary generation retries', () => {
       getReaderCache: jest.fn(() => null),
       upsertPodcastSummary: jest.fn((payload) => ({ ...existingPodcast, ...payload, audioStatus: 'completed' }))
     };
-    const aiPodcastGeneratorMock = mockAiPodcastGenerator({
-      generateItalianAudio: jest.fn().mockResolvedValue({
-        data: Buffer.from('audio').toString('base64'),
-        mimeType: 'audio/mpeg',
-        model: 'test-tts-model',
-        voice: 'Charon'
-      })
-    });
-
-    jest.doMock('./database', () => databaseMock);
-    jest.doMock('./aiSummaryGenerator', () => ({
+    const aiSummaryGeneratorMock = {
       isAiSummaryGenerationAvailable: jest.fn(() => true),
       _getConfig: jest.fn(() => ({ model: 'test-summary-model' }))
-    }));
-    jest.doMock('./readerService', () => ({ getReaderArticle: jest.fn() }));
-    jest.doMock('./websocketService', () => ({ broadcastFeedRefresh: jest.fn() }));
-    jest.doMock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() }));
-
-    const service = require('./thematicSummaryService');
+    };
+    const { service, aiPodcastGeneratorMock } = loadServiceWithMocks({
+      databaseMock,
+      aiSummaryGeneratorMock,
+      aiPodcastGeneratorOverrides: {
+        generateItalianAudio: jest.fn().mockResolvedValue({
+          data: Buffer.from('audio').toString('base64'),
+          mimeType: 'audio/mpeg',
+          model: 'test-tts-model',
+          voice: 'Charon'
+        })
+      }
+    });
     const result = await service._generatePodcastForWindow(summaryWindow);
 
     expect(result.generatedNow).toBe(true);

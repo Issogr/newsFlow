@@ -1,9 +1,11 @@
-const path = require('path');
-
-function applySanitizedForwardedHeaders(proxyReq, req) {
+function clearForwardedHeaders(proxyReq) {
   proxyReq.removeHeader('x-forwarded-for');
   proxyReq.removeHeader('x-forwarded-host');
   proxyReq.removeHeader('x-forwarded-proto');
+}
+
+function applySanitizedForwardedHeaders(proxyReq, req) {
+  clearForwardedHeaders(proxyReq);
 
   const clientIp = req.ip || req.socket?.remoteAddress;
   if (clientIp) {
@@ -44,11 +46,6 @@ function copyBackendResponseHeaders(res, headers = {}) {
   });
 }
 
-function serveSpaIndex(frontendDistDir, res) {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.sendFile(path.join(frontendDistDir, 'index.html'));
-}
-
 function extractDeletedAdminUserId(req, statusCode) {
   if (String(req.method || '').toUpperCase() !== 'DELETE' || statusCode < 200 || statusCode >= 300) {
     return '';
@@ -61,7 +58,7 @@ function extractDeletedAdminUserId(req, statusCode) {
 
 module.exports = {
   applySanitizedForwardedHeaders,
+  clearForwardedHeaders,
   copyBackendResponseHeaders,
-  extractDeletedAdminUserId,
-  serveSpaIndex
+  extractDeletedAdminUserId
 };

@@ -67,7 +67,7 @@ describe('useSettingsPanelState', () => {
     }), { initialProps: { currentUser: baseCurrentUser } });
 
     act(() => {
-      result.current.setDefaultLanguage('it');
+      result.current.setSetting('defaultLanguage', 'it');
       result.current.setSourceForm({ url: source.url });
     });
 
@@ -103,7 +103,7 @@ describe('useSettingsPanelState', () => {
     }), { initialProps: { currentUser: baseCurrentUser } });
 
     act(() => {
-      result.current.setDefaultLanguage('it');
+      result.current.setSetting('defaultLanguage', 'it');
     });
 
     await act(async () => {
@@ -168,7 +168,7 @@ describe('useSettingsPanelState', () => {
     }));
 
     act(() => {
-      result.current.setDefaultLanguage('it');
+      result.current.setSetting('defaultLanguage', 'it');
       result.current.startEditSource(currentUser.customSources[0]);
       result.current.setEditingSourceForm({
         name: updatedSource.name,
@@ -215,7 +215,7 @@ describe('useSettingsPanelState', () => {
     }));
 
     act(() => {
-      result.current.setDefaultLanguage('it');
+      result.current.setSetting('defaultLanguage', 'it');
     });
 
     await act(async () => {
@@ -249,7 +249,7 @@ describe('useSettingsPanelState', () => {
     }));
 
     act(() => {
-      result.current.setDefaultLanguage('it');
+      result.current.setSetting('defaultLanguage', 'it');
     });
 
     await act(async () => {

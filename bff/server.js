@@ -7,18 +7,12 @@ const helmet = require('helmet');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const { parseIntegerEnv } = require('./lib/env');
 const {
-  BACKEND_SESSION_COOKIE_NAME,
-  BFF_SESSION_COOKIE_NAME,
   SESSION_SCHEMA_VERSION,
   clearBffSessionCookie,
   encryptBackendSessionCookie,
   extractBackendSessionCookie,
   getBffSessionSecret,
-  getInternalProxyToken,
-  isValidSessionPayload,
-  parseCookieHeader,
-  serializeCookie,
-  unsignSessionId
+  getInternalProxyToken
 } = require('./lib/sessionPolicy');
 const {
   buildSessionMiddleware,
@@ -34,9 +28,9 @@ const {
 } = require('./lib/sessionStore');
 const {
   applySanitizedForwardedHeaders,
+  clearForwardedHeaders,
   copyBackendResponseHeaders,
-  extractDeletedAdminUserId,
-  serveSpaIndex
+  extractDeletedAdminUserId
 } = require('./lib/proxyHelpers');
 
 const DEFAULT_FRONTEND_DIST_DIR = path.join(__dirname, 'public');
@@ -109,9 +103,7 @@ function createApp(options = {}) {
 
   function applyBackendSessionProxyHeaders(proxyReq, req) {
     stripClientCredentials(proxyReq);
-    proxyReq.removeHeader('x-forwarded-for');
-    proxyReq.removeHeader('x-forwarded-host');
-    proxyReq.removeHeader('x-forwarded-proto');
+    clearForwardedHeaders(proxyReq);
     Object.entries(buildInternalHeaders(req)).forEach(([name, value]) => {
       proxyReq.setHeader(name, value);
     });
@@ -155,23 +147,6 @@ function createApp(options = {}) {
     res.end(JSON.stringify(UPSTREAM_ERROR_RESPONSE));
   }
 
-  async function forwardInternalRequest(req, res, { pathName, method = req.method, payload = undefined, params = req.query, backendSessionCookie = '' }) {
-    const response = await backendHttp.request({
-      url: `/internal-api${pathName}`,
-      method,
-      params,
-      data: payload,
-      headers: {
-        ...buildInternalHeaders(req),
-        ...(backendSessionCookie ? { Cookie: backendSessionCookie } : {}),
-      },
-    });
-
-    copyBackendResponseHeaders(res, response.headers);
-    res.status(response.status).send(response.data);
-    return response;
-  }
-
   async function handleSessionAuthRequest(req, res, next, pathName) {
     try {
       const response = await backendHttp.request({
@@ -210,6 +185,11 @@ function createApp(options = {}) {
     } catch (error) {
       next(error);
     }
+  }
+
+  function serveSpaIndex(res) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(frontendDistDir, 'index.html'));
   }
 
   const publicApiProxy = createProxyMiddleware({
@@ -288,7 +268,7 @@ function createApp(options = {}) {
   });
 
   app.get(['/api/docs', '/api/docs/'], (req, res) => {
-    serveSpaIndex(frontendDistDir, res);
+    serveSpaIndex(res);
   });
 
   app.use(express.static(frontendDistDir, {
@@ -332,7 +312,15 @@ function createApp(options = {}) {
 
   app.get('/api/auth/password-setup/validate', async (req, res, next) => {
     try {
-      await forwardInternalRequest(req, res, { pathName: '/auth/password-setup/validate' });
+      const response = await backendHttp.request({
+        url: '/internal-api/auth/password-setup/validate',
+        method: req.method,
+        params: req.query,
+        headers: buildInternalHeaders(req),
+      });
+
+      copyBackendResponseHeaders(res, response.headers);
+      res.status(response.status).send(response.data);
     } catch (error) {
       next(error);
     }
@@ -408,7 +396,7 @@ function createApp(options = {}) {
   app.use('/socket.io', requireBackendSession, socketProxy);
 
   app.get(/.*/, (req, res) => {
-    serveSpaIndex(frontendDistDir, res);
+    serveSpaIndex(res);
   });
 
   app.use((error, req, res, next) => {
@@ -433,7 +421,6 @@ function createApp(options = {}) {
   return {
     app,
     sessionDb,
-    sessionMiddleware,
     sessionSecret: getBffSessionSecret(),
     sessionStore,
     socketProxy,
@@ -476,18 +463,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  BACKEND_SESSION_COOKIE_NAME,
-  BFF_SESSION_COOKIE_NAME,
-  SESSION_SCHEMA_VERSION,
   createApp,
-  createServer,
-  createSessionStore,
-  destroyStoredSessionsByUserId,
-  encryptBackendSessionCookie,
-  getBffSessionSecret,
-  getInternalProxyToken,
-  isValidSessionPayload,
-  parseCookieHeader,
-  serializeCookie,
-  unsignSessionId,
+  createServer
 };

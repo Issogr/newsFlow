@@ -30,6 +30,9 @@ function buildPublicRateLimitMessage(message) {
   };
 }
 
+const anonymousPublicNewsRateLimitMessage = buildPublicRateLimitMessage('Too many anonymous public API requests. Please try again later.');
+const authenticatedPublicNewsRateLimitMessage = buildPublicRateLimitMessage('Too many authenticated public API requests. Please try again later.');
+
 const anonymousPublicNewsRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
@@ -40,19 +43,9 @@ const anonymousPublicNewsRateLimit = rateLimit({
     return `anon:${ipKeyGenerator(req.ip)}`;
   },
   handler: (req, res) => {
-    res.status(429).json({
-      error: {
-        message: 'Too many anonymous public API requests. Please try again later.',
-        code: 'RATE_LIMIT_EXCEEDED'
-      }
-    });
+    res.status(429).json(anonymousPublicNewsRateLimitMessage);
   },
-  message: {
-    error: {
-      message: 'Too many anonymous public API requests. Please try again later.',
-      code: 'RATE_LIMIT_EXCEEDED'
-    }
-  }
+  message: anonymousPublicNewsRateLimitMessage
 });
 
 const authenticatedPublicNewsRateLimit = rateLimit({
@@ -66,19 +59,9 @@ const authenticatedPublicNewsRateLimit = rateLimit({
     return `token:${apiTokenId}`;
   },
   handler: (req, res) => {
-    res.status(429).json({
-      error: {
-        message: 'Too many authenticated public API requests. Please try again later.',
-        code: 'RATE_LIMIT_EXCEEDED'
-      }
-    });
+    res.status(429).json(authenticatedPublicNewsRateLimitMessage);
   },
-  message: {
-    error: {
-      message: 'Too many authenticated public API requests. Please try again later.',
-      code: 'RATE_LIMIT_EXCEEDED'
-    }
-  }
+  message: authenticatedPublicNewsRateLimitMessage
 });
 
 function getExternalUserContext(req) {
@@ -97,12 +80,7 @@ const preAuthPublicNewsRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
-  message: {
-    error: {
-      message: 'Too many public API requests. Please try again later.',
-      code: 'RATE_LIMIT_EXCEEDED'
-    }
-  }
+  message: buildPublicRateLimitMessage('Too many public API requests. Please try again later.')
 });
 
 const bearerPublicNewsIpRateLimit = rateLimit({

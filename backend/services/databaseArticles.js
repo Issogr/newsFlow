@@ -1576,6 +1576,44 @@ function createArticleRepository({
     })).filter((source) => source.articleId && source.title);
   }
 
+  function normalizeLocalizedSummaryFields(summary = {}, textFieldName, textByLocaleFieldName) {
+    const titleByLocale = summary.titleByLocale && typeof summary.titleByLocale === 'object' ? summary.titleByLocale : {};
+    const textByLocale = summary[textByLocaleFieldName] && typeof summary[textByLocaleFieldName] === 'object' ? summary[textByLocaleFieldName] : {};
+    const textEnKey = `${textFieldName}En`;
+    const textItKey = `${textFieldName}It`;
+    const titleEn = String(summary.titleEn || titleByLocale.en || summary.title || '').trim().slice(0, 180);
+    const titleIt = String(summary.titleIt || titleByLocale.it || titleEn || summary.title || '').trim().slice(0, 180);
+    const textEn = String(summary[textEnKey] || textByLocale.en || summary[textFieldName] || '').trim();
+    const textIt = String(summary[textItKey] || textByLocale.it || textEn || summary[textFieldName] || '').trim();
+
+    return {
+      title: titleEn || titleIt,
+      text: textEn || textIt,
+      titleEn,
+      titleIt,
+      textEn,
+      textIt
+    };
+  }
+
+  function getLocalizedSummaryRowFields(row = {}, textFieldName) {
+    const textEnKey = `${textFieldName}En`;
+    const textItKey = `${textFieldName}It`;
+
+    return {
+      title: row.titleEn || row.title || row.titleIt || '',
+      text: row[textEnKey] || row[textFieldName] || row[textItKey] || '',
+      titleByLocale: {
+        en: row.titleEn || row.title || row.titleIt || '',
+        it: row.titleIt || row.titleEn || row.title || ''
+      },
+      textByLocale: {
+        en: row[textEnKey] || row[textFieldName] || row[textItKey] || '',
+        it: row[textItKey] || row[textEnKey] || row[textFieldName] || ''
+      }
+    };
+  }
+
   function normalizeSummaryPayload(summary = {}) {
     const topicKey = String(summary.topicKey || '').trim();
     const periodStart = String(summary.periodStart || '').trim();
@@ -1586,12 +1624,7 @@ function createArticleRepository({
     }
 
     const id = String(summary.id || `${topicKey}:${periodStart}:${periodEnd}`).trim();
-    const titleByLocale = summary.titleByLocale && typeof summary.titleByLocale === 'object' ? summary.titleByLocale : {};
-    const summaryTextByLocale = summary.summaryTextByLocale && typeof summary.summaryTextByLocale === 'object' ? summary.summaryTextByLocale : {};
-    const titleEn = String(summary.titleEn || titleByLocale.en || summary.title || '').trim().slice(0, 180);
-    const titleIt = String(summary.titleIt || titleByLocale.it || titleEn || summary.title || '').trim().slice(0, 180);
-    const summaryTextEn = String(summary.summaryTextEn || summaryTextByLocale.en || summary.summaryText || '').trim();
-    const summaryTextIt = String(summary.summaryTextIt || summaryTextByLocale.it || summaryTextEn || summary.summaryText || '').trim();
+    const localized = normalizeLocalizedSummaryFields(summary, 'summaryText', 'summaryTextByLocale');
 
     return {
       id,
@@ -1600,12 +1633,12 @@ function createArticleRepository({
       topicsJson: JSON.stringify(Array.isArray(summary.topics) ? summary.topics : []),
       periodStart,
       periodEnd,
-      title: titleEn || titleIt,
-      summaryText: summaryTextEn || summaryTextIt,
-      titleEn,
-      summaryTextEn,
-      titleIt,
-      summaryTextIt,
+      title: localized.title,
+      summaryText: localized.text,
+      titleEn: localized.titleEn,
+      summaryTextEn: localized.textEn,
+      titleIt: localized.titleIt,
+      summaryTextIt: localized.textIt,
       sourcesJson: JSON.stringify(normalizeSummarySources(summary.sources || [])),
       articleCount: Math.max(0, Number(summary.articleCount) || 0),
       model: String(summary.model || '').trim().slice(0, 120),
@@ -1629,6 +1662,8 @@ function createArticleRepository({
       return null;
     }
 
+    const localized = getLocalizedSummaryRowFields(row, 'summaryText');
+
     return {
       id: row.id,
       topicKey: row.topicKey,
@@ -1636,16 +1671,10 @@ function createArticleRepository({
       topics: parseSummaryJson(row.topicsJson),
       periodStart: row.periodStart,
       periodEnd: row.periodEnd,
-      title: row.titleEn || row.title || row.titleIt || '',
-      summaryText: row.summaryTextEn || row.summaryText || row.summaryTextIt || '',
-      titleByLocale: {
-        en: row.titleEn || row.title || row.titleIt || '',
-        it: row.titleIt || row.titleEn || row.title || ''
-      },
-      summaryTextByLocale: {
-        en: row.summaryTextEn || row.summaryText || row.summaryTextIt || '',
-        it: row.summaryTextIt || row.summaryTextEn || row.summaryText || ''
-      },
+      title: localized.title,
+      summaryText: localized.text,
+      titleByLocale: localized.titleByLocale,
+      summaryTextByLocale: localized.textByLocale,
       sources: parseSummaryJson(row.sourcesJson),
       articleCount: row.articleCount,
       model: row.model,
@@ -1688,12 +1717,7 @@ function createArticleRepository({
     }
 
     const id = String(summary.id || `podcast:${periodStart}:${periodEnd}`).trim();
-    const titleByLocale = summary.titleByLocale && typeof summary.titleByLocale === 'object' ? summary.titleByLocale : {};
-    const scriptTextByLocale = summary.scriptTextByLocale && typeof summary.scriptTextByLocale === 'object' ? summary.scriptTextByLocale : {};
-    const titleEn = String(summary.titleEn || titleByLocale.en || summary.title || '').trim().slice(0, 180);
-    const titleIt = String(summary.titleIt || titleByLocale.it || titleEn || summary.title || '').trim().slice(0, 180);
-    const scriptTextEn = String(summary.scriptTextEn || scriptTextByLocale.en || summary.scriptText || '').trim();
-    const scriptTextIt = String(summary.scriptTextIt || scriptTextByLocale.it || scriptTextEn || summary.scriptText || '').trim();
+    const localized = normalizeLocalizedSummaryFields(summary, 'scriptText', 'scriptTextByLocale');
     const audioBlob = normalizePodcastAudioData(summary.audioData || summary.audio?.data || null);
     const requestedAudioStatus = String(summary.audioStatus || (audioBlob ? 'completed' : 'not_available')).trim().slice(0, 40);
     const audioStatus = requestedAudioStatus === 'completed' && !audioBlob ? 'not_available' : requestedAudioStatus;
@@ -1702,12 +1726,12 @@ function createArticleRepository({
       id,
       periodStart,
       periodEnd,
-      title: titleEn || titleIt,
-      scriptText: scriptTextEn || scriptTextIt,
-      titleEn,
-      scriptTextEn,
-      titleIt,
-      scriptTextIt,
+      title: localized.title,
+      scriptText: localized.text,
+      titleEn: localized.titleEn,
+      scriptTextEn: localized.textEn,
+      titleIt: localized.titleIt,
+      scriptTextIt: localized.textIt,
       sourcesJson: JSON.stringify(normalizeSummarySources(summary.sources || [])),
       articleCount: Math.max(0, Number(summary.articleCount) || 0),
       scriptModel: String(summary.scriptModel || summary.model || '').trim().slice(0, 120),
@@ -1728,6 +1752,8 @@ function createArticleRepository({
       return null;
     }
 
+    const localized = getLocalizedSummaryRowFields(row, 'scriptText');
+
     return {
       id: row.id,
       type: 'podcast',
@@ -1736,16 +1762,10 @@ function createArticleRepository({
       topics: ['Podcast'],
       periodStart: row.periodStart,
       periodEnd: row.periodEnd,
-      title: row.titleEn || row.title || row.titleIt || '',
-      summaryText: row.scriptTextEn || row.scriptText || row.scriptTextIt || '',
-      titleByLocale: {
-        en: row.titleEn || row.title || row.titleIt || '',
-        it: row.titleIt || row.titleEn || row.title || ''
-      },
-      summaryTextByLocale: {
-        en: row.scriptTextEn || row.scriptText || row.scriptTextIt || '',
-        it: row.scriptTextIt || row.scriptTextEn || row.scriptText || ''
-      },
+      title: localized.title,
+      summaryText: localized.text,
+      titleByLocale: localized.titleByLocale,
+      summaryTextByLocale: localized.textByLocale,
       sources: parseSummaryJson(row.sourcesJson),
       articleCount: row.articleCount,
       model: row.scriptModel,
