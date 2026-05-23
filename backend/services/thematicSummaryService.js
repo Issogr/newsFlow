@@ -17,6 +17,8 @@ const SUMMARY_READER_PREWARM_CONCURRENCY = parseIntegerEnv('AI_SUMMARY_READER_PR
 const SUMMARY_READER_TEXT_MAX_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MAX_CHARS', 3000, { min: 500, max: 12000 });
 const SUMMARY_READER_TEXT_MIN_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MIN_CHARS', 250, { min: 80, max: 2000 });
 const SUMMARY_FAILED_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
+const TERMINAL_SUMMARY_STATUSES = new Set(['completed', 'empty']);
+const NON_RETRYABLE_SUMMARY_FAILURE_CATEGORIES = new Set(['invalid_output']);
 const SUMMARY_TOPICS = [
   {
     key: 'technology',
@@ -229,8 +231,37 @@ function buildPodcastSummaryId(periodStart, periodEnd) {
   return buildSummaryId('podcast', periodStart, periodEnd);
 }
 
+function isTerminalSummary(summary = {}) {
+  return Boolean(summary) && TERMINAL_SUMMARY_STATUSES.has(summary.status);
+}
+
+function getSummaryFailureCategory(error = {}) {
+  if (error.code === 'SUMMARY_VALIDATION_FAILED') {
+    return 'invalid_output';
+  }
+
+  const message = String(error.message || '').toLowerCase();
+  if (/timeout|timed out|rate|quota|429|503|network|fetch|econnreset|socket/u.test(message)) {
+    return 'provider_unavailable';
+  }
+
+  if (/json|summary text|citation|identical|too short/u.test(message)) {
+    return 'invalid_output';
+  }
+
+  return 'generation_error';
+}
+
 function isFailedSummaryRetryDue(summary = {}, referenceDate = new Date()) {
-  if (summary.status !== 'failed' || SUMMARY_FAILED_RETRY_COOLDOWN_MS <= 0) {
+  if (summary.status !== 'failed') {
+    return true;
+  }
+
+  if (NON_RETRYABLE_SUMMARY_FAILURE_CATEGORIES.has(summary.failureCategory)) {
+    return false;
+  }
+
+  if (SUMMARY_FAILED_RETRY_COOLDOWN_MS <= 0) {
     return true;
   }
 
@@ -252,6 +283,33 @@ function buildSourceList(articles = []) {
     url: article.url || '',
     publishedAt: article.pubDate || ''
   }));
+}
+
+function buildEmptySummaryPayload(topicConfig, window) {
+  const titleEn = `No ${topicConfig.label} stories`;
+  const titleIt = 'Nessuna notizia per questo topic';
+  const textEn = `No ${topicConfig.label.toLowerCase()} stories were available for this summary window.`;
+  const textIt = 'Nessuna notizia disponibile per questo topic in questa finestra di riepilogo.';
+
+  return {
+    id: buildSummaryId(topicConfig.key, window.periodStart, window.periodEnd),
+    topicKey: topicConfig.key,
+    topicLabel: topicConfig.label,
+    topics: topicConfig.topics,
+    periodStart: window.periodStart,
+    periodEnd: window.periodEnd,
+    title: titleEn,
+    summaryText: textEn,
+    titleByLocale: { en: titleEn, it: titleIt },
+    summaryTextByLocale: { en: textEn, it: textIt },
+    articleCount: 0,
+    sources: [],
+    model: '',
+    status: 'empty',
+    failureCategory: '',
+    retryCount: 0,
+    generatedAt: new Date().toISOString()
+  };
 }
 
 function normalizeReaderText(value = '') {
@@ -489,7 +547,7 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
 
 async function generateSummaryForTopic(topicConfig, window, options = {}) {
   const existingSummary = database.getThematicSummary(topicConfig.key, window.periodStart, window.periodEnd);
-  if (existingSummary?.status === 'completed' && options.force !== true) {
+  if (isTerminalSummary(existingSummary) && options.force !== true) {
     return { summary: existingSummary, generatedNow: false };
   }
   if (existingSummary?.status === 'failed' && options.force !== true && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
@@ -505,6 +563,17 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
   }));
 
   if (articles.length === 0) {
+    if (options.force !== true && database.hasPendingTopicProcessingForThematicSummary?.(window)) {
+      return { summary: null, generatedNow: false };
+    }
+
+    return {
+      summary: database.upsertThematicSummary(buildEmptySummaryPayload(topicConfig, window)),
+      generatedNow: true
+    };
+  }
+
+  if (options.canGenerateSummaries === false) {
     return { summary: null, generatedNow: false };
   }
 
@@ -541,11 +610,14 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
         titleByLocale: generated.titleByLocale,
         summaryTextByLocale: generated.summaryTextByLocale,
         model: generated.model,
-        status: 'completed'
+        status: 'completed',
+        failureCategory: '',
+        retryCount: 0
       }),
       generatedNow: true
     };
   } catch (error) {
+    const failureCategory = getSummaryFailureCategory(error);
     logger.warn(`Thematic summary generation failed: topic=${topicConfig.key}, windowEnd=${window.periodEnd}, error=${error.message}`);
     database.upsertThematicSummary({
       ...basePayload,
@@ -553,6 +625,8 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
       summaryText: '',
       model: aiSummaryGenerator._getConfig().model,
       status: 'failed',
+      failureCategory,
+      retryCount: (existingSummary?.retryCount || 0) + 1,
       errorMessage: error.message
     });
     return { summary: null, generatedNow: false };
@@ -634,17 +708,11 @@ async function generateDueSummaries(options = {}) {
     const window = options.window || getLatestDueWindow(options.referenceDate || new Date());
     const summaries = [];
     let generatedCount = 0;
-
-    if (!aiSummaryGenerator.isAiSummaryGenerationAvailable()) {
-      return {
-        window,
-        items: summaries
-      };
-    }
+    const canGenerateSummaries = aiSummaryGenerator.isAiSummaryGenerationAvailable();
 
     for (const topicConfig of SUMMARY_TOPICS) {
-      const result = await generateSummaryForTopic(topicConfig, window, options);
-      if (result.summary?.status === 'completed') {
+      const result = await generateSummaryForTopic(topicConfig, window, { ...options, canGenerateSummaries });
+      if (TERMINAL_SUMMARY_STATUSES.has(result.summary?.status)) {
         summaries.push(result.summary);
       }
       if (result.generatedNow) {

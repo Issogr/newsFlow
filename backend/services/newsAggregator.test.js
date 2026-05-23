@@ -66,6 +66,7 @@ jest.mock('./aiStoryGrouper', () => ({
 }));
 
 jest.mock('./thematicSummaryService', () => ({
+  generateDueSummaries: jest.fn(() => Promise.resolve({ items: [] })),
   startScheduler: jest.fn(),
   stopScheduler: jest.fn()
 }));
@@ -75,6 +76,7 @@ const database = require('./database');
 const websocketService = require('./websocketService');
 const aiTopicClassifier = require('./aiTopicClassifier');
 const aiStoryGrouper = require('./aiStoryGrouper');
+const thematicSummaryService = require('./thematicSummaryService');
 const newsAggregator = require('./newsAggregator');
 const { normalizeIncomingArticles } = require('./newsAggregatorGrouping');
 const {
@@ -138,6 +140,7 @@ describe('newsAggregator service flows', () => {
     aiTopicClassifier.isAiTopicDetectionAvailable.mockReturnValue(true);
     aiStoryGrouper.findSimilarStoriesForArticle.mockResolvedValue({ matches: [], model: 'test-story-model' });
     aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(false);
+    thematicSummaryService.generateDueSummaries.mockResolvedValue({ items: [] });
     aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockResolvedValue({
       topicsByArticleId: new Map(),
       attemptedArticleIds: [],
@@ -837,6 +840,7 @@ describe('newsAggregator service flows', () => {
     expect(database.replaceTopicsForArticles).toHaveBeenCalledWith(expect.arrayContaining([
       expect.objectContaining({ articleId: 'inserted-1' })
     ]));
+    expect(thematicSummaryService.generateDueSummaries).toHaveBeenCalledWith({ broadcast: true });
     expect(database.getAiStoryGroupingCandidateSet).toHaveBeenCalledWith('inserted-1', expect.any(Object));
   });
 

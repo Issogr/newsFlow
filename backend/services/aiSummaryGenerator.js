@@ -12,6 +12,7 @@ const {
 const DEFAULT_OPENROUTER_SUMMARY_MODEL = 'deepseek/deepseek-v4-flash';
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_PROMPT_TEXT_BUDGET_CHARS = 30000;
+const MIN_SUMMARY_TEXT_LENGTH = 60;
 
 function getConfig() {
   return getOpenRouterConfig({
@@ -110,6 +111,44 @@ function normalizeGeneratedSummary(payload = {}, fallbackTitle = '') {
   };
 }
 
+function createValidationError(message) {
+  const error = new Error(message);
+  error.code = 'SUMMARY_VALIDATION_FAILED';
+  return error;
+}
+
+function extractCitationIndexes(text = '') {
+  return [...String(text || '').matchAll(/\[(\d+)\]/gu)].map((match) => Number(match[1]));
+}
+
+function assertValidCitations(summaryText, articleCount, locale) {
+  const citations = extractCitationIndexes(summaryText);
+  if (citations.length === 0) {
+    throw createValidationError(`AI summary ${locale} text has no citations`);
+  }
+
+  const invalidCitation = citations.find((citation) => !Number.isInteger(citation) || citation < 1 || citation > articleCount);
+  if (invalidCitation) {
+    throw createValidationError(`AI summary ${locale} text has invalid citation [${invalidCitation}]`);
+  }
+}
+
+function validateGeneratedSummary(summary = {}, articleCount = 0) {
+  const enText = String(summary.summaryTextByLocale?.en || '').trim();
+  const itText = String(summary.summaryTextByLocale?.it || '').trim();
+
+  if (enText.length < MIN_SUMMARY_TEXT_LENGTH || itText.length < MIN_SUMMARY_TEXT_LENGTH) {
+    throw createValidationError('AI summary text is too short');
+  }
+
+  if (enText.toLowerCase() === itText.toLowerCase()) {
+    throw createValidationError('AI summary English and Italian text are identical');
+  }
+
+  assertValidCitations(enText, articleCount, 'English');
+  assertValidCitations(itText, articleCount, 'Italian');
+}
+
 async function generateSummaryForArticles(topicConfig = {}, articles = []) {
   const config = getConfig();
   if (!Array.isArray(articles) || articles.length === 0) {
@@ -165,6 +204,8 @@ async function generateSummaryForArticles(topicConfig = {}, articles = []) {
     throw new Error('AI summary response did not contain both English and Italian summary text');
   }
 
+  validateGeneratedSummary(normalized, articles.length);
+
   logger.info(`AI summary generated: topic=${topicConfig.key}, model=${config.model}, articles=${articles.length}, durationMs=${Date.now() - startedAt}`);
   return {
     ...normalized,
@@ -183,6 +224,7 @@ module.exports = {
   _getArticleTextLimit: getArticleTextLimit,
   _getConfig: getConfig,
   _normalizeGeneratedSummary: normalizeGeneratedSummary,
+  _validateGeneratedSummary: validateGeneratedSummary,
   _parseJsonContent: parseJsonContent,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };

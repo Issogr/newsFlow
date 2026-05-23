@@ -1679,6 +1679,28 @@ function createArticleRepository({
     return hydrateArticleRows(rows, { userId: null });
   }
 
+  function hasPendingTopicProcessingForThematicSummary({ periodStart, periodEnd } = {}) {
+    if (!periodStart || !periodEnd) {
+      return false;
+    }
+
+    const row = getDb().prepare(`
+      SELECT 1
+      FROM articles
+      WHERE owner_user_id IS NULL
+        AND published_at >= ?
+        AND published_at < ?
+        AND published_at <= ?
+        AND (
+          ai_topics_processed_at IS NULL
+          OR ai_topics_status IN ('failed', 'deferred')
+        )
+      LIMIT 1
+    `).get(periodStart, periodEnd, new Date().toISOString());
+
+    return Boolean(row);
+  }
+
   function normalizeSummarySources(sources = []) {
     if (!Array.isArray(sources)) {
       return [];
@@ -1762,6 +1784,8 @@ function createArticleRepository({
       articleCount: Math.max(0, Number(summary.articleCount) || 0),
       model: String(summary.model || '').trim().slice(0, 120),
       status: String(summary.status || 'completed').trim().slice(0, 40),
+      failureCategory: String(summary.failureCategory || '').trim().slice(0, 80),
+      retryCount: Math.max(0, Number(summary.retryCount) || 0),
       errorMessage: summary.errorMessage ? String(summary.errorMessage).trim().slice(0, 1000) : null,
       generatedAt: String(summary.generatedAt || new Date().toISOString()).trim()
     };
@@ -1798,6 +1822,8 @@ function createArticleRepository({
       articleCount: row.articleCount,
       model: row.model,
       status: row.status,
+      failureCategory: row.failureCategory || '',
+      retryCount: row.retryCount || 0,
       errorMessage: row.errorMessage,
       generatedAt: row.generatedAt
     };
@@ -1912,9 +1938,9 @@ function createArticleRepository({
       INSERT INTO thematic_summaries (
         id, topic_key, topic_label, topics_json, period_start, period_end, title,
         summary_text, title_en, summary_text_en, title_it, summary_text_it,
-        sources_json, article_count, model, status, error_message, generated_at
+        sources_json, article_count, model, status, failure_category, retry_count, error_message, generated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(topic_key, period_start, period_end) DO UPDATE SET
         topic_label = excluded.topic_label,
         topics_json = excluded.topics_json,
@@ -1928,6 +1954,8 @@ function createArticleRepository({
         article_count = excluded.article_count,
         model = excluded.model,
         status = excluded.status,
+        failure_category = excluded.failure_category,
+        retry_count = excluded.retry_count,
         error_message = excluded.error_message,
         generated_at = excluded.generated_at
     `).run(
@@ -1947,6 +1975,8 @@ function createArticleRepository({
       normalized.articleCount,
       normalized.model,
       normalized.status,
+      normalized.failureCategory,
+      normalized.retryCount,
       normalized.errorMessage,
       normalized.generatedAt
     );
@@ -1961,6 +1991,7 @@ function createArticleRepository({
              title_en AS titleEn, summary_text_en AS summaryTextEn,
              title_it AS titleIt, summary_text_it AS summaryTextIt,
              sources_json AS sourcesJson, article_count AS articleCount, model, status,
+             failure_category AS failureCategory, retry_count AS retryCount,
              error_message AS errorMessage, generated_at AS generatedAt
       FROM thematic_summaries
       WHERE topic_key = ? AND period_start = ? AND period_end = ?
@@ -1984,6 +2015,7 @@ function createArticleRepository({
              title_en AS titleEn, summary_text_en AS summaryTextEn,
              title_it AS titleIt, summary_text_it AS summaryTextIt,
              sources_json AS sourcesJson, article_count AS articleCount, model, status,
+             failure_category AS failureCategory, retry_count AS retryCount,
              error_message AS errorMessage, generated_at AS generatedAt
       FROM thematic_summaries ts
       WHERE topic_key IN (${normalizedTopicKeys.map(() => '?').join(', ')})
@@ -1991,9 +2023,9 @@ function createArticleRepository({
           SELECT MAX(period_end)
           FROM thematic_summaries latest
           WHERE latest.topic_key = ts.topic_key
-            AND latest.status = 'completed'
+            AND latest.status IN ('completed', 'empty')
         )
-        AND status = 'completed'
+        AND status IN ('completed', 'empty')
       ORDER BY period_end DESC, topic_key ASC
     `).all(...normalizedTopicKeys);
 
@@ -2476,6 +2508,7 @@ function createArticleRepository({
     getArticlesByIds,
     getReadLaterArticles,
     getArticlesForThematicSummary,
+    hasPendingTopicProcessingForThematicSummary,
     upsertThematicSummary,
     getThematicSummary,
     listLatestThematicSummaries,

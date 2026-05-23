@@ -2,6 +2,7 @@ const rssParser = require('./rssParser');
 const database = require('./database');
 const logger = require('../utils/logger');
 const websocketService = require('./websocketService');
+const thematicSummaryService = require('./thematicSummaryService');
 const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const {
   classifyTopicDetailsForArticlesWithStatus,
@@ -254,6 +255,7 @@ async function processAiTopicsForPendingArticles(articles = [], options = {}) {
     );
     database.markArticlesAiTopicProcessing([...failedArticleIds], 'failed');
     database.markArticlesAiTopicProcessing([...cappedArticleIds], 'deferred');
+    scheduleThematicSummariesAfterTopicProcessing(attemptedArticleIds);
   } catch (error) {
     logger.warn(`Background AI topic processing failed: ${error.message}`);
     database.markArticlesAiTopicProcessing(articleIds, 'failed');
@@ -267,6 +269,18 @@ async function processAiTopicsForPendingArticles(articles = [], options = {}) {
       }
     }
   }
+}
+
+function scheduleThematicSummariesAfterTopicProcessing(classifiedArticleIds = []) {
+  if (!Array.isArray(classifiedArticleIds) || classifiedArticleIds.length === 0) {
+    return;
+  }
+
+  setTimeout(() => {
+    thematicSummaryService.generateDueSummaries({ broadcast: true }).catch((error) => {
+      logger.warn(`Thematic summary generation after topic processing failed: ${error.message}`);
+    });
+  }, 0);
 }
 
 function scheduleAiTopicsForPendingArticles(normalizedArticles = [], options = {}) {

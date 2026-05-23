@@ -214,6 +214,7 @@ module.exports = {
   getArticlesByIds: articleRepository.getArticlesByIds,
   getReadLaterArticles: articleRepository.getReadLaterArticles,
   getArticlesForThematicSummary: articleRepository.getArticlesForThematicSummary,
+  hasPendingTopicProcessingForThematicSummary: articleRepository.hasPendingTopicProcessingForThematicSummary,
   upsertThematicSummary: articleRepository.upsertThematicSummary,
   getThematicSummary: articleRepository.getThematicSummary,
   listLatestThematicSummaries: articleRepository.listLatestThematicSummaries,

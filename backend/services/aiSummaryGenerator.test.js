@@ -86,6 +86,29 @@ describe('aiSummaryGenerator', () => {
     expect(normalized.summaryTextByLocale.it).toBe('I regolatori hanno discusso nuove regole sui chip [1].');
   });
 
+  test('validates generated summary citations and language quality', () => {
+    expect(() => aiSummaryGenerator._validateGeneratedSummary({
+      summaryTextByLocale: {
+        en: 'Policy makers discussed a new chip rule with industry leaders and regulators during the window [2].',
+        it: 'I regolatori hanno discusso una nuova regola sui chip con aziende e istituzioni nella finestra [2].'
+      }
+    }, 1)).toThrow('invalid citation [2]');
+
+    expect(() => aiSummaryGenerator._validateGeneratedSummary({
+      summaryTextByLocale: {
+        en: 'Policy makers discussed a new chip rule with industry leaders and regulators during the window.',
+        it: 'I regolatori hanno discusso una nuova regola sui chip con aziende e istituzioni nella finestra [1].'
+      }
+    }, 1)).toThrow('English text has no citations');
+
+    expect(() => aiSummaryGenerator._validateGeneratedSummary({
+      summaryTextByLocale: {
+        en: 'Policy makers discussed a new chip rule with industry leaders and regulators during the window [1].',
+        it: 'Policy makers discussed a new chip rule with industry leaders and regulators during the window [1].'
+      }
+    }, 1)).toThrow('identical');
+  });
+
   test.each([
     ['configured thematic summary model', 'summary-model', 'summary-model'],
     ['default thematic summary model', undefined, 'deepseek/deepseek-v4-flash']

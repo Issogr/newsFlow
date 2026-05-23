@@ -79,7 +79,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('33');
+    expect(migrationVersion).toBe('34');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -105,7 +105,7 @@ describe('database migrations', () => {
     expect(passwordSetupTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'purpose', 'expires_at', 'used_at']));
     expect(apiTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'token_prefix', 'expires_at', 'revoked_at', 'last_used_at']));
     expect(readLaterColumns).toEqual(expect.arrayContaining(['user_id', 'article_id', 'saved_at']));
-    expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['topic_key', 'period_start', 'period_end', 'summary_text', 'title_en', 'summary_text_en', 'title_it', 'summary_text_it', 'sources_json']));
+    expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['topic_key', 'period_start', 'period_end', 'summary_text', 'title_en', 'summary_text_en', 'title_it', 'summary_text_it', 'sources_json', 'failure_category', 'retry_count']));
     expect(podcastSummaryColumns).toEqual(expect.arrayContaining(['period_start', 'period_end', 'script_text', 'title_en', 'script_text_en', 'title_it', 'script_text_it', 'audio_blob', 'audio_status', 'audio_voice', 'sources_json']));
     expect(articleIndexNames).toContain('idx_articles_owner_published_id');
     expect(userIndexNames).toContain('idx_users_username_lower');
@@ -162,7 +162,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('33');
+    expect(migratedVersion).toBe('34');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
@@ -281,7 +281,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('33');
+    expect(migratedVersion).toBe('34');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -394,7 +394,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
 
-    expect(migratedVersion).toBe('33');
+    expect(migratedVersion).toBe('34');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -963,9 +963,30 @@ describe('database queries and user data', () => {
       title: 'Technology briefing',
       titleByLocale: expect.objectContaining({ it: 'Sintesi tecnologia' }),
       summaryTextByLocale: expect.objectContaining({ it: 'I chip AI hanno accelerato nella finestra [1].' }),
-      sources: [expect.objectContaining({ articleId: 'summary-global-tech' })]
+      sources: [expect.objectContaining({ articleId: 'summary-global-tech' })],
+      failureCategory: '',
+      retryCount: 0
     }));
     expect(database.listLatestThematicSummaries(['technology'])).toHaveLength(1);
+
+    const emptySummary = database.upsertThematicSummary({
+      topicKey: 'technology',
+      topicLabel: 'Technology',
+      topics: ['Tecnologia'],
+      periodStart: windowEnd,
+      periodEnd: '2025-05-21T19:00:00.000Z',
+      title: 'No Technology stories',
+      summaryText: 'No technology stories were available for this summary window.',
+      titleByLocale: { en: 'No Technology stories', it: 'Nessuna notizia per questo topic' },
+      summaryTextByLocale: {
+        en: 'No technology stories were available for this summary window.',
+        it: 'Nessuna notizia disponibile per questo topic in questa finestra di riepilogo.'
+      },
+      status: 'empty'
+    });
+
+    expect(emptySummary).toEqual(expect.objectContaining({ status: 'empty', articleCount: 0 }));
+    expect(database.listLatestThematicSummaries(['technology'])[0]).toEqual(expect.objectContaining({ status: 'empty' }));
   });
 
   test('persists podcast summaries with localized scripts and audio payloads', () => {

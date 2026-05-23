@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 33;
+  const CURRENT_SCHEMA_VERSION = 34;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getPodcastSummariesSchemaSql() {
@@ -278,6 +278,8 @@ function createDatabaseSchema({ logger }) {
         article_count INTEGER NOT NULL DEFAULT 0,
         model TEXT NOT NULL DEFAULT '',
         status TEXT NOT NULL DEFAULT 'completed',
+        failure_category TEXT NOT NULL DEFAULT '',
+        retry_count INTEGER NOT NULL DEFAULT 0,
         error_message TEXT,
         generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(topic_key, period_start, period_end)
@@ -414,6 +416,10 @@ function createDatabaseSchema({ logger }) {
 
     if (!articleColumns.has('ai_story_group_match_ids') || !articleColumns.has('ai_story_group_confidence') || !articleColumns.has('ai_story_group_reason')) {
       return 32;
+    }
+
+    if (!thematicSummaryColumns.has('failure_category') || !thematicSummaryColumns.has('retry_count')) {
+      return 33;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -858,6 +864,21 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 33);
       logger.info('Migrated DB schema from version 32 to 33');
+      migrateSchema(database, 33);
+      return;
+    }
+
+    if (currentVersion === 33) {
+      const thematicSummaryColumns = getColumnNames(database, 'thematic_summaries');
+      if (!thematicSummaryColumns.has('failure_category')) {
+        database.exec("ALTER TABLE thematic_summaries ADD COLUMN failure_category TEXT NOT NULL DEFAULT ''");
+      }
+      if (!thematicSummaryColumns.has('retry_count')) {
+        database.exec('ALTER TABLE thematic_summaries ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0');
+      }
+
+      setCurrentSchemaVersion(database, 34);
+      logger.info('Migrated DB schema from version 33 to 34');
       return;
     }
 
