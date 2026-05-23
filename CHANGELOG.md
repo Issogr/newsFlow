@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.5.0
+
+- added an AI-generated podcast briefing story at the start of the topic story rail, using the same scheduled summary article set and cached reader text without triggering reader extraction during generation
+- generated podcast scripts in English and Italian, with Italian-only audio playback when TTS generation is available
+- switched the default podcast TTS provider model to Gemini 3.1 Flash TTS Preview with a Gemini-compatible voice
+- requested Gemini podcast audio as PCM and stored it as browser-playable WAV audio
+- surfaced podcast audio generation, completion, and failure state through summary refreshes instead of leaving retries silent
+
 ## 3.4.2
 
 - added AI-assisted story grouping that can merge articles from different RSS sources when their titles and descriptions describe the same event, while keeping grouping decisions out of feed request latency

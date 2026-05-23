@@ -1,6 +1,7 @@
 const database = require('./database');
 const logger = require('../utils/logger');
 const aiSummaryGenerator = require('./aiSummaryGenerator');
+const aiPodcastGenerator = require('./aiPodcastGenerator');
 const readerService = require('./readerService');
 const websocketService = require('./websocketService');
 const { parseIntegerEnv } = require('../utils/env');
@@ -224,6 +225,10 @@ function buildSummaryId(topicKey, periodStart, periodEnd) {
     .replace(/[^a-zA-Z0-9_-]+/g, '-');
 }
 
+function buildPodcastSummaryId(periodStart, periodEnd) {
+  return buildSummaryId('podcast', periodStart, periodEnd);
+}
+
 function isFailedSummaryRetryDue(summary = {}, referenceDate = new Date()) {
   if (summary.status !== 'failed' || SUMMARY_FAILED_RETRY_COOLDOWN_MS <= 0) {
     return true;
@@ -290,6 +295,138 @@ function getCandidateArticlesForWindow(window) {
   });
 
   return [...byId.values()];
+}
+
+function sortArticlesForPodcast(articles = []) {
+  return [...articles].sort((left, right) => {
+    const dateComparison = String(right.pubDate || '').localeCompare(String(left.pubDate || ''));
+    return dateComparison || String(right.id || '').localeCompare(String(left.id || ''));
+  });
+}
+
+function getPodcastScriptTextByLocale(summary = {}) {
+  const summaryTextByLocale = summary.summaryTextByLocale && typeof summary.summaryTextByLocale === 'object'
+    ? summary.summaryTextByLocale
+    : {};
+  return {
+    en: String(summaryTextByLocale.en || summary.summaryText || '').trim(),
+    it: String(summaryTextByLocale.it || summaryTextByLocale.en || summary.summaryText || '').trim()
+  };
+}
+
+function buildPodcastUpdatePayload(summary = {}, updates = {}) {
+  const scriptTextByLocale = getPodcastScriptTextByLocale(summary);
+  return {
+    id: summary.id || buildPodcastSummaryId(summary.periodStart, summary.periodEnd),
+    periodStart: summary.periodStart,
+    periodEnd: summary.periodEnd,
+    title: summary.title || summary.titleByLocale?.en || summary.titleByLocale?.it || 'News podcast',
+    scriptText: scriptTextByLocale.en || scriptTextByLocale.it,
+    titleByLocale: summary.titleByLocale || { en: summary.title || 'News podcast', it: summary.title || 'Podcast news' },
+    scriptTextByLocale,
+    sources: summary.sources || [],
+    articleCount: summary.articleCount || 0,
+    model: summary.model || aiPodcastGenerator._getScriptConfig().model,
+    status: summary.status || 'completed',
+    ...updates,
+    generatedAt: new Date().toISOString()
+  };
+}
+
+function broadcastSummariesRefresh(options = {}) {
+  if (options.broadcast !== false) {
+    websocketService.broadcastFeedRefresh({ reason: 'summaries' });
+  }
+}
+
+function shouldRetryPodcastAudio(summary = {}, options = {}) {
+  if (summary.status !== 'completed') {
+    return false;
+  }
+
+  if (!getPodcastScriptTextByLocale(summary).it) {
+    return false;
+  }
+
+  const ttsConfig = aiPodcastGenerator._getTtsConfig();
+  if (!ttsConfig.enabled) {
+    logger.info(`AI podcast audio retry skipped: reason=${ttsConfig.apiKey ? 'disabled' : 'missing_api_key'}, windowEnd=${summary.periodEnd}`);
+    return false;
+  }
+
+  const expectedVoice = aiPodcastGenerator._getTtsVoice();
+  const audioMatchesConfig = summary.audioStatus === 'completed'
+    && summary.audioModel === ttsConfig.model
+    && summary.audioVoice === expectedVoice;
+  if (audioMatchesConfig) {
+    return false;
+  }
+
+  if (summary.audioStatus === 'failed' && summary.audioVoice === expectedVoice && !isFailedSummaryRetryDue({ ...summary, status: 'failed' }, options.referenceDate || new Date())) {
+    logger.debug(`AI podcast audio retry skipped during cooldown: windowEnd=${summary.periodEnd}`);
+    return false;
+  }
+
+  return true;
+}
+
+async function retryPodcastAudio(summary = {}, options = {}) {
+  if (!shouldRetryPodcastAudio(summary, options)) {
+    return { summary, generatedNow: false };
+  }
+
+  const scriptTextByLocale = getPodcastScriptTextByLocale(summary);
+  const ttsConfig = aiPodcastGenerator._getTtsConfig();
+  const expectedVoice = aiPodcastGenerator._getTtsVoice();
+  const generatingSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(summary, {
+    audioStatus: 'generating',
+    audioErrorMessage: '',
+    audioModel: ttsConfig.model,
+    audioVoice: expectedVoice,
+    status: 'completed'
+  }));
+  broadcastSummariesRefresh(options);
+
+  try {
+    const audio = await aiPodcastGenerator.generateItalianAudio(scriptTextByLocale.it);
+    if (!audio) {
+      const unavailableSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
+        audioStatus: 'not_available',
+        audioErrorMessage: '',
+        audioModel: ttsConfig.model,
+        audioVoice: expectedVoice,
+        status: 'completed'
+      }));
+      broadcastSummariesRefresh(options);
+      return { summary: unavailableSummary, generatedNow: false };
+    }
+
+    return {
+      summary: database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
+        audio,
+        audioStatus: 'completed',
+        audioErrorMessage: '',
+        audioModel: audio.model || ttsConfig.model,
+        audioVoice: audio.voice || expectedVoice,
+        status: 'completed'
+      })),
+      generatedNow: true
+    };
+  } catch (error) {
+    logger.warn(`AI podcast audio retry failed: windowEnd=${summary.periodEnd}, error=${error.message}`);
+    const failedSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
+      audioStatus: 'failed',
+      audioErrorMessage: error.message,
+      audioModel: ttsConfig.model,
+      audioVoice: expectedVoice,
+      status: 'completed'
+    }));
+    broadcastSummariesRefresh(options);
+    return {
+      summary: failedSummary,
+      generatedNow: false
+    };
+  }
 }
 
 async function prewarmReaderCacheForDueWindow(options = {}) {
@@ -418,6 +555,72 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
   }
 }
 
+async function generatePodcastForWindow(window, options = {}) {
+  const existingSummary = database.getPodcastSummary(window.periodStart, window.periodEnd);
+  if (existingSummary?.status === 'completed' && options.force !== true) {
+    return retryPodcastAudio(existingSummary, options);
+  }
+  if (existingSummary?.status === 'failed' && options.force !== true && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
+    logger.debug(`AI podcast retry skipped during cooldown: windowEnd=${window.periodEnd}`);
+    return { summary: null, generatedNow: false };
+  }
+
+  const articles = sortArticlesForPodcast(getCandidateArticlesForWindow(window));
+  if (articles.length === 0) {
+    return { summary: null, generatedNow: false };
+  }
+
+  const enrichedArticles = withCachedReaderText(articles);
+  const sources = buildSourceList(enrichedArticles);
+  const basePayload = {
+    id: buildPodcastSummaryId(window.periodStart, window.periodEnd),
+    periodStart: window.periodStart,
+    periodEnd: window.periodEnd,
+    articleCount: enrichedArticles.length,
+    sources,
+    generatedAt: new Date().toISOString()
+  };
+
+  try {
+    const generated = await aiPodcastGenerator.generatePodcastForArticles(window, enrichedArticles);
+    if (!generated) {
+      return { summary: null, generatedNow: false };
+    }
+
+    return {
+      summary: database.upsertPodcastSummary({
+        ...basePayload,
+        title: generated.title,
+        scriptText: generated.scriptText,
+        titleByLocale: generated.titleByLocale,
+        scriptTextByLocale: generated.scriptTextByLocale,
+        model: generated.model,
+        audio: generated.audio,
+        audioStatus: generated.audioStatus,
+        audioErrorMessage: generated.audioErrorMessage,
+        audioModel: generated.audio?.model || aiPodcastGenerator._getTtsConfig().model,
+        audioVoice: generated.audio?.voice || aiPodcastGenerator._getTtsVoice(),
+        status: 'completed'
+      }),
+      generatedNow: true
+    };
+  } catch (error) {
+    logger.warn(`AI podcast generation failed: windowEnd=${window.periodEnd}, error=${error.message}`);
+    database.upsertPodcastSummary({
+      ...basePayload,
+      title: 'News podcast',
+      scriptText: '',
+      titleByLocale: { en: 'News podcast', it: 'Podcast news' },
+      scriptTextByLocale: { en: '', it: '' },
+      model: aiPodcastGenerator._getScriptConfig().model,
+      audioStatus: 'not_available',
+      status: 'failed',
+      errorMessage: error.message
+    });
+    return { summary: null, generatedNow: false };
+  }
+}
+
 async function generateDueSummaries(options = {}) {
   if (generationPromise && options.force !== true) {
     return generationPromise;
@@ -445,11 +648,17 @@ async function generateDueSummaries(options = {}) {
       }
     }
 
+    const podcastResult = await generatePodcastForWindow(window, options);
+    if (podcastResult.summary?.status === 'completed') {
+      summaries.unshift(podcastResult.summary);
+    }
+    if (podcastResult.generatedNow) {
+      generatedCount += 1;
+    }
+
     if (generatedCount > 0) {
       logger.info(`Thematic summaries ready: windowEnd=${window.periodEnd}, count=${generatedCount}`);
-      if (options.broadcast !== false) {
-        websocketService.broadcastFeedRefresh({ reason: 'summaries' });
-      }
+      broadcastSummariesRefresh(options);
     }
 
     return {
@@ -469,15 +678,22 @@ function getLatestSummaries() {
     database.listLatestThematicSummaries(topicConfigs.map((topic) => topic.key)).map((summary) => [summary.topicKey, summary])
   );
 
+  const topicItems = topicConfigs
+    .map((topic) => {
+      const summary = latestByKey.get(topic.key);
+      return summary ? { ...summary, topicLabel: topic.label } : null;
+    })
+    .filter(Boolean);
+  const latestPodcast = database.getLatestPodcastSummary();
+
   return {
-    items: topicConfigs
-      .map((topic) => {
-        const summary = latestByKey.get(topic.key);
-        return summary ? { ...summary, topicLabel: topic.label } : null;
-      })
-      .filter(Boolean),
+    items: latestPodcast ? [latestPodcast, ...topicItems] : topicItems,
     topics: topicConfigs
   };
+}
+
+function getLatestPodcastSummary() {
+  return database.getLatestPodcastSummary();
 }
 
 function startScheduler() {
@@ -509,6 +725,7 @@ function stopScheduler() {
 
 module.exports = {
   getLatestSummaries,
+  getLatestPodcastSummary,
   generateDueSummaries,
   prewarmReaderCacheForDueWindow,
   startScheduler,
@@ -518,6 +735,7 @@ module.exports = {
   _isReaderPrewarmEnabled: isReaderPrewarmEnabled,
   _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,
   _getSummaryTopics: getSummaryTopics,
+  _generatePodcastForWindow: generatePodcastForWindow,
   _getPrewarmAttemptWindowCount: () => attemptedPrewarmArticleIdsByWindow.size,
   _prunePrewarmAttempts: prunePrewarmAttempts
 };

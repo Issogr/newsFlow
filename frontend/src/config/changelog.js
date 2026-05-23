@@ -1,13 +1,13 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.4.2',
+  version: '3.5.0',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '🧠 AI now helps group reworded RSS articles from different sources into one shared news card when they describe the same event.',
-      '📱 Thematic summaries now stay properly full screen on mobile without revealing the news list while scrolling.',
-      '🔔 New-article notices now stay visible during background topic and story updates until you refresh.'
+      '🎧 A new podcast briefing appears first in the topic story rail, generated from the same scheduled summary articles.',
+      '🌍 Podcast scripts are available in English and Italian based on your app language.',
+      '🔊 Italian audio playback is included when podcast TTS generation is available, using the Gemini TTS default configuration.'
     ]
   },
   it: {
@@ -15,9 +15,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '🧠 L\'AI ora aiuta a raggruppare in un\'unica news card articoli RSS riscritti da fonti diverse quando descrivono lo stesso evento.',
-      '📱 Le sintesi tematiche ora restano correttamente a schermo intero su mobile senza mostrare la lista delle news durante lo scroll.',
-      '🔔 Gli avvisi di nuove notizie ora restano visibili durante gli aggiornamenti in background di topic e storie finche non aggiorni.'
+      '🎧 Un nuovo briefing podcast appare per primo nella barra delle storie per topic, generato dagli stessi articoli delle sintesi programmate.',
+      '🌍 I testi podcast sono disponibili in inglese e italiano in base alla lingua dell\'app.',
+      '🔊 La riproduzione audio in italiano e inclusa quando la generazione TTS del podcast e disponibile, con la configurazione predefinita Gemini TTS.'
     ]
   }
 };

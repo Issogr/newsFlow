@@ -4,7 +4,8 @@ const TOPIC_LABELS = {
   crime: { en: 'Crime', it: 'Cronaca' },
   sport: { en: 'Sport', it: 'Sport' },
   entertainment: { en: 'Entertainment', it: 'Spettacolo' },
-  science: { en: 'Science', it: 'Scienza' }
+  science: { en: 'Science', it: 'Scienza' },
+  podcast: { en: 'News podcast', it: 'Podcast news' }
 };
 
 function getSupportedLocale(locale) {

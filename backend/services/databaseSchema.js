@@ -4,8 +4,40 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 30;
+  const CURRENT_SCHEMA_VERSION = 32;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
+
+  function getPodcastSummariesSchemaSql() {
+    return `
+      CREATE TABLE IF NOT EXISTS podcast_summaries (
+        id TEXT PRIMARY KEY,
+        period_start TEXT NOT NULL,
+        period_end TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        script_text TEXT NOT NULL DEFAULT '',
+        title_en TEXT NOT NULL DEFAULT '',
+        script_text_en TEXT NOT NULL DEFAULT '',
+        title_it TEXT NOT NULL DEFAULT '',
+        script_text_it TEXT NOT NULL DEFAULT '',
+        sources_json TEXT NOT NULL DEFAULT '[]',
+        article_count INTEGER NOT NULL DEFAULT 0,
+        script_model TEXT NOT NULL DEFAULT '',
+        audio_model TEXT NOT NULL DEFAULT '',
+        audio_voice TEXT NOT NULL DEFAULT '',
+        audio_mime_type TEXT NOT NULL DEFAULT '',
+        audio_blob BLOB,
+        audio_status TEXT NOT NULL DEFAULT 'not_available',
+        audio_error_message TEXT,
+        status TEXT NOT NULL DEFAULT 'completed',
+        error_message TEXT,
+        generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(period_start, period_end)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_podcast_summaries_period
+      ON podcast_summaries (period_end DESC);
+    `;
+  }
 
   function getAllConfiguredSourceGroupIds() {
     return getConfiguredSourceGroups().map((source) => source.id);
@@ -251,6 +283,8 @@ function createDatabaseSchema({ logger }) {
       CREATE INDEX IF NOT EXISTS idx_thematic_summaries_topic_period
       ON thematic_summaries (topic_key, period_end DESC);
 
+      ${getPodcastSummariesSchemaSql()}
+
       CREATE VIRTUAL TABLE IF NOT EXISTS article_search USING fts5(
         article_id UNINDEXED,
         title,
@@ -364,6 +398,15 @@ function createDatabaseSchema({ logger }) {
 
     if (!articleColumns.has('story_group_id') || !articleColumns.has('ai_story_group_processed_at') || !articleColumns.has('ai_story_group_status') || !articleColumns.has('ai_story_group_model')) {
       return 28;
+    }
+
+    if (!tableExists(database, 'podcast_summaries')) {
+      return 30;
+    }
+
+    const podcastSummaryColumns = getColumnNames(database, 'podcast_summaries');
+    if (!podcastSummaryColumns.has('audio_voice')) {
+      return 31;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -769,6 +812,27 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 30);
       logger.info('Migrated DB schema from version 29 to 30');
+      migrateSchema(database, 30);
+      return;
+    }
+
+    if (currentVersion === 30) {
+      database.exec(getPodcastSummariesSchemaSql());
+
+      setCurrentSchemaVersion(database, 31);
+      logger.info('Migrated DB schema from version 30 to 31');
+      migrateSchema(database, 31);
+      return;
+    }
+
+    if (currentVersion === 31) {
+      const podcastSummaryColumns = getColumnNames(database, 'podcast_summaries');
+      if (!podcastSummaryColumns.has('audio_voice')) {
+        database.exec("ALTER TABLE podcast_summaries ADD COLUMN audio_voice TEXT NOT NULL DEFAULT ''");
+      }
+
+      setCurrentSchemaVersion(database, 32);
+      logger.info('Migrated DB schema from version 31 to 32');
       return;
     }
 

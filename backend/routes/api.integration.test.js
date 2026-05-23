@@ -987,4 +987,88 @@ describe('API auth and user flows', () => {
 
     expect(meResponse.body.error.code).toBe('UNAUTHORIZED');
   });
+
+  test('serves podcast audio with byte ranges for media players', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'podcast-audio-user', password: 'secret123' })
+      .expect(201);
+    const sessionCookie = getSessionCookie(registerResponse);
+    const audioBytes = Buffer.from('0123456789');
+
+    database.upsertPodcastSummary({
+      id: 'podcast-audio-test',
+      periodStart: '2026-05-22T11:00:00.000Z',
+      periodEnd: '2026-05-22T17:00:00.000Z',
+      titleByLocale: { en: 'News podcast', it: 'Podcast news' },
+      scriptTextByLocale: { en: 'English script', it: 'Testo italiano' },
+      sources: [{ index: 1, articleId: 'article-1', title: 'Podcast article', source: 'BBC' }],
+      articleCount: 1,
+      model: 'summary-model',
+      audio: {
+        data: audioBytes.toString('base64'),
+        mimeType: 'audio/mpeg',
+        model: 'tts-model'
+      },
+      audioStatus: 'completed'
+    });
+
+    const fullResponse = await request(app)
+      .get('/api/podcast-summary/podcast-audio-test/audio')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(fullResponse.headers['accept-ranges']).toBe('bytes');
+    expect(fullResponse.headers['cache-control']).toContain('no-store');
+    expect(fullResponse.headers['content-length']).toBe(String(audioBytes.length));
+    expect(fullResponse.headers['content-type']).toContain('audio/mpeg');
+
+    const rangeResponse = await request(app)
+      .get('/api/podcast-summary/podcast-audio-test/audio')
+      .set('Cookie', sessionCookie)
+      .set('Range', 'bytes=2-5')
+      .expect(206);
+
+    expect(rangeResponse.headers['accept-ranges']).toBe('bytes');
+    expect(rangeResponse.headers['content-range']).toBe('bytes 2-5/10');
+    expect(rangeResponse.headers['content-length']).toBe('4');
+
+    const invalidRangeResponse = await request(app)
+      .get('/api/podcast-summary/podcast-audio-test/audio')
+      .set('Cookie', sessionCookie)
+      .set('Range', 'bytes=20-30')
+      .expect(416);
+
+    expect(invalidRangeResponse.headers['content-range']).toBe('bytes */10');
+
+    const wavBytes = Buffer.concat([
+      Buffer.from('RIFF'),
+      Buffer.from([36, 0, 0, 0]),
+      Buffer.from('WAVEfmt '),
+      Buffer.alloc(28)
+    ]);
+    database.upsertPodcastSummary({
+      id: 'podcast-wav-audio-test',
+      periodStart: '2026-05-22T17:00:00.000Z',
+      periodEnd: '2026-05-23T05:00:00.000Z',
+      titleByLocale: { en: 'News podcast', it: 'Podcast news' },
+      scriptTextByLocale: { en: 'English script', it: 'Testo italiano' },
+      sources: [{ index: 1, articleId: 'article-1', title: 'Podcast article', source: 'BBC' }],
+      articleCount: 1,
+      model: 'summary-model',
+      audio: {
+        data: wavBytes.toString('base64'),
+        mimeType: 'audio/mpeg',
+        model: 'tts-model'
+      },
+      audioStatus: 'completed'
+    });
+
+    const wavResponse = await request(app)
+      .get('/api/podcast-summary/podcast-wav-audio-test/audio')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(wavResponse.headers['content-type']).toContain('audio/wav');
+  });
 });

@@ -4,6 +4,7 @@ import {
   Film,
   FlaskConical,
   Globe2,
+  Headphones,
   HeartPulse,
   Landmark,
   Leaf,
@@ -27,6 +28,7 @@ const TOPIC_BADGE_CLASSES = {
   world: 'bg-[#D7ECFF] text-[#0C4A6E] ring-1 ring-inset ring-[#9CCBF4] hover:bg-[#C8E4FF]',
   climate: 'bg-[#CDEFE8] text-[#115E59] ring-1 ring-inset ring-[#86D4C4] hover:bg-[#BEE8DE]',
   security: 'bg-[#F8D3D7] text-[#991B1B] ring-1 ring-inset ring-[#E6A3AF] hover:bg-[#F4C4CA]',
+  podcast: 'bg-[#D8F3FF] text-[#075985] ring-1 ring-inset ring-[#83D4F2] hover:bg-[#C7EEFF]',
   fallback: 'bg-[#E2E8F0] text-[#334155] ring-1 ring-inset ring-[#B8C4D4] hover:bg-[#D7E0EA]'
 };
 
@@ -91,6 +93,10 @@ export function getTopicPresentation(topic) {
 
   if (/(security|sicurezza|war|guerra|defense|difesa)/.test(normalized)) {
     return createTopicPresentation(Shield, TOPIC_BADGE_CLASSES.security);
+  }
+
+  if (/(podcast|audio|briefing)/.test(normalized)) {
+    return createTopicPresentation(Headphones, TOPIC_BADGE_CLASSES.podcast);
   }
 
   return createTopicPresentation(Tags, TOPIC_BADGE_CLASSES.fallback);

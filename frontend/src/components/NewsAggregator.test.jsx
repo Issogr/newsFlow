@@ -312,6 +312,64 @@ describe('NewsAggregator', () => {
     expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
   });
 
+  test('updates the open summary panel when refreshed summary data arrives', async () => {
+    let onSummariesRefresh;
+
+    useTopicRefreshSocket.mockImplementation(({ onSummariesRefresh: handleSummariesRefresh }) => {
+      onSummariesRefresh = handleSummariesRefresh;
+    });
+    fetchNews.mockResolvedValue({
+      items: [createGroup('group-1', 'Top headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    fetchThematicSummaries
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'summary-technology',
+            topicKey: 'technology',
+            topicLabel: 'Technology',
+            topics: ['Technology'],
+            periodStart: '2026-05-21T07:00:00.000Z',
+            periodEnd: '2026-05-21T13:00:00.000Z',
+            titleByLocale: { en: 'Technology briefing', it: 'Sintesi tecnologia' },
+            summaryTextByLocale: { en: 'First technology update [1].', it: 'Primo aggiornamento tecnologia [1].' },
+            articleCount: 1,
+            sources: []
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'summary-technology',
+            topicKey: 'technology',
+            topicLabel: 'Technology',
+            topics: ['Technology'],
+            periodStart: '2026-05-21T07:00:00.000Z',
+            periodEnd: '2026-05-21T13:00:00.000Z',
+            titleByLocale: { en: 'Technology briefing', it: 'Sintesi tecnologia' },
+            summaryTextByLocale: { en: 'Updated technology update [1].', it: 'Aggiornamento tecnologia aggiornato [1].' },
+            articleCount: 2,
+            sources: []
+          }
+        ]
+      });
+
+    await renderNewsAggregator();
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Technology summary' }));
+
+    expect(screen.getByText('1 article evaluated')).toBeInTheDocument();
+
+    await act(async () => {
+      await onSummariesRefresh({ refresh: true, reason: 'summaries' });
+    });
+
+    expect(await screen.findByText('2 articles evaluated')).toBeInTheDocument();
+    expect(screen.queryByText('1 article evaluated')).not.toBeInTheDocument();
+  });
+
   test('ignores stale thematic summary responses after a newer refresh', async () => {
     let onSummariesRefresh;
     const firstSummariesRequest = createDeferred();

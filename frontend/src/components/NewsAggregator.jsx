@@ -275,6 +275,13 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     ? currentUser.sourceCatalog
     : sourceCatalog;
   const readThematicSummariesStorageKey = useMemo(() => getReadThematicSummariesStorageKey(currentUser), [currentUser]);
+  const displayedThematicSummary = useMemo(() => {
+    if (!selectedThematicSummary?.id) {
+      return null;
+    }
+
+    return thematicSummaries.find((summary) => summary?.id === selectedThematicSummary.id) || selectedThematicSummary;
+  }, [selectedThematicSummary, thematicSummaries]);
 
   const visibleAvailableSources = useMemo(() => {
     return availableSources.filter((source) => !excludedSourceIds.includes(source.id));
@@ -908,9 +915,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         />
       )}
 
-      {selectedThematicSummary && (
+      {displayedThematicSummary && (
         <ThematicSummaryPanel
-          summary={selectedThematicSummary}
+          summary={displayedThematicSummary}
           locale={locale}
           t={t}
           onClose={() => setSelectedThematicSummary(null)}

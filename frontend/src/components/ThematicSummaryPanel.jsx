@@ -4,6 +4,7 @@ import useLockBodyScroll from '../hooks/useLockBodyScroll';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { getTopicPresentation } from '../topicPresentation';
 import { getLocalizedThematicSummary } from '../utils/thematicSummaryLocale';
+import PodcastAudioPlayer from './PodcastAudioPlayer';
 
 function formatSummaryDate(value, locale) {
   const date = new Date(value);
@@ -22,6 +23,10 @@ function splitSummaryParagraphs(summaryText = '') {
     .split(/\n{2,}/u)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
+}
+
+function isPodcastSummary(summary = {}) {
+  return summary?.type === 'podcast' || summary?.topicKey === 'podcast';
 }
 
 function renderSourceChip(source, key) {
@@ -78,8 +83,10 @@ const ThematicSummaryPanel = ({ summary, locale, t, onClose }) => {
   const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [locale, summary]);
   const paragraphs = useMemo(() => splitSummaryParagraphs(localizedSummary.displaySummaryText), [localizedSummary.displaySummaryText]);
   const sourceByIndex = useMemo(() => new Map((summary?.sources || []).map((source) => [Number(source.index), source])), [summary?.sources]);
-  const primaryPresentation = getTopicPresentation(summary?.topics?.[0] || summary?.topicLabel);
+  const isPodcast = isPodcastSummary(summary);
+  const primaryPresentation = getTopicPresentation(summary?.topicKey || summary?.topics?.[0] || summary?.topicLabel);
   const PrimaryIcon = primaryPresentation.Icon;
+  const closeLabel = isPodcast ? t('closePodcastSummary') : t('closeThematicSummary');
 
   useLockBodyScroll();
 
@@ -106,7 +113,7 @@ const ThematicSummaryPanel = ({ summary, locale, t, onClose }) => {
       <button
         type="button"
         className="absolute inset-0 hidden cursor-default lg:block"
-        aria-label={t('closeThematicSummary')}
+        aria-label={closeLabel}
         onClick={onClose}
       />
 
@@ -118,7 +125,7 @@ const ThematicSummaryPanel = ({ summary, locale, t, onClose }) => {
                 <PrimaryIcon className="h-5 w-5" aria-hidden="true" />
               </span>
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">{t('thematicSummary')}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">{isPodcast ? t('podcastBriefing') : t('thematicSummary')}</p>
                 <h2 className="truncate text-base font-semibold text-stone-900">{localizedSummary.displayTopicLabel}</h2>
               </div>
             </div>
@@ -127,7 +134,7 @@ const ThematicSummaryPanel = ({ summary, locale, t, onClose }) => {
               type="button"
               onClick={onClose}
               className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-500 shadow-sm transition-colors hover:bg-stone-100 hover:text-stone-800"
-              aria-label={t('closeThematicSummary')}
+              aria-label={closeLabel}
             >
               <X className="h-5 w-5" />
             </button>
@@ -149,6 +156,24 @@ const ThematicSummaryPanel = ({ summary, locale, t, onClose }) => {
               </div>
 
               <article className="rounded-[2rem] border border-stone-200/80 bg-white/95 px-6 py-8 shadow-[0_24px_70px_rgba(15,23,42,0.08)] md:px-10 md:py-10">
+                {isPodcast && summary.audioStatus === 'completed' && summary.audioUrl && (
+                  <div className="mb-7">
+                    <PodcastAudioPlayer src={summary.audioUrl} t={t} />
+                  </div>
+                )}
+
+                {isPodcast && summary.audioStatus !== 'completed' && (
+                  <div className="mb-7 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900" aria-live="polite">
+                    {summary.audioStatus === 'generating'
+                      ? t('podcastAudioGenerating')
+                      : (summary.audioStatus === 'failed' ? t('podcastAudioFailed') : t('podcastAudioUnavailable'))}
+                  </div>
+                )}
+
+                {isPodcast && localizedSummary.displayTitle && (
+                  <h3 className="mb-6 text-2xl font-semibold tracking-tight text-stone-950 md:text-3xl">{localizedSummary.displayTitle}</h3>
+                )}
+
                 <div className="space-y-6 text-[1.05rem] leading-8 tracking-[0.01em] text-stone-800 md:text-lg md:leading-9">
                   {paragraphs.map((paragraph, index) => (
                     <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex)}</p>

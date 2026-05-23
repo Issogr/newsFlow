@@ -1645,6 +1645,114 @@ function createArticleRepository({
     };
   }
 
+  function normalizePodcastAudioData(audioData) {
+    if (!audioData) {
+      return null;
+    }
+
+    if (Buffer.isBuffer(audioData)) {
+      return audioData;
+    }
+
+    if (typeof audioData === 'string') {
+      const base64Data = audioData.includes(',') && /^data:audio\//i.test(audioData)
+        ? audioData.slice(audioData.indexOf(',') + 1)
+        : audioData;
+      try {
+        const buffer = Buffer.from(base64Data, 'base64');
+        return buffer.length > 0 ? buffer : null;
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  function normalizePodcastSummaryPayload(summary = {}) {
+    const periodStart = String(summary.periodStart || '').trim();
+    const periodEnd = String(summary.periodEnd || '').trim();
+
+    if (!periodStart || !periodEnd) {
+      return null;
+    }
+
+    const id = String(summary.id || `podcast:${periodStart}:${periodEnd}`).trim();
+    const titleByLocale = summary.titleByLocale && typeof summary.titleByLocale === 'object' ? summary.titleByLocale : {};
+    const scriptTextByLocale = summary.scriptTextByLocale && typeof summary.scriptTextByLocale === 'object' ? summary.scriptTextByLocale : {};
+    const titleEn = String(summary.titleEn || titleByLocale.en || summary.title || '').trim().slice(0, 180);
+    const titleIt = String(summary.titleIt || titleByLocale.it || titleEn || summary.title || '').trim().slice(0, 180);
+    const scriptTextEn = String(summary.scriptTextEn || scriptTextByLocale.en || summary.scriptText || '').trim();
+    const scriptTextIt = String(summary.scriptTextIt || scriptTextByLocale.it || scriptTextEn || summary.scriptText || '').trim();
+    const audioBlob = normalizePodcastAudioData(summary.audioData || summary.audio?.data || null);
+    const requestedAudioStatus = String(summary.audioStatus || (audioBlob ? 'completed' : 'not_available')).trim().slice(0, 40);
+    const audioStatus = requestedAudioStatus === 'completed' && !audioBlob ? 'not_available' : requestedAudioStatus;
+
+    return {
+      id,
+      periodStart,
+      periodEnd,
+      title: titleEn || titleIt,
+      scriptText: scriptTextEn || scriptTextIt,
+      titleEn,
+      scriptTextEn,
+      titleIt,
+      scriptTextIt,
+      sourcesJson: JSON.stringify(normalizeSummarySources(summary.sources || [])),
+      articleCount: Math.max(0, Number(summary.articleCount) || 0),
+      scriptModel: String(summary.scriptModel || summary.model || '').trim().slice(0, 120),
+      audioModel: String(summary.audioModel || summary.audio?.model || '').trim().slice(0, 120),
+      audioVoice: String(summary.audioVoice || summary.audio?.voice || '').trim().slice(0, 120),
+      audioMimeType: String(summary.audioMimeType || summary.audio?.mimeType || '').trim().slice(0, 120),
+      audioBlob,
+      audioStatus,
+      audioErrorMessage: summary.audioErrorMessage ? String(summary.audioErrorMessage).trim().slice(0, 1000) : null,
+      status: String(summary.status || 'completed').trim().slice(0, 40),
+      errorMessage: summary.errorMessage ? String(summary.errorMessage).trim().slice(0, 1000) : null,
+      generatedAt: String(summary.generatedAt || new Date().toISOString()).trim()
+    };
+  }
+
+  function mapPodcastSummaryRow(row) {
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      type: 'podcast',
+      topicKey: 'podcast',
+      topicLabel: 'Podcast',
+      topics: ['Podcast'],
+      periodStart: row.periodStart,
+      periodEnd: row.periodEnd,
+      title: row.titleEn || row.title || row.titleIt || '',
+      summaryText: row.scriptTextEn || row.scriptText || row.scriptTextIt || '',
+      titleByLocale: {
+        en: row.titleEn || row.title || row.titleIt || '',
+        it: row.titleIt || row.titleEn || row.title || ''
+      },
+      summaryTextByLocale: {
+        en: row.scriptTextEn || row.scriptText || row.scriptTextIt || '',
+        it: row.scriptTextIt || row.scriptTextEn || row.scriptText || ''
+      },
+      sources: parseSummaryJson(row.sourcesJson),
+      articleCount: row.articleCount,
+      model: row.scriptModel,
+      audioModel: row.audioModel,
+      audioVoice: row.audioVoice,
+      audioMimeType: row.audioMimeType,
+      audioStatus: row.audioStatus,
+      audioErrorMessage: row.audioErrorMessage,
+      audioUrl: row.audioStatus === 'completed'
+        ? `/api/podcast-summary/${encodeURIComponent(row.id)}/audio?v=${encodeURIComponent([row.generatedAt, row.audioModel, row.audioVoice].filter(Boolean).join(':'))}`
+        : '',
+      status: row.status,
+      errorMessage: row.errorMessage,
+      generatedAt: row.generatedAt
+    };
+  }
+
   function upsertThematicSummary(summary = {}) {
     const normalized = normalizeSummaryPayload(summary);
     if (!normalized) {
@@ -1741,6 +1849,119 @@ function createArticleRepository({
     `).all(...normalizedTopicKeys);
 
     return rows.map(mapThematicSummaryRow).filter(Boolean);
+  }
+
+  function upsertPodcastSummary(summary = {}) {
+    const normalized = normalizePodcastSummaryPayload(summary);
+    if (!normalized) {
+      return null;
+    }
+
+    getDb().prepare(`
+      INSERT INTO podcast_summaries (
+        id, period_start, period_end, title, script_text, title_en, script_text_en,
+        title_it, script_text_it, sources_json, article_count, script_model,
+        audio_model, audio_voice, audio_mime_type, audio_blob, audio_status, audio_error_message,
+        status, error_message, generated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(period_start, period_end) DO UPDATE SET
+        title = excluded.title,
+        script_text = excluded.script_text,
+        title_en = excluded.title_en,
+        script_text_en = excluded.script_text_en,
+        title_it = excluded.title_it,
+        script_text_it = excluded.script_text_it,
+        sources_json = excluded.sources_json,
+        article_count = excluded.article_count,
+        script_model = excluded.script_model,
+        audio_model = excluded.audio_model,
+        audio_voice = excluded.audio_voice,
+        audio_mime_type = excluded.audio_mime_type,
+        audio_blob = excluded.audio_blob,
+        audio_status = excluded.audio_status,
+        audio_error_message = excluded.audio_error_message,
+        status = excluded.status,
+        error_message = excluded.error_message,
+        generated_at = excluded.generated_at
+    `).run(
+      normalized.id,
+      normalized.periodStart,
+      normalized.periodEnd,
+      normalized.title,
+      normalized.scriptText,
+      normalized.titleEn,
+      normalized.scriptTextEn,
+      normalized.titleIt,
+      normalized.scriptTextIt,
+      normalized.sourcesJson,
+      normalized.articleCount,
+      normalized.scriptModel,
+      normalized.audioModel,
+      normalized.audioVoice,
+      normalized.audioMimeType,
+      normalized.audioBlob,
+      normalized.audioStatus,
+      normalized.audioErrorMessage,
+      normalized.status,
+      normalized.errorMessage,
+      normalized.generatedAt
+    );
+
+    return getPodcastSummary(normalized.periodStart, normalized.periodEnd);
+  }
+
+  function getPodcastSummary(periodStart, periodEnd) {
+    const row = getDb().prepare(`
+      SELECT id, period_start AS periodStart, period_end AS periodEnd, title, script_text AS scriptText,
+             title_en AS titleEn, script_text_en AS scriptTextEn,
+             title_it AS titleIt, script_text_it AS scriptTextIt,
+             sources_json AS sourcesJson, article_count AS articleCount, script_model AS scriptModel,
+             audio_model AS audioModel, audio_voice AS audioVoice, audio_mime_type AS audioMimeType, audio_status AS audioStatus,
+             audio_error_message AS audioErrorMessage, status, error_message AS errorMessage,
+             generated_at AS generatedAt
+      FROM podcast_summaries
+      WHERE period_start = ? AND period_end = ?
+      LIMIT 1
+    `).get(periodStart, periodEnd);
+
+    return mapPodcastSummaryRow(row);
+  }
+
+  function getLatestPodcastSummary() {
+    const row = getDb().prepare(`
+      SELECT id, period_start AS periodStart, period_end AS periodEnd, title, script_text AS scriptText,
+             title_en AS titleEn, script_text_en AS scriptTextEn,
+             title_it AS titleIt, script_text_it AS scriptTextIt,
+             sources_json AS sourcesJson, article_count AS articleCount, script_model AS scriptModel,
+             audio_model AS audioModel, audio_voice AS audioVoice, audio_mime_type AS audioMimeType, audio_status AS audioStatus,
+             audio_error_message AS audioErrorMessage, status, error_message AS errorMessage,
+             generated_at AS generatedAt
+      FROM podcast_summaries
+      WHERE status = 'completed'
+      ORDER BY period_end DESC
+      LIMIT 1
+    `).get();
+
+    return mapPodcastSummaryRow(row);
+  }
+
+  function getPodcastSummaryAudio(podcastId) {
+    const row = getDb().prepare(`
+      SELECT audio_blob AS audioBlob, audio_mime_type AS audioMimeType
+      FROM podcast_summaries
+      WHERE id = ? AND status = 'completed' AND audio_status = 'completed' AND audio_blob IS NOT NULL
+      LIMIT 1
+    `).get(String(podcastId || '').trim());
+
+    if (!row?.audioBlob) {
+      return null;
+    }
+
+    return {
+      data: row.audioBlob,
+      mimeType: row.audioMimeType || 'audio/mpeg'
+    };
   }
 
   function countArticles(options = {}) {
@@ -2109,6 +2330,10 @@ function createArticleRepository({
     upsertThematicSummary,
     getThematicSummary,
     listLatestThematicSummaries,
+    upsertPodcastSummary,
+    getPodcastSummary,
+    getLatestPodcastSummary,
+    getPodcastSummaryAudio,
     getReadLaterArticleIdSet,
     isReadLaterArticle,
     saveReadLaterArticles,
