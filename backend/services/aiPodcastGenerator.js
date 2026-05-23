@@ -95,12 +95,13 @@ function buildPrompt(window = {}, articles = []) {
     'Write a single podcast-style news script using only the provided articles.',
     'This is not topic-specific: include every newsworthy article in the input exactly once or as part of a coherent connected segment.',
     'Skip promotional shopping deals, coupon or affiliate sale posts, and product price-drop blurbs; do not read them as news.',
+    'The schedule window is coverage metadata only. Do not name the title or opening after a time of day such as morning, noon, midday, afternoon, evening, night, mattina, mezzogiorno, pomeriggio, or sera.',
     'The script should feel natural when read aloud: quick introduction, fluid transitions, concise context, then a short closing.',
     'Do not invent facts, do not use outside knowledge, and do not add bracket citations because the script may be converted to speech.',
     'Mention source names naturally only when useful. Avoid bullet lists, markdown, stage directions, timestamps, and sound effects.',
     'Generate both supported languages: English and Italian. The Italian script will be used for text-to-speech audio.',
     'Return minified JSON only. Do not use markdown fences or prose outside JSON.',
-    'Return this exact shape: {"en":{"title":"Podcast title","script":"speakable script"},"it":{"title":"Titolo podcast","script":"testo podcast parlato"}}.',
+    'Return this exact shape: {"en":{"title":"News briefing","script":"speakable script"},"it":{"title":"Briefing notizie","script":"testo podcast parlato"}}.',
     '',
     JSON.stringify({
       periodStart: window.periodStart,
@@ -108,6 +109,39 @@ function buildPrompt(window = {}, articles = []) {
       articles: articles.map((article, index) => buildArticlePayload(article, index, { articleTextLimit }))
     })
   ].join('\n');
+}
+
+function containsTimeOfDayLabel(value = '', locale = 'en') {
+  const normalized = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const pattern = locale === 'it'
+    ? /\b(mattina|mattino|mattutino|mezzogiorno|pranzo|pomeriggio|pomeridiano|sera|serale|notte|notturno)\b/u
+    : /\b(morning|midday|noon|afternoon|evening|night|tonight|lunchtime)\b/u;
+  return pattern.test(normalized);
+}
+
+function sanitizePodcastTitle(title = '', locale = 'en', fallbackTitle = '') {
+  const fallback = fallbackTitle || (locale === 'it' ? 'Briefing notizie' : 'News briefing');
+  const normalizedTitle = truncateText(title || fallback, 180);
+  return containsTimeOfDayLabel(normalizedTitle, locale) ? fallback : normalizedTitle;
+}
+
+function sanitizePodcastScript(script = '', locale = 'en') {
+  const text = String(script || '').trim();
+  if (!text) {
+    return '';
+  }
+
+  const intro = text.slice(0, 500);
+  const rest = text.slice(500);
+  const sanitizedIntro = locale === 'it'
+    ? intro
+      .replace(/\b(aggiornamento|notiziario|briefing)\s+(?:di|del|della|da)\s+(?:mezzogiorno|mattina|mattino|pomeriggio|sera|notte)\b/giu, '$1 delle notizie')
+      .replace(/\b(aggiornamento|notiziario|briefing)\s+(?:mattutino|pomeridiano|serale|notturno)\b/giu, '$1 delle notizie')
+    : intro
+      .replace(/\b(?:morning|midday|noon|afternoon|evening|night|tonight)\s+(news\s+)?(briefing|update|podcast|roundup)\b/giu, 'news $2')
+      .replace(/\b(news\s+)?(briefing|update|podcast|roundup)\s+(?:for|at|around|of)\s+(?:the\s+)?(?:morning|midday|noon|afternoon|evening|night)\b/giu, 'news $2');
+
+  return `${sanitizedIntro}${rest}`.trim();
 }
 
 function getCompletionTokenBudget(articleCount) {
@@ -120,8 +154,8 @@ function normalizeLocalizedPodcast(payload = {}, locale, fallbackTitle = '') {
     return null;
   }
 
-  const title = truncateText(localizedPayload.title || fallbackTitle, 180);
-  const script = String(localizedPayload.script || localizedPayload.text || '').trim();
+  const title = sanitizePodcastTitle(localizedPayload.title || fallbackTitle, locale, fallbackTitle);
+  const script = sanitizePodcastScript(localizedPayload.script || localizedPayload.text || '', locale);
 
   if (!script) {
     return null;
@@ -131,8 +165,8 @@ function normalizeLocalizedPodcast(payload = {}, locale, fallbackTitle = '') {
 }
 
 function normalizeGeneratedPodcast(payload = {}) {
-  const en = normalizeLocalizedPodcast(payload, 'en', 'News podcast');
-  const it = normalizeLocalizedPodcast(payload, 'it', 'Podcast news');
+  const en = normalizeLocalizedPodcast(payload, 'en', 'News briefing');
+  const it = normalizeLocalizedPodcast(payload, 'it', 'Briefing notizie');
 
   if (!en?.script || !it?.script) {
     return null;
@@ -520,6 +554,7 @@ module.exports = {
   _getScriptConfig: getScriptConfig,
   _getTtsConfig: getTtsConfig,
   _getTtsVoice: getTtsVoice,
+  _normalizeGeneratedPodcast: normalizeGeneratedPodcast,
   _parseJsonContent: parseJsonContent,
   _setAudioSpeechHttpClient: setAudioSpeechHttpClient,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader

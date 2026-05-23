@@ -35,6 +35,7 @@ describe('aiPodcastGenerator', () => {
 
     expect(prompt).toContain('Generate both supported languages: English and Italian');
     expect(prompt).toContain('Skip promotional shopping deals');
+    expect(prompt).toContain('Do not name the title or opening after a time of day');
     expect(payload.articles).toHaveLength(2);
     expect(payload.articles[0]).toEqual(expect.objectContaining({
       ref: 1,
@@ -47,6 +48,24 @@ describe('aiPodcastGenerator', () => {
     }));
     expect(payload.articles[0]).not.toHaveProperty('id');
     expect(payload.articles[0]).not.toHaveProperty('url');
+  });
+
+  test('removes inferred time-of-day labels from generated podcast title and opening', () => {
+    const normalized = aiPodcastGenerator._normalizeGeneratedPodcast({
+      en: {
+        title: 'Noon news update',
+        script: 'Welcome to the midday news update. First story follows.'
+      },
+      it: {
+        title: 'Notiziario di Mezzogiorno',
+        script: 'Benvenuti all\'aggiornamento di mezzogiorno. Prima notizia.'
+      }
+    });
+
+    expect(normalized.titleByLocale.en).toBe('News briefing');
+    expect(normalized.titleByLocale.it).toBe('Briefing notizie');
+    expect(normalized.scriptTextByLocale.en).toBe('Welcome to the news update. First story follows.');
+    expect(normalized.scriptTextByLocale.it).toBe('Benvenuti all\'aggiornamento delle notizie. Prima notizia.');
   });
 
   test('extracts base64 audio payloads from OpenRouter-style responses', () => {

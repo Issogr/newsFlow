@@ -74,6 +74,7 @@ function buildPrompt(topicConfig = {}, articles = []) {
     'Cite article references inline with bracketed numbers like [1] when mentioning a fact.',
     'Do not invent facts, do not use outside knowledge, and do not cite references that are not present in the input.',
     'Exclude promotional shopping deals, coupon or affiliate sale posts, and product price-drop blurbs; do not summarize them as news.',
+    'The schedule window is coverage metadata only. Do not name the title or opening after a time of day such as morning, noon, midday, afternoon, evening, night, mattina, mezzogiorno, pomeriggio, or sera.',
     'Generate the briefing in both supported languages: English and Italian.',
     'Return minified JSON only. Do not use markdown fences or prose outside JSON.',
     'Return this exact shape: {"en":{"title":"Brief title","paragraphs":["paragraph with [1] citations"]},"it":{"title":"Titolo breve","paragraphs":["paragrafo con citazioni [1]"]}}.',
