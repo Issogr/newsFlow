@@ -14,6 +14,7 @@
 - removed promotional product price-drop sentences from generated summaries and podcast scripts as a final cleanup pass
 - streamed podcast audio through the browser media pipeline instead of eagerly downloading and decoding the full file
 - made podcast generation more reliable by rejecting non-speakable scripts, bounding TTS input size, validating audio responses, and retrying failed audio without regenerating scripts
+- split Gemini podcast TTS into natural narration chunks and stitched the raw PCM into one WAV file to avoid silent provider truncation while keeping pauses short
 - made AI story grouping more reliable by checking a larger nearby candidate pool while keeping model input capped, retrying recent misses after new articles, and recording match evidence
 - made thematic summaries more reliable by triggering due summaries after topic classification, validating citations/language quality, and storing terminal empty-window messages
 - hardened BFF proxy trust, CSP, session renewal, and public API invalid-token throttling

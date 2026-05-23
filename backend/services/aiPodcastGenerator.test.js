@@ -18,6 +18,14 @@ function createTestWavBuffer(byteLength = 2048) {
   return buffer;
 }
 
+function createTestPcmBuffer(byteLength = 2400, sampleValue = 1000) {
+  const buffer = Buffer.alloc(byteLength + (byteLength % 2));
+  for (let offset = 0; offset + 2 <= buffer.length; offset += 2) {
+    buffer.writeInt16LE(sampleValue, offset);
+  }
+  return buffer;
+}
+
 describe('aiPodcastGenerator', () => {
   const originalEnv = process.env;
 
@@ -217,6 +225,47 @@ describe('aiPodcastGenerator', () => {
     expect(wavBytes.readUInt32LE(40)).toBe(pcmBytes.length);
   });
 
+  test('splits Gemini TTS into stitched WAV chunks with short gaps', async () => {
+    process.env = {
+      ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key',
+      AI_PODCAST_TTS_CHUNK_MAX_BYTES: '500',
+      AI_PODCAST_TTS_CHUNK_SILENCE_MS: '10'
+    };
+    let callIndex = 0;
+    const pcmByteLength = 2400;
+    const httpClient = {
+      post: jest.fn().mockImplementation(() => {
+        callIndex += 1;
+        return Promise.resolve({
+          status: 200,
+          headers: { 'content-type': 'audio/pcm' },
+          data: createTestPcmBuffer(pcmByteLength, 1000 + callIndex)
+        });
+      })
+    };
+    const sentence = 'La Francia ha comunicato una decisione politica importante e il servizio spiega il contesto per gli ascoltatori.';
+    const longScript = `${sentence} ${sentence} ${sentence}\n\n${sentence} ${sentence} ${sentence}\n\n${sentence} ${sentence} ${sentence}`;
+    aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
+
+    const audio = await aiPodcastGenerator._generateItalianAudio(longScript);
+
+    expect(httpClient.post.mock.calls.length).toBeGreaterThan(1);
+    httpClient.post.mock.calls.forEach((call) => {
+      const input = call[1].input;
+      expect(Buffer.byteLength(input, 'utf8')).toBeLessThanOrEqual(500);
+      expect(input).not.toMatch(/\n/u);
+      expect(call[1]).toEqual(expect.objectContaining({ response_format: 'pcm' }));
+    });
+    const wavBytes = Buffer.from(audio.data, 'base64');
+    const silenceBytesPerGap = 480;
+    const expectedDataBytes = (httpClient.post.mock.calls.length * pcmByteLength)
+      + ((httpClient.post.mock.calls.length - 1) * silenceBytesPerGap);
+    expect(audio.mimeType).toBe('audio/wav');
+    expect(wavBytes.subarray(0, 4).toString('ascii')).toBe('RIFF');
+    expect(wavBytes.readUInt32LE(40)).toBe(expectedDataBytes);
+  });
+
   test('uses the OpenRouter audio speech endpoint for Italian TTS', async () => {
     process.env = {
       ...originalEnv,
@@ -305,10 +354,11 @@ describe('aiPodcastGenerator', () => {
       .rejects.toThrow('AI podcast TTS request failed (400): Provider returned 400: Invalid voice: UnknownVoice');
   });
 
-  test('rejects overlong TTS input before calling the provider', async () => {
+  test('rejects overlong non-stitchable TTS input before calling the provider', async () => {
     process.env = {
       ...originalEnv,
       OPENROUTER_API_KEY: 'test-key',
+      OPENROUTER_PODCAST_AUDIO_MODEL: 'tts-model',
       AI_PODCAST_TTS_MAX_INPUT_BYTES: '1000'
     };
     const httpClient = { post: jest.fn() };

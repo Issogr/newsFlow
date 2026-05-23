@@ -20,6 +20,11 @@ const DEFAULT_PROMPT_TEXT_BUDGET_CHARS = 42000;
 const DEFAULT_GEMINI_TTS_MAX_INPUT_BYTES = 3800;
 const DEFAULT_TTS_MAX_INPUT_BYTES = 6000;
 const DEFAULT_TTS_MIN_AUDIO_BYTES = 1024;
+const DEFAULT_GEMINI_TTS_CHUNK_MAX_BYTES = 700;
+const DEFAULT_TTS_MAX_CHUNKS = 8;
+const DEFAULT_TTS_CHUNK_SILENCE_MS = 60;
+const DEFAULT_TTS_CHUNK_EDGE_SILENCE_MS = 35;
+const PCM_SILENCE_THRESHOLD = 64;
 const MIN_PODCAST_SCRIPT_CHARS = 120;
 const GEMINI_TTS_PCM_SAMPLE_RATE_HZ = 24000;
 const GEMINI_TTS_PCM_CHANNELS = 1;
@@ -65,6 +70,20 @@ function getTtsMaxInputBytes(model = '') {
 
 function getTtsMinAudioBytes() {
   return parseIntegerEnv('AI_PODCAST_TTS_MIN_AUDIO_BYTES', DEFAULT_TTS_MIN_AUDIO_BYTES, { min: 44, max: 100000 });
+}
+
+function getTtsChunkMaxBytes(model = '') {
+  const maxInputBytes = getTtsMaxInputBytes(model);
+  const defaultLimit = isGeminiTtsModel(model) ? Math.min(DEFAULT_GEMINI_TTS_CHUNK_MAX_BYTES, maxInputBytes) : maxInputBytes;
+  return parseIntegerEnv('AI_PODCAST_TTS_CHUNK_MAX_BYTES', defaultLimit, { min: 300, max: maxInputBytes });
+}
+
+function getTtsMaxChunks() {
+  return parseIntegerEnv('AI_PODCAST_TTS_MAX_CHUNKS', DEFAULT_TTS_MAX_CHUNKS, { min: 1, max: 30 });
+}
+
+function getTtsChunkSilenceMs() {
+  return parseIntegerEnv('AI_PODCAST_TTS_CHUNK_SILENCE_MS', DEFAULT_TTS_CHUNK_SILENCE_MS, { min: 0, max: 500 });
 }
 
 function buildPrompt(window = {}, articles = []) {
@@ -328,6 +347,117 @@ function assertValidAudioBuffer(audioBuffer, mimeType = '') {
   }
 }
 
+function getUtf8ByteLength(value = '') {
+  return Buffer.byteLength(String(value || ''), 'utf8');
+}
+
+function normalizeTtsText(value = '') {
+  return String(value || '')
+    .replace(/\r\n?/gu, '\n')
+    .replace(/[ \t]+/gu, ' ')
+    .replace(/\n{3,}/gu, '\n\n')
+    .trim();
+}
+
+function normalizeTtsChunkText(value = '') {
+  return String(value || '').replace(/\s+/gu, ' ').trim();
+}
+
+function splitLongTextByWords(text = '', maxBytes = DEFAULT_GEMINI_TTS_CHUNK_MAX_BYTES) {
+  const parts = [];
+  let current = '';
+
+  for (const word of normalizeTtsChunkText(text).split(/\s+/u).filter(Boolean)) {
+    if (getUtf8ByteLength(word) > maxBytes) {
+      if (current) {
+        parts.push(current);
+        current = '';
+      }
+
+      let wordPart = '';
+      for (const character of [...word]) {
+        const candidate = `${wordPart}${character}`;
+        if (wordPart && getUtf8ByteLength(candidate) > maxBytes) {
+          parts.push(wordPart);
+          wordPart = character;
+        } else {
+          wordPart = candidate;
+        }
+      }
+      if (wordPart) {
+        parts.push(wordPart);
+      }
+      continue;
+    }
+
+    const candidate = current ? `${current} ${word}` : word;
+    if (current && getUtf8ByteLength(candidate) > maxBytes) {
+      parts.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+
+  if (current) {
+    parts.push(current);
+  }
+
+  return parts;
+}
+
+function splitParagraphIntoSentenceUnits(paragraph = '', maxBytes = DEFAULT_GEMINI_TTS_CHUNK_MAX_BYTES) {
+  const normalized = normalizeTtsChunkText(paragraph);
+  if (!normalized) {
+    return [];
+  }
+
+  if (getUtf8ByteLength(normalized) <= maxBytes) {
+    return [normalized];
+  }
+
+  return normalized
+    .split(/(?<=[.!?…])\s+/u)
+    .flatMap((sentence) => {
+      const cleanSentence = normalizeTtsChunkText(sentence);
+      if (!cleanSentence) {
+        return [];
+      }
+      return getUtf8ByteLength(cleanSentence) <= maxBytes
+        ? [cleanSentence]
+        : splitLongTextByWords(cleanSentence, maxBytes);
+    });
+}
+
+function splitTextIntoTtsChunks(text = '', maxBytes = DEFAULT_GEMINI_TTS_CHUNK_MAX_BYTES) {
+  const normalized = normalizeTtsText(text);
+  if (!normalized) {
+    return [];
+  }
+
+  const units = normalized
+    .split(/\n{2,}/u)
+    .flatMap((paragraph) => splitParagraphIntoSentenceUnits(paragraph, maxBytes));
+  const chunks = [];
+  let current = '';
+
+  for (const unit of units) {
+    const candidate = current ? `${current} ${unit}` : unit;
+    if (current && getUtf8ByteLength(candidate) > maxBytes) {
+      chunks.push(current);
+      current = unit;
+    } else {
+      current = candidate;
+    }
+  }
+
+  if (current) {
+    chunks.push(current);
+  }
+
+  return chunks;
+}
+
 function getTtsFailureCategory(error = {}) {
   if (error.code === 'PODCAST_TTS_PROVIDER_ERROR') {
     return 'provider_unavailable';
@@ -363,6 +493,177 @@ function wrapPcmBufferInWav(pcmBuffer, options = {}) {
   return Buffer.concat([header, normalizedPcmBuffer]);
 }
 
+function readWavPcmBuffer(wavBuffer) {
+  if (!isWavBuffer(wavBuffer)) {
+    throw createTtsError('AI podcast TTS response did not contain a valid WAV header', 'PODCAST_TTS_AUDIO_INVALID');
+  }
+
+  const format = {
+    audioFormat: 1,
+    channels: GEMINI_TTS_PCM_CHANNELS,
+    sampleRate: GEMINI_TTS_PCM_SAMPLE_RATE_HZ,
+    bitsPerSample: GEMINI_TTS_PCM_BITS_PER_SAMPLE
+  };
+  let pcmBuffer = null;
+  let offset = 12;
+
+  while (offset + 8 <= wavBuffer.length) {
+    const chunkId = wavBuffer.subarray(offset, offset + 4).toString('ascii');
+    const chunkSize = wavBuffer.readUInt32LE(offset + 4);
+    const chunkStart = offset + 8;
+    const chunkEnd = Math.min(chunkStart + chunkSize, wavBuffer.length);
+
+    if (chunkId === 'fmt ' && chunkSize >= 16 && chunkEnd <= wavBuffer.length) {
+      format.audioFormat = wavBuffer.readUInt16LE(chunkStart);
+      format.channels = wavBuffer.readUInt16LE(chunkStart + 2);
+      format.sampleRate = wavBuffer.readUInt32LE(chunkStart + 4);
+      format.bitsPerSample = wavBuffer.readUInt16LE(chunkStart + 14);
+    }
+
+    if (chunkId === 'data' && chunkEnd <= wavBuffer.length) {
+      pcmBuffer = Buffer.from(wavBuffer.subarray(chunkStart, chunkEnd));
+      break;
+    }
+
+    offset = chunkStart + chunkSize + (chunkSize % 2);
+  }
+
+  if (!pcmBuffer || pcmBuffer.length === 0) {
+    throw createTtsError('AI podcast TTS response did not include audio data', 'PODCAST_TTS_AUDIO_INVALID');
+  }
+  if (format.audioFormat !== 1) {
+    throw createTtsError('AI podcast TTS WAV response is not linear PCM', 'PODCAST_TTS_AUDIO_INVALID');
+  }
+
+  return { pcmBuffer, ...format };
+}
+
+function normalizeAudioBufferToPcm(audioBuffer, mimeType = '', requestedFormat = '') {
+  const normalizedMimeType = String(mimeType || '').split(';')[0].trim().toLowerCase();
+  const normalizedFormat = String(requestedFormat || '').trim().toLowerCase();
+  if (isWavBuffer(audioBuffer)) {
+    return readWavPcmBuffer(audioBuffer);
+  }
+  if (normalizedMimeType === 'audio/pcm' || normalizedFormat === 'pcm') {
+    if (!Buffer.isBuffer(audioBuffer) || audioBuffer.length === 0) {
+      throw createTtsError('AI podcast TTS response did not include audio data', 'PODCAST_TTS_AUDIO_INVALID');
+    }
+    return {
+      pcmBuffer: Buffer.from(audioBuffer),
+      audioFormat: 1,
+      channels: GEMINI_TTS_PCM_CHANNELS,
+      sampleRate: GEMINI_TTS_PCM_SAMPLE_RATE_HZ,
+      bitsPerSample: GEMINI_TTS_PCM_BITS_PER_SAMPLE
+    };
+  }
+
+  throw createTtsError(`AI podcast TTS chunk returned unsupported audio type ${mimeType || 'unknown'}`, 'PODCAST_TTS_AUDIO_INVALID');
+}
+
+function getPcmFormatKey(format = {}) {
+  return [format.audioFormat || 1, format.channels, format.sampleRate, format.bitsPerSample].join(':');
+}
+
+function getPcmSilenceBuffer(format = {}, durationMs = 0) {
+  const sampleRate = Number(format.sampleRate) || GEMINI_TTS_PCM_SAMPLE_RATE_HZ;
+  const channels = Number(format.channels) || GEMINI_TTS_PCM_CHANNELS;
+  const bitsPerSample = Number(format.bitsPerSample) || GEMINI_TTS_PCM_BITS_PER_SAMPLE;
+  const blockAlign = Math.max(1, Math.floor((channels * bitsPerSample) / 8));
+  const frameCount = Math.max(0, Math.round((sampleRate * Math.max(0, Number(durationMs) || 0)) / 1000));
+  return Buffer.alloc(frameCount * blockAlign);
+}
+
+function getPcmFrameAmplitude(pcmBuffer, offset, format = {}) {
+  if ((Number(format.bitsPerSample) || GEMINI_TTS_PCM_BITS_PER_SAMPLE) !== 16) {
+    return PCM_SILENCE_THRESHOLD + 1;
+  }
+
+  const channels = Number(format.channels) || GEMINI_TTS_PCM_CHANNELS;
+  let amplitude = 0;
+  for (let channel = 0; channel < channels; channel += 1) {
+    const sampleOffset = offset + (channel * 2);
+    if (sampleOffset + 2 <= pcmBuffer.length) {
+      amplitude = Math.max(amplitude, Math.abs(pcmBuffer.readInt16LE(sampleOffset)));
+    }
+  }
+  return amplitude;
+}
+
+function trimPcmSilence(pcmBuffer, format = {}, options = {}) {
+  if ((Number(format.bitsPerSample) || GEMINI_TTS_PCM_BITS_PER_SAMPLE) !== 16) {
+    return pcmBuffer;
+  }
+
+  const sampleRate = Number(format.sampleRate) || GEMINI_TTS_PCM_SAMPLE_RATE_HZ;
+  const channels = Number(format.channels) || GEMINI_TTS_PCM_CHANNELS;
+  const blockAlign = Math.max(1, Math.floor((channels * 16) / 8));
+  const frameCount = Math.floor(pcmBuffer.length / blockAlign);
+  let firstAudibleFrame = -1;
+  let lastAudibleFrame = -1;
+
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    if (getPcmFrameAmplitude(pcmBuffer, frame * blockAlign, format) > PCM_SILENCE_THRESHOLD) {
+      firstAudibleFrame = frame;
+      break;
+    }
+  }
+
+  for (let frame = frameCount - 1; frame >= 0; frame -= 1) {
+    if (getPcmFrameAmplitude(pcmBuffer, frame * blockAlign, format) > PCM_SILENCE_THRESHOLD) {
+      lastAudibleFrame = frame;
+      break;
+    }
+  }
+
+  if (firstAudibleFrame < 0 || lastAudibleFrame < firstAudibleFrame) {
+    return pcmBuffer;
+  }
+
+  const preserveStartFrames = Math.round((sampleRate * Math.max(0, Number(options.preserveStartMs) || 0)) / 1000);
+  const preserveEndFrames = Math.round((sampleRate * Math.max(0, Number(options.preserveEndMs) || 0)) / 1000);
+  const startFrame = Math.max(0, firstAudibleFrame - preserveStartFrames);
+  const endFrame = Math.min(frameCount, lastAudibleFrame + 1 + preserveEndFrames);
+  return Buffer.from(pcmBuffer.subarray(startFrame * blockAlign, endFrame * blockAlign));
+}
+
+function stitchPcmAudioChunks(chunks = [], options = {}) {
+  if (chunks.length === 0) {
+    throw createTtsError('AI podcast TTS response did not include audio data', 'PODCAST_TTS_AUDIO_INVALID');
+  }
+
+  const format = {
+    audioFormat: chunks[0].audioFormat || 1,
+    channels: chunks[0].channels,
+    sampleRate: chunks[0].sampleRate,
+    bitsPerSample: chunks[0].bitsPerSample
+  };
+  const expectedFormatKey = getPcmFormatKey(format);
+  const silenceMs = getTtsChunkSilenceMs();
+  const edgeSilenceMs = options.edgeSilenceMs ?? DEFAULT_TTS_CHUNK_EDGE_SILENCE_MS;
+  const buffers = [];
+
+  chunks.forEach((chunk, index) => {
+    if (getPcmFormatKey(chunk) !== expectedFormatKey) {
+      throw createTtsError('AI podcast TTS chunks returned incompatible audio formats', 'PODCAST_TTS_AUDIO_INVALID');
+    }
+
+    const isLast = index === chunks.length - 1;
+    const trimmedPcm = trimPcmSilence(chunk.pcmBuffer, format, {
+      preserveStartMs: edgeSilenceMs,
+      preserveEndMs: isLast ? Math.max(edgeSilenceMs, 80) : edgeSilenceMs
+    });
+    buffers.push(trimmedPcm.length > 0 ? trimmedPcm : chunk.pcmBuffer);
+
+    if (!isLast && silenceMs > 0) {
+      buffers.push(getPcmSilenceBuffer(format, silenceMs));
+    }
+  });
+
+  const wavBuffer = wrapPcmBufferInWav(Buffer.concat(buffers), format);
+  assertValidAudioBuffer(wavBuffer, 'audio/wav');
+  return wavBuffer;
+}
+
 function normalizeAudioBufferForStorage(audioBuffer, mimeType, requestedFormat) {
   const normalizedFormat = String(requestedFormat || '').trim().toLowerCase();
   const normalizedMimeType = String(mimeType || '').split(';')[0].trim().toLowerCase();
@@ -382,17 +683,8 @@ function normalizeAudioBufferForStorage(audioBuffer, mimeType, requestedFormat) 
   };
 }
 
-function normalizeExtractedAudioForStorage(audio = {}, requestedFormat = '') {
-  const audioBuffer = Buffer.from(String(audio.data || ''), 'base64');
-  if (audioBuffer.length === 0) {
-    return null;
-  }
-
-  return normalizeAudioBufferForStorage(
-    audioBuffer,
-    String(audio.mimeType || getAudioMimeType(requestedFormat)).trim() || getAudioMimeType(requestedFormat),
-    requestedFormat
-  );
+function canStitchTtsAudio(model = '', audioFormat = '') {
+  return isGeminiTtsModel(model) && String(audioFormat || '').trim().toLowerCase() === 'pcm';
 }
 
 function parseSpeechErrorMessage(data) {
@@ -447,6 +739,91 @@ function extractAudioPayload(response = {}, fallbackMimeType = 'audio/mpeg') {
   }
 
   return null;
+}
+
+async function requestItalianAudioBuffer(text = '', options = {}) {
+  const { config, audioFormat, ttsVoice, fallbackMimeType } = options;
+  const response = await audioSpeechHttpClient.post(
+    getAudioSpeechUrl(config),
+    {
+      model: config.model,
+      input: text,
+      voice: ttsVoice,
+      response_format: audioFormat,
+      instructions: 'Generate clear, natural Italian podcast narration audio. Do not translate the input text.'
+    },
+    {
+      headers: getOpenRouterHeaders(config),
+      responseType: 'arraybuffer',
+      timeout: config.timeoutMs,
+      validateStatus: () => true
+    }
+  );
+
+  if (response.status >= 400) {
+    throw createTtsError(`AI podcast TTS request failed (${response.status}): ${parseSpeechErrorMessage(response.data)}`, 'PODCAST_TTS_PROVIDER_ERROR');
+  }
+
+  const contentType = getResponseContentType(response.headers || {}, fallbackMimeType);
+  if (contentType === 'application/json') {
+    const payload = parseJsonContent(getResponseBuffer(response.data).toString('utf8'));
+    const audio = extractAudioPayload(payload, fallbackMimeType);
+    if (!audio?.data) {
+      throw createTtsError('AI podcast TTS response did not include audio data', 'PODCAST_TTS_AUDIO_INVALID');
+    }
+
+    const audioBuffer = Buffer.from(String(audio.data || ''), 'base64');
+    if (audioBuffer.length === 0) {
+      throw createTtsError('AI podcast TTS response did not include audio data', 'PODCAST_TTS_AUDIO_INVALID');
+    }
+
+    return {
+      audioBuffer,
+      mimeType: String(audio.mimeType || fallbackMimeType).trim() || fallbackMimeType
+    };
+  }
+
+  const audioBuffer = getResponseBuffer(response.data);
+  if (audioBuffer.length === 0) {
+    throw createTtsError('AI podcast TTS response did not include audio data', 'PODCAST_TTS_AUDIO_INVALID');
+  }
+
+  return {
+    audioBuffer,
+    mimeType: contentType || fallbackMimeType
+  };
+}
+
+async function generateChunkedItalianAudio(text = '', options = {}) {
+  const { config, audioFormat, ttsVoice, fallbackMimeType } = options;
+  const chunks = splitTextIntoTtsChunks(text, getTtsChunkMaxBytes(config.model));
+  const maxChunks = getTtsMaxChunks();
+  if (chunks.length > maxChunks) {
+    throw createTtsError(
+      `AI podcast TTS input requires too many chunks (${chunks.length} > ${maxChunks})`,
+      'PODCAST_TTS_INPUT_TOO_LONG'
+    );
+  }
+
+  const pcmChunks = [];
+  for (const chunk of chunks) {
+    assertTtsInputWithinLimit(chunk, config.model);
+    const audio = await requestItalianAudioBuffer(chunk, { config, audioFormat, ttsVoice, fallbackMimeType });
+    pcmChunks.push(normalizeAudioBufferToPcm(audio.audioBuffer, audio.mimeType, audioFormat));
+  }
+
+  return {
+    data: stitchPcmAudioChunks(pcmChunks).toString('base64'),
+    mimeType: 'audio/wav',
+    chunkCount: chunks.length
+  };
+}
+
+async function generateSingleItalianAudio(text = '', options = {}) {
+  const { config, audioFormat, ttsVoice, fallbackMimeType } = options;
+  assertTtsInputWithinLimit(text, config.model);
+  const audio = await requestItalianAudioBuffer(text, { config, audioFormat, ttsVoice, fallbackMimeType });
+  return normalizeAudioBufferForStorage(audio.audioBuffer, audio.mimeType, audioFormat);
 }
 
 async function generatePodcastScript(window = {}, articles = []) {
@@ -528,60 +905,15 @@ async function generateItalianAudio(scriptText = '') {
   const audioFormat = getTtsAudioFormat(config.model);
   const ttsVoice = getTtsVoice();
   const fallbackMimeType = getAudioMimeType(audioFormat);
-  assertTtsInputWithinLimit(text, config.model);
   const startedAt = Date.now();
-  const response = await audioSpeechHttpClient.post(
-    getAudioSpeechUrl(config),
-    {
-      model: config.model,
-      input: text,
-      voice: ttsVoice,
-      response_format: audioFormat,
-      instructions: 'Generate clear, natural Italian podcast narration audio. Do not translate the input text.'
-    },
-    {
-      headers: getOpenRouterHeaders(config),
-      responseType: 'arraybuffer',
-      timeout: config.timeoutMs,
-      validateStatus: () => true
-    }
-  );
+  const playableAudio = canStitchTtsAudio(config.model, audioFormat)
+    ? await generateChunkedItalianAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType })
+    : await generateSingleItalianAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType });
+  const { chunkCount, ...audioForStorage } = playableAudio;
 
-  if (response.status >= 400) {
-    throw createTtsError(`AI podcast TTS request failed (${response.status}): ${parseSpeechErrorMessage(response.data)}`, 'PODCAST_TTS_PROVIDER_ERROR');
-  }
-
-  const contentType = getResponseContentType(response.headers || {}, fallbackMimeType);
-  if (contentType === 'application/json') {
-    const payload = parseJsonContent(getResponseBuffer(response.data).toString('utf8'));
-    const audio = extractAudioPayload(payload, fallbackMimeType);
-    if (audio?.data) {
-      const playableAudio = normalizeExtractedAudioForStorage(audio, audioFormat);
-      if (!playableAudio) {
-        throw createTtsError('AI podcast TTS response did not include audio data', 'PODCAST_TTS_AUDIO_INVALID');
-      }
-
-      logger.info(`AI podcast audio generated: model=${config.model}, durationMs=${Date.now() - startedAt}`);
-      return {
-        ...playableAudio,
-        model: config.model,
-        voice: ttsVoice,
-        generatedAt: new Date().toISOString()
-      };
-    }
-
-    throw createTtsError('AI podcast TTS response did not include audio data', 'PODCAST_TTS_AUDIO_INVALID');
-  }
-
-  const audioBuffer = getResponseBuffer(response.data);
-  if (audioBuffer.length === 0) {
-    throw createTtsError('AI podcast TTS response did not include audio data', 'PODCAST_TTS_AUDIO_INVALID');
-  }
-  const playableAudio = normalizeAudioBufferForStorage(audioBuffer, contentType || fallbackMimeType, audioFormat);
-
-  logger.info(`AI podcast audio generated: model=${config.model}, durationMs=${Date.now() - startedAt}`);
+  logger.info(`AI podcast audio generated: model=${config.model}, chunks=${chunkCount || 1}, durationMs=${Date.now() - startedAt}`);
   return {
-    ...playableAudio,
+    ...audioForStorage,
     model: config.model,
     voice: ttsVoice,
     generatedAt: new Date().toISOString()
@@ -635,10 +967,12 @@ module.exports = {
   _getArticleTextLimit: getArticleTextLimit,
   _getScriptConfig: getScriptConfig,
   _getTtsConfig: getTtsConfig,
+  _getTtsChunkMaxBytes: getTtsChunkMaxBytes,
   _getTtsMaxInputBytes: getTtsMaxInputBytes,
   _getTtsVoice: getTtsVoice,
   _normalizeGeneratedPodcast: normalizeGeneratedPodcast,
   _parseJsonContent: parseJsonContent,
+  _splitTextIntoTtsChunks: splitTextIntoTtsChunks,
   _validateGeneratedPodcast: validateGeneratedPodcast,
   _setAudioSpeechHttpClient: setAudioSpeechHttpClient,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
