@@ -16,6 +16,11 @@ const SUMMARY_READER_PREWARM_CONCURRENCY = parseIntegerEnv('AI_SUMMARY_READER_PR
 const SUMMARY_READER_TEXT_MAX_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MAX_CHARS', 3000, { min: 500, max: 12000 });
 const SUMMARY_READER_TEXT_MIN_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MIN_CHARS', 250, { min: 80, max: 2000 });
 const SUMMARY_FAILED_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
+const PROMOTIONAL_DEAL_PATTERN = /\b(deal|deals|discount|discounts|sale|sales|coupon|coupons|promo|promotion|offer|offers|offerta|offerte|sconto|sconti|saldi|minimo storico|lowest price|best price|price drop|deal alert|black friday|cyber monday|prime day|gift card|carta regalo|cashback)\b/u;
+const PRICE_PATTERN = /(?:[$€£]\s?\d|\b\d+(?:[.,]\d{2})?\s?(?:dollari|euro|usd|eur)\b)/u;
+const RETAILER_PATTERN = /\b(best buy|amazon|walmart|target|ebay|mediaworld|unieuro|euronics|store|shop|shopping|buy|preorder|pre-order|acquista|compra|carrello|retailer|rivenditore)\b/u;
+const PRODUCT_DEAL_PATTERN = /\b(tv|oled|lamp|monitor|laptop|notebook|tablet|phone|iphone|ipad|smartwatch|watch|headphones|earbuds|speaker|router|ssd|console|camera|vacuum|robot|keyboard|mouse|televisore|cuffie|auricolari|friggitrice)\b/u;
+const DEAL_URL_PATTERN = /(?:^|\/)(deals?|shopping|coupon|promo|offers?|black-friday|cyber-monday)(?:\/|$|-|_)/u;
 
 const SUMMARY_TOPICS = [
   {
@@ -262,6 +267,44 @@ function isUsefulReaderText(value = '') {
   return normalizeReaderText(value).length >= SUMMARY_READER_TEXT_MIN_CHARS;
 }
 
+function normalizeDealDetectionText(value = '') {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function isPromotionalDealArticle(article = {}) {
+  const title = normalizeDealDetectionText(article.title || '');
+  const combinedText = normalizeDealDetectionText([
+    article.title,
+    article.description,
+    article.content,
+    article.url
+  ].filter(Boolean).join(' '));
+
+  if (!combinedText) {
+    return false;
+  }
+
+  const hasDealCue = PROMOTIONAL_DEAL_PATTERN.test(combinedText)
+    || /\b(?:best|top)\b.{0,50}\b(?:deals?|discounts?|offers?|sconti|offerte)\b/u.test(title);
+  if (!hasDealCue) {
+    return false;
+  }
+
+  return PRICE_PATTERN.test(combinedText)
+    || RETAILER_PATTERN.test(combinedText)
+    || PRODUCT_DEAL_PATTERN.test(combinedText)
+    || DEAL_URL_PATTERN.test(combinedText);
+}
+
+function filterNewsworthySummaryArticles(articles = []) {
+  return (Array.isArray(articles) ? articles : []).filter((article) => !isPromotionalDealArticle(article));
+}
+
 function getCachedReaderText(articleId) {
   const cached = database.getReaderCache(articleId, null);
   if (!isUsefulReaderText(cached?.contentText)) {
@@ -282,12 +325,12 @@ function withCachedReaderText(articles = []) {
 function getCandidateArticlesForWindow(window) {
   const byId = new Map();
   SUMMARY_TOPICS.forEach((topicConfig) => {
-    database.getArticlesForThematicSummary({
+    filterNewsworthySummaryArticles(database.getArticlesForThematicSummary({
       topics: topicConfig.topics,
       periodStart: window.periodStart,
       periodEnd: window.periodEnd,
       limit: SUMMARY_MAX_ARTICLES_PER_TOPIC
-    }).forEach((article) => {
+    })).forEach((article) => {
       if (article?.id && !byId.has(article.id)) {
         byId.set(article.id, article);
       }
@@ -493,12 +536,12 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
     return { summary: null, generatedNow: false };
   }
 
-  const articles = database.getArticlesForThematicSummary({
+  const articles = filterNewsworthySummaryArticles(database.getArticlesForThematicSummary({
     topics: topicConfig.topics,
     periodStart: window.periodStart,
     periodEnd: window.periodEnd,
     limit: SUMMARY_MAX_ARTICLES_PER_TOPIC
-  });
+  }));
 
   if (articles.length === 0) {
     return { summary: null, generatedNow: false };
@@ -736,6 +779,7 @@ module.exports = {
   _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,
   _getSummaryTopics: getSummaryTopics,
   _generatePodcastForWindow: generatePodcastForWindow,
+  _isPromotionalDealArticle: isPromotionalDealArticle,
   _getPrewarmAttemptWindowCount: () => attemptedPrewarmArticleIdsByWindow.size,
   _prunePrewarmAttempts: prunePrewarmAttempts
 };

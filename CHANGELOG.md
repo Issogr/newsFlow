@@ -7,6 +7,7 @@
 - switched the default podcast TTS provider model to Gemini 3.1 Flash TTS Preview with a Gemini-compatible voice
 - requested Gemini podcast audio as PCM and stored it as browser-playable WAV audio
 - surfaced podcast audio generation, completion, and failure state through summary refreshes instead of leaving retries silent
+- filtered promotional shopping deals and affiliate-style sale posts out of AI summaries and podcast briefings
 
 ## 3.4.2
 

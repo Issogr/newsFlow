@@ -34,6 +34,7 @@ describe('aiPodcastGenerator', () => {
     const payload = JSON.parse(prompt.split('\n').at(-1));
 
     expect(prompt).toContain('Generate both supported languages: English and Italian');
+    expect(prompt).toContain('Skip promotional shopping deals');
     expect(payload.articles).toHaveLength(2);
     expect(payload.articles[0]).toEqual(expect.objectContaining({
       ref: 1,

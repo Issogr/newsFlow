@@ -28,6 +28,7 @@ describe('aiSummaryGenerator', () => {
 
     const payload = JSON.parse(prompt.split('\n').at(-1));
 
+    expect(prompt).toContain('Exclude promotional shopping deals');
     expect(payload.articles[0]).toEqual(expect.objectContaining({
       ref: 1,
       description: 'Full cached reader text with significantly more useful article context.',

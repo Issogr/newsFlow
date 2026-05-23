@@ -73,6 +73,7 @@ function buildPrompt(topicConfig = {}, articles = []) {
     'The style should feel like a clean ChatGPT reading experience: clear context, compact paragraphs, no hype, no bullet spam.',
     'Cite article references inline with bracketed numbers like [1] when mentioning a fact.',
     'Do not invent facts, do not use outside knowledge, and do not cite references that are not present in the input.',
+    'Exclude promotional shopping deals, coupon or affiliate sale posts, and product price-drop blurbs; do not summarize them as news.',
     'Generate the briefing in both supported languages: English and Italian.',
     'Return minified JSON only. Do not use markdown fences or prose outside JSON.',
     'Return this exact shape: {"en":{"title":"Brief title","paragraphs":["paragraph with [1] citations"]},"it":{"title":"Titolo breve","paragraphs":["paragrafo con citazioni [1]"]}}.',

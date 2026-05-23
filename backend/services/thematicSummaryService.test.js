@@ -50,6 +50,18 @@ describe('thematicSummaryService', () => {
     expect(topicKeys).toEqual(['technology', 'politics', 'crime', 'sport', 'entertainment', 'science']);
   });
 
+  test('classifies promotional shopping deal posts without blocking price-related news', () => {
+    expect(thematicSummaryService._isPromotionalDealArticle({
+      title: 'Govee Table Lamp 2 Pro hits its lowest price yet',
+      description: 'The TV OLED LG B5 is $1,499.99 with a $200 gift card at Best Buy.',
+      url: 'https://example.com/deals/govee-lg-oled-best-buy'
+    })).toBe(true);
+    expect(thematicSummaryService._isPromotionalDealArticle({
+      title: 'Inflation pressures household budgets as energy prices rise',
+      description: 'Economists say the price increase is tied to lower supply and higher demand.'
+    })).toBe(false);
+  });
+
   test('builds the next due window for reader prewarm', () => {
     expect(thematicSummaryService._getNextDueWindow(new Date('2026-05-21T04:30:00.000Z'))).toEqual({
       periodStart: '2026-05-20T17:00:00.000Z',
@@ -246,12 +258,20 @@ describe('thematic summary generation retries', () => {
       url: 'https://example.com/ai',
       pubDate: '2026-05-20T18:00:00.000Z'
     };
+    const dealArticle = {
+      id: 'deal-article',
+      source: 'The Verge',
+      title: 'The best OLED TV deals are at a new low',
+      description: 'The LG OLED TV is down to $1,499.99 with a $200 gift card at Best Buy.',
+      url: 'https://example.com/deals/lg-oled-tv-best-buy',
+      pubDate: '2026-05-20T19:00:00.000Z'
+    };
     const databaseMock = {
       getThematicSummary: jest.fn((topicKey) => (topicKey === 'technology' ? failedSummary : null)),
       listLatestThematicSummaries: jest.fn(() => []),
       getPodcastSummary: jest.fn(() => null),
       upsertPodcastSummary: jest.fn(),
-      getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Tecnologia') ? [article] : []),
+      getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Tecnologia') ? [dealArticle, article] : []),
       getReaderCache: jest.fn(() => null),
       upsertThematicSummary: jest.fn(() => completedSummary)
     };
@@ -280,6 +300,9 @@ describe('thematic summary generation retries', () => {
 
     expect(result.items).toEqual([completedSummary]);
     expect(aiSummaryGeneratorMock.generateSummaryForArticles).toHaveBeenCalledTimes(1);
+    expect(aiSummaryGeneratorMock.generateSummaryForArticles.mock.calls[0][1]).toEqual([
+      expect.objectContaining({ id: article.id })
+    ]);
     expect(databaseMock.upsertThematicSummary).toHaveBeenCalledWith(expect.objectContaining({
       topicKey: 'technology',
       status: 'completed'
@@ -413,14 +436,21 @@ describe('thematic summary generation retries', () => {
       url: 'https://example.com/science',
       pubDate: '2026-05-20T19:00:00.000Z'
     };
+    const dealArticle = {
+      id: 'deal-article',
+      source: 'The Verge',
+      title: 'Govee Table Lamp 2 Pro drops to its lowest price',
+      description: 'The desk lamp is now $134.99 and an LG OLED TV includes a $200 gift card at Best Buy.',
+      url: 'https://example.com/deals/govee-table-lamp-lg-oled-tv'
+    };
     const databaseMock = {
       getPodcastSummary: jest.fn(() => null),
       getArticlesForThematicSummary: jest.fn(({ topics }) => {
         if (topics.includes('Tecnologia')) {
-          return [articleOne];
+          return [articleOne, dealArticle];
         }
         if (topics.includes('Scienza')) {
-          return [articleOne, articleTwo];
+          return [articleOne, articleTwo, dealArticle];
         }
         return [];
       }),
