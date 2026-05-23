@@ -8,7 +8,7 @@ const {
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
 
-const DEFAULT_OPENROUTER_SUMMARY_MODEL = 'deepseek/deepseek-v4-flash';
+const DEFAULT_OPENROUTER_STORY_GROUPING_MODEL = 'qwen/qwen3.5-9b';
 const DEFAULT_TIMEOUT_MS = 120000;
 const MIN_MATCH_CONFIDENCE = 0.82;
 const STORY_GROUP_TOKEN_STOP_WORDS = new Set([
@@ -18,8 +18,8 @@ const STORY_GROUP_TOKEN_STOP_WORDS = new Set([
 function getConfig() {
   return getOpenRouterConfig({
     enabledEnvName: 'AI_STORY_GROUPING_ENABLED',
-    modelEnvName: 'OPENROUTER_SUMMARY_MODEL',
-    defaultModel: DEFAULT_OPENROUTER_SUMMARY_MODEL,
+    modelEnvName: 'OPENROUTER_STORY_GROUPING_MODEL',
+    defaultModel: DEFAULT_OPENROUTER_STORY_GROUPING_MODEL,
     timeoutEnvName: 'AI_SUMMARY_REQUEST_TIMEOUT_MS',
     defaultTimeoutMs: DEFAULT_TIMEOUT_MS
   });

@@ -105,21 +105,37 @@ describe('aiPodcastGenerator', () => {
     });
   });
 
-  test('uses the summary model config for script generation and separate TTS config for audio', () => {
+  test('uses separate model configs for script generation and audio', () => {
     process.env = {
       ...originalEnv,
       OPENROUTER_API_KEY: 'test-key',
-      OPENROUTER_SUMMARY_MODEL: 'summary-model',
-      OPENROUTER_TTS_MODEL: 'tts-model'
+      OPENROUTER_PODCAST_SCRIPT_MODEL: 'podcast-script-model',
+      OPENROUTER_PODCAST_AUDIO_MODEL: 'podcast-audio-model'
     };
 
     expect(aiPodcastGenerator._getScriptConfig()).toEqual(expect.objectContaining({
       enabled: true,
-      model: 'summary-model'
+      model: 'podcast-script-model'
     }));
     expect(aiPodcastGenerator._getTtsConfig()).toEqual(expect.objectContaining({
       enabled: true,
-      model: 'tts-model'
+      model: 'podcast-audio-model'
+    }));
+  });
+
+  test('uses requested default models when feature-specific env vars are unset', () => {
+    process.env = {
+      ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key',
+      OPENROUTER_PODCAST_SCRIPT_MODEL: undefined,
+      OPENROUTER_PODCAST_AUDIO_MODEL: undefined
+    };
+
+    expect(aiPodcastGenerator._getScriptConfig()).toEqual(expect.objectContaining({
+      model: 'deepseek/deepseek-v4-flash'
+    }));
+    expect(aiPodcastGenerator._getTtsConfig()).toEqual(expect.objectContaining({
+      model: 'google/gemini-3.1-flash-tts-preview'
     }));
   });
 
@@ -159,7 +175,7 @@ describe('aiPodcastGenerator', () => {
       ...originalEnv,
       OPENROUTER_API_KEY: 'test-key',
       OPENROUTER_BASE_URL: 'https://openrouter.ai/api/v1',
-      OPENROUTER_TTS_MODEL: 'tts-model',
+      OPENROUTER_PODCAST_AUDIO_MODEL: 'tts-model',
       AI_PODCAST_TTS_FORMAT: 'wav',
       AI_PODCAST_TTS_VOICE: 'Puck'
     };

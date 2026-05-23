@@ -4,6 +4,7 @@
 
 - added an AI-generated podcast briefing story at the start of the topic story rail, using the same scheduled summary article set and cached reader text without triggering reader extraction during generation
 - generated podcast scripts in English and Italian, with Italian-only audio playback when TTS generation is available
+- added separate OpenRouter model environment variables with independent defaults for topic classification, thematic summaries, podcast scripts, podcast audio, and AI story grouping/news duplicate prevention
 - switched the default podcast TTS provider model to Gemini 3.1 Flash TTS Preview with a Gemini-compatible voice
 - requested Gemini podcast audio as PCM and stored it as browser-playable WAV audio
 - surfaced podcast audio generation, completion, and failure state through summary refreshes instead of leaving retries silent

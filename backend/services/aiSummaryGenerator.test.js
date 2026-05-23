@@ -86,4 +86,30 @@ describe('aiSummaryGenerator', () => {
     expect(normalized.summaryTextByLocale.en).toBe('Policy makers discussed chip rules [1].');
     expect(normalized.summaryTextByLocale.it).toBe('I regolatori hanno discusso nuove regole sui chip [1].');
   });
+
+  test('uses the dedicated thematic summary model config', () => {
+    process.env = {
+      ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key',
+      OPENROUTER_SUMMARY_MODEL: 'summary-model'
+    };
+
+    expect(aiSummaryGenerator._getConfig()).toEqual(expect.objectContaining({
+      enabled: true,
+      model: 'summary-model'
+    }));
+  });
+
+  test('defaults thematic summaries to deepseek flash when unset', () => {
+    process.env = {
+      ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key',
+      OPENROUTER_SUMMARY_MODEL: undefined
+    };
+
+    expect(aiSummaryGenerator._getConfig()).toEqual(expect.objectContaining({
+      enabled: true,
+      model: 'deepseek/deepseek-v4-flash'
+    }));
+  });
 });

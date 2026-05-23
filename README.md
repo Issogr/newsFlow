@@ -143,19 +143,21 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `RSS_CACHE_MAX_ENTRIES` | `200` | Max cached feed responses |
 | `RSS_INGESTION_CONCURRENCY` | `8` | Max feed requests processed concurrently during ingestion |
 
-### AI Topic Detection
+### AI Features
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | unset | Server-side OpenRouter API key used only by backend AI jobs |
-| `OPENROUTER_MODEL` | `qwen/qwen3.5-9b` | OpenRouter model id used for topic classification |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL |
+| `OPENROUTER_TOPIC_MODEL` | `qwen/qwen3.5-9b` | OpenRouter model id used for topic classification |
 | `AI_TOPIC_DETECTION_ENABLED` | `auto` | Set to `false` to disable AI topics; `auto` enables AI only when `OPENROUTER_API_KEY` is present |
 | `AI_TOPIC_BATCH_SIZE` | `4` | Max new articles sent in one AI topic-classification request |
 | `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Max concurrent AI topic-classification requests during ingestion |
 | `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles classified by AI per refresh before falling back to local detection |
 | `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one AI topic-classification request, configurable up to 120 seconds for slower models |
 | `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for thematic summaries, independent from topic classification |
+| `OPENROUTER_PODCAST_SCRIPT_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for podcast script generation |
+| `OPENROUTER_STORY_GROUPING_MODEL` | `qwen/qwen3.5-9b` | Model id used for AI-assisted story grouping/news duplicate prevention |
 | `AI_STORY_GROUPING_ENABLED` | `auto` | Set to `false` to disable AI-assisted story grouping; `auto` enables it when `OPENROUTER_API_KEY` is present |
 | `AI_STORY_GROUPING_CONCURRENCY` | `1` | Max concurrent AI story-grouping checks during ingestion |
 | `AI_SUMMARY_GENERATION_ENABLED` | `auto` | Set to `false` to disable thematic summaries; `auto` enables them when `OPENROUTER_API_KEY` is present |
@@ -169,16 +171,16 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `AI_SUMMARY_READER_TEXT_MIN_CHARS` | `250` | Minimum cached reader-text length considered useful for summary input |
 | `AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS` | `42000` | Approximate total cached text budget for one scheduled podcast script prompt |
 | `AI_PODCAST_TTS_ENABLED` | `auto` | Set to `false` to disable Italian podcast audio generation; `auto` enables it when `OPENROUTER_API_KEY` is present |
-| `OPENROUTER_TTS_MODEL` | `google/gemini-3.1-flash-tts-preview` | OpenRouter model id used for Italian podcast audio generation |
+| `OPENROUTER_PODCAST_AUDIO_MODEL` | `google/gemini-3.1-flash-tts-preview` | OpenRouter model id used for Italian podcast audio generation |
 | `AI_PODCAST_TTS_TIMEOUT_MS` | `120000` | Timeout for one podcast audio generation request, configurable up to 120 seconds |
 | `AI_PODCAST_TTS_FORMAT` | `pcm` for Gemini TTS, otherwise `mp3` | Requested podcast audio format for the TTS model; Gemini TTS requires `pcm`, which the backend wraps into playable WAV audio before storing |
 | `AI_PODCAST_TTS_VOICE` | `Charon` | Requested podcast TTS voice; Gemini voices include `Charon`, `Puck`, and `Orus` |
 
 Thematic summaries are generated in both supported app languages, English and Italian; the frontend displays the version matching the current app language.
-Podcast briefings use the same scheduled, built-in article set as thematic-summary prewarming, generate English and Italian scripts with `OPENROUTER_SUMMARY_MODEL`, and use Italian script text for optional TTS audio.
+Podcast briefings use the same scheduled, built-in article set as thematic-summary prewarming, generate English and Italian scripts with `OPENROUTER_PODCAST_SCRIPT_MODEL`, and use Italian script text for optional TTS audio through `OPENROUTER_PODCAST_AUDIO_MODEL`.
 Summary slots use `AI_SUMMARY_TIME_ZONE`, so the default Docker setup generates the `07:00`, `13:00`, and `19:00` summaries at Italian local time instead of UTC.
 Reader-mode extraction is prewarmed before summary slots when enabled, but summary generation itself only reads cached reader text and falls back to RSS title/description when cached text is missing or not useful.
-AI-assisted story grouping runs after ingestion and uses the summary model on RSS title/description metadata only; feed requests keep using stored grouping decisions and never call the AI provider.
+AI-assisted story grouping runs after ingestion and uses `OPENROUTER_STORY_GROUPING_MODEL` on RSS title/description metadata only; feed requests keep using stored grouping decisions and never call the AI provider.
 
 AI topic detection uses the official `@openrouter/sdk` package from the backend.
 

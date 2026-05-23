@@ -9,7 +9,7 @@ const {
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
 
-const DEFAULT_OPENROUTER_MODEL = 'qwen/qwen3.5-9b';
+const DEFAULT_OPENROUTER_TOPIC_MODEL = 'qwen/qwen3.5-9b';
 const DEFAULT_BATCH_SIZE = 4;
 const DEFAULT_BATCH_CONCURRENCY = 1;
 const DEFAULT_MAX_ARTICLES_PER_REFRESH = 160;
@@ -70,8 +70,8 @@ function getIntegerEnv(name, fallback, min, max) {
 function getConfig() {
   const openRouterConfig = getOpenRouterConfig({
     enabledEnvName: 'AI_TOPIC_DETECTION_ENABLED',
-    modelEnvName: 'OPENROUTER_MODEL',
-    defaultModel: DEFAULT_OPENROUTER_MODEL,
+    modelEnvName: 'OPENROUTER_TOPIC_MODEL',
+    defaultModel: DEFAULT_OPENROUTER_TOPIC_MODEL,
     timeoutEnvName: 'AI_TOPIC_REQUEST_TIMEOUT_MS',
     defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
     clampTimeout: true

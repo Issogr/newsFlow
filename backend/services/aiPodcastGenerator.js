@@ -10,8 +10,8 @@ const {
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
 
-const DEFAULT_OPENROUTER_SUMMARY_MODEL = 'deepseek/deepseek-v4-flash';
-const DEFAULT_TTS_MODEL = 'google/gemini-3.1-flash-tts-preview';
+const DEFAULT_PODCAST_SCRIPT_MODEL = 'deepseek/deepseek-v4-flash';
+const DEFAULT_PODCAST_AUDIO_MODEL = 'google/gemini-3.1-flash-tts-preview';
 const DEFAULT_TTS_VOICE = 'Charon';
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_TTS_TIMEOUT_MS = 120000;
@@ -46,8 +46,8 @@ function truncateText(value, maxLength) {
 function getScriptConfig() {
   return getOpenRouterConfig({
     enabledEnvName: 'AI_SUMMARY_GENERATION_ENABLED',
-    modelEnvName: 'OPENROUTER_SUMMARY_MODEL',
-    defaultModel: DEFAULT_OPENROUTER_SUMMARY_MODEL,
+    modelEnvName: 'OPENROUTER_PODCAST_SCRIPT_MODEL',
+    defaultModel: DEFAULT_PODCAST_SCRIPT_MODEL,
     timeoutEnvName: 'AI_SUMMARY_REQUEST_TIMEOUT_MS',
     defaultTimeoutMs: DEFAULT_TIMEOUT_MS
   });
@@ -56,8 +56,8 @@ function getScriptConfig() {
 function getTtsConfig() {
   return getOpenRouterConfig({
     enabledEnvName: 'AI_PODCAST_TTS_ENABLED',
-    modelEnvName: 'OPENROUTER_TTS_MODEL',
-    defaultModel: DEFAULT_TTS_MODEL,
+    modelEnvName: 'OPENROUTER_PODCAST_AUDIO_MODEL',
+    defaultModel: DEFAULT_PODCAST_AUDIO_MODEL,
     timeoutEnvName: 'AI_PODCAST_TTS_TIMEOUT_MS',
     defaultTimeoutMs: DEFAULT_TTS_TIMEOUT_MS
   });

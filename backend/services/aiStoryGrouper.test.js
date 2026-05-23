@@ -5,7 +5,7 @@ describe('aiStoryGrouper', () => {
   beforeEach(() => {
     jest.resetModules();
     process.env.OPENROUTER_API_KEY = 'test-key';
-    process.env.OPENROUTER_SUMMARY_MODEL = 'test-summary-model';
+    process.env.OPENROUTER_STORY_GROUPING_MODEL = 'test-story-grouping-model';
     sendMock = jest.fn(async () => ({
       choices: [
         {
@@ -30,10 +30,10 @@ describe('aiStoryGrouper', () => {
 
   afterEach(() => {
     delete process.env.OPENROUTER_API_KEY;
-    delete process.env.OPENROUTER_SUMMARY_MODEL;
+    delete process.env.OPENROUTER_STORY_GROUPING_MODEL;
   });
 
-  test('uses the summary model to classify candidate story matches', async () => {
+  test('uses the story grouping model to classify candidate story matches', async () => {
     const result = await aiStoryGrouper.findSimilarStoriesForArticle({
       id: 'target-1',
       title: 'Meloni meets Trump in Rome',
@@ -59,12 +59,12 @@ describe('aiStoryGrouper', () => {
 
     expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
       chatRequest: expect.objectContaining({
-        model: 'test-summary-model',
+        model: 'test-story-grouping-model',
         responseFormat: { type: 'json_object' }
       })
     }), expect.any(Object));
     expect(result).toEqual(expect.objectContaining({
-      model: 'test-summary-model',
+      model: 'test-story-grouping-model',
       matches: [{ articleId: 'candidate-1', confidence: 0.91, reason: 'same meeting and policy topics' }]
     }));
   });
@@ -84,5 +84,13 @@ describe('aiStoryGrouper', () => {
 
     expect(result).toEqual(expect.objectContaining({ skipped: 'no_candidates', matches: [] }));
     expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  test('defaults to qwen when the story grouping model env var is unset', () => {
+    delete process.env.OPENROUTER_STORY_GROUPING_MODEL;
+
+    expect(aiStoryGrouper._getConfig()).toEqual(expect.objectContaining({
+      model: 'qwen/qwen3.5-9b'
+    }));
   });
 });
