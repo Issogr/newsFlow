@@ -79,7 +79,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('34');
+    expect(migrationVersion).toBe('35');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -106,7 +106,7 @@ describe('database migrations', () => {
     expect(apiTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'token_prefix', 'expires_at', 'revoked_at', 'last_used_at']));
     expect(readLaterColumns).toEqual(expect.arrayContaining(['user_id', 'article_id', 'saved_at']));
     expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['topic_key', 'period_start', 'period_end', 'summary_text', 'title_en', 'summary_text_en', 'title_it', 'summary_text_it', 'sources_json', 'failure_category', 'retry_count']));
-    expect(podcastSummaryColumns).toEqual(expect.arrayContaining(['period_start', 'period_end', 'script_text', 'title_en', 'script_text_en', 'title_it', 'script_text_it', 'audio_blob', 'audio_status', 'audio_voice', 'sources_json']));
+    expect(podcastSummaryColumns).toEqual(expect.arrayContaining(['period_start', 'period_end', 'script_text', 'title_en', 'script_text_en', 'title_it', 'script_text_it', 'audio_blob', 'audio_status', 'audio_voice', 'sources_json', 'failure_category', 'retry_count', 'audio_failure_category', 'audio_retry_count', 'audio_failed_at']));
     expect(articleIndexNames).toContain('idx_articles_owner_published_id');
     expect(userIndexNames).toContain('idx_users_username_lower');
     expect(topicIndexNames).toContain('idx_article_topics_topic_article');
@@ -162,7 +162,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('34');
+    expect(migratedVersion).toBe('35');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
@@ -281,7 +281,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('34');
+    expect(migratedVersion).toBe('35');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -394,7 +394,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
 
-    expect(migratedVersion).toBe('34');
+    expect(migratedVersion).toBe('35');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -1014,6 +1014,11 @@ describe('database queries and user data', () => {
         voice: 'Charon'
       },
       audioStatus: 'completed',
+      audioFailureCategory: '',
+      audioRetryCount: 0,
+      audioFailedAt: null,
+      failureCategory: '',
+      retryCount: 0,
       generatedAt: '2025-05-21T13:05:00.000Z'
     });
 
@@ -1024,7 +1029,11 @@ describe('database queries and user data', () => {
       titleByLocale: expect.objectContaining({ it: 'Podcast news' }),
       summaryTextByLocale: expect.objectContaining({ it: 'Testo italiano' }),
       audioStatus: 'completed',
+      audioFailureCategory: '',
+      audioRetryCount: 0,
       audioVoice: 'Charon',
+      failureCategory: '',
+      retryCount: 0,
       audioUrl: `/api/podcast-summary/podcast-summary-test/audio?v=${encodeURIComponent('2025-05-21T13:05:00.000Z:tts-model:Charon')}`
     }));
     expect(database.getLatestPodcastSummary()).toEqual(expect.objectContaining({ id: 'podcast-summary-test' }));

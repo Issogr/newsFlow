@@ -1886,7 +1886,12 @@ function createArticleRepository({
       audioBlob,
       audioStatus,
       audioErrorMessage: summary.audioErrorMessage ? String(summary.audioErrorMessage).trim().slice(0, 1000) : null,
+      audioFailureCategory: String(summary.audioFailureCategory || '').trim().slice(0, 80),
+      audioRetryCount: Math.max(0, Number(summary.audioRetryCount) || 0),
+      audioFailedAt: summary.audioFailedAt ? String(summary.audioFailedAt).trim() : null,
       status: String(summary.status || 'completed').trim().slice(0, 40),
+      failureCategory: String(summary.failureCategory || '').trim().slice(0, 80),
+      retryCount: Math.max(0, Number(summary.retryCount) || 0),
       errorMessage: summary.errorMessage ? String(summary.errorMessage).trim().slice(0, 1000) : null,
       generatedAt: String(summary.generatedAt || new Date().toISOString()).trim()
     };
@@ -1919,10 +1924,15 @@ function createArticleRepository({
       audioMimeType: row.audioMimeType,
       audioStatus: row.audioStatus,
       audioErrorMessage: row.audioErrorMessage,
+      audioFailureCategory: row.audioFailureCategory || '',
+      audioRetryCount: row.audioRetryCount || 0,
+      audioFailedAt: row.audioFailedAt || null,
       audioUrl: row.audioStatus === 'completed'
         ? `/api/podcast-summary/${encodeURIComponent(row.id)}/audio?v=${encodeURIComponent([row.generatedAt, row.audioModel, row.audioVoice].filter(Boolean).join(':'))}`
         : '',
       status: row.status,
+      failureCategory: row.failureCategory || '',
+      retryCount: row.retryCount || 0,
       errorMessage: row.errorMessage,
       generatedAt: row.generatedAt
     };
@@ -2043,9 +2053,10 @@ function createArticleRepository({
         id, period_start, period_end, title, script_text, title_en, script_text_en,
         title_it, script_text_it, sources_json, article_count, script_model,
         audio_model, audio_voice, audio_mime_type, audio_blob, audio_status, audio_error_message,
-        status, error_message, generated_at
+        audio_failure_category, audio_retry_count, audio_failed_at, status, failure_category, retry_count,
+        error_message, generated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(period_start, period_end) DO UPDATE SET
         title = excluded.title,
         script_text = excluded.script_text,
@@ -2062,7 +2073,12 @@ function createArticleRepository({
         audio_blob = excluded.audio_blob,
         audio_status = excluded.audio_status,
         audio_error_message = excluded.audio_error_message,
+        audio_failure_category = excluded.audio_failure_category,
+        audio_retry_count = excluded.audio_retry_count,
+        audio_failed_at = excluded.audio_failed_at,
         status = excluded.status,
+        failure_category = excluded.failure_category,
+        retry_count = excluded.retry_count,
         error_message = excluded.error_message,
         generated_at = excluded.generated_at
     `).run(
@@ -2084,7 +2100,12 @@ function createArticleRepository({
       normalized.audioBlob,
       normalized.audioStatus,
       normalized.audioErrorMessage,
+      normalized.audioFailureCategory,
+      normalized.audioRetryCount,
+      normalized.audioFailedAt,
       normalized.status,
+      normalized.failureCategory,
+      normalized.retryCount,
       normalized.errorMessage,
       normalized.generatedAt
     );
@@ -2099,7 +2120,9 @@ function createArticleRepository({
              title_it AS titleIt, script_text_it AS scriptTextIt,
              sources_json AS sourcesJson, article_count AS articleCount, script_model AS scriptModel,
              audio_model AS audioModel, audio_voice AS audioVoice, audio_mime_type AS audioMimeType, audio_status AS audioStatus,
-             audio_error_message AS audioErrorMessage, status, error_message AS errorMessage,
+             audio_error_message AS audioErrorMessage, audio_failure_category AS audioFailureCategory,
+             audio_retry_count AS audioRetryCount, audio_failed_at AS audioFailedAt,
+             status, failure_category AS failureCategory, retry_count AS retryCount, error_message AS errorMessage,
              generated_at AS generatedAt
       FROM podcast_summaries
       WHERE period_start = ? AND period_end = ?
@@ -2116,7 +2139,9 @@ function createArticleRepository({
              title_it AS titleIt, script_text_it AS scriptTextIt,
              sources_json AS sourcesJson, article_count AS articleCount, script_model AS scriptModel,
              audio_model AS audioModel, audio_voice AS audioVoice, audio_mime_type AS audioMimeType, audio_status AS audioStatus,
-             audio_error_message AS audioErrorMessage, status, error_message AS errorMessage,
+             audio_error_message AS audioErrorMessage, audio_failure_category AS audioFailureCategory,
+             audio_retry_count AS audioRetryCount, audio_failed_at AS audioFailedAt,
+             status, failure_category AS failureCategory, retry_count AS retryCount, error_message AS errorMessage,
              generated_at AS generatedAt
       FROM podcast_summaries
       WHERE status = 'completed'

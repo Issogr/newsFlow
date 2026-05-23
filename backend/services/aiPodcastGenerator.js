@@ -1,5 +1,6 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
+const { parseIntegerEnv } = require('../utils/env');
 const { removePromotionalSentences } = require('../utils/promotionalContent');
 const { buildArticlePayload, getArticleTextLimit: getSharedArticleTextLimit, truncateText } = require('./aiArticlePayload');
 const {
@@ -16,6 +17,10 @@ const DEFAULT_TTS_VOICE = 'Charon';
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_TTS_TIMEOUT_MS = 120000;
 const DEFAULT_PROMPT_TEXT_BUDGET_CHARS = 42000;
+const DEFAULT_GEMINI_TTS_MAX_INPUT_BYTES = 3800;
+const DEFAULT_TTS_MAX_INPUT_BYTES = 6000;
+const DEFAULT_TTS_MIN_AUDIO_BYTES = 1024;
+const MIN_PODCAST_SCRIPT_CHARS = 120;
 const GEMINI_TTS_PCM_SAMPLE_RATE_HZ = 24000;
 const GEMINI_TTS_PCM_CHANNELS = 1;
 const GEMINI_TTS_PCM_BITS_PER_SAMPLE = 16;
@@ -53,8 +58,18 @@ function getArticleTextLimit(articleCount) {
   });
 }
 
+function getTtsMaxInputBytes(model = '') {
+  const defaultLimit = isGeminiTtsModel(model) ? DEFAULT_GEMINI_TTS_MAX_INPUT_BYTES : DEFAULT_TTS_MAX_INPUT_BYTES;
+  return parseIntegerEnv('AI_PODCAST_TTS_MAX_INPUT_BYTES', defaultLimit, { min: 500, max: 16000 });
+}
+
+function getTtsMinAudioBytes() {
+  return parseIntegerEnv('AI_PODCAST_TTS_MIN_AUDIO_BYTES', DEFAULT_TTS_MIN_AUDIO_BYTES, { min: 44, max: 100000 });
+}
+
 function buildPrompt(window = {}, articles = []) {
   const articleTextLimit = getArticleTextLimit(articles.length);
+  const ttsInputTarget = Math.floor(getTtsMaxInputBytes(getTtsConfig().model) * 0.85);
 
   return [
     'Write a single podcast-style news script using only the provided articles.',
@@ -65,6 +80,7 @@ function buildPrompt(window = {}, articles = []) {
     'Use short paragraphs separated by blank lines. Start a new paragraph after the intro, when changing story or subject, and before the closing.',
     'Do not invent facts, do not use outside knowledge, and do not add bracket citations because the script may be converted to speech.',
     'Mention source names naturally only when useful. Avoid bullet lists, markdown, stage directions, timestamps, and sound effects.',
+    `Keep each localized script under ${ttsInputTarget} UTF-8 bytes; concise scripts are more reliable for text-to-speech conversion.`,
     'Generate both supported languages: English and Italian. The Italian script will be used for text-to-speech audio.',
     'Return minified JSON only. Do not use markdown fences or prose outside JSON.',
     'Return this exact shape: {"en":{"title":"News briefing","script":"speakable script"},"it":{"title":"Briefing notizie","script":"testo podcast parlato"}}.',
@@ -152,6 +168,50 @@ function normalizeGeneratedPodcast(payload = {}) {
   };
 }
 
+function createPodcastValidationError(message) {
+  const error = new Error(message);
+  error.code = 'PODCAST_SCRIPT_VALIDATION_FAILED';
+  return error;
+}
+
+function getMinScriptLength(articleCount) {
+  return Math.min(500, MIN_PODCAST_SCRIPT_CHARS + (Math.max(1, Number(articleCount) || 1) * 35));
+}
+
+function hasForbiddenPodcastFormatting(script = '') {
+  return /(^|\n)\s*(#{1,6}\s|[-*•]\s+|\d+[.)]\s+)/u.test(script)
+    || /```|`|\*\*|__/u.test(script)
+    || /\[(?:\d+|\d{1,2}:\d{2}|[^\]]*(?:music|sfx|sound|intro|outro|pause|jingle|applause)[^\]]*)\]/iu.test(script)
+    || /\([^)]*(?:music|sfx|sound|intro|outro|pause|jingle|applause)[^)]*\)/iu.test(script)
+    || /(^|\n)\s*(?:host|speaker|narrator|sfx|music|intro|outro)\s*:/iu.test(script)
+    || /(?:^|\s)\d{1,2}:\d{2}(?::\d{2})?(?:\s|$)/u.test(script);
+}
+
+function validatePodcastScriptText(script = '', locale = 'en', articleCount = 1) {
+  const normalized = String(script || '').trim();
+  if (normalized.length < getMinScriptLength(articleCount)) {
+    throw createPodcastValidationError(`AI podcast ${locale} script is too short`);
+  }
+  if (/\[\d+\]/u.test(normalized)) {
+    throw createPodcastValidationError(`AI podcast ${locale} script contains bracket citations`);
+  }
+  if (hasForbiddenPodcastFormatting(normalized)) {
+    throw createPodcastValidationError(`AI podcast ${locale} script contains non-speakable formatting`);
+  }
+}
+
+function validateGeneratedPodcast(podcast = {}, articleCount = 1) {
+  const enScript = String(podcast.scriptTextByLocale?.en || '').trim();
+  const itScript = String(podcast.scriptTextByLocale?.it || '').trim();
+
+  validatePodcastScriptText(enScript, 'English', articleCount);
+  validatePodcastScriptText(itScript, 'Italian', articleCount);
+
+  if (enScript.toLowerCase() === itScript.toLowerCase()) {
+    throw createPodcastValidationError('AI podcast English and Italian scripts are identical');
+  }
+}
+
 function getAudioMimeType(format = 'mp3') {
   const normalizedFormat = String(format || '').trim().toLowerCase();
   if (normalizedFormat === 'aac') {
@@ -236,6 +296,46 @@ function isWavBuffer(audioBuffer) {
     && audioBuffer.subarray(8, 12).toString('ascii') === 'WAVE';
 }
 
+function createTtsError(message, code = 'PODCAST_TTS_FAILED') {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function assertTtsInputWithinLimit(text = '', model = '') {
+  const maxInputBytes = getTtsMaxInputBytes(model);
+  const inputBytes = Buffer.byteLength(String(text || ''), 'utf8');
+  if (inputBytes > maxInputBytes) {
+    throw createTtsError(
+      `AI podcast TTS input is too long (${inputBytes} bytes > ${maxInputBytes} bytes)`,
+      'PODCAST_TTS_INPUT_TOO_LONG'
+    );
+  }
+}
+
+function assertValidAudioBuffer(audioBuffer, mimeType = '') {
+  const normalizedMimeType = String(mimeType || '').split(';')[0].trim().toLowerCase();
+  const minAudioBytes = getTtsMinAudioBytes();
+  if (!Buffer.isBuffer(audioBuffer) || audioBuffer.length < minAudioBytes) {
+    throw createTtsError(
+      `AI podcast TTS response audio is too small (${audioBuffer?.length || 0} bytes)`,
+      'PODCAST_TTS_AUDIO_INVALID'
+    );
+  }
+
+  if (normalizedMimeType === 'audio/wav' && !isWavBuffer(audioBuffer)) {
+    throw createTtsError('AI podcast TTS response did not contain a valid WAV header', 'PODCAST_TTS_AUDIO_INVALID');
+  }
+}
+
+function getTtsFailureCategory(error = {}) {
+  if (error.code === 'PODCAST_TTS_PROVIDER_ERROR') {
+    return 'provider_unavailable';
+  }
+
+  return 'tts_failed';
+}
+
 function wrapPcmBufferInWav(pcmBuffer, options = {}) {
   const sampleRate = Number(options.sampleRate) || GEMINI_TTS_PCM_SAMPLE_RATE_HZ;
   const channels = Number(options.channels) || GEMINI_TTS_PCM_CHANNELS;
@@ -265,13 +365,17 @@ function wrapPcmBufferInWav(pcmBuffer, options = {}) {
 
 function normalizeAudioBufferForStorage(audioBuffer, mimeType, requestedFormat) {
   const normalizedFormat = String(requestedFormat || '').trim().toLowerCase();
-  if (normalizedFormat === 'pcm' && !isWavBuffer(audioBuffer)) {
+  const normalizedMimeType = String(mimeType || '').split(';')[0].trim().toLowerCase();
+  if ((normalizedFormat === 'pcm' || normalizedMimeType === 'audio/pcm') && !isWavBuffer(audioBuffer)) {
+    const wavBuffer = wrapPcmBufferInWav(audioBuffer);
+    assertValidAudioBuffer(wavBuffer, 'audio/wav');
     return {
-      data: wrapPcmBufferInWav(audioBuffer).toString('base64'),
+      data: wavBuffer.toString('base64'),
       mimeType: 'audio/wav'
     };
   }
 
+  assertValidAudioBuffer(audioBuffer, mimeType);
   return {
     data: audioBuffer.toString('base64'),
     mimeType
@@ -400,6 +504,8 @@ async function generatePodcastScript(window = {}, articles = []) {
     throw new Error('AI podcast response did not contain both English and Italian script text');
   }
 
+  validateGeneratedPodcast(normalized, articles.length);
+
   logger.info(`AI podcast script generated: model=${config.model}, articles=${articles.length}, durationMs=${Date.now() - startedAt}`);
   return {
     ...normalized,
@@ -422,6 +528,7 @@ async function generateItalianAudio(scriptText = '') {
   const audioFormat = getTtsAudioFormat(config.model);
   const ttsVoice = getTtsVoice();
   const fallbackMimeType = getAudioMimeType(audioFormat);
+  assertTtsInputWithinLimit(text, config.model);
   const startedAt = Date.now();
   const response = await audioSpeechHttpClient.post(
     getAudioSpeechUrl(config),
@@ -441,7 +548,7 @@ async function generateItalianAudio(scriptText = '') {
   );
 
   if (response.status >= 400) {
-    throw new Error(`AI podcast TTS request failed (${response.status}): ${parseSpeechErrorMessage(response.data)}`);
+    throw createTtsError(`AI podcast TTS request failed (${response.status}): ${parseSpeechErrorMessage(response.data)}`, 'PODCAST_TTS_PROVIDER_ERROR');
   }
 
   const contentType = getResponseContentType(response.headers || {}, fallbackMimeType);
@@ -451,7 +558,7 @@ async function generateItalianAudio(scriptText = '') {
     if (audio?.data) {
       const playableAudio = normalizeExtractedAudioForStorage(audio, audioFormat);
       if (!playableAudio) {
-        throw new Error('AI podcast TTS response did not include audio data');
+        throw createTtsError('AI podcast TTS response did not include audio data', 'PODCAST_TTS_AUDIO_INVALID');
       }
 
       logger.info(`AI podcast audio generated: model=${config.model}, durationMs=${Date.now() - startedAt}`);
@@ -463,12 +570,12 @@ async function generateItalianAudio(scriptText = '') {
       };
     }
 
-    throw new Error('AI podcast TTS response did not include audio data');
+    throw createTtsError('AI podcast TTS response did not include audio data', 'PODCAST_TTS_AUDIO_INVALID');
   }
 
   const audioBuffer = getResponseBuffer(response.data);
   if (audioBuffer.length === 0) {
-    throw new Error('AI podcast TTS response did not include audio data');
+    throw createTtsError('AI podcast TTS response did not include audio data', 'PODCAST_TTS_AUDIO_INVALID');
   }
   const playableAudio = normalizeAudioBufferForStorage(audioBuffer, contentType || fallbackMimeType, audioFormat);
 
@@ -493,14 +600,23 @@ async function generatePodcastForArticles(window = {}, articles = []) {
     audio = await generateItalianAudio(script.scriptTextByLocale.it);
   } catch (error) {
     audioErrorMessage = error.message;
+    const audioFailureCategory = getTtsFailureCategory(error);
     logger.warn(`AI podcast audio generation failed: model=${getTtsConfig().model}, error=${error.message}`);
+    return {
+      ...script,
+      audio: null,
+      audioStatus: 'failed',
+      audioErrorMessage,
+      audioFailureCategory
+    };
   }
 
   return {
     ...script,
     audio,
-    audioStatus: audio ? 'completed' : (audioErrorMessage ? 'failed' : 'not_available'),
-    audioErrorMessage
+    audioStatus: audio ? 'completed' : 'not_available',
+    audioErrorMessage,
+    audioFailureCategory: ''
   };
 }
 
@@ -519,9 +635,11 @@ module.exports = {
   _getArticleTextLimit: getArticleTextLimit,
   _getScriptConfig: getScriptConfig,
   _getTtsConfig: getTtsConfig,
+  _getTtsMaxInputBytes: getTtsMaxInputBytes,
   _getTtsVoice: getTtsVoice,
   _normalizeGeneratedPodcast: normalizeGeneratedPodcast,
   _parseJsonContent: parseJsonContent,
+  _validateGeneratedPodcast: validateGeneratedPodcast,
   _setAudioSpeechHttpClient: setAudioSpeechHttpClient,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };

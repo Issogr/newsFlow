@@ -17,8 +17,10 @@ const SUMMARY_READER_PREWARM_CONCURRENCY = parseIntegerEnv('AI_SUMMARY_READER_PR
 const SUMMARY_READER_TEXT_MAX_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MAX_CHARS', 3000, { min: 500, max: 12000 });
 const SUMMARY_READER_TEXT_MIN_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MIN_CHARS', 250, { min: 80, max: 2000 });
 const SUMMARY_FAILED_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
+const PODCAST_TTS_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_PODCAST_TTS_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
+const PODCAST_TTS_MAX_RETRIES = parseIntegerEnv('AI_PODCAST_TTS_MAX_RETRIES', 4, { min: 0, max: 20 });
 const TERMINAL_SUMMARY_STATUSES = new Set(['completed', 'empty']);
-const NON_RETRYABLE_SUMMARY_FAILURE_CATEGORIES = new Set(['invalid_output']);
+const NON_RETRYABLE_SUMMARY_FAILURE_CATEGORIES = new Set(['invalid_output', 'invalid_script']);
 const SUMMARY_TOPICS = [
   {
     key: 'technology',
@@ -236,6 +238,10 @@ function isTerminalSummary(summary = {}) {
 }
 
 function getSummaryFailureCategory(error = {}) {
+  if (error.code === 'PODCAST_SCRIPT_VALIDATION_FAILED') {
+    return 'invalid_script';
+  }
+
   if (error.code === 'SUMMARY_VALIDATION_FAILED') {
     return 'invalid_output';
   }
@@ -250,6 +256,14 @@ function getSummaryFailureCategory(error = {}) {
   }
 
   return 'generation_error';
+}
+
+function getPodcastAudioFailureCategory(error = {}) {
+  if (error.code === 'PODCAST_TTS_PROVIDER_ERROR') {
+    return 'provider_unavailable';
+  }
+
+  return 'tts_failed';
 }
 
 function isFailedSummaryRetryDue(summary = {}, referenceDate = new Date()) {
@@ -307,6 +321,28 @@ function buildEmptySummaryPayload(topicConfig, window) {
     model: '',
     status: 'empty',
     failureCategory: '',
+    retryCount: 0,
+    generatedAt: new Date().toISOString()
+  };
+}
+
+function buildEmptyPodcastPayload(window) {
+  return {
+    id: buildPodcastSummaryId(window.periodStart, window.periodEnd),
+    periodStart: window.periodStart,
+    periodEnd: window.periodEnd,
+    title: 'No podcast available',
+    scriptText: '',
+    titleByLocale: { en: 'No podcast available', it: 'Podcast non disponibile' },
+    scriptTextByLocale: { en: '', it: '' },
+    articleCount: 0,
+    sources: [],
+    model: '',
+    audioStatus: 'not_available',
+    audioFailureCategory: '',
+    audioRetryCount: 0,
+    status: 'empty',
+    failureCategory: 'empty_window',
     retryCount: 0,
     generatedAt: new Date().toISOString()
   };
@@ -401,6 +437,33 @@ function broadcastSummariesRefresh(options = {}) {
   }
 }
 
+function getAudioRetryDelayMs(summary = {}) {
+  if (PODCAST_TTS_RETRY_COOLDOWN_MS <= 0) {
+    return 0;
+  }
+
+  const retryCount = Math.max(0, Number(summary.audioRetryCount) || 0);
+  const multiplier = 2 ** Math.min(Math.max(retryCount - 1, 0), 4);
+  return Math.min(PODCAST_TTS_RETRY_COOLDOWN_MS * multiplier, 24 * 60 * 60 * 1000);
+}
+
+function isPodcastAudioRetryDue(summary = {}, options = {}) {
+  if (PODCAST_TTS_MAX_RETRIES <= 0 || Number(summary.audioRetryCount || 0) >= PODCAST_TTS_MAX_RETRIES) {
+    return false;
+  }
+
+  const failedAtTime = Date.parse(summary.audioFailedAt || '');
+  if (!Number.isFinite(failedAtTime)) {
+    return true;
+  }
+
+  return new Date(options.referenceDate || new Date()).getTime() - failedAtTime >= getAudioRetryDelayMs(summary);
+}
+
+function isSamePodcastAudioConfig(summary = {}, ttsConfig = {}, expectedVoice = '') {
+  return summary.audioModel === ttsConfig.model && summary.audioVoice === expectedVoice;
+}
+
 function shouldRetryPodcastAudio(summary = {}, options = {}) {
   if (summary.status !== 'completed') {
     return false;
@@ -417,6 +480,7 @@ function shouldRetryPodcastAudio(summary = {}, options = {}) {
   }
 
   const expectedVoice = aiPodcastGenerator._getTtsVoice();
+  const sameAudioConfig = isSamePodcastAudioConfig(summary, ttsConfig, expectedVoice);
   const audioMatchesConfig = summary.audioStatus === 'completed'
     && summary.audioModel === ttsConfig.model
     && summary.audioVoice === expectedVoice;
@@ -424,7 +488,7 @@ function shouldRetryPodcastAudio(summary = {}, options = {}) {
     return false;
   }
 
-  if (summary.audioStatus === 'failed' && summary.audioVoice === expectedVoice && !isFailedSummaryRetryDue({ ...summary, status: 'failed' }, options.referenceDate || new Date())) {
+  if (summary.audioStatus === 'failed' && sameAudioConfig && !isPodcastAudioRetryDue(summary, options)) {
     logger.debug(`AI podcast audio retry skipped during cooldown: windowEnd=${summary.periodEnd}`);
     return false;
   }
@@ -440,11 +504,16 @@ async function retryPodcastAudio(summary = {}, options = {}) {
   const scriptTextByLocale = getPodcastScriptTextByLocale(summary);
   const ttsConfig = aiPodcastGenerator._getTtsConfig();
   const expectedVoice = aiPodcastGenerator._getTtsVoice();
+  const sameAudioConfig = isSamePodcastAudioConfig(summary, ttsConfig, expectedVoice);
+  const currentAudioRetryCount = sameAudioConfig ? Math.max(0, Number(summary.audioRetryCount) || 0) : 0;
   const generatingSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(summary, {
     audioStatus: 'generating',
     audioErrorMessage: '',
+    audioFailureCategory: '',
     audioModel: ttsConfig.model,
     audioVoice: expectedVoice,
+    audioRetryCount: currentAudioRetryCount,
+    audioFailedAt: summary.audioFailedAt || null,
     status: 'completed'
   }));
   broadcastSummariesRefresh(options);
@@ -455,6 +524,9 @@ async function retryPodcastAudio(summary = {}, options = {}) {
       const unavailableSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
         audioStatus: 'not_available',
         audioErrorMessage: '',
+        audioFailureCategory: '',
+        audioRetryCount: currentAudioRetryCount,
+        audioFailedAt: null,
         audioModel: ttsConfig.model,
         audioVoice: expectedVoice,
         status: 'completed'
@@ -468,19 +540,26 @@ async function retryPodcastAudio(summary = {}, options = {}) {
         audio,
         audioStatus: 'completed',
         audioErrorMessage: '',
+        audioFailureCategory: '',
         audioModel: audio.model || ttsConfig.model,
         audioVoice: audio.voice || expectedVoice,
+        audioRetryCount: 0,
+        audioFailedAt: null,
         status: 'completed'
       })),
       generatedNow: true
     };
   } catch (error) {
+    const failedAt = new Date().toISOString();
     logger.warn(`AI podcast audio retry failed: windowEnd=${summary.periodEnd}, error=${error.message}`);
     const failedSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
       audioStatus: 'failed',
       audioErrorMessage: error.message,
+      audioFailureCategory: getPodcastAudioFailureCategory(error),
       audioModel: ttsConfig.model,
       audioVoice: expectedVoice,
+      audioRetryCount: currentAudioRetryCount + 1,
+      audioFailedAt: failedAt,
       status: 'completed'
     }));
     broadcastSummariesRefresh(options);
@@ -638,6 +717,9 @@ async function generatePodcastForWindow(window, options = {}) {
   if (existingSummary?.status === 'completed' && options.force !== true) {
     return retryPodcastAudio(existingSummary, options);
   }
+  if (existingSummary?.status === 'empty' && options.force !== true) {
+    return { summary: existingSummary, generatedNow: false };
+  }
   if (existingSummary?.status === 'failed' && options.force !== true && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
     logger.debug(`AI podcast retry skipped during cooldown: windowEnd=${window.periodEnd}`);
     return { summary: null, generatedNow: false };
@@ -645,7 +727,10 @@ async function generatePodcastForWindow(window, options = {}) {
 
   const articles = sortArticlesForPodcast(getCandidateArticlesForWindow(window));
   if (articles.length === 0) {
-    return { summary: null, generatedNow: false };
+    return {
+      summary: database.upsertPodcastSummary(buildEmptyPodcastPayload(window)),
+      generatedNow: true
+    };
   }
 
   const enrichedArticles = withCachedReaderText(articles);
@@ -664,6 +749,7 @@ async function generatePodcastForWindow(window, options = {}) {
     if (!generated) {
       return { summary: null, generatedNow: false };
     }
+    const audioFailedAt = generated.audioStatus === 'failed' ? new Date().toISOString() : null;
 
     return {
       summary: database.upsertPodcastSummary({
@@ -676,13 +762,19 @@ async function generatePodcastForWindow(window, options = {}) {
         audio: generated.audio,
         audioStatus: generated.audioStatus,
         audioErrorMessage: generated.audioErrorMessage,
+        audioFailureCategory: generated.audioFailureCategory || '',
         audioModel: generated.audio?.model || aiPodcastGenerator._getTtsConfig().model,
         audioVoice: generated.audio?.voice || aiPodcastGenerator._getTtsVoice(),
-        status: 'completed'
+        audioRetryCount: generated.audioStatus === 'failed' ? 1 : 0,
+        audioFailedAt,
+        status: 'completed',
+        failureCategory: '',
+        retryCount: 0
       }),
       generatedNow: true
     };
   } catch (error) {
+    const failureCategory = getSummaryFailureCategory(error);
     logger.warn(`AI podcast generation failed: windowEnd=${window.periodEnd}, error=${error.message}`);
     database.upsertPodcastSummary({
       ...basePayload,
@@ -693,6 +785,8 @@ async function generatePodcastForWindow(window, options = {}) {
       model: aiPodcastGenerator._getScriptConfig().model,
       audioStatus: 'not_available',
       status: 'failed',
+      failureCategory,
+      retryCount: (existingSummary?.retryCount || 0) + 1,
       errorMessage: error.message
     });
     return { summary: null, generatedNow: false };

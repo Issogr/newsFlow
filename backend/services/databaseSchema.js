@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 34;
+  const CURRENT_SCHEMA_VERSION = 35;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getPodcastSummariesSchemaSql() {
@@ -28,7 +28,12 @@ function createDatabaseSchema({ logger }) {
         audio_blob BLOB,
         audio_status TEXT NOT NULL DEFAULT 'not_available',
         audio_error_message TEXT,
+        audio_failure_category TEXT NOT NULL DEFAULT '',
+        audio_retry_count INTEGER NOT NULL DEFAULT 0,
+        audio_failed_at TEXT,
         status TEXT NOT NULL DEFAULT 'completed',
+        failure_category TEXT NOT NULL DEFAULT '',
+        retry_count INTEGER NOT NULL DEFAULT 0,
         error_message TEXT,
         generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(period_start, period_end)
@@ -420,6 +425,10 @@ function createDatabaseSchema({ logger }) {
 
     if (!thematicSummaryColumns.has('failure_category') || !thematicSummaryColumns.has('retry_count')) {
       return 33;
+    }
+
+    if (!podcastSummaryColumns.has('failure_category') || !podcastSummaryColumns.has('retry_count') || !podcastSummaryColumns.has('audio_failure_category') || !podcastSummaryColumns.has('audio_retry_count') || !podcastSummaryColumns.has('audio_failed_at')) {
+      return 34;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -879,6 +888,30 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 34);
       logger.info('Migrated DB schema from version 33 to 34');
+      migrateSchema(database, 34);
+      return;
+    }
+
+    if (currentVersion === 34) {
+      const podcastSummaryColumns = getColumnNames(database, 'podcast_summaries');
+      if (!podcastSummaryColumns.has('audio_failure_category')) {
+        database.exec("ALTER TABLE podcast_summaries ADD COLUMN audio_failure_category TEXT NOT NULL DEFAULT ''");
+      }
+      if (!podcastSummaryColumns.has('audio_retry_count')) {
+        database.exec('ALTER TABLE podcast_summaries ADD COLUMN audio_retry_count INTEGER NOT NULL DEFAULT 0');
+      }
+      if (!podcastSummaryColumns.has('audio_failed_at')) {
+        database.exec('ALTER TABLE podcast_summaries ADD COLUMN audio_failed_at TEXT');
+      }
+      if (!podcastSummaryColumns.has('failure_category')) {
+        database.exec("ALTER TABLE podcast_summaries ADD COLUMN failure_category TEXT NOT NULL DEFAULT ''");
+      }
+      if (!podcastSummaryColumns.has('retry_count')) {
+        database.exec('ALTER TABLE podcast_summaries ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0');
+      }
+
+      setCurrentSchemaVersion(database, 35);
+      logger.info('Migrated DB schema from version 34 to 35');
       return;
     }
 

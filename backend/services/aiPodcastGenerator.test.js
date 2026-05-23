@@ -1,5 +1,23 @@
 const aiPodcastGenerator = require('./aiPodcastGenerator');
 
+function createTestWavBuffer(byteLength = 2048) {
+  const buffer = Buffer.alloc(Math.max(44, byteLength));
+  buffer.write('RIFF', 0);
+  buffer.writeUInt32LE(buffer.length - 8, 4);
+  buffer.write('WAVE', 8);
+  buffer.write('fmt ', 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(24000, 24);
+  buffer.writeUInt32LE(48000, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write('data', 36);
+  buffer.writeUInt32LE(buffer.length - 44, 40);
+  return buffer;
+}
+
 describe('aiPodcastGenerator', () => {
   const originalEnv = process.env;
 
@@ -83,6 +101,31 @@ describe('aiPodcastGenerator', () => {
 
     expect(normalized.scriptTextByLocale.en).toBe('The opening story covers transport policy. The closing story covers science.');
     expect(normalized.scriptTextByLocale.it).toBe('La prima notizia riguarda i trasporti. La chiusura riguarda la scienza.');
+  });
+
+  test('validates generated podcast scripts for speakable output', () => {
+    const validScript = 'This briefing opens with a clear summary of the main story and then moves through the important context in natural spoken language. It closes with a short, direct ending for listeners.';
+
+    expect(() => aiPodcastGenerator._validateGeneratedPodcast({
+      scriptTextByLocale: {
+        en: `${validScript} Reference [1].`,
+        it: 'Questa sintesi apre con il contesto principale e prosegue con una spiegazione naturale per l\'ascolto. Si chiude con una frase breve e chiara.'
+      }
+    }, 1)).toThrow('bracket citations');
+
+    expect(() => aiPodcastGenerator._validateGeneratedPodcast({
+      scriptTextByLocale: {
+        en: `- ${validScript}`,
+        it: 'Questa sintesi apre con il contesto principale e prosegue con una spiegazione naturale per l\'ascolto. Si chiude con una frase breve e chiara.'
+      }
+    }, 1)).toThrow('non-speakable formatting');
+
+    expect(() => aiPodcastGenerator._validateGeneratedPodcast({
+      scriptTextByLocale: {
+        en: validScript,
+        it: validScript
+      }
+    }, 1)).toThrow('identical');
   });
 
   test('extracts base64 audio payloads from OpenRouter-style responses', () => {
@@ -183,7 +226,7 @@ describe('aiPodcastGenerator', () => {
       AI_PODCAST_TTS_FORMAT: 'wav',
       AI_PODCAST_TTS_VOICE: 'Puck'
     };
-    const audioBytes = Buffer.from('RIFF test audio');
+    const audioBytes = createTestWavBuffer();
     const httpClient = {
       post: jest.fn().mockResolvedValue({
         status: 200,
@@ -260,5 +303,36 @@ describe('aiPodcastGenerator', () => {
 
     await expect(aiPodcastGenerator._generateItalianAudio('Testo podcast italiano'))
       .rejects.toThrow('AI podcast TTS request failed (400): Provider returned 400: Invalid voice: UnknownVoice');
+  });
+
+  test('rejects overlong TTS input before calling the provider', async () => {
+    process.env = {
+      ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key',
+      AI_PODCAST_TTS_MAX_INPUT_BYTES: '1000'
+    };
+    const httpClient = { post: jest.fn() };
+    aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
+
+    await expect(aiPodcastGenerator._generateItalianAudio('Testo podcast italiano. '.repeat(200)))
+      .rejects.toThrow('TTS input is too long');
+    expect(httpClient.post).not.toHaveBeenCalled();
+  });
+
+  test('rejects tiny or malformed TTS audio responses', async () => {
+    process.env = {
+      ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key'
+    };
+    aiPodcastGenerator._setAudioSpeechHttpClient({
+      post: jest.fn().mockResolvedValue({
+        status: 200,
+        headers: { 'content-type': 'audio/wav' },
+        data: Buffer.from('RIFF broken')
+      })
+    });
+
+    await expect(aiPodcastGenerator._generateItalianAudio('Testo podcast italiano'))
+      .rejects.toThrow('audio is too small');
   });
 });
