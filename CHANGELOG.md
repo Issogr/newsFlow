@@ -13,6 +13,7 @@
 - improved summary and podcast readability with paragraph breaks for dense generated text
 - removed promotional product price-drop sentences from generated summaries and podcast scripts as a final cleanup pass
 - streamed podcast audio through the browser media pipeline instead of eagerly downloading and decoding the full file
+- made AI story grouping more reliable by checking a larger nearby candidate pool while keeping model input capped, retrying recent misses after new articles, and recording match evidence
 - hardened BFF proxy trust, CSP, session renewal, and public API invalid-token throttling
 - fixed grouped-feed cursor pagination so already returned related articles do not reappear on later pages
 - preserved unsaved settings drafts while adding sources or changing API tokens

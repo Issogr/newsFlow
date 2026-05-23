@@ -227,6 +227,7 @@ module.exports = {
   removeReadLaterArticles: articleRepository.removeReadLaterArticles,
   getArticleIdsPendingAiTopicProcessing: articleRepository.getArticleIdsPendingAiTopicProcessing,
   getArticleIdsPendingAiStoryGrouping: articleRepository.getArticleIdsPendingAiStoryGrouping,
+  getArticleIdsForAiStoryGroupingRetry: articleRepository.getArticleIdsForAiStoryGroupingRetry,
   getTopicClassificationReport: articleRepository.getTopicClassificationReport,
   markArticlesAiTopicProcessing: articleRepository.markArticlesAiTopicProcessing,
   markArticlesAiStoryGrouping: articleRepository.markArticlesAiStoryGrouping,

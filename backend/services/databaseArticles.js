@@ -232,7 +232,10 @@ function createArticleRepository({
         a.story_group_id AS storyGroupId,
         a.ai_story_group_processed_at AS aiStoryGroupProcessedAt,
         a.ai_story_group_status AS aiStoryGroupStatus,
-        a.ai_story_group_model AS aiStoryGroupModel
+        a.ai_story_group_model AS aiStoryGroupModel,
+        a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
+        a.ai_story_group_confidence AS aiStoryGroupConfidence,
+        a.ai_story_group_reason AS aiStoryGroupReason
       FROM articles a
       ${joins.join('\n')}
       ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
@@ -600,9 +603,24 @@ function createArticleRepository({
             SELECT ai_story_group_model
             FROM articles duplicate
             WHERE duplicate.id = ?
+          )),
+          ai_story_group_match_ids = COALESCE(NULLIF(NULLIF(ai_story_group_match_ids, ''), '[]'), (
+            SELECT ai_story_group_match_ids
+            FROM articles duplicate
+            WHERE duplicate.id = ?
+          )),
+          ai_story_group_confidence = COALESCE(ai_story_group_confidence, (
+            SELECT ai_story_group_confidence
+            FROM articles duplicate
+            WHERE duplicate.id = ?
+          )),
+          ai_story_group_reason = COALESCE(ai_story_group_reason, (
+            SELECT ai_story_group_reason
+            FROM articles duplicate
+            WHERE duplicate.id = ?
           ))
       WHERE id = ?
-    `).run(duplicateId, duplicateId, duplicateId, duplicateId, persistedArticleId);
+    `).run(duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, persistedArticleId);
   }
 
   function getTopicDetailsByArticleIds(articleIds) {
@@ -659,6 +677,7 @@ function createArticleRepository({
 
       return {
         ...row,
+        aiStoryGroupMatchIds: parseJsonArray(row.aiStoryGroupMatchIds),
         rawSourceId: row.sourceId,
         rawSource: row.source,
         sourceId: sourceMetadata.sourceId,
@@ -934,6 +953,54 @@ function createArticleRepository({
     });
   }
 
+  function getArticleIdsForAiStoryGroupingRetry(articleIds = [], options = {}) {
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
+    if (normalizedArticleIds.length === 0) {
+      return [];
+    }
+
+    const database = getDb();
+    const windowHours = Math.max(1, Math.min(Number(options.windowHours) || 24, 72));
+    const limit = Math.max(1, Math.min(Number(options.limit) || 12, 100));
+    const retryStatuses = ['failed', 'deferred', 'no_candidates', 'no_match'];
+    const anchors = chunkValues(normalizedArticleIds).flatMap((ids) => {
+      return database.prepare(`
+        SELECT id, owner_user_id AS ownerUserId, published_at AS pubDate
+        FROM articles
+        WHERE id IN (${ids.map(() => '?').join(', ')})
+      `).all(...ids);
+    });
+    const retryIds = new Set();
+
+    anchors.forEach((anchor) => {
+      if (retryIds.size >= limit) {
+        return;
+      }
+
+      const anchorTimestamp = Date.parse(anchor.pubDate || '');
+      if (!Number.isFinite(anchorTimestamp)) {
+        return;
+      }
+
+      const periodStart = new Date(anchorTimestamp - (windowHours * 60 * 60 * 1000)).toISOString();
+      const periodEnd = new Date(anchorTimestamp + (windowHours * 60 * 60 * 1000)).toISOString();
+      const rows = database.prepare(`
+        SELECT id
+        FROM articles
+        WHERE id != ?
+          AND COALESCE(owner_user_id, '') = COALESCE(?, '')
+          AND published_at BETWEEN ? AND ?
+          AND ai_story_group_status IN (${retryStatuses.map(() => '?').join(', ')})
+        ORDER BY published_at DESC, id DESC
+        LIMIT ?
+      `).all(anchor.id, anchor.ownerUserId || '', periodStart, periodEnd, ...retryStatuses, limit - retryIds.size);
+
+      rows.forEach((row) => retryIds.add(row.id));
+    });
+
+    return [...retryIds];
+  }
+
   function markArticlesAiStoryGrouping(articleIds = [], status = 'completed', model = '') {
     const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     if (normalizedArticleIds.length === 0) {
@@ -952,7 +1019,34 @@ function createArticleRepository({
     }, 0);
   }
 
-  function assignArticlesToStoryGroup(articleIds = [], storyGroupId = '', model = '') {
+  function normalizeStoryMatchEvidence(matches = []) {
+    const normalizedMatches = (Array.isArray(matches) ? matches : [])
+      .map((match) => ({
+        articleId: String(match?.articleId || match?.id || '').trim(),
+        confidence: Number(match?.confidence),
+        reason: String(match?.reason || '').replace(/\s+/g, ' ').trim()
+      }))
+      .filter((match) => match.articleId && Number.isFinite(match.confidence))
+      .sort((left, right) => right.confidence - left.confidence);
+    const matchIds = [...new Set(normalizedMatches.map((match) => match.articleId))].slice(0, 20);
+    const confidence = normalizedMatches.length > 0
+      ? Math.max(...normalizedMatches.map((match) => match.confidence))
+      : null;
+    const reason = normalizedMatches
+      .map((match) => match.reason)
+      .filter(Boolean)
+      .slice(0, 3)
+      .join('; ')
+      .slice(0, 500);
+
+    return {
+      matchIdsJson: JSON.stringify(matchIds),
+      confidence,
+      reason: reason || null
+    };
+  }
+
+  function assignArticlesToStoryGroup(articleIds = [], storyGroupId = '', model = '', matches = []) {
     const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     const normalizedStoryGroupId = String(storyGroupId || '').trim().slice(0, 160);
     if (normalizedArticleIds.length === 0 || !normalizedStoryGroupId) {
@@ -960,15 +1054,27 @@ function createArticleRepository({
     }
 
     const processedAt = new Date().toISOString();
+    const evidence = normalizeStoryMatchEvidence(matches);
     return chunkValues(normalizedArticleIds).reduce((total, ids) => {
       return total + getDb().prepare(`
         UPDATE articles
         SET story_group_id = ?,
             ai_story_group_processed_at = ?,
             ai_story_group_status = 'matched',
-            ai_story_group_model = ?
+            ai_story_group_model = ?,
+            ai_story_group_match_ids = ?,
+            ai_story_group_confidence = ?,
+            ai_story_group_reason = ?
         WHERE id IN (${ids.map(() => '?').join(', ')})
-      `).run(normalizedStoryGroupId, processedAt, String(model || '').slice(0, 160), ...ids).changes;
+      `).run(
+        normalizedStoryGroupId,
+        processedAt,
+        String(model || '').slice(0, 160),
+        evidence.matchIdsJson,
+        evidence.confidence,
+        evidence.reason,
+        ...ids
+      ).changes;
     }, 0);
   }
 
@@ -1000,12 +1106,14 @@ function createArticleRepository({
 
     const database = getDb();
     const windowHours = Math.max(1, Math.min(Number(options.windowHours) || 24, 72));
-    const limit = Math.max(1, Math.min(Number(options.limit) || 12, 30));
+    const limit = Math.max(1, Math.min(Number(options.limit) || 12, 100));
     const targetRow = database.prepare(`
       SELECT id, source_id AS sourceId, source_name AS source, title, description, content, url, canonical_url AS canonicalUrl,
              image, author, language, owner_user_id AS ownerUserId, published_at AS pubDate,
              story_group_id AS storyGroupId, ai_story_group_processed_at AS aiStoryGroupProcessedAt,
-             ai_story_group_status AS aiStoryGroupStatus, ai_story_group_model AS aiStoryGroupModel
+             ai_story_group_status AS aiStoryGroupStatus, ai_story_group_model AS aiStoryGroupModel,
+             ai_story_group_match_ids AS aiStoryGroupMatchIds, ai_story_group_confidence AS aiStoryGroupConfidence,
+             ai_story_group_reason AS aiStoryGroupReason
       FROM articles
       WHERE id = ?
     `).get(normalizedArticleId);
@@ -1025,7 +1133,9 @@ function createArticleRepository({
       SELECT id, source_id AS sourceId, source_name AS source, title, description, content, url, canonical_url AS canonicalUrl,
              image, author, language, owner_user_id AS ownerUserId, published_at AS pubDate,
              story_group_id AS storyGroupId, ai_story_group_processed_at AS aiStoryGroupProcessedAt,
-             ai_story_group_status AS aiStoryGroupStatus, ai_story_group_model AS aiStoryGroupModel
+             ai_story_group_status AS aiStoryGroupStatus, ai_story_group_model AS aiStoryGroupModel,
+             ai_story_group_match_ids AS aiStoryGroupMatchIds, ai_story_group_confidence AS aiStoryGroupConfidence,
+             ai_story_group_reason AS aiStoryGroupReason
       FROM articles
       WHERE id != ?
         AND COALESCE(owner_user_id, '') = COALESCE(?, '')
@@ -1287,7 +1397,10 @@ function createArticleRepository({
           a.story_group_id AS storyGroupId,
           a.ai_story_group_processed_at AS aiStoryGroupProcessedAt,
           a.ai_story_group_status AS aiStoryGroupStatus,
-          a.ai_story_group_model AS aiStoryGroupModel
+          a.ai_story_group_model AS aiStoryGroupModel,
+          a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
+          a.ai_story_group_confidence AS aiStoryGroupConfidence,
+          a.ai_story_group_reason AS aiStoryGroupReason
         FROM articles a
         WHERE ${where.join(' AND ')}
       `).all(...params);
@@ -1506,6 +1619,9 @@ function createArticleRepository({
         a.ai_story_group_processed_at AS aiStoryGroupProcessedAt,
         a.ai_story_group_status AS aiStoryGroupStatus,
         a.ai_story_group_model AS aiStoryGroupModel,
+        a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
+        a.ai_story_group_confidence AS aiStoryGroupConfidence,
+        a.ai_story_group_reason AS aiStoryGroupReason,
         rl.saved_at AS readLaterSavedAt
       FROM articles a
       ${joins.join('\n')}
@@ -1545,7 +1661,10 @@ function createArticleRepository({
         a.story_group_id AS storyGroupId,
         a.ai_story_group_processed_at AS aiStoryGroupProcessedAt,
         a.ai_story_group_status AS aiStoryGroupStatus,
-        a.ai_story_group_model AS aiStoryGroupModel
+        a.ai_story_group_model AS aiStoryGroupModel,
+        a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
+        a.ai_story_group_confidence AS aiStoryGroupConfidence,
+        a.ai_story_group_reason AS aiStoryGroupReason
       FROM articles a
       JOIN article_topics at ON at.article_id = a.id
       WHERE a.owner_user_id IS NULL
@@ -2370,6 +2489,7 @@ function createArticleRepository({
     removeReadLaterArticles,
     getArticleIdsPendingAiTopicProcessing,
     getArticleIdsPendingAiStoryGrouping,
+    getArticleIdsForAiStoryGroupingRetry,
     getTopicClassificationReport,
     markArticlesAiTopicProcessing,
     markArticlesAiStoryGrouping,

@@ -13,6 +13,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '📖 Dense summaries and podcast scripts are split into more readable paragraphs.',
       '🛒 Promotional product price-drop sentences are removed from generated summaries and podcast scripts.',
       '⚡ Podcast audio now streams through the browser instead of loading the full file first.',
+      '🧩 AI story grouping checks more nearby candidates, retries recent misses, and records match evidence while keeping model input small.',
       '🛡️ Feed pagination, session handling, and settings drafts are more reliable.'
     ]
   },
@@ -29,6 +30,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '📖 Sintesi e testi podcast densi vengono divisi in paragrafi piu leggibili.',
       '🛒 Le frasi promozionali su cali di prezzo dei prodotti vengono rimosse da sintesi e podcast.',
       '⚡ L\'audio podcast ora viene riprodotto in streaming dal browser invece di caricare prima tutto il file.',
+      '🧩 Il raggruppamento AI delle storie controlla piu candidati vicini, ritenta i match recenti mancati e conserva le prove del match mantenendo piccolo l\'input del modello.',
       '🛡️ Paginazione del feed, sessioni e bozze delle impostazioni sono piu affidabili.'
     ]
   }

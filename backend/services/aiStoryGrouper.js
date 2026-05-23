@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const logger = require('../utils/logger');
+const { parseIntegerEnv } = require('../utils/env');
 const {
   createOpenRouterClient,
   extractAssistantContent,
@@ -10,6 +11,7 @@ const {
 
 const DEFAULT_OPENROUTER_STORY_GROUPING_MODEL = 'qwen/qwen3.5-9b';
 const DEFAULT_TIMEOUT_MS = 120000;
+const DEFAULT_AI_CANDIDATE_LIMIT = 8;
 const MIN_MATCH_CONFIDENCE = 0.82;
 const STORY_GROUP_TOKEN_STOP_WORDS = new Set([
   'a', 'ad', 'al', 'alla', 'and', 'con', 'da', 'dal', 'dalla', 'de', 'del', 'della', 'di', 'e', 'for', 'from', 'gli', 'il', 'in', 'la', 'le', 'lo', 'of', 'on', 'per', 'the', 'to', 'un', 'una', 'with'
@@ -71,7 +73,19 @@ function hasTopicOverlap(left = {}, right = {}) {
   return (right.topics || []).some((topic) => leftTopics.has(String(topic || '').toLowerCase()));
 }
 
-function filterCandidateArticles(target = {}, candidates = []) {
+function getAiCandidateLimit(limit) {
+  const configuredLimit = parseIntegerEnv('AI_STORY_GROUPING_AI_CANDIDATE_LIMIT', DEFAULT_AI_CANDIDATE_LIMIT, { min: 1, max: 12 });
+  const requestedLimit = Number(limit);
+  return Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : configuredLimit, 12));
+}
+
+function getCandidateScore(overlapScore, topicOverlap) {
+  return overlapScore + (topicOverlap ? 0.1 : 0);
+}
+
+function filterCandidateArticles(target = {}, candidates = [], options = {}) {
+  const candidateLimit = getAiCandidateLimit(options.limit);
+
   return (Array.isArray(candidates) ? candidates : [])
     .filter((candidate) => candidate?.id && candidate.id !== target?.id)
     .map((candidate) => ({
@@ -80,8 +94,10 @@ function filterCandidateArticles(target = {}, candidates = []) {
       topicOverlap: hasTopicOverlap(target, candidate)
     }))
     .filter(({ overlapScore, topicOverlap }) => overlapScore >= 0.18 || topicOverlap)
-    .sort((left, right) => right.overlapScore - left.overlapScore)
-    .slice(0, 8)
+    .sort((left, right) => (
+      getCandidateScore(right.overlapScore, right.topicOverlap) - getCandidateScore(left.overlapScore, left.topicOverlap)
+    ))
+    .slice(0, candidateLimit)
     .map(({ candidate }) => candidate);
 }
 
@@ -135,9 +151,9 @@ function buildStoryGroupId(articleIds = []) {
   return `ai-story-${crypto.createHash('sha1').update(stableIds.join('|')).digest('hex').slice(0, 16)}`;
 }
 
-async function findSimilarStoriesForArticle(target = {}, candidates = []) {
+async function findSimilarStoriesForArticle(target = {}, candidates = [], options = {}) {
   const config = getConfig();
-  const filteredCandidates = filterCandidateArticles(target, candidates);
+  const filteredCandidates = filterCandidateArticles(target, candidates, options);
   if (!target?.id || filteredCandidates.length === 0) {
     return { matches: [], model: config.model, skipped: 'no_candidates' };
   }

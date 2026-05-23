@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 32;
+  const CURRENT_SCHEMA_VERSION = 33;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getPodcastSummariesSchemaSql() {
@@ -86,6 +86,9 @@ function createDatabaseSchema({ logger }) {
         ai_story_group_processed_at TEXT,
         ai_story_group_status TEXT,
         ai_story_group_model TEXT,
+        ai_story_group_match_ids TEXT NOT NULL DEFAULT '[]',
+        ai_story_group_confidence REAL,
+        ai_story_group_reason TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -407,6 +410,10 @@ function createDatabaseSchema({ logger }) {
     const podcastSummaryColumns = getColumnNames(database, 'podcast_summaries');
     if (!podcastSummaryColumns.has('audio_voice')) {
       return 31;
+    }
+
+    if (!articleColumns.has('ai_story_group_match_ids') || !articleColumns.has('ai_story_group_confidence') || !articleColumns.has('ai_story_group_reason')) {
+      return 32;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -833,6 +840,24 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 32);
       logger.info('Migrated DB schema from version 31 to 32');
+      migrateSchema(database, 32);
+      return;
+    }
+
+    if (currentVersion === 32) {
+      const articleColumns = getColumnNames(database, 'articles');
+      if (!articleColumns.has('ai_story_group_match_ids')) {
+        database.exec("ALTER TABLE articles ADD COLUMN ai_story_group_match_ids TEXT NOT NULL DEFAULT '[]'");
+      }
+      if (!articleColumns.has('ai_story_group_confidence')) {
+        database.exec('ALTER TABLE articles ADD COLUMN ai_story_group_confidence REAL');
+      }
+      if (!articleColumns.has('ai_story_group_reason')) {
+        database.exec('ALTER TABLE articles ADD COLUMN ai_story_group_reason TEXT');
+      }
+
+      setCurrentSchemaVersion(database, 33);
+      logger.info('Migrated DB schema from version 32 to 33');
       return;
     }
 
