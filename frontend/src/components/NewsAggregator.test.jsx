@@ -266,7 +266,7 @@ describe('NewsAggregator', () => {
 
     fireEvent.click(storyButton);
 
-    expect(screen.queryByText('Sintesi tecnologia')).not.toBeInTheDocument();
+    expect(screen.getByText('Sintesi tecnologia')).toBeInTheDocument();
     expect(screen.getByText('1 articolo valutato')).toBeInTheDocument();
     expect(screen.queryByText('I chip AI sono avanzati rapidamente nella finestra [1].')).not.toBeInTheDocument();
     expect(screen.getAllByText('BBC')).not.toHaveLength(0);
@@ -1035,7 +1035,8 @@ describe('NewsAggregator', () => {
           hasMore: true,
           nextCursor: {
             beforePubDate: '2026-03-14T10:00:00.000Z',
-            beforeId: 'article-1'
+            beforeId: 'article-1',
+            excludeArticleIds: ['article-1', 'article-related']
           }
         },
         filters: { sources: [], sourceCatalog: [], topics: [] }
@@ -1057,7 +1058,8 @@ describe('NewsAggregator', () => {
     await waitFor(() => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
         beforePubDate: '2026-03-14T10:00:00.000Z',
-        beforeId: 'article-1'
+        beforeId: 'article-1',
+        excludeArticleIds: ['article-1', 'article-related']
       }));
     });
     expect(await screen.findByText('Older headline')).toBeInTheDocument();

@@ -588,6 +588,55 @@ describe('database queries and user data', () => {
     expect(secondPage.map((article) => article.id)).toEqual(['article-b', 'article-a']);
   });
 
+  test('excludes already returned article ids from cursor pagination', () => {
+    const pubDate = new Date().toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'exclude-article-c',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Story C',
+        description: 'Third story',
+        content: 'Body C',
+        url: 'https://example.com/exclude-c',
+        language: 'en',
+        pubDate
+      },
+      {
+        id: 'exclude-article-b',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Story B',
+        description: 'Second story',
+        content: 'Body B',
+        url: 'https://example.com/exclude-b',
+        language: 'en',
+        pubDate
+      },
+      {
+        id: 'exclude-article-a',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Story A',
+        description: 'First story',
+        content: 'Body A',
+        url: 'https://example.com/exclude-a',
+        language: 'en',
+        pubDate
+      }
+    ]);
+
+    const page = database.getArticles({
+      beforePubDate: pubDate,
+      beforeId: 'exclude-article-c',
+      excludeArticleIds: ['exclude-article-b'],
+      limit: 3
+    }, { maxArticleAgeHours: 9999 });
+
+    expect(page.map((article) => article.id)).toEqual(['exclude-article-a']);
+  });
+
   test('updates an existing same-source article when the canonical URL matches a new id', () => {
     const now = new Date().toISOString();
 
@@ -1389,6 +1438,33 @@ describe('database queries and user data', () => {
     expect(database.deleteUserSource('user-1', 'custom-1')).toBe(1);
     expect(database.listUserSources('user-1')).toEqual([]);
     expect(database.getArticles({}, { userId: 'user-1' })).toEqual([]);
+  });
+
+  test('persists zero article retention as a valid setting value', () => {
+    const now = new Date().toISOString();
+
+    database.createUser({
+      id: 'zero-retention-user',
+      username: 'zero-retention',
+      passwordHash: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const settings = database.upsertUserSettings('zero-retention-user', {
+      defaultLanguage: 'auto',
+      articleRetentionHours: 0,
+      recentHours: 3,
+      excludedSourceIds: [],
+      excludedSubSourceIds: []
+    });
+
+    expect(settings.articleRetentionHours).toBe(0);
+    expect(database.getDb().prepare(`
+      SELECT article_retention_hours AS articleRetentionHours
+      FROM user_settings
+      WHERE user_id = ?
+    `).get('zero-retention-user').articleRetentionHours).toBe(0);
   });
 
   test('deleting one user shared custom source does not remove another user shared source data', () => {

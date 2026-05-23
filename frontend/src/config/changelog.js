@@ -11,7 +11,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🧹 AI summaries and podcast briefings now skip promotional shopping deals and affiliate-style sale posts.',
       '🕒 Podcast and summary titles no longer invent morning, noon, or evening labels from the coverage window.',
       '📖 Dense summaries and podcast scripts are split into more readable paragraphs.',
-      '🛒 Promotional product price-drop sentences are removed from generated summaries and podcast scripts.'
+      '🛒 Promotional product price-drop sentences are removed from generated summaries and podcast scripts.',
+      '⚡ Podcast audio now streams through the browser instead of loading the full file first.',
+      '🛡️ Feed pagination, session handling, and settings drafts are more reliable.'
     ]
   },
   it: {
@@ -25,7 +27,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🧹 Le sintesi AI e i briefing podcast ora saltano offerte promozionali e articoli di vendita in stile affiliate.',
       '🕒 I titoli di podcast e sintesi non inventano piu etichette come mattina, mezzogiorno o sera dalla finestra coperta.',
       '📖 Sintesi e testi podcast densi vengono divisi in paragrafi piu leggibili.',
-      '🛒 Le frasi promozionali su cali di prezzo dei prodotti vengono rimosse da sintesi e podcast.'
+      '🛒 Le frasi promozionali su cali di prezzo dei prodotti vengono rimosse da sintesi e podcast.',
+      '⚡ L\'audio podcast ora viene riprodotto in streaming dal browser invece di caricare prima tutto il file.',
+      '🛡️ Paginazione del feed, sessioni e bozze delle impostazioni sono piu affidabili.'
     ]
   }
 };

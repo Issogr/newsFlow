@@ -155,6 +155,7 @@ export const fetchNews = async ({
   recentHours = null,
   beforePubDate = '',
   beforeId = '',
+  excludeArticleIds = [],
   refresh = false,
   includeFilters = true,
   signal
@@ -183,6 +184,10 @@ export const fetchNews = async ({
 
   if (beforeId) {
     params.beforeId = beforeId;
+  }
+
+  if (Array.isArray(excludeArticleIds) && excludeArticleIds.length > 0) {
+    params.excludeArticleIds = excludeArticleIds.join(',');
   }
 
   if (refresh) {
@@ -235,11 +240,6 @@ export const fetchReadLaterNews = async ({
 
 export const fetchThematicSummaries = async ({ signal } = {}) => {
   const response = await api.get('/thematic-summaries', { signal });
-  return response.data;
-};
-
-export const fetchPodcastSummary = async ({ signal } = {}) => {
-  const response = await api.get('/podcast-summary', { signal });
   return response.data;
 };
 

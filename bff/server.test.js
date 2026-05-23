@@ -51,7 +51,10 @@ function requestUpgrade(server, { cookie = '', headers = {} } = {}) {
 
 function createFrontendDist() {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'newsflow-bff-frontend-'));
+  fs.mkdirSync(path.join(tempDir, 'assets'), { recursive: true });
   fs.writeFileSync(path.join(tempDir, 'index.html'), '<!doctype html><html><body>News Flow</body></html>');
+  fs.writeFileSync(path.join(tempDir, 'assets', 'app-test.js'), 'window.__newsFlowTest = true;');
+  fs.writeFileSync(path.join(tempDir, 'icon.svg'), '<svg xmlns="http://www.w3.org/2000/svg" />');
   return tempDir;
 }
 
@@ -235,7 +238,7 @@ describe('bff server', () => {
 
     expect(meResponse.body).toEqual({ user: { id: 'user-1', username: 'alice' } });
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
-    expect(meResponse.headers['set-cookie']?.find((value) => value.startsWith('newsflow_bff_session='))).toContain('Expires=');
+    expect(meResponse.headers['set-cookie']).toBeUndefined();
   });
 
   test('serves browser responses with security headers', async () => {
@@ -245,8 +248,22 @@ describe('bff server', () => {
 
     expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
     expect(response.headers['content-security-policy']).toContain("default-src 'self'");
+    expect(response.headers['content-security-policy']).toContain("connect-src 'self'");
+    expect(response.headers['content-security-policy']).not.toContain('wss:');
     expect(response.headers['referrer-policy']).toBe('same-origin');
     expect(response.headers['set-cookie']).toBeUndefined();
+  });
+
+  test('only marks fingerprinted assets as immutable', async () => {
+    const assetResponse = await request(app)
+      .get('/assets/app-test.js')
+      .expect(200);
+    const iconResponse = await request(app)
+      .get('/icon.svg')
+      .expect(200);
+
+    expect(assetResponse.headers['cache-control']).toBe('public, max-age=2592000, immutable');
+    expect(iconResponse.headers['cache-control']).toBe('public, max-age=0, must-revalidate');
   });
 
   test('returns a client error for malformed JSON on auth routes', async () => {
@@ -420,6 +437,40 @@ describe('bff server', () => {
     expect(lastBackendHeaders['x-forwarded-for']).toContain('203.0.113.99');
     expect(lastBackendHeaders['x-forwarded-host']).not.toBe('evil.example');
     expect(lastBackendHeaders['x-forwarded-proto']).toBe('https');
+  });
+
+  test('does not trust caller forwarded headers unless explicitly configured', async () => {
+    const directSession = createSessionDbPath();
+    const previousTrustProxy = process.env.TRUST_PROXY;
+    const previousNodeEnv = process.env.NODE_ENV;
+    delete process.env.TRUST_PROXY;
+    process.env.NODE_ENV = 'production';
+    const directApp = createApp({ backendBaseUrl, frontendDistDir, sessionDbPath: directSession.sessionDbPath });
+
+    try {
+      await request(directApp.app)
+        .get('/api/public/ping')
+        .set('X-Forwarded-For', '203.0.113.99')
+        .set('X-Forwarded-Proto', 'https')
+        .expect(200);
+
+      expect(lastBackendHeaders['x-forwarded-for']).not.toContain('203.0.113.99');
+      expect(lastBackendHeaders['x-forwarded-proto']).toBe('http');
+    } finally {
+      directApp.sessionStore.stopCleanupInterval();
+      directApp.sessionDb.close();
+      fs.rmSync(directSession.tempDir, { recursive: true, force: true });
+      if (previousTrustProxy === undefined) {
+        delete process.env.TRUST_PROXY;
+      } else {
+        process.env.TRUST_PROXY = previousTrustProxy;
+      }
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+    }
   });
 
   test('rebuilds forwarded headers on authenticated app routes from trusted request values', async () => {

@@ -30,65 +30,9 @@ function t(key, params = {}) {
   return typeof entry === 'function' ? entry(params) : entry;
 }
 
-function createWavBytes(durationSeconds = 2) {
-  const sampleRate = 8000;
-  const channels = 1;
-  const bitsPerSample = 16;
-  const byteRate = sampleRate * channels * (bitsPerSample / 8);
-  const dataSize = byteRate * durationSeconds;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-
-  function writeText(offset, text) {
-    [...text].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
-  }
-
-  writeText(0, 'RIFF');
-  view.setUint32(4, 36 + dataSize, true);
-  writeText(8, 'WAVE');
-  writeText(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, channels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, channels * (bitsPerSample / 8), true);
-  view.setUint16(34, bitsPerSample, true);
-  writeText(36, 'data');
-  view.setUint32(40, dataSize, true);
-
-  return buffer;
-}
-
 describe('thematic summary podcast UI', () => {
-  let mockAudioSource;
-
   beforeEach(() => {
-    mockAudioSource = {
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      start: vi.fn(),
-      stop: vi.fn(),
-      onended: null,
-      buffer: null
-    };
-    vi.stubGlobal('fetch', vi.fn(async () => ({
-      ok: true,
-      headers: { get: () => 'audio/wav' },
-      blob: async () => new Blob([createWavBytes(2)], { type: 'audio/wav' })
-    })));
-    vi.stubGlobal('AudioContext', function MockAudioContext() {
-      return {
-        currentTime: 0,
-        destination: {},
-        resume: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn().mockResolvedValue(undefined),
-        decodeAudioData: vi.fn().mockResolvedValue({ duration: 2 }),
-        createBufferSource: vi.fn(() => mockAudioSource)
-      };
-    });
-    URL.createObjectURL = vi.fn(() => 'blob:podcast-audio');
-    URL.revokeObjectURL = vi.fn();
+    vi.stubGlobal('fetch', vi.fn());
     HTMLMediaElement.prototype.load = vi.fn();
     HTMLMediaElement.prototype.pause = vi.fn();
     HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
@@ -160,13 +104,17 @@ describe('thematic summary podcast UI', () => {
 
     expect(screen.getByText('Podcast briefing')).toBeInTheDocument();
     expect(screen.queryByText('Podcast del mattino')).not.toBeInTheDocument();
+    const audio = document.querySelector('audio');
+    Object.defineProperty(audio, 'duration', { configurable: true, value: 2 });
+    fireEvent.loadedMetadata(audio);
+
     expect(screen.getByText('Testo podcast italiano')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('0:00 / 0:02')).toBeInTheDocument());
-    expect(fetch).toHaveBeenCalledWith('/api/podcast-summary/podcast-1/audio', expect.objectContaining({ cache: 'no-store', credentials: 'include' }));
+    expect(fetch).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Play podcast audio' })).toBeInTheDocument();
     expect(screen.getByLabelText('Seek podcast audio')).toBeInTheDocument();
-    expect(document.querySelector('audio')?.getAttribute('src')).toBe('blob:podcast-audio');
-    expect(document.querySelector('audio')?.getAttribute('preload')).toBe('metadata');
+    expect(audio?.getAttribute('src')).toBe('/api/podcast-summary/podcast-1/audio');
+    expect(audio?.getAttribute('preload')).toBe('metadata');
   });
 
   test('shows podcast audio generation feedback while audio is pending', () => {
@@ -252,7 +200,7 @@ describe('thematic summary podcast UI', () => {
     ]);
   });
 
-  test('starts decoded podcast audio when pressing play', async () => {
+  test('starts native streaming audio when pressing play', async () => {
     render(
       <ThematicSummaryPanel
         summary={{
@@ -277,7 +225,7 @@ describe('thematic summary podcast UI', () => {
     const playButton = await screen.findByRole('button', { name: 'Play podcast audio' });
     fireEvent.click(playButton);
 
-    await waitFor(() => expect(mockAudioSource.start).toHaveBeenCalledWith(0, 0));
-    expect(mockAudioSource.connect).toHaveBeenCalled();
+    await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled());
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

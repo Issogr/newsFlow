@@ -422,6 +422,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         recentHours: showRecentOnly ? recentHours : null,
         beforePubDate: !isReadLaterView && append ? cursor?.beforePubDate : '',
         beforeId: !isReadLaterView && append ? cursor?.beforeId : '',
+        excludeArticleIds: !isReadLaterView && append ? cursor?.excludeArticleIds : [],
         refresh: !isReadLaterView && forceRefresh,
         includeFilters: !append,
         signal: request.signal

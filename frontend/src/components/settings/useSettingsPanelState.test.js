@@ -21,7 +21,7 @@ vi.mock('../../services/api', () => ({
 }));
 
 const baseCurrentUser = {
-  user: { username: 'alice' },
+  user: { id: 'user-1', username: 'alice' },
   settings: {
     defaultLanguage: 'en',
     themeMode: 'system',
@@ -81,6 +81,68 @@ describe('useSettingsPanelState', () => {
       settings: expect.objectContaining({ defaultLanguage: 'en' }),
       customSources: [source]
     }));
+  });
+
+  test('keeps unsaved settings after parent rerenders from a source add', async () => {
+    const onUserUpdate = jest.fn();
+    const source = {
+      id: 'source-1',
+      name: 'Example Feed',
+      url: 'https://example.com/rss',
+      language: 'en'
+    };
+
+    addUserSource.mockResolvedValue({ source });
+
+    const { result, rerender } = renderHook(({ currentUser }) => useSettingsPanelState({
+      currentUser,
+      availableSources: [],
+      onClose: jest.fn(),
+      onUserUpdate
+    }), { initialProps: { currentUser: baseCurrentUser } });
+
+    act(() => {
+      result.current.setDefaultLanguage('it');
+      result.current.setSourceForm({ url: source.url });
+    });
+
+    await act(async () => {
+      await result.current.handleAddSource({ preventDefault: jest.fn() });
+    });
+
+    rerender({ currentUser: onUserUpdate.mock.calls.at(-1)[0] });
+
+    expect(result.current.settings.defaultLanguage).toBe('it');
+    expect(result.current.customSources).toEqual([source]);
+  });
+
+  test('keeps unsaved settings after parent rerenders from token changes', async () => {
+    const onUserUpdate = jest.fn();
+    createApiToken.mockResolvedValue({
+      token: 'raw-token',
+      tokenInfo: { tokenPrefix: 'raw-token', expiresAt: '2026-01-01T00:00:00.000Z' }
+    });
+
+    const { result, rerender } = renderHook(({ currentUser }) => useSettingsPanelState({
+      currentUser,
+      availableSources: [],
+      onClose: jest.fn(),
+      onUserUpdate
+    }), { initialProps: { currentUser: baseCurrentUser } });
+
+    act(() => {
+      result.current.setDefaultLanguage('it');
+    });
+
+    await act(async () => {
+      await result.current.handleCreateApiToken();
+    });
+
+    rerender({ currentUser: onUserUpdate.mock.calls.at(-1)[0] });
+
+    expect(result.current.settings.defaultLanguage).toBe('it');
+    expect(result.current.apiToken).toEqual({ tokenPrefix: 'raw-token', expiresAt: '2026-01-01T00:00:00.000Z' });
+    expect(result.current.newApiToken).toBe('raw-token');
   });
 
   test('surfaces source add failures near the custom source form', async () => {

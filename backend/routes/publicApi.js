@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const express = require('express');
 const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const newsService = require('../services/newsAggregator');
@@ -9,6 +10,25 @@ const { parseNewsQuery } = require('../utils/newsQuery');
 const { buildUserContext } = require('../utils/userContext');
 
 const router = express.Router();
+
+function getBearerTokenCandidate(req) {
+  const authorization = String(req.get?.('authorization') || req.headers?.authorization || '').trim();
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
+}
+
+function hashRateLimitToken(value = '') {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16);
+}
+
+function buildPublicRateLimitMessage(message) {
+  return {
+    error: {
+      message,
+      code: 'RATE_LIMIT_EXCEEDED'
+    }
+  };
+}
 
 const anonymousPublicNewsRateLimit = rateLimit({
   windowMs: 60 * 1000,
@@ -85,8 +105,30 @@ const preAuthPublicNewsRateLimit = rateLimit({
   }
 });
 
+const bearerPublicNewsIpRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => !getBearerTokenCandidate(req),
+  keyGenerator: (req) => `bearer-ip:${ipKeyGenerator(req.ip)}`,
+  message: buildPublicRateLimitMessage('Too many public API token attempts. Please try again later.')
+});
+
+const bearerPublicNewsTokenRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => !getBearerTokenCandidate(req),
+  keyGenerator: (req) => `bearer-token:${ipKeyGenerator(req.ip)}:${hashRateLimitToken(getBearerTokenCandidate(req))}`,
+  message: buildPublicRateLimitMessage('Too many public API token attempts. Please try again later.')
+});
+
 router.get('/news', [
   preAuthPublicNewsRateLimit,
+  bearerPublicNewsIpRateLimit,
+  bearerPublicNewsTokenRateLimit,
   resolveOptionalExternalApiPrincipal,
   anonymousPublicNewsRateLimit,
   authenticatedPublicNewsRateLimit,

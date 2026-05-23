@@ -168,9 +168,7 @@ describe('newsAggregator service flows', () => {
       topics: ['Science']
     };
 
-    database.getArticles
-      .mockReturnValueOnce([groupedArticleA, groupedArticleB])
-      .mockReturnValueOnce([]);
+    database.getArticles.mockReturnValueOnce([groupedArticleA, groupedArticleB]);
     database.getLatestIngestionRun.mockReturnValue({ id: 7, status: 'completed' });
     database.getSourceStats.mockReturnValue([{ id: ansaSourceId, name: ansaSourceName, count: 1 }]);
     database.getTopicStatsByFilters.mockReturnValue([{ topic: 'Economy', count: 1 }]);
@@ -189,7 +187,8 @@ describe('newsAggregator service flows', () => {
       totalGroups: null,
       nextCursor: {
         beforePubDate: '2026-03-07T10:00:00.000Z',
-        beforeId: 'global-1'
+        beforeId: 'global-1',
+        excludeArticleIds: ['global-1']
       },
       scannedArticles: 2,
       ingestion: { id: 7, status: 'completed' }
@@ -199,6 +198,66 @@ describe('newsAggregator service flows', () => {
       expect.objectContaining({ id: 'example.com', name: 'My Feed', language: 'en' })
     ]));
     expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({ limit: 251, offset: 0 }), expect.objectContaining({ userId: 'user-1' }));
+  });
+
+  test('getNewsFeed carries returned group article ids in cursor exclusions', async () => {
+    const primaryStoryArticle = {
+      id: 'story-new',
+      sourceId: ansaSourceId,
+      source: 'ANSA',
+      title: 'Shared story headline',
+      description: 'Newest article',
+      pubDate: '2026-03-07T10:00:00.000Z',
+      url: 'https://example.com/story-new',
+      topics: ['Economy']
+    };
+    const separateArticle = {
+      id: 'separate-story',
+      sourceId: 'bbc',
+      source: 'BBC',
+      title: 'Separate story headline',
+      description: 'Separate article',
+      pubDate: '2026-03-07T09:00:00.000Z',
+      url: 'https://example.com/separate-story',
+      topics: ['Science']
+    };
+    const secondaryStoryArticle = {
+      id: 'story-old',
+      sourceId: 'reuters',
+      source: 'Reuters',
+      title: 'Shared story headline',
+      description: 'Older grouped article',
+      pubDate: '2026-03-07T08:00:00.000Z',
+      url: 'https://example.com/story-old',
+      topics: ['Economy']
+    };
+
+    database.getArticles.mockReset();
+    database.getArticles.mockReturnValue([]);
+    database.getArticles.mockReturnValueOnce([primaryStoryArticle, separateArticle, secondaryStoryArticle]);
+
+    const firstPage = await newsAggregator.getNewsFeed({ page: 1, pageSize: 1 }, { userId: 'user-1' });
+
+    expect(firstPage.meta.nextCursor).toEqual(expect.objectContaining({
+      beforePubDate: '2026-03-07T10:00:00.000Z',
+      beforeId: 'story-new',
+      excludeArticleIds: ['story-new', 'story-old']
+    }));
+
+    database.getArticles.mockClear();
+    database.getArticles.mockReturnValueOnce([]);
+
+    await newsAggregator.getNewsFeed({
+      page: 1,
+      pageSize: 1,
+      beforePubDate: firstPage.meta.nextCursor.beforePubDate,
+      beforeId: firstPage.meta.nextCursor.beforeId,
+      excludeArticleIds: firstPage.meta.nextCursor.excludeArticleIds
+    }, { userId: 'user-1' });
+
+    expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({
+      excludeArticleIds: ['story-new', 'story-old']
+    }), expect.any(Object));
   });
 
   test('getNewsFeed applies page offsets after story grouping when no cursor is provided', async () => {

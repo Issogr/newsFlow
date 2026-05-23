@@ -12,6 +12,10 @@ function parseCsvParam(value) {
     .filter(Boolean);
 }
 
+function parseLimitedCsvParam(value, limit) {
+  return parseCsvParam(value).slice(0, limit);
+}
+
 function parseBoundedPositiveInteger(value, fallback, max) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
@@ -42,6 +46,7 @@ function parseNewsQuery(query = {}) {
     recentHours: parseOptionalBoundedPositiveInteger(query.recentHours, MAX_RECENT_HOURS),
     beforePubDate: query.beforePubDate || '',
     beforeId: query.beforeId || '',
+    excludeArticleIds: parseLimitedCsvParam(query.excludeArticleIds, 300),
     page: parseBoundedPositiveInteger(query.page, 1, MAX_NEWS_PAGE),
     pageSize: parseBoundedPositiveInteger(query.pageSize, 12, 30),
     refresh: query.refresh === 'true',
@@ -53,6 +58,7 @@ module.exports = {
   MAX_NEWS_PAGE,
   MAX_RECENT_HOURS,
   parseCsvParam,
+  parseLimitedCsvParam,
   parseBoundedPositiveInteger,
   parseOptionalBoundedPositiveInteger,
   parseNewsQuery,

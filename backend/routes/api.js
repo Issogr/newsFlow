@@ -468,11 +468,6 @@ router.get('/thematic-summaries', requireAuthenticatedUser, asyncHandler(async (
   res.json(thematicSummaryService.getLatestSummaries());
 }));
 
-router.get('/podcast-summary', requireAuthenticatedUser, asyncHandler(async (req, res) => {
-  res.set('Cache-Control', 'private, no-store, max-age=0');
-  res.json({ item: thematicSummaryService.getLatestPodcastSummary() });
-}));
-
 router.get('/podcast-summary/:summaryId/audio', [
   requireAuthenticatedUser,
   validateParam('summaryId', 'Invalid podcast summary ID'),

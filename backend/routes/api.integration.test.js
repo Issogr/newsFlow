@@ -608,6 +608,24 @@ describe('API auth and user flows', () => {
     expect(revokedRow.revokedAt).toEqual(expect.any(String));
   });
 
+  test('rate-limits repeated invalid public API token attempts before DB lookup', async () => {
+    const lookupSpy = jest.spyOn(database, 'findActiveApiTokenByHash');
+
+    for (let index = 0; index < 30; index += 1) {
+      await request(app)
+        .get('/api/public/news')
+        .set('Authorization', 'Bearer invalid-public-token')
+        .expect(401);
+    }
+
+    await request(app)
+      .get('/api/public/news')
+      .set('Authorization', 'Bearer invalid-public-token')
+      .expect(429);
+
+    expect(lookupSpy).toHaveBeenCalledTimes(30);
+  });
+
   test('regenerates api tokens immediately and revokes the previous token row', async () => {
     const registerResponse = await request(app)
       .post('/api/auth/register')

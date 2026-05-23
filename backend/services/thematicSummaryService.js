@@ -696,10 +696,6 @@ function getLatestSummaries() {
   };
 }
 
-function getLatestPodcastSummary() {
-  return database.getLatestPodcastSummary();
-}
-
 function startScheduler() {
   if (schedulerHandle) {
     return;
@@ -729,7 +725,6 @@ function stopScheduler() {
 
 module.exports = {
   getLatestSummaries,
-  getLatestPodcastSummary,
   generateDueSummaries,
   prewarmReaderCacheForDueWindow,
   startScheduler,

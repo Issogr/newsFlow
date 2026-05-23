@@ -3,7 +3,7 @@ var mockApiConfig;
 var responseErrorHandler;
 
 import axios from 'axios';
-import { AUTH_EXPIRED_EVENT, fetchNews, fetchPodcastSummary, fetchReadLaterNews, fetchReaderArticle, fetchThematicSummaries, isRequestCanceled, removeReadLaterArticles, saveReadLaterArticles, submitFeedback } from './api';
+import { AUTH_EXPIRED_EVENT, fetchNews, fetchReadLaterNews, fetchReaderArticle, fetchThematicSummaries, isRequestCanceled, removeReadLaterArticles, saveReadLaterArticles, submitFeedback } from './api';
 
 vi.mock('axios', () => {
   const axios = {
@@ -98,6 +98,7 @@ describe('api service', () => {
       recentHours: 0,
       beforePubDate: '2026-05-21T10:00:00.000Z',
       beforeId: 'article-10',
+      excludeArticleIds: ['article-2', 'article-3'],
       includeFilters: false,
       signal: 'news-signal'
     });
@@ -110,7 +111,8 @@ describe('api service', () => {
         sources: 'ansa,bbc',
         topics: 'Economy',
         beforePubDate: '2026-05-21T10:00:00.000Z',
-        beforeId: 'article-10'
+        beforeId: 'article-10',
+        excludeArticleIds: 'article-2,article-3'
       },
       signal: 'news-signal'
     });
@@ -162,14 +164,6 @@ describe('api service', () => {
     await fetchThematicSummaries({ signal: 'summary-signal' });
 
     expect(mockApi.get).toHaveBeenCalledWith('/thematic-summaries', { signal: 'summary-signal' });
-  });
-
-  test('fetches podcast summary from the app API', async () => {
-    mockApi.get.mockResolvedValue({ data: { item: null } });
-
-    await fetchPodcastSummary({ signal: 'podcast-signal' });
-
-    expect(mockApi.get).toHaveBeenCalledWith('/podcast-summary', { signal: 'podcast-signal' });
   });
 
   test('broadcasts auth expiry when a non-auth request returns 401', async () => {

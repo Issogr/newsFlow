@@ -11,6 +11,10 @@
 - kept podcast and summary titles/openings from inventing morning, noon, or evening labels from scheduled coverage windows
 - improved summary and podcast readability with paragraph breaks for dense generated text
 - removed promotional product price-drop sentences from generated summaries and podcast scripts as a final cleanup pass
+- streamed podcast audio through the browser media pipeline instead of eagerly downloading and decoding the full file
+- hardened BFF proxy trust, CSP, session renewal, and public API invalid-token throttling
+- fixed grouped-feed cursor pagination so already returned related articles do not reappear on later pages
+- preserved unsaved settings drafts while adding sources or changing API tokens
 
 ## 3.4.2
 

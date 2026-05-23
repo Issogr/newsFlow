@@ -55,8 +55,8 @@ Open `http://localhost`.
 
 Runtime requirements:
 
-- Backend: Node.js 20+
-- BFF: Node.js 20+
+- Backend: Node.js `^20.19.0 || >=22.13.0`
+- BFF: Node.js `^20.19.0 || >=22.13.0`
 - Frontend: Node.js `^20.19.0 || >=22.12.0`
 
 ## Local Development
@@ -104,13 +104,14 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `LOG_LEVEL` | `debug` in development, `info` in production | Logger verbosity |
 | `NEWS_DB_PATH` | `backend/data/news.db` | SQLite file path |
 | `ALLOWED_ORIGINS` | empty | Comma-separated CORS allowlist |
-| `TRUST_PROXY` | auto in production | Explicit backend/BFF proxy trust toggle; leave unset for production auto-detection |
+| `TRUST_PROXY` | backend auto in production, BFF `false` | Explicit proxy trust toggle; set only when the service is behind a trusted reverse proxy |
 
 ### BFF, Auth, and Session
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SESSION_TTL_DAYS` | `30` | Session lifetime in days |
+| `SESSION_TOUCH_RENEWAL_WINDOW_MS` | `86400000` | BFF renews persisted sessions only inside this remaining-lifetime window |
 | `SESSION_PURGE_INTERVAL_MS` | `300000` | Expired-session cleanup interval in ms |
 | `SESSION_STORE_CLEAR_INTERVAL_MS` | `300000` | BFF persisted session-store cleanup interval in ms |
 | `ADMIN_USERNAME` | `admin` | Reserved dedicated admin username |

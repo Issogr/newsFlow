@@ -181,6 +181,38 @@ describe('readerService', () => {
     expect(database.upsertReaderCache).toHaveBeenCalledTimes(1);
   });
 
+  test('deduplicates concurrent forced refreshes for the same article', async () => {
+    let resolveFetch;
+    const fetchPromise = new Promise((resolve) => {
+      resolveFetch = resolve;
+    });
+    fetchSafeTextUrl.mockReturnValue(fetchPromise);
+    Readability.mockImplementation(() => ({
+      parse: () => ({
+        title: 'Forced readable headline',
+        siteName: 'Readable Site',
+        byline: 'Readable Byline',
+        lang: 'en',
+        excerpt: 'Readable excerpt',
+        textContent: 'First paragraph. Second paragraph.',
+        content: '<h1>Forced readable headline</h1><p>First paragraph.</p><p>Second paragraph.</p>'
+      })
+    }));
+
+    const firstRequest = readerService.getReaderArticle(article.id, { forceRefresh: true, userId: 'user-1' });
+    const secondRequest = readerService.getReaderArticle(article.id, { forceRefresh: true, userId: 'user-1' });
+    resolveFetch({
+      data: '<html><body><article><h1>Forced readable headline</h1><p>First paragraph.</p><p>Second paragraph.</p></article></body></html>'
+    });
+
+    await expect(Promise.all([firstRequest, secondRequest])).resolves.toEqual([
+      expect.objectContaining({ articleId: article.id, title: 'Forced readable headline' }),
+      expect.objectContaining({ articleId: article.id, title: 'Forced readable headline' })
+    ]);
+    expect(fetchSafeTextUrl).toHaveBeenCalledTimes(1);
+    expect(database.upsertReaderCache).toHaveBeenCalledTimes(1);
+  });
+
   test('falls back without fetching unsafe article destinations', async () => {
     fetchSafeTextUrl.mockRejectedValue(Object.assign(new Error('blocked'), {
       status: 403,

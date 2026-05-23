@@ -36,6 +36,7 @@ WORKDIR /usr/src/app
 
 # Copia i node_modules dalla fase di build
 COPY --from=build /app/node_modules ./node_modules
+RUN node -e "require('better-sqlite3')"
 
 # Copia il codice
 COPY . .

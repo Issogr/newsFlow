@@ -38,6 +38,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=bff-deps /app/bff/node_modules ./node_modules
+RUN node -e "require('better-sqlite3')"
 COPY bff/package*.json ./
 COPY bff/server.js ./server.js
 COPY bff/lib ./lib

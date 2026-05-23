@@ -6,6 +6,7 @@ const SqliteStoreFactory = require('better-sqlite3-session-store')(session);
 const { parseIntegerEnv } = require('./env');
 const {
   BFF_SESSION_COOKIE_NAME,
+  SESSION_TTL_MS,
   clearBffSessionCookie,
   decryptBackendSessionCookie,
   getSessionCookieOptions,
@@ -16,6 +17,7 @@ const {
 
 const DEFAULT_SESSION_DB_PATH = path.join(__dirname, '..', 'data', 'sessions.sqlite');
 const SESSION_STORE_CLEAR_INTERVAL_MS = parseIntegerEnv('SESSION_STORE_CLEAR_INTERVAL_MS', 300000, { min: 1000 });
+const SESSION_TOUCH_RENEWAL_WINDOW_MS = parseIntegerEnv('SESSION_TOUCH_RENEWAL_WINDOW_MS', 24 * 60 * 60 * 1000, { min: 1000 });
 
 function ensureSessionDbDirectory(sessionDbPath) {
   fs.mkdirSync(path.dirname(sessionDbPath), { recursive: true });
@@ -34,6 +36,20 @@ function cleanupStoredSessionUsers(sessionDb) {
       WHERE sessions.sid = session_users.sid
     )
   `).run().changes;
+}
+
+function getSessionExpiryTime(sessionData = {}) {
+  const expiresAt = Date.parse(sessionData.cookie?.expires || '');
+  return Number.isFinite(expiresAt) ? expiresAt : null;
+}
+
+function shouldRenewSession(sessionData = {}, referenceTime = Date.now()) {
+  const expiresAt = getSessionExpiryTime(sessionData);
+  if (!Number.isFinite(expiresAt)) {
+    return true;
+  }
+
+  return expiresAt - referenceTime <= SESSION_TOUCH_RENEWAL_WINDOW_MS;
 }
 
 function createSessionStore(options = {}) {
@@ -70,6 +86,15 @@ function createSessionStore(options = {}) {
     clearExpiredSessions() {
       super.clearExpiredSessions();
       cleanupStoredSessionUsers(db);
+    }
+
+    touch(sid, sess, callback = () => {}) {
+      if (!shouldRenewSession(sess)) {
+        callback();
+        return;
+      }
+
+      super.touch(sid, sess, callback);
     }
   }
 
@@ -146,10 +171,21 @@ function buildSessionMiddleware(store, secret) {
     secret,
     resave: false,
     saveUninitialized: false,
-    rolling: true,
+    rolling: false,
     unset: 'destroy',
     cookie: getSessionCookieOptions(),
   });
+}
+
+function renewSessionExpiryIfNeeded(req, res, next) {
+  if (!req.session || !isValidSessionPayload(req.session) || !shouldRenewSession(req.session)) {
+    next();
+    return;
+  }
+
+  req.session.cookie.maxAge = SESSION_TTL_MS;
+  req.session.renewedAt = new Date().toISOString();
+  next();
 }
 
 function normalizeSessionState(req, res, next, sessionDb = null) {
@@ -233,5 +269,6 @@ module.exports = {
   loadUpgradeSession,
   normalizeSessionState,
   persistSessionUserId,
+  renewSessionExpiryIfNeeded,
   upsertStoredSessionUser
 };

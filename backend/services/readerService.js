@@ -16,11 +16,35 @@ const READER_FALLBACK_CACHE_PRUNE_INTERVAL_MS = parseIntegerEnv(
   { min: 1000 }
 );
 const READER_MAX_RESPONSE_BYTES = parseIntegerEnv('READER_MAX_RESPONSE_BYTES', 2097152, { min: 1 });
+const READER_EXTRACTION_CONCURRENCY = parseIntegerEnv('READER_EXTRACTION_CONCURRENCY', 3, { min: 1 });
 const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'PRE']);
 const CONTAINER_TAGS = new Set(['ARTICLE', 'SECTION', 'DIV', 'MAIN']);
 const readerExtractionPromises = new Map();
 const readerFallbackCache = new Map();
+const readerExtractionQueue = [];
 let readerFallbackPruneHandle = null;
+let activeReaderExtractions = 0;
+
+function drainReaderExtractionQueue() {
+  while (activeReaderExtractions < READER_EXTRACTION_CONCURRENCY && readerExtractionQueue.length > 0) {
+    const queued = readerExtractionQueue.shift();
+    activeReaderExtractions += 1;
+    Promise.resolve()
+      .then(queued.task)
+      .then(queued.resolve, queued.reject)
+      .finally(() => {
+        activeReaderExtractions -= 1;
+        drainReaderExtractionQueue();
+      });
+  }
+}
+
+function runWithReaderExtractionConcurrency(task) {
+  return new Promise((resolve, reject) => {
+    readerExtractionQueue.push({ task, resolve, reject });
+    drainReaderExtractionQueue();
+  });
+}
 
 function normalizeText(text) {
   return String(text || '')
@@ -378,12 +402,12 @@ async function loadFreshReaderPayload(articleId, article) {
   }
 }
 
-function getOrCreateReaderExtractionPromise(articleId, article, { forceRefresh = false } = {}) {
-  if (!forceRefresh && readerExtractionPromises.has(articleId)) {
+function getOrCreateReaderExtractionPromise(articleId, article) {
+  if (readerExtractionPromises.has(articleId)) {
     return readerExtractionPromises.get(articleId);
   }
 
-  const extractionPromise = loadFreshReaderPayload(articleId, article)
+  const extractionPromise = runWithReaderExtractionConcurrency(() => loadFreshReaderPayload(articleId, article))
     .finally(() => {
       if (readerExtractionPromises.get(articleId) === extractionPromise) {
         readerExtractionPromises.delete(articleId);
@@ -395,6 +419,8 @@ function getOrCreateReaderExtractionPromise(articleId, article, { forceRefresh =
 
 function clearRuntimeState() {
   readerExtractionPromises.clear();
+  readerExtractionQueue.splice(0).forEach((queued) => queued.reject(new Error('Reader extraction queue cleared')));
+  activeReaderExtractions = 0;
   readerFallbackCache.clear();
   stopFallbackCachePruneInterval();
 }
@@ -421,7 +447,7 @@ async function getReaderArticle(articleId, options = {}) {
     }
   }
 
-  return getOrCreateReaderExtractionPromise(articleId, article, { forceRefresh: options.forceRefresh });
+  return getOrCreateReaderExtractionPromise(articleId, article);
 }
 
 module.exports = {

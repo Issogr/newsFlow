@@ -157,6 +157,7 @@ function unsignSessionId(rawCookieValue, secret) {
 module.exports = {
   BACKEND_SESSION_COOKIE_NAME,
   BFF_SESSION_COOKIE_NAME,
+  SESSION_TTL_MS,
   SESSION_SCHEMA_VERSION,
   clearBffSessionCookie,
   decryptBackendSessionCookie,

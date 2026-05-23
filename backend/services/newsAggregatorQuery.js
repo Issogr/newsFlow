@@ -75,15 +75,25 @@ function getQueryOptions(userContext = {}) {
   };
 }
 
-function buildNextCursor(groups = []) {
+function collectGroupArticleIds(groups = []) {
+  return groups.flatMap((group) => (group.items || []).map((item) => item.id).filter(Boolean));
+}
+
+function buildNextCursor(groups = [], existingExcludeArticleIds = []) {
   const lastItem = groups[groups.length - 1];
   if (!lastItem?.pubDate || !lastItem?.cursorId) {
     return null;
   }
 
+  const excludeArticleIds = [...new Set([
+    ...(Array.isArray(existingExcludeArticleIds) ? existingExcludeArticleIds : []),
+    ...collectGroupArticleIds(groups)
+  ])].slice(-300);
+
   return {
     beforePubDate: lastItem.pubDate,
-    beforeId: lastItem.cursorId
+    beforeId: lastItem.cursorId,
+    excludeArticleIds
   };
 }
 
@@ -243,6 +253,7 @@ function fetchGroupedNewsPage(filters = {}, queryOptions = {}, page = 1, pageSiz
       recentHours: filters.recentHours,
       beforePubDate: cursor.beforePubDate,
       beforeId: cursor.beforeId,
+      excludeArticleIds: filters.excludeArticleIds,
       limit: GROUP_PAGINATION_ARTICLE_BATCH_SIZE + 1,
       offset: 0
     }, queryOptions);
@@ -327,7 +338,7 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
       page,
       pageSize,
       hasMore,
-      nextCursor: hasMore ? buildNextCursor(pageGroups) : null,
+      nextCursor: hasMore ? buildNextCursor(pageGroups, filters.excludeArticleIds) : null,
       returnedGroups: pageGroups.length,
       totalGroups: null,
       scannedArticles: groupedPage.articles.length,

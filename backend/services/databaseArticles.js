@@ -112,6 +112,7 @@ function createArticleRepository({
       recentHours: Number.isFinite(filters.recentHours) && filters.recentHours > 0 ? filters.recentHours : null,
       beforePubDate: typeof filters.beforePubDate === 'string' && filters.beforePubDate.trim() ? filters.beforePubDate.trim() : '',
       beforeId: typeof filters.beforeId === 'string' && filters.beforeId.trim() ? filters.beforeId.trim() : '',
+      excludeArticleIds: Array.isArray(filters.excludeArticleIds) ? filters.excludeArticleIds.filter(Boolean).slice(0, 300) : [],
       limit: Math.max(1, Math.min(Number(filters.limit) || 50, 251)),
       offset: Math.max(0, Number(filters.offset) || 0)
     };
@@ -202,6 +203,11 @@ function createArticleRepository({
     } else if (state.beforePubDate) {
       where.push('a.published_at < ?');
       params.push(state.beforePubDate);
+    }
+
+    if (state.excludeArticleIds.length > 0) {
+      where.push(`a.id NOT IN (${state.excludeArticleIds.map(() => '?').join(', ')})`);
+      params.push(...state.excludeArticleIds);
     }
 
     const sql = `

@@ -29,6 +29,7 @@ const {
   loadUpgradeSession,
   normalizeSessionState,
   persistSessionUserId,
+  renewSessionExpiryIfNeeded,
   upsertStoredSessionUser
 } = require('./lib/sessionStore');
 const {
@@ -63,7 +64,7 @@ function createApp(options = {}) {
   } else if (process.env.TRUST_PROXY === 'false') {
     app.set('trust proxy', false);
   } else {
-    app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
+    app.set('trust proxy', false);
   }
 
   app.use(helmet({
@@ -73,7 +74,7 @@ function createApp(options = {}) {
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'", 'ws:', 'wss:'],
+        connectSrc: ["'self'"],
         frameSrc: ["'none'"],
         objectSrc: ["'none'"],
       },
@@ -89,15 +90,14 @@ function createApp(options = {}) {
     );
     const forwardedFor = String(req.ip || req.socket?.remoteAddress || '').trim();
     const forwardedProto = req.protocol || (req.socket?.encrypted ? 'https' : 'http');
-    const host = String(getHeader('host') || '').trim();
+    const forwardedHost = String(getHeader('host') || '').trim();
 
     return {
       'x-newsflow-proxy': internalProxyToken,
       'x-newsflow-service': String(process.env.INTERNAL_SERVICE_NAME || 'bff').trim().toLowerCase() || 'bff',
       'x-forwarded-for': forwardedFor,
       'x-forwarded-proto': forwardedProto,
-      'x-forwarded-host': host,
-      host,
+      'x-forwarded-host': forwardedHost,
     };
   }
 
@@ -219,7 +219,7 @@ function createApp(options = {}) {
 
   const publicApiProxy = createProxyMiddleware({
     target: `${backendBaseUrl}/api/public`,
-    changeOrigin: false,
+    changeOrigin: true,
     xfwd: false,
     timeout: UPSTREAM_TIMEOUT_MS,
     proxyTimeout: UPSTREAM_TIMEOUT_MS,
@@ -237,7 +237,7 @@ function createApp(options = {}) {
 
   const appApiProxy = createProxyMiddleware({
     target: `${backendBaseUrl}/internal-api`,
-    changeOrigin: false,
+    changeOrigin: true,
     xfwd: false,
     timeout: UPSTREAM_TIMEOUT_MS,
     proxyTimeout: UPSTREAM_TIMEOUT_MS,
@@ -265,7 +265,7 @@ function createApp(options = {}) {
 
   const socketProxy = createProxyMiddleware({
     target: backendBaseUrl,
-    changeOrigin: false,
+    changeOrigin: true,
     xfwd: false,
     ws: true,
     pathRewrite: (proxyPath, req) => req.originalUrl || proxyPath,
@@ -298,8 +298,15 @@ function createApp(options = {}) {
 
   app.use(express.static(frontendDistDir, {
     index: false,
-    maxAge: '30d',
-    immutable: true,
+    setHeaders: (res, filePath) => {
+      const normalizedPath = String(filePath || '').split(path.sep).join('/');
+      if (normalizedPath.includes('/assets/')) {
+        res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        return;
+      }
+
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    },
   }));
 
   app.use((req, res, next) => {
@@ -318,6 +325,7 @@ function createApp(options = {}) {
 
     normalizeSessionState(req, res, next, sessionDb);
   });
+  app.use(renewSessionExpiryIfNeeded);
 
   app.post('/api/auth/register', jsonParser, (req, res, next) => {
     handleSessionAuthRequest(req, res, next, '/auth/register');
