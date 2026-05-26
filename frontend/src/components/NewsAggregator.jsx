@@ -79,6 +79,43 @@ function mergeUniqueValues(...lists) {
   return [...new Set(lists.flat().filter(Boolean))];
 }
 
+function addTopicEntry(topicMap, entry) {
+  const topic = String(entry?.topic || entry || '').trim();
+  if (!topic) {
+    return;
+  }
+
+  const key = topic.toLowerCase();
+  const current = topicMap.get(key);
+  const nextEntry = entry && typeof entry === 'object'
+    ? {
+      ...entry,
+      topic,
+      source: String(entry.source || current?.source || '').trim().toLowerCase()
+    }
+    : {
+      topic,
+      source: String(current?.source || '').trim().toLowerCase()
+    };
+
+  if (!current || nextEntry.source === 'ai') {
+    topicMap.set(key, nextEntry);
+  }
+}
+
+function getMergedTopicDetails(incomingGroup = {}, mergedItems = []) {
+  const topicMap = new Map();
+
+  mergedItems.forEach((item) => {
+    (item?.topicDetails || []).forEach((entry) => addTopicEntry(topicMap, entry));
+    (item?.topics || []).forEach((entry) => addTopicEntry(topicMap, entry));
+  });
+  (incomingGroup.topicDetails || []).forEach((entry) => addTopicEntry(topicMap, entry));
+  (incomingGroup.topics || []).forEach((entry) => addTopicEntry(topicMap, entry));
+
+  return [...topicMap.values()];
+}
+
 function mergeGroupItems(primaryItems = [], secondaryItems = []) {
   const itemMap = new Map();
 
@@ -118,11 +155,12 @@ function filterGroupsMatchingCurrent(currentGroups = [], incomingGroups = []) {
 function mergeGroupIntoTarget(targetGroup, incomingGroup) {
   const nextItems = mergeGroupItems(targetGroup.items, incomingGroup.items);
   const primaryItem = nextItems[0] || null;
+  const nextTopicDetails = getMergedTopicDetails(incomingGroup, nextItems);
 
   targetGroup.items = nextItems;
   targetGroup.sources = mergeUniqueValues(targetGroup.sources || [], incomingGroup.sources || [], nextItems.map((item) => item.source));
-  targetGroup.topics = mergeUniqueValues(targetGroup.topics || [], incomingGroup.topics || [], nextItems.flatMap((item) => item.topics || []));
-  targetGroup.topicDetails = [...(targetGroup.topicDetails || []), ...(incomingGroup.topicDetails || [])];
+  targetGroup.topics = nextTopicDetails.map((entry) => entry.topic);
+  targetGroup.topicDetails = nextTopicDetails;
   targetGroup.readLater = Boolean(targetGroup.readLater || incomingGroup.readLater);
   targetGroup.readLaterArticleIds = mergeUniqueValues(targetGroup.readLaterArticleIds || [], incomingGroup.readLaterArticleIds || []);
 

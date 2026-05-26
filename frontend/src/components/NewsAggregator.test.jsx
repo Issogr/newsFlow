@@ -22,9 +22,29 @@ vi.mock('../hooks/useTopicRefreshSocket', () => ({
   default: vi.fn()
 }));
 
-vi.mock('./NewsCard', () => ({
-  default: ({ group }) => <div>{group.title}</div>
-}));
+vi.mock('./NewsCard', () => {
+  const getRenderedTopicSummary = (group = {}) => {
+    const topicEntries = [
+      ...(group.topicDetails || []).map((entry) => `${entry.topic}:${entry.source || ''}`),
+      ...(group.topics || []).map((topic) => `${topic}:`),
+      ...(group.items || []).flatMap((item) => [
+        ...(item.topicDetails || []).map((entry) => `${entry.topic}:${entry.source || ''}`),
+        ...(item.topics || []).map((topic) => `${topic}:`)
+      ])
+    ];
+
+    return topicEntries.join('|');
+  };
+
+  return {
+    default: ({ group }) => (
+      <div>
+        <div>{group.title}</div>
+        <div data-testid={`topics-${group.id}`}>{getRenderedTopicSummary(group)}</div>
+      </div>
+    )
+  };
+});
 vi.mock('./ReaderPanel', () => ({
   default: () => null
 }));
@@ -602,6 +622,64 @@ describe('NewsAggregator', () => {
       refresh: false,
       includeFilters: true
     }));
+  });
+
+  test('replaces stale fallback topics after a silent AI topic reload', async () => {
+    let onTopicRefresh;
+    const fallbackTopic = { topic: 'Economia', source: 'local' };
+    const aiTopic = { topic: 'Tecnologia', source: 'ai', confidence: 0.9 };
+
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [{
+          id: 'group-1',
+          title: 'Topic headline',
+          topics: ['Economia'],
+          topicDetails: [fallbackTopic],
+          items: [{
+            id: 'article-group-1',
+            title: 'Topic headline',
+            pubDate: '2026-03-14T10:00:00.000Z',
+            topics: ['Economia'],
+            topicDetails: [fallbackTopic]
+          }]
+        }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: ['Economia'] }
+      })
+      .mockResolvedValueOnce({
+        items: [{
+          id: 'group-1',
+          title: 'Topic headline',
+          topics: ['Tecnologia'],
+          topicDetails: [aiTopic],
+          items: [{
+            id: 'article-group-1',
+            title: 'Topic headline',
+            pubDate: '2026-03-14T10:00:00.000Z',
+            topics: ['Tecnologia'],
+            topicDetails: [aiTopic]
+          }]
+        }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: ['Tecnologia'] }
+      });
+
+    await renderNewsAggregator();
+    expect(await screen.findByTestId('topics-group-1')).toHaveTextContent('Economia:local');
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('topics-group-1')).toHaveTextContent('Tecnologia:ai');
+    });
+    expect(screen.getByTestId('topics-group-1')).not.toHaveTextContent('Economia');
   });
 
   test('adds brand-new cards when a manual refresh completion reload arrives', async () => {
