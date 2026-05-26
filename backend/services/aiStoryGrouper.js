@@ -11,7 +11,7 @@ const {
 } = require('./openRouterClient');
 const { truncateText } = require('./aiArticlePayload');
 
-const DEFAULT_OPENROUTER_STORY_GROUPING_MODEL = 'qwen/qwen3.5-9b';
+const DEFAULT_OPENROUTER_STORY_GROUPING_MODEL = 'deepseek/deepseek-v4-flash';
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_AI_CANDIDATE_LIMIT = 8;
 const MIN_MATCH_CONFIDENCE = 0.82;
@@ -99,10 +99,8 @@ function buildArticlePayload(article = {}) {
     id: String(article.id || '').slice(0, 160),
     title: truncateText(article.title || '', 220),
     description: truncateText(article.description || article.content || '', 520),
-    source: truncateText(article.source || article.rawSource || '', 120),
     publishedAt: article.pubDate || '',
-    topics: (article.topics || []).slice(0, 4),
-    url: truncateText(article.url || '', 320)
+    topics: (article.topics || []).slice(0, 4)
   };
 }
 

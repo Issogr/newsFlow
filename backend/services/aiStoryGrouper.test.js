@@ -39,6 +39,7 @@ describe('aiStoryGrouper', () => {
       title: 'Meloni meets Trump in Rome',
       description: 'Talks focused on tariffs and Ukraine.',
       source: 'Source A',
+      url: 'https://example.com/meloni-trump-rome',
       pubDate: '2026-03-15T14:30:00.000Z'
     }, [
       {
@@ -46,6 +47,7 @@ describe('aiStoryGrouper', () => {
         title: 'Tariffs and Ukraine at Trump Meloni summit',
         description: 'The two leaders met in the Italian capital.',
         source: 'Source B',
+        url: 'https://example.com/trump-meloni-summit',
         pubDate: '2026-03-15T14:10:00.000Z'
       },
       {
@@ -63,6 +65,10 @@ describe('aiStoryGrouper', () => {
         responseFormat: { type: 'json_object' }
       })
     }), expect.any(Object));
+    const userPrompt = sendMock.mock.calls[0][0].chatRequest.messages[1].content;
+    const promptPayload = JSON.parse(userPrompt.split('\n').pop());
+    expect(Object.keys(promptPayload.target).sort()).toEqual(['description', 'id', 'publishedAt', 'title', 'topics']);
+    expect(Object.keys(promptPayload.candidates[0]).sort()).toEqual(['description', 'id', 'publishedAt', 'title', 'topics']);
     expect(result).toEqual(expect.objectContaining({
       model: 'test-story-grouping-model',
       matches: [{ articleId: 'candidate-1', confidence: 0.91, reason: 'same meeting and policy topics' }]
@@ -86,11 +92,11 @@ describe('aiStoryGrouper', () => {
     expect(sendMock).not.toHaveBeenCalled();
   });
 
-  test('defaults to qwen when the story grouping model env var is unset', () => {
+  test('defaults to DeepSeek flash when the story grouping model env var is unset', () => {
     delete process.env.OPENROUTER_STORY_GROUPING_MODEL;
 
     expect(aiStoryGrouper._getConfig()).toEqual(expect.objectContaining({
-      model: 'qwen/qwen3.5-9b'
+      model: 'deepseek/deepseek-v4-flash'
     }));
   });
 });

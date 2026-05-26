@@ -157,7 +157,7 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one AI topic-classification request, configurable up to 120 seconds for slower models |
 | `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for thematic summaries, independent from topic classification |
 | `OPENROUTER_PODCAST_SCRIPT_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for podcast script generation |
-| `OPENROUTER_STORY_GROUPING_MODEL` | `qwen/qwen3.5-9b` | Model id used for AI-assisted story grouping/news duplicate prevention |
+| `OPENROUTER_STORY_GROUPING_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for AI-assisted story grouping/news duplicate prevention |
 | `AI_STORY_GROUPING_ENABLED` | `auto` | Set to `false` to disable AI-assisted story grouping; `auto` enables it when `OPENROUTER_API_KEY` is present |
 | `AI_STORY_GROUPING_CONCURRENCY` | `1` | Max concurrent AI story-grouping checks during ingestion |
 | `AI_SUMMARY_GENERATION_ENABLED` | `auto` | Set to `false` to disable thematic summaries; `auto` enables them when `OPENROUTER_API_KEY` is present |
