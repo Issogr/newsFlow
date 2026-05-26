@@ -14,6 +14,7 @@ import { getStoredReaderTextSizePreference, setStoredReaderTextSizePreference } 
 
 const createInitialSourceForm = () => ({ url: '' });
 const createInitialEditingSourceForm = () => ({ name: '', url: '', language: 'it' });
+const getCurrentUserIdentity = (currentUser) => currentUser?.user?.id || currentUser?.user?.username || currentUser?.id || '';
 const getInitialSettings = (currentUser) => ({
   ...currentUser.settings,
   readerTextSize: getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize)
@@ -51,6 +52,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   const [editingSourceId, setEditingSourceId] = useState('');
   const [editingSourceForm, setEditingSourceForm] = useState(createInitialEditingSourceForm);
   const importInputRef = useRef(null);
+  const userIdentityRef = useRef(getCurrentUserIdentity(currentUser));
   const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
 
   const excludedSourceCatalog = useMemo(() => {
@@ -76,14 +78,19 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   }, [excludedSubFeedCatalog]);
 
   useEffect(() => {
-    setSettings(getInitialSettings(currentUser));
+    const nextUserIdentity = getCurrentUserIdentity(currentUser);
+    if (userIdentityRef.current !== nextUserIdentity) {
+      userIdentityRef.current = nextUserIdentity;
+      setSettings(getInitialSettings(currentUser));
+      setNewApiToken('');
+      setSourceError(null);
+      setSourceForm(createInitialSourceForm());
+      setEditingSourceId('');
+      setEditingSourceForm(createInitialEditingSourceForm());
+    }
+
     setCustomSources(currentUser.customSources || []);
     setApiToken(currentUser.apiToken || null);
-    setNewApiToken('');
-    setSourceError(null);
-    setSourceForm(createInitialSourceForm());
-    setEditingSourceId('');
-    setEditingSourceForm(createInitialEditingSourceForm());
   }, [currentUser]);
 
   const syncPersistedUserState = useCallback((nextSettings, nextCustomSources) => {
@@ -122,47 +129,16 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     }
   }, []);
 
+  const setSetting = useCallback((key, value) => {
+    setSettings((current) => ({
+      ...current,
+      [key]: value
+    }));
+  }, []);
+
   const updateNumericSetting = useCallback((key, value, limits) => {
-    setSettings((current) => ({
-      ...current,
-      [key]: clampSettingValue(value, limits)
-    }));
-  }, []);
-
-  const setDefaultLanguage = useCallback((value) => {
-    setSettings((current) => ({
-      ...current,
-      defaultLanguage: value
-    }));
-  }, []);
-
-  const setThemeMode = useCallback((value) => {
-    setSettings((current) => ({
-      ...current,
-      themeMode: value
-    }));
-  }, []);
-
-  const setShowNewsImages = useCallback((value) => {
-    setSettings((current) => ({
-      ...current,
-      showNewsImages: Boolean(value)
-    }));
-  }, []);
-
-  const setReaderPanelPosition = useCallback((value) => {
-    setSettings((current) => ({
-      ...current,
-      readerPanelPosition: value
-    }));
-  }, []);
-
-  const setReaderTextSize = useCallback((value) => {
-    setSettings((current) => ({
-      ...current,
-      readerTextSize: value
-    }));
-  }, []);
+    setSetting(key, clampSettingValue(value, limits));
+  }, [setSetting]);
 
   const toggleExcludedSource = useCallback((sourceId) => {
     setSettings((current) => {
@@ -354,11 +330,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     excludedSubFeedCatalog,
     setSourceForm,
     setEditingSourceForm,
-    setDefaultLanguage,
-    setThemeMode,
-    setShowNewsImages,
-    setReaderPanelPosition,
-    setReaderTextSize,
+    setSetting,
     updateNumericSetting,
     toggleExcludedSource,
     toggleExcludedSubFeed,

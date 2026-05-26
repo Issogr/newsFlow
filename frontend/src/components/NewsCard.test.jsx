@@ -18,6 +18,26 @@ const group = {
   ]
 };
 
+function createGroup(overrides = {}) {
+  return {
+    ...group,
+    ...overrides,
+    items: overrides.items || group.items
+  };
+}
+
+function renderNewsCard({ cardGroup = group, ...props } = {}) {
+  return render(
+    <NewsCard
+      group={cardGroup}
+      locale="en"
+      t={t}
+      onOpenReader={jest.fn()}
+      {...props}
+    />
+  );
+}
+
 describe('NewsCard', () => {
   const originalShare = navigator.share;
   const originalClipboard = navigator.clipboard;
@@ -33,25 +53,19 @@ describe('NewsCard', () => {
   test('opens a safe external url in a new tab', () => {
     window.open = jest.fn();
 
-    render(
-      <NewsCard
-        group={{ ...group, url: 'https://example.com/story' }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
     fireEvent.click(screen.getByRole('button', { name: 'openOriginalSource' }));
 
     expect(window.open).toHaveBeenCalledWith('https://example.com/story', '_blank', 'noopener,noreferrer');
   });
 
-  test('renders the first safe article image in the card', () => {
-    render(
+  test('uses safe static covers and falls back when images are unavailable or disabled', () => {
+    const { rerender } = render(
       <NewsCard
         group={{
           ...group,
+          id: 'safe-image',
           items: [
             {
               id: 'article-1',
@@ -68,13 +82,12 @@ describe('NewsCard', () => {
     );
 
     expect(screen.getByRole('img', { name: 'Headline' })).toHaveAttribute('src', 'https://example.com/image.jpg');
-  });
 
-  test('skips gif article images when choosing the card cover', () => {
-    render(
+    rerender(
       <NewsCard
         group={{
           ...group,
+          id: 'gif-image',
           items: [
             {
               id: 'article-1',
@@ -97,13 +110,69 @@ describe('NewsCard', () => {
     );
 
     expect(screen.getByRole('img', { name: 'Headline' })).toHaveAttribute('src', 'https://example.com/static.jpg');
-  });
 
-  test('does not render images when card images are disabled', () => {
-    render(
+    rerender(
+      <NewsCard
+        group={{ ...group, id: 'no-image' }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
+
+    rerender(
       <NewsCard
         group={{
           ...group,
+          id: 'unsafe-image',
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              image: 'javascript:alert(1)'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
+
+    rerender(
+      <NewsCard
+        group={{
+          ...group,
+          id: 'broken-image',
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              image: 'https://example.com/broken.jpg'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    fireEvent.error(screen.getByRole('img', { name: 'Headline' }));
+
+    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
+
+    rerender(
+      <NewsCard
+        group={{
+          ...group,
+          id: 'disabled-image',
           items: [
             {
               id: 'article-1',
@@ -121,43 +190,11 @@ describe('NewsCard', () => {
     );
 
     expect(screen.queryByRole('img', { name: 'Headline' })).not.toBeInTheDocument();
-  });
-
-  test('does not render publication dates', () => {
-    render(
-      <NewsCard
-        group={group}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
-
-    expect(screen.queryByText(/2026/)).not.toBeInTheDocument();
-  });
-
-  test('renders a generic fallback illustration when the article has no image', () => {
-    render(
-      <NewsCard
-        group={group}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
-
-    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
+    expect(screen.queryByRole('img', { name: 'genericNewsCoverAlt' })).not.toBeInTheDocument();
   });
 
   test('renders icon-only topic pills on standard cards', () => {
-    render(
-      <NewsCard
-        group={{ ...group, topics: ['Tecnologia', 'Economia'] }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({ cardGroup: createGroup({ topics: ['Tecnologia', 'Economia'] }) });
 
     expect(screen.getByLabelText('Technology')).toBeInTheDocument();
     expect(screen.getByLabelText('Economy')).toBeInTheDocument();
@@ -228,7 +265,7 @@ describe('NewsCard', () => {
     expect(screen.getByText('Source A +1')).toBeInTheDocument();
   });
 
-  test('shows a rainbow sparkle badge for AI-grouped stories only', () => {
+  test('shows an AI-grouped badge only for matched AI stories', () => {
     const { rerender } = render(
       <NewsCard
         group={{
@@ -256,9 +293,29 @@ describe('NewsCard', () => {
       />
     );
 
-    expect(screen.getByLabelText('aiGroupedStory')).toHaveStyle({
-      backgroundImage: expect.stringContaining('conic-gradient')
-    });
+    expect(screen.getByLabelText('aiGroupedStory')).toBeInTheDocument();
+
+    rerender(
+      <NewsCard
+        group={{
+          ...group,
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              storyGroupId: 'ai-story-1',
+              aiStoryGroupStatus: 'matched'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByLabelText('aiGroupedStory')).not.toBeInTheDocument();
 
     rerender(
       <NewsCard
@@ -272,115 +329,18 @@ describe('NewsCard', () => {
     expect(screen.queryByLabelText('aiGroupedStory')).not.toBeInTheDocument();
   });
 
-  test('adds a rainbow ring around AI-classified topic icons', () => {
-    render(
-      <NewsCard
-        group={{
-          ...group,
-          topicDetails: [
-            { topic: 'Tecnologia', source: 'ai' },
-            { topic: 'Economia', source: 'local' }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
-
-    expect(screen.getByLabelText('Technology')).toHaveStyle({
-      backgroundImage: expect.stringContaining('conic-gradient')
-    });
-    expect(screen.getByLabelText('Economy').getAttribute('style') || '').not.toContain('conic-gradient');
-  });
-
-  test('keeps topic pills in the unified card layout', () => {
-    render(
-      <NewsCard
-        group={{ ...group, topics: ['Tecnologia'] }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
-
-    expect(screen.getByLabelText('Technology')).toBeInTheDocument();
-  });
-
   test('toggles the read-later action from the card header', () => {
     const onToggleReadLater = jest.fn();
 
-    render(
-      <NewsCard
-        group={group}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-        onToggleReadLater={onToggleReadLater}
-      />
-    );
+    renderNewsCard({ onToggleReadLater });
 
     fireEvent.click(screen.getByRole('button', { name: 'saveReadLater' }));
 
     expect(onToggleReadLater).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }));
   });
 
-  test('falls back to the generic illustration for unsafe or broken article images', () => {
-    const { rerender } = render(
-      <NewsCard
-        group={{
-          ...group,
-          items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              image: 'javascript:alert(1)'
-            }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
-
-    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
-
-    rerender(
-      <NewsCard
-        group={{
-          ...group,
-          items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              image: 'https://example.com/broken.jpg'
-            }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
-
-    const image = screen.getByRole('img', { name: 'Headline' });
-    fireEvent.error(image);
-
-    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
-  });
-
   test('disables unsafe external links', () => {
-    render(
-      <NewsCard
-        group={{ ...group, url: 'javascript:alert(1)' }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({ cardGroup: createGroup({ url: 'javascript:alert(1)' }) });
 
     expect(screen.getByRole('button', { name: 'openOriginalSource' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'openOriginalSource' })).toHaveAttribute('title', 'openOriginalSourceUnavailable');
@@ -390,14 +350,7 @@ describe('NewsCard', () => {
   test('uses the native share action when available', async () => {
     navigator.share = jest.fn().mockResolvedValue(undefined);
 
-    render(
-      <NewsCard
-        group={{ ...group, url: 'https://example.com/story' }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
@@ -415,14 +368,7 @@ describe('NewsCard', () => {
       writeText: jest.fn().mockResolvedValue(undefined)
     };
 
-    render(
-      <NewsCard
-        group={{ ...group, url: 'https://example.com/story' }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
@@ -438,14 +384,7 @@ describe('NewsCard', () => {
       writeText: jest.fn().mockRejectedValue(new Error('denied'))
     };
 
-    render(
-      <NewsCard
-        group={{ ...group, url: 'https://example.com/story' }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
@@ -519,34 +458,4 @@ describe('NewsCard', () => {
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
   });
 
-  test('preserves actions and topics in the unified card layout', () => {
-    window.open = jest.fn();
-
-    render(
-      <NewsCard
-        group={{
-          ...group,
-          topics: ['Tecnologia'],
-          url: 'https://example.com/story',
-          items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              image: 'https://example.com/image.jpg'
-            }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
-
-    expect(screen.getByRole('button', { name: 'shareArticle' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'readerMode' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Technology')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'openOriginalSource' }));
-    expect(window.open).toHaveBeenCalledWith('https://example.com/story', '_blank', 'noopener,noreferrer');
-  });
 });

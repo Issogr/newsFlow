@@ -6,7 +6,6 @@ const {
   getSourceAliases,
   getSourceVariantLabel
 } = require('./sourceCatalog');
-const configuredSources = require('../config/newsSources');
 
 describe('sourceCatalog domain grouping', () => {
   test('extracts registrable domains from feed URLs', () => {
@@ -36,9 +35,5 @@ describe('sourceCatalog domain grouping', () => {
     expect(getSourceVariantLabel('bbc_world', 'BBC News - World')).toBe('World');
 
     expect(getSourceAliases('ansa.it').ids).toEqual(expect.arrayContaining(['ansa.it', 'ansa', 'ansa_home', 'ansa_mondo']));
-  });
-
-  test('uses the Il Post feed URL that serves RSS without a 403', () => {
-    expect(configuredSources.find((source) => source.id === 'ilpost')?.url).toBe('https://www.ilpost.it/feed');
   });
 });

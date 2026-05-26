@@ -17,7 +17,7 @@ const {
   getFeedbackAttachmentType,
 } = require('../utils/feedback');
 const { asyncHandler, createError } = require('../utils/errorHandler');
-const { sanitizeParam, sanitizeQuery, validateParam, sanitizeBody } = require('../utils/inputValidator');
+const { sanitizeQuery, sanitizeBody, validateAndSanitizeParam } = require('../utils/inputValidator');
 const { requireAuthenticatedUser, requireAdminUser, SESSION_COOKIE_NAME } = require('../utils/auth');
 const { parseIntegerEnv } = require('../utils/env');
 const { parseNewsQuery } = require('../utils/newsQuery');
@@ -27,14 +27,27 @@ const logger = require('../utils/logger');
 const router = express.Router();
 
 function refreshUserSourceInBackground(userId, sourceId) {
+  refreshUserSourcesInBackground(userId, { sourceIds: [sourceId], broadcast: true }, `custom source ${sourceId}`);
+}
+
+function refreshUserSourcesInBackground(userId, options = {}, label = 'user sources') {
   try {
-    Promise.resolve(newsService.refreshUserSources(userId, { sourceIds: [sourceId], broadcast: true }))
+    Promise.resolve(newsService.refreshUserSources(userId, options))
       .catch((error) => {
-        logger.warn(`Custom source refresh failed for ${sourceId}: ${error.message}`);
+        logger.warn(`Background refresh failed for ${label}: ${error.message}`);
       });
   } catch (error) {
-    logger.warn(`Custom source refresh failed for ${sourceId}: ${error.message}`);
+    logger.warn(`Background refresh failed for ${label}: ${error.message}`);
   }
+}
+
+function buildRateLimitMessage(message) {
+  return {
+    error: {
+      message,
+      code: 'RATE_LIMIT_EXCEEDED',
+    },
+  };
 }
 
 const feedbackRateLimit = rateLimit({
@@ -42,12 +55,7 @@ const feedbackRateLimit = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: {
-    error: {
-      message: 'Too many feedback submissions. Please try again later.',
-      code: 'RATE_LIMIT_EXCEEDED',
-    },
-  },
+  message: buildRateLimitMessage('Too many feedback submissions. Please try again later.'),
 });
 
 const authRateLimit = rateLimit({
@@ -59,12 +67,7 @@ const authRateLimit = rateLimit({
     const username = String(req.body?.username || '').trim().toLowerCase();
     return `${ipKeyGenerator(req.ip)}:${username}`;
   },
-  message: {
-    error: {
-      message: 'Too many authentication attempts. Please try again later.',
-      code: 'RATE_LIMIT_EXCEEDED',
-    },
-  },
+  message: buildRateLimitMessage('Too many authentication attempts. Please try again later.'),
 });
 
 const passwordSetupRateLimit = rateLimit({
@@ -76,12 +79,18 @@ const passwordSetupRateLimit = rateLimit({
     const token = String(req.body?.token || req.query?.token || '').trim().slice(0, 24);
     return `${ipKeyGenerator(req.ip)}:${token}`;
   },
-  message: {
-    error: {
-      message: 'Too many password setup attempts. Please try again later.',
-      code: 'RATE_LIMIT_EXCEEDED',
-    },
+  message: buildRateLimitMessage('Too many password setup attempts. Please try again later.'),
+});
+
+const readerRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    return req.user?.id ? `user:${req.user.id}` : ipKeyGenerator(req.ip);
   },
+  message: buildRateLimitMessage('Too many reader requests. Please try again shortly.'),
 });
 
 function getSessionCookieOptions() {
@@ -193,6 +202,98 @@ function getRequestArticleIds(req) {
   return rawArticleIds.map((articleId) => String(articleId || '').trim()).filter(Boolean);
 }
 
+function parseSingleByteRange(rangeHeader = '', size = 0) {
+  const match = String(rangeHeader || '').match(/^bytes=(\d*)-(\d*)$/u);
+  if (!match || size <= 0) {
+    return null;
+  }
+
+  let start = match[1] ? Number(match[1]) : null;
+  let end = match[2] ? Number(match[2]) : null;
+
+  if (start === null && end === null) {
+    return null;
+  }
+
+  if (start === null) {
+    const suffixLength = end;
+    if (!Number.isFinite(suffixLength) || suffixLength <= 0) {
+      return null;
+    }
+    start = Math.max(0, size - suffixLength);
+    end = size - 1;
+  } else {
+    if (!Number.isFinite(start) || start < 0) {
+      return null;
+    }
+    end = Number.isFinite(end) ? Math.min(end, size - 1) : size - 1;
+  }
+
+  if (!Number.isFinite(end) || start >= size || end < start) {
+    return null;
+  }
+
+  return { start, end };
+}
+
+function sniffAudioMimeType(audioBuffer, fallbackMimeType = 'audio/mpeg') {
+  if (!Buffer.isBuffer(audioBuffer) || audioBuffer.length < 4) {
+    return fallbackMimeType;
+  }
+
+  const signature = audioBuffer.subarray(0, 12).toString('ascii');
+  if (signature.startsWith('RIFF') && signature.slice(8, 12) === 'WAVE') {
+    return 'audio/wav';
+  }
+  if (signature.startsWith('ID3') || (audioBuffer[0] === 0xff && (audioBuffer[1] & 0xe0) === 0xe0)) {
+    return 'audio/mpeg';
+  }
+  if (signature.startsWith('OggS')) {
+    return 'audio/ogg';
+  }
+  if (signature.startsWith('fLaC')) {
+    return 'audio/flac';
+  }
+  if (audioBuffer.length >= 8 && audioBuffer.subarray(4, 8).toString('ascii') === 'ftyp') {
+    return 'audio/mp4';
+  }
+  if (audioBuffer[0] === 0xff && (audioBuffer[1] === 0xf1 || audioBuffer[1] === 0xf9)) {
+    return 'audio/aac';
+  }
+
+  return fallbackMimeType;
+}
+
+function sendAudioResponse(req, res, audio) {
+  const audioBuffer = Buffer.isBuffer(audio.data) ? audio.data : Buffer.from(audio.data || []);
+  const audioSize = audioBuffer.length;
+  const mimeType = sniffAudioMimeType(audioBuffer, audio.mimeType || 'audio/mpeg');
+
+  res.set('Content-Type', mimeType);
+  res.set('Cache-Control', 'private, no-store, max-age=0');
+  res.set('Accept-Ranges', 'bytes');
+  res.set('Content-Disposition', 'inline');
+
+  if (!req.headers.range) {
+    res.set('Content-Length', String(audioSize));
+    res.send(audioBuffer);
+    return;
+  }
+
+  const range = parseSingleByteRange(req.headers.range, audioSize);
+  if (!range) {
+    res.set('Content-Range', `bytes */${audioSize}`);
+    res.status(416).end();
+    return;
+  }
+
+  const chunk = audioBuffer.subarray(range.start, range.end + 1);
+  res.status(206);
+  res.set('Content-Range', `bytes ${range.start}-${range.end}/${audioSize}`);
+  res.set('Content-Length', String(chunk.length));
+  res.send(chunk);
+}
+
 router.post('/auth/register', [authRateLimit, sanitizeBody(['username'])], asyncHandler(async (req, res) => {
   const result = await userService.registerUser(req.body || {});
   setSessionCookie(res, result.token);
@@ -292,7 +393,7 @@ router.get('/me/settings/export', requireAuthenticatedUser, asyncHandler(async (
 
 router.post('/me/settings/import', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   const result = await userService.importUserSettings(req.user.id, req.body || {});
-  await newsService.refreshUserSources(req.user.id, { broadcast: false });
+  refreshUserSourcesInBackground(req.user.id, { broadcast: true }, `imported sources for user ${req.user.id}`);
   res.json({ success: true, ...result });
 }));
 
@@ -304,8 +405,7 @@ router.post('/me/sources', requireAuthenticatedUser, asyncHandler(async (req, re
 
 router.patch('/me/sources/:sourceId', [
   requireAuthenticatedUser,
-  validateParam('sourceId', 'Invalid source ID'),
-  sanitizeParam('sourceId')
+  ...validateAndSanitizeParam('sourceId', 'Invalid source ID')
 ], asyncHandler(async (req, res) => {
   const source = await userService.updateUserSource(req.user.id, req.params.sourceId, req.body || {});
   refreshUserSourceInBackground(req.user.id, source.id);
@@ -314,8 +414,7 @@ router.patch('/me/sources/:sourceId', [
 
 router.delete('/me/sources/:sourceId', [
   requireAuthenticatedUser,
-  validateParam('sourceId', 'Invalid source ID'),
-  sanitizeParam('sourceId')
+  ...validateAndSanitizeParam('sourceId', 'Invalid source ID')
 ], asyncHandler(async (req, res) => {
   userService.removeUserSource(req.user.id, req.params.sourceId);
   res.json({ success: true });
@@ -328,8 +427,7 @@ router.get('/admin/users', [requireAuthenticatedUser, requireAdminUser], asyncHa
 router.post('/admin/users/:userId/password-setup-link', [
   requireAuthenticatedUser,
   requireAdminUser,
-  validateParam('userId', 'Invalid user ID'),
-  sanitizeParam('userId')
+  ...validateAndSanitizeParam('userId', 'Invalid user ID')
 ], asyncHandler(async (req, res) => {
   const result = userService.createUserPasswordSetupLink(req.user.id, req.params.userId);
   res.json({ success: true, ...result });
@@ -338,8 +436,7 @@ router.post('/admin/users/:userId/password-setup-link', [
 router.delete('/admin/users/:userId', [
   requireAuthenticatedUser,
   requireAdminUser,
-  validateParam('userId', 'Invalid user ID'),
-  sanitizeParam('userId')
+  ...validateAndSanitizeParam('userId', 'Invalid user ID')
 ], asyncHandler(async (req, res) => {
   const result = userService.deleteUserAsAdmin(req.user.id, req.params.userId);
   res.json(result);
@@ -348,8 +445,7 @@ router.delete('/admin/users/:userId', [
 router.get('/admin/articles/:articleId/topics/debug', [
   requireAuthenticatedUser,
   requireAdminUser,
-  validateParam('articleId', 'Invalid article ID'),
-  sanitizeParam('articleId')
+  ...validateAndSanitizeParam('articleId', 'Invalid article ID')
 ], asyncHandler(async (req, res) => {
   const report = database.getTopicClassificationReport(req.params.articleId);
   if (!report) {
@@ -372,7 +468,25 @@ router.get('/read-later', [requireAuthenticatedUser, sanitizeQuery('search')], a
 }));
 
 router.get('/thematic-summaries', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'private, no-store, max-age=0');
   res.json(thematicSummaryService.getLatestSummaries());
+}));
+
+router.get('/podcast-summary/:summaryId/audio', [
+  requireAuthenticatedUser,
+  ...validateAndSanitizeParam('summaryId', 'Invalid podcast summary ID')
+], asyncHandler(async (req, res) => {
+  const summaryId = String(req.params.summaryId || '').trim();
+  if (summaryId.length < 5) {
+    throw createError(400, 'Invalid podcast summary ID', 'INVALID_PODCAST_SUMMARY_ID');
+  }
+
+  const audio = database.getPodcastSummaryAudio(summaryId);
+  if (!audio?.data) {
+    throw createError(404, 'Podcast audio not found', 'RESOURCE_NOT_FOUND');
+  }
+
+  sendAudioResponse(req, res, audio);
 }));
 
 router.post('/me/read-later', requireAuthenticatedUser, asyncHandler(async (req, res) => {
@@ -387,8 +501,8 @@ router.post('/me/read-later/remove', requireAuthenticatedUser, asyncHandler(asyn
 
 router.get('/articles/:articleId/reader', [
   requireAuthenticatedUser,
-  validateParam('articleId', 'ID articolo non valido'),
-  sanitizeParam('articleId')
+  readerRateLimit,
+  ...validateAndSanitizeParam('articleId', 'ID articolo non valido')
 ], asyncHandler(async (req, res) => {
   const { articleId } = req.params;
   const userContext = getUserContext(req);

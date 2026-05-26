@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import BrandMark from './BrandMark';
 
 function renderTextWithInlineCode(text) {
@@ -111,7 +111,7 @@ const docsContent = {
 };
 
 const ApiDocsPage = ({ locale }) => {
-  const content = useMemo(() => docsContent[locale] || docsContent.en, [locale]);
+  const content = docsContent[locale] || docsContent.en;
 
   return (
     <div className="min-h-screen bg-white text-slate-900 sm:bg-slate-100 sm:px-4 sm:py-10">

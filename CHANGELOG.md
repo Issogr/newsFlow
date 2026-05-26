@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.5.0
+
+- added an AI-generated podcast briefing story at the start of the topic story rail, using the same scheduled summary article set and cached reader text without triggering reader extraction during generation
+- generated podcast scripts in English and Italian, with Italian-only audio playback when TTS generation is available
+- added separate OpenRouter model environment variables with independent defaults for topic classification, thematic summaries, podcast scripts, podcast audio, and AI story grouping/news duplicate prevention
+- switched the default podcast TTS provider model to Gemini 3.1 Flash TTS Preview with a Gemini-compatible voice
+- requested Gemini podcast audio as PCM and stored it as browser-playable WAV audio
+- surfaced podcast audio generation, completion, and failure state through summary refreshes instead of leaving retries silent
+- filtered promotional shopping deals and affiliate-style sale posts out of AI summaries and podcast briefings
+- kept podcast and summary titles/openings from inventing morning, noon, or evening labels from scheduled coverage windows
+- improved summary and podcast readability with paragraph breaks for dense generated text
+- removed promotional product price-drop sentences from generated summaries and podcast scripts as a final cleanup pass
+- streamed podcast audio through the browser media pipeline instead of eagerly downloading and decoding the full file
+- made podcast generation more reliable by rejecting non-speakable scripts, bounding TTS input size, validating audio responses, and retrying failed audio without regenerating scripts
+- split Gemini podcast TTS into natural narration chunks and stitched the raw PCM into one WAV file to avoid silent provider truncation while keeping pauses short
+- pruned older thematic summary and podcast rows after a replacement summary or podcast exists for the current scheduled window
+- made AI story grouping more reliable by checking a larger nearby candidate pool while keeping model input capped, retrying recent misses after new articles, and recording match evidence
+- made thematic summaries more reliable by triggering due summaries after topic classification, validating citations/language quality, and storing terminal empty-window messages
+- hardened BFF proxy trust, CSP, session renewal, and public API invalid-token throttling
+- fixed grouped-feed cursor pagination so already returned related articles do not reappear on later pages
+- preserved unsaved settings drafts while adding sources or changing API tokens
+
 ## 3.4.2
 
 - added AI-assisted story grouping that can merge articles from different RSS sources when their titles and descriptions describe the same event, while keeping grouping decisions out of feed request latency

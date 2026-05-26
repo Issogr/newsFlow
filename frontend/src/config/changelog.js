@@ -1,13 +1,16 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.4.2',
+  version: '3.5.0',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '🧠 AI now helps group reworded RSS articles from different sources into one shared news card when they describe the same event.',
-      '📱 Thematic summaries now stay properly full screen on mobile without revealing the news list while scrolling.',
-      '🔔 New-article notices now stay visible during background topic and story updates until you refresh.'
+      '🎧 A new podcast briefing appears first in the topic story rail, generated from the same scheduled summary articles, with English/Italian scripts based on your app language and Italian Gemini TTS audio when available.',
+      '⚡ Podcast audio streams through the browser, while generation validates scripts and audio, caps TTS input size, retries failed audio without regenerating scripts, and stitches natural Gemini chunks into one WAV to avoid truncated narration with shorter pauses.',
+      '🧽 Older summary and podcast rows are removed after a replacement exists for the current scheduled window.',
+      '🧩 AI story grouping checks more nearby candidates, retries recent misses, and records match evidence while keeping model input small.',
+      '📰 Thematic summaries now wait for topic classification, validate citations, and show an explicit empty-window message when no topic news is available.',
+      '🛡️ Feed pagination, session handling, and settings drafts are more reliable.'
     ]
   },
   it: {
@@ -15,9 +18,12 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '🧠 L\'AI ora aiuta a raggruppare in un\'unica news card articoli RSS riscritti da fonti diverse quando descrivono lo stesso evento.',
-      '📱 Le sintesi tematiche ora restano correttamente a schermo intero su mobile senza mostrare la lista delle news durante lo scroll.',
-      '🔔 Gli avvisi di nuove notizie ora restano visibili durante gli aggiornamenti in background di topic e storie finche non aggiorni.'
+      '🎧 Un nuovo briefing podcast appare per primo nella barra delle storie per topic, generato dagli stessi articoli delle sintesi programmate, con testi in inglese/italiano in base alla lingua dell\'app e audio italiano Gemini TTS quando disponibile.',
+      '⚡ L\'audio podcast viene riprodotto in streaming dal browser; la generazione valida testi e audio, limita l\'input TTS, ritenta l\'audio fallito senza rigenerare i testi e unisce segmenti Gemini naturali in un unico WAV per evitare narrazioni troncate con pause piu brevi.',
+      '🧽 Le righe vecchie di sintesi e podcast vengono rimosse dopo che esiste una sostituzione per la finestra programmata corrente.',
+      '🧩 Il raggruppamento AI delle storie controlla piu candidati vicini, ritenta i match recenti mancati e conserva le prove del match mantenendo piccolo l\'input del modello.',
+      '📰 Le sintesi tematiche ora aspettano la classificazione dei topic, validano le citazioni e mostrano un messaggio esplicito quando non ci sono notizie per la finestra.',
+      '🛡️ Paginazione del feed, sessioni e bozze delle impostazioni sono piu affidabili.'
     ]
   }
 };

@@ -5,29 +5,46 @@ import {
   Rss,
   Search,
   Tags,
-  X,
 } from 'lucide-react';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import useFilterSurfaceState from '../hooks/useFilterSurfaceState';
-import { SourceFilterList, TopicFilterList } from './FilterOptionLists';
+import { FilterSearchInput } from './FilterSurfaceControls';
+import FilterBubbles from './FilterBubbles';
 
 const BUBBLE_MAX_HEIGHT = 'min(50vh, 24rem)';
+const MOBILE_BUBBLE_CLASS_NAME = 'absolute bottom-full left-2 right-2 z-[60] mb-3 overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur-md';
 
-function FilterBubble({ children, open }) {
+function MobileNavButton({
+  active,
+  activeClassName,
+  ariaExpanded,
+  badge = null,
+  badgeClassName,
+  icon: Icon,
+  label,
+  onClick,
+  onPointerDown,
+}) {
   return (
-    <div
-      className={`absolute bottom-full left-2 right-2 z-[60] mb-3 overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur-md transition-all duration-200 ease-out ${
-        open
-          ? 'pointer-events-auto translate-y-0 opacity-100'
-          : 'pointer-events-none translate-y-2 opacity-0'
+    <button
+      type="button"
+      onPointerDown={onPointerDown}
+      onClick={onClick}
+      aria-expanded={ariaExpanded}
+      className={`relative flex h-full flex-col items-center justify-center gap-0.5 px-1 transition-colors ${
+        active ? activeClassName : 'text-slate-500 hover:text-slate-700'
       }`}
-      aria-hidden={!open}
-      inert={open ? undefined : ''}
     >
-      <div className="max-h-[var(--bubble-max-height)] overflow-y-auto overscroll-contain p-4" style={{ '--bubble-max-height': BUBBLE_MAX_HEIGHT }}>
-        {children}
+      <div className="relative flex h-5 w-5 items-center justify-center">
+        <Icon className="h-5 w-5" />
+        {badge !== null && badge !== undefined && (
+          <span className={`absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[8px] font-bold ${badgeClassName}`}>
+            {badge}
+          </span>
+        )}
       </div>
-    </div>
+      <span className="h-3.5 text-center text-[10px] font-medium leading-none">{label}</span>
+    </button>
   );
 }
 
@@ -104,28 +121,17 @@ const MobileBottomNav = ({
         className="relative mx-auto w-[calc(100%-2rem)] max-w-md pb-[calc(env(safe-area-inset-bottom)+1.25rem+var(--mobile-keyboard-offset,0px))] transition-[padding-bottom] duration-200 ease-out"
         style={{ '--mobile-keyboard-offset': `${keyboardOffset}px` }}
       >
-        <FilterBubble
-          open={openBubble === 'sources'}
-        >
-          <SourceFilterList
-            sources={visibleSources}
-            activeSourceIds={activeFilters.sourceIds}
-            emptyLabel={t('noNewsText')}
-            onToggleSource={(sourceId) => onToggleFilter('sourceIds', sourceId)}
-          />
-        </FilterBubble>
-
-        <FilterBubble
-          open={openBubble === 'topics'}
-        >
-          <TopicFilterList
-            topics={availableTopics}
-            activeTopics={activeFilters.topics}
-            emptyLabel={t('noNewsText')}
-            locale={locale}
-            onToggleTopic={(topic) => onToggleFilter('topics', topic)}
-          />
-        </FilterBubble>
+        <FilterBubbles
+          activeFilters={activeFilters}
+          availableTopics={availableTopics}
+          bubbleClassName={MOBILE_BUBBLE_CLASS_NAME}
+          emptyLabel={t('noNewsText')}
+          locale={locale}
+          maxHeight={BUBBLE_MAX_HEIGHT}
+          onToggleFilter={onToggleFilter}
+          openBubble={openBubble}
+          visibleSources={visibleSources}
+        />
 
         {/* Nav bar */}
         <div className="overflow-hidden rounded-full border border-slate-200 bg-white/95 shadow-md backdrop-blur-md">
@@ -137,93 +143,59 @@ const MobileBottomNav = ({
                 : 'translate-x-0 scale-100 opacity-100 blur-0'
             }`}
           >
-            <button
-              type="button"
+            <MobileNavButton
+              icon={Rss}
+              label={t('sources')}
               onPointerDown={(event) => handleBubbleButtonPress(event, 'sources')}
               onClick={(event) => handleBubbleButtonClick(event, 'sources')}
-              aria-expanded={openBubble === 'sources'}
-              className={`relative flex h-full flex-col items-center justify-center gap-0.5 px-1 transition-colors ${
-                openBubble === 'sources' ? 'text-sky-600' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <div className="relative flex h-5 w-5 items-center justify-center">
-                <Rss className="h-5 w-5" />
-                {sourceCount > 0 && (
-                  <span className="absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-sky-600 text-[8px] font-bold text-white">
-                    {sourceCount}
-                  </span>
-                )}
-              </div>
-              <span className="h-3.5 text-center text-[10px] font-medium leading-none">{t('sources')}</span>
-            </button>
+              ariaExpanded={openBubble === 'sources'}
+              active={openBubble === 'sources'}
+              activeClassName="text-sky-600"
+              badge={sourceCount > 0 ? sourceCount : null}
+              badgeClassName="bg-sky-600 text-white"
+            />
 
-            <button
-              type="button"
+            <MobileNavButton
+              icon={Tags}
+              label={t('topics')}
               onPointerDown={(event) => handleBubbleButtonPress(event, 'topics')}
               onClick={(event) => handleBubbleButtonClick(event, 'topics')}
-              aria-expanded={openBubble === 'topics'}
-              className={`relative flex h-full flex-col items-center justify-center gap-0.5 px-1 transition-colors ${
-                openBubble === 'topics' ? 'text-emerald-600' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <div className="relative flex h-5 w-5 items-center justify-center">
-                <Tags className="h-5 w-5" />
-                {topicCount > 0 && (
-                  <span className="absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-600 text-[8px] font-bold text-white">
-                    {topicCount}
-                  </span>
-                )}
-              </div>
-              <span className="h-3.5 text-center text-[10px] font-medium leading-none">{t('topics')}</span>
-            </button>
+              ariaExpanded={openBubble === 'topics'}
+              active={openBubble === 'topics'}
+              activeClassName="text-emerald-600"
+              badge={topicCount > 0 ? topicCount : null}
+              badgeClassName="bg-emerald-600 text-white"
+            />
 
-            <button
-              type="button"
+            <MobileNavButton
+              icon={Clock3}
+              label={t('latestHours', { hours: recentHours })}
               onClick={onToggleRecent}
-              className={`relative flex h-full flex-col items-center justify-center gap-0.5 px-1 transition-colors ${
-                showRecentOnly ? 'text-amber-600' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <div className="relative flex h-5 w-5 items-center justify-center">
-                <Clock3 className="h-5 w-5" />
-                {timeCount > 0 && (
-                  <span className="absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-white" />
-                )}
-              </div>
-              <span className="h-3.5 text-center text-[10px] font-medium leading-none">{t('latestHours', { hours: recentHours })}</span>
-            </button>
+              active={showRecentOnly}
+              activeClassName="text-amber-600"
+              badge={timeCount > 0 ? '' : null}
+              badgeClassName="bg-amber-500 text-white"
+            />
 
-            <button
-              type="button"
+            <MobileNavButton
+              icon={Bookmark}
+              label={t('readLaterShort')}
               onClick={() => onViewChange?.(readLaterActive ? 'news' : 'readLater')}
-              className={`relative flex h-full flex-col items-center justify-center gap-0.5 px-1 transition-colors ${
-                readLaterActive ? 'text-amber-600' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <div className="relative flex h-5 w-5 items-center justify-center">
-                <Bookmark className="h-5 w-5" />
-                {readLaterActive && (
-                  <span className="absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-white" />
-                )}
-              </div>
-              <span className="h-3.5 text-center text-[10px] font-medium leading-none">{t('readLaterShort')}</span>
-            </button>
+              active={readLaterActive}
+              activeClassName="text-amber-600"
+              badge={readLaterActive ? '' : null}
+              badgeClassName="bg-amber-500 text-white"
+            />
 
-            <button
-              type="button"
+            <MobileNavButton
+              icon={Search}
+              label={t('searchLabel')}
               onClick={handleEnterSearch}
-              className={`relative flex h-full flex-col items-center justify-center gap-0.5 px-1 transition-colors ${
-                searchCount > 0 ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <div className="relative flex h-5 w-5 items-center justify-center">
-                <Search className="h-5 w-5" />
-                {searchCount > 0 && (
-                  <span className="absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-800 text-[8px] font-bold text-white" />
-                )}
-              </div>
-              <span className="h-3.5 text-center text-[10px] font-medium leading-none">{t('searchLabel')}</span>
-            </button>
+              active={searchCount > 0}
+              activeClassName="text-slate-900"
+              badge={searchCount > 0 ? '' : null}
+              badgeClassName="bg-slate-800 text-white"
+            />
           </div>
 
           <div
@@ -235,38 +207,18 @@ const MobileBottomNav = ({
             aria-hidden={!searchMode}
             inert={searchMode ? undefined : ''}
           >
-            <label className="group flex h-full flex-1 items-center gap-2 rounded-full border border-slate-200/80 bg-gradient-to-r from-slate-50 to-white px-3.5 shadow-inner shadow-slate-200/60 transition-colors focus-within:border-sky-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100">
-              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm transition-colors group-focus-within:text-sky-600">
-                <Search className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <input
-                ref={searchInputRef}
-                type="search"
-                value={search}
-                onChange={(event) => onSearchChange(event.target.value)}
-                placeholder={t('searchPlaceholder')}
-                tabIndex={searchMode ? 0 : -1}
-                className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:font-normal placeholder:text-slate-400"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={onSearchClear}
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700"
-                  aria-label={t('clearSearch')}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </label>
-            <button
-              type="button"
-              onClick={handleExitSearch}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-sm transition-colors hover:bg-slate-700"
-              aria-label={t('cancel')}
-            >
-              <X className="h-4.5 w-4.5" />
-            </button>
+            <FilterSearchInput
+              className="flex flex-1 items-center gap-2"
+              labelClassName="h-full"
+              inputTabIndex={searchMode ? 0 : -1}
+              cancelIconClassName="h-4.5 w-4.5"
+              onCancel={handleExitSearch}
+              onSearchChange={onSearchChange}
+              onSearchClear={onSearchClear}
+              search={search}
+              searchInputRef={searchInputRef}
+              t={t}
+            />
           </div>
         </div>
         </div>

@@ -78,26 +78,18 @@ describe('api service', () => {
     }));
   });
 
-  test('sends an explicit refresh flag for manual news refreshes', async () => {
-    mockApi.get.mockResolvedValue({ data: { items: [] } });
-
-    await fetchNews({ refresh: true });
-
-    expect(mockApi.get).toHaveBeenCalledWith('/news', expect.objectContaining({
-      params: expect.objectContaining({ refresh: 'true' })
-    }));
-  });
-
-  test('builds news query params only from active filters', async () => {
+  test('builds news query params only from active filters and manual refresh state', async () => {
     mockApi.get.mockResolvedValue({ data: { items: [] } });
 
     await fetchNews({
+      refresh: true,
       search: '  economy  ',
       sourceIds: ['ansa', 'bbc'],
       topics: ['Economy'],
       recentHours: 0,
       beforePubDate: '2026-05-21T10:00:00.000Z',
       beforeId: 'article-10',
+      excludeArticleIds: ['article-2', 'article-3'],
       includeFilters: false,
       signal: 'news-signal'
     });
@@ -106,11 +98,13 @@ describe('api service', () => {
       params: {
         page: 1,
         pageSize: 12,
+        refresh: 'true',
         search: 'economy',
         sources: 'ansa,bbc',
         topics: 'Economy',
         beforePubDate: '2026-05-21T10:00:00.000Z',
-        beforeId: 'article-10'
+        beforeId: 'article-10',
+        excludeArticleIds: 'article-2,article-3'
       },
       signal: 'news-signal'
     });

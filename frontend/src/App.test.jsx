@@ -16,10 +16,8 @@ vi.mock('./services/api', () => ({
   AUTH_EXPIRED_EVENT: 'newsflow:auth-expired',
   completePasswordSetup: vi.fn(),
   fetchCurrentUser: vi.fn(),
-  fetchAdminUsers: vi.fn(),
   loginUser: vi.fn(),
   logoutUser: vi.fn(),
-  createAdminPasswordSetupLink: vi.fn(),
   registerUser: vi.fn(),
   updateUserSettings: vi.fn(),
   validatePasswordSetupToken: vi.fn()
@@ -87,14 +85,6 @@ describe('App', () => {
     document.documentElement.style.colorScheme = '';
   });
 
-  test('renders the authenticated app when the current session loads', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION }));
-
-    render(<App />);
-
-    expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
-  });
-
   test('renders the admin dashboard instead of the news home for admin sessions', async () => {
     fetchCurrentUser.mockResolvedValue({
       ...createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.5' }),
@@ -127,16 +117,19 @@ describe('App', () => {
     render(<App />);
 
     expect(await screen.findByText('Update released')).toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('');
     expect(screen.queryByText('What is new')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Update released'));
 
     expect(await screen.findByText('What is new')).toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('hidden');
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
 
     await waitFor(() => {
       expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION });
+      expect(document.body.style.overflow).toBe('');
     });
   });
 
@@ -190,30 +183,6 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open release notes' }));
 
     expect(await screen.findByText('What is new')).toBeInTheDocument();
-  });
-
-  test('locks body scroll while release notes are open', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser());
-    updateUserSettings.mockResolvedValue({
-      success: true,
-      settings: createCurrentUser({ lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION }).settings
-    });
-
-    render(<App />);
-
-    expect(await screen.findByText('Update released')).toBeInTheDocument();
-    expect(document.body.style.overflow).toBe('');
-
-    fireEvent.click(screen.getByText('Update released'));
-
-    expect(await screen.findByText('What is new')).toBeInTheDocument();
-    expect(document.body.style.overflow).toBe('hidden');
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
-
-    await waitFor(() => {
-      expect(document.body.style.overflow).toBe('');
-    });
   });
 
   test('falls back to the authentication screen when loading the session fails', async () => {

@@ -9,6 +9,13 @@ const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
 const GROUP_PAGINATION_ARTICLE_BATCH_SIZE = 250;
 const READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE = 250;
 
+function getPagination(filters = {}) {
+  return {
+    page: Math.max(1, Math.min(Number(filters.page) || 1, MAX_NEWS_PAGE)),
+    pageSize: Math.max(1, Math.min(Number(filters.pageSize) || 12, 30))
+  };
+}
+
 function expandConfiguredSources() {
   return newsSources;
 }
@@ -63,27 +70,41 @@ function getAvailableSources(userContext = {}, userSources = null) {
   return [...availableSources.values()];
 }
 
+function getMaxArticleAgeHours(userContext = {}, articleRetentionHours = ARTICLE_RETENTION_HOURS) {
+  return Math.min(
+    articleRetentionHours,
+    Number.isFinite(userContext.articleRetentionHours) ? userContext.articleRetentionHours : articleRetentionHours
+  );
+}
+
 function getQueryOptions(userContext = {}) {
   return {
     userId: userContext.userId || null,
-    maxArticleAgeHours: Math.min(
-      ARTICLE_RETENTION_HOURS,
-      Number.isFinite(userContext.articleRetentionHours) ? userContext.articleRetentionHours : ARTICLE_RETENTION_HOURS
-    ),
+    maxArticleAgeHours: getMaxArticleAgeHours(userContext),
     excludedSourceIds: Array.isArray(userContext.excludedSourceIds) ? userContext.excludedSourceIds : [],
     excludedSubSourceIds: Array.isArray(userContext.excludedSubSourceIds) ? userContext.excludedSubSourceIds : []
   };
 }
 
-function buildNextCursor(groups = []) {
+function collectGroupArticleIds(groups = []) {
+  return groups.flatMap((group) => (group.items || []).map((item) => item.id).filter(Boolean));
+}
+
+function buildNextCursor(groups = [], existingExcludeArticleIds = []) {
   const lastItem = groups[groups.length - 1];
   if (!lastItem?.pubDate || !lastItem?.cursorId) {
     return null;
   }
 
+  const excludeArticleIds = [...new Set([
+    ...(Array.isArray(existingExcludeArticleIds) ? existingExcludeArticleIds : []),
+    ...collectGroupArticleIds(groups)
+  ])].slice(-300);
+
   return {
     beforePubDate: lastItem.pubDate,
-    beforeId: lastItem.cursorId
+    beforeId: lastItem.cursorId,
+    excludeArticleIds
   };
 }
 
@@ -243,6 +264,7 @@ function fetchGroupedNewsPage(filters = {}, queryOptions = {}, page = 1, pageSiz
       recentHours: filters.recentHours,
       beforePubDate: cursor.beforePubDate,
       beforeId: cursor.beforeId,
+      excludeArticleIds: filters.excludeArticleIds,
       limit: GROUP_PAGINATION_ARTICLE_BATCH_SIZE + 1,
       offset: 0
     }, queryOptions);
@@ -311,8 +333,7 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   };
   const availableSources = getAvailableSources(userContext, userSources);
 
-  const page = Math.max(1, Math.min(Number(filters.page) || 1, MAX_NEWS_PAGE));
-  const pageSize = Math.max(1, Math.min(Number(filters.pageSize) || 12, 30));
+  const { page, pageSize } = getPagination(filters);
   const groupedPage = fetchGroupedNewsPage(filters, queryOptions, page, pageSize);
   const pageGroups = annotateReadLaterGroups(groupedPage.pageGroups, userContext.userId || null);
   const cursorMode = Boolean(filters.beforePubDate || filters.beforeId);
@@ -327,7 +348,7 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
       page,
       pageSize,
       hasMore,
-      nextCursor: hasMore ? buildNextCursor(pageGroups) : null,
+      nextCursor: hasMore ? buildNextCursor(pageGroups, filters.excludeArticleIds) : null,
       returnedGroups: pageGroups.length,
       totalGroups: null,
       scannedArticles: groupedPage.articles.length,
@@ -359,8 +380,7 @@ async function getReadLaterFeed(filters = {}, userContext = {}) {
   };
   const availableSources = getAvailableSources(userContext, userSources);
 
-  const page = Math.max(1, Math.min(Number(filters.page) || 1, MAX_NEWS_PAGE));
-  const pageSize = Math.max(1, Math.min(Number(filters.pageSize) || 12, 30));
+  const { page, pageSize } = getPagination(filters);
   const includeFilters = filters.includeFilters !== false;
   const groupedPage = fetchGroupedReadLaterPage(filters, queryOptions, page, pageSize);
   const hasMore = page >= MAX_NEWS_PAGE ? false : groupedPage.hasMore;
@@ -392,6 +412,7 @@ module.exports = {
   newsSources,
   expandConfiguredSources,
   expandUserSources,
+  getMaxArticleAgeHours,
   getNewsFeed,
   getReadLaterFeed,
   getQueryOptions,

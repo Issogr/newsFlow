@@ -1,19 +1,19 @@
 const logger = require('../utils/logger');
-const { parseIntegerEnv } = require('../utils/env');
+const { removePromotionalSentences } = require('../utils/promotionalContent');
+const { buildArticlePayload, getArticleTextLimit: getSharedArticleTextLimit, truncateText } = require('./aiArticlePayload');
 const {
   createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
+  sendChatCompletion,
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
 
 const DEFAULT_OPENROUTER_SUMMARY_MODEL = 'deepseek/deepseek-v4-flash';
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_PROMPT_TEXT_BUDGET_CHARS = 30000;
-const MIN_ARTICLE_TEXT_CHARS = 220;
-const DEFAULT_READER_TEXT_MAX_CHARS = 3000;
-const DEFAULT_RSS_METADATA_MAX_CHARS = 520;
+const MIN_SUMMARY_TEXT_LENGTH = 60;
 
 function getConfig() {
   return getOpenRouterConfig({
@@ -25,44 +25,11 @@ function getConfig() {
   });
 }
 
-function truncateText(value, maxLength) {
-  const limit = Math.max(0, Number(maxLength) || 0);
-  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
-  if (!limit || normalized.length <= limit) {
-    return normalized;
-  }
-
-  if (limit <= 3) {
-    return normalized.slice(0, limit).trim();
-  }
-
-  return `${normalized.slice(0, limit - 3).trim()}...`;
-}
-
-function getPromptTextBudgetChars() {
-  return parseIntegerEnv('AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS', DEFAULT_PROMPT_TEXT_BUDGET_CHARS, { min: 10000, max: 240000 });
-}
-
 function getArticleTextLimit(articleCount) {
-  return Math.max(MIN_ARTICLE_TEXT_CHARS, Math.floor(getPromptTextBudgetChars() / Math.max(1, Number(articleCount) || 1)));
-}
-
-function buildArticlePayload(article = {}, index = 0, options = {}) {
-  const articleTextLimit = Math.min(
-    Number(article.readerTextMaxChars) || DEFAULT_READER_TEXT_MAX_CHARS,
-    Number(options.articleTextLimit) || DEFAULT_READER_TEXT_MAX_CHARS
-  );
-  const readerText = truncateText(article.readerText || '', articleTextLimit);
-  const fallbackText = truncateText(article.description || article.content || '', Math.min(DEFAULT_RSS_METADATA_MAX_CHARS, articleTextLimit));
-
-  return {
-    ref: index + 1,
-    title: truncateText(article.title || '', 220),
-    description: readerText || fallbackText,
-    contentType: readerText ? 'cached_reader_text' : 'rss_metadata',
-    source: truncateText(article.source || article.rawSource || '', 120),
-    publishedAt: article.pubDate || ''
-  };
+  return getSharedArticleTextLimit(articleCount, {
+    envName: 'AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS',
+    defaultBudgetChars: DEFAULT_PROMPT_TEXT_BUDGET_CHARS
+  });
 }
 
 function buildPrompt(topicConfig = {}, articles = []) {
@@ -73,10 +40,12 @@ function buildPrompt(topicConfig = {}, articles = []) {
     'The style should feel like a clean ChatGPT reading experience: clear context, compact paragraphs, no hype, no bullet spam.',
     'Cite article references inline with bracketed numbers like [1] when mentioning a fact.',
     'Do not invent facts, do not use outside knowledge, and do not cite references that are not present in the input.',
+    'Exclude promotional shopping deals, coupon or affiliate sale posts, and product price-drop blurbs; do not summarize them as news.',
+    'The schedule window is coverage metadata only. Do not name the title or opening after a time of day such as morning, noon, midday, afternoon, evening, night, mattina, mezzogiorno, pomeriggio, or sera.',
     'Generate the briefing in both supported languages: English and Italian.',
     'Return minified JSON only. Do not use markdown fences or prose outside JSON.',
     'Return this exact shape: {"en":{"title":"Brief title","paragraphs":["paragraph with [1] citations"]},"it":{"title":"Titolo breve","paragraphs":["paragrafo con citazioni [1]"]}}.',
-    'Use two to four paragraphs per language. Keep each briefing easy to scan but written as prose.',
+    'Use two to four paragraphs per language. Start a new paragraph whenever the subject, argument, or subtopic changes. Keep each briefing easy to scan but written as prose.',
     '',
     JSON.stringify({
       topic: topicConfig.label || topicConfig.key,
@@ -106,8 +75,8 @@ function normalizeLocalizedSummary(payload = {}, locale, fallbackTitle = '') {
     ? localizedPayload.highlights
     : [];
   const summaryParts = [
-    ...paragraphs.map((paragraph) => String(paragraph || '').trim()).filter(Boolean),
-    ...highlights.map((highlight) => String(highlight || '').trim()).filter(Boolean)
+    ...paragraphs.map((paragraph) => removePromotionalSentences(paragraph)).filter(Boolean),
+    ...highlights.map((highlight) => removePromotionalSentences(highlight)).filter(Boolean)
   ];
   const summaryText = summaryParts.join('\n\n').trim();
 
@@ -143,6 +112,44 @@ function normalizeGeneratedSummary(payload = {}, fallbackTitle = '') {
   };
 }
 
+function createValidationError(message) {
+  const error = new Error(message);
+  error.code = 'SUMMARY_VALIDATION_FAILED';
+  return error;
+}
+
+function extractCitationIndexes(text = '') {
+  return [...String(text || '').matchAll(/\[(\d+)\]/gu)].map((match) => Number(match[1]));
+}
+
+function assertValidCitations(summaryText, articleCount, locale) {
+  const citations = extractCitationIndexes(summaryText);
+  if (citations.length === 0) {
+    throw createValidationError(`AI summary ${locale} text has no citations`);
+  }
+
+  const invalidCitation = citations.find((citation) => !Number.isInteger(citation) || citation < 1 || citation > articleCount);
+  if (invalidCitation) {
+    throw createValidationError(`AI summary ${locale} text has invalid citation [${invalidCitation}]`);
+  }
+}
+
+function validateGeneratedSummary(summary = {}, articleCount = 0) {
+  const enText = String(summary.summaryTextByLocale?.en || '').trim();
+  const itText = String(summary.summaryTextByLocale?.it || '').trim();
+
+  if (enText.length < MIN_SUMMARY_TEXT_LENGTH || itText.length < MIN_SUMMARY_TEXT_LENGTH) {
+    throw createValidationError('AI summary text is too short');
+  }
+
+  if (enText.toLowerCase() === itText.toLowerCase()) {
+    throw createValidationError('AI summary English and Italian text are identical');
+  }
+
+  assertValidCitations(enText, articleCount, 'English');
+  assertValidCitations(itText, articleCount, 'Italian');
+}
+
 async function generateSummaryForArticles(topicConfig = {}, articles = []) {
   const config = getConfig();
   if (!Array.isArray(articles) || articles.length === 0) {
@@ -157,46 +164,37 @@ async function generateSummaryForArticles(topicConfig = {}, articles = []) {
   const startedAt = Date.now();
   const openRouter = await createOpenRouterClient(config);
   const tokenBudget = getCompletionTokenBudget(articles.length);
-  const completionPromise = openRouter.chat.send({
-    chatRequest: {
-      model: config.model,
-      messages: [
-        {
-          role: 'system',
-          content: 'You write concise, source-grounded news briefings. Return valid JSON only.'
-        },
-        {
-          role: 'user',
-          content: buildPrompt(topicConfig, articles)
-        }
-      ],
-      temperature: 0.25,
-      maxTokens: tokenBudget,
-      maxCompletionTokens: tokenBudget,
-      reasoning: {
-        enabled: false,
-        effort: 'none',
-        maxTokens: 0
+  const response = await sendChatCompletion(openRouter, {
+    model: config.model,
+    messages: [
+      {
+        role: 'system',
+        content: 'You write concise, source-grounded news briefings. Return valid JSON only.'
       },
-      responseFormat: { type: 'json_object' },
-      stream: false
-    }
-  }, {
-    retries: { strategy: 'none' },
-    timeoutMs: config.timeoutMs
-  });
-
-  if (completionPromise && typeof completionPromise.catch === 'function') {
-    completionPromise.catch(() => {});
-  }
-
-  const response = await completionPromise;
+      {
+        role: 'user',
+        content: buildPrompt(topicConfig, articles)
+      }
+    ],
+    temperature: 0.25,
+    maxTokens: tokenBudget,
+    maxCompletionTokens: tokenBudget,
+    reasoning: {
+      enabled: false,
+      effort: 'none',
+      maxTokens: 0
+    },
+    responseFormat: { type: 'json_object' },
+    stream: false
+  }, { timeoutMs: config.timeoutMs });
   const payload = parseJsonContent(extractAssistantContent(response));
   const normalized = normalizeGeneratedSummary(payload, topicConfig.label || topicConfig.key || 'News briefing');
 
   if (!normalized) {
     throw new Error('AI summary response did not contain both English and Italian summary text');
   }
+
+  validateGeneratedSummary(normalized, articles.length);
 
   logger.info(`AI summary generated: topic=${topicConfig.key}, model=${config.model}, articles=${articles.length}, durationMs=${Date.now() - startedAt}`);
   return {
@@ -215,6 +213,8 @@ module.exports = {
   _buildPrompt: buildPrompt,
   _getArticleTextLimit: getArticleTextLimit,
   _getConfig: getConfig,
+  _normalizeGeneratedSummary: normalizeGeneratedSummary,
+  _validateGeneratedSummary: validateGeneratedSummary,
   _parseJsonContent: parseJsonContent,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };

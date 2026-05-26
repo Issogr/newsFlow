@@ -121,6 +121,10 @@ function getGroupImageUrl(group) {
 }
 
 function isAiGroupedStory(group) {
+  if (getGroupItemCount(group) <= 1) {
+    return false;
+  }
+
   return (group?.items || []).some((item) => {
     return item?.storyGroupId && String(item?.aiStoryGroupStatus || '').toLowerCase() === 'matched';
   });
@@ -300,7 +304,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   );
 
   return (
-    <article className="relative flex h-full min-h-[18rem] w-full min-w-0 flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-xl">
+    <article className="group relative flex h-full min-h-[18rem] w-full min-w-0 flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all duration-200 ease-out hover:border-sky-200 hover:bg-sky-50/35 hover:ring-1 hover:ring-sky-200/70 hover:shadow-sm focus-within:ring-2 focus-within:ring-sky-300">
       <div className="flex min-w-0 items-center gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
         {sourceIconStack}
         <div className="min-w-0 flex-1">
@@ -371,7 +375,6 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
             alt={isGenericNewsCover(imageUrl) ? fallbackImageAlt : group.title}
             loading="lazy"
             className="block h-full w-full object-cover"
-            onDoubleClick={openReader}
             onError={() => {
               if (!showImages) {
                 setImageUrl('');

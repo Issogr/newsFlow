@@ -1,15 +1,18 @@
 const logger = require('../utils/logger');
 const topicNormalizer = require('./topicNormalizer');
 const { mapSettledWithConcurrency } = require('../utils/concurrency');
+const { parseIntegerEnv } = require('../utils/env');
 const {
   createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
+  sendChatCompletion,
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
+const { truncateText } = require('./aiArticlePayload');
 
-const DEFAULT_OPENROUTER_MODEL = 'qwen/qwen3.5-9b';
+const DEFAULT_OPENROUTER_TOPIC_MODEL = 'qwen/qwen3.5-9b';
 const DEFAULT_BATCH_SIZE = 4;
 const DEFAULT_BATCH_CONCURRENCY = 1;
 const DEFAULT_MAX_ARTICLES_PER_REFRESH = 160;
@@ -58,20 +61,11 @@ function logBatchClassificationsForDebug(result = new Map(), articlesById = new 
   logger.info(`AI topic batch classifications (dev): model=${config.model}, items=${summary}`);
 }
 
-function getIntegerEnv(name, fallback, min, max) {
-  const value = Number(process.env[name]);
-  if (!Number.isFinite(value)) {
-    return fallback;
-  }
-
-  return Math.max(min, Math.min(Math.floor(value), max));
-}
-
 function getConfig() {
   const openRouterConfig = getOpenRouterConfig({
     enabledEnvName: 'AI_TOPIC_DETECTION_ENABLED',
-    modelEnvName: 'OPENROUTER_MODEL',
-    defaultModel: DEFAULT_OPENROUTER_MODEL,
+    modelEnvName: 'OPENROUTER_TOPIC_MODEL',
+    defaultModel: DEFAULT_OPENROUTER_TOPIC_MODEL,
     timeoutEnvName: 'AI_TOPIC_REQUEST_TIMEOUT_MS',
     defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
     clampTimeout: true
@@ -79,9 +73,9 @@ function getConfig() {
 
   return {
     ...openRouterConfig,
-    batchSize: getIntegerEnv('AI_TOPIC_BATCH_SIZE', DEFAULT_BATCH_SIZE, 1, 50),
-    batchConcurrency: getIntegerEnv('AI_TOPIC_BATCH_CONCURRENCY', DEFAULT_BATCH_CONCURRENCY, 1, 4),
-    maxArticlesPerRefresh: getIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, 1, 1000)
+    batchSize: parseIntegerEnv('AI_TOPIC_BATCH_SIZE', DEFAULT_BATCH_SIZE, { min: 1, max: 50, clamp: true, strict: true }),
+    batchConcurrency: parseIntegerEnv('AI_TOPIC_BATCH_CONCURRENCY', DEFAULT_BATCH_CONCURRENCY, { min: 1, max: 4, clamp: true, strict: true }),
+    maxArticlesPerRefresh: parseIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, { min: 1, max: 1000, clamp: true, strict: true })
   };
 }
 
@@ -105,15 +99,6 @@ function summarizeAiError(error) {
   }
 
   return error?.message || 'OpenRouter request failed; keeping local fallback topics';
-}
-
-function truncateText(value, maxLength) {
-  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, maxLength - 3).trim()}...`;
 }
 
 function buildArticlePayload(article = {}, index = 0) {
@@ -327,42 +312,30 @@ async function classifyBatch(batch, config, context = {}) {
   const startedAt = Date.now();
   logBatchArticlesForDebug(batch, config, context.batchIndex || 0, context.batchCount || 0);
   const openRouter = context.openRouter || await createOpenRouterClient(config);
-  const completionPromise = openRouter.chat.send({
-    chatRequest: {
-      model: config.model,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a fast, conservative news taxonomy classifier. Return valid JSON only.'
-        },
-        {
-          role: 'user',
-          content: buildPrompt(batch)
-        }
-      ],
-      temperature: 0,
-      maxTokens: getCompletionTokenBudget(batch.length),
-      maxCompletionTokens: getCompletionTokenBudget(batch.length),
-      reasoning: {
-        enabled: false,
-        effort: 'none',
-        maxTokens: 0
+  const tokenBudget = getCompletionTokenBudget(batch.length);
+  const response = await sendChatCompletion(openRouter, {
+    model: config.model,
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a fast, conservative news taxonomy classifier. Return valid JSON only.'
       },
-      responseFormat: { type: 'json_object' },
-      stream: false
-    }
-  }, {
-    retries: { strategy: 'none' },
-    timeoutMs: config.timeoutMs
-  });
-
-  // The SDK's APIPromise owns a secondary unwrapped promise; attach a catch so
-  // expected request failures do not also surface as global unhandled rejections.
-  if (completionPromise && typeof completionPromise.catch === 'function') {
-    completionPromise.catch(() => {});
-  }
-
-  const response = await completionPromise;
+      {
+        role: 'user',
+        content: buildPrompt(batch)
+      }
+    ],
+    temperature: 0,
+    maxTokens: tokenBudget,
+    maxCompletionTokens: tokenBudget,
+    reasoning: {
+      enabled: false,
+      effort: 'none',
+      maxTokens: 0
+    },
+    responseFormat: { type: 'json_object' },
+    stream: false
+  }, { timeoutMs: config.timeoutMs });
 
   const content = extractAssistantContent(response);
   const payload = parseJsonContent(content);
@@ -444,14 +417,11 @@ function isAiTopicDetectionAvailable() {
 module.exports = {
   classifyTopicDetailsForArticlesWithStatus,
   isAiTopicDetectionAvailable,
-  _buildArticlePayload: buildArticlePayload,
   _buildPrompt: buildPrompt,
   _getConfig: getConfig,
   _getCompletionTokenBudget: getCompletionTokenBudget,
   _extractAssistantContent: extractAssistantContent,
-  _isAiArticleDebugLoggingEnabled: isAiArticleDebugLoggingEnabled,
   _normalizeClassifierDetails: normalizeClassifierDetails,
   _parseJsonContent: parseJsonContent,
-  _summarizeResponseShape: summarizeResponseShape,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };

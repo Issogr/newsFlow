@@ -4,8 +4,45 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 30;
+  const CURRENT_SCHEMA_VERSION = 35;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
+
+  function getPodcastSummariesSchemaSql() {
+    return `
+      CREATE TABLE IF NOT EXISTS podcast_summaries (
+        id TEXT PRIMARY KEY,
+        period_start TEXT NOT NULL,
+        period_end TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        script_text TEXT NOT NULL DEFAULT '',
+        title_en TEXT NOT NULL DEFAULT '',
+        script_text_en TEXT NOT NULL DEFAULT '',
+        title_it TEXT NOT NULL DEFAULT '',
+        script_text_it TEXT NOT NULL DEFAULT '',
+        sources_json TEXT NOT NULL DEFAULT '[]',
+        article_count INTEGER NOT NULL DEFAULT 0,
+        script_model TEXT NOT NULL DEFAULT '',
+        audio_model TEXT NOT NULL DEFAULT '',
+        audio_voice TEXT NOT NULL DEFAULT '',
+        audio_mime_type TEXT NOT NULL DEFAULT '',
+        audio_blob BLOB,
+        audio_status TEXT NOT NULL DEFAULT 'not_available',
+        audio_error_message TEXT,
+        audio_failure_category TEXT NOT NULL DEFAULT '',
+        audio_retry_count INTEGER NOT NULL DEFAULT 0,
+        audio_failed_at TEXT,
+        status TEXT NOT NULL DEFAULT 'completed',
+        failure_category TEXT NOT NULL DEFAULT '',
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        error_message TEXT,
+        generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(period_start, period_end)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_podcast_summaries_period
+      ON podcast_summaries (period_end DESC);
+    `;
+  }
 
   function getAllConfiguredSourceGroupIds() {
     return getConfiguredSourceGroups().map((source) => source.id);
@@ -54,6 +91,9 @@ function createDatabaseSchema({ logger }) {
         ai_story_group_processed_at TEXT,
         ai_story_group_status TEXT,
         ai_story_group_model TEXT,
+        ai_story_group_match_ids TEXT NOT NULL DEFAULT '[]',
+        ai_story_group_confidence REAL,
+        ai_story_group_reason TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -243,6 +283,8 @@ function createDatabaseSchema({ logger }) {
         article_count INTEGER NOT NULL DEFAULT 0,
         model TEXT NOT NULL DEFAULT '',
         status TEXT NOT NULL DEFAULT 'completed',
+        failure_category TEXT NOT NULL DEFAULT '',
+        retry_count INTEGER NOT NULL DEFAULT 0,
         error_message TEXT,
         generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(topic_key, period_start, period_end)
@@ -250,6 +292,8 @@ function createDatabaseSchema({ logger }) {
 
       CREATE INDEX IF NOT EXISTS idx_thematic_summaries_topic_period
       ON thematic_summaries (topic_key, period_end DESC);
+
+      ${getPodcastSummariesSchemaSql()}
 
       CREATE VIRTUAL TABLE IF NOT EXISTS article_search USING fts5(
         article_id UNINDEXED,
@@ -364,6 +408,27 @@ function createDatabaseSchema({ logger }) {
 
     if (!articleColumns.has('story_group_id') || !articleColumns.has('ai_story_group_processed_at') || !articleColumns.has('ai_story_group_status') || !articleColumns.has('ai_story_group_model')) {
       return 28;
+    }
+
+    if (!tableExists(database, 'podcast_summaries')) {
+      return 30;
+    }
+
+    const podcastSummaryColumns = getColumnNames(database, 'podcast_summaries');
+    if (!podcastSummaryColumns.has('audio_voice')) {
+      return 31;
+    }
+
+    if (!articleColumns.has('ai_story_group_match_ids') || !articleColumns.has('ai_story_group_confidence') || !articleColumns.has('ai_story_group_reason')) {
+      return 32;
+    }
+
+    if (!thematicSummaryColumns.has('failure_category') || !thematicSummaryColumns.has('retry_count')) {
+      return 33;
+    }
+
+    if (!podcastSummaryColumns.has('failure_category') || !podcastSummaryColumns.has('retry_count') || !podcastSummaryColumns.has('audio_failure_category') || !podcastSummaryColumns.has('audio_retry_count') || !podcastSummaryColumns.has('audio_failed_at')) {
+      return 34;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -769,6 +834,84 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 30);
       logger.info('Migrated DB schema from version 29 to 30');
+      migrateSchema(database, 30);
+      return;
+    }
+
+    if (currentVersion === 30) {
+      database.exec(getPodcastSummariesSchemaSql());
+
+      setCurrentSchemaVersion(database, 31);
+      logger.info('Migrated DB schema from version 30 to 31');
+      migrateSchema(database, 31);
+      return;
+    }
+
+    if (currentVersion === 31) {
+      const podcastSummaryColumns = getColumnNames(database, 'podcast_summaries');
+      if (!podcastSummaryColumns.has('audio_voice')) {
+        database.exec("ALTER TABLE podcast_summaries ADD COLUMN audio_voice TEXT NOT NULL DEFAULT ''");
+      }
+
+      setCurrentSchemaVersion(database, 32);
+      logger.info('Migrated DB schema from version 31 to 32');
+      migrateSchema(database, 32);
+      return;
+    }
+
+    if (currentVersion === 32) {
+      const articleColumns = getColumnNames(database, 'articles');
+      if (!articleColumns.has('ai_story_group_match_ids')) {
+        database.exec("ALTER TABLE articles ADD COLUMN ai_story_group_match_ids TEXT NOT NULL DEFAULT '[]'");
+      }
+      if (!articleColumns.has('ai_story_group_confidence')) {
+        database.exec('ALTER TABLE articles ADD COLUMN ai_story_group_confidence REAL');
+      }
+      if (!articleColumns.has('ai_story_group_reason')) {
+        database.exec('ALTER TABLE articles ADD COLUMN ai_story_group_reason TEXT');
+      }
+
+      setCurrentSchemaVersion(database, 33);
+      logger.info('Migrated DB schema from version 32 to 33');
+      migrateSchema(database, 33);
+      return;
+    }
+
+    if (currentVersion === 33) {
+      const thematicSummaryColumns = getColumnNames(database, 'thematic_summaries');
+      if (!thematicSummaryColumns.has('failure_category')) {
+        database.exec("ALTER TABLE thematic_summaries ADD COLUMN failure_category TEXT NOT NULL DEFAULT ''");
+      }
+      if (!thematicSummaryColumns.has('retry_count')) {
+        database.exec('ALTER TABLE thematic_summaries ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0');
+      }
+
+      setCurrentSchemaVersion(database, 34);
+      logger.info('Migrated DB schema from version 33 to 34');
+      migrateSchema(database, 34);
+      return;
+    }
+
+    if (currentVersion === 34) {
+      const podcastSummaryColumns = getColumnNames(database, 'podcast_summaries');
+      if (!podcastSummaryColumns.has('audio_failure_category')) {
+        database.exec("ALTER TABLE podcast_summaries ADD COLUMN audio_failure_category TEXT NOT NULL DEFAULT ''");
+      }
+      if (!podcastSummaryColumns.has('audio_retry_count')) {
+        database.exec('ALTER TABLE podcast_summaries ADD COLUMN audio_retry_count INTEGER NOT NULL DEFAULT 0');
+      }
+      if (!podcastSummaryColumns.has('audio_failed_at')) {
+        database.exec('ALTER TABLE podcast_summaries ADD COLUMN audio_failed_at TEXT');
+      }
+      if (!podcastSummaryColumns.has('failure_category')) {
+        database.exec("ALTER TABLE podcast_summaries ADD COLUMN failure_category TEXT NOT NULL DEFAULT ''");
+      }
+      if (!podcastSummaryColumns.has('retry_count')) {
+        database.exec('ALTER TABLE podcast_summaries ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0');
+      }
+
+      setCurrentSchemaVersion(database, 35);
+      logger.info('Migrated DB schema from version 34 to 35');
       return;
     }
 

@@ -112,6 +112,7 @@ function createArticleRepository({
       recentHours: Number.isFinite(filters.recentHours) && filters.recentHours > 0 ? filters.recentHours : null,
       beforePubDate: typeof filters.beforePubDate === 'string' && filters.beforePubDate.trim() ? filters.beforePubDate.trim() : '',
       beforeId: typeof filters.beforeId === 'string' && filters.beforeId.trim() ? filters.beforeId.trim() : '',
+      excludeArticleIds: Array.isArray(filters.excludeArticleIds) ? filters.excludeArticleIds.filter(Boolean).slice(0, 300) : [],
       limit: Math.max(1, Math.min(Number(filters.limit) || 50, 251)),
       offset: Math.max(0, Number(filters.offset) || 0)
     };
@@ -119,6 +120,10 @@ function createArticleRepository({
 
   function normalizeArticleIds(articleIds = []) {
     return [...new Set((Array.isArray(articleIds) ? articleIds : []).map((id) => String(id || '').trim()).filter(Boolean))];
+  }
+
+  function uniqueTruthyArticleIds(articleIds = []) {
+    return [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
   }
 
   function buildSearchQuery(search) {
@@ -204,6 +209,11 @@ function createArticleRepository({
       params.push(state.beforePubDate);
     }
 
+    if (state.excludeArticleIds.length > 0) {
+      where.push(`a.id NOT IN (${state.excludeArticleIds.map(() => '?').join(', ')})`);
+      params.push(...state.excludeArticleIds);
+    }
+
     const sql = `
       SELECT
         a.id,
@@ -222,7 +232,10 @@ function createArticleRepository({
         a.story_group_id AS storyGroupId,
         a.ai_story_group_processed_at AS aiStoryGroupProcessedAt,
         a.ai_story_group_status AS aiStoryGroupStatus,
-        a.ai_story_group_model AS aiStoryGroupModel
+        a.ai_story_group_model AS aiStoryGroupModel,
+        a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
+        a.ai_story_group_confidence AS aiStoryGroupConfidence,
+        a.ai_story_group_reason AS aiStoryGroupReason
       FROM articles a
       ${joins.join('\n')}
       ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
@@ -590,9 +603,24 @@ function createArticleRepository({
             SELECT ai_story_group_model
             FROM articles duplicate
             WHERE duplicate.id = ?
+          )),
+          ai_story_group_match_ids = COALESCE(NULLIF(NULLIF(ai_story_group_match_ids, ''), '[]'), (
+            SELECT ai_story_group_match_ids
+            FROM articles duplicate
+            WHERE duplicate.id = ?
+          )),
+          ai_story_group_confidence = COALESCE(ai_story_group_confidence, (
+            SELECT ai_story_group_confidence
+            FROM articles duplicate
+            WHERE duplicate.id = ?
+          )),
+          ai_story_group_reason = COALESCE(ai_story_group_reason, (
+            SELECT ai_story_group_reason
+            FROM articles duplicate
+            WHERE duplicate.id = ?
           ))
       WHERE id = ?
-    `).run(duplicateId, duplicateId, duplicateId, duplicateId, persistedArticleId);
+    `).run(duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, persistedArticleId);
   }
 
   function getTopicDetailsByArticleIds(articleIds) {
@@ -649,6 +677,7 @@ function createArticleRepository({
 
       return {
         ...row,
+        aiStoryGroupMatchIds: parseJsonArray(row.aiStoryGroupMatchIds),
         rawSourceId: row.sourceId,
         rawSource: row.source,
         sourceId: sourceMetadata.sourceId,
@@ -870,7 +899,7 @@ function createArticleRepository({
   }
 
   function getArticleIdsPendingAiTopicProcessing(articleIds = []) {
-    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     if (normalizedArticleIds.length === 0) {
       return [];
     }
@@ -889,7 +918,7 @@ function createArticleRepository({
   }
 
   function markArticlesAiTopicProcessing(articleIds = [], status = 'completed') {
-    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     if (normalizedArticleIds.length === 0) {
       return 0;
     }
@@ -906,7 +935,7 @@ function createArticleRepository({
   }
 
   function getArticleIdsPendingAiStoryGrouping(articleIds = []) {
-    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     if (normalizedArticleIds.length === 0) {
       return [];
     }
@@ -924,8 +953,56 @@ function createArticleRepository({
     });
   }
 
+  function getArticleIdsForAiStoryGroupingRetry(articleIds = [], options = {}) {
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
+    if (normalizedArticleIds.length === 0) {
+      return [];
+    }
+
+    const database = getDb();
+    const windowHours = Math.max(1, Math.min(Number(options.windowHours) || 24, 72));
+    const limit = Math.max(1, Math.min(Number(options.limit) || 12, 100));
+    const retryStatuses = ['failed', 'deferred', 'no_candidates', 'no_match'];
+    const anchors = chunkValues(normalizedArticleIds).flatMap((ids) => {
+      return database.prepare(`
+        SELECT id, owner_user_id AS ownerUserId, published_at AS pubDate
+        FROM articles
+        WHERE id IN (${ids.map(() => '?').join(', ')})
+      `).all(...ids);
+    });
+    const retryIds = new Set();
+
+    anchors.forEach((anchor) => {
+      if (retryIds.size >= limit) {
+        return;
+      }
+
+      const anchorTimestamp = Date.parse(anchor.pubDate || '');
+      if (!Number.isFinite(anchorTimestamp)) {
+        return;
+      }
+
+      const periodStart = new Date(anchorTimestamp - (windowHours * 60 * 60 * 1000)).toISOString();
+      const periodEnd = new Date(anchorTimestamp + (windowHours * 60 * 60 * 1000)).toISOString();
+      const rows = database.prepare(`
+        SELECT id
+        FROM articles
+        WHERE id != ?
+          AND COALESCE(owner_user_id, '') = COALESCE(?, '')
+          AND published_at BETWEEN ? AND ?
+          AND ai_story_group_status IN (${retryStatuses.map(() => '?').join(', ')})
+        ORDER BY published_at DESC, id DESC
+        LIMIT ?
+      `).all(anchor.id, anchor.ownerUserId || '', periodStart, periodEnd, ...retryStatuses, limit - retryIds.size);
+
+      rows.forEach((row) => retryIds.add(row.id));
+    });
+
+    return [...retryIds];
+  }
+
   function markArticlesAiStoryGrouping(articleIds = [], status = 'completed', model = '') {
-    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     if (normalizedArticleIds.length === 0) {
       return 0;
     }
@@ -942,23 +1019,62 @@ function createArticleRepository({
     }, 0);
   }
 
-  function assignArticlesToStoryGroup(articleIds = [], storyGroupId = '', model = '') {
-    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : []).filter(Boolean))];
+  function normalizeStoryMatchEvidence(matches = []) {
+    const normalizedMatches = (Array.isArray(matches) ? matches : [])
+      .map((match) => ({
+        articleId: String(match?.articleId || match?.id || '').trim(),
+        confidence: Number(match?.confidence),
+        reason: String(match?.reason || '').replace(/\s+/g, ' ').trim()
+      }))
+      .filter((match) => match.articleId && Number.isFinite(match.confidence))
+      .sort((left, right) => right.confidence - left.confidence);
+    const matchIds = [...new Set(normalizedMatches.map((match) => match.articleId))].slice(0, 20);
+    const confidence = normalizedMatches.length > 0
+      ? Math.max(...normalizedMatches.map((match) => match.confidence))
+      : null;
+    const reason = normalizedMatches
+      .map((match) => match.reason)
+      .filter(Boolean)
+      .slice(0, 3)
+      .join('; ')
+      .slice(0, 500);
+
+    return {
+      matchIdsJson: JSON.stringify(matchIds),
+      confidence,
+      reason: reason || null
+    };
+  }
+
+  function assignArticlesToStoryGroup(articleIds = [], storyGroupId = '', model = '', matches = []) {
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     const normalizedStoryGroupId = String(storyGroupId || '').trim().slice(0, 160);
     if (normalizedArticleIds.length === 0 || !normalizedStoryGroupId) {
       return 0;
     }
 
     const processedAt = new Date().toISOString();
+    const evidence = normalizeStoryMatchEvidence(matches);
     return chunkValues(normalizedArticleIds).reduce((total, ids) => {
       return total + getDb().prepare(`
         UPDATE articles
         SET story_group_id = ?,
             ai_story_group_processed_at = ?,
             ai_story_group_status = 'matched',
-            ai_story_group_model = ?
+            ai_story_group_model = ?,
+            ai_story_group_match_ids = ?,
+            ai_story_group_confidence = ?,
+            ai_story_group_reason = ?
         WHERE id IN (${ids.map(() => '?').join(', ')})
-      `).run(normalizedStoryGroupId, processedAt, String(model || '').slice(0, 160), ...ids).changes;
+      `).run(
+        normalizedStoryGroupId,
+        processedAt,
+        String(model || '').slice(0, 160),
+        evidence.matchIdsJson,
+        evidence.confidence,
+        evidence.reason,
+        ...ids
+      ).changes;
     }, 0);
   }
 
@@ -990,12 +1106,14 @@ function createArticleRepository({
 
     const database = getDb();
     const windowHours = Math.max(1, Math.min(Number(options.windowHours) || 24, 72));
-    const limit = Math.max(1, Math.min(Number(options.limit) || 12, 30));
+    const limit = Math.max(1, Math.min(Number(options.limit) || 12, 100));
     const targetRow = database.prepare(`
       SELECT id, source_id AS sourceId, source_name AS source, title, description, content, url, canonical_url AS canonicalUrl,
              image, author, language, owner_user_id AS ownerUserId, published_at AS pubDate,
              story_group_id AS storyGroupId, ai_story_group_processed_at AS aiStoryGroupProcessedAt,
-             ai_story_group_status AS aiStoryGroupStatus, ai_story_group_model AS aiStoryGroupModel
+             ai_story_group_status AS aiStoryGroupStatus, ai_story_group_model AS aiStoryGroupModel,
+             ai_story_group_match_ids AS aiStoryGroupMatchIds, ai_story_group_confidence AS aiStoryGroupConfidence,
+             ai_story_group_reason AS aiStoryGroupReason
       FROM articles
       WHERE id = ?
     `).get(normalizedArticleId);
@@ -1015,7 +1133,9 @@ function createArticleRepository({
       SELECT id, source_id AS sourceId, source_name AS source, title, description, content, url, canonical_url AS canonicalUrl,
              image, author, language, owner_user_id AS ownerUserId, published_at AS pubDate,
              story_group_id AS storyGroupId, ai_story_group_processed_at AS aiStoryGroupProcessedAt,
-             ai_story_group_status AS aiStoryGroupStatus, ai_story_group_model AS aiStoryGroupModel
+             ai_story_group_status AS aiStoryGroupStatus, ai_story_group_model AS aiStoryGroupModel,
+             ai_story_group_match_ids AS aiStoryGroupMatchIds, ai_story_group_confidence AS aiStoryGroupConfidence,
+             ai_story_group_reason AS aiStoryGroupReason
       FROM articles
       WHERE id != ?
         AND COALESCE(owner_user_id, '') = COALESCE(?, '')
@@ -1277,7 +1397,10 @@ function createArticleRepository({
           a.story_group_id AS storyGroupId,
           a.ai_story_group_processed_at AS aiStoryGroupProcessedAt,
           a.ai_story_group_status AS aiStoryGroupStatus,
-          a.ai_story_group_model AS aiStoryGroupModel
+          a.ai_story_group_model AS aiStoryGroupModel,
+          a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
+          a.ai_story_group_confidence AS aiStoryGroupConfidence,
+          a.ai_story_group_reason AS aiStoryGroupReason
         FROM articles a
         WHERE ${where.join(' AND ')}
       `).all(...params);
@@ -1496,6 +1619,9 @@ function createArticleRepository({
         a.ai_story_group_processed_at AS aiStoryGroupProcessedAt,
         a.ai_story_group_status AS aiStoryGroupStatus,
         a.ai_story_group_model AS aiStoryGroupModel,
+        a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
+        a.ai_story_group_confidence AS aiStoryGroupConfidence,
+        a.ai_story_group_reason AS aiStoryGroupReason,
         rl.saved_at AS readLaterSavedAt
       FROM articles a
       ${joins.join('\n')}
@@ -1535,7 +1661,10 @@ function createArticleRepository({
         a.story_group_id AS storyGroupId,
         a.ai_story_group_processed_at AS aiStoryGroupProcessedAt,
         a.ai_story_group_status AS aiStoryGroupStatus,
-        a.ai_story_group_model AS aiStoryGroupModel
+        a.ai_story_group_model AS aiStoryGroupModel,
+        a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
+        a.ai_story_group_confidence AS aiStoryGroupConfidence,
+        a.ai_story_group_reason AS aiStoryGroupReason
       FROM articles a
       JOIN article_topics at ON at.article_id = a.id
       WHERE a.owner_user_id IS NULL
@@ -1548,6 +1677,28 @@ function createArticleRepository({
     `).all(periodStart, periodEnd, new Date().toISOString(), ...normalizedTopics, normalizedLimit);
 
     return hydrateArticleRows(rows, { userId: null });
+  }
+
+  function hasPendingTopicProcessingForThematicSummary({ periodStart, periodEnd } = {}) {
+    if (!periodStart || !periodEnd) {
+      return false;
+    }
+
+    const row = getDb().prepare(`
+      SELECT 1
+      FROM articles
+      WHERE owner_user_id IS NULL
+        AND published_at >= ?
+        AND published_at < ?
+        AND published_at <= ?
+        AND (
+          ai_topics_processed_at IS NULL
+          OR ai_topics_status IN ('failed', 'deferred')
+        )
+      LIMIT 1
+    `).get(periodStart, periodEnd, new Date().toISOString());
+
+    return Boolean(row);
   }
 
   function normalizeSummarySources(sources = []) {
@@ -1566,6 +1717,44 @@ function createArticleRepository({
     })).filter((source) => source.articleId && source.title);
   }
 
+  function normalizeLocalizedSummaryFields(summary = {}, textFieldName, textByLocaleFieldName) {
+    const titleByLocale = summary.titleByLocale && typeof summary.titleByLocale === 'object' ? summary.titleByLocale : {};
+    const textByLocale = summary[textByLocaleFieldName] && typeof summary[textByLocaleFieldName] === 'object' ? summary[textByLocaleFieldName] : {};
+    const textEnKey = `${textFieldName}En`;
+    const textItKey = `${textFieldName}It`;
+    const titleEn = String(summary.titleEn || titleByLocale.en || summary.title || '').trim().slice(0, 180);
+    const titleIt = String(summary.titleIt || titleByLocale.it || titleEn || summary.title || '').trim().slice(0, 180);
+    const textEn = String(summary[textEnKey] || textByLocale.en || summary[textFieldName] || '').trim();
+    const textIt = String(summary[textItKey] || textByLocale.it || textEn || summary[textFieldName] || '').trim();
+
+    return {
+      title: titleEn || titleIt,
+      text: textEn || textIt,
+      titleEn,
+      titleIt,
+      textEn,
+      textIt
+    };
+  }
+
+  function getLocalizedSummaryRowFields(row = {}, textFieldName) {
+    const textEnKey = `${textFieldName}En`;
+    const textItKey = `${textFieldName}It`;
+
+    return {
+      title: row.titleEn || row.title || row.titleIt || '',
+      text: row[textEnKey] || row[textFieldName] || row[textItKey] || '',
+      titleByLocale: {
+        en: row.titleEn || row.title || row.titleIt || '',
+        it: row.titleIt || row.titleEn || row.title || ''
+      },
+      textByLocale: {
+        en: row[textEnKey] || row[textFieldName] || row[textItKey] || '',
+        it: row[textItKey] || row[textEnKey] || row[textFieldName] || ''
+      }
+    };
+  }
+
   function normalizeSummaryPayload(summary = {}) {
     const topicKey = String(summary.topicKey || '').trim();
     const periodStart = String(summary.periodStart || '').trim();
@@ -1576,12 +1765,7 @@ function createArticleRepository({
     }
 
     const id = String(summary.id || `${topicKey}:${periodStart}:${periodEnd}`).trim();
-    const titleByLocale = summary.titleByLocale && typeof summary.titleByLocale === 'object' ? summary.titleByLocale : {};
-    const summaryTextByLocale = summary.summaryTextByLocale && typeof summary.summaryTextByLocale === 'object' ? summary.summaryTextByLocale : {};
-    const titleEn = String(summary.titleEn || titleByLocale.en || summary.title || '').trim().slice(0, 180);
-    const titleIt = String(summary.titleIt || titleByLocale.it || titleEn || summary.title || '').trim().slice(0, 180);
-    const summaryTextEn = String(summary.summaryTextEn || summaryTextByLocale.en || summary.summaryText || '').trim();
-    const summaryTextIt = String(summary.summaryTextIt || summaryTextByLocale.it || summaryTextEn || summary.summaryText || '').trim();
+    const localized = normalizeLocalizedSummaryFields(summary, 'summaryText', 'summaryTextByLocale');
 
     return {
       id,
@@ -1590,16 +1774,18 @@ function createArticleRepository({
       topicsJson: JSON.stringify(Array.isArray(summary.topics) ? summary.topics : []),
       periodStart,
       periodEnd,
-      title: titleEn || titleIt,
-      summaryText: summaryTextEn || summaryTextIt,
-      titleEn,
-      summaryTextEn,
-      titleIt,
-      summaryTextIt,
+      title: localized.title,
+      summaryText: localized.text,
+      titleEn: localized.titleEn,
+      summaryTextEn: localized.textEn,
+      titleIt: localized.titleIt,
+      summaryTextIt: localized.textIt,
       sourcesJson: JSON.stringify(normalizeSummarySources(summary.sources || [])),
       articleCount: Math.max(0, Number(summary.articleCount) || 0),
       model: String(summary.model || '').trim().slice(0, 120),
       status: String(summary.status || 'completed').trim().slice(0, 40),
+      failureCategory: String(summary.failureCategory || '').trim().slice(0, 80),
+      retryCount: Math.max(0, Number(summary.retryCount) || 0),
       errorMessage: summary.errorMessage ? String(summary.errorMessage).trim().slice(0, 1000) : null,
       generatedAt: String(summary.generatedAt || new Date().toISOString()).trim()
     };
@@ -1619,6 +1805,8 @@ function createArticleRepository({
       return null;
     }
 
+    const localized = getLocalizedSummaryRowFields(row, 'summaryText');
+
     return {
       id: row.id,
       topicKey: row.topicKey,
@@ -1626,20 +1814,125 @@ function createArticleRepository({
       topics: parseSummaryJson(row.topicsJson),
       periodStart: row.periodStart,
       periodEnd: row.periodEnd,
-      title: row.titleEn || row.title || row.titleIt || '',
-      summaryText: row.summaryTextEn || row.summaryText || row.summaryTextIt || '',
-      titleByLocale: {
-        en: row.titleEn || row.title || row.titleIt || '',
-        it: row.titleIt || row.titleEn || row.title || ''
-      },
-      summaryTextByLocale: {
-        en: row.summaryTextEn || row.summaryText || row.summaryTextIt || '',
-        it: row.summaryTextIt || row.summaryTextEn || row.summaryText || ''
-      },
+      title: localized.title,
+      summaryText: localized.text,
+      titleByLocale: localized.titleByLocale,
+      summaryTextByLocale: localized.textByLocale,
       sources: parseSummaryJson(row.sourcesJson),
       articleCount: row.articleCount,
       model: row.model,
       status: row.status,
+      failureCategory: row.failureCategory || '',
+      retryCount: row.retryCount || 0,
+      errorMessage: row.errorMessage,
+      generatedAt: row.generatedAt
+    };
+  }
+
+  function normalizePodcastAudioData(audioData) {
+    if (!audioData) {
+      return null;
+    }
+
+    if (Buffer.isBuffer(audioData)) {
+      return audioData;
+    }
+
+    if (typeof audioData === 'string') {
+      const base64Data = audioData.includes(',') && /^data:audio\//i.test(audioData)
+        ? audioData.slice(audioData.indexOf(',') + 1)
+        : audioData;
+      try {
+        const buffer = Buffer.from(base64Data, 'base64');
+        return buffer.length > 0 ? buffer : null;
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  function normalizePodcastSummaryPayload(summary = {}) {
+    const periodStart = String(summary.periodStart || '').trim();
+    const periodEnd = String(summary.periodEnd || '').trim();
+
+    if (!periodStart || !periodEnd) {
+      return null;
+    }
+
+    const id = String(summary.id || `podcast:${periodStart}:${periodEnd}`).trim();
+    const localized = normalizeLocalizedSummaryFields(summary, 'scriptText', 'scriptTextByLocale');
+    const audioBlob = normalizePodcastAudioData(summary.audioData || summary.audio?.data || null);
+    const requestedAudioStatus = String(summary.audioStatus || (audioBlob ? 'completed' : 'not_available')).trim().slice(0, 40);
+    const audioStatus = requestedAudioStatus === 'completed' && !audioBlob ? 'not_available' : requestedAudioStatus;
+
+    return {
+      id,
+      periodStart,
+      periodEnd,
+      title: localized.title,
+      scriptText: localized.text,
+      titleEn: localized.titleEn,
+      scriptTextEn: localized.textEn,
+      titleIt: localized.titleIt,
+      scriptTextIt: localized.textIt,
+      sourcesJson: JSON.stringify(normalizeSummarySources(summary.sources || [])),
+      articleCount: Math.max(0, Number(summary.articleCount) || 0),
+      scriptModel: String(summary.scriptModel || summary.model || '').trim().slice(0, 120),
+      audioModel: String(summary.audioModel || summary.audio?.model || '').trim().slice(0, 120),
+      audioVoice: String(summary.audioVoice || summary.audio?.voice || '').trim().slice(0, 120),
+      audioMimeType: String(summary.audioMimeType || summary.audio?.mimeType || '').trim().slice(0, 120),
+      audioBlob,
+      audioStatus,
+      audioErrorMessage: summary.audioErrorMessage ? String(summary.audioErrorMessage).trim().slice(0, 1000) : null,
+      audioFailureCategory: String(summary.audioFailureCategory || '').trim().slice(0, 80),
+      audioRetryCount: Math.max(0, Number(summary.audioRetryCount) || 0),
+      audioFailedAt: summary.audioFailedAt ? String(summary.audioFailedAt).trim() : null,
+      status: String(summary.status || 'completed').trim().slice(0, 40),
+      failureCategory: String(summary.failureCategory || '').trim().slice(0, 80),
+      retryCount: Math.max(0, Number(summary.retryCount) || 0),
+      errorMessage: summary.errorMessage ? String(summary.errorMessage).trim().slice(0, 1000) : null,
+      generatedAt: String(summary.generatedAt || new Date().toISOString()).trim()
+    };
+  }
+
+  function mapPodcastSummaryRow(row) {
+    if (!row) {
+      return null;
+    }
+
+    const localized = getLocalizedSummaryRowFields(row, 'scriptText');
+
+    return {
+      id: row.id,
+      type: 'podcast',
+      topicKey: 'podcast',
+      topicLabel: 'Podcast',
+      topics: ['Podcast'],
+      periodStart: row.periodStart,
+      periodEnd: row.periodEnd,
+      title: localized.title,
+      summaryText: localized.text,
+      titleByLocale: localized.titleByLocale,
+      summaryTextByLocale: localized.textByLocale,
+      sources: parseSummaryJson(row.sourcesJson),
+      articleCount: row.articleCount,
+      model: row.scriptModel,
+      audioModel: row.audioModel,
+      audioVoice: row.audioVoice,
+      audioMimeType: row.audioMimeType,
+      audioStatus: row.audioStatus,
+      audioErrorMessage: row.audioErrorMessage,
+      audioFailureCategory: row.audioFailureCategory || '',
+      audioRetryCount: row.audioRetryCount || 0,
+      audioFailedAt: row.audioFailedAt || null,
+      audioUrl: row.audioStatus === 'completed'
+        ? `/api/podcast-summary/${encodeURIComponent(row.id)}/audio?v=${encodeURIComponent([row.generatedAt, row.audioModel, row.audioVoice].filter(Boolean).join(':'))}`
+        : '',
+      status: row.status,
+      failureCategory: row.failureCategory || '',
+      retryCount: row.retryCount || 0,
       errorMessage: row.errorMessage,
       generatedAt: row.generatedAt
     };
@@ -1655,9 +1948,9 @@ function createArticleRepository({
       INSERT INTO thematic_summaries (
         id, topic_key, topic_label, topics_json, period_start, period_end, title,
         summary_text, title_en, summary_text_en, title_it, summary_text_it,
-        sources_json, article_count, model, status, error_message, generated_at
+        sources_json, article_count, model, status, failure_category, retry_count, error_message, generated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(topic_key, period_start, period_end) DO UPDATE SET
         topic_label = excluded.topic_label,
         topics_json = excluded.topics_json,
@@ -1671,6 +1964,8 @@ function createArticleRepository({
         article_count = excluded.article_count,
         model = excluded.model,
         status = excluded.status,
+        failure_category = excluded.failure_category,
+        retry_count = excluded.retry_count,
         error_message = excluded.error_message,
         generated_at = excluded.generated_at
     `).run(
@@ -1690,6 +1985,8 @@ function createArticleRepository({
       normalized.articleCount,
       normalized.model,
       normalized.status,
+      normalized.failureCategory,
+      normalized.retryCount,
       normalized.errorMessage,
       normalized.generatedAt
     );
@@ -1704,6 +2001,7 @@ function createArticleRepository({
              title_en AS titleEn, summary_text_en AS summaryTextEn,
              title_it AS titleIt, summary_text_it AS summaryTextIt,
              sources_json AS sourcesJson, article_count AS articleCount, model, status,
+             failure_category AS failureCategory, retry_count AS retryCount,
              error_message AS errorMessage, generated_at AS generatedAt
       FROM thematic_summaries
       WHERE topic_key = ? AND period_start = ? AND period_end = ?
@@ -1727,6 +2025,7 @@ function createArticleRepository({
              title_en AS titleEn, summary_text_en AS summaryTextEn,
              title_it AS titleIt, summary_text_it AS summaryTextIt,
              sources_json AS sourcesJson, article_count AS articleCount, model, status,
+             failure_category AS failureCategory, retry_count AS retryCount,
              error_message AS errorMessage, generated_at AS generatedAt
       FROM thematic_summaries ts
       WHERE topic_key IN (${normalizedTopicKeys.map(() => '?').join(', ')})
@@ -1734,13 +2033,165 @@ function createArticleRepository({
           SELECT MAX(period_end)
           FROM thematic_summaries latest
           WHERE latest.topic_key = ts.topic_key
-            AND latest.status = 'completed'
+            AND latest.status IN ('completed', 'empty')
         )
-        AND status = 'completed'
+        AND status IN ('completed', 'empty')
       ORDER BY period_end DESC, topic_key ASC
     `).all(...normalizedTopicKeys);
 
     return rows.map(mapThematicSummaryRow).filter(Boolean);
+  }
+
+  function pruneSummaryHistory(options = {}) {
+    const periodEnd = String(options.periodEnd || '').trim();
+    if (!periodEnd) {
+      return { thematicSummaries: 0, podcastSummaries: 0 };
+    }
+
+    const topicKeys = [...new Set((Array.isArray(options.topicKeys) ? options.topicKeys : [])
+      .map((topicKey) => String(topicKey || '').trim())
+      .filter(Boolean))];
+    const db = getDb();
+    const thematicSummaries = topicKeys.length > 0
+      ? db.prepare(`
+        DELETE FROM thematic_summaries
+        WHERE period_end < ?
+          AND topic_key IN (${topicKeys.map(() => '?').join(', ')})
+      `).run(periodEnd, ...topicKeys).changes
+      : 0;
+    const podcastSummaries = options.podcast === true
+      ? db.prepare('DELETE FROM podcast_summaries WHERE period_end < ?').run(periodEnd).changes
+      : 0;
+
+    return { thematicSummaries, podcastSummaries };
+  }
+
+  function upsertPodcastSummary(summary = {}) {
+    const normalized = normalizePodcastSummaryPayload(summary);
+    if (!normalized) {
+      return null;
+    }
+
+    getDb().prepare(`
+      INSERT INTO podcast_summaries (
+        id, period_start, period_end, title, script_text, title_en, script_text_en,
+        title_it, script_text_it, sources_json, article_count, script_model,
+        audio_model, audio_voice, audio_mime_type, audio_blob, audio_status, audio_error_message,
+        audio_failure_category, audio_retry_count, audio_failed_at, status, failure_category, retry_count,
+        error_message, generated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(period_start, period_end) DO UPDATE SET
+        title = excluded.title,
+        script_text = excluded.script_text,
+        title_en = excluded.title_en,
+        script_text_en = excluded.script_text_en,
+        title_it = excluded.title_it,
+        script_text_it = excluded.script_text_it,
+        sources_json = excluded.sources_json,
+        article_count = excluded.article_count,
+        script_model = excluded.script_model,
+        audio_model = excluded.audio_model,
+        audio_voice = excluded.audio_voice,
+        audio_mime_type = excluded.audio_mime_type,
+        audio_blob = excluded.audio_blob,
+        audio_status = excluded.audio_status,
+        audio_error_message = excluded.audio_error_message,
+        audio_failure_category = excluded.audio_failure_category,
+        audio_retry_count = excluded.audio_retry_count,
+        audio_failed_at = excluded.audio_failed_at,
+        status = excluded.status,
+        failure_category = excluded.failure_category,
+        retry_count = excluded.retry_count,
+        error_message = excluded.error_message,
+        generated_at = excluded.generated_at
+    `).run(
+      normalized.id,
+      normalized.periodStart,
+      normalized.periodEnd,
+      normalized.title,
+      normalized.scriptText,
+      normalized.titleEn,
+      normalized.scriptTextEn,
+      normalized.titleIt,
+      normalized.scriptTextIt,
+      normalized.sourcesJson,
+      normalized.articleCount,
+      normalized.scriptModel,
+      normalized.audioModel,
+      normalized.audioVoice,
+      normalized.audioMimeType,
+      normalized.audioBlob,
+      normalized.audioStatus,
+      normalized.audioErrorMessage,
+      normalized.audioFailureCategory,
+      normalized.audioRetryCount,
+      normalized.audioFailedAt,
+      normalized.status,
+      normalized.failureCategory,
+      normalized.retryCount,
+      normalized.errorMessage,
+      normalized.generatedAt
+    );
+
+    return getPodcastSummary(normalized.periodStart, normalized.periodEnd);
+  }
+
+  function getPodcastSummary(periodStart, periodEnd) {
+    const row = getDb().prepare(`
+      SELECT id, period_start AS periodStart, period_end AS periodEnd, title, script_text AS scriptText,
+             title_en AS titleEn, script_text_en AS scriptTextEn,
+             title_it AS titleIt, script_text_it AS scriptTextIt,
+             sources_json AS sourcesJson, article_count AS articleCount, script_model AS scriptModel,
+             audio_model AS audioModel, audio_voice AS audioVoice, audio_mime_type AS audioMimeType, audio_status AS audioStatus,
+             audio_error_message AS audioErrorMessage, audio_failure_category AS audioFailureCategory,
+             audio_retry_count AS audioRetryCount, audio_failed_at AS audioFailedAt,
+             status, failure_category AS failureCategory, retry_count AS retryCount, error_message AS errorMessage,
+             generated_at AS generatedAt
+      FROM podcast_summaries
+      WHERE period_start = ? AND period_end = ?
+      LIMIT 1
+    `).get(periodStart, periodEnd);
+
+    return mapPodcastSummaryRow(row);
+  }
+
+  function getLatestPodcastSummary() {
+    const row = getDb().prepare(`
+      SELECT id, period_start AS periodStart, period_end AS periodEnd, title, script_text AS scriptText,
+             title_en AS titleEn, script_text_en AS scriptTextEn,
+             title_it AS titleIt, script_text_it AS scriptTextIt,
+             sources_json AS sourcesJson, article_count AS articleCount, script_model AS scriptModel,
+             audio_model AS audioModel, audio_voice AS audioVoice, audio_mime_type AS audioMimeType, audio_status AS audioStatus,
+             audio_error_message AS audioErrorMessage, audio_failure_category AS audioFailureCategory,
+             audio_retry_count AS audioRetryCount, audio_failed_at AS audioFailedAt,
+             status, failure_category AS failureCategory, retry_count AS retryCount, error_message AS errorMessage,
+             generated_at AS generatedAt
+      FROM podcast_summaries
+      WHERE status = 'completed'
+      ORDER BY period_end DESC
+      LIMIT 1
+    `).get();
+
+    return mapPodcastSummaryRow(row);
+  }
+
+  function getPodcastSummaryAudio(podcastId) {
+    const row = getDb().prepare(`
+      SELECT audio_blob AS audioBlob, audio_mime_type AS audioMimeType
+      FROM podcast_summaries
+      WHERE id = ? AND status = 'completed' AND audio_status = 'completed' AND audio_blob IS NOT NULL
+      LIMIT 1
+    `).get(String(podcastId || '').trim());
+
+    if (!row?.audioBlob) {
+      return null;
+    }
+
+    return {
+      data: row.audioBlob,
+      mimeType: row.audioMimeType || 'audio/mpeg'
+    };
   }
 
   function countArticles(options = {}) {
@@ -2106,15 +2557,22 @@ function createArticleRepository({
     getArticlesByIds,
     getReadLaterArticles,
     getArticlesForThematicSummary,
+    hasPendingTopicProcessingForThematicSummary,
     upsertThematicSummary,
     getThematicSummary,
     listLatestThematicSummaries,
+    pruneSummaryHistory,
+    upsertPodcastSummary,
+    getPodcastSummary,
+    getLatestPodcastSummary,
+    getPodcastSummaryAudio,
     getReadLaterArticleIdSet,
     isReadLaterArticle,
     saveReadLaterArticles,
     removeReadLaterArticles,
     getArticleIdsPendingAiTopicProcessing,
     getArticleIdsPendingAiStoryGrouping,
+    getArticleIdsForAiStoryGroupingRetry,
     getTopicClassificationReport,
     markArticlesAiTopicProcessing,
     markArticlesAiStoryGrouping,

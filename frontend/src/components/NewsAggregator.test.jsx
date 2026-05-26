@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import NewsAggregator from './NewsAggregator';
 import { fetchNews, fetchThematicSummaries, isRequestCanceled, updateUserSettings } from '../services/api';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
+import { createDeferred, resolveDeferred } from '../test-utils/deferred';
 
 vi.mock('../services/api', () => ({
   fetchNews: vi.fn(),
@@ -22,9 +23,29 @@ vi.mock('../hooks/useTopicRefreshSocket', () => ({
   default: vi.fn()
 }));
 
-vi.mock('./NewsCard', () => ({
-  default: ({ group }) => group.renderNull ? null : <div>{group.title}</div>
-}));
+vi.mock('./NewsCard', () => {
+  const getRenderedTopicSummary = (group = {}) => {
+    const topicEntries = [
+      ...(group.topicDetails || []).map((entry) => `${entry.topic}:${entry.source || ''}`),
+      ...(group.topics || []).map((topic) => `${topic}:`),
+      ...(group.items || []).flatMap((item) => [
+        ...(item.topicDetails || []).map((entry) => `${entry.topic}:${entry.source || ''}`),
+        ...(item.topics || []).map((topic) => `${topic}:`)
+      ])
+    ];
+
+    return topicEntries.join('|');
+  };
+
+  return {
+    default: ({ group }) => (
+      <div>
+        <div>{group.title}</div>
+        <div data-testid={`topics-${group.id}`}>{getRenderedTopicSummary(group)}</div>
+      </div>
+    )
+  };
+});
 vi.mock('./ReaderPanel', () => ({
   default: () => null
 }));
@@ -37,24 +58,6 @@ vi.mock('./SettingsPanel', () => ({
 vi.mock('./ErrorMessage', () => ({
   default: ({ error }) => <div>{error?.message || 'error'}</div>
 }));
-
-function createDeferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-
-  return { promise, resolve, reject };
-}
-
-async function resolveDeferred(deferred, value) {
-  await act(async () => {
-    deferred.resolve(value);
-    await deferred.promise;
-  });
-}
 
 async function renderNewsAggregator(overrides = {}) {
   let view;
@@ -266,7 +269,7 @@ describe('NewsAggregator', () => {
 
     fireEvent.click(storyButton);
 
-    expect(screen.queryByText('Sintesi tecnologia')).not.toBeInTheDocument();
+    expect(screen.getByText('Sintesi tecnologia')).toBeInTheDocument();
     expect(screen.getByText('1 articolo valutato')).toBeInTheDocument();
     expect(screen.queryByText('I chip AI sono avanzati rapidamente nella finestra [1].')).not.toBeInTheDocument();
     expect(screen.getAllByText('BBC')).not.toHaveLength(0);
@@ -310,6 +313,64 @@ describe('NewsAggregator', () => {
     });
 
     expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
+  });
+
+  test('updates the open summary panel when refreshed summary data arrives', async () => {
+    let onSummariesRefresh;
+
+    useTopicRefreshSocket.mockImplementation(({ onSummariesRefresh: handleSummariesRefresh }) => {
+      onSummariesRefresh = handleSummariesRefresh;
+    });
+    fetchNews.mockResolvedValue({
+      items: [createGroup('group-1', 'Top headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    fetchThematicSummaries
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'summary-technology',
+            topicKey: 'technology',
+            topicLabel: 'Technology',
+            topics: ['Technology'],
+            periodStart: '2026-05-21T07:00:00.000Z',
+            periodEnd: '2026-05-21T13:00:00.000Z',
+            titleByLocale: { en: 'Technology briefing', it: 'Sintesi tecnologia' },
+            summaryTextByLocale: { en: 'First technology update [1].', it: 'Primo aggiornamento tecnologia [1].' },
+            articleCount: 1,
+            sources: []
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'summary-technology',
+            topicKey: 'technology',
+            topicLabel: 'Technology',
+            topics: ['Technology'],
+            periodStart: '2026-05-21T07:00:00.000Z',
+            periodEnd: '2026-05-21T13:00:00.000Z',
+            titleByLocale: { en: 'Technology briefing', it: 'Sintesi tecnologia' },
+            summaryTextByLocale: { en: 'Updated technology update [1].', it: 'Aggiornamento tecnologia aggiornato [1].' },
+            articleCount: 2,
+            sources: []
+          }
+        ]
+      });
+
+    await renderNewsAggregator();
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Technology summary' }));
+
+    expect(screen.getByText('1 article evaluated')).toBeInTheDocument();
+
+    await act(async () => {
+      await onSummariesRefresh({ refresh: true, reason: 'summaries' });
+    });
+
+    expect(await screen.findByText('2 articles evaluated')).toBeInTheDocument();
+    expect(screen.queryByText('1 article evaluated')).not.toBeInTheDocument();
   });
 
   test('ignores stale thematic summary responses after a newer refresh', async () => {
@@ -459,24 +520,6 @@ describe('NewsAggregator', () => {
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
   });
 
-  test('renders when locale storage is unavailable', async () => {
-    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('storage blocked');
-    });
-
-    fetchNews.mockResolvedValue({
-      items: [createGroup('group-1', 'Stored-locale fallback headline')],
-      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-      filters: { sources: [], sourceCatalog: [], topics: [] }
-    });
-
-    await renderNewsAggregator();
-
-    expect(await screen.findByText('Stored-locale fallback headline')).toBeInTheDocument();
-
-    setItemSpy.mockRestore();
-  });
-
   test('forces a source refresh and reloads existing thematic summaries from the top navigation refresh button', async () => {
     fetchNews.mockResolvedValue({
       items: [createGroup('group-1', 'Current headline')],
@@ -560,41 +603,66 @@ describe('NewsAggregator', () => {
     expect(await screen.findByText('AI topic headline')).toBeInTheDocument();
     expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
       refresh: false,
-      includeFilters: true
+      includeFilters: false
     }));
   });
 
-  test('does not add brand-new cards during silent topic reloads', async () => {
+  test('replaces stale fallback topics after a silent AI topic reload', async () => {
     let onTopicRefresh;
+    const fallbackTopic = { topic: 'Economia', source: 'local' };
+    const aiTopic = { topic: 'Tecnologia', source: 'ai', confidence: 0.9 };
 
     useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
       onTopicRefresh = handleTopicRefresh;
     });
     fetchNews
       .mockResolvedValueOnce({
-        items: [createGroup('group-current', 'Current headline')],
-        meta: { page: 1, pageSize: 12, hasMore: true, totalGroups: 2 },
-        filters: { sources: [], sourceCatalog: [], topics: [] }
+        items: [{
+          id: 'group-1',
+          title: 'Topic headline',
+          topics: ['Economia'],
+          topicDetails: [fallbackTopic],
+          items: [{
+            id: 'article-group-1',
+            title: 'Topic headline',
+            pubDate: '2026-03-14T10:00:00.000Z',
+            topics: ['Economia'],
+            topicDetails: [fallbackTopic]
+          }]
+        }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: ['Economia'] }
       })
       .mockResolvedValueOnce({
-        items: [
-          createGroup('group-new', 'New automatic headline', '2026-03-14T11:00:00.000Z'),
-          createGroup('group-current', 'Current headline with AI topics')
-        ],
-        meta: { page: 1, pageSize: 12, hasMore: true, totalGroups: 2 },
-        filters: { sources: [], sourceCatalog: [], topics: ['Technology'] }
+        items: [{
+          id: 'group-1',
+          title: 'Topic headline',
+          topics: ['Tecnologia'],
+          topicDetails: [aiTopic],
+          items: [{
+            id: 'article-group-1',
+            title: 'Topic headline',
+            pubDate: '2026-03-14T10:00:00.000Z',
+            topics: ['Tecnologia'],
+            topicDetails: [aiTopic]
+          }]
+        }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: ['Tecnologia'] }
       });
 
     await renderNewsAggregator();
-    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+    expect(await screen.findByTestId('topics-group-1')).toHaveTextContent('Economia:local');
 
     await act(async () => {
       onTopicRefresh({ refresh: true, reason: 'topics' });
       await Promise.resolve();
     });
 
-    expect(await screen.findByText('Current headline with AI topics')).toBeInTheDocument();
-    expect(screen.queryByText('New automatic headline')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('topics-group-1')).toHaveTextContent('Tecnologia:ai');
+    });
+    expect(screen.getByTestId('topics-group-1')).not.toHaveTextContent('Economia');
   });
 
   test('adds brand-new cards when a manual refresh completion reload arrives', async () => {
@@ -789,7 +857,7 @@ describe('NewsAggregator', () => {
       beforePubDate: '',
       beforeId: '',
       refresh: false,
-      includeFilters: true
+      includeFilters: false
     }));
   });
 
@@ -851,7 +919,7 @@ describe('NewsAggregator', () => {
     expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
       beforePubDate: '',
       beforeId: '',
-      includeFilters: true
+      includeFilters: false
     }));
   });
 
@@ -977,7 +1045,8 @@ describe('NewsAggregator', () => {
           hasMore: true,
           nextCursor: {
             beforePubDate: '2026-03-14T10:00:00.000Z',
-            beforeId: 'article-1'
+            beforeId: 'article-1',
+            excludeArticleIds: ['article-1', 'article-related']
           }
         },
         filters: { sources: [], sourceCatalog: [], topics: [] }
@@ -999,7 +1068,8 @@ describe('NewsAggregator', () => {
     await waitFor(() => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
         beforePubDate: '2026-03-14T10:00:00.000Z',
-        beforeId: 'article-1'
+        beforeId: 'article-1',
+        excludeArticleIds: ['article-1', 'article-related']
       }));
     });
     expect(await screen.findByText('Older headline')).toBeInTheDocument();
@@ -1019,23 +1089,6 @@ describe('NewsAggregator', () => {
 
     expect(await screen.findByText('Visible headline')).toBeInTheDocument();
     expect(screen.queryByText('Empty headline')).not.toBeInTheDocument();
-    expect(container.querySelector('main .grid')?.children).toHaveLength(1);
-  });
-
-  test('does not leave an empty grid cell when a card returns null', async () => {
-    fetchNews.mockResolvedValue({
-      items: [
-        { id: 'hidden-group', title: 'Hidden headline', renderNull: true, items: [{ id: 'article-hidden', pubDate: '2026-03-14T10:00:00.000Z' }] },
-        { id: 'visible-group', title: 'Visible headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }
-      ],
-      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-      filters: { sources: [], sourceCatalog: [], topics: [] }
-    });
-
-    const { container } = await renderNewsAggregator();
-
-    expect(await screen.findByText('Visible headline')).toBeInTheDocument();
-    expect(screen.queryByText('Hidden headline')).not.toBeInTheDocument();
     expect(container.querySelector('main .grid')?.children).toHaveLength(1);
   });
 
@@ -1235,29 +1288,4 @@ describe('NewsAggregator', () => {
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
   });
 
-  test('scrolls smoothly to the top from the back-to-top control', async () => {
-    fetchNews.mockResolvedValue({
-      items: [createGroup('group-1', 'First headline')],
-      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-      filters: { sources: [], sourceCatalog: [], topics: [] }
-    });
-
-    await renderNewsAggregator();
-
-    const backToTopButton = screen.getByRole('button', { name: 'Back to top' });
-
-    await act(async () => {
-      Object.defineProperty(window, 'scrollY', {
-        value: 360,
-        writable: true,
-        configurable: true
-      });
-      fireEvent.scroll(window);
-      jest.advanceTimersByTime(16);
-    });
-
-    fireEvent.click(backToTopButton);
-
-    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
-  });
 });

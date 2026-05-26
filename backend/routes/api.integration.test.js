@@ -1,18 +1,8 @@
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 const request = require('supertest');
 const { getCanonicalSourceId } = require('../utils/sourceCatalog');
+const { cleanupTempNewsDb, setupTempNewsDb } = require('../test-utils/tempNewsDb');
 
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
-
-function createTempDbPath() {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'news-api-test-'));
-  return {
-    tempDir,
-    dbPath: path.join(tempDir, 'news.db')
-  };
-}
 
 function buildApiTestApp() {
   const express = require('express');
@@ -38,7 +28,6 @@ function getSessionCookie(response) {
 
 describe('API auth and user flows', () => {
   let tempDir;
-  let dbPath;
   let app;
   let database;
   let newsService;
@@ -48,8 +37,7 @@ describe('API auth and user flows', () => {
 
   beforeEach(() => {
     jest.resetModules();
-    ({ tempDir, dbPath } = createTempDbPath());
-    process.env.NEWS_DB_PATH = dbPath;
+    ({ tempDir } = setupTempNewsDb('news-api-test-'));
 
     jest.doMock('../services/newsAggregator', () => ({
       ingestAllNews: jest.fn().mockResolvedValue({ success: true }),
@@ -84,12 +72,7 @@ describe('API auth and user flows', () => {
   });
 
   afterEach(() => {
-    if (database?.closeDb) {
-      database.closeDb();
-    }
-
-    delete process.env.NEWS_DB_PATH;
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    cleanupTempNewsDb({ tempDir }, database);
     jest.clearAllMocks();
   });
 
@@ -608,6 +591,24 @@ describe('API auth and user flows', () => {
     expect(revokedRow.revokedAt).toEqual(expect.any(String));
   });
 
+  test('rate-limits repeated invalid public API token attempts before DB lookup', async () => {
+    const lookupSpy = jest.spyOn(database, 'findActiveApiTokenByHash');
+
+    for (let index = 0; index < 30; index += 1) {
+      await request(app)
+        .get('/api/public/news')
+        .set('Authorization', 'Bearer invalid-public-token')
+        .expect(401);
+    }
+
+    await request(app)
+      .get('/api/public/news')
+      .set('Authorization', 'Bearer invalid-public-token')
+      .expect(429);
+
+    expect(lookupSpy).toHaveBeenCalledTimes(30);
+  });
+
   test('regenerates api tokens immediately and revokes the previous token row', async () => {
     const registerResponse = await request(app)
       .post('/api/auth/register')
@@ -761,23 +762,46 @@ describe('API auth and user flows', () => {
     }));
   });
 
-  test('submits authenticated feedback with an optional screenshot', async () => {
+  test.each([
+    {
+      name: 'screenshot',
+      username: 'feedback-user',
+      category: 'bug',
+      title: 'Reader overlap on mobile',
+      description: 'The reader panel overlaps the sticky header on a narrow mobile viewport.',
+      attachment: {
+        buffer: Buffer.from('fake-image-content'),
+        filename: 'reader-mobile.png',
+        contentType: 'image/png'
+      }
+    },
+    {
+      name: 'small video',
+      username: 'feedback-video-user',
+      category: 'feedback',
+      title: 'Animation feels abrupt',
+      description: 'Short clip showing the abrupt transition in the filter drawer.',
+      attachment: {
+        buffer: Buffer.from('fake-video-content'),
+        filename: 'filters-transition.mp4',
+        contentType: 'video/mp4'
+      }
+    }
+  ])('submits authenticated feedback with a $name attachment', async ({ username, category, title, description, attachment }) => {
     const registerResponse = await request(app)
       .post('/api/auth/register')
-      .send({ username: 'feedback-user', password: 'secret123' })
+      .send({ username, password: 'secret123' })
       .expect(201);
-
-    const imageBuffer = Buffer.from('fake-image-content');
 
     const response = await request(app)
       .post('/api/me/feedback')
       .set('Cookie', getSessionCookie(registerResponse))
-      .field('category', 'bug')
-      .field('title', 'Reader overlap on mobile')
-      .field('description', 'The reader panel overlaps the sticky header on a narrow mobile viewport.')
-      .attach('attachment', imageBuffer, {
-        filename: 'reader-mobile.png',
-        contentType: 'image/png'
+      .field('category', category)
+      .field('title', title)
+      .field('description', description)
+      .attach('attachment', attachment.buffer, {
+        filename: attachment.filename,
+        contentType: attachment.contentType
       })
       .expect(201);
 
@@ -785,52 +809,15 @@ describe('API auth and user flows', () => {
     expect(feedbackService.sendFeedback).toHaveBeenCalledWith(expect.objectContaining({
       user: expect.objectContaining({
         id: registerResponse.body.user.id,
-        username: 'feedback-user'
+        username
       }),
-      category: 'bug',
-      title: 'Reader overlap on mobile',
-      description: 'The reader panel overlaps the sticky header on a narrow mobile viewport.',
+      category,
+      title,
+      description,
       attachment: expect.objectContaining({
-        originalname: 'reader-mobile.png',
-        mimetype: 'image/png',
-        size: imageBuffer.length
-      })
-    }));
-  });
-
-  test('submits authenticated feedback with a small video attachment', async () => {
-    const registerResponse = await request(app)
-      .post('/api/auth/register')
-      .send({ username: 'feedback-video-user', password: 'secret123' })
-      .expect(201);
-
-    const videoBuffer = Buffer.from('fake-video-content');
-
-    const response = await request(app)
-      .post('/api/me/feedback')
-      .set('Cookie', getSessionCookie(registerResponse))
-      .field('category', 'feedback')
-      .field('title', 'Animation feels abrupt')
-      .field('description', 'Short clip showing the abrupt transition in the filter drawer.')
-      .attach('attachment', videoBuffer, {
-        filename: 'filters-transition.mp4',
-        contentType: 'video/mp4'
-      })
-      .expect(201);
-
-    expect(response.body).toEqual({ success: true });
-    expect(feedbackService.sendFeedback).toHaveBeenLastCalledWith(expect.objectContaining({
-      user: expect.objectContaining({
-        id: registerResponse.body.user.id,
-        username: 'feedback-video-user'
-      }),
-      category: 'feedback',
-      title: 'Animation feels abrupt',
-      description: 'Short clip showing the abrupt transition in the filter drawer.',
-      attachment: expect.objectContaining({
-        originalname: 'filters-transition.mp4',
-        mimetype: 'video/mp4',
-        size: videoBuffer.length
+        originalname: attachment.filename,
+        mimetype: attachment.contentType,
+        size: attachment.buffer.length
       })
     }));
   });
@@ -964,7 +951,35 @@ describe('API auth and user flows', () => {
         })
       ]
     });
-    expect(newsService.refreshUserSources).toHaveBeenLastCalledWith(expect.any(String), { broadcast: false });
+    expect(newsService.refreshUserSources).toHaveBeenLastCalledWith(expect.any(String), { broadcast: true });
+  });
+
+  test('returns from settings import without waiting for source refresh completion', async () => {
+    rssParser.validateFeedUrl.mockResolvedValue({ title: 'Imported Feed', language: 'it', itemCount: 4 });
+    newsService.refreshUserSources.mockImplementation(() => new Promise(() => {}));
+
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'nonblocking-import-user', password: 'secret123' })
+      .expect(201);
+
+    const importResponse = await request(app)
+      .post('/api/me/settings/import')
+      .set('Cookie', getSessionCookie(registerResponse))
+      .send({
+        settings: { defaultLanguage: 'en' },
+        customSources: [
+          {
+            name: 'Imported Feed',
+            url: 'https://example.com/imported.xml',
+            language: 'it'
+          }
+        ]
+      })
+      .expect(200);
+
+    expect(importResponse.body).toMatchObject({ success: true });
+    expect(newsService.refreshUserSources).toHaveBeenCalledWith(expect.any(String), { broadcast: true });
   });
 
   test('logs out the current session and rejects it afterward', async () => {
@@ -986,5 +1001,89 @@ describe('API auth and user flows', () => {
       .expect(401);
 
     expect(meResponse.body.error.code).toBe('UNAUTHORIZED');
+  });
+
+  test('serves podcast audio with byte ranges for media players', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'podcast-audio-user', password: 'secret123' })
+      .expect(201);
+    const sessionCookie = getSessionCookie(registerResponse);
+    const audioBytes = Buffer.from('0123456789');
+
+    database.upsertPodcastSummary({
+      id: 'podcast-audio-test',
+      periodStart: '2026-05-22T11:00:00.000Z',
+      periodEnd: '2026-05-22T17:00:00.000Z',
+      titleByLocale: { en: 'News podcast', it: 'Podcast news' },
+      scriptTextByLocale: { en: 'English script', it: 'Testo italiano' },
+      sources: [{ index: 1, articleId: 'article-1', title: 'Podcast article', source: 'BBC' }],
+      articleCount: 1,
+      model: 'summary-model',
+      audio: {
+        data: audioBytes.toString('base64'),
+        mimeType: 'audio/mpeg',
+        model: 'tts-model'
+      },
+      audioStatus: 'completed'
+    });
+
+    const fullResponse = await request(app)
+      .get('/api/podcast-summary/podcast-audio-test/audio')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(fullResponse.headers['accept-ranges']).toBe('bytes');
+    expect(fullResponse.headers['cache-control']).toContain('no-store');
+    expect(fullResponse.headers['content-length']).toBe(String(audioBytes.length));
+    expect(fullResponse.headers['content-type']).toContain('audio/mpeg');
+
+    const rangeResponse = await request(app)
+      .get('/api/podcast-summary/podcast-audio-test/audio')
+      .set('Cookie', sessionCookie)
+      .set('Range', 'bytes=2-5')
+      .expect(206);
+
+    expect(rangeResponse.headers['accept-ranges']).toBe('bytes');
+    expect(rangeResponse.headers['content-range']).toBe('bytes 2-5/10');
+    expect(rangeResponse.headers['content-length']).toBe('4');
+
+    const invalidRangeResponse = await request(app)
+      .get('/api/podcast-summary/podcast-audio-test/audio')
+      .set('Cookie', sessionCookie)
+      .set('Range', 'bytes=20-30')
+      .expect(416);
+
+    expect(invalidRangeResponse.headers['content-range']).toBe('bytes */10');
+
+    const wavBytes = Buffer.concat([
+      Buffer.from('RIFF'),
+      Buffer.from([36, 0, 0, 0]),
+      Buffer.from('WAVEfmt '),
+      Buffer.alloc(28)
+    ]);
+    database.upsertPodcastSummary({
+      id: 'podcast-wav-audio-test',
+      periodStart: '2026-05-22T17:00:00.000Z',
+      periodEnd: '2026-05-23T05:00:00.000Z',
+      titleByLocale: { en: 'News podcast', it: 'Podcast news' },
+      scriptTextByLocale: { en: 'English script', it: 'Testo italiano' },
+      sources: [{ index: 1, articleId: 'article-1', title: 'Podcast article', source: 'BBC' }],
+      articleCount: 1,
+      model: 'summary-model',
+      audio: {
+        data: wavBytes.toString('base64'),
+        mimeType: 'audio/mpeg',
+        model: 'tts-model'
+      },
+      audioStatus: 'completed'
+    });
+
+    const wavResponse = await request(app)
+      .get('/api/podcast-summary/podcast-wav-audio-test/audio')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(wavResponse.headers['content-type']).toContain('audio/wav');
   });
 });

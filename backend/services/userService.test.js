@@ -1,26 +1,14 @@
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-
-function createTempDbPath() {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'news-user-service-test-'));
-  return {
-    tempDir,
-    dbPath: path.join(tempDir, 'news.db')
-  };
-}
+const { cleanupTempNewsDb, setupTempNewsDb } = require('../test-utils/tempNewsDb');
 
 describe('userService imports', () => {
   let tempDir;
-  let dbPath;
   let userService;
   let database;
   let rssParser;
 
   beforeEach(() => {
     jest.resetModules();
-    ({ tempDir, dbPath } = createTempDbPath());
-    process.env.NEWS_DB_PATH = dbPath;
+    ({ tempDir } = setupTempNewsDb('news-user-service-test-'));
 
     jest.doMock('./rssParser', () => ({
       validateFeedUrl: jest.fn()
@@ -32,12 +20,7 @@ describe('userService imports', () => {
   });
 
   afterEach(() => {
-    if (database?.closeDb) {
-      database.closeDb();
-    }
-
-    delete process.env.NEWS_DB_PATH;
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    cleanupTempNewsDb({ tempDir }, database);
     jest.clearAllMocks();
   });
 

@@ -53,6 +53,13 @@ function sanitizeParam(paramName) {
   };
 }
 
+function validateAndSanitizeParam(paramName, errorMessage = 'Parameter missing or invalid') {
+  return [
+    validateParam(paramName, errorMessage),
+    sanitizeParam(paramName)
+  ];
+}
+
 function sanitizeBody(fieldNames = []) {
   return (req, res, next) => {
     if (!req.body || !Array.isArray(fieldNames)) {
@@ -70,10 +77,8 @@ function sanitizeBody(fieldNames = []) {
 }
 
 module.exports = {
-  sanitizeString,
   sanitizeHtml,
-  validateParam,
   sanitizeQuery,
-  sanitizeParam,
+  validateAndSanitizeParam,
   sanitizeBody
 };

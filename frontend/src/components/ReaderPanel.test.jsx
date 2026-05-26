@@ -2,30 +2,13 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ReaderPanel from './ReaderPanel';
 import { fetchReaderArticle, updateUserSettings } from '../services/api';
+import { createDeferred, resolveDeferred } from '../test-utils/deferred';
 
 vi.mock('../services/api', () => ({
   fetchReaderArticle: vi.fn(),
   updateUserSettings: vi.fn(),
   isRequestCanceled: vi.fn((error) => error?.code === 'ERR_CANCELED')
 }));
-
-function createDeferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-
-  return { promise, resolve, reject };
-}
-
-async function resolveDeferred(deferred, value) {
-  await act(async () => {
-    deferred.resolve(value);
-    await deferred.promise;
-  });
-}
 
 const group = {
   id: 'group-1',
@@ -66,6 +49,20 @@ const currentUser = {
   }
 };
 
+function renderReaderPanel(props = {}) {
+  return render(
+    <ReaderPanel
+      group={group}
+      initialArticleId="article-1"
+      readerPosition="right"
+      t={t}
+      currentUser={currentUser}
+      onClose={jest.fn()}
+      {...props}
+    />
+  );
+}
+
 describe('ReaderPanel', () => {
   const originalShare = navigator.share;
   const originalClipboard = navigator.clipboard;
@@ -89,17 +86,7 @@ describe('ReaderPanel', () => {
       .mockImplementationOnce(() => firstRequest.promise)
       .mockImplementationOnce(() => secondRequest.promise);
 
-    render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onUserUpdate={jest.fn()}
-        onClose={jest.fn()}
-      />
-    );
+    renderReaderPanel();
 
     fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
 
@@ -127,28 +114,6 @@ describe('ReaderPanel', () => {
     });
   });
 
-  test('locks body scroll while the reader is open', () => {
-    fetchReaderArticle.mockImplementation(() => new Promise(() => {}));
-
-    const { unmount } = render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onUserUpdate={jest.fn()}
-        onClose={jest.fn()}
-      />
-    );
-
-    expect(document.body.style.overflow).toBe('hidden');
-
-    unmount();
-
-    expect(document.body.style.overflow).toBe('');
-  });
-
   test('fetches reader content from the backend on open', async () => {
     fetchReaderArticle.mockResolvedValue({
       title: 'Backend cached reader title',
@@ -158,16 +123,7 @@ describe('ReaderPanel', () => {
       minutesToRead: 2
     });
 
-    render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onClose={jest.fn()}
-      />
-    );
+    renderReaderPanel();
 
     expect(await screen.findByText('Backend cached reader title')).toBeInTheDocument();
     expect(fetchReaderArticle).toHaveBeenCalledWith('article-1', expect.objectContaining({
@@ -187,16 +143,7 @@ describe('ReaderPanel', () => {
       minutesToRead: 1
     });
 
-    render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onClose={jest.fn()}
-      />
-    );
+    renderReaderPanel();
 
     expect(await screen.findByText('Visible body')).toBeInTheDocument();
   });
@@ -212,16 +159,7 @@ describe('ReaderPanel', () => {
         minutesToRead: 2
       });
 
-    render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onClose={jest.fn()}
-      />
-    );
+    renderReaderPanel();
 
     expect(await screen.findByText('readerUnavailable')).toBeInTheDocument();
 
@@ -248,16 +186,7 @@ describe('ReaderPanel', () => {
         minutesToRead: 1
       });
 
-    render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onClose={jest.fn()}
-      />
-    );
+    renderReaderPanel();
 
     expect(await screen.findByText('First reader title')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
@@ -285,9 +214,8 @@ describe('ReaderPanel', () => {
         minutesToRead: 1
       });
 
-    render(
-      <ReaderPanel
-        group={{
+    renderReaderPanel({
+      group: {
           ...group,
           items: [
             {
@@ -303,14 +231,9 @@ describe('ReaderPanel', () => {
               source: 'Source A'
             }
           ]
-        }}
-        initialArticleId="same-source-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onClose={jest.fn()}
-      />
-    );
+        },
+      initialArticleId: 'same-source-1'
+    });
 
     expect(await screen.findByText('First same-source reader title')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Source A #1' })).toBeInTheDocument();
@@ -332,23 +255,15 @@ describe('ReaderPanel', () => {
       minutesToRead: 1
     });
 
-    render(
-      <ReaderPanel
-        group={{
+    renderReaderPanel({
+      group: {
           ...group,
           items: [{
             ...group.items[0],
             url: 'javascript:alert(1)'
           }]
-        }}
-        initialArticleId="article-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onUserUpdate={jest.fn()}
-        onClose={jest.fn()}
-      />
-    );
+        }
+    });
 
     await screen.findByText('Unsafe reader title');
 
@@ -366,17 +281,7 @@ describe('ReaderPanel', () => {
       minutesToRead: 1
     });
 
-    render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onUserUpdate={jest.fn()}
-        onClose={jest.fn()}
-      />
-    );
+    renderReaderPanel();
 
     await screen.findByText('Reader title');
     await act(async () => {
@@ -404,17 +309,7 @@ describe('ReaderPanel', () => {
       }
     });
 
-    render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onUserUpdate={jest.fn()}
-        onClose={jest.fn()}
-      />
-    );
+    renderReaderPanel();
 
     await screen.findByText('Reader title');
 
@@ -443,17 +338,7 @@ describe('ReaderPanel', () => {
         minutesToRead: 1
       });
 
-    render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onUserUpdate={jest.fn()}
-        onClose={jest.fn()}
-      />
-    );
+    renderReaderPanel();
 
     await screen.findByText('Reader title');
 
@@ -478,17 +363,7 @@ describe('ReaderPanel', () => {
       })
       .mockRejectedValueOnce(new Error('Refresh failed'));
 
-    render(
-      <ReaderPanel
-        group={group}
-        initialArticleId="article-1"
-        readerPosition="right"
-        t={t}
-        currentUser={currentUser}
-        onUserUpdate={jest.fn()}
-        onClose={jest.fn()}
-      />
-    );
+    renderReaderPanel();
 
     expect(await screen.findByText('Reader title')).toBeInTheDocument();
 

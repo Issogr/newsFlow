@@ -1,15 +1,19 @@
 const crypto = require('crypto');
 const logger = require('../utils/logger');
+const { parseIntegerEnv } = require('../utils/env');
 const {
   createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
+  sendChatCompletion,
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
+const { truncateText } = require('./aiArticlePayload');
 
-const DEFAULT_OPENROUTER_SUMMARY_MODEL = 'deepseek/deepseek-v4-flash';
+const DEFAULT_OPENROUTER_STORY_GROUPING_MODEL = 'deepseek/deepseek-v4-flash';
 const DEFAULT_TIMEOUT_MS = 120000;
+const DEFAULT_AI_CANDIDATE_LIMIT = 8;
 const MIN_MATCH_CONFIDENCE = 0.82;
 const STORY_GROUP_TOKEN_STOP_WORDS = new Set([
   'a', 'ad', 'al', 'alla', 'and', 'con', 'da', 'dal', 'dalla', 'de', 'del', 'della', 'di', 'e', 'for', 'from', 'gli', 'il', 'in', 'la', 'le', 'lo', 'of', 'on', 'per', 'the', 'to', 'un', 'una', 'with'
@@ -18,20 +22,11 @@ const STORY_GROUP_TOKEN_STOP_WORDS = new Set([
 function getConfig() {
   return getOpenRouterConfig({
     enabledEnvName: 'AI_STORY_GROUPING_ENABLED',
-    modelEnvName: 'OPENROUTER_SUMMARY_MODEL',
-    defaultModel: DEFAULT_OPENROUTER_SUMMARY_MODEL,
+    modelEnvName: 'OPENROUTER_STORY_GROUPING_MODEL',
+    defaultModel: DEFAULT_OPENROUTER_STORY_GROUPING_MODEL,
     timeoutEnvName: 'AI_SUMMARY_REQUEST_TIMEOUT_MS',
     defaultTimeoutMs: DEFAULT_TIMEOUT_MS
   });
-}
-
-function truncateText(value, maxLength) {
-  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, maxLength - 3).trim()}...`;
 }
 
 function tokenizeStoryText(article = {}) {
@@ -71,7 +66,19 @@ function hasTopicOverlap(left = {}, right = {}) {
   return (right.topics || []).some((topic) => leftTopics.has(String(topic || '').toLowerCase()));
 }
 
-function filterCandidateArticles(target = {}, candidates = []) {
+function getAiCandidateLimit(limit) {
+  const configuredLimit = parseIntegerEnv('AI_STORY_GROUPING_AI_CANDIDATE_LIMIT', DEFAULT_AI_CANDIDATE_LIMIT, { min: 1, max: 12 });
+  const requestedLimit = Number(limit);
+  return Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : configuredLimit, 12));
+}
+
+function getCandidateScore(overlapScore, topicOverlap) {
+  return overlapScore + (topicOverlap ? 0.1 : 0);
+}
+
+function filterCandidateArticles(target = {}, candidates = [], options = {}) {
+  const candidateLimit = getAiCandidateLimit(options.limit);
+
   return (Array.isArray(candidates) ? candidates : [])
     .filter((candidate) => candidate?.id && candidate.id !== target?.id)
     .map((candidate) => ({
@@ -80,8 +87,10 @@ function filterCandidateArticles(target = {}, candidates = []) {
       topicOverlap: hasTopicOverlap(target, candidate)
     }))
     .filter(({ overlapScore, topicOverlap }) => overlapScore >= 0.18 || topicOverlap)
-    .sort((left, right) => right.overlapScore - left.overlapScore)
-    .slice(0, 8)
+    .sort((left, right) => (
+      getCandidateScore(right.overlapScore, right.topicOverlap) - getCandidateScore(left.overlapScore, left.topicOverlap)
+    ))
+    .slice(0, candidateLimit)
     .map(({ candidate }) => candidate);
 }
 
@@ -90,10 +99,8 @@ function buildArticlePayload(article = {}) {
     id: String(article.id || '').slice(0, 160),
     title: truncateText(article.title || '', 220),
     description: truncateText(article.description || article.content || '', 520),
-    source: truncateText(article.source || article.rawSource || '', 120),
     publishedAt: article.pubDate || '',
-    topics: (article.topics || []).slice(0, 4),
-    url: truncateText(article.url || '', 320)
+    topics: (article.topics || []).slice(0, 4)
   };
 }
 
@@ -135,9 +142,9 @@ function buildStoryGroupId(articleIds = []) {
   return `ai-story-${crypto.createHash('sha1').update(stableIds.join('|')).digest('hex').slice(0, 16)}`;
 }
 
-async function findSimilarStoriesForArticle(target = {}, candidates = []) {
+async function findSimilarStoriesForArticle(target = {}, candidates = [], options = {}) {
   const config = getConfig();
-  const filteredCandidates = filterCandidateArticles(target, candidates);
+  const filteredCandidates = filterCandidateArticles(target, candidates, options);
   if (!target?.id || filteredCandidates.length === 0) {
     return { matches: [], model: config.model, skipped: 'no_candidates' };
   }
@@ -149,40 +156,29 @@ async function findSimilarStoriesForArticle(target = {}, candidates = []) {
 
   const startedAt = Date.now();
   const openRouter = await createOpenRouterClient(config);
-  const completionPromise = openRouter.chat.send({
-    chatRequest: {
-      model: config.model,
-      messages: [
-        {
-          role: 'system',
-          content: 'You classify whether news articles describe the same specific story. Return valid JSON only.'
-        },
-        {
-          role: 'user',
-          content: buildPrompt(target, filteredCandidates)
-        }
-      ],
-      temperature: 0,
-      maxTokens: 900,
-      maxCompletionTokens: 900,
-      reasoning: {
-        enabled: false,
-        effort: 'none',
-        maxTokens: 0
+  const response = await sendChatCompletion(openRouter, {
+    model: config.model,
+    messages: [
+      {
+        role: 'system',
+        content: 'You classify whether news articles describe the same specific story. Return valid JSON only.'
       },
-      responseFormat: { type: 'json_object' },
-      stream: false
-    }
-  }, {
-    retries: { strategy: 'none' },
-    timeoutMs: config.timeoutMs
-  });
-
-  if (completionPromise && typeof completionPromise.catch === 'function') {
-    completionPromise.catch(() => {});
-  }
-
-  const response = await completionPromise;
+      {
+        role: 'user',
+        content: buildPrompt(target, filteredCandidates)
+      }
+    ],
+    temperature: 0,
+    maxTokens: 900,
+    maxCompletionTokens: 900,
+    reasoning: {
+      enabled: false,
+      effort: 'none',
+      maxTokens: 0
+    },
+    responseFormat: { type: 'json_object' },
+    stream: false
+  }, { timeoutMs: config.timeoutMs });
   const payload = parseJsonContent(extractAssistantContent(response));
   if (!payload) {
     throw new Error('AI story grouping response did not contain valid JSON');

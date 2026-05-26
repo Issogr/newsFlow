@@ -25,7 +25,7 @@ describe('aiTopicClassifier', () => {
     process.env = {
       ...originalEnv,
       OPENROUTER_API_KEY: 'test-key',
-      OPENROUTER_MODEL: 'qwen/qwen3.5-9b',
+      OPENROUTER_TOPIC_MODEL: 'topic-classifier-model',
       AI_TOPIC_BATCH_SIZE: undefined,
       AI_TOPIC_BATCH_CONCURRENCY: undefined,
       AI_TOPIC_MAX_ARTICLES_PER_REFRESH: undefined,
@@ -67,7 +67,7 @@ describe('aiTopicClassifier', () => {
     const promptPayload = JSON.parse(prompt.split('\n').at(-1));
 
     expect(status.topicsByArticleId.get('article-1').map((entry) => entry.topic)).toEqual(['Tecnologia']);
-    expect(requestBody.model).toBe('qwen/qwen3.5-9b');
+    expect(requestBody.model).toBe('topic-classifier-model');
     expect(requestBody.responseFormat).toEqual({ type: 'json_object' });
     expect(requestBody.reasoning).toEqual({
       enabled: false,
@@ -156,6 +156,14 @@ describe('aiTopicClassifier', () => {
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection skipped: reason=missing_api_key'));
   });
 
+  test('defaults to qwen when the topic model env var is unset', () => {
+    delete process.env.OPENROUTER_TOPIC_MODEL;
+
+    expect(aiTopicClassifier._getConfig()).toEqual(expect.objectContaining({
+      model: 'qwen/qwen3.5-9b'
+    }));
+  });
+
   test('logs AI timeouts as fallback warnings without throwing', async () => {
     const timeoutError = new Error('The operation was aborted due to timeout');
     timeoutError.name = 'TimeoutError';
@@ -220,7 +228,7 @@ describe('aiTopicClassifier', () => {
     expect(result.get('article-1').map((entry) => entry.topic)).toEqual(['Cronaca']);
   });
 
-  test('accepts common model response variants', () => {
+  test('accepts common model response, SDK content, and invalid JSON variants safely', () => {
     const result = aiTopicClassifier._normalizeClassifierDetails({
       results: [
         { articleId: 'article-1', category: 'Technology' },
@@ -230,9 +238,6 @@ describe('aiTopicClassifier', () => {
 
     expect(result.get('article-1').map((entry) => entry.topic)).toEqual(['Tecnologia']);
     expect(result.get('article-2').map((entry) => entry.topic)).toEqual(['Esteri']);
-  });
-
-  test('extracts assistant content from SDK response variants', () => {
     expect(aiTopicClassifier._extractAssistantContent({
       choices: [
         { message: { content: [{ type: 'text', text: '{"topicsById":[]}' }] } }
@@ -242,9 +247,7 @@ describe('aiTopicClassifier', () => {
     expect(aiTopicClassifier._extractAssistantContent({
       output_text: '{"topicsById":[]}'
     })).toBe('{"topicsById":[]}');
-  });
 
-  test('returns null instead of throwing on truncated JSON output', () => {
     expect(aiTopicClassifier._parseJsonContent('{"topicsById":[')).toBeNull();
     expect(aiTopicClassifier._parseJsonContent('```json\n{"topicsById":[{"id":"article-1"}]')).toBeNull();
   });

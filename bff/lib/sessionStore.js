@@ -2,10 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 const session = require('express-session');
-const SqliteStoreFactory = require('better-sqlite3-session-store')(session);
 const { parseIntegerEnv } = require('./env');
 const {
   BFF_SESSION_COOKIE_NAME,
+  SESSION_TTL_MS,
   clearBffSessionCookie,
   decryptBackendSessionCookie,
   getSessionCookieOptions,
@@ -16,6 +16,7 @@ const {
 
 const DEFAULT_SESSION_DB_PATH = path.join(__dirname, '..', 'data', 'sessions.sqlite');
 const SESSION_STORE_CLEAR_INTERVAL_MS = parseIntegerEnv('SESSION_STORE_CLEAR_INTERVAL_MS', 300000, { min: 1000 });
+const SESSION_TOUCH_RENEWAL_WINDOW_MS = parseIntegerEnv('SESSION_TOUCH_RENEWAL_WINDOW_MS', 24 * 60 * 60 * 1000, { min: 1000 });
 
 function ensureSessionDbDirectory(sessionDbPath) {
   fs.mkdirSync(path.dirname(sessionDbPath), { recursive: true });
@@ -36,6 +37,122 @@ function cleanupStoredSessionUsers(sessionDb) {
   `).run().changes;
 }
 
+function getSessionExpiryTime(sessionData = {}) {
+  const expiresAt = Date.parse(sessionData.cookie?.expires || '');
+  return Number.isFinite(expiresAt) ? expiresAt : null;
+}
+
+function shouldRenewSession(sessionData = {}, referenceTime = Date.now()) {
+  const expiresAt = getSessionExpiryTime(sessionData);
+  if (!Number.isFinite(expiresAt)) {
+    return true;
+  }
+
+  return expiresAt - referenceTime <= SESSION_TOUCH_RENEWAL_WINDOW_MS;
+}
+
+function getSessionExpireValue(sessionData = {}) {
+  const expiresAt = getSessionExpiryTime(sessionData) || Date.now() + SESSION_TTL_MS;
+  return new Date(expiresAt).toISOString();
+}
+
+class ManagedSqliteStore extends session.Store {
+  constructor(db, options = {}) {
+    super();
+    this.db = db;
+    this.expired = options.expired || {};
+    this.cleanupInterval = null;
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        sid TEXT PRIMARY KEY,
+        sess TEXT NOT NULL,
+        expire TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions (expire);
+    `);
+
+    if (this.expired.clear !== false) {
+      this.startInterval();
+    }
+  }
+
+  startInterval() {
+    if (this.cleanupInterval) {
+      return;
+    }
+
+    this.cleanupInterval = setInterval(() => this.clearExpiredSessions(), this.expired.intervalMs || SESSION_STORE_CLEAR_INTERVAL_MS);
+    this.cleanupInterval?.unref?.();
+  }
+
+  stopCleanupInterval() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+  }
+
+  clearExpiredSessions() {
+    this.db.prepare('DELETE FROM sessions WHERE expire <= ?').run(new Date().toISOString());
+    cleanupStoredSessionUsers(this.db);
+  }
+
+  get(sid, callback = () => {}) {
+    try {
+      const row = this.db.prepare('SELECT sess, expire FROM sessions WHERE sid = ?').get(sid);
+      if (!row) {
+        callback(null, null);
+        return;
+      }
+
+      const expiresAt = Date.parse(row.expire);
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+        this.destroy(sid, () => callback(null, null));
+        return;
+      }
+
+      callback(null, JSON.parse(row.sess));
+    } catch (error) {
+      callback(error);
+    }
+  }
+
+  set(sid, sess, callback = () => {}) {
+    try {
+      this.db.prepare(`
+        INSERT INTO sessions (sid, sess, expire)
+        VALUES (?, ?, ?)
+        ON CONFLICT(sid) DO UPDATE SET
+          sess = excluded.sess,
+          expire = excluded.expire
+      `).run(sid, JSON.stringify(sess), getSessionExpireValue(sess));
+      callback(null);
+    } catch (error) {
+      callback(error);
+    }
+  }
+
+  destroy(sid, callback = () => {}) {
+    try {
+      this.db.prepare('DELETE FROM sessions WHERE sid = ?').run(sid);
+      callback(null);
+    } catch (error) {
+      callback(error);
+    }
+  }
+
+  touch(sid, sess, callback = () => {}) {
+    if (!shouldRenewSession(sess)) {
+      callback(null);
+      return;
+    }
+
+    this.set(sid, sess, callback);
+  }
+}
+
 function createSessionStore(options = {}) {
   const sessionDbPath = options.sessionDbPath || process.env.BFF_SESSION_DB_PATH || DEFAULT_SESSION_DB_PATH;
   ensureSessionDbDirectory(sessionDbPath);
@@ -53,28 +170,7 @@ function createSessionStore(options = {}) {
     CREATE INDEX IF NOT EXISTS idx_session_users_user_id ON session_users (user_id);
   `);
 
-  const BaseSqliteStore = SqliteStoreFactory;
-  class ManagedSqliteStore extends BaseSqliteStore {
-    startInterval() {
-      this.cleanupInterval = setInterval(this.clearExpiredSessions.bind(this), this.expired.intervalMs);
-      this.cleanupInterval?.unref?.();
-    }
-
-    stopCleanupInterval() {
-      if (this.cleanupInterval) {
-        clearInterval(this.cleanupInterval);
-        this.cleanupInterval = null;
-      }
-    }
-
-    clearExpiredSessions() {
-      super.clearExpiredSessions();
-      cleanupStoredSessionUsers(db);
-    }
-  }
-
-  const store = new ManagedSqliteStore({
-    client: db,
+  const store = new ManagedSqliteStore(db, {
     expired: {
       clear: true,
       intervalMs: SESSION_STORE_CLEAR_INTERVAL_MS,
@@ -146,10 +242,21 @@ function buildSessionMiddleware(store, secret) {
     secret,
     resave: false,
     saveUninitialized: false,
-    rolling: true,
+    rolling: false,
     unset: 'destroy',
     cookie: getSessionCookieOptions(),
   });
+}
+
+function renewSessionExpiryIfNeeded(req, res, next) {
+  if (!req.session || !isValidSessionPayload(req.session) || !shouldRenewSession(req.session)) {
+    next();
+    return;
+  }
+
+  req.session.cookie.maxAge = SESSION_TTL_MS;
+  req.session.renewedAt = new Date().toISOString();
+  next();
 }
 
 function normalizeSessionState(req, res, next, sessionDb = null) {
@@ -212,14 +319,17 @@ function getBackendSessionCookieFromRequest(req) {
 }
 
 async function persistSessionUserId(req, userId, sessionDb = null) {
-  if (!req.session || !userId || req.session.userId === userId) {
+  if (!req.session || !userId) {
     return;
   }
 
-  req.session.userId = userId;
-  await new Promise((resolve, reject) => {
-    req.session.save((error) => (error ? reject(error) : resolve()));
-  });
+  if (req.session.userId !== userId) {
+    req.session.userId = userId;
+    await new Promise((resolve, reject) => {
+      req.session.save((error) => (error ? reject(error) : resolve()));
+    });
+  }
+
   upsertStoredSessionUser(sessionDb, req.sessionID, userId);
 }
 
@@ -233,5 +343,6 @@ module.exports = {
   loadUpgradeSession,
   normalizeSessionState,
   persistSessionUserId,
+  renewSessionExpiryIfNeeded,
   upsertStoredSessionUser
 };

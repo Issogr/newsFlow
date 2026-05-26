@@ -5,34 +5,14 @@ import {
   Rss,
   Search,
   Tags,
-  X,
 } from 'lucide-react';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import useFilterSurfaceState from '../hooks/useFilterSurfaceState';
-import { SourceFilterList, TopicFilterList } from './FilterOptionLists';
+import { FilterSearchInput } from './FilterSurfaceControls';
 import TopNavActionButton from './TopNavActionButton';
+import FilterBubbles from './FilterBubbles';
 
 const TOP_BUBBLE_MAX_HEIGHT = 'min(55vh, 28rem)';
-
-function TopFilterBubble({ children, open, compact }) {
-  const positionClassName = compact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]';
-
-  return (
-    <div
-      className={`absolute right-0 ${positionClassName} z-50 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md transition-all duration-200 ease-out ${
-        open
-          ? 'pointer-events-auto translate-y-0 opacity-100'
-          : 'pointer-events-none -translate-y-2 opacity-0'
-      }`}
-      aria-hidden={!open}
-      inert={open ? undefined : ''}
-    >
-      <div className="max-h-[var(--top-bubble-max-height)] overflow-y-auto overscroll-contain p-4" style={{ '--top-bubble-max-height': TOP_BUBBLE_MAX_HEIGHT }}>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 const DesktopTopNavFilters = ({
   visibleSources,
@@ -71,27 +51,22 @@ const DesktopTopNavFilters = ({
   const topicCount = activeFilters.topics.length;
   const timeCount = showRecentOnly ? 1 : 0;
   const searchCount = search ? 1 : 0;
+  const bubbleClassName = `absolute right-0 ${compact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]'} z-50 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md`;
 
   return (
     <div ref={surfaceRef} className="relative hidden md:block">
-      <TopFilterBubble open={openBubble === 'sources'} compact={compact}>
-        <SourceFilterList
-          sources={visibleSources}
-          activeSourceIds={activeFilters.sourceIds}
-          emptyLabel={t('noNewsText')}
-          onToggleSource={(sourceId) => onToggleFilter('sourceIds', sourceId)}
-        />
-      </TopFilterBubble>
-
-      <TopFilterBubble open={openBubble === 'topics'} compact={compact}>
-        <TopicFilterList
-          topics={availableTopics}
-          activeTopics={activeFilters.topics}
-          emptyLabel={t('noNewsText')}
-          locale={locale}
-          onToggleTopic={(topic) => onToggleFilter('topics', topic)}
-        />
-      </TopFilterBubble>
+      <FilterBubbles
+        activeFilters={activeFilters}
+        availableTopics={availableTopics}
+        bubbleClassName={bubbleClassName}
+        closedClassName="-translate-y-2"
+        emptyLabel={t('noNewsText')}
+        locale={locale}
+        maxHeight={TOP_BUBBLE_MAX_HEIGHT}
+        onToggleFilter={onToggleFilter}
+        openBubble={openBubble}
+        visibleSources={visibleSources}
+      />
 
       {searchMode ? (
         <div className="flex items-center gap-1.5 transition-all duration-200 ease-out">
@@ -104,39 +79,16 @@ const DesktopTopNavFilters = ({
             aria-label={t('readLater')}
             title={t('readLater')}
           />
-          <div className="flex w-[min(32vw,25rem)] items-center gap-2">
-            <label className="group flex h-11 flex-1 items-center gap-2 rounded-full border border-slate-200/80 bg-gradient-to-r from-slate-50 to-white px-3.5 shadow-inner shadow-slate-200/60 transition-colors focus-within:border-sky-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100">
-              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm transition-colors group-focus-within:text-sky-600">
-                <Search className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <input
-                ref={searchInputRef}
-                type="search"
-                value={search}
-                onChange={(event) => onSearchChange(event.target.value)}
-                placeholder={t('searchPlaceholder')}
-                className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:font-normal placeholder:text-slate-400"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={onSearchClear}
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700"
-                  aria-label={t('clearSearch')}
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-              )}
-            </label>
-            <button
-              type="button"
-              onClick={handleExitSearch}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-sm transition-colors hover:bg-slate-700"
-              aria-label={t('cancel')}
-            >
-              <X className="h-[1.125rem] w-[1.125rem]" aria-hidden="true" />
-            </button>
-          </div>
+          <FilterSearchInput
+            className="flex w-[min(32vw,25rem)] items-center gap-2"
+            cancelIconClassName="h-[1.125rem] w-[1.125rem]"
+            onCancel={handleExitSearch}
+            onSearchChange={onSearchChange}
+            onSearchClear={onSearchClear}
+            search={search}
+            searchInputRef={searchInputRef}
+            t={t}
+          />
         </div>
       ) : (
         <div className="flex items-center gap-1.5">

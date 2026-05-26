@@ -16,11 +16,81 @@ const READER_FALLBACK_CACHE_PRUNE_INTERVAL_MS = parseIntegerEnv(
   { min: 1000 }
 );
 const READER_MAX_RESPONSE_BYTES = parseIntegerEnv('READER_MAX_RESPONSE_BYTES', 2097152, { min: 1 });
+const READER_EXTRACTION_CONCURRENCY = parseIntegerEnv('READER_EXTRACTION_CONCURRENCY', 3, { min: 1 });
+const READER_EXTRACTION_MAX_PENDING = parseIntegerEnv('READER_EXTRACTION_MAX_PENDING', 60, { min: READER_EXTRACTION_CONCURRENCY });
+const READER_EXTRACTION_MAX_PENDING_PER_USER = parseIntegerEnv('READER_EXTRACTION_MAX_PENDING_PER_USER', 20, { min: 1 });
 const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'PRE']);
 const CONTAINER_TAGS = new Set(['ARTICLE', 'SECTION', 'DIV', 'MAIN']);
 const readerExtractionPromises = new Map();
 const readerFallbackCache = new Map();
+const readerExtractionQueue = [];
+const readerExtractionsByUser = new Map();
 let readerFallbackPruneHandle = null;
+let activeReaderExtractions = 0;
+
+function getReaderExtractionUserKey(userId = '') {
+  return String(userId || 'anonymous').trim() || 'anonymous';
+}
+
+function incrementReaderExtractionUserCount(userKey) {
+  readerExtractionsByUser.set(userKey, (readerExtractionsByUser.get(userKey) || 0) + 1);
+}
+
+function decrementReaderExtractionUserCount(userKey) {
+  const currentCount = readerExtractionsByUser.get(userKey) || 0;
+  if (currentCount <= 1) {
+    readerExtractionsByUser.delete(userKey);
+    return;
+  }
+
+  readerExtractionsByUser.set(userKey, currentCount - 1);
+}
+
+function getPendingReaderExtractionCount() {
+  return activeReaderExtractions + readerExtractionQueue.length;
+}
+
+function assertReaderExtractionCapacity(userKey) {
+  if (getPendingReaderExtractionCount() >= READER_EXTRACTION_MAX_PENDING) {
+    throw createError(429, 'Reader extraction is busy. Please try again shortly.', 'READER_EXTRACTION_BUSY');
+  }
+
+  if ((readerExtractionsByUser.get(userKey) || 0) >= READER_EXTRACTION_MAX_PENDING_PER_USER) {
+    throw createError(429, 'Too many reader extraction requests. Please wait for the current requests to finish.', 'READER_EXTRACTION_BUSY');
+  }
+}
+
+function drainReaderExtractionQueue() {
+  while (activeReaderExtractions < READER_EXTRACTION_CONCURRENCY && readerExtractionQueue.length > 0) {
+    const queued = readerExtractionQueue.shift();
+    activeReaderExtractions += 1;
+    Promise.resolve()
+      .then(queued.task)
+      .then(queued.resolve, queued.reject)
+      .finally(() => {
+        activeReaderExtractions = Math.max(0, activeReaderExtractions - 1);
+        decrementReaderExtractionUserCount(queued.userKey);
+        drainReaderExtractionQueue();
+      });
+  }
+}
+
+function runWithReaderExtractionConcurrency(task, options = {}) {
+  const userKey = getReaderExtractionUserKey(options.userId);
+
+  try {
+    assertReaderExtractionCapacity(userKey);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+
+  incrementReaderExtractionUserCount(userKey);
+
+  return new Promise((resolve, reject) => {
+    readerExtractionQueue.push({ task, resolve, reject, userKey });
+    drainReaderExtractionQueue();
+  });
+}
 
 function normalizeText(text) {
   return String(text || '')
@@ -378,12 +448,14 @@ async function loadFreshReaderPayload(articleId, article) {
   }
 }
 
-function getOrCreateReaderExtractionPromise(articleId, article, { forceRefresh = false } = {}) {
-  if (!forceRefresh && readerExtractionPromises.has(articleId)) {
+function getOrCreateReaderExtractionPromise(articleId, article, options = {}) {
+  if (readerExtractionPromises.has(articleId)) {
     return readerExtractionPromises.get(articleId);
   }
 
-  const extractionPromise = loadFreshReaderPayload(articleId, article)
+  const extractionPromise = runWithReaderExtractionConcurrency(() => loadFreshReaderPayload(articleId, article), {
+    userId: options.userId
+  })
     .finally(() => {
       if (readerExtractionPromises.get(articleId) === extractionPromise) {
         readerExtractionPromises.delete(articleId);
@@ -395,6 +467,12 @@ function getOrCreateReaderExtractionPromise(articleId, article, { forceRefresh =
 
 function clearRuntimeState() {
   readerExtractionPromises.clear();
+  readerExtractionQueue.splice(0).forEach((queued) => {
+    decrementReaderExtractionUserCount(queued.userKey);
+    queued.reject(new Error('Reader extraction queue cleared'));
+  });
+  activeReaderExtractions = 0;
+  readerExtractionsByUser.clear();
   readerFallbackCache.clear();
   stopFallbackCachePruneInterval();
 }
@@ -421,7 +499,9 @@ async function getReaderArticle(articleId, options = {}) {
     }
   }
 
-  return getOrCreateReaderExtractionPromise(articleId, article, { forceRefresh: options.forceRefresh });
+  return getOrCreateReaderExtractionPromise(articleId, article, {
+    userId: options.userId
+  });
 }
 
 module.exports = {
@@ -433,5 +513,11 @@ module.exports = {
   _blocksToText: blocksToText,
   _clearRuntimeState: clearRuntimeState,
   _getFallbackCacheSize: () => readerFallbackCache.size,
-  _pruneExpiredFallbackCache: pruneExpiredFallbackCache
+  _pruneExpiredFallbackCache: pruneExpiredFallbackCache,
+  _getReaderExtractionStats: () => ({
+    active: activeReaderExtractions,
+    queued: readerExtractionQueue.length,
+    pending: getPendingReaderExtractionCount(),
+    users: new Map(readerExtractionsByUser)
+  })
 };

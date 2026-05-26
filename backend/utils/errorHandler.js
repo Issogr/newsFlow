@@ -145,6 +145,5 @@ const asyncHandler = (fn) => (req, res, next) => {
 module.exports = {
   createError,
   errorMiddleware,
-  asyncHandler,
-  ERROR_MESSAGES
+  asyncHandler
 };

@@ -11,8 +11,6 @@ export default function useFilterSurfaceState({
   const surfaceRef = useRef(null);
   const ignoreNextToggleClickRef = useRef(false);
 
-  const closeBubbles = useCallback(() => setOpenBubble(null), []);
-
   const closeAll = useCallback(({ closeSearch = false } = {}) => {
     setOpenBubble(null);
     if (closeSearch) {
@@ -44,10 +42,10 @@ export default function useFilterSurfaceState({
   }, [handleToggleBubble]);
 
   const handleEnterSearch = useCallback(() => {
-    closeBubbles();
+    setOpenBubble(null);
     onOpenSurface?.();
     setSearchMode(true);
-  }, [closeBubbles, onOpenSurface]);
+  }, [onOpenSurface]);
 
   const handleExitSearch = useCallback(() => {
     setSearchMode(false);

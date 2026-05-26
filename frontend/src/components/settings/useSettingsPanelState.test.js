@@ -4,7 +4,6 @@ import {
   addUserSource,
   createApiToken,
   deleteUserSource,
-  revokeApiToken,
   updateUserSource,
   updateUserSettings
 } from '../../services/api';
@@ -21,7 +20,7 @@ vi.mock('../../services/api', () => ({
 }));
 
 const baseCurrentUser = {
-  user: { username: 'alice' },
+  user: { id: 'user-1', username: 'alice' },
   settings: {
     defaultLanguage: 'en',
     themeMode: 'system',
@@ -48,7 +47,7 @@ describe('useSettingsPanelState', () => {
     jest.clearAllMocks();
   });
 
-  test('keeps unsaved settings local when adding a source', async () => {
+  test('keeps unsaved settings local through a source add and parent rerender', async () => {
     const onUserUpdate = jest.fn();
     const source = {
       id: 'source-1',
@@ -59,15 +58,15 @@ describe('useSettingsPanelState', () => {
 
     addUserSource.mockResolvedValue({ source });
 
-    const { result } = renderHook(() => useSettingsPanelState({
-      currentUser: baseCurrentUser,
+    const { result, rerender } = renderHook(({ currentUser }) => useSettingsPanelState({
+      currentUser,
       availableSources: [],
       onClose: jest.fn(),
       onUserUpdate
-    }));
+    }), { initialProps: { currentUser: baseCurrentUser } });
 
     act(() => {
-      result.current.setDefaultLanguage('it');
+      result.current.setSetting('defaultLanguage', 'it');
       result.current.setSourceForm({ url: source.url });
     });
 
@@ -81,6 +80,40 @@ describe('useSettingsPanelState', () => {
       settings: expect.objectContaining({ defaultLanguage: 'en' }),
       customSources: [source]
     }));
+
+    rerender({ currentUser: onUserUpdate.mock.calls.at(-1)[0] });
+
+    expect(result.current.settings.defaultLanguage).toBe('it');
+    expect(result.current.customSources).toEqual([source]);
+  });
+
+  test('keeps unsaved settings after parent rerenders from token changes', async () => {
+    const onUserUpdate = jest.fn();
+    createApiToken.mockResolvedValue({
+      token: 'raw-token',
+      tokenInfo: { tokenPrefix: 'raw-token', expiresAt: '2026-01-01T00:00:00.000Z' }
+    });
+
+    const { result, rerender } = renderHook(({ currentUser }) => useSettingsPanelState({
+      currentUser,
+      availableSources: [],
+      onClose: jest.fn(),
+      onUserUpdate
+    }), { initialProps: { currentUser: baseCurrentUser } });
+
+    act(() => {
+      result.current.setSetting('defaultLanguage', 'it');
+    });
+
+    await act(async () => {
+      await result.current.handleCreateApiToken();
+    });
+
+    rerender({ currentUser: onUserUpdate.mock.calls.at(-1)[0] });
+
+    expect(result.current.settings.defaultLanguage).toBe('it');
+    expect(result.current.apiToken).toEqual({ tokenPrefix: 'raw-token', expiresAt: '2026-01-01T00:00:00.000Z' });
+    expect(result.current.newApiToken).toBe('raw-token');
   });
 
   test('surfaces source add failures near the custom source form', async () => {
@@ -134,7 +167,7 @@ describe('useSettingsPanelState', () => {
     }));
 
     act(() => {
-      result.current.setDefaultLanguage('it');
+      result.current.setSetting('defaultLanguage', 'it');
       result.current.startEditSource(currentUser.customSources[0]);
       result.current.setEditingSourceForm({
         name: updatedSource.name,
@@ -181,7 +214,7 @@ describe('useSettingsPanelState', () => {
     }));
 
     act(() => {
-      result.current.setDefaultLanguage('it');
+      result.current.setSetting('defaultLanguage', 'it');
     });
 
     await act(async () => {
@@ -215,7 +248,7 @@ describe('useSettingsPanelState', () => {
     }));
 
     act(() => {
-      result.current.setDefaultLanguage('it');
+      result.current.setSetting('defaultLanguage', 'it');
     });
 
     await act(async () => {

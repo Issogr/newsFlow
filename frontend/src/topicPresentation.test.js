@@ -1,7 +1,7 @@
 import { getTopicPresentation } from './topicPresentation';
 
 describe('getTopicPresentation', () => {
-  test('uses a unique badge palette for each topic family', () => {
+  test('keeps topic families visually distinguishable with explicit badge palettes', () => {
     const topicSamples = [
       'Politica',
       'Economia',
@@ -21,12 +21,8 @@ describe('getTopicPresentation', () => {
     const classNames = topicSamples.map((topic) => getTopicPresentation(topic).iconBadgeClassName);
 
     expect(new Set(classNames)).toHaveLength(topicSamples.length);
-  });
 
-  test('uses explicit palette values so dark-mode utility overrides do not wash out some topics', () => {
-    const topicSamples = ['Politica', 'Economia', 'Cronaca', 'Esteri', 'Misc'];
-
-    topicSamples.forEach((topic) => {
+    ['Politica', 'Economia', 'Cronaca', 'Esteri', 'Misc'].forEach((topic) => {
       expect(getTopicPresentation(topic).iconBadgeClassName).toContain('bg-[#');
     });
   });

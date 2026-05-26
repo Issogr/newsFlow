@@ -5,6 +5,7 @@ const {
   newsSources,
   expandConfiguredSources,
   expandUserSources,
+  getMaxArticleAgeHours,
   getNewsFeed: buildNewsFeed,
   getReadLaterFeed: buildReadLaterFeed
 } = require('./newsAggregatorQuery');
@@ -355,10 +356,7 @@ function removeReadLaterArticles(userContext = {}, articleIds = []) {
     throw createError(400, 'Choose at least one article to remove.', 'INVALID_READ_LATER_PAYLOAD');
   }
 
-  const maxArticleAgeHours = Math.min(
-    ARTICLE_RETENTION_HOURS,
-    Number.isFinite(userContext.articleRetentionHours) ? userContext.articleRetentionHours : ARTICLE_RETENTION_HOURS
-  );
+  const maxArticleAgeHours = getMaxArticleAgeHours(userContext, ARTICLE_RETENTION_HOURS);
   const result = database.removeReadLaterArticles(userId, normalizedArticleIds, { maxArticleAgeHours });
 
   return {

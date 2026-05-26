@@ -1,20 +1,41 @@
-const path = require('path');
-
-function applySanitizedForwardedHeaders(proxyReq, req) {
+function clearForwardedHeaders(proxyReq) {
   proxyReq.removeHeader('x-forwarded-for');
   proxyReq.removeHeader('x-forwarded-host');
   proxyReq.removeHeader('x-forwarded-proto');
+}
 
-  const clientIp = req.ip || req.socket?.remoteAddress;
-  if (clientIp) {
-    proxyReq.setHeader('X-Forwarded-For', clientIp);
+function getRequestHeader(req, name) {
+  return typeof req.get === 'function'
+    ? req.get(name)
+    : req.headers?.[String(name || '').toLowerCase()];
+}
+
+function buildTrustedForwardedHeaders(req, options = {}) {
+  const forwardedFor = String(req.ip || req.socket?.remoteAddress || '').trim();
+  const forwardedProto = req.protocol || (req.socket?.encrypted ? 'https' : 'http');
+  const forwardedHost = String(getRequestHeader(req, 'host') || '').trim();
+  const headers = {};
+
+  if (forwardedFor || options.includeEmpty) {
+    headers['x-forwarded-for'] = forwardedFor;
   }
 
-  if (req.headers.host) {
-    proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+  if (forwardedHost || options.includeEmpty) {
+    headers['x-forwarded-host'] = forwardedHost;
   }
 
-  proxyReq.setHeader('X-Forwarded-Proto', req.protocol || (req.socket?.encrypted ? 'https' : 'http'));
+  if (forwardedProto || options.includeEmpty) {
+    headers['x-forwarded-proto'] = forwardedProto;
+  }
+
+  return headers;
+}
+
+function applySanitizedForwardedHeaders(proxyReq, req) {
+  clearForwardedHeaders(proxyReq);
+  Object.entries(buildTrustedForwardedHeaders(req)).forEach(([name, value]) => {
+    proxyReq.setHeader(name, value);
+  });
 }
 
 function copyBackendResponseHeaders(res, headers = {}) {
@@ -44,24 +65,20 @@ function copyBackendResponseHeaders(res, headers = {}) {
   });
 }
 
-function serveSpaIndex(frontendDistDir, res) {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.sendFile(path.join(frontendDistDir, 'index.html'));
-}
-
 function extractDeletedAdminUserId(req, statusCode) {
   if (String(req.method || '').toUpperCase() !== 'DELETE' || statusCode < 200 || statusCode >= 300) {
     return '';
   }
 
   const rawPath = String(req.originalUrl || req.url || '');
-  const match = rawPath.match(/^\/api\/admin\/users\/([^/?#]+)$/);
+  const match = rawPath.match(/^\/api\/admin\/users\/([^/?#]+)\/?(?:[?#].*)?$/);
   return match?.[1] || '';
 }
 
 module.exports = {
   applySanitizedForwardedHeaders,
+  buildTrustedForwardedHeaders,
+  clearForwardedHeaders,
   copyBackendResponseHeaders,
-  extractDeletedAdminUserId,
-  serveSpaIndex
+  extractDeletedAdminUserId
 };

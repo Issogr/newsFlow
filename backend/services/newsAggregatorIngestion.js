@@ -2,6 +2,7 @@ const rssParser = require('./rssParser');
 const database = require('./database');
 const logger = require('../utils/logger');
 const websocketService = require('./websocketService');
+const thematicSummaryService = require('./thematicSummaryService');
 const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const {
   classifyTopicDetailsForArticlesWithStatus,
@@ -23,7 +24,17 @@ const {
 const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24, { min: 0 });
 const RSS_INGESTION_CONCURRENCY = parseIntegerEnv('RSS_INGESTION_CONCURRENCY', 8, { min: 1 });
 const SOURCE_FETCH_FRESHNESS_MS = parseIntegerEnv('SOURCE_FETCH_FRESHNESS_MS', 5 * 60 * 1000, { min: 0 });
+const SOURCE_FETCH_FRESHNESS_MAX_ENTRIES = parseIntegerEnv('SOURCE_FETCH_FRESHNESS_MAX_ENTRIES', 1000, { min: 1 });
+const SOURCE_FETCH_FRESHNESS_RETENTION_MS = parseIntegerEnv(
+  'SOURCE_FETCH_FRESHNESS_RETENTION_MS',
+  Math.max((Number.isFinite(SOURCE_FETCH_FRESHNESS_MS) ? SOURCE_FETCH_FRESHNESS_MS : 0) * 6, 60 * 60 * 1000),
+  { min: 1000 }
+);
 const AI_STORY_GROUPING_CONCURRENCY = parseIntegerEnv('AI_STORY_GROUPING_CONCURRENCY', 1, { min: 1, max: 4 });
+const AI_STORY_GROUPING_WINDOW_HOURS = parseIntegerEnv('AI_STORY_GROUPING_WINDOW_HOURS', 24, { min: 1, max: 72 });
+const AI_STORY_GROUPING_CANDIDATE_LIMIT = parseIntegerEnv('AI_STORY_GROUPING_CANDIDATE_LIMIT', 64, { min: 8, max: 100 });
+const AI_STORY_GROUPING_RETRY_LIMIT = parseIntegerEnv('AI_STORY_GROUPING_RETRY_LIMIT', 12, { min: 0, max: 50 });
+const EXISTING_STORY_GROUP_MERGE_MIN_CONFIDENCE = 0.9;
 const pendingAiTopicProcessingIds = new Set();
 const pendingAiStoryGroupingIds = new Set();
 const sourceFetchTimestamps = new Map();
@@ -105,11 +116,38 @@ function getSourceFetchKey(source = {}) {
   return normalizeSourceFetchUrl(source.url) || source.id || '';
 }
 
+function pruneSourceFetchTimestamps(referenceTime = Date.now()) {
+  if (sourceFetchTimestamps.size === 0) {
+    return 0;
+  }
+
+  let removedCount = 0;
+  sourceFetchTimestamps.forEach((timestamp, fetchKey) => {
+    if (!Number.isFinite(timestamp) || referenceTime - timestamp > SOURCE_FETCH_FRESHNESS_RETENTION_MS) {
+      sourceFetchTimestamps.delete(fetchKey);
+      removedCount += 1;
+    }
+  });
+
+  while (sourceFetchTimestamps.size > SOURCE_FETCH_FRESHNESS_MAX_ENTRIES) {
+    const oldestFetchKey = sourceFetchTimestamps.keys().next().value;
+    if (!oldestFetchKey) {
+      break;
+    }
+
+    sourceFetchTimestamps.delete(oldestFetchKey);
+    removedCount += 1;
+  }
+
+  return removedCount;
+}
+
 function isSourceFetchFresh(source = {}, freshnessMs = SOURCE_FETCH_FRESHNESS_MS, referenceTime = Date.now()) {
   if (!Number.isFinite(freshnessMs) || freshnessMs <= 0) {
     return false;
   }
 
+  pruneSourceFetchTimestamps(referenceTime);
   const fetchKey = getSourceFetchKey(source);
   const lastFetchedAt = fetchKey ? sourceFetchTimestamps.get(fetchKey) : null;
   return Number.isFinite(lastFetchedAt) && referenceTime - lastFetchedAt < freshnessMs;
@@ -118,7 +156,9 @@ function isSourceFetchFresh(source = {}, freshnessMs = SOURCE_FETCH_FRESHNESS_MS
 function markSourceFetched(source = {}, referenceTime = Date.now()) {
   const fetchKey = getSourceFetchKey(source);
   if (fetchKey) {
+    sourceFetchTimestamps.delete(fetchKey);
     sourceFetchTimestamps.set(fetchKey, referenceTime);
+    pruneSourceFetchTimestamps(referenceTime);
   }
 }
 
@@ -189,7 +229,7 @@ async function fetchSourceTask(task, options = {}) {
   return task.targetSources.flatMap((source) => parsedArticles.map((article) => cloneArticleForSource(article, source)));
 }
 
-async function processAiTopicsForPendingArticles(articles = []) {
+async function processAiTopicsForPendingArticles(articles = [], options = {}) {
   if (!Array.isArray(articles) || articles.length === 0) {
     return;
   }
@@ -250,22 +290,42 @@ async function processAiTopicsForPendingArticles(articles = []) {
     );
     database.markArticlesAiTopicProcessing([...failedArticleIds], 'failed');
     database.markArticlesAiTopicProcessing([...cappedArticleIds], 'deferred');
+    scheduleThematicSummariesAfterTopicProcessing(attemptedArticleIds);
   } catch (error) {
     logger.warn(`Background AI topic processing failed: ${error.message}`);
     database.markArticlesAiTopicProcessing(articleIds, 'failed');
   } finally {
     articleIds.forEach((articleId) => pendingAiTopicProcessingIds.delete(articleId));
+    if (typeof options.onComplete === 'function') {
+      try {
+        options.onComplete(articles);
+      } catch (error) {
+        logger.warn(`Background AI topic completion hook failed: ${error.message}`);
+      }
+    }
   }
 }
 
-function scheduleAiTopicsForPendingArticles(normalizedArticles = []) {
-  if (!Array.isArray(normalizedArticles) || normalizedArticles.length === 0 || !isAiTopicDetectionAvailable()) {
+function scheduleThematicSummariesAfterTopicProcessing(classifiedArticleIds = []) {
+  if (!Array.isArray(classifiedArticleIds) || classifiedArticleIds.length === 0) {
     return;
+  }
+
+  setTimeout(() => {
+    thematicSummaryService.generateDueSummaries({ broadcast: true }).catch((error) => {
+      logger.warn(`Thematic summary generation after topic processing failed: ${error.message}`);
+    });
+  }, 0);
+}
+
+function scheduleAiTopicsForPendingArticles(normalizedArticles = [], options = {}) {
+  if (!Array.isArray(normalizedArticles) || normalizedArticles.length === 0 || !isAiTopicDetectionAvailable()) {
+    return false;
   }
 
   const pendingArticleIds = database.getArticleIdsPendingAiTopicProcessing(normalizedArticles.map((article) => article.id));
   if (pendingArticleIds.length === 0) {
-    return;
+    return false;
   }
 
   const pendingArticleIdSet = new Set(pendingArticleIds);
@@ -279,12 +339,46 @@ function scheduleAiTopicsForPendingArticles(normalizedArticles = []) {
   });
 
   if (pendingArticles.length === 0) {
-    return;
+    return false;
   }
 
   setTimeout(() => {
-    processAiTopicsForPendingArticles(pendingArticles);
+    processAiTopicsForPendingArticles(pendingArticles, options);
   }, 0);
+
+  return true;
+}
+
+function getStoryGroupId(article = {}) {
+  return String(article?.storyGroupId || '').trim();
+}
+
+function getMatchesByArticleId(matches = []) {
+  return new Map((Array.isArray(matches) ? matches : [])
+    .map((match) => [match.articleId, match])
+    .filter(([articleId]) => Boolean(articleId)));
+}
+
+function selectMatchesForConservativeMerge(target = {}, candidates = [], matches = []) {
+  const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+  const matchedCandidates = matches.map((match) => candidateById.get(match.articleId)).filter(Boolean);
+  const involvedStoryGroupIds = [...new Set([target, ...matchedCandidates].map(getStoryGroupId).filter(Boolean))];
+
+  if (involvedStoryGroupIds.length <= 1) {
+    return matches;
+  }
+
+  const selectedGroupId = getStoryGroupId(target)
+    || getStoryGroupId(matchedCandidates.find((candidate) => getStoryGroupId(candidate)))
+    || '';
+
+  return matches.filter((match) => {
+    const candidateGroupId = getStoryGroupId(candidateById.get(match.articleId));
+    return !candidateGroupId
+      || !selectedGroupId
+      || candidateGroupId === selectedGroupId
+      || match.confidence >= EXISTING_STORY_GROUP_MERGE_MIN_CONFIDENCE;
+  });
 }
 
 async function processAiStoryGroupingForArticle(article = {}) {
@@ -294,8 +388,8 @@ async function processAiStoryGroupingForArticle(article = {}) {
   }
 
   const candidateSet = database.getAiStoryGroupingCandidateSet(articleId, {
-    windowHours: 24,
-    limit: 16
+    windowHours: AI_STORY_GROUPING_WINDOW_HOURS,
+    limit: AI_STORY_GROUPING_CANDIDATE_LIMIT
   });
   const target = candidateSet.target || article;
   const candidates = candidateSet.candidates || [];
@@ -311,16 +405,22 @@ async function processAiStoryGroupingForArticle(article = {}) {
     return;
   }
 
-  const matches = result.matches || [];
+  if (result.skipped === 'disabled') {
+    database.markArticlesAiStoryGrouping([articleId], 'deferred', result.model);
+    return;
+  }
+
+  const matches = selectMatchesForConservativeMerge(target, candidates, result.matches || []);
   if (matches.length === 0) {
     database.markArticlesAiStoryGrouping([articleId], 'no_match', result.model);
     return;
   }
 
+  const matchesByArticleId = getMatchesByArticleId(matches);
   const matchedIds = matches.map((match) => match.articleId);
   const matchedCandidates = candidates.filter((candidate) => matchedIds.includes(candidate.id));
   const involvedStoryGroupIds = [...new Set([target, ...matchedCandidates]
-    .map((candidate) => String(candidate?.storyGroupId || '').trim())
+    .map(getStoryGroupId)
     .filter(Boolean))];
   const existingGroupId = involvedStoryGroupIds[0] || '';
   const groupedArticleIds = [...new Set([
@@ -332,8 +432,11 @@ async function processAiStoryGroupingForArticle(article = {}) {
   const affectedUserIds = [target, ...matchedCandidates]
     .map((item) => item?.ownerUserId)
     .filter(Boolean);
+  const matchEvidence = matchedCandidates
+    .map((candidate) => matchesByArticleId.get(candidate.id))
+    .filter(Boolean);
 
-  const updatedCount = database.assignArticlesToStoryGroup(groupedArticleIds, storyGroupId, result.model);
+  const updatedCount = database.assignArticlesToStoryGroup(groupedArticleIds, storyGroupId, result.model, matchEvidence);
   if (updatedCount > 0) {
     websocketService.broadcastFeedRefresh({
       userIds: affectedUserIds.length > 0 ? [...new Set(affectedUserIds)] : [],
@@ -367,19 +470,31 @@ async function processAiStoryGroupingForPendingArticles(articles = []) {
   }
 }
 
-function scheduleAiStoryGroupingForPendingArticles(normalizedArticles = []) {
+function scheduleAiStoryGroupingForPendingArticles(normalizedArticles = [], options = {}) {
   if (!Array.isArray(normalizedArticles) || normalizedArticles.length === 0 || !isAiStoryGroupingAvailable()) {
-    return;
+    return false;
   }
 
-  const pendingArticleIds = database.getArticleIdsPendingAiStoryGrouping(normalizedArticles.map((article) => article.id));
+  const articleIds = normalizedArticles.map((article) => article.id).filter(Boolean);
+  const retryAnchorArticleIds = Array.isArray(options.retryAnchorArticleIds) ? options.retryAnchorArticleIds : articleIds;
+  const retryArticleIds = AI_STORY_GROUPING_RETRY_LIMIT > 0 && typeof database.getArticleIdsForAiStoryGroupingRetry === 'function'
+    ? database.getArticleIdsForAiStoryGroupingRetry(retryAnchorArticleIds, {
+        windowHours: AI_STORY_GROUPING_WINDOW_HOURS,
+        limit: AI_STORY_GROUPING_RETRY_LIMIT
+      })
+    : [];
+  const pendingArticleIds = [...new Set([
+    ...database.getArticleIdsPendingAiStoryGrouping(articleIds),
+    ...retryArticleIds
+  ])];
   if (pendingArticleIds.length === 0) {
-    return;
+    return false;
   }
 
+  const articleById = new Map(normalizedArticles.map((article) => [article.id, article]));
   const pendingArticleIdSet = new Set(pendingArticleIds);
-  const pendingArticles = normalizedArticles.filter((article) => {
-    if (!pendingArticleIdSet.has(article.id) || pendingAiStoryGroupingIds.has(article.id)) {
+  const pendingArticles = [...pendingArticleIdSet].map((articleId) => articleById.get(articleId) || { id: articleId }).filter((article) => {
+    if (!article.id || pendingAiStoryGroupingIds.has(article.id)) {
       return false;
     }
 
@@ -388,12 +503,14 @@ function scheduleAiStoryGroupingForPendingArticles(normalizedArticles = []) {
   });
 
   if (pendingArticles.length === 0) {
-    return;
+    return false;
   }
 
   setTimeout(() => {
     processAiStoryGroupingForPendingArticles(pendingArticles);
   }, 0);
+
+  return true;
 }
 
 function resetPendingAiTopicProcessingIds() {
@@ -416,16 +533,22 @@ function mergeNormalizedArticleTopics(normalizedArticles = []) {
   database.mergeTopicsForArticles(normalizedArticles
     .filter((article) => pendingArticleIdSet.has(article.id))
     .map((article) => ({
-    articleId: article.id,
-    topics: article.topicDetails || article.topics
+      articleId: article.id,
+      topics: article.topicDetails || article.topics
     })));
 }
 
 async function persistNormalizedArticles(normalizedArticles = []) {
   const upsertResult = database.upsertArticles(normalizedArticles);
+  const storyGroupingOptions = { retryAnchorArticleIds: upsertResult.insertedIds || [] };
   mergeNormalizedArticleTopics(normalizedArticles);
-  scheduleAiTopicsForPendingArticles(normalizedArticles);
-  scheduleAiStoryGroupingForPendingArticles(normalizedArticles);
+  const scheduledTopicProcessing = scheduleAiTopicsForPendingArticles(normalizedArticles, {
+    onComplete: () => scheduleAiStoryGroupingForPendingArticles(normalizedArticles, storyGroupingOptions)
+  });
+
+  if (!scheduledTopicProcessing) {
+    scheduleAiStoryGroupingForPendingArticles(normalizedArticles, storyGroupingOptions);
+  }
   return upsertResult;
 }
 
@@ -542,6 +665,7 @@ module.exports = {
   _resetPendingAiTopicProcessingIds: resetPendingAiTopicProcessingIds,
   _resetPendingAiStoryGroupingIds: resetPendingAiStoryGroupingIds,
   _resetSourceFetchFreshness: resetSourceFetchFreshness,
+  _pruneSourceFetchTimestamps: pruneSourceFetchTimestamps,
   _sourceFetchTimestamps: sourceFetchTimestamps,
   buildSourceFetchTasks,
   cloneArticleForSource

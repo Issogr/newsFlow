@@ -1,3 +1,5 @@
+const { parseIntegerEnv } = require('../utils/env');
+
 const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_TIMEOUT_MS = 120000;
 
@@ -17,32 +19,6 @@ async function loadOpenRouterSdk() {
   return openRouterSdkPromise;
 }
 
-function parseBoundedIntegerEnv(name, fallbackValue, options = {}) {
-  const parsed = Number(process.env[name]);
-  const fallback = Number(fallbackValue);
-
-  if (!Number.isFinite(parsed)) {
-    return fallback;
-  }
-
-  const value = Math.floor(parsed);
-  const min = Number.isFinite(options.min) ? options.min : null;
-  const max = Number.isFinite(options.max) ? options.max : null;
-
-  if (options.clamp === true) {
-    return Math.max(min ?? value, Math.min(value, max ?? value));
-  }
-
-  if (min !== null && value < min) {
-    return fallback;
-  }
-  if (max !== null && value > max) {
-    return fallback;
-  }
-
-  return value;
-}
-
 function getOpenRouterConfig({
   enabledEnvName,
   modelEnvName,
@@ -60,7 +36,7 @@ function getOpenRouterConfig({
     enabled: enabledValue !== 'false' && Boolean(apiKey),
     model: String(process.env[modelEnvName] || resolvedDefaultModel).trim() || resolvedDefaultModel,
     baseUrl: String(process.env.OPENROUTER_BASE_URL || DEFAULT_OPENROUTER_BASE_URL).trim().replace(/\/+$/u, ''),
-    timeoutMs: parseBoundedIntegerEnv(timeoutEnvName, defaultTimeoutMs, { min: 1000, max: 120000, clamp: clampTimeout })
+    timeoutMs: parseIntegerEnv(timeoutEnvName, defaultTimeoutMs, { min: 1000, max: 120000, clamp: clampTimeout, strict: true })
   };
 }
 
@@ -130,11 +106,26 @@ function parseJsonContent(content) {
   }
 }
 
+async function sendChatCompletion(openRouter, chatRequest, options = {}) {
+  const completionPromise = openRouter.chat.send({ chatRequest }, {
+    retries: { strategy: 'none' },
+    timeoutMs: options.timeoutMs
+  });
+
+  // The SDK's APIPromise owns a secondary unwrapped promise; attach a catch so
+  // expected request failures do not also surface as global unhandled rejections.
+  if (completionPromise && typeof completionPromise.catch === 'function') {
+    completionPromise.catch(() => {});
+  }
+
+  return completionPromise;
+}
+
 module.exports = {
   createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
-  parseBoundedIntegerEnv,
   parseJsonContent,
+  sendChatCompletion,
   setOpenRouterSdkLoader
 };

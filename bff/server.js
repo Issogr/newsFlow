@@ -7,18 +7,12 @@ const helmet = require('helmet');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const { parseIntegerEnv } = require('./lib/env');
 const {
-  BACKEND_SESSION_COOKIE_NAME,
-  BFF_SESSION_COOKIE_NAME,
   SESSION_SCHEMA_VERSION,
   clearBffSessionCookie,
   encryptBackendSessionCookie,
   extractBackendSessionCookie,
   getBffSessionSecret,
-  getInternalProxyToken,
-  isValidSessionPayload,
-  parseCookieHeader,
-  serializeCookie,
-  unsignSessionId
+  getInternalProxyToken
 } = require('./lib/sessionPolicy');
 const {
   buildSessionMiddleware,
@@ -29,17 +23,31 @@ const {
   loadUpgradeSession,
   normalizeSessionState,
   persistSessionUserId,
+  renewSessionExpiryIfNeeded,
   upsertStoredSessionUser
 } = require('./lib/sessionStore');
 const {
   applySanitizedForwardedHeaders,
+  buildTrustedForwardedHeaders,
+  clearForwardedHeaders,
   copyBackendResponseHeaders,
-  extractDeletedAdminUserId,
-  serveSpaIndex
+  extractDeletedAdminUserId
 } = require('./lib/proxyHelpers');
 
 const DEFAULT_FRONTEND_DIST_DIR = path.join(__dirname, 'public');
 const UPSTREAM_TIMEOUT_MS = parseIntegerEnv('BFF_UPSTREAM_TIMEOUT_MS', 30000, { min: 1000 });
+const BACKEND_PROXY_DEFAULTS = {
+  changeOrigin: true,
+  xfwd: false,
+  timeout: UPSTREAM_TIMEOUT_MS,
+  proxyTimeout: UPSTREAM_TIMEOUT_MS,
+};
+const UPSTREAM_ERROR_RESPONSE = {
+  error: {
+    message: 'Unable to reach the application backend.',
+    code: 'BFF_UPSTREAM_ERROR',
+  },
+};
 
 function createApp(options = {}) {
   const backendBaseUrl = String(options.backendBaseUrl || process.env.BACKEND_BASE_URL || 'http://backend:5000').trim().replace(/\/+$/, '');
@@ -58,13 +66,7 @@ function createApp(options = {}) {
   const app = express();
   const jsonParser = express.json({ limit: '1mb' });
 
-  if (process.env.TRUST_PROXY === 'true') {
-    app.set('trust proxy', true);
-  } else if (process.env.TRUST_PROXY === 'false') {
-    app.set('trust proxy', false);
-  } else {
-    app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
-  }
+  app.set('trust proxy', process.env.TRUST_PROXY === 'true');
 
   app.use(helmet({
     contentSecurityPolicy: {
@@ -82,22 +84,10 @@ function createApp(options = {}) {
   }));
 
   function buildInternalHeaders(req) {
-    const getHeader = (name) => (
-      typeof req.get === 'function'
-        ? req.get(name)
-        : req.headers?.[String(name || '').toLowerCase()]
-    );
-    const forwardedFor = String(req.ip || req.socket?.remoteAddress || '').trim();
-    const forwardedProto = req.protocol || (req.socket?.encrypted ? 'https' : 'http');
-    const host = String(getHeader('host') || '').trim();
-
     return {
       'x-newsflow-proxy': internalProxyToken,
       'x-newsflow-service': String(process.env.INTERNAL_SERVICE_NAME || 'bff').trim().toLowerCase() || 'bff',
-      'x-forwarded-for': forwardedFor,
-      'x-forwarded-proto': forwardedProto,
-      'x-forwarded-host': host,
-      host,
+      ...buildTrustedForwardedHeaders(req, { includeEmpty: true }),
     };
   }
 
@@ -109,9 +99,7 @@ function createApp(options = {}) {
 
   function applyBackendSessionProxyHeaders(proxyReq, req) {
     stripClientCredentials(proxyReq);
-    proxyReq.removeHeader('x-forwarded-for');
-    proxyReq.removeHeader('x-forwarded-host');
-    proxyReq.removeHeader('x-forwarded-proto');
+    clearForwardedHeaders(proxyReq);
     Object.entries(buildInternalHeaders(req)).forEach(([name, value]) => {
       proxyReq.setHeader(name, value);
     });
@@ -139,6 +127,24 @@ function createApp(options = {}) {
     });
   }
 
+  async function requestInternalBackend(req, pathName, options = {}) {
+    return backendHttp.request({
+      url: `/internal-api${pathName}`,
+      method: options.method || req.method,
+      ...(Object.prototype.hasOwnProperty.call(options, 'data') ? { data: options.data } : {}),
+      ...(Object.prototype.hasOwnProperty.call(options, 'params') ? { params: options.params } : {}),
+      headers: {
+        ...buildInternalHeaders(req),
+        ...(options.backendSessionCookie ? { Cookie: options.backendSessionCookie } : {}),
+      },
+    });
+  }
+
+  function sendBackendResponse(res, response) {
+    copyBackendResponseHeaders(res, response.headers);
+    res.status(response.status).send(response.data);
+  }
+
   function handleProxyError(error, req, res) {
     if (typeof res?.setHeader !== 'function' || typeof res?.end !== 'function') {
       res?.destroy?.();
@@ -152,39 +158,14 @@ function createApp(options = {}) {
 
     res.statusCode = 502;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify({
-      error: {
-        message: 'Unable to reach the application backend.',
-        code: 'BFF_UPSTREAM_ERROR',
-      },
-    }));
-  }
-
-  async function forwardInternalRequest(req, res, { pathName, method = req.method, payload = undefined, params = req.query, backendSessionCookie = '' }) {
-    const response = await backendHttp.request({
-      url: `/internal-api${pathName}`,
-      method,
-      params,
-      data: payload,
-      headers: {
-        ...buildInternalHeaders(req),
-        ...(backendSessionCookie ? { Cookie: backendSessionCookie } : {}),
-      },
-    });
-
-    copyBackendResponseHeaders(res, response.headers);
-    res.status(response.status).send(response.data);
-    return response;
+    res.end(JSON.stringify(UPSTREAM_ERROR_RESPONSE));
   }
 
   async function handleSessionAuthRequest(req, res, next, pathName) {
     try {
-      const response = await backendHttp.request({
-        url: `/internal-api${pathName}`,
-        method: req.method,
+      const response = await requestInternalBackend(req, pathName, {
         data: req.body || {},
         params: req.query,
-        headers: buildInternalHeaders(req),
       });
 
       const backendSessionCookie = extractBackendSessionCookie(response.headers['set-cookie']);
@@ -210,19 +191,20 @@ function createApp(options = {}) {
         upsertStoredSessionUser(sessionDb, req.sessionID, req.session.userId);
       }
 
-      copyBackendResponseHeaders(res, response.headers);
-      res.status(response.status).send(response.data);
+      sendBackendResponse(res, response);
     } catch (error) {
       next(error);
     }
   }
 
+  function serveSpaIndex(res) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(frontendDistDir, 'index.html'));
+  }
+
   const publicApiProxy = createProxyMiddleware({
     target: `${backendBaseUrl}/api/public`,
-    changeOrigin: false,
-    xfwd: false,
-    timeout: UPSTREAM_TIMEOUT_MS,
-    proxyTimeout: UPSTREAM_TIMEOUT_MS,
+    ...BACKEND_PROXY_DEFAULTS,
     on: {
       proxyReq: (proxyReq, req) => {
         proxyReq.removeHeader('cookie');
@@ -237,10 +219,7 @@ function createApp(options = {}) {
 
   const appApiProxy = createProxyMiddleware({
     target: `${backendBaseUrl}/internal-api`,
-    changeOrigin: false,
-    xfwd: false,
-    timeout: UPSTREAM_TIMEOUT_MS,
-    proxyTimeout: UPSTREAM_TIMEOUT_MS,
+    ...BACKEND_PROXY_DEFAULTS,
     on: {
       proxyReq: (proxyReq, req) => {
         applyBackendSessionProxyHeaders(proxyReq, req);
@@ -265,12 +244,9 @@ function createApp(options = {}) {
 
   const socketProxy = createProxyMiddleware({
     target: backendBaseUrl,
-    changeOrigin: false,
-    xfwd: false,
+    ...BACKEND_PROXY_DEFAULTS,
     ws: true,
     pathRewrite: (proxyPath, req) => req.originalUrl || proxyPath,
-    timeout: UPSTREAM_TIMEOUT_MS,
-    proxyTimeout: UPSTREAM_TIMEOUT_MS,
     on: {
       proxyReq: (proxyReq, req) => {
         applyBackendSessionProxyHeaders(proxyReq, req);
@@ -293,13 +269,20 @@ function createApp(options = {}) {
   });
 
   app.get(['/api/docs', '/api/docs/'], (req, res) => {
-    serveSpaIndex(frontendDistDir, res);
+    serveSpaIndex(res);
   });
 
   app.use(express.static(frontendDistDir, {
     index: false,
-    maxAge: '30d',
-    immutable: true,
+    setHeaders: (res, filePath) => {
+      const normalizedPath = String(filePath || '').split(path.sep).join('/');
+      if (normalizedPath.includes('/assets/')) {
+        res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        return;
+      }
+
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    },
   }));
 
   app.use((req, res, next) => {
@@ -318,37 +301,36 @@ function createApp(options = {}) {
 
     normalizeSessionState(req, res, next, sessionDb);
   });
+  app.use(renewSessionExpiryIfNeeded);
 
-  app.post('/api/auth/register', jsonParser, (req, res, next) => {
-    handleSessionAuthRequest(req, res, next, '/auth/register');
-  });
-
-  app.post('/api/auth/login', jsonParser, (req, res, next) => {
-    handleSessionAuthRequest(req, res, next, '/auth/login');
+  [
+    ['/api/auth/register', '/auth/register'],
+    ['/api/auth/login', '/auth/login'],
+    ['/api/auth/password-setup/complete', '/auth/password-setup/complete']
+  ].forEach(([routePath, backendPath]) => {
+    app.post(routePath, jsonParser, (req, res, next) => {
+      handleSessionAuthRequest(req, res, next, backendPath);
+    });
   });
 
   app.get('/api/auth/password-setup/validate', async (req, res, next) => {
     try {
-      await forwardInternalRequest(req, res, { pathName: '/auth/password-setup/validate' });
+      const response = await requestInternalBackend(req, '/auth/password-setup/validate', {
+        params: req.query,
+      });
+
+      sendBackendResponse(res, response);
     } catch (error) {
       next(error);
     }
   });
 
-  app.post('/api/auth/password-setup/complete', jsonParser, (req, res, next) => {
-    handleSessionAuthRequest(req, res, next, '/auth/password-setup/complete');
-  });
-
   app.get('/api/me', async (req, res, next) => {
     try {
       const backendSessionCookie = getBackendSessionCookieFromRequest(req);
-      const response = await backendHttp.request({
-        url: '/internal-api/me',
+      const response = await requestInternalBackend(req, '/me', {
         method: 'GET',
-        headers: {
-          ...buildInternalHeaders(req),
-          ...(backendSessionCookie ? { Cookie: backendSessionCookie } : {}),
-        },
+        backendSessionCookie,
       });
 
       if (response.status === 401) {
@@ -358,8 +340,7 @@ function createApp(options = {}) {
         await persistSessionUserId(req, response.data?.user?.id || '', sessionDb);
       }
 
-      copyBackendResponseHeaders(res, response.headers);
-      res.status(response.status).send(response.data);
+      sendBackendResponse(res, response);
     } catch (error) {
       next(error);
     }
@@ -371,17 +352,13 @@ function createApp(options = {}) {
 
     try {
       if (backendSessionCookie) {
-        backendResponse = await backendHttp.request({
-          url: '/internal-api/auth/logout',
+        backendResponse = await requestInternalBackend(req, '/auth/logout', {
           method: 'POST',
           data: {},
-          headers: {
-            ...buildInternalHeaders(req),
-            Cookie: backendSessionCookie,
-          },
+          backendSessionCookie,
         });
       }
-    } catch (error) {
+    } catch {
       backendResponse = null;
     }
 
@@ -390,8 +367,7 @@ function createApp(options = {}) {
       clearBffSessionCookie(res);
 
       if (backendResponse?.status && backendResponse.status < 500) {
-        copyBackendResponseHeaders(res, backendResponse.headers);
-        res.status(backendResponse.status).send(backendResponse.data);
+        sendBackendResponse(res, backendResponse);
         return;
       }
 
@@ -405,7 +381,7 @@ function createApp(options = {}) {
   app.use('/socket.io', requireBackendSession, socketProxy);
 
   app.get(/.*/, (req, res) => {
-    serveSpaIndex(frontendDistDir, res);
+    serveSpaIndex(res);
   });
 
   app.use((error, req, res, next) => {
@@ -424,18 +400,12 @@ function createApp(options = {}) {
       return;
     }
 
-    res.status(502).json({
-      error: {
-        message: 'Unable to reach the application backend.',
-        code: 'BFF_UPSTREAM_ERROR',
-      },
-    });
+    res.status(502).json(UPSTREAM_ERROR_RESPONSE);
   });
 
   return {
     app,
     sessionDb,
-    sessionMiddleware,
     sessionSecret: getBffSessionSecret(),
     sessionStore,
     socketProxy,
@@ -443,8 +413,19 @@ function createApp(options = {}) {
 }
 
 function createServer(options = {}) {
-  const { app, sessionSecret, sessionStore, socketProxy } = createApp(options);
+  const { app, sessionDb, sessionSecret, sessionStore, socketProxy } = createApp(options);
   const server = http.createServer(app);
+  let closedResources = false;
+
+  server.on('close', () => {
+    if (closedResources) {
+      return;
+    }
+
+    closedResources = true;
+    sessionStore?.stopCleanupInterval?.();
+    sessionDb?.close?.();
+  });
 
   server.on('upgrade', (req, socket, head) => {
     if (!req.url?.startsWith('/socket.io')) {
@@ -478,18 +459,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  BACKEND_SESSION_COOKIE_NAME,
-  BFF_SESSION_COOKIE_NAME,
-  SESSION_SCHEMA_VERSION,
   createApp,
-  createServer,
-  createSessionStore,
-  destroyStoredSessionsByUserId,
-  encryptBackendSessionCookie,
-  getBffSessionSecret,
-  getInternalProxyToken,
-  isValidSessionPayload,
-  parseCookieHeader,
-  serializeCookie,
-  unsignSessionId,
+  createServer
 };

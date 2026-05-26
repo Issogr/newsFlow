@@ -27,11 +27,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     excludedSubFeedCatalog,
     setSourceForm,
     setEditingSourceForm,
-    setDefaultLanguage,
-    setThemeMode,
-    setShowNewsImages,
-    setReaderPanelPosition,
-    setReaderTextSize,
+    setSetting,
     updateNumericSetting,
     toggleExcludedSource,
     toggleExcludedSubFeed,
@@ -80,11 +76,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               t={t}
               settings={settings}
               settingsLimits={settingsLimits}
-              onDefaultLanguageChange={setDefaultLanguage}
-              onThemeModeChange={setThemeMode}
-              onShowNewsImagesChange={setShowNewsImages}
-              onReaderPanelPositionChange={setReaderPanelPosition}
-              onReaderTextSizeChange={setReaderTextSize}
+              onSettingChange={setSetting}
               onNumericSettingChange={updateNumericSetting}
             />
 

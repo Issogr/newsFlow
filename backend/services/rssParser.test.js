@@ -77,54 +77,49 @@ describe('rssParser article ids', () => {
     expect(axios.get).toHaveBeenCalledTimes(1);
   });
 
-  test('keeps the same id when the guid is stable but pubDate changes', () => {
-    const source = { id: 'ansa' };
-    const firstId = rssParser._buildArticleId(source, {
-      guid: 'article-123',
-      link: 'https://example.com/story',
-      title: 'Stable story',
-      pubDate: '2026-03-11T10:00:00.000Z'
-    });
-    const secondId = rssParser._buildArticleId(source, {
-      guid: 'article-123',
-      link: 'https://example.com/story',
-      title: 'Stable story',
-      pubDate: '2026-03-11T12:00:00.000Z'
-    });
+  test.each([
+    {
+      label: 'guid is stable but pubDate changes',
+      source: { id: 'ansa' },
+      firstItem: { guid: 'article-123', link: 'https://example.com/story', title: 'Stable story', pubDate: '2026-03-11T10:00:00.000Z' },
+      secondItem: { guid: 'article-123', link: 'https://example.com/story', title: 'Stable story', pubDate: '2026-03-11T12:00:00.000Z' }
+    },
+    {
+      label: 'link and title are stable and pubDate is missing',
+      source: { id: 'bbc' },
+      firstItem: { link: 'https://example.com/no-date', title: 'No date story' },
+      secondItem: { link: 'https://example.com/no-date', title: 'No date story' }
+    },
+    {
+      label: 'guid changes but the canonical link stays the same',
+      source: { id: 'ansa' },
+      firstItem: { guid: 'guid-v1', link: 'https://example.com/story?utm_source=rss', title: 'Stable story', pubDate: '2026-03-11T10:00:00.000Z' },
+      secondItem: { guid: 'guid-v2', link: 'https://example.com/story?utm_source=homepage', title: 'Stable story', pubDate: '2026-03-11T12:00:00.000Z' }
+    },
+    {
+      label: 'guid and link are missing but title and date are stable',
+      source: { id: 'custom' },
+      firstItem: { title: 'Fallback story', pubDate: '2026-03-11T10:00:00.000Z' },
+      secondItem: { title: 'Fallback story', pubDate: '2026-03-11T10:00:00.000Z' },
+      differentItem: { title: 'Fallback story', pubDate: '2026-03-11T11:00:00.000Z' }
+    },
+    {
+      label: 'guid and link are missing but title and summary are stable',
+      source: { id: 'custom' },
+      firstItem: { title: 'Fallback story', description: 'A stable description for the same article', pubDate: '2026-03-11T10:00:00.000Z' },
+      secondItem: { title: 'Fallback story', description: 'A stable description for the same article', pubDate: '2026-03-11T11:00:00.000Z' }
+    }
+  ])('keeps stable article ids when $label', ({ source, firstItem, secondItem, differentItem }) => {
+    const firstId = rssParser._buildArticleId(source, firstItem);
+    const secondId = rssParser._buildArticleId(source, secondItem);
 
     expect(firstId).toBe(secondId);
+    if (differentItem) {
+      expect(firstId).not.toBe(rssParser._buildArticleId(source, differentItem));
+    }
   });
 
-  test('keeps the same id when link and title are stable and pubDate is missing', () => {
-    const source = { id: 'bbc' };
-    const firstId = rssParser._buildArticleId(source, {
-      link: 'https://example.com/no-date',
-      title: 'No date story'
-    });
-    const secondId = rssParser._buildArticleId(source, {
-      link: 'https://example.com/no-date',
-      title: 'No date story'
-    });
-
-    expect(firstId).toBe(secondId);
-  });
-
-  test('keeps the same id when guid changes but the canonical link stays the same', () => {
-    const source = { id: 'ansa' };
-    const firstId = rssParser._buildArticleId(source, {
-      guid: 'guid-v1',
-      link: 'https://example.com/story?utm_source=rss',
-      title: 'Stable story',
-      pubDate: '2026-03-11T10:00:00.000Z'
-    });
-    const secondId = rssParser._buildArticleId(source, {
-      guid: 'guid-v2',
-      link: 'https://example.com/story?utm_source=homepage',
-      title: 'Stable story',
-      pubDate: '2026-03-11T12:00:00.000Z'
-    });
-
-    expect(firstId).toBe(secondId);
+  test('canonical link normalization removes tracking parameters before id generation', () => {
     expect(rssParser._normalizeArticleUrl('https://example.com/story?utm_source=rss')).toBe('https://example.com/story');
   });
 
@@ -168,44 +163,9 @@ describe('rssParser article ids', () => {
     expect(rssParser._extractImageFromArticleHtml(html, 'https://www.example.com/article')).toBe('https://www.example.com/media/story.jpg');
   });
 
-  test('falls back to title and published date when guid and link are missing', () => {
-    const source = { id: 'custom' };
-    const firstId = rssParser._buildArticleId(source, {
-      title: 'Fallback story',
-      pubDate: '2026-03-11T10:00:00.000Z'
-    });
-    const secondId = rssParser._buildArticleId(source, {
-      title: 'Fallback story',
-      pubDate: '2026-03-11T10:00:00.000Z'
-    });
-    const thirdId = rssParser._buildArticleId(source, {
-      title: 'Fallback story',
-      pubDate: '2026-03-11T11:00:00.000Z'
-    });
-
-    expect(firstId).toBe(secondId);
-    expect(firstId).not.toBe(thirdId);
-  });
-
   test('normalizes future publication dates to the current day', () => {
     expect(
       rssParser._normalizeDate('2030-04-01T12:45:00.000Z', '2026-03-15T14:30:00.000Z')
     ).toBe('2026-03-15T00:00:00.000Z');
-  });
-
-  test('keeps the same id when guid and link are missing but title and summary are stable', () => {
-    const source = { id: 'custom' };
-    const firstId = rssParser._buildArticleId(source, {
-      title: 'Fallback story',
-      description: 'A stable description for the same article',
-      pubDate: '2026-03-11T10:00:00.000Z'
-    });
-    const secondId = rssParser._buildArticleId(source, {
-      title: 'Fallback story',
-      description: 'A stable description for the same article',
-      pubDate: '2026-03-11T11:00:00.000Z'
-    });
-
-    expect(firstId).toBe(secondId);
   });
 });

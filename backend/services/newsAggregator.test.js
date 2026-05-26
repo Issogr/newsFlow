@@ -13,6 +13,7 @@ jest.mock('./database', () => ({
   upsertArticles: jest.fn(() => ({ insertedIds: [], insertedCount: 0, updatedCount: 0 })),
   getArticleIdsPendingAiTopicProcessing: jest.fn(() => []),
   getArticleIdsPendingAiStoryGrouping: jest.fn(() => []),
+  getArticleIdsForAiStoryGroupingRetry: jest.fn(() => []),
   markArticlesAiTopicProcessing: jest.fn(() => 0),
   markArticlesAiStoryGrouping: jest.fn(() => 0),
   assignArticlesToStoryGroup: jest.fn(() => 0),
@@ -65,6 +66,7 @@ jest.mock('./aiStoryGrouper', () => ({
 }));
 
 jest.mock('./thematicSummaryService', () => ({
+  generateDueSummaries: jest.fn(() => Promise.resolve({ items: [] })),
   startScheduler: jest.fn(),
   stopScheduler: jest.fn()
 }));
@@ -74,6 +76,7 @@ const database = require('./database');
 const websocketService = require('./websocketService');
 const aiTopicClassifier = require('./aiTopicClassifier');
 const aiStoryGrouper = require('./aiStoryGrouper');
+const thematicSummaryService = require('./thematicSummaryService');
 const newsAggregator = require('./newsAggregator');
 const { normalizeIncomingArticles } = require('./newsAggregatorGrouping');
 const {
@@ -84,7 +87,9 @@ const {
   _filterArticlesWithinRetention,
   _resetPendingAiTopicProcessingIds,
   _resetPendingAiStoryGroupingIds,
-  _resetSourceFetchFreshness
+  _resetSourceFetchFreshness,
+  _pruneSourceFetchTimestamps,
+  _sourceFetchTimestamps
 } = require('./newsAggregatorIngestion');
 const { getCanonicalSourceId, getCanonicalSourceName } = require('../utils/sourceCatalog');
 
@@ -124,6 +129,7 @@ describe('newsAggregator service flows', () => {
     database.cleanupRemovedConfiguredSourceData.mockReturnValue({ removedArticles: 0, updatedSettings: 0 });
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue([]);
     database.getArticleIdsPendingAiStoryGrouping.mockReturnValue([]);
+    database.getArticleIdsForAiStoryGroupingRetry.mockReturnValue([]);
     database.getArticles.mockReturnValue([]);
     database.getLatestIngestionRun.mockReturnValue(null);
     database.getSourceStats.mockReturnValue([]);
@@ -136,6 +142,7 @@ describe('newsAggregator service flows', () => {
     aiTopicClassifier.isAiTopicDetectionAvailable.mockReturnValue(true);
     aiStoryGrouper.findSimilarStoriesForArticle.mockResolvedValue({ matches: [], model: 'test-story-model' });
     aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(false);
+    thematicSummaryService.generateDueSummaries.mockResolvedValue({ items: [] });
     aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockResolvedValue({
       topicsByArticleId: new Map(),
       attemptedArticleIds: [],
@@ -168,9 +175,7 @@ describe('newsAggregator service flows', () => {
       topics: ['Science']
     };
 
-    database.getArticles
-      .mockReturnValueOnce([groupedArticleA, groupedArticleB])
-      .mockReturnValueOnce([]);
+    database.getArticles.mockReturnValueOnce([groupedArticleA, groupedArticleB]);
     database.getLatestIngestionRun.mockReturnValue({ id: 7, status: 'completed' });
     database.getSourceStats.mockReturnValue([{ id: ansaSourceId, name: ansaSourceName, count: 1 }]);
     database.getTopicStatsByFilters.mockReturnValue([{ topic: 'Economy', count: 1 }]);
@@ -189,7 +194,8 @@ describe('newsAggregator service flows', () => {
       totalGroups: null,
       nextCursor: {
         beforePubDate: '2026-03-07T10:00:00.000Z',
-        beforeId: 'global-1'
+        beforeId: 'global-1',
+        excludeArticleIds: ['global-1']
       },
       scannedArticles: 2,
       ingestion: { id: 7, status: 'completed' }
@@ -199,6 +205,66 @@ describe('newsAggregator service flows', () => {
       expect.objectContaining({ id: 'example.com', name: 'My Feed', language: 'en' })
     ]));
     expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({ limit: 251, offset: 0 }), expect.objectContaining({ userId: 'user-1' }));
+  });
+
+  test('getNewsFeed carries returned group article ids in cursor exclusions', async () => {
+    const primaryStoryArticle = {
+      id: 'story-new',
+      sourceId: ansaSourceId,
+      source: 'ANSA',
+      title: 'Shared story headline',
+      description: 'Newest article',
+      pubDate: '2026-03-07T10:00:00.000Z',
+      url: 'https://example.com/story-new',
+      topics: ['Economy']
+    };
+    const separateArticle = {
+      id: 'separate-story',
+      sourceId: 'bbc',
+      source: 'BBC',
+      title: 'Separate story headline',
+      description: 'Separate article',
+      pubDate: '2026-03-07T09:00:00.000Z',
+      url: 'https://example.com/separate-story',
+      topics: ['Science']
+    };
+    const secondaryStoryArticle = {
+      id: 'story-old',
+      sourceId: 'reuters',
+      source: 'Reuters',
+      title: 'Shared story headline',
+      description: 'Older grouped article',
+      pubDate: '2026-03-07T08:00:00.000Z',
+      url: 'https://example.com/story-old',
+      topics: ['Economy']
+    };
+
+    database.getArticles.mockReset();
+    database.getArticles.mockReturnValue([]);
+    database.getArticles.mockReturnValueOnce([primaryStoryArticle, separateArticle, secondaryStoryArticle]);
+
+    const firstPage = await newsAggregator.getNewsFeed({ page: 1, pageSize: 1 }, { userId: 'user-1' });
+
+    expect(firstPage.meta.nextCursor).toEqual(expect.objectContaining({
+      beforePubDate: '2026-03-07T10:00:00.000Z',
+      beforeId: 'story-new',
+      excludeArticleIds: ['story-new', 'story-old']
+    }));
+
+    database.getArticles.mockClear();
+    database.getArticles.mockReturnValueOnce([]);
+
+    await newsAggregator.getNewsFeed({
+      page: 1,
+      pageSize: 1,
+      beforePubDate: firstPage.meta.nextCursor.beforePubDate,
+      beforeId: firstPage.meta.nextCursor.beforeId,
+      excludeArticleIds: firstPage.meta.nextCursor.excludeArticleIds
+    }, { userId: 'user-1' });
+
+    expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({
+      excludeArticleIds: ['story-new', 'story-old']
+    }), expect.any(Object));
   });
 
   test('getNewsFeed applies page offsets after story grouping when no cursor is provided', async () => {
@@ -748,6 +814,38 @@ describe('newsAggregator service flows', () => {
     expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'no_topics');
   });
 
+  test('AI story grouping waits until pending topic processing finishes', async () => {
+    rssParser.parseFeed.mockResolvedValue([
+      { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'AI chip rollout', description: 'New processors launch', pubDate: recentIso({ hoursAgo: 1 }), url: 'https://example.com/ai-chip' }
+    ]);
+    database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], insertedCount: 1, updatedCount: 0 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1']);
+    database.getArticleIdsPendingAiStoryGrouping.mockReturnValue(['inserted-1']);
+    database.getAiStoryGroupingCandidateSet.mockReturnValue({ target: { id: 'inserted-1' }, candidates: [] });
+    aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(true);
+    aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockResolvedValue({
+      topicsByArticleId: new Map([
+        ['inserted-1', [{ topic: 'Tecnologia', source: 'ai', confidence: 0.9, evidence: ['AI chip'], reasonCode: 'ai_confident_evidence' }]]
+      ]),
+      attemptedArticleIds: ['inserted-1'],
+      failedArticleIds: [],
+      cappedArticleIds: []
+    });
+
+    await newsAggregator.ingestAllNews({ broadcast: false });
+
+    expect(database.getAiStoryGroupingCandidateSet).not.toHaveBeenCalled();
+
+    await flushBackgroundAiProcessing();
+    await flushBackgroundAiProcessing();
+
+    expect(database.replaceTopicsForArticles).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ articleId: 'inserted-1' })
+    ]));
+    expect(thematicSummaryService.generateDueSummaries).toHaveBeenCalledWith({ broadcast: true });
+    expect(database.getAiStoryGroupingCandidateSet).toHaveBeenCalledWith('inserted-1', expect.any(Object));
+  });
+
   test('marks AI-capped articles as deferred so they do not remain pending forever', async () => {
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1', 'inserted-2']);
     aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockResolvedValue({
@@ -797,8 +895,10 @@ describe('newsAggregator service flows', () => {
     scheduleAiStoryGroupingForPendingArticles([target]);
     await flushBackgroundAiProcessing();
 
-    expect(database.getAiStoryGroupingCandidateSet).toHaveBeenCalledWith('story-target', expect.objectContaining({ windowHours: 24, limit: 16 }));
-    expect(database.assignArticlesToStoryGroup).toHaveBeenCalledWith(['story-target', 'story-candidate'], 'ai-story-story-candidate-story-target', 'test-story-model');
+    expect(database.getAiStoryGroupingCandidateSet).toHaveBeenCalledWith('story-target', expect.objectContaining({ windowHours: 24, limit: 64 }));
+    expect(database.assignArticlesToStoryGroup).toHaveBeenCalledWith(['story-target', 'story-candidate'], 'ai-story-story-candidate-story-target', 'test-story-model', [
+      { articleId: 'story-candidate', confidence: 0.9 }
+    ]);
     expect(websocketService.broadcastFeedRefresh).toHaveBeenCalledWith({ userIds: [], reason: 'stories' });
   });
 
@@ -830,8 +930,8 @@ describe('newsAggregator service flows', () => {
     database.getArticleIdsForStoryGroups.mockReturnValue(['story-candidate-a', 'story-extra-a', 'story-candidate-b', 'story-extra-b']);
     aiStoryGrouper.findSimilarStoriesForArticle.mockResolvedValue({
       matches: [
-        { articleId: 'story-candidate-a', confidence: 0.9 },
-        { articleId: 'story-candidate-b', confidence: 0.88 }
+        { articleId: 'story-candidate-a', confidence: 0.94 },
+        { articleId: 'story-candidate-b', confidence: 0.92 }
       ],
       model: 'test-story-model'
     });
@@ -847,8 +947,88 @@ describe('newsAggregator service flows', () => {
       'story-candidate-b',
       'story-extra-a',
       'story-extra-b'
-    ], 'ai-story-a', 'test-story-model');
+    ], 'ai-story-a', 'test-story-model', [
+      { articleId: 'story-candidate-a', confidence: 0.94 },
+      { articleId: 'story-candidate-b', confidence: 0.92 }
+    ]);
     expect(aiStoryGrouper.buildStoryGroupId).not.toHaveBeenCalled();
+  });
+
+  test('AI story grouping avoids low-confidence bridges between existing groups', async () => {
+    const target = {
+      id: 'story-target',
+      title: 'Summit follow-up connects reports',
+      description: 'The latest report ties together earlier story clusters.',
+      pubDate: recentIso()
+    };
+    const candidateA = {
+      id: 'story-candidate-a',
+      title: 'Earlier summit report',
+      description: 'First cluster member.',
+      storyGroupId: 'ai-story-a',
+      pubDate: recentIso({ minutesAgo: 10 })
+    };
+    const candidateB = {
+      id: 'story-candidate-b',
+      title: 'Second summit report',
+      description: 'Second cluster member.',
+      storyGroupId: 'ai-story-b',
+      pubDate: recentIso({ minutesAgo: 20 })
+    };
+
+    aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(true);
+    database.getArticleIdsPendingAiStoryGrouping.mockReturnValue(['story-target']);
+    database.getAiStoryGroupingCandidateSet.mockReturnValue({ target, candidates: [candidateA, candidateB] });
+    database.getArticleIdsForStoryGroups.mockReturnValue(['story-candidate-a', 'story-extra-a']);
+    aiStoryGrouper.findSimilarStoriesForArticle.mockResolvedValue({
+      matches: [
+        { articleId: 'story-candidate-a', confidence: 0.89 },
+        { articleId: 'story-candidate-b', confidence: 0.88 }
+      ],
+      model: 'test-story-model'
+    });
+    database.assignArticlesToStoryGroup.mockReturnValue(3);
+
+    scheduleAiStoryGroupingForPendingArticles([target]);
+    await flushBackgroundAiProcessing();
+
+    expect(database.getArticleIdsForStoryGroups).toHaveBeenCalledWith(['ai-story-a'], null);
+    expect(database.assignArticlesToStoryGroup).toHaveBeenCalledWith([
+      'story-target',
+      'story-candidate-a',
+      'story-extra-a'
+    ], 'ai-story-a', 'test-story-model', [
+      { articleId: 'story-candidate-a', confidence: 0.89 }
+    ]);
+  });
+
+  test('AI story grouping retries recent no-match articles around new inserts', async () => {
+    aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(true);
+    database.getArticleIdsPendingAiStoryGrouping.mockReturnValue([]);
+    database.getArticleIdsForAiStoryGroupingRetry.mockReturnValue(['retry-story']);
+    database.getAiStoryGroupingCandidateSet.mockReturnValue({ target: { id: 'retry-story' }, candidates: [] });
+
+    scheduleAiStoryGroupingForPendingArticles([{ id: 'new-story' }], { retryAnchorArticleIds: ['new-story'] });
+    await flushBackgroundAiProcessing();
+
+    expect(database.getArticleIdsForAiStoryGroupingRetry).toHaveBeenCalledWith(['new-story'], expect.objectContaining({ windowHours: 24, limit: 12 }));
+    expect(database.getAiStoryGroupingCandidateSet).toHaveBeenCalledWith('retry-story', expect.any(Object));
+    expect(database.markArticlesAiStoryGrouping).toHaveBeenCalledWith(['retry-story'], 'no_candidates');
+  });
+
+  test('AI story grouping marks disabled model responses as deferred', async () => {
+    const target = { id: 'story-target', title: 'Target', description: 'Target story', pubDate: recentIso() };
+    const candidate = { id: 'story-candidate', title: 'Target update', description: 'Target story update', pubDate: recentIso({ minutesAgo: 5 }) };
+
+    aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(true);
+    database.getArticleIdsPendingAiStoryGrouping.mockReturnValue(['story-target']);
+    database.getAiStoryGroupingCandidateSet.mockReturnValue({ target, candidates: [candidate] });
+    aiStoryGrouper.findSimilarStoriesForArticle.mockResolvedValue({ matches: [], model: 'test-story-model', skipped: 'disabled' });
+
+    scheduleAiStoryGroupingForPendingArticles([target]);
+    await flushBackgroundAiProcessing();
+
+    expect(database.markArticlesAiStoryGrouping).toHaveBeenCalledWith(['story-target'], 'deferred', 'test-story-model');
   });
 
   test('marks pending AI articles failed when background classification throws', async () => {
@@ -947,6 +1127,17 @@ describe('newsAggregator service flows', () => {
     await ingestSourceConfigs([{ ...source, id: 'source-b', name: 'Source B' }], { sourceFetchFreshnessMs: 300000 }, runtime);
 
     expect(rssParser.parseFeed).toHaveBeenCalledTimes(1);
+  });
+
+  test('prunes stale source freshness entries', () => {
+    const now = Date.now();
+
+    _sourceFetchTimestamps.set('https://example.com/old.xml', now - (2 * 60 * 60 * 1000));
+    _sourceFetchTimestamps.set('https://example.com/fresh.xml', now);
+
+    expect(_pruneSourceFetchTimestamps(now)).toBe(1);
+    expect(_sourceFetchTimestamps.has('https://example.com/old.xml')).toBe(false);
+    expect(_sourceFetchTimestamps.has('https://example.com/fresh.xml')).toBe(true);
   });
 
   test('normalizes duplicate sibling subfeed articles into one incoming article', () => {
