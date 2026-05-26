@@ -121,6 +121,10 @@ function getGroupImageUrl(group) {
 }
 
 function isAiGroupedStory(group) {
+  if (getGroupItemCount(group) <= 1) {
+    return false;
+  }
+
   return (group?.items || []).some((item) => {
     return item?.storyGroupId && String(item?.aiStoryGroupStatus || '').toLowerCase() === 'matched';
   });

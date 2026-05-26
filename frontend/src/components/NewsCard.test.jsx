@@ -297,6 +297,28 @@ describe('NewsCard', () => {
 
     rerender(
       <NewsCard
+        group={{
+          ...group,
+          items: [
+            {
+              id: 'article-1',
+              sourceId: 'source-a',
+              source: 'Source A',
+              storyGroupId: 'ai-story-1',
+              aiStoryGroupStatus: 'matched'
+            }
+          ]
+        }}
+        locale="en"
+        t={t}
+        onOpenReader={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByLabelText('aiGroupedStory')).not.toBeInTheDocument();
+
+    rerender(
+      <NewsCard
         group={group}
         locale="en"
         t={t}
