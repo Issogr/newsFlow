@@ -5,13 +5,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "lint": "node --check server.js && for file in lib/*.js; do node --check \"$file\"; done",
+    "lint": "eslint .",
     "test": "NODE_OPTIONS=--no-experimental-webstorage jest"
   },
   "dependencies": {
     "axios": "^1.16.1",
     "better-sqlite3": "^12.10.0",
-    "better-sqlite3-session-store": "^0.1.0",
     "cookie": "^1.1.1",
     "cookie-signature": "^1.2.2",
     "express": "^5.2.1",
@@ -21,6 +20,7 @@
   },
   "devDependencies": {
     "@babel/plugin-transform-modules-commonjs": "^7.28.6",
+    "eslint": "^10.4.0",
     "jest": "^30.4.2",
     "supertest": "^7.2.2"
   },

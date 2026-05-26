@@ -968,7 +968,35 @@ describe('API auth and user flows', () => {
         })
       ]
     });
-    expect(newsService.refreshUserSources).toHaveBeenLastCalledWith(expect.any(String), { broadcast: false });
+    expect(newsService.refreshUserSources).toHaveBeenLastCalledWith(expect.any(String), { broadcast: true });
+  });
+
+  test('returns from settings import without waiting for source refresh completion', async () => {
+    rssParser.validateFeedUrl.mockResolvedValue({ title: 'Imported Feed', language: 'it', itemCount: 4 });
+    newsService.refreshUserSources.mockImplementation(() => new Promise(() => {}));
+
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'nonblocking-import-user', password: 'secret123' })
+      .expect(201);
+
+    const importResponse = await request(app)
+      .post('/api/me/settings/import')
+      .set('Cookie', getSessionCookie(registerResponse))
+      .send({
+        settings: { defaultLanguage: 'en' },
+        customSources: [
+          {
+            name: 'Imported Feed',
+            url: 'https://example.com/imported.xml',
+            language: 'it'
+          }
+        ]
+      })
+      .expect(200);
+
+    expect(importResponse.body).toMatchObject({ success: true });
+    expect(newsService.refreshUserSources).toHaveBeenCalledWith(expect.any(String), { broadcast: true });
   });
 
   test('logs out the current session and rejects it afterward', async () => {

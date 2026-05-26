@@ -213,6 +213,46 @@ describe('readerService', () => {
     expect(database.upsertReaderCache).toHaveBeenCalledTimes(1);
   });
 
+  test('rejects new extractions when one user saturates the pending queue', async () => {
+    let resolveFetch;
+    const fetchPromise = new Promise((resolve) => {
+      resolveFetch = resolve;
+    });
+    fetchSafeTextUrl.mockReturnValue(fetchPromise);
+    database.getArticleById.mockImplementation((articleId) => ({
+      ...article,
+      id: articleId,
+      url: `https://example.com/${articleId}`
+    }));
+    Readability.mockImplementation(() => ({
+      parse: () => ({
+        title: 'Readable headline',
+        siteName: 'Readable Site',
+        byline: 'Readable Byline',
+        lang: 'en',
+        excerpt: 'Readable excerpt',
+        textContent: 'First paragraph. Second paragraph.',
+        content: '<h1>Readable headline</h1><p>First paragraph.</p><p>Second paragraph.</p>'
+      })
+    }));
+
+    const pendingRequests = Array.from({ length: 20 }, (_, index) => {
+      return readerService.getReaderArticle(`article-${index}`, { userId: 'user-1' });
+    });
+
+    await expect(readerService.getReaderArticle('article-overflow', { userId: 'user-1' })).rejects.toMatchObject({
+      status: 429,
+      code: 'READER_EXTRACTION_BUSY'
+    });
+    expect(readerService._getReaderExtractionStats().pending).toBe(20);
+
+    resolveFetch({
+      data: '<html><body><article><h1>Readable headline</h1><p>First paragraph.</p><p>Second paragraph.</p></article></body></html>'
+    });
+
+    await expect(Promise.all(pendingRequests)).resolves.toHaveLength(20);
+  });
+
   test('falls back without fetching unsafe article destinations', async () => {
     fetchSafeTextUrl.mockRejectedValue(Object.assign(new Error('blocked'), {
       status: 403,

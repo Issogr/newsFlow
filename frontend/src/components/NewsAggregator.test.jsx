@@ -620,7 +620,7 @@ describe('NewsAggregator', () => {
     expect(await screen.findByText('AI topic headline')).toBeInTheDocument();
     expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
       refresh: false,
-      includeFilters: true
+      includeFilters: false
     }));
   });
 
@@ -874,7 +874,7 @@ describe('NewsAggregator', () => {
       beforePubDate: '',
       beforeId: '',
       refresh: false,
-      includeFilters: true
+      includeFilters: false
     }));
   });
 
@@ -936,7 +936,7 @@ describe('NewsAggregator', () => {
     expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
       beforePubDate: '',
       beforeId: '',
-      includeFilters: true
+      includeFilters: false
     }));
   });
 

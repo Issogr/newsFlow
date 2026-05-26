@@ -24,6 +24,12 @@ const {
 const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24, { min: 0 });
 const RSS_INGESTION_CONCURRENCY = parseIntegerEnv('RSS_INGESTION_CONCURRENCY', 8, { min: 1 });
 const SOURCE_FETCH_FRESHNESS_MS = parseIntegerEnv('SOURCE_FETCH_FRESHNESS_MS', 5 * 60 * 1000, { min: 0 });
+const SOURCE_FETCH_FRESHNESS_MAX_ENTRIES = parseIntegerEnv('SOURCE_FETCH_FRESHNESS_MAX_ENTRIES', 1000, { min: 1 });
+const SOURCE_FETCH_FRESHNESS_RETENTION_MS = parseIntegerEnv(
+  'SOURCE_FETCH_FRESHNESS_RETENTION_MS',
+  Math.max((Number.isFinite(SOURCE_FETCH_FRESHNESS_MS) ? SOURCE_FETCH_FRESHNESS_MS : 0) * 6, 60 * 60 * 1000),
+  { min: 1000 }
+);
 const AI_STORY_GROUPING_CONCURRENCY = parseIntegerEnv('AI_STORY_GROUPING_CONCURRENCY', 1, { min: 1, max: 4 });
 const AI_STORY_GROUPING_WINDOW_HOURS = parseIntegerEnv('AI_STORY_GROUPING_WINDOW_HOURS', 24, { min: 1, max: 72 });
 const AI_STORY_GROUPING_CANDIDATE_LIMIT = parseIntegerEnv('AI_STORY_GROUPING_CANDIDATE_LIMIT', 64, { min: 8, max: 100 });
@@ -110,11 +116,38 @@ function getSourceFetchKey(source = {}) {
   return normalizeSourceFetchUrl(source.url) || source.id || '';
 }
 
+function pruneSourceFetchTimestamps(referenceTime = Date.now()) {
+  if (sourceFetchTimestamps.size === 0) {
+    return 0;
+  }
+
+  let removedCount = 0;
+  sourceFetchTimestamps.forEach((timestamp, fetchKey) => {
+    if (!Number.isFinite(timestamp) || referenceTime - timestamp > SOURCE_FETCH_FRESHNESS_RETENTION_MS) {
+      sourceFetchTimestamps.delete(fetchKey);
+      removedCount += 1;
+    }
+  });
+
+  while (sourceFetchTimestamps.size > SOURCE_FETCH_FRESHNESS_MAX_ENTRIES) {
+    const oldestFetchKey = sourceFetchTimestamps.keys().next().value;
+    if (!oldestFetchKey) {
+      break;
+    }
+
+    sourceFetchTimestamps.delete(oldestFetchKey);
+    removedCount += 1;
+  }
+
+  return removedCount;
+}
+
 function isSourceFetchFresh(source = {}, freshnessMs = SOURCE_FETCH_FRESHNESS_MS, referenceTime = Date.now()) {
   if (!Number.isFinite(freshnessMs) || freshnessMs <= 0) {
     return false;
   }
 
+  pruneSourceFetchTimestamps(referenceTime);
   const fetchKey = getSourceFetchKey(source);
   const lastFetchedAt = fetchKey ? sourceFetchTimestamps.get(fetchKey) : null;
   return Number.isFinite(lastFetchedAt) && referenceTime - lastFetchedAt < freshnessMs;
@@ -123,7 +156,9 @@ function isSourceFetchFresh(source = {}, freshnessMs = SOURCE_FETCH_FRESHNESS_MS
 function markSourceFetched(source = {}, referenceTime = Date.now()) {
   const fetchKey = getSourceFetchKey(source);
   if (fetchKey) {
+    sourceFetchTimestamps.delete(fetchKey);
     sourceFetchTimestamps.set(fetchKey, referenceTime);
+    pruneSourceFetchTimestamps(referenceTime);
   }
 }
 
@@ -630,6 +665,7 @@ module.exports = {
   _resetPendingAiTopicProcessingIds: resetPendingAiTopicProcessingIds,
   _resetPendingAiStoryGroupingIds: resetPendingAiStoryGroupingIds,
   _resetSourceFetchFreshness: resetSourceFetchFreshness,
+  _pruneSourceFetchTimestamps: pruneSourceFetchTimestamps,
   _sourceFetchTimestamps: sourceFetchTimestamps,
   buildSourceFetchTasks,
   cloneArticleForSource

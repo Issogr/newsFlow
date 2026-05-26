@@ -4,7 +4,6 @@ import {
   addUserSource,
   createApiToken,
   deleteUserSource,
-  revokeApiToken,
   updateUserSource,
   updateUserSettings
 } from '../../services/api';

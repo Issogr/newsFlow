@@ -11,17 +11,18 @@ permissions:
 
 jobs:
   validate:
-    name: Validate ${{ matrix.service }}
+    name: Validate ${{ matrix.service.name }} on Node ${{ matrix.node-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - service: backend
+        node-version: ['20', '22']
+        service:
+          - name: backend
             working_directory: backend
-          - service: bff
+          - name: bff
             working_directory: bff
-          - service: frontend
+          - name: frontend
             working_directory: frontend
 
     steps:
@@ -31,29 +32,29 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: ${{ matrix.node-version }}
           cache: npm
-          cache-dependency-path: ${{ matrix.working_directory }}/package-lock.json
+          cache-dependency-path: ${{ matrix.service.working_directory }}/package-lock.json
 
       - name: Install dependencies
-        working-directory: ${{ matrix.working_directory }}
+        working-directory: ${{ matrix.service.working_directory }}
         run: npm ci
 
       - name: Lint
-        working-directory: ${{ matrix.working_directory }}
+        working-directory: ${{ matrix.service.working_directory }}
         run: npm run lint
 
       - name: Build frontend
-        if: matrix.service == 'frontend'
-        working-directory: ${{ matrix.working_directory }}
+        if: matrix.service.name == 'frontend'
+        working-directory: ${{ matrix.service.working_directory }}
         run: npm run build
 
       - name: Test
-        working-directory: ${{ matrix.working_directory }}
+        working-directory: ${{ matrix.service.working_directory }}
         run: npm test
 
       - name: Audit production dependencies
-        working-directory: ${{ matrix.working_directory }}
+        working-directory: ${{ matrix.service.working_directory }}
         run: npm audit --omit=dev
 
   publish:

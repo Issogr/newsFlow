@@ -68,7 +68,7 @@ function createApp(options = {}) {
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", 'ws:', 'wss:'],
         frameSrc: ["'none'"],
         objectSrc: ["'none'"],
       },
@@ -372,7 +372,7 @@ function createApp(options = {}) {
           },
         });
       }
-    } catch (error) {
+    } catch {
       backendResponse = null;
     }
 

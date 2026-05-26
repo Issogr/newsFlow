@@ -462,7 +462,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         beforeId: !isReadLaterView && append ? cursor?.beforeId : '',
         excludeArticleIds: !isReadLaterView && append ? cursor?.excludeArticleIds : [],
         refresh: !isReadLaterView && forceRefresh,
-        includeFilters: !append,
+        includeFilters: !append && !silent,
         signal: request.signal
       });
 

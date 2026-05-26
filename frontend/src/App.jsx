@@ -99,7 +99,7 @@ function App() {
     try {
       const me = await fetchCurrentUser();
       setAuthData(me);
-    } catch (error) {
+    } catch {
       setAuthData(null);
       setAuthError(null);
     } finally {

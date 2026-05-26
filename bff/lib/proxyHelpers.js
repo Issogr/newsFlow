@@ -52,7 +52,7 @@ function extractDeletedAdminUserId(req, statusCode) {
   }
 
   const rawPath = String(req.originalUrl || req.url || '');
-  const match = rawPath.match(/^\/api\/admin\/users\/([^/?#]+)$/);
+  const match = rawPath.match(/^\/api\/admin\/users\/([^/?#]+)\/?(?:[?#].*)?$/);
   return match?.[1] || '';
 }
 

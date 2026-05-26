@@ -300,8 +300,7 @@ describe('bff server', () => {
 
     expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
     expect(response.headers['content-security-policy']).toContain("default-src 'self'");
-    expect(response.headers['content-security-policy']).toContain("connect-src 'self'");
-    expect(response.headers['content-security-policy']).not.toContain('wss:');
+    expect(response.headers['content-security-policy']).toContain("connect-src 'self' ws: wss:");
     expect(response.headers['referrer-policy']).toBe('same-origin');
     expect(response.headers['set-cookie']).toBeUndefined();
   });
@@ -423,6 +422,37 @@ describe('bff server', () => {
       .expect(401);
 
     expect(lastBackendHeaders.cookie).not.toBe('newsflow_session=backend-session-user-1');
+  });
+
+  test('removes deleted user sessions for trailing-slash admin delete URLs', async () => {
+    const { cookie: aliceBffSessionCookie } = await login(app);
+    const { cookie: adminBffSessionCookie } = await login(app, { username: 'admin' });
+
+    await request(app)
+      .delete('/api/admin/users/user-1/')
+      .set('Cookie', adminBffSessionCookie)
+      .expect(200);
+
+    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(1);
+
+    await request(app)
+      .get('/api/me')
+      .set('Cookie', aliceBffSessionCookie)
+      .expect(401);
+  });
+
+  test('repairs the session user index for existing valid sessions', async () => {
+    const { cookie: aliceBffSessionCookie } = await login(app);
+
+    sessionDb.prepare('DELETE FROM session_users').run();
+    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users').get().count).toBe(0);
+
+    await request(app)
+      .get('/api/me')
+      .set('Cookie', aliceBffSessionCookie)
+      .expect(200);
+
+    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users WHERE user_id = ?').get('user-1').count).toBe(1);
   });
 
   test('removes stale session_users rows when expired sessions are cleaned', async () => {

@@ -11,17 +11,18 @@ permissions:
 
 jobs:
   validate:
-    name: Validate ${{ matrix.service }}
+    name: Validate ${{ matrix.service.name }} on Node ${{ matrix.node-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - service: backend
+        node-version: ['20', '22']
+        service:
+          - name: backend
             working_directory: backend
-          - service: bff
+          - name: bff
             working_directory: bff
-          - service: frontend
+          - name: frontend
             working_directory: frontend
 
     steps:
@@ -31,26 +32,30 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: ${{ matrix.node-version }}
           cache: npm
-          cache-dependency-path: ${{ matrix.working_directory }}/package-lock.json
+          cache-dependency-path: ${{ matrix.service.working_directory }}/package-lock.json
 
       - name: Install dependencies
-        working-directory: ${{ matrix.working_directory }}
+        working-directory: ${{ matrix.service.working_directory }}
         run: npm ci
 
       - name: Lint
-        working-directory: ${{ matrix.working_directory }}
+        working-directory: ${{ matrix.service.working_directory }}
         run: npm run lint
 
       - name: Build frontend
-        if: matrix.service == 'frontend'
-        working-directory: ${{ matrix.working_directory }}
+        if: matrix.service.name == 'frontend'
+        working-directory: ${{ matrix.service.working_directory }}
         run: npm run build
 
       - name: Test
-        working-directory: ${{ matrix.working_directory }}
+        working-directory: ${{ matrix.service.working_directory }}
         run: npm test
+
+      - name: Audit production dependencies
+        working-directory: ${{ matrix.service.working_directory }}
+        run: npm audit --omit=dev
 
   docker-smoke:
     name: Docker Smoke ${{ matrix.service }}
@@ -80,6 +85,43 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
           push: false
+          load: true
           tags: newsflow-${{ matrix.service }}:ci
           cache-from: type=gha,scope=ci-${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=ci-${{ matrix.service }}
+
+      - name: Run backend health check
+        if: matrix.service == 'backend'
+        run: |
+          docker run -d --name newsflow-backend-ci -p 5000:5000 \
+            -e INTERNAL_PROXY_TOKEN=ci-internal-token \
+            newsflow-backend:ci
+          for attempt in {1..30}; do
+            if wget -qO- http://127.0.0.1:5000/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs newsflow-backend-ci
+          exit 1
+
+      - name: Run BFF health check
+        if: matrix.service == 'bff'
+        run: |
+          docker run -d --name newsflow-bff-ci -p 8080:80 \
+            -e INTERNAL_PROXY_TOKEN=ci-internal-token \
+            -e BFF_SESSION_SECRET=ci-session-secret \
+            -e BACKEND_BASE_URL=http://127.0.0.1:5000 \
+            newsflow-bff:ci
+          for attempt in {1..30}; do
+            if wget -qO- http://127.0.0.1:8080/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs newsflow-bff-ci
+          exit 1
+
+      - name: Stop smoke container
+        if: always()
+        run: docker rm -f newsflow-${{ matrix.service }}-ci || true

@@ -87,7 +87,9 @@ const {
   _filterArticlesWithinRetention,
   _resetPendingAiTopicProcessingIds,
   _resetPendingAiStoryGroupingIds,
-  _resetSourceFetchFreshness
+  _resetSourceFetchFreshness,
+  _pruneSourceFetchTimestamps,
+  _sourceFetchTimestamps
 } = require('./newsAggregatorIngestion');
 const { getCanonicalSourceId, getCanonicalSourceName } = require('../utils/sourceCatalog');
 
@@ -1125,6 +1127,17 @@ describe('newsAggregator service flows', () => {
     await ingestSourceConfigs([{ ...source, id: 'source-b', name: 'Source B' }], { sourceFetchFreshnessMs: 300000 }, runtime);
 
     expect(rssParser.parseFeed).toHaveBeenCalledTimes(1);
+  });
+
+  test('prunes stale source freshness entries', () => {
+    const now = Date.now();
+
+    _sourceFetchTimestamps.set('https://example.com/old.xml', now - (2 * 60 * 60 * 1000));
+    _sourceFetchTimestamps.set('https://example.com/fresh.xml', now);
+
+    expect(_pruneSourceFetchTimestamps(now)).toBe(1);
+    expect(_sourceFetchTimestamps.has('https://example.com/old.xml')).toBe(false);
+    expect(_sourceFetchTimestamps.has('https://example.com/fresh.xml')).toBe(true);
   });
 
   test('normalizes duplicate sibling subfeed articles into one incoming article', () => {

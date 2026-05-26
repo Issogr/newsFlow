@@ -27,13 +27,17 @@ const logger = require('../utils/logger');
 const router = express.Router();
 
 function refreshUserSourceInBackground(userId, sourceId) {
+  refreshUserSourcesInBackground(userId, { sourceIds: [sourceId], broadcast: true }, `custom source ${sourceId}`);
+}
+
+function refreshUserSourcesInBackground(userId, options = {}, label = 'user sources') {
   try {
-    Promise.resolve(newsService.refreshUserSources(userId, { sourceIds: [sourceId], broadcast: true }))
+    Promise.resolve(newsService.refreshUserSources(userId, options))
       .catch((error) => {
-        logger.warn(`Custom source refresh failed for ${sourceId}: ${error.message}`);
+        logger.warn(`Background refresh failed for ${label}: ${error.message}`);
       });
   } catch (error) {
-    logger.warn(`Custom source refresh failed for ${sourceId}: ${error.message}`);
+    logger.warn(`Background refresh failed for ${label}: ${error.message}`);
   }
 }
 
@@ -79,6 +83,22 @@ const passwordSetupRateLimit = rateLimit({
   message: {
     error: {
       message: 'Too many password setup attempts. Please try again later.',
+      code: 'RATE_LIMIT_EXCEEDED',
+    },
+  },
+});
+
+const readerRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    return req.user?.id ? `user:${req.user.id}` : ipKeyGenerator(req.ip);
+  },
+  message: {
+    error: {
+      message: 'Too many reader requests. Please try again shortly.',
       code: 'RATE_LIMIT_EXCEEDED',
     },
   },
@@ -384,7 +404,7 @@ router.get('/me/settings/export', requireAuthenticatedUser, asyncHandler(async (
 
 router.post('/me/settings/import', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   const result = await userService.importUserSettings(req.user.id, req.body || {});
-  await newsService.refreshUserSources(req.user.id, { broadcast: false });
+  refreshUserSourcesInBackground(req.user.id, { broadcast: true }, `imported sources for user ${req.user.id}`);
   res.json({ success: true, ...result });
 }));
 
@@ -492,6 +512,7 @@ router.post('/me/read-later/remove', requireAuthenticatedUser, asyncHandler(asyn
 
 router.get('/articles/:articleId/reader', [
   requireAuthenticatedUser,
+  readerRateLimit,
   ...validateAndSanitizeParam('articleId', 'ID articolo non valido')
 ], asyncHandler(async (req, res) => {
   const { articleId } = req.params;
