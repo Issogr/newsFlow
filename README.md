@@ -55,9 +55,9 @@ Open `http://localhost`.
 
 Runtime requirements:
 
-- Backend: Node.js `^20.19.0 || >=22.13.0`
-- BFF: Node.js `^20.19.0 || >=22.13.0`
-- Frontend: Node.js `^20.19.0 || >=22.12.0`
+- Backend: Node.js `^24.0.0`
+- BFF: Node.js `^24.0.0`
+- Frontend: Node.js `^24.0.0`
 
 ## Local Development
 
@@ -82,6 +82,7 @@ Notes:
 - The frontend talks to the BFF on `/api/*` in development.
 - The backend uses `backend/data/news.db` by default.
 - The BFF uses `bff/data/sessions.sqlite` by default.
+- After switching Node versions, rerun `npm install` or `npm rebuild` in `backend/` and `bff/` so `better-sqlite3` native bindings match the active Node runtime.
 
 ## Container Images
 

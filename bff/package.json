@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "lint": "eslint .",
-    "test": "NODE_OPTIONS=--no-experimental-webstorage jest"
+    "test": "node ../scripts/run-jest.js"
   },
   "dependencies": {
     "axios": "^1.16.1",
@@ -25,7 +25,7 @@
     "supertest": "^7.2.2"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.13.0"
+    "node": "^24.0.0"
   },
   "jest": {
     "testEnvironment": "node",
