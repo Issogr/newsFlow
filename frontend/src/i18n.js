@@ -624,10 +624,6 @@ export function createTranslator(locale) {
   };
 }
 
-export function getDateLocale(locale) {
-  return locale === 'it' ? 'it-IT' : 'en-US';
-}
-
 const topicTranslations = {
   politica: { en: 'Politics', it: 'Politica' },
   politics: { en: 'Politics', it: 'Politica' },

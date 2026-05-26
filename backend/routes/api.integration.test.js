@@ -1,18 +1,8 @@
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 const request = require('supertest');
 const { getCanonicalSourceId } = require('../utils/sourceCatalog');
+const { cleanupTempNewsDb, setupTempNewsDb } = require('../test-utils/tempNewsDb');
 
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
-
-function createTempDbPath() {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'news-api-test-'));
-  return {
-    tempDir,
-    dbPath: path.join(tempDir, 'news.db')
-  };
-}
 
 function buildApiTestApp() {
   const express = require('express');
@@ -38,7 +28,6 @@ function getSessionCookie(response) {
 
 describe('API auth and user flows', () => {
   let tempDir;
-  let dbPath;
   let app;
   let database;
   let newsService;
@@ -48,8 +37,7 @@ describe('API auth and user flows', () => {
 
   beforeEach(() => {
     jest.resetModules();
-    ({ tempDir, dbPath } = createTempDbPath());
-    process.env.NEWS_DB_PATH = dbPath;
+    ({ tempDir } = setupTempNewsDb('news-api-test-'));
 
     jest.doMock('../services/newsAggregator', () => ({
       ingestAllNews: jest.fn().mockResolvedValue({ success: true }),
@@ -84,12 +72,7 @@ describe('API auth and user flows', () => {
   });
 
   afterEach(() => {
-    if (database?.closeDb) {
-      database.closeDb();
-    }
-
-    delete process.env.NEWS_DB_PATH;
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    cleanupTempNewsDb({ tempDir }, database);
     jest.clearAllMocks();
   });
 

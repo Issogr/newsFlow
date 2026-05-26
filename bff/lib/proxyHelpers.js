@@ -4,19 +4,38 @@ function clearForwardedHeaders(proxyReq) {
   proxyReq.removeHeader('x-forwarded-proto');
 }
 
+function getRequestHeader(req, name) {
+  return typeof req.get === 'function'
+    ? req.get(name)
+    : req.headers?.[String(name || '').toLowerCase()];
+}
+
+function buildTrustedForwardedHeaders(req, options = {}) {
+  const forwardedFor = String(req.ip || req.socket?.remoteAddress || '').trim();
+  const forwardedProto = req.protocol || (req.socket?.encrypted ? 'https' : 'http');
+  const forwardedHost = String(getRequestHeader(req, 'host') || '').trim();
+  const headers = {};
+
+  if (forwardedFor || options.includeEmpty) {
+    headers['x-forwarded-for'] = forwardedFor;
+  }
+
+  if (forwardedHost || options.includeEmpty) {
+    headers['x-forwarded-host'] = forwardedHost;
+  }
+
+  if (forwardedProto || options.includeEmpty) {
+    headers['x-forwarded-proto'] = forwardedProto;
+  }
+
+  return headers;
+}
+
 function applySanitizedForwardedHeaders(proxyReq, req) {
   clearForwardedHeaders(proxyReq);
-
-  const clientIp = req.ip || req.socket?.remoteAddress;
-  if (clientIp) {
-    proxyReq.setHeader('X-Forwarded-For', clientIp);
-  }
-
-  if (req.headers.host) {
-    proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
-  }
-
-  proxyReq.setHeader('X-Forwarded-Proto', req.protocol || (req.socket?.encrypted ? 'https' : 'http'));
+  Object.entries(buildTrustedForwardedHeaders(req)).forEach(([name, value]) => {
+    proxyReq.setHeader(name, value);
+  });
 }
 
 function copyBackendResponseHeaders(res, headers = {}) {
@@ -58,6 +77,7 @@ function extractDeletedAdminUserId(req, statusCode) {
 
 module.exports = {
   applySanitizedForwardedHeaders,
+  buildTrustedForwardedHeaders,
   clearForwardedHeaders,
   copyBackendResponseHeaders,
   extractDeletedAdminUserId

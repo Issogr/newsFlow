@@ -106,10 +106,26 @@ function parseJsonContent(content) {
   }
 }
 
+async function sendChatCompletion(openRouter, chatRequest, options = {}) {
+  const completionPromise = openRouter.chat.send({ chatRequest }, {
+    retries: { strategy: 'none' },
+    timeoutMs: options.timeoutMs
+  });
+
+  // The SDK's APIPromise owns a secondary unwrapped promise; attach a catch so
+  // expected request failures do not also surface as global unhandled rejections.
+  if (completionPromise && typeof completionPromise.catch === 'function') {
+    completionPromise.catch(() => {});
+  }
+
+  return completionPromise;
+}
+
 module.exports = {
   createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
+  sendChatCompletion,
   setOpenRouterSdkLoader
 };

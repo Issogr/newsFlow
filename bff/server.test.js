@@ -254,14 +254,9 @@ describe('bff server', () => {
   });
 
   afterEach(async () => {
-    await new Promise((resolve) => {
-      backendServer.close(resolve);
-    });
-
-    sessionStore?.stopCleanupInterval?.();
-    sessionDb?.close?.();
+    await close(backendServer);
+    cleanupCreatedApp({ sessionStore, sessionDb }, sessionDir);
     fs.rmSync(frontendDistDir, { recursive: true, force: true });
-    fs.rmSync(sessionDir, { recursive: true, force: true });
     delete process.env.BFF_SESSION_SECRET;
     delete process.env.INTERNAL_PROXY_TOKEN;
     delete process.env.INTERNAL_SERVICE_NAME;
@@ -403,14 +398,17 @@ describe('bff server', () => {
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-admin-id');
   });
 
-  test('removes persisted BFF sessions for a deleted user after an admin delete', async () => {
+  test.each([
+    '/api/admin/users/user-1',
+    '/api/admin/users/user-1/'
+  ])('removes persisted BFF sessions for a deleted user after admin delete %s', async (deletePath) => {
     const { cookie: aliceBffSessionCookie } = await login(app);
     const { cookie: adminBffSessionCookie } = await login(app, { username: 'admin' });
 
     expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(2);
 
     await request(app)
-      .delete('/api/admin/users/user-1')
+      .delete(deletePath)
       .set('Cookie', adminBffSessionCookie)
       .expect(200);
 
@@ -422,23 +420,6 @@ describe('bff server', () => {
       .expect(401);
 
     expect(lastBackendHeaders.cookie).not.toBe('newsflow_session=backend-session-user-1');
-  });
-
-  test('removes deleted user sessions for trailing-slash admin delete URLs', async () => {
-    const { cookie: aliceBffSessionCookie } = await login(app);
-    const { cookie: adminBffSessionCookie } = await login(app, { username: 'admin' });
-
-    await request(app)
-      .delete('/api/admin/users/user-1/')
-      .set('Cookie', adminBffSessionCookie)
-      .expect(200);
-
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(1);
-
-    await request(app)
-      .get('/api/me')
-      .set('Cookie', aliceBffSessionCookie)
-      .expect(401);
   });
 
   test('repairs the session user index for existing valid sessions', async () => {
@@ -627,6 +608,21 @@ describe('bff server', () => {
       message: 'Unable to reach the application backend.',
       code: 'BFF_UPSTREAM_ERROR',
     });
+  });
+
+});
+
+describe('session policy helpers', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalSessionSecret = process.env.BFF_SESSION_SECRET;
+
+  beforeEach(() => {
+    process.env.BFF_SESSION_SECRET = 'test-bff-secret';
+  });
+
+  afterEach(() => {
+    restoreEnvValue('NODE_ENV', originalNodeEnv);
+    restoreEnvValue('BFF_SESSION_SECRET', originalSessionSecret);
   });
 
   test('requires a non-default BFF session secret in production', () => {

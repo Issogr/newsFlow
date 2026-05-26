@@ -14,7 +14,6 @@ module.exports = [
       sourceType: 'commonjs',
       globals: {
         Buffer: 'readonly',
-        URL: 'readonly',
         __dirname: 'readonly',
         afterAll: 'readonly',
         afterEach: 'readonly',
@@ -23,7 +22,6 @@ module.exports = [
         clearInterval: 'readonly',
         describe: 'readonly',
         expect: 'readonly',
-        jest: 'readonly',
         module: 'readonly',
         process: 'readonly',
         require: 'readonly',

@@ -16,10 +16,8 @@ vi.mock('./services/api', () => ({
   AUTH_EXPIRED_EVENT: 'newsflow:auth-expired',
   completePasswordSetup: vi.fn(),
   fetchCurrentUser: vi.fn(),
-  fetchAdminUsers: vi.fn(),
   loginUser: vi.fn(),
   logoutUser: vi.fn(),
-  createAdminPasswordSetupLink: vi.fn(),
   registerUser: vi.fn(),
   updateUserSettings: vi.fn(),
   validatePasswordSetupToken: vi.fn()

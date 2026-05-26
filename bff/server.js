@@ -28,6 +28,7 @@ const {
 } = require('./lib/sessionStore');
 const {
   applySanitizedForwardedHeaders,
+  buildTrustedForwardedHeaders,
   clearForwardedHeaders,
   copyBackendResponseHeaders,
   extractDeletedAdminUserId
@@ -35,6 +36,12 @@ const {
 
 const DEFAULT_FRONTEND_DIST_DIR = path.join(__dirname, 'public');
 const UPSTREAM_TIMEOUT_MS = parseIntegerEnv('BFF_UPSTREAM_TIMEOUT_MS', 30000, { min: 1000 });
+const BACKEND_PROXY_DEFAULTS = {
+  changeOrigin: true,
+  xfwd: false,
+  timeout: UPSTREAM_TIMEOUT_MS,
+  proxyTimeout: UPSTREAM_TIMEOUT_MS,
+};
 const UPSTREAM_ERROR_RESPONSE = {
   error: {
     message: 'Unable to reach the application backend.',
@@ -77,21 +84,10 @@ function createApp(options = {}) {
   }));
 
   function buildInternalHeaders(req) {
-    const getHeader = (name) => (
-      typeof req.get === 'function'
-        ? req.get(name)
-        : req.headers?.[String(name || '').toLowerCase()]
-    );
-    const forwardedFor = String(req.ip || req.socket?.remoteAddress || '').trim();
-    const forwardedProto = req.protocol || (req.socket?.encrypted ? 'https' : 'http');
-    const forwardedHost = String(getHeader('host') || '').trim();
-
     return {
       'x-newsflow-proxy': internalProxyToken,
       'x-newsflow-service': String(process.env.INTERNAL_SERVICE_NAME || 'bff').trim().toLowerCase() || 'bff',
-      'x-forwarded-for': forwardedFor,
-      'x-forwarded-proto': forwardedProto,
-      'x-forwarded-host': forwardedHost,
+      ...buildTrustedForwardedHeaders(req, { includeEmpty: true }),
     };
   }
 
@@ -131,6 +127,24 @@ function createApp(options = {}) {
     });
   }
 
+  async function requestInternalBackend(req, pathName, options = {}) {
+    return backendHttp.request({
+      url: `/internal-api${pathName}`,
+      method: options.method || req.method,
+      ...(Object.prototype.hasOwnProperty.call(options, 'data') ? { data: options.data } : {}),
+      ...(Object.prototype.hasOwnProperty.call(options, 'params') ? { params: options.params } : {}),
+      headers: {
+        ...buildInternalHeaders(req),
+        ...(options.backendSessionCookie ? { Cookie: options.backendSessionCookie } : {}),
+      },
+    });
+  }
+
+  function sendBackendResponse(res, response) {
+    copyBackendResponseHeaders(res, response.headers);
+    res.status(response.status).send(response.data);
+  }
+
   function handleProxyError(error, req, res) {
     if (typeof res?.setHeader !== 'function' || typeof res?.end !== 'function') {
       res?.destroy?.();
@@ -149,12 +163,9 @@ function createApp(options = {}) {
 
   async function handleSessionAuthRequest(req, res, next, pathName) {
     try {
-      const response = await backendHttp.request({
-        url: `/internal-api${pathName}`,
-        method: req.method,
+      const response = await requestInternalBackend(req, pathName, {
         data: req.body || {},
         params: req.query,
-        headers: buildInternalHeaders(req),
       });
 
       const backendSessionCookie = extractBackendSessionCookie(response.headers['set-cookie']);
@@ -180,8 +191,7 @@ function createApp(options = {}) {
         upsertStoredSessionUser(sessionDb, req.sessionID, req.session.userId);
       }
 
-      copyBackendResponseHeaders(res, response.headers);
-      res.status(response.status).send(response.data);
+      sendBackendResponse(res, response);
     } catch (error) {
       next(error);
     }
@@ -194,10 +204,7 @@ function createApp(options = {}) {
 
   const publicApiProxy = createProxyMiddleware({
     target: `${backendBaseUrl}/api/public`,
-    changeOrigin: true,
-    xfwd: false,
-    timeout: UPSTREAM_TIMEOUT_MS,
-    proxyTimeout: UPSTREAM_TIMEOUT_MS,
+    ...BACKEND_PROXY_DEFAULTS,
     on: {
       proxyReq: (proxyReq, req) => {
         proxyReq.removeHeader('cookie');
@@ -212,10 +219,7 @@ function createApp(options = {}) {
 
   const appApiProxy = createProxyMiddleware({
     target: `${backendBaseUrl}/internal-api`,
-    changeOrigin: true,
-    xfwd: false,
-    timeout: UPSTREAM_TIMEOUT_MS,
-    proxyTimeout: UPSTREAM_TIMEOUT_MS,
+    ...BACKEND_PROXY_DEFAULTS,
     on: {
       proxyReq: (proxyReq, req) => {
         applyBackendSessionProxyHeaders(proxyReq, req);
@@ -240,12 +244,9 @@ function createApp(options = {}) {
 
   const socketProxy = createProxyMiddleware({
     target: backendBaseUrl,
-    changeOrigin: true,
-    xfwd: false,
+    ...BACKEND_PROXY_DEFAULTS,
     ws: true,
     pathRewrite: (proxyPath, req) => req.originalUrl || proxyPath,
-    timeout: UPSTREAM_TIMEOUT_MS,
-    proxyTimeout: UPSTREAM_TIMEOUT_MS,
     on: {
       proxyReq: (proxyReq, req) => {
         applyBackendSessionProxyHeaders(proxyReq, req);
@@ -302,44 +303,34 @@ function createApp(options = {}) {
   });
   app.use(renewSessionExpiryIfNeeded);
 
-  app.post('/api/auth/register', jsonParser, (req, res, next) => {
-    handleSessionAuthRequest(req, res, next, '/auth/register');
-  });
-
-  app.post('/api/auth/login', jsonParser, (req, res, next) => {
-    handleSessionAuthRequest(req, res, next, '/auth/login');
+  [
+    ['/api/auth/register', '/auth/register'],
+    ['/api/auth/login', '/auth/login'],
+    ['/api/auth/password-setup/complete', '/auth/password-setup/complete']
+  ].forEach(([routePath, backendPath]) => {
+    app.post(routePath, jsonParser, (req, res, next) => {
+      handleSessionAuthRequest(req, res, next, backendPath);
+    });
   });
 
   app.get('/api/auth/password-setup/validate', async (req, res, next) => {
     try {
-      const response = await backendHttp.request({
-        url: '/internal-api/auth/password-setup/validate',
-        method: req.method,
+      const response = await requestInternalBackend(req, '/auth/password-setup/validate', {
         params: req.query,
-        headers: buildInternalHeaders(req),
       });
 
-      copyBackendResponseHeaders(res, response.headers);
-      res.status(response.status).send(response.data);
+      sendBackendResponse(res, response);
     } catch (error) {
       next(error);
     }
   });
 
-  app.post('/api/auth/password-setup/complete', jsonParser, (req, res, next) => {
-    handleSessionAuthRequest(req, res, next, '/auth/password-setup/complete');
-  });
-
   app.get('/api/me', async (req, res, next) => {
     try {
       const backendSessionCookie = getBackendSessionCookieFromRequest(req);
-      const response = await backendHttp.request({
-        url: '/internal-api/me',
+      const response = await requestInternalBackend(req, '/me', {
         method: 'GET',
-        headers: {
-          ...buildInternalHeaders(req),
-          ...(backendSessionCookie ? { Cookie: backendSessionCookie } : {}),
-        },
+        backendSessionCookie,
       });
 
       if (response.status === 401) {
@@ -349,8 +340,7 @@ function createApp(options = {}) {
         await persistSessionUserId(req, response.data?.user?.id || '', sessionDb);
       }
 
-      copyBackendResponseHeaders(res, response.headers);
-      res.status(response.status).send(response.data);
+      sendBackendResponse(res, response);
     } catch (error) {
       next(error);
     }
@@ -362,14 +352,10 @@ function createApp(options = {}) {
 
     try {
       if (backendSessionCookie) {
-        backendResponse = await backendHttp.request({
-          url: '/internal-api/auth/logout',
+        backendResponse = await requestInternalBackend(req, '/auth/logout', {
           method: 'POST',
           data: {},
-          headers: {
-            ...buildInternalHeaders(req),
-            Cookie: backendSessionCookie,
-          },
+          backendSessionCookie,
         });
       }
     } catch {
@@ -381,8 +367,7 @@ function createApp(options = {}) {
       clearBffSessionCookie(res);
 
       if (backendResponse?.status && backendResponse.status < 500) {
-        copyBackendResponseHeaders(res, backendResponse.headers);
-        res.status(backendResponse.status).send(backendResponse.data);
+        sendBackendResponse(res, backendResponse);
         return;
       }
 
@@ -428,8 +413,19 @@ function createApp(options = {}) {
 }
 
 function createServer(options = {}) {
-  const { app, sessionSecret, sessionStore, socketProxy } = createApp(options);
+  const { app, sessionDb, sessionSecret, sessionStore, socketProxy } = createApp(options);
   const server = http.createServer(app);
+  let closedResources = false;
+
+  server.on('close', () => {
+    if (closedResources) {
+      return;
+    }
+
+    closedResources = true;
+    sessionStore?.stopCleanupInterval?.();
+    sessionDb?.close?.();
+  });
 
   server.on('upgrade', (req, socket, head) => {
     if (!req.url?.startsWith('/socket.io')) {

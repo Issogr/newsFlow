@@ -8,9 +8,9 @@ import {
 } from 'lucide-react';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import useFilterSurfaceState from '../hooks/useFilterSurfaceState';
-import { FilterBubble, FilterSearchInput } from './FilterSurfaceControls';
-import { SourceFilterList, TopicFilterList } from './FilterOptionLists';
+import { FilterSearchInput } from './FilterSurfaceControls';
 import TopNavActionButton from './TopNavActionButton';
+import FilterBubbles from './FilterBubbles';
 
 const TOP_BUBBLE_MAX_HEIGHT = 'min(55vh, 28rem)';
 
@@ -51,37 +51,22 @@ const DesktopTopNavFilters = ({
   const topicCount = activeFilters.topics.length;
   const timeCount = showRecentOnly ? 1 : 0;
   const searchCount = search ? 1 : 0;
+  const bubbleClassName = `absolute right-0 ${compact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]'} z-50 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md`;
 
   return (
     <div ref={surfaceRef} className="relative hidden md:block">
-      <FilterBubble
-        open={openBubble === 'sources'}
+      <FilterBubbles
+        activeFilters={activeFilters}
+        availableTopics={availableTopics}
+        bubbleClassName={bubbleClassName}
         closedClassName="-translate-y-2"
+        emptyLabel={t('noNewsText')}
+        locale={locale}
         maxHeight={TOP_BUBBLE_MAX_HEIGHT}
-        className={`absolute right-0 ${compact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]'} z-50 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md`}
-      >
-        <SourceFilterList
-          sources={visibleSources}
-          activeSourceIds={activeFilters.sourceIds}
-          emptyLabel={t('noNewsText')}
-          onToggleSource={(sourceId) => onToggleFilter('sourceIds', sourceId)}
-        />
-      </FilterBubble>
-
-      <FilterBubble
-        open={openBubble === 'topics'}
-        closedClassName="-translate-y-2"
-        maxHeight={TOP_BUBBLE_MAX_HEIGHT}
-        className={`absolute right-0 ${compact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]'} z-50 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md`}
-      >
-        <TopicFilterList
-          topics={availableTopics}
-          activeTopics={activeFilters.topics}
-          emptyLabel={t('noNewsText')}
-          locale={locale}
-          onToggleTopic={(topic) => onToggleFilter('topics', topic)}
-        />
-      </FilterBubble>
+        onToggleFilter={onToggleFilter}
+        openBubble={openBubble}
+        visibleSources={visibleSources}
+      />
 
       {searchMode ? (
         <div className="flex items-center gap-1.5 transition-all duration-200 ease-out">

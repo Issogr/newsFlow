@@ -54,13 +54,11 @@ function App() {
     modalOpen: false
   });
 
-  const locale = useMemo(() => {
-    return resolvePreferredLocale(authData?.settings?.defaultLanguage);
-  }, [authData?.settings?.defaultLanguage]);
+  const locale = resolvePreferredLocale(authData?.settings?.defaultLanguage);
   const themeMode = authData?.settings?.themeMode || 'system';
   const t = useMemo(() => createTranslator(locale), [locale]);
   const releaseNotes = useMemo(() => getCurrentChangelog(locale), [locale]);
-  const setupToken = useMemo(() => {
+  const setupToken = (() => {
     const searchToken = new URLSearchParams(locationState.search).get('token') || '';
     if (searchToken) {
       return searchToken;
@@ -68,7 +66,7 @@ function App() {
 
     const hash = String(window.location.hash || '').replace(/^#/, '');
     return new URLSearchParams(hash).get('token') || '';
-  }, [locationState.search]);
+  })();
   const isPasswordSetupRoute = locationState.pathname === '/password/setup' || locationState.pathname === '/admin/setup';
   const isApiDocsRoute = locationState.pathname === '/api/docs' || locationState.pathname === '/api/docs/';
   const isPrivacyPolicyRoute = locationState.pathname === '/privacy-policy';

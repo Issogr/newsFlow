@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import NewsAggregator from './NewsAggregator';
 import { fetchNews, fetchThematicSummaries, isRequestCanceled, updateUserSettings } from '../services/api';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
+import { createDeferred, resolveDeferred } from '../test-utils/deferred';
 
 vi.mock('../services/api', () => ({
   fetchNews: vi.fn(),
@@ -57,24 +58,6 @@ vi.mock('./SettingsPanel', () => ({
 vi.mock('./ErrorMessage', () => ({
   default: ({ error }) => <div>{error?.message || 'error'}</div>
 }));
-
-function createDeferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-
-  return { promise, resolve, reject };
-}
-
-async function resolveDeferred(deferred, value) {
-  await act(async () => {
-    deferred.resolve(value);
-    await deferred.promise;
-  });
-}
 
 async function renderNewsAggregator(overrides = {}) {
   let view;

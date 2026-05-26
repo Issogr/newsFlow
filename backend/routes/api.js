@@ -41,17 +41,21 @@ function refreshUserSourcesInBackground(userId, options = {}, label = 'user sour
   }
 }
 
+function buildRateLimitMessage(message) {
+  return {
+    error: {
+      message,
+      code: 'RATE_LIMIT_EXCEEDED',
+    },
+  };
+}
+
 const feedbackRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: {
-    error: {
-      message: 'Too many feedback submissions. Please try again later.',
-      code: 'RATE_LIMIT_EXCEEDED',
-    },
-  },
+  message: buildRateLimitMessage('Too many feedback submissions. Please try again later.'),
 });
 
 const authRateLimit = rateLimit({
@@ -63,12 +67,7 @@ const authRateLimit = rateLimit({
     const username = String(req.body?.username || '').trim().toLowerCase();
     return `${ipKeyGenerator(req.ip)}:${username}`;
   },
-  message: {
-    error: {
-      message: 'Too many authentication attempts. Please try again later.',
-      code: 'RATE_LIMIT_EXCEEDED',
-    },
-  },
+  message: buildRateLimitMessage('Too many authentication attempts. Please try again later.'),
 });
 
 const passwordSetupRateLimit = rateLimit({
@@ -80,12 +79,7 @@ const passwordSetupRateLimit = rateLimit({
     const token = String(req.body?.token || req.query?.token || '').trim().slice(0, 24);
     return `${ipKeyGenerator(req.ip)}:${token}`;
   },
-  message: {
-    error: {
-      message: 'Too many password setup attempts. Please try again later.',
-      code: 'RATE_LIMIT_EXCEEDED',
-    },
-  },
+  message: buildRateLimitMessage('Too many password setup attempts. Please try again later.'),
 });
 
 const readerRateLimit = rateLimit({
@@ -96,12 +90,7 @@ const readerRateLimit = rateLimit({
   keyGenerator: (req) => {
     return req.user?.id ? `user:${req.user.id}` : ipKeyGenerator(req.ip);
   },
-  message: {
-    error: {
-      message: 'Too many reader requests. Please try again shortly.',
-      code: 'RATE_LIMIT_EXCEEDED',
-    },
-  },
+  message: buildRateLimitMessage('Too many reader requests. Please try again shortly.'),
 });
 
 function getSessionCookieOptions() {

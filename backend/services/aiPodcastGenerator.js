@@ -8,6 +8,7 @@ const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
+  sendChatCompletion,
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
 
@@ -840,40 +841,29 @@ async function generatePodcastScript(window = {}, articles = []) {
   const startedAt = Date.now();
   const openRouter = await createOpenRouterClient(config);
   const tokenBudget = getCompletionTokenBudget(articles.length);
-  const completionPromise = openRouter.chat.send({
-    chatRequest: {
-      model: config.model,
-      messages: [
-        {
-          role: 'system',
-          content: 'You write source-grounded, speakable podcast scripts. Return valid JSON only.'
-        },
-        {
-          role: 'user',
-          content: buildPrompt(window, articles)
-        }
-      ],
-      temperature: 0.35,
-      maxTokens: tokenBudget,
-      maxCompletionTokens: tokenBudget,
-      reasoning: {
-        enabled: false,
-        effort: 'none',
-        maxTokens: 0
+  const response = await sendChatCompletion(openRouter, {
+    model: config.model,
+    messages: [
+      {
+        role: 'system',
+        content: 'You write source-grounded, speakable podcast scripts. Return valid JSON only.'
       },
-      responseFormat: { type: 'json_object' },
-      stream: false
-    }
-  }, {
-    retries: { strategy: 'none' },
-    timeoutMs: config.timeoutMs
-  });
-
-  if (completionPromise && typeof completionPromise.catch === 'function') {
-    completionPromise.catch(() => {});
-  }
-
-  const response = await completionPromise;
+      {
+        role: 'user',
+        content: buildPrompt(window, articles)
+      }
+    ],
+    temperature: 0.35,
+    maxTokens: tokenBudget,
+    maxCompletionTokens: tokenBudget,
+    reasoning: {
+      enabled: false,
+      effort: 'none',
+      maxTokens: 0
+    },
+    responseFormat: { type: 'json_object' },
+    stream: false
+  }, { timeoutMs: config.timeoutMs });
   const payload = parseJsonContent(extractAssistantContent(response));
   const normalized = normalizeGeneratedPodcast(payload);
 

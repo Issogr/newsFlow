@@ -6,8 +6,10 @@ const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
+  sendChatCompletion,
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
+const { truncateText } = require('./aiArticlePayload');
 
 const DEFAULT_OPENROUTER_STORY_GROUPING_MODEL = 'qwen/qwen3.5-9b';
 const DEFAULT_TIMEOUT_MS = 120000;
@@ -25,15 +27,6 @@ function getConfig() {
     timeoutEnvName: 'AI_SUMMARY_REQUEST_TIMEOUT_MS',
     defaultTimeoutMs: DEFAULT_TIMEOUT_MS
   });
-}
-
-function truncateText(value, maxLength) {
-  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, maxLength - 3).trim()}...`;
 }
 
 function tokenizeStoryText(article = {}) {
@@ -165,40 +158,29 @@ async function findSimilarStoriesForArticle(target = {}, candidates = [], option
 
   const startedAt = Date.now();
   const openRouter = await createOpenRouterClient(config);
-  const completionPromise = openRouter.chat.send({
-    chatRequest: {
-      model: config.model,
-      messages: [
-        {
-          role: 'system',
-          content: 'You classify whether news articles describe the same specific story. Return valid JSON only.'
-        },
-        {
-          role: 'user',
-          content: buildPrompt(target, filteredCandidates)
-        }
-      ],
-      temperature: 0,
-      maxTokens: 900,
-      maxCompletionTokens: 900,
-      reasoning: {
-        enabled: false,
-        effort: 'none',
-        maxTokens: 0
+  const response = await sendChatCompletion(openRouter, {
+    model: config.model,
+    messages: [
+      {
+        role: 'system',
+        content: 'You classify whether news articles describe the same specific story. Return valid JSON only.'
       },
-      responseFormat: { type: 'json_object' },
-      stream: false
-    }
-  }, {
-    retries: { strategy: 'none' },
-    timeoutMs: config.timeoutMs
-  });
-
-  if (completionPromise && typeof completionPromise.catch === 'function') {
-    completionPromise.catch(() => {});
-  }
-
-  const response = await completionPromise;
+      {
+        role: 'user',
+        content: buildPrompt(target, filteredCandidates)
+      }
+    ],
+    temperature: 0,
+    maxTokens: 900,
+    maxCompletionTokens: 900,
+    reasoning: {
+      enabled: false,
+      effort: 'none',
+      maxTokens: 0
+    },
+    responseFormat: { type: 'json_object' },
+    stream: false
+  }, { timeoutMs: config.timeoutMs });
   const payload = parseJsonContent(extractAssistantContent(response));
   if (!payload) {
     throw new Error('AI story grouping response did not contain valid JSON');

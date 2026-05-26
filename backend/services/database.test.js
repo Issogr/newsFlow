@@ -1,8 +1,6 @@
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 const SqliteDatabase = require('better-sqlite3');
 const configuredSources = require('../config/newsSources');
+const { cleanupTempNewsDb, setupTempNewsDb } = require('../test-utils/tempNewsDb');
 const {
   getCanonicalSourceId,
   getCanonicalSourceName,
@@ -25,14 +23,6 @@ const primarySourceFamilyId = getCanonicalSourceId(primarySource.id, primarySour
 const secondarySourceFamilyId = getCanonicalSourceId(secondarySource.id, secondarySource.name);
 const secondarySourceFamilyName = getCanonicalSourceName(secondarySource.id, secondarySource.name);
 
-function createTempDbPath() {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'news-db-test-'));
-  return {
-    tempDir,
-    dbPath: path.join(tempDir, 'news.db')
-  };
-}
-
 describe('database migrations', () => {
   let tempDir;
   let dbPath;
@@ -40,17 +30,11 @@ describe('database migrations', () => {
 
   beforeEach(() => {
     jest.resetModules();
-    ({ tempDir, dbPath } = createTempDbPath());
-    process.env.NEWS_DB_PATH = dbPath;
+    ({ tempDir, dbPath } = setupTempNewsDb('news-db-test-'));
   });
 
   afterEach(() => {
-    if (database?.closeDb) {
-      database.closeDb();
-    }
-
-    delete process.env.NEWS_DB_PATH;
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    cleanupTempNewsDb({ tempDir }, database);
   });
 
   test('initializes a fresh database at the latest migration version', () => {
@@ -422,21 +406,17 @@ describe('database migrations', () => {
 
 describe('database queries and user data', () => {
   let tempDir;
-  let dbPath;
   let database;
 
   beforeEach(() => {
     jest.resetModules();
-    ({ tempDir, dbPath } = createTempDbPath());
-    process.env.NEWS_DB_PATH = dbPath;
+    ({ tempDir } = setupTempNewsDb('news-db-test-'));
     database = require('./database');
     database.getDb();
   });
 
   afterEach(() => {
-    database.closeDb();
-    delete process.env.NEWS_DB_PATH;
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    cleanupTempNewsDb({ tempDir }, database);
   });
 
   test('stores articles and applies scope, excluded-source, search, topic, and recency filters', () => {

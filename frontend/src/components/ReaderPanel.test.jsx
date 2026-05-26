@@ -2,30 +2,13 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ReaderPanel from './ReaderPanel';
 import { fetchReaderArticle, updateUserSettings } from '../services/api';
+import { createDeferred, resolveDeferred } from '../test-utils/deferred';
 
 vi.mock('../services/api', () => ({
   fetchReaderArticle: vi.fn(),
   updateUserSettings: vi.fn(),
   isRequestCanceled: vi.fn((error) => error?.code === 'ERR_CANCELED')
 }));
-
-function createDeferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-
-  return { promise, resolve, reject };
-}
-
-async function resolveDeferred(deferred, value) {
-  await act(async () => {
-    deferred.resolve(value);
-    await deferred.promise;
-  });
-}
 
 const group = {
   id: 'group-1',
@@ -74,7 +57,6 @@ function renderReaderPanel(props = {}) {
       readerPosition="right"
       t={t}
       currentUser={currentUser}
-      onUserUpdate={jest.fn()}
       onClose={jest.fn()}
       {...props}
     />

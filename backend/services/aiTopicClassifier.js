@@ -7,8 +7,10 @@ const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
+  sendChatCompletion,
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
+const { truncateText } = require('./aiArticlePayload');
 
 const DEFAULT_OPENROUTER_TOPIC_MODEL = 'qwen/qwen3.5-9b';
 const DEFAULT_BATCH_SIZE = 4;
@@ -97,15 +99,6 @@ function summarizeAiError(error) {
   }
 
   return error?.message || 'OpenRouter request failed; keeping local fallback topics';
-}
-
-function truncateText(value, maxLength) {
-  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, maxLength - 3).trim()}...`;
 }
 
 function buildArticlePayload(article = {}, index = 0) {
@@ -319,42 +312,30 @@ async function classifyBatch(batch, config, context = {}) {
   const startedAt = Date.now();
   logBatchArticlesForDebug(batch, config, context.batchIndex || 0, context.batchCount || 0);
   const openRouter = context.openRouter || await createOpenRouterClient(config);
-  const completionPromise = openRouter.chat.send({
-    chatRequest: {
-      model: config.model,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a fast, conservative news taxonomy classifier. Return valid JSON only.'
-        },
-        {
-          role: 'user',
-          content: buildPrompt(batch)
-        }
-      ],
-      temperature: 0,
-      maxTokens: getCompletionTokenBudget(batch.length),
-      maxCompletionTokens: getCompletionTokenBudget(batch.length),
-      reasoning: {
-        enabled: false,
-        effort: 'none',
-        maxTokens: 0
+  const tokenBudget = getCompletionTokenBudget(batch.length);
+  const response = await sendChatCompletion(openRouter, {
+    model: config.model,
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a fast, conservative news taxonomy classifier. Return valid JSON only.'
       },
-      responseFormat: { type: 'json_object' },
-      stream: false
-    }
-  }, {
-    retries: { strategy: 'none' },
-    timeoutMs: config.timeoutMs
-  });
-
-  // The SDK's APIPromise owns a secondary unwrapped promise; attach a catch so
-  // expected request failures do not also surface as global unhandled rejections.
-  if (completionPromise && typeof completionPromise.catch === 'function') {
-    completionPromise.catch(() => {});
-  }
-
-  const response = await completionPromise;
+      {
+        role: 'user',
+        content: buildPrompt(batch)
+      }
+    ],
+    temperature: 0,
+    maxTokens: tokenBudget,
+    maxCompletionTokens: tokenBudget,
+    reasoning: {
+      enabled: false,
+      effort: 'none',
+      maxTokens: 0
+    },
+    responseFormat: { type: 'json_object' },
+    stream: false
+  }, { timeoutMs: config.timeoutMs });
 
   const content = extractAssistantContent(response);
   const payload = parseJsonContent(content);

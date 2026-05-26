@@ -168,6 +168,5 @@ module.exports = {
   getSessionCookieOptions,
   isValidSessionPayload,
   parseCookieHeader,
-  serializeCookie,
   unsignSessionId
 };

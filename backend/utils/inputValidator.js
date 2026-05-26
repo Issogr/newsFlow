@@ -77,11 +77,8 @@ function sanitizeBody(fieldNames = []) {
 }
 
 module.exports = {
-  sanitizeString,
   sanitizeHtml,
-  validateParam,
   sanitizeQuery,
-  sanitizeParam,
   validateAndSanitizeParam,
   sanitizeBody
 };

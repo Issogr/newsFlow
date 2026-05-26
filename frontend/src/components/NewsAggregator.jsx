@@ -222,6 +222,61 @@ const mergeGroups = (primaryGroups, secondaryGroups) => {
 
 const appendUniqueGroups = (currentGroups, incomingGroups) => mergeGroups(currentGroups, incomingGroups);
 
+function buildFeedRequestParams({
+  activeFilters,
+  append,
+  cursor,
+  forceRefresh,
+  includeFilters,
+  isReadLaterView,
+  page,
+  pageSize,
+  recentHours,
+  search,
+  showRecentOnly,
+  signal,
+}) {
+  return {
+    page,
+    pageSize,
+    search,
+    sourceIds: activeFilters.sourceIds,
+    topics: activeFilters.topics,
+    recentHours: showRecentOnly ? recentHours : null,
+    beforePubDate: !isReadLaterView && append ? cursor?.beforePubDate : '',
+    beforeId: !isReadLaterView && append ? cursor?.beforeId : '',
+    excludeArticleIds: !isReadLaterView && append ? cursor?.excludeArticleIds : [],
+    refresh: !isReadLaterView && forceRefresh,
+    includeFilters,
+    signal
+  };
+}
+
+function getLoadedNewsGroups(currentGroups, {
+  append,
+  isReadLaterView,
+  mergedItems,
+  responseItems,
+  silent,
+}) {
+  let nextNews = append ? appendUniqueGroups(currentGroups, responseItems) : mergedItems;
+
+  if (!append && silent) {
+    nextNews = mergeGroups(currentGroups, filterGroupsMatchingCurrent(currentGroups, mergedItems));
+  }
+
+  if (!append && silent && currentGroups.length > nextNews.length) {
+    const preservedTail = currentGroups.slice(nextNews.length);
+    nextNews = appendUniqueGroups(nextNews, preservedTail).slice(0, currentGroups.length);
+  }
+
+  if (!isReadLaterView && nextNews.length > MAX_RETAINED_NEWS_GROUPS) {
+    nextNews = nextNews.slice(0, MAX_RETAINED_NEWS_GROUPS);
+  }
+
+  return nextNews;
+}
+
 const getSourceReloadSignature = (excludedSourceIds, excludedSubSourceIds, customSources) => JSON.stringify({
   excludedSourceIds,
   excludedSubSourceIds,
@@ -451,20 +506,26 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       const responsePageSize = append
         ? PAGE_SIZE
         : Math.min(Math.max(PAGE_SIZE, minimumItemCount || PAGE_SIZE), MAX_TOPIC_RELOAD_PAGE_SIZE);
-      const response = await (isReadLaterView ? fetchReadLaterNews : fetchNews)({
+      const baseRequestParams = {
+        activeFilters: {
+          sourceIds: activeFilters.sourceIds,
+          topics: activeFilters.topics,
+        },
+        recentHours,
+        search: debouncedSearch,
+        showRecentOnly,
+        signal: request.signal,
+      };
+      const response = await (isReadLaterView ? fetchReadLaterNews : fetchNews)(buildFeedRequestParams({
+        ...baseRequestParams,
+        append,
+        cursor,
+        forceRefresh,
+        includeFilters: !append && !silent,
+        isReadLaterView,
         page,
         pageSize: responsePageSize,
-        search: debouncedSearch,
-        sourceIds: activeFilters.sourceIds,
-        topics: activeFilters.topics,
-        recentHours: showRecentOnly ? recentHours : null,
-        beforePubDate: !isReadLaterView && append ? cursor?.beforePubDate : '',
-        beforeId: !isReadLaterView && append ? cursor?.beforeId : '',
-        excludeArticleIds: !isReadLaterView && append ? cursor?.excludeArticleIds : [],
-        refresh: !isReadLaterView && forceRefresh,
-        includeFilters: !append && !silent,
-        signal: request.signal
-      });
+      }));
 
       if (!request.isLatest()) {
         return;
@@ -481,19 +542,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         && nextMeta?.hasMore
         && nextMeta?.nextCursor
       ) {
-        const nextPage = await fetchNews({
+        const nextPage = await fetchNews(buildFeedRequestParams({
+          ...baseRequestParams,
+          append: true,
+          cursor: nextMeta.nextCursor,
+          forceRefresh: false,
+          includeFilters: false,
+          isReadLaterView: false,
           page: 1,
           pageSize: Math.min(targetItemCount - mergedItems.length, MAX_TOPIC_RELOAD_PAGE_SIZE),
-          search: debouncedSearch,
-          sourceIds: activeFilters.sourceIds,
-          topics: activeFilters.topics,
-          recentHours: showRecentOnly ? recentHours : null,
-          beforePubDate: nextMeta.nextCursor.beforePubDate,
-          beforeId: nextMeta.nextCursor.beforeId,
-          refresh: false,
-          includeFilters: false,
-          signal: request.signal
-        });
+        }));
 
         if (!request.isLatest()) {
           return;
@@ -504,20 +562,13 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       }
 
       setNews((current) => {
-        let nextNews = append ? appendUniqueGroups(current, response.items || []) : mergedItems;
-
-        if (!append && silent) {
-          nextNews = mergeGroups(current, filterGroupsMatchingCurrent(current, mergedItems));
-        }
-
-        if (!append && silent && current.length > nextNews.length) {
-          const preservedTail = current.slice(nextNews.length);
-          nextNews = appendUniqueGroups(nextNews, preservedTail).slice(0, current.length);
-        }
-
-        if (!isReadLaterView && nextNews.length > MAX_RETAINED_NEWS_GROUPS) {
-          nextNews = nextNews.slice(0, MAX_RETAINED_NEWS_GROUPS);
-        }
+        const nextNews = getLoadedNewsGroups(current, {
+          append,
+          isReadLaterView,
+          mergedItems,
+          responseItems: response.items || [],
+          silent,
+        });
 
         visibleNewsCountRef.current = nextNews.length;
         preservedNewsCountRef.current = nextNews.length;
@@ -722,6 +773,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
+  const clearSearch = useCallback(() => {
+    setSearch('');
+    setDebouncedSearch('');
+  }, []);
+
   return (
     <div className="min-h-screen overflow-x-clip bg-slate-100 text-slate-900">
       <header className={`sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md transition-shadow duration-200 ${topNavCompact ? 'shadow-md' : 'shadow-sm'}`}>
@@ -749,10 +805,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 onToggleFilter={toggleFilter}
                 onToggleRecent={() => setShowRecentOnly((value) => !value)}
                 onSearchChange={setSearch}
-                onSearchClear={() => {
-                  setSearch('');
-                  setDebouncedSearch('');
-                }}
+                onSearchClear={clearSearch}
                 onToggleReadLater={() => setActiveView((current) => current === 'readLater' ? 'news' : 'readLater')}
                 onOpenSurface={() => setUserMenuOpen(false)}
                 readLaterActive={isReadLaterView}
@@ -1018,10 +1071,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           onToggleFilter={toggleFilter}
           onToggleRecent={() => setShowRecentOnly((v) => !v)}
           onSearchChange={setSearch}
-          onSearchClear={() => {
-            setSearch('');
-            setDebouncedSearch('');
-          }}
+          onSearchClear={clearSearch}
           activeView={activeView}
           onViewChange={setActiveView}
           visible={showMobileNav}
