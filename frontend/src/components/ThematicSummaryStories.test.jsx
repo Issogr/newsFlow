@@ -115,6 +115,7 @@ describe('thematic summary podcast UI', () => {
     expect(screen.getByText('Morning podcast')).toBeInTheDocument();
     expect(screen.getByText('English podcast audio is not generated yet. The available podcast audio is in Italian.')).toBeInTheDocument();
     expect(screen.getByText('Audio in Italian')).toBeInTheDocument();
+    expect(screen.queryByText('Italian audio briefing')).not.toBeInTheDocument();
     expect(screen.queryByText('Podcast del mattino')).not.toBeInTheDocument();
     const audio = document.querySelector('audio');
     Object.defineProperty(audio, 'duration', { configurable: true, value: 2 });

@@ -91,7 +91,7 @@ const PodcastAudioPlayer = ({ src, t }) => {
   }
 
   return (
-    <div className="overflow-hidden rounded-[2rem] border border-sky-100 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950 p-4 text-white shadow-[0_22px_60px_rgba(2,6,23,0.22)] md:p-5">
+    <div className="overflow-hidden rounded-[1.5rem] border border-sky-100 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950 p-3 text-white shadow-[0_18px_48px_rgba(2,6,23,0.22)] sm:p-4">
       <audio
         ref={audioRef}
         src={audioUrl || undefined}
@@ -123,12 +123,12 @@ const PodcastAudioPlayer = ({ src, t }) => {
         }}
       />
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 sm:gap-4">
         <button
           type="button"
           onClick={togglePlayback}
           disabled={error || !audioUrl}
-          className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-950 shadow-lg transition hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-950 shadow-lg transition hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-60 sm:h-14 sm:w-14"
           aria-label={playing ? t('pausePodcastAudio') : t('playPodcastAudio')}
         >
           {loading ? (
@@ -141,12 +141,9 @@ const PodcastAudioPlayer = ({ src, t }) => {
         </button>
 
         <div className="min-w-0 flex-1">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">{t('podcastAudioTitle')}</p>
-              <p className="truncate text-sm font-medium text-white/80">{error ? t('podcastAudioLoadFailed') : t('podcastAudioReady')}</p>
-            </div>
-            <p className="shrink-0 font-mono text-xs tabular-nums text-sky-100">
+          <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+            <p className="truncate text-sm font-semibold text-white/85">{error ? t('podcastAudioLoadFailed') : t('podcastAudioReady')}</p>
+            <p className="font-mono text-xs tabular-nums text-sky-100 sm:shrink-0">
               {formatDuration(currentTime)} / {duration > 0 ? formatDuration(duration) : '--:--'}
             </p>
           </div>
@@ -168,12 +165,12 @@ const PodcastAudioPlayer = ({ src, t }) => {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-3 text-xs font-semibold text-sky-100/90">
-        <button type="button" onClick={() => seekTo(currentTime - 15)} disabled={error || !audioUrl} className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50">
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-semibold text-sky-100/90 sm:mt-4">
+        <button type="button" onClick={() => seekTo(currentTime - 15)} disabled={error || !audioUrl} className="inline-flex items-center justify-center gap-1.5 rounded-full bg-white/10 px-3 py-2 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50 sm:py-1.5">
           <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
           {t('podcastAudioBack')}
         </button>
-        <button type="button" onClick={() => seekTo(currentTime + 30)} disabled={error || !audioUrl} className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50">
+        <button type="button" onClick={() => seekTo(currentTime + 30)} disabled={error || !audioUrl} className="inline-flex items-center justify-center gap-1.5 rounded-full bg-white/10 px-3 py-2 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50 sm:py-1.5">
           {t('podcastAudioForward')}
           <SkipForward className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
