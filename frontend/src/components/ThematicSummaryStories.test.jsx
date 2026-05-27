@@ -10,6 +10,10 @@ const translations = {
   closeThematicSummary: 'Close summary',
   closePodcastSummary: 'Close podcast briefing',
   podcastBriefing: 'Podcast briefing',
+  morningPodcast: 'Morning podcast',
+  eveningPodcast: 'Evening podcast',
+  podcastItalianOnlyNotice: 'English podcast audio is not generated yet. The available podcast audio is in Italian.',
+  podcastItalianAudioLabel: 'Audio in Italian',
   thematicSummary: 'Thematic summary',
   summaryArticleCount: ({ count }) => `${count} articles evaluated`,
   podcastAudioTitle: 'Italian audio briefing',
@@ -21,8 +25,8 @@ const translations = {
   podcastAudioBack: '15 sec back',
   podcastAudioForward: '30 sec ahead',
   podcastAudioGenerating: 'Audio generation is in progress. This panel will update when it is ready.',
-  podcastAudioUnavailable: 'Audio is not available yet. You can read the podcast script below.',
-  podcastAudioFailed: 'Audio generation failed for this briefing. You can read the podcast script below.'
+  podcastAudioUnavailable: 'Audio is not available for this briefing yet.',
+  podcastAudioFailed: 'Audio generation failed for this briefing.'
 };
 
 function t(key, params = {}) {
@@ -53,6 +57,10 @@ describe('thematic summary podcast UI', () => {
       titleByLocale: { en: 'News podcast' },
       summaryTextByLocale: { en: 'Podcast script' }
     };
+    const olderPodcast = {
+      ...podcast,
+      id: 'podcast-older'
+    };
     const technology = {
       id: 'summary-technology',
       topicKey: 'technology',
@@ -64,7 +72,7 @@ describe('thematic summary podcast UI', () => {
 
     render(
       <ThematicSummaryStories
-        summaries={[technology, podcast]}
+        summaries={[technology, podcast, olderPodcast]}
         locale="en"
         readSummaryIds={[]}
         t={t}
@@ -73,6 +81,7 @@ describe('thematic summary podcast UI', () => {
     );
 
     const buttons = screen.getAllByRole('button');
+    expect(buttons).toHaveLength(2);
     expect(buttons[0]).toHaveAccessibleName('Open podcast briefing');
 
     fireEvent.click(buttons[0]);
@@ -80,7 +89,7 @@ describe('thematic summary podcast UI', () => {
     expect(onOpenSummary).toHaveBeenCalledWith(podcast);
   });
 
-  test('renders custom podcast audio controls, localized script text, and starts playback', async () => {
+  test('renders custom podcast audio controls without script text and starts playback', async () => {
     render(
       <ThematicSummaryPanel
         summary={{
@@ -96,19 +105,22 @@ describe('thematic summary podcast UI', () => {
           audioStatus: 'completed',
           audioUrl: '/api/podcast-summary/podcast-1/audio'
         }}
-        locale="it"
+        locale="en"
         t={t}
         onClose={vi.fn()}
       />
     );
 
     expect(screen.getByText('Podcast briefing')).toBeInTheDocument();
+    expect(screen.getByText('Morning podcast')).toBeInTheDocument();
+    expect(screen.getByText('English podcast audio is not generated yet. The available podcast audio is in Italian.')).toBeInTheDocument();
+    expect(screen.getByText('Audio in Italian')).toBeInTheDocument();
     expect(screen.queryByText('Podcast del mattino')).not.toBeInTheDocument();
     const audio = document.querySelector('audio');
     Object.defineProperty(audio, 'duration', { configurable: true, value: 2 });
     fireEvent.loadedMetadata(audio);
 
-    expect(screen.getByText('Testo podcast italiano')).toBeInTheDocument();
+    expect(screen.queryByText('Testo podcast italiano')).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('0:00 / 0:02')).toBeInTheDocument());
     expect(fetch).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Play podcast audio' })).toBeInTheDocument();
@@ -147,31 +159,49 @@ describe('thematic summary podcast UI', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test('splits dense podcast scripts into readable paragraphs', () => {
+  test('shows morning and evening podcast players together', () => {
+    const morningPodcast = {
+      id: 'podcast-morning',
+      type: 'podcast',
+      topicKey: 'podcast',
+      topicLabel: 'Podcast',
+      periodStart: '2026-05-20T17:00:00.000Z',
+      periodEnd: '2026-05-21T05:00:00.000Z',
+      articleCount: 2,
+      titleByLocale: { en: 'Morning podcast' },
+      summaryTextByLocale: { en: 'Morning script' },
+      audioStatus: 'completed',
+      audioUrl: '/api/podcast-summary/podcast-morning/audio'
+    };
+    const eveningPodcast = {
+      id: 'podcast-evening',
+      type: 'podcast',
+      topicKey: 'podcast',
+      topicLabel: 'Podcast',
+      periodStart: '2026-05-21T05:00:00.000Z',
+      periodEnd: '2026-05-21T17:00:00.000Z',
+      articleCount: 3,
+      titleByLocale: { en: 'Evening podcast' },
+      summaryTextByLocale: { en: 'Evening script' },
+      audioStatus: 'completed',
+      audioUrl: '/api/podcast-summary/podcast-evening/audio'
+    };
+
     render(
       <ThematicSummaryPanel
-        summary={{
-          id: 'podcast-1',
-          type: 'podcast',
-          topicKey: 'podcast',
-          topicLabel: 'Podcast',
-          periodStart: '2026-05-21T05:00:00.000Z',
-          periodEnd: '2026-05-21T11:00:00.000Z',
-          articleCount: 3,
-          titleByLocale: { en: 'News podcast' },
-          summaryTextByLocale: {
-            en: 'First, the technology story opens with enough context to make this sentence intentionally long and representative of a dense generated podcast script. Next, the politics story shifts to a different subject with additional context and a second long sentence that should not be glued to every other item. Finally, the science story closes the briefing with one more detailed sentence so the renderer creates another paragraph.'
-          },
-          audioStatus: 'not_available'
-        }}
+        summary={eveningPodcast}
+        summaries={[eveningPodcast, morningPodcast]}
         locale="en"
         t={t}
         onClose={vi.fn()}
       />
     );
 
-    expect(screen.getByText(/^First, the technology story opens/)).toHaveTextContent('Next, the politics story shifts');
-    expect(screen.getByText(/^Finally, the science story closes/)).toBeInTheDocument();
+    expect(screen.getByText('Morning podcast')).toBeInTheDocument();
+    expect(screen.getByText('Evening podcast')).toBeInTheDocument();
+    expect(screen.queryByText('Morning script')).not.toBeInTheDocument();
+    expect(screen.queryByText('Evening script')).not.toBeInTheDocument();
+    expect(document.querySelectorAll('audio')).toHaveLength(2);
   });
 
   test('uses single newlines as paragraph breaks for thematic summaries', () => {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.5.2
+
+- generated podcast briefings on morning and evening windows, retained the latest two podcast rows so both remain available, and simplified the podcast panel to audio players only
+
 ## 3.5.0
 
 - added an AI-generated podcast briefing story at the start of the topic story rail, using the same scheduled summary article set and cached reader text without triggering reader extraction during generation

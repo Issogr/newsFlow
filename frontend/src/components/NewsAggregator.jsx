@@ -37,6 +37,10 @@ const BACK_TO_TOP_THRESHOLD = 280;
 const TOP_NAV_SHRINK_THRESHOLD = 28;
 const READ_THEMATIC_SUMMARIES_STORAGE_PREFIX = 'newsflow-read-thematic-summaries';
 
+function isPodcastSummary(summary = {}) {
+  return summary?.type === 'podcast' || summary?.topicKey === 'podcast';
+}
+
 function getGroupMergeKeys(group = {}) {
   const keys = new Set();
 
@@ -731,15 +735,20 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
     setSelectedThematicSummary(summary);
     setReadThematicSummaryIds((current) => {
-      if (current.includes(summary.id)) {
+      const summaryIds = [...new Set(isPodcastSummary(summary)
+        ? [summary.id, ...thematicSummaries.filter(isPodcastSummary).map((podcastSummary) => podcastSummary.id)].filter(Boolean)
+        : [summary.id])];
+      const unreadSummaryIds = summaryIds.filter((summaryId) => !current.includes(summaryId));
+
+      if (unreadSummaryIds.length === 0) {
         return current;
       }
 
-      const next = [...current, summary.id];
+      const next = [...current, ...unreadSummaryIds];
       setStoredReadThematicSummaryIds(readThematicSummariesStorageKey, next);
       return next;
     });
-  }, [readThematicSummariesStorageKey]);
+  }, [readThematicSummariesStorageKey, thematicSummaries]);
 
   const handleToggleReadLater = useCallback(async (group) => {
     const articleIds = (group?.readLater ? (group.readLaterArticleIds || []) : (group?.items || []).map((item) => item.id)).filter(Boolean);
@@ -1010,6 +1019,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       {displayedThematicSummary && (
         <ThematicSummaryPanel
           summary={displayedThematicSummary}
+          summaries={thematicSummaries}
           locale={locale}
           t={t}
           onClose={() => setSelectedThematicSummary(null)}

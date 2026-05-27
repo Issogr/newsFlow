@@ -10,6 +10,8 @@ const { isPromotionalDealArticle } = require('../utils/promotionalContent');
 
 const DEFAULT_SUMMARY_TIME_ZONE = 'Europe/Rome';
 const SUMMARY_GENERATION_HOURS = [7, 13, 19];
+const PODCAST_GENERATION_HOURS = [7, 19];
+const PODCAST_HISTORY_RETAIN_COUNT = parseIntegerEnv('AI_PODCAST_HISTORY_RETAIN_COUNT', 2, { min: 1, max: 10 });
 const SUMMARY_CHECK_INTERVAL_MS = parseIntegerEnv('THEMATIC_SUMMARY_CHECK_INTERVAL_MS', 60 * 1000, { min: 1000 });
 const SUMMARY_MAX_ARTICLES_PER_TOPIC = parseIntegerEnv('AI_SUMMARY_MAX_ARTICLES_PER_TOPIC', 120, { min: 1, max: 300 });
 const SUMMARY_READER_PREWARM_MINUTES_BEFORE = parseIntegerEnv('AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE', 30, { min: 1, max: 180 });
@@ -142,16 +144,16 @@ function createZonedSlotDate(localDate, hour, timeZone = SUMMARY_TIME_ZONE) {
   }, timeZone);
 }
 
-function getLatestDueWindow(referenceDate = new Date()) {
+function getLatestDueWindow(referenceDate = new Date(), generationHours = SUMMARY_GENERATION_HOURS) {
   const reference = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
   const localToday = getTimeZoneParts(reference, SUMMARY_TIME_ZONE);
-  const todaySlots = SUMMARY_GENERATION_HOURS.map((hour) => createZonedSlotDate(localToday, hour, SUMMARY_TIME_ZONE));
+  const todaySlots = generationHours.map((hour) => createZonedSlotDate(localToday, hour, SUMMARY_TIME_ZONE));
   const dueSlotIndex = todaySlots.findLastIndex((slotDate) => slotDate.getTime() <= reference.getTime());
 
   if (dueSlotIndex >= 0) {
     const periodEnd = todaySlots[dueSlotIndex];
     const periodStart = dueSlotIndex === 0
-      ? createZonedSlotDate(addCalendarDays(localToday, -1), SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1], SUMMARY_TIME_ZONE)
+      ? createZonedSlotDate(addCalendarDays(localToday, -1), generationHours[generationHours.length - 1], SUMMARY_TIME_ZONE)
       : todaySlots[dueSlotIndex - 1];
 
     return {
@@ -161,8 +163,8 @@ function getLatestDueWindow(referenceDate = new Date()) {
   }
 
   const yesterday = addCalendarDays(localToday, -1);
-  const periodEnd = createZonedSlotDate(yesterday, SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1], SUMMARY_TIME_ZONE);
-  const periodStart = createZonedSlotDate(yesterday, SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 2], SUMMARY_TIME_ZONE);
+  const periodEnd = createZonedSlotDate(yesterday, generationHours[generationHours.length - 1], SUMMARY_TIME_ZONE);
+  const periodStart = createZonedSlotDate(yesterday, generationHours[generationHours.length - 2], SUMMARY_TIME_ZONE);
 
   return {
     periodStart: periodStart.toISOString(),
@@ -170,16 +172,16 @@ function getLatestDueWindow(referenceDate = new Date()) {
   };
 }
 
-function getNextDueWindow(referenceDate = new Date()) {
+function getNextDueWindow(referenceDate = new Date(), generationHours = SUMMARY_GENERATION_HOURS) {
   const reference = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
   const localToday = getTimeZoneParts(reference, SUMMARY_TIME_ZONE);
-  const todaySlots = SUMMARY_GENERATION_HOURS.map((hour) => createZonedSlotDate(localToday, hour, SUMMARY_TIME_ZONE));
+  const todaySlots = generationHours.map((hour) => createZonedSlotDate(localToday, hour, SUMMARY_TIME_ZONE));
   const nextSlotIndex = todaySlots.findIndex((slotDate) => slotDate.getTime() > reference.getTime());
 
   if (nextSlotIndex >= 0) {
     const periodEnd = todaySlots[nextSlotIndex];
     const periodStart = nextSlotIndex === 0
-      ? createZonedSlotDate(addCalendarDays(localToday, -1), SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1], SUMMARY_TIME_ZONE)
+      ? createZonedSlotDate(addCalendarDays(localToday, -1), generationHours[generationHours.length - 1], SUMMARY_TIME_ZONE)
       : todaySlots[nextSlotIndex - 1];
 
     return {
@@ -189,13 +191,26 @@ function getNextDueWindow(referenceDate = new Date()) {
   }
 
   const tomorrow = addCalendarDays(localToday, 1);
-  const periodStart = createZonedSlotDate(localToday, SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1], SUMMARY_TIME_ZONE);
-  const periodEnd = createZonedSlotDate(tomorrow, SUMMARY_GENERATION_HOURS[0], SUMMARY_TIME_ZONE);
+  const periodStart = createZonedSlotDate(localToday, generationHours[generationHours.length - 1], SUMMARY_TIME_ZONE);
+  const periodEnd = createZonedSlotDate(tomorrow, generationHours[0], SUMMARY_TIME_ZONE);
 
   return {
     periodStart: periodStart.toISOString(),
     periodEnd: periodEnd.toISOString()
   };
+}
+
+function getLatestDuePodcastWindow(referenceDate = new Date()) {
+  return getLatestDueWindow(referenceDate, PODCAST_GENERATION_HOURS);
+}
+
+function getPodcastWindowSlot(summary = {}) {
+  const periodEnd = new Date(summary.periodEnd || '');
+  if (Number.isNaN(periodEnd.getTime())) {
+    return '';
+  }
+
+  return getTimeZoneParts(periodEnd, SUMMARY_TIME_ZONE).hour < 12 ? 'morning' : 'evening';
 }
 
 function getSummaryTopics() {
@@ -810,7 +825,9 @@ async function generateDueSummaries(options = {}) {
   }
 
   generationPromise = (async () => {
-    const window = options.window || getLatestDueWindow(options.referenceDate || new Date());
+    const referenceDate = options.referenceDate || new Date();
+    const summaryWindow = options.summaryWindow || options.window || getLatestDueWindow(referenceDate);
+    const podcastWindow = options.podcastWindow || options.window || getLatestDuePodcastWindow(referenceDate);
     const summaries = [];
     let generatedCount = 0;
     const generatedTopicKeys = [];
@@ -818,7 +835,7 @@ async function generateDueSummaries(options = {}) {
     const canGenerateSummaries = aiSummaryGenerator.isAiSummaryGenerationAvailable();
 
     for (const topicConfig of SUMMARY_TOPICS) {
-      const result = await generateSummaryForTopic(topicConfig, window, { ...options, canGenerateSummaries });
+      const result = await generateSummaryForTopic(topicConfig, summaryWindow, { ...options, canGenerateSummaries });
       if (TERMINAL_SUMMARY_STATUSES.has(result.summary?.status)) {
         summaries.push(result.summary);
       }
@@ -830,7 +847,7 @@ async function generateDueSummaries(options = {}) {
       }
     }
 
-    const podcastResult = await generatePodcastForWindow(window, options);
+    const podcastResult = await generatePodcastForWindow(podcastWindow, options);
     if (podcastResult.summary?.status === 'completed') {
       summaries.unshift(podcastResult.summary);
     }
@@ -842,17 +859,28 @@ async function generateDueSummaries(options = {}) {
     }
 
     if (generatedCount > 0) {
-      pruneGeneratedSummaryHistory({
-        periodEnd: window.periodEnd,
-        topicKeys: generatedTopicKeys,
-        podcast: generatedPodcast
-      });
-      logger.info(`Thematic summaries ready: windowEnd=${window.periodEnd}, count=${generatedCount}`);
+      if (generatedTopicKeys.length > 0) {
+        pruneGeneratedSummaryHistory({
+          periodEnd: summaryWindow.periodEnd,
+          topicKeys: generatedTopicKeys,
+          podcast: false
+        });
+      }
+      if (generatedPodcast) {
+        pruneGeneratedSummaryHistory({
+          periodEnd: podcastWindow.periodEnd,
+          topicKeys: [],
+          podcast: true,
+          podcastRetainCount: PODCAST_HISTORY_RETAIN_COUNT
+        });
+      }
+      logger.info(`Thematic summaries ready: summaryWindowEnd=${summaryWindow.periodEnd}, podcastWindowEnd=${podcastWindow.periodEnd}, count=${generatedCount}`);
       broadcastSummariesRefresh(options);
     }
 
     return {
-      window,
+      window: summaryWindow,
+      podcastWindow,
       items: summaries
     };
   })().finally(() => {
@@ -874,10 +902,13 @@ function getLatestSummaries() {
       return summary ? { ...summary, topicLabel: topic.label } : null;
     })
     .filter(Boolean);
-  const latestPodcast = database.getLatestPodcastSummary();
+  const latestPodcasts = (typeof database.listLatestPodcastSummaries === 'function'
+    ? database.listLatestPodcastSummaries(PODCAST_HISTORY_RETAIN_COUNT)
+    : [database.getLatestPodcastSummary()].filter(Boolean))
+    .map((summary) => ({ ...summary, podcastSlot: getPodcastWindowSlot(summary) }));
 
   return {
-    items: latestPodcast ? [latestPodcast, ...topicItems] : topicItems,
+    items: [...latestPodcasts, ...topicItems],
     topics: topicConfigs
   };
 }
@@ -916,6 +947,7 @@ module.exports = {
   startScheduler,
   stopScheduler,
   _getLatestDueWindow: getLatestDueWindow,
+  _getLatestDuePodcastWindow: getLatestDuePodcastWindow,
   _getNextDueWindow: getNextDueWindow,
   _isReaderPrewarmEnabled: isReaderPrewarmEnabled,
   _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,

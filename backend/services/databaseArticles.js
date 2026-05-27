@@ -2059,8 +2059,20 @@ function createArticleRepository({
           AND topic_key IN (${topicKeys.map(() => '?').join(', ')})
       `).run(periodEnd, ...topicKeys).changes
       : 0;
+    const podcastRetainCount = Math.max(1, Number(options.podcastRetainCount) || 1);
     const podcastSummaries = options.podcast === true
-      ? db.prepare('DELETE FROM podcast_summaries WHERE period_end < ?').run(periodEnd).changes
+      ? db.prepare(`
+        DELETE FROM podcast_summaries
+        WHERE period_end < ?
+          AND period_end NOT IN (
+            SELECT period_end
+            FROM podcast_summaries
+            WHERE period_end <= ?
+              AND status IN ('completed', 'empty')
+            ORDER BY period_end DESC
+            LIMIT ?
+          )
+      `).run(periodEnd, periodEnd, podcastRetainCount).changes
       : 0;
 
     return { thematicSummaries, podcastSummaries };
@@ -2156,8 +2168,9 @@ function createArticleRepository({
     return mapPodcastSummaryRow(row);
   }
 
-  function getLatestPodcastSummary() {
-    const row = getDb().prepare(`
+  function listLatestPodcastSummaries(limit = 1) {
+    const normalizedLimit = Math.max(1, Math.min(Number(limit) || 1, 10));
+    const rows = getDb().prepare(`
       SELECT id, period_start AS periodStart, period_end AS periodEnd, title, script_text AS scriptText,
              title_en AS titleEn, script_text_en AS scriptTextEn,
              title_it AS titleIt, script_text_it AS scriptTextIt,
@@ -2170,10 +2183,14 @@ function createArticleRepository({
       FROM podcast_summaries
       WHERE status = 'completed'
       ORDER BY period_end DESC
-      LIMIT 1
-    `).get();
+      LIMIT ?
+    `).all(normalizedLimit);
 
-    return mapPodcastSummaryRow(row);
+    return rows.map(mapPodcastSummaryRow).filter(Boolean);
+  }
+
+  function getLatestPodcastSummary() {
+    return listLatestPodcastSummaries(1)[0] || null;
   }
 
   function getPodcastSummaryAudio(podcastId) {
@@ -2564,6 +2581,7 @@ function createArticleRepository({
     pruneSummaryHistory,
     upsertPodcastSummary,
     getPodcastSummary,
+    listLatestPodcastSummaries,
     getLatestPodcastSummary,
     getPodcastSummaryAudio,
     getReadLaterArticleIdSet,

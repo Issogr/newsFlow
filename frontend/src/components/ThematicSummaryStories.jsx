@@ -17,7 +17,9 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
   }
 
   const readSummaryIdSet = new Set(readSummaryIds);
-  const sortedSummaries = [...summaries].sort((left, right) => Number(isPodcastSummary(right)) - Number(isPodcastSummary(left)));
+  const podcastSummaries = summaries.filter(isPodcastSummary);
+  const topicSummaries = summaries.filter((summary) => !isPodcastSummary(summary));
+  const sortedSummaries = podcastSummaries.length > 0 ? [podcastSummaries[0], ...topicSummaries] : topicSummaries;
 
   return (
     <section className="mb-5" aria-label={t('thematicSummariesTitle')}>
@@ -27,14 +29,17 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
           const primaryPresentation = getTopicPresentation(summary.topicKey || summary.topics?.[0] || summary.topicLabel);
           const circleClassName = removeHoverClasses(primaryPresentation.iconBadgeClassName);
           const PrimaryIcon = primaryPresentation.Icon;
-          const unread = !readSummaryIdSet.has(summary.id);
-          const ariaLabel = isPodcastSummary(summary)
+          const isPodcast = isPodcastSummary(summary);
+          const unread = isPodcast
+            ? podcastSummaries.some((podcastSummary) => !readSummaryIdSet.has(podcastSummary.id))
+            : !readSummaryIdSet.has(summary.id);
+          const ariaLabel = isPodcast
             ? t('openPodcastSummary')
             : t('openThematicSummary', { topic: localizedSummary.displayTopicLabel });
 
           return (
             <button
-              key={summary.id}
+              key={isPodcast ? 'podcast-summaries' : summary.id}
               type="button"
               onClick={() => onOpenSummary(summary)}
               className="group relative inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-white shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"

@@ -1087,6 +1087,46 @@ describe('database queries and user data', () => {
     expect(database.getPodcastSummaryAudio('current-podcast-summary')).toEqual(expect.objectContaining({ data: Buffer.from('current-audio') }));
   });
 
+  test('lists and retains the latest two podcast windows when requested', () => {
+    const firstStart = '2025-05-20T17:00:00.000Z';
+    const firstEnd = '2025-05-21T05:00:00.000Z';
+    const secondStart = '2025-05-21T05:00:00.000Z';
+    const secondEnd = '2025-05-21T17:00:00.000Z';
+    const thirdStart = '2025-05-21T17:00:00.000Z';
+    const thirdEnd = '2025-05-22T05:00:00.000Z';
+
+    [
+      ['first-podcast-summary', firstStart, firstEnd],
+      ['second-podcast-summary', secondStart, secondEnd],
+      ['third-podcast-summary', thirdStart, thirdEnd]
+    ].forEach(([id, periodStart, periodEnd]) => {
+      database.upsertPodcastSummary({
+        id,
+        periodStart,
+        periodEnd,
+        title: id,
+        scriptText: `${id} script`,
+        audio: { data: Buffer.from(id).toString('base64'), mimeType: 'audio/mpeg' },
+        audioStatus: 'completed'
+      });
+    });
+
+    expect(database.listLatestPodcastSummaries(2).map((summary) => summary.id)).toEqual([
+      'third-podcast-summary',
+      'second-podcast-summary'
+    ]);
+
+    expect(database.pruneSummaryHistory({
+      periodEnd: thirdEnd,
+      podcast: true,
+      podcastRetainCount: 2
+    })).toEqual({ thematicSummaries: 0, podcastSummaries: 1 });
+
+    expect(database.getPodcastSummary(firstStart, firstEnd)).toBeNull();
+    expect(database.getPodcastSummary(secondStart, secondEnd)).toEqual(expect.objectContaining({ id: 'second-podcast-summary' }));
+    expect(database.getPodcastSummary(thirdStart, thirdEnd)).toEqual(expect.objectContaining({ id: 'third-podcast-summary' }));
+  });
+
   test('tracks AI topic processing and replaces fallback topics', () => {
     const now = new Date().toISOString();
 

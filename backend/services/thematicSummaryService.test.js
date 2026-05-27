@@ -36,6 +36,17 @@ describe('thematicSummaryService', () => {
     });
   });
 
+  test('builds podcast windows for morning and evening only', () => {
+    expect(thematicSummaryService._getLatestDuePodcastWindow(new Date('2026-05-21T11:10:00.000Z'))).toEqual({
+      periodStart: '2026-05-20T17:00:00.000Z',
+      periodEnd: '2026-05-21T05:00:00.000Z'
+    });
+    expect(thematicSummaryService._getLatestDuePodcastWindow(new Date('2026-05-21T17:01:00.000Z'))).toEqual({
+      periodStart: '2026-05-21T05:00:00.000Z',
+      periodEnd: '2026-05-21T17:00:00.000Z'
+    });
+  });
+
   test('defaults summary scheduling to Europe/Rome instead of the container UTC clock', () => {
     expect(thematicSummaryService._getSummaryTimeZone()).toBe('Europe/Rome');
     expect(thematicSummaryService._getLatestDueWindow(new Date('2026-01-21T06:05:00.000Z'))).toEqual({
@@ -389,6 +400,47 @@ describe('thematic summary generation retries', () => {
     expect(aiSummaryGeneratorMock.generateSummaryForArticles).not.toHaveBeenCalled();
     expect(databaseMock.pruneSummaryHistory).not.toHaveBeenCalled();
     expect(websocketServiceMock.broadcastFeedRefresh).not.toHaveBeenCalled();
+  });
+
+  test('uses morning and evening podcast windows independently from topic summary windows', async () => {
+    jest.resetModules();
+    process.env = {
+      ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key'
+    };
+
+    const existingSummary = {
+      status: 'completed',
+      periodStart: '2026-05-21T05:00:00.000Z',
+      periodEnd: '2026-05-21T11:00:00.000Z'
+    };
+    const existingPodcastSummary = {
+      id: 'podcast-morning',
+      status: 'completed',
+      periodStart: '2026-05-20T17:00:00.000Z',
+      periodEnd: '2026-05-21T05:00:00.000Z'
+    };
+    const databaseMock = {
+      getThematicSummary: jest.fn((topicKey) => ({ ...existingSummary, topicKey })),
+      listLatestThematicSummaries: jest.fn(() => []),
+      getPodcastSummary: jest.fn(() => existingPodcastSummary),
+      getArticlesForThematicSummary: jest.fn(() => []),
+      getReaderCache: jest.fn(() => null),
+      upsertThematicSummary: jest.fn(),
+      pruneSummaryHistory: jest.fn()
+    };
+    const aiSummaryGeneratorMock = {
+      isAiSummaryGenerationAvailable: jest.fn(() => true),
+      generateSummaryForArticles: jest.fn(),
+      _getConfig: jest.fn(() => ({ model: 'test-model' }))
+    };
+
+    const { service } = loadServiceWithMocks({ databaseMock, aiSummaryGeneratorMock });
+    await service.generateDueSummaries({ referenceDate: new Date('2026-05-21T11:10:00.000Z') });
+
+    expect(databaseMock.getThematicSummary).toHaveBeenCalledWith('technology', '2026-05-21T05:00:00.000Z', '2026-05-21T11:00:00.000Z');
+    expect(databaseMock.getPodcastSummary).toHaveBeenCalledWith('2026-05-20T17:00:00.000Z', '2026-05-21T05:00:00.000Z');
+    expect(databaseMock.pruneSummaryHistory).not.toHaveBeenCalled();
   });
 
   test('persists empty summary windows without calling the model', async () => {

@@ -68,6 +68,61 @@ function isPodcastSummary(summary = {}) {
   return summary?.type === 'podcast' || summary?.topicKey === 'podcast';
 }
 
+function getPodcastSlot(summary = {}) {
+  if (summary.podcastSlot === 'morning' || summary.podcastSlot === 'evening') {
+    return summary.podcastSlot;
+  }
+
+  const periodEnd = new Date(summary.periodEnd || '');
+  if (Number.isNaN(periodEnd.getTime())) {
+    return 'podcast';
+  }
+
+  return periodEnd.getUTCHours() < 12 ? 'morning' : 'evening';
+}
+
+function getPodcastSlotLabel(summary = {}, t) {
+  const slot = getPodcastSlot(summary);
+  if (slot === 'morning') {
+    return t('morningPodcast');
+  }
+  if (slot === 'evening') {
+    return t('eveningPodcast');
+  }
+
+  return t('podcastBriefing');
+}
+
+function getPodcastSummariesForPanel(summary = {}, summaries = []) {
+  const byId = new Map();
+  [summary, ...summaries].filter(isPodcastSummary).forEach((podcastSummary) => {
+    if (podcastSummary?.id && !byId.has(podcastSummary.id)) {
+      byId.set(podcastSummary.id, podcastSummary);
+    }
+  });
+
+  const slotOrder = { morning: 0, evening: 1, podcast: 2 };
+  return [...byId.values()].sort((left, right) => {
+    const slotComparison = slotOrder[getPodcastSlot(left)] - slotOrder[getPodcastSlot(right)];
+    if (slotComparison !== 0) {
+      return slotComparison;
+    }
+
+    return String(right.periodEnd || '').localeCompare(String(left.periodEnd || ''));
+  });
+}
+
+function getPodcastAudioStatusText(summary = {}, t) {
+  if (summary.audioStatus === 'generating') {
+    return t('podcastAudioGenerating');
+  }
+  if (summary.audioStatus === 'failed') {
+    return t('podcastAudioFailed');
+  }
+
+  return t('podcastAudioUnavailable');
+}
+
 function renderSourceChip(source, key) {
   const safeUrl = getSafeExternalUrl(source?.url);
   const safeIconUrl = getSafeExternalUrl(source?.sourceIconUrl);
@@ -118,12 +173,13 @@ function renderParagraphWithSources(paragraph, paragraphIndex, sourceByIndex) {
   return parts;
 }
 
-const ThematicSummaryPanel = ({ summary, locale, t, onClose }) => {
+const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose }) => {
   const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [locale, summary]);
   const sourceByIndex = useMemo(() => new Map((summary?.sources || []).map((source) => [Number(source.index), source])), [summary?.sources]);
   const isPodcast = isPodcastSummary(summary);
+  const podcastSummaries = useMemo(() => getPodcastSummariesForPanel(summary, summaries), [summaries, summary]);
   const paragraphs = useMemo(() => {
-    return splitSummaryParagraphs(localizedSummary.displaySummaryText, { maxParagraphChars: isPodcast ? 380 : 520 });
+    return isPodcast ? [] : splitSummaryParagraphs(localizedSummary.displaySummaryText, { maxParagraphChars: 520 });
   }, [isPodcast, localizedSummary.displaySummaryText]);
   const primaryPresentation = getTopicPresentation(summary?.topicKey || summary?.topics?.[0] || summary?.topicLabel);
   const PrimaryIcon = primaryPresentation.Icon;
@@ -183,43 +239,70 @@ const ThematicSummaryPanel = ({ summary, locale, t, onClose }) => {
 
           <div className="flex-1 overflow-y-auto overscroll-contain bg-slate-50 px-4 py-6 md:px-5 md:py-8 lg:px-6">
             <div className="mx-auto max-w-[54rem] space-y-5">
-              <div className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">
-                <span className="inline-flex items-center justify-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {formatSummaryDate(summary.periodStart, locale)} - {formatSummaryDate(summary.periodEnd, locale)}
-                  {Number(summary.articleCount) > 0 && (
-                    <>
-                      <span aria-hidden="true">·</span>
-                      <span>{t('summaryArticleCount', { count: Number(summary.articleCount) })}</span>
-                    </>
-                  )}
-                </span>
-              </div>
+              {!isPodcast && (
+                <div className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {formatSummaryDate(summary.periodStart, locale)} - {formatSummaryDate(summary.periodEnd, locale)}
+                    {Number(summary.articleCount) > 0 && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span>{t('summaryArticleCount', { count: Number(summary.articleCount) })}</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+              )}
 
               <article className="rounded-[2rem] border border-stone-200/80 bg-white/95 px-6 py-8 shadow-[0_24px_70px_rgba(15,23,42,0.08)] md:px-10 md:py-10">
-                {isPodcast && summary.audioStatus === 'completed' && summary.audioUrl && (
-                  <div className="mb-7">
-                    <PodcastAudioPlayer src={summary.audioUrl} t={t} />
+                {isPodcast ? (
+                  <div className="space-y-5">
+                    {locale !== 'it' && (
+                      <div className="rounded-3xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-900" aria-live="polite">
+                        {t('podcastItalianOnlyNotice')}
+                      </div>
+                    )}
+
+                    {podcastSummaries.map((podcastSummary) => (
+                      <section key={podcastSummary.id} className="rounded-[1.75rem] border border-slate-200 bg-slate-50/80 p-4 md:p-5">
+                        <div className="mb-4 flex flex-col gap-1 text-left sm:flex-row sm:items-end sm:justify-between">
+                          <div>
+                            <h3 className="text-lg font-semibold tracking-tight text-slate-950 md:text-xl">{getPodcastSlotLabel(podcastSummary, t)}</h3>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                              <span>{formatSummaryDate(podcastSummary.periodStart, locale)} - {formatSummaryDate(podcastSummary.periodEnd, locale)}</span>
+                              <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5 text-sky-700">{t('podcastItalianAudioLabel')}</span>
+                            </div>
+                          </div>
+                          {Number(podcastSummary.articleCount) > 0 && (
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                              {t('summaryArticleCount', { count: Number(podcastSummary.articleCount) })}
+                            </p>
+                          )}
+                        </div>
+
+                        {podcastSummary.audioStatus === 'completed' && podcastSummary.audioUrl ? (
+                          <PodcastAudioPlayer src={podcastSummary.audioUrl} t={t} />
+                        ) : (
+                          <div className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900" aria-live="polite">
+                            {getPodcastAudioStatusText(podcastSummary, t)}
+                          </div>
+                        )}
+                      </section>
+                    ))}
                   </div>
-                )}
+                ) : (
+                  <>
+                    {localizedSummary.displayTitle && (
+                      <h3 className="mb-6 text-2xl font-semibold tracking-tight text-stone-950 md:text-3xl">{localizedSummary.displayTitle}</h3>
+                    )}
 
-                {isPodcast && summary.audioStatus !== 'completed' && (
-                  <div className="mb-7 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900" aria-live="polite">
-                    {summary.audioStatus === 'generating'
-                      ? t('podcastAudioGenerating')
-                      : (summary.audioStatus === 'failed' ? t('podcastAudioFailed') : t('podcastAudioUnavailable'))}
-                  </div>
+                    <div className="space-y-6 text-[1.05rem] leading-8 tracking-[0.01em] text-stone-800 md:text-lg md:leading-9">
+                      {paragraphs.map((paragraph, index) => (
+                        <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex)}</p>
+                      ))}
+                    </div>
+                  </>
                 )}
-
-                {!isPodcast && localizedSummary.displayTitle && (
-                  <h3 className="mb-6 text-2xl font-semibold tracking-tight text-stone-950 md:text-3xl">{localizedSummary.displayTitle}</h3>
-                )}
-
-                <div className="space-y-6 text-[1.05rem] leading-8 tracking-[0.01em] text-stone-800 md:text-lg md:leading-9">
-                  {paragraphs.map((paragraph, index) => (
-                    <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex)}</p>
-                  ))}
-                </div>
 
               </article>
             </div>
