@@ -112,6 +112,7 @@ jobs:
           docker network create newsflow-ci
           docker run -d --name newsflow-backend-ci --network newsflow-ci \
             -e INTERNAL_PROXY_TOKEN=ci-internal-token \
+            -e PUBLIC_API_ANONYMOUS_ENABLED=true \
             newsflow-backend:ci
           for attempt in {1..30}; do
             if docker exec newsflow-backend-ci wget -qO- http://127.0.0.1:5000/health; then

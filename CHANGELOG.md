@@ -7,6 +7,7 @@
 - kept background AI topic refreshes from interrupting active feed loads and preserved existing source selections during one-time source review
 - reduced repeated feed filter-stat work, de-duplicated simultaneous RSS fetches for shared URLs, and made public API usage counters flush reliably on timers and shutdown
 - hardened BFF origin checks, proxy trust parsing, coverage reporting, and Docker smoke validation for proxied backend routes
+- made anonymous and token-authenticated public API exposure opt-in with separate environment variables, hiding API-token settings when token access is disabled
 
 ## 3.5.0
 

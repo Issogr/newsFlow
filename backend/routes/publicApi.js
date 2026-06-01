@@ -3,11 +3,15 @@ const express = require('express');
 const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const newsService = require('../services/newsAggregator');
 const userService = require('../services/userService');
-const { asyncHandler } = require('../utils/errorHandler');
+const { asyncHandler, createError } = require('../utils/errorHandler');
 const { sanitizeQuery } = require('../utils/inputValidator');
 const { extractBearerToken, resolveOptionalExternalApiPrincipal } = require('../utils/auth');
 const { parseNewsQuery } = require('../utils/newsQuery');
 const { buildUserContext } = require('../utils/userContext');
+const {
+  isAnonymousPublicApiEnabled,
+  isAuthenticatedPublicApiEnabled
+} = require('../config/publicApi');
 
 const router = express.Router();
 
@@ -27,6 +31,22 @@ function buildPublicRateLimitMessage(message) {
       code: 'RATE_LIMIT_EXCEEDED'
     }
   };
+}
+
+function requirePublicApiModeEnabled(req, res, next) {
+  const bearerToken = getBearerTokenCandidate(req);
+  const enabled = bearerToken ? isAuthenticatedPublicApiEnabled() : isAnonymousPublicApiEnabled();
+
+  if (enabled) {
+    next();
+    return;
+  }
+
+  next(createError(
+    404,
+    'Public API access is disabled.',
+    'PUBLIC_API_DISABLED'
+  ));
 }
 
 const anonymousPublicNewsRateLimitMessage = buildPublicRateLimitMessage('Too many anonymous public API requests. Please try again later.');
@@ -103,6 +123,7 @@ const bearerPublicNewsTokenRateLimit = rateLimit({
 });
 
 router.get('/news', [
+  requirePublicApiModeEnabled,
   preAuthPublicNewsRateLimit,
   bearerPublicNewsIpRateLimit,
   bearerPublicNewsTokenRateLimit,

@@ -22,6 +22,7 @@ const { requireAuthenticatedUser, requireAdminUser, SESSION_COOKIE_NAME } = requ
 const { parseIntegerEnv } = require('../utils/env');
 const { parseNewsQuery } = require('../utils/newsQuery');
 const { buildUserContext } = require('../utils/userContext');
+const { isAuthenticatedPublicApiEnabled } = require('../config/publicApi');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -202,6 +203,15 @@ function getRequestArticleIds(req) {
   return rawArticleIds.map((articleId) => String(articleId || '').trim()).filter(Boolean);
 }
 
+function requireAuthenticatedPublicApiFeature(req, res, next) {
+  if (isAuthenticatedPublicApiEnabled()) {
+    next();
+    return;
+  }
+
+  next(createError(404, 'Public API token access is disabled.', 'PUBLIC_API_DISABLED'));
+}
+
 function parseSingleByteRange(rangeHeader = '', size = 0) {
   const match = String(rangeHeader || '').match(/^bytes=(\d*)-(\d*)$/u);
   if (!match || size <= 0) {
@@ -330,18 +340,18 @@ router.get('/me', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   res.json(userService.getCurrentUser(req.user.id));
 }));
 
-router.get('/me/api-token', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+router.get('/me/api-token', [requireAuthenticatedUser, requireAuthenticatedPublicApiFeature], asyncHandler(async (req, res) => {
   res.json({ apiToken: userService.getUserApiToken(req.user.id) });
 }));
 
-router.post('/me/api-token', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+router.post('/me/api-token', [requireAuthenticatedUser, requireAuthenticatedPublicApiFeature], asyncHandler(async (req, res) => {
   const result = userService.createUserApiToken(req.user.id, {
     label: req.body?.label
   });
   res.status(201).json(result);
 }));
 
-router.delete('/me/api-token', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+router.delete('/me/api-token', [requireAuthenticatedUser, requireAuthenticatedPublicApiFeature], asyncHandler(async (req, res) => {
   userService.revokeUserApiToken(req.user.id);
   res.json({ success: true, apiToken: null });
 }));

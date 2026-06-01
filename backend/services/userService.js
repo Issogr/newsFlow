@@ -7,6 +7,10 @@ const { mapWithConcurrency } = require('../utils/concurrency');
 const { parseIntegerEnv } = require('../utils/env');
 const { getProviderIconUrl } = require('../utils/sourceIcons');
 const {
+  getPublicApiFeatures,
+  isAuthenticatedPublicApiEnabled
+} = require('../config/publicApi');
+const {
   MAX_FEEDBACK_DESCRIPTION_LENGTH,
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_TITLE_LENGTH,
@@ -323,14 +327,17 @@ function buildUserPayload(user) {
 }
 
 function buildAuthResponse(user, sessionToken) {
+  const features = getPublicApiFeatures();
+
   return {
     token: sessionToken,
     user: buildUserPayload(user),
     settings: getUserSettings(user.id),
     limits: getUserLimits(),
+    features,
     sourceCatalog: getConfiguredSourceGroups(),
     customSources: database.listUserSources(user.id),
-    apiToken: getUserApiToken(user.id)
+    apiToken: features.publicApi.authenticatedEnabled ? getUserApiToken(user.id) : null
   };
 }
 
@@ -512,9 +519,10 @@ function getCurrentUser(userId) {
     user: buildUserPayload(user),
     settings: getUserSettings(userId),
     limits: getUserLimits(),
+    features: getPublicApiFeatures(),
     sourceCatalog: getConfiguredSourceGroups(),
     customSources: database.listUserSources(userId),
-    apiToken: getUserApiToken(userId)
+    apiToken: isAuthenticatedPublicApiEnabled() ? getUserApiToken(userId) : null
   };
 }
 
@@ -523,6 +531,10 @@ function createApiTokenLabel(label) {
 }
 
 function createUserApiToken(userId, options = {}) {
+  if (!isAuthenticatedPublicApiEnabled()) {
+    throw createError(404, 'Public API token access is disabled.', 'PUBLIC_API_DISABLED');
+  }
+
   const user = database.findUserById(userId);
   if (!user) {
     throw createError(404, 'User not found', 'RESOURCE_NOT_FOUND');

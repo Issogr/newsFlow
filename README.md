@@ -122,6 +122,8 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `INTERNAL_SERVICE_NAME` | `bff` | Expected internal caller name for backend app-private traffic |
 | `APP_BASE_URL` | `http://localhost` | Public BFF or app URL for generated setup links and secure-cookie decisions |
 | `FRONTEND_BASE_URL` | unset | Fallback alias for `APP_BASE_URL` |
+| `PUBLIC_API_ANONYMOUS_ENABLED` | `false` | Enables unauthenticated external access to `GET /api/public/news` when set to `true`, `1`, `yes`, or `on` |
+| `PUBLIC_API_AUTHENTICATED_ENABLED` | `false` | Enables external API-token access to `GET /api/public/news` and shows API-token controls in Settings when set to `true`, `1`, `yes`, or `on` |
 | `PASSWORD_SETUP_TTL_MINUTES` | `60` | User password setup or reset link lifetime |
 | `ADMIN_BOOTSTRAP_TTL_MINUTES` | `30` | Admin bootstrap link lifetime |
 | `ONLINE_ACTIVITY_WINDOW_MINUTES` | `5` | Window used to consider a user online in the admin dashboard |

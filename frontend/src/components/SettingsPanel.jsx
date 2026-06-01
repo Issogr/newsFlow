@@ -10,6 +10,7 @@ import useLockBodyScroll from '../hooks/useLockBodyScroll';
 import { PROJECT_GITHUB_URL } from '../config/projectLinks';
 
 const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, onUserUpdate }) => {
+  const publicApiAuthenticatedEnabled = currentUser?.features?.publicApi?.authenticatedEnabled === true;
   const {
     saving,
     error,
@@ -116,6 +117,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               t={t}
               saving={saving}
               importInputRef={importInputRef}
+              showApiTokenControls={publicApiAuthenticatedEnabled}
               apiToken={apiToken}
               newApiToken={newApiToken}
               settingsLimits={settingsLimits}
