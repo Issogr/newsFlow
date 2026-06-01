@@ -164,7 +164,7 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `AI_STORY_GROUPING_ENABLED` | `auto` | Set to `false` to disable AI-assisted story grouping; `auto` enables it when `OPENROUTER_API_KEY` is present |
 | `AI_STORY_GROUPING_CONCURRENCY` | `1` | Max concurrent AI story-grouping checks during ingestion |
 | `AI_SUMMARY_GENERATION_ENABLED` | `auto` | Set to `false` to disable thematic summaries; `auto` enables them when `OPENROUTER_API_KEY` is present |
-| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for thematic summary slots (`07:00`, `13:00`, `19:00`) regardless of the container/server UTC clock |
+| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for thematic summary and podcast slots (`07:00`, `19:00`) regardless of the container/server UTC clock |
 | `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in, topic-tagged articles sent to one thematic summary request |
 | `AI_SUMMARY_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one thematic summary request, configurable up to 120 seconds |
 | `AI_SUMMARY_READER_PREWARM_ENABLED` | `auto` | Prewarm reader-mode cache before summary slots when summary generation is available; set to `false` to disable article-page extraction prewarm |
@@ -181,7 +181,7 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 
 Thematic summaries are generated in both supported app languages, English and Italian; the frontend displays the version matching the current app language.
 Podcast briefings use the same scheduled, built-in article set as thematic-summary prewarming, generate English and Italian scripts with `OPENROUTER_PODCAST_SCRIPT_MODEL`, and use Italian script text for optional TTS audio through `OPENROUTER_PODCAST_AUDIO_MODEL`.
-Summary slots use `AI_SUMMARY_TIME_ZONE`, so the default Docker setup generates the `07:00`, `13:00`, and `19:00` summaries at Italian local time instead of UTC.
+Summary and podcast slots use `AI_SUMMARY_TIME_ZONE`, so the default Docker setup generates the `07:00` and `19:00` briefings at Italian local time instead of UTC.
 Reader-mode extraction is prewarmed before summary slots when enabled, but summary generation itself only reads cached reader text and falls back to RSS title/description when cached text is missing or not useful.
 AI-assisted story grouping runs after ingestion and uses `OPENROUTER_STORY_GROUPING_MODEL` on RSS title/description metadata only; feed requests keep using stored grouping decisions and never call the AI provider.
 

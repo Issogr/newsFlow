@@ -9,7 +9,7 @@ const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const { isPromotionalDealArticle } = require('../utils/promotionalContent');
 
 const DEFAULT_SUMMARY_TIME_ZONE = 'Europe/Rome';
-const SUMMARY_GENERATION_HOURS = [7, 13, 19];
+const SUMMARY_GENERATION_HOURS = [7, 19];
 const PODCAST_GENERATION_HOURS = [7, 19];
 const PODCAST_HISTORY_RETAIN_COUNT = parseIntegerEnv('AI_PODCAST_HISTORY_RETAIN_COUNT', 2, { min: 1, max: 10 });
 const SUMMARY_CHECK_INTERVAL_MS = parseIntegerEnv('THEMATIC_SUMMARY_CHECK_INTERVAL_MS', 60 * 1000, { min: 1000 });
@@ -263,10 +263,6 @@ function buildSummaryId(topicKey, periodStart, periodEnd) {
 
 function buildPodcastSummaryId(periodStart, periodEnd) {
   return buildSummaryId('podcast', periodStart, periodEnd);
-}
-
-function isTerminalSummary(summary = {}) {
-  return Boolean(summary) && TERMINAL_SUMMARY_STATUSES.has(summary.status);
 }
 
 function getSummaryFailureCategory(error = {}) {

@@ -5,7 +5,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '🗂️ Thematic summaries no longer generate unused titles and use simple morning, lunch time, and evening labels instead of exact time ranges.',
+      '🗂️ Thematic summaries now follow the same morning and evening schedule as podcasts, no longer generate unused titles, and use simple slot labels instead of exact time ranges.',
       '🧽 Podcast briefings now run for morning and evening windows, keep both latest players available, and hide script text from the player panel.',
       '🛡️ Background refreshes, source setup, public API counters, and the BFF proxy are now more resilient under concurrent use.',
       '🔒 Anonymous and token-authenticated public API access are now separate opt-in server settings, and token controls appear only when token access is enabled.'
@@ -16,7 +16,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '🗂️ Le sintesi tematiche non generano piu titoli inutilizzati e usano etichette semplici come mattina, pranzo e sera invece di fasce orarie precise.',
+      '🗂️ Le sintesi tematiche ora seguono la stessa programmazione mattina e sera dei podcast, non generano piu titoli inutilizzati e usano etichette semplici invece di fasce orarie precise.',
       '🧽 I briefing podcast ora seguono le finestre mattina e sera, tengono disponibili entrambi i player piu recenti e nascondono il testo nel pannello audio.',
       '🛡️ Refresh in background, scelta fonti, contatori API pubbliche e proxy BFF sono piu solidi con utilizzo concorrente.',
       '🔒 Accesso API pubblico anonimo e con token sono ora opzioni server separate, e i controlli token compaiono solo quando l\'accesso con token e attivo.'

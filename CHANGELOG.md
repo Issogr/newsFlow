@@ -2,7 +2,7 @@
 
 ## 3.5.2
 
-- stopped generating unused thematic summary titles and replaced exact summary time ranges with morning, lunch time, and evening labels
+- aligned thematic summaries with the podcast morning and evening schedule, stopped generating unused thematic summary titles, and replaced exact summary time ranges with simple slot labels
 - generated podcast briefings on morning and evening windows, retained the latest two podcast rows so both remain available, and simplified the podcast panel to audio players only
 - kept background AI topic refreshes from interrupting active feed loads and preserved existing source selections during one-time source review
 - reduced repeated feed filter-stat work, de-duplicated simultaneous RSS fetches for shared URLs, and made public API usage counters flush reliably on timers and shutdown
