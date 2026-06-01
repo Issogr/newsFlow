@@ -506,11 +506,6 @@ async function getReaderArticle(articleId, options = {}) {
 
 module.exports = {
   getReaderArticle,
-  _normalizeText: normalizeText,
-  _splitParagraphs: splitParagraphs,
-  _calculateMinutesToRead: calculateMinutesToRead,
-  _buildBlocksFromHtml: buildBlocksFromHtml,
-  _blocksToText: blocksToText,
   _clearRuntimeState: clearRuntimeState,
   _getFallbackCacheSize: () => readerFallbackCache.size,
   _pruneExpiredFallbackCache: pruneExpiredFallbackCache,

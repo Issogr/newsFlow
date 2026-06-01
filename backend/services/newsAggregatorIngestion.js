@@ -744,7 +744,6 @@ module.exports = {
   _resetSourceFetchFreshness: resetSourceFetchFreshness,
   _pruneSourceFetchTimestamps: pruneSourceFetchTimestamps,
   _sourceFetchTimestamps: sourceFetchTimestamps,
-  _sourceFetchFailures: sourceFetchFailures,
   buildSourceFetchTasks,
   cloneArticleForSource
 };

@@ -73,6 +73,5 @@ function removePromotionalSentences(value = '') {
 module.exports = {
   isPromotionalDealArticle,
   isPromotionalDealText,
-  removePromotionalSentences,
-  _normalizePromotionalDetectionText: normalizePromotionalDetectionText
+  removePromotionalSentences
 };

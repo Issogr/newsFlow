@@ -992,7 +992,6 @@ module.exports = {
   _getLatestDueWindow: getLatestDueWindow,
   _getLatestDuePodcastWindow: getLatestDuePodcastWindow,
   _getNextDueWindow: getNextDueWindow,
-  _isReaderPrewarmEnabled: isReaderPrewarmEnabled,
   _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,
   _getSummaryTopics: getSummaryTopics,
   _generatePodcastForWindow: generatePodcastForWindow,

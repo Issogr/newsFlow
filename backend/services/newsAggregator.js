@@ -292,14 +292,6 @@ async function refreshUserSources(userId, options = {}) {
   })();
 }
 
-async function ensureSeedData() {
-  if (database.countArticles() > 0) {
-    return;
-  }
-
-  await ingestAllNews({ broadcast: false });
-}
-
 function startSeedDataRefresh() {
   if (database.countArticles() > 0) {
     return null;
@@ -441,7 +433,6 @@ module.exports = {
   _hasPendingUserAssignedSourceRefresh: hasPendingUserAssignedSourceRefresh,
   _startUserAssignedSourceRefresh: startUserAssignedSourceRefresh,
   _waitForExistingUserAssignedSourceRefresh: waitForExistingUserAssignedSourceRefresh,
-  _ensureSeedData: ensureSeedData,
   _startSeedDataRefresh: startSeedDataRefresh,
   _resetImmediateRefreshState: resetImmediateRefreshState
 };

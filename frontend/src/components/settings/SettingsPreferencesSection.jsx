@@ -3,6 +3,8 @@ import { Clock3, Globe2, Image as ImageIcon, MonitorSmartphone, PanelRightOpen, 
 import SettingsSectionCard from './SettingsSectionCard';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORDER } from '../../config/readerTextSize';
 
+const fieldClassName = 'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3';
+
 const SettingsPreferencesSection = ({
   t,
   settings,
@@ -25,7 +27,7 @@ const SettingsPreferencesSection = ({
           <select
             value={settings.defaultLanguage}
             onChange={(event) => onSettingChange('defaultLanguage', event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+            className={fieldClassName}
           >
             <option value="auto">{t('useBrowserLanguage')}</option>
             <option value="it">IT</option>
@@ -44,7 +46,7 @@ const SettingsPreferencesSection = ({
             max={settingsLimits.articleRetentionHours.max}
             value={settings.articleRetentionHours}
             onChange={(event) => onNumericSettingChange('articleRetentionHours', event.target.value, settingsLimits.articleRetentionHours)}
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+            className={fieldClassName}
           />
           <span className="mt-2 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
             {articleRetentionRange}
@@ -59,7 +61,7 @@ const SettingsPreferencesSection = ({
           <select
             value={settings.themeMode || 'system'}
             onChange={(event) => onSettingChange('themeMode', event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+            className={fieldClassName}
           >
             <option value="system">{t('themeModeSystem')}</option>
             <option value="light">{t('themeModeLight')}</option>
@@ -78,7 +80,7 @@ const SettingsPreferencesSection = ({
             max={settingsLimits.recentHours.max}
             value={settings.recentHours}
             onChange={(event) => onNumericSettingChange('recentHours', event.target.value, settingsLimits.recentHours)}
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+            className={fieldClassName}
           />
           <span className="mt-2 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
             {recentHoursRange}
@@ -93,7 +95,7 @@ const SettingsPreferencesSection = ({
           <select
             value={settings.readerPanelPosition || 'right'}
             onChange={(event) => onSettingChange('readerPanelPosition', event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+            className={fieldClassName}
           >
             <option value="left">{t('readerPanelPositionLeft')}</option>
             <option value="center">{t('readerPanelPositionCenter')}</option>
@@ -109,7 +111,7 @@ const SettingsPreferencesSection = ({
           <select
             value={settings.readerTextSize || DEFAULT_READER_TEXT_SIZE}
             onChange={(event) => onSettingChange('readerTextSize', event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+            className={fieldClassName}
           >
             {READER_TEXT_SIZE_ORDER.map((size) => (
               <option key={size} value={size}>{t(READER_TEXT_SIZE_LABELS[size])}</option>

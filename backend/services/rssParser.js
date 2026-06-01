@@ -523,8 +523,5 @@ module.exports = {
   _normalizeDate: normalizeDate,
   _getImageUrl: getImageUrl,
   _extractImageFromHtml: extractImageFromHtml,
-  _extractImageFromArticleHtml: extractImageFromArticleHtml,
-  _normalizeOptionalDate: normalizeOptionalDate,
-  _pruneResponseCache: pruneResponseCache,
-  _responseCache: responseCache
+  _extractImageFromArticleHtml: extractImageFromArticleHtml
 };

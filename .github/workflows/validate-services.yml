@@ -16,10 +16,13 @@ jobs:
         service:
           - name: backend
             working_directory: backend
+            test_command: npm test
           - name: bff
             working_directory: bff
+            test_command: npm test
           - name: frontend
             working_directory: frontend
+            test_command: npm run test:coverage
 
     steps:
       - name: Checkout repository
@@ -46,14 +49,8 @@ jobs:
         run: npm run build
 
       - name: Test
-        if: matrix.service.name != 'frontend'
         working-directory: ${{ matrix.service.working_directory }}
-        run: npm test
-
-      - name: Test frontend with coverage
-        if: matrix.service.name == 'frontend'
-        working-directory: ${{ matrix.service.working_directory }}
-        run: npm run test:coverage
+        run: ${{ matrix.service.test_command }}
 
       - name: Audit production dependencies
         working-directory: ${{ matrix.service.working_directory }}
