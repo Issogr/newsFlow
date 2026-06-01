@@ -46,8 +46,14 @@ jobs:
         run: npm run build
 
       - name: Test
+        if: matrix.service.name != 'frontend'
         working-directory: ${{ matrix.service.working_directory }}
         run: npm test
+
+      - name: Test frontend with coverage
+        if: matrix.service.name == 'frontend'
+        working-directory: ${{ matrix.service.working_directory }}
+        run: npm run test:coverage
 
       - name: Audit production dependencies
         working-directory: ${{ matrix.service.working_directory }}

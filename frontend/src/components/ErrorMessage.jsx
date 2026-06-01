@@ -13,7 +13,11 @@ const ErrorMessage = ({
       return t('unknownError');
     }
 
-    if (error.message === 'Network Error') {
+    if (error.newsFlowClientCode === 'timeout' || error.code === 'ECONNABORTED') {
+      return t('requestTimeoutError');
+    }
+
+    if (error.newsFlowClientCode === 'network' || error.message === 'Network Error') {
       return t('networkError');
     }
 

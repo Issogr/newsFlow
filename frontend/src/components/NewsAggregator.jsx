@@ -61,6 +61,23 @@ function getGroupMergeKeys(group = {}) {
   return keys;
 }
 
+function getCurrentThematicSummarySelection(selectedSummary, summaries = []) {
+  if (!selectedSummary?.id) {
+    return null;
+  }
+
+  const sameIdSummary = summaries.find((summary) => summary?.id === selectedSummary.id);
+  if (sameIdSummary) {
+    return sameIdSummary;
+  }
+
+  if (isPodcastSummary(selectedSummary)) {
+    return summaries.find(isPodcastSummary) || null;
+  }
+
+  return summaries.find((summary) => !isPodcastSummary(summary) && summary?.topicKey === selectedSummary.topicKey) || null;
+}
+
 function cloneGroup(group) {
   return {
     ...group,
@@ -374,8 +391,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       return null;
     }
 
-    return thematicSummaries.find((summary) => summary?.id === selectedThematicSummary.id) || selectedThematicSummary;
+    return getCurrentThematicSummarySelection(selectedThematicSummary, thematicSummaries);
   }, [selectedThematicSummary, thematicSummaries]);
+
+  useEffect(() => {
+    if (selectedThematicSummary?.id && !displayedThematicSummary) {
+      setSelectedThematicSummary(null);
+    }
+  }, [displayedThematicSummary, selectedThematicSummary?.id]);
 
   const visibleAvailableSources = useMemo(() => {
     return availableSources.filter((source) => !excludedSourceIds.includes(source.id));
@@ -610,6 +633,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     }
 
     if (payload.reason === 'news') {
+      if (isReadLaterView) {
+        return;
+      }
+
       loadNews({ page: 1, append: false });
       return;
     }
@@ -625,7 +652,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       silent: hasVisibleNews,
       minimumItemCount: hasVisibleNews ? Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current) : 0
     });
-  }, [loadNews, needsSourceSetup]);
+  }, [isReadLaterView, loadNews, needsSourceSetup]);
 
   const handleNewsUpdate = useCallback((payload = {}) => {
     const incomingGroupIds = (Array.isArray(payload.groupIds) ? payload.groupIds : []).filter(Boolean);
@@ -1076,7 +1103,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         <ArrowUp className="h-5 w-5" aria-hidden="true" />
       </button>
 
-      {!readerState.isOpen && !selectedThematicSummary && !settingsOpen && !feedbackOpen ? (
+      {!readerState.isOpen && !displayedThematicSummary && !settingsOpen && !feedbackOpen ? (
         <MobileBottomNav
           visibleSources={visibleAvailableSources}
           availableTopics={availableTopics}

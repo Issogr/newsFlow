@@ -129,6 +129,7 @@ describe('ReaderPanel', () => {
     expect(fetchReaderArticle).toHaveBeenCalledWith('article-1', expect.objectContaining({
       refresh: false
     }));
+    expect(fetchReaderArticle).toHaveBeenCalledTimes(1);
   });
 
   test('ignores malformed reader list blocks without crashing', async () => {

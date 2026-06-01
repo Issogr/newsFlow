@@ -137,6 +137,8 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES` | `ONLINE_ACTIVITY_WINDOW_MINUTES` or `5` | Recent-activity window used to decide which users have assigned sources eligible for scheduled refresh |
 | `MANUAL_REFRESH_COOLDOWN_MS` | `300000` | Per-user backend cooldown for manual refresh attempts; repeated clicks keep serving cached feed data |
 | `SOURCE_FETCH_FRESHNESS_MS` | `300000` | Shared upstream RSS freshness window that skips refetching a source recently fetched by any refresh path |
+| `SOURCE_FETCH_FAILURE_BACKOFF_MS` | `120000` | Initial per-source backoff after a failed RSS fetch to avoid retry storms against broken feeds |
+| `SOURCE_FETCH_FAILURE_MAX_BACKOFF_MS` | `1800000` | Maximum per-source RSS failure backoff |
 | `ARTICLE_RETENTION_HOURS` | `24` | Article and reader-cache retention window in hours |
 | `MAX_ARTICLES_PER_SOURCE` | `25` | Max parsed items per feed |
 | `RSS_MAX_RETRIES` | `4` | Feed retry attempts for transient failures |
@@ -163,9 +165,11 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `OPENROUTER_STORY_GROUPING_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for AI-assisted story grouping/news duplicate prevention |
 | `AI_STORY_GROUPING_ENABLED` | `auto` | Set to `false` to disable AI-assisted story grouping; `auto` enables it when `OPENROUTER_API_KEY` is present |
 | `AI_STORY_GROUPING_CONCURRENCY` | `1` | Max concurrent AI story-grouping checks during ingestion |
+| `AI_STORY_GROUPING_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one AI story-grouping request, independent from thematic summary requests |
 | `AI_SUMMARY_GENERATION_ENABLED` | `auto` | Set to `false` to disable thematic summaries; `auto` enables them when `OPENROUTER_API_KEY` is present |
 | `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for thematic summary and podcast slots (`07:00`, `19:00`) regardless of the container/server UTC clock |
 | `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in, topic-tagged articles sent to one thematic summary request |
+| `AI_SUMMARY_GENERATION_CONCURRENCY` | `2` | Max topic summary generations run concurrently for one due window |
 | `AI_SUMMARY_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one thematic summary request, configurable up to 120 seconds |
 | `AI_SUMMARY_READER_PREWARM_ENABLED` | `auto` | Prewarm reader-mode cache before summary slots when summary generation is available; set to `false` to disable article-page extraction prewarm |
 | `AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE` | `30` | Minutes before a summary slot when reader-cache prewarm can start |

@@ -43,6 +43,7 @@ export function FilterSearchInput({
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder={t('searchPlaceholder')}
+          aria-label={t('searchLabel')}
           tabIndex={inputTabIndex}
           className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:font-normal placeholder:text-slate-400"
         />

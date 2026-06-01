@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import NewsAggregator from './NewsAggregator';
-import { fetchNews, fetchThematicSummaries, isRequestCanceled, updateUserSettings } from '../services/api';
+import { fetchNews, fetchReadLaterNews, fetchThematicSummaries, isRequestCanceled, updateUserSettings } from '../services/api';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 import { createDeferred, resolveDeferred } from '../test-utils/deferred';
 
@@ -167,6 +167,37 @@ describe('NewsAggregator', () => {
       jest.runOnlyPendingTimers();
     });
     jest.useRealTimers();
+  });
+
+  test('ignores main-feed refresh socket events while viewing read later', async () => {
+    let onTopicRefresh;
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+    fetchNews.mockResolvedValue({
+      items: [createGroup('news', 'News headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    fetchReadLaterNews.mockResolvedValue({
+      items: [createGroup('saved', 'Saved headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    await renderNewsAggregator();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Read later' })[0]);
+    await waitFor(() => expect(fetchReadLaterNews).toHaveBeenCalled());
+    fetchNews.mockClear();
+    fetchReadLaterNews.mockClear();
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'news' });
+      await Promise.resolve();
+    });
+
+    expect(fetchNews).not.toHaveBeenCalled();
+    expect(fetchReadLaterNews).not.toHaveBeenCalled();
   });
 
   test('keeps the latest news response when an older request resolves later', async () => {
@@ -362,6 +393,61 @@ describe('NewsAggregator', () => {
     });
 
     expect(await screen.findByText('2 articles evaluated')).toBeInTheDocument();
+    expect(screen.queryByText('1 article evaluated')).not.toBeInTheDocument();
+  });
+
+  test('closes an open summary panel when refreshed summaries no longer include it', async () => {
+    let onSummariesRefresh;
+
+    useTopicRefreshSocket.mockImplementation(({ onSummariesRefresh: handleSummariesRefresh }) => {
+      onSummariesRefresh = handleSummariesRefresh;
+    });
+    fetchNews.mockResolvedValue({
+      items: [createGroup('group-1', 'Top headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    fetchThematicSummaries
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'summary-technology',
+            topicKey: 'technology',
+            topicLabel: 'Technology',
+            topics: ['Technology'],
+            periodStart: '2026-05-21T07:00:00.000Z',
+            periodEnd: '2026-05-21T13:00:00.000Z',
+            summaryTextByLocale: { en: 'Technology update [1].', it: 'Aggiornamento tecnologia [1].' },
+            articleCount: 1,
+            sources: []
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'summary-science',
+            topicKey: 'science',
+            topicLabel: 'Science',
+            topics: ['Science'],
+            periodStart: '2026-05-21T07:00:00.000Z',
+            periodEnd: '2026-05-21T13:00:00.000Z',
+            summaryTextByLocale: { en: 'Science update [1].', it: 'Aggiornamento scienza [1].' },
+            articleCount: 1,
+            sources: []
+          }
+        ]
+      });
+
+    await renderNewsAggregator();
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Technology summary' }));
+    expect(screen.getByText('1 article evaluated')).toBeInTheDocument();
+
+    await act(async () => {
+      await onSummariesRefresh({ refresh: true, reason: 'summaries' });
+    });
+
+    expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
     expect(screen.queryByText('1 article evaluated')).not.toBeInTheDocument();
   });
 
@@ -1314,7 +1400,7 @@ describe('NewsAggregator', () => {
     await renderNewsAggregator();
 
     openDesktopSearch();
-    const searchInput = screen.getByRole('searchbox');
+    const searchInput = screen.getByRole('searchbox', { name: 'Search' });
     fireEvent.change(searchInput, { target: { value: 'economy' } });
 
     expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();

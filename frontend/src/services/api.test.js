@@ -189,13 +189,20 @@ describe('api service', () => {
   });
 
   test.each([
-    ['timeout', { code: 'ECONNABORTED', config: { url: '/news' } }, 'The request timed out. Please try again in a few seconds.'],
-    ['network', { config: { url: '/news' } }, 'Unable to connect to the server. Check your connection.'],
-    ['rate limit', { response: { status: 429 }, config: { url: '/news' } }, 'Too many requests. Please wait a moment before trying again.']
-  ])('normalizes %s errors', async (label, error, message) => {
+    ['timeout', { code: 'ECONNABORTED', config: { url: '/news' } }, 'timeout'],
+    ['network', { config: { url: '/news' } }, 'network']
+  ])('marks %s errors with a structured client code', async (label, error, clientCode) => {
     await expect(responseErrorHandler(error)).rejects.toBe(error);
 
-    expect(error.message).toBe(message);
+    expect(error.newsFlowClientCode).toBe(clientCode);
+  });
+
+  test('leaves HTTP response errors response-driven', async () => {
+    const error = { response: { status: 429 }, config: { url: '/news' } };
+
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+
+    expect(error.newsFlowClientCode).toBeUndefined();
   });
 
   test('recognizes axios and native cancellation errors', () => {

@@ -34,6 +34,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Validate Docker Compose configuration
+        if: matrix.service == 'bff'
+        run: |
+          INTERNAL_PROXY_TOKEN=ci-internal-token BFF_SESSION_SECRET=ci-session-secret OPENROUTER_API_KEY= docker compose config
+
       - name: Build image
         uses: docker/build-push-action@v7
         with:
@@ -84,16 +89,24 @@ jobs:
             -e INTERNAL_PROXY_TOKEN=ci-internal-token \
             -e BFF_SESSION_SECRET=ci-session-secret \
             -e BACKEND_BASE_URL=http://newsflow-backend-ci:5000 \
+            -e APP_BASE_URL=http://127.0.0.1:8080 \
             newsflow-bff:ci
           for attempt in {1..30}; do
             if wget -qO- http://127.0.0.1:8080/api/public/news; then
-              exit 0
+              break
+            fi
+            if [ "$attempt" = "30" ]; then
+              docker logs newsflow-backend-ci
+              docker logs newsflow-bff-ci
+              exit 1
             fi
             sleep 1
           done
-          docker logs newsflow-backend-ci
-          docker logs newsflow-bff-ci
-          exit 1
+          curl -fsS -H 'Content-Type: application/json' \
+            -c /tmp/newsflow-bff-cookies.txt \
+            -d '{"username":"ci-user","password":"secret123"}' \
+            http://127.0.0.1:8080/api/auth/register >/tmp/newsflow-register.json
+          curl -fsS -b /tmp/newsflow-bff-cookies.txt http://127.0.0.1:8080/api/me >/tmp/newsflow-me.json
 
       - name: Stop smoke container
         if: always()

@@ -26,13 +26,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.code === 'ECONNABORTED') {
-      error.message = 'The request timed out. Please try again in a few seconds.';
+      error.newsFlowClientCode = 'timeout';
     } else if (!error.response) {
-      error.message = 'Unable to connect to the server. Check your connection.';
+      error.newsFlowClientCode = 'network';
     } else if (error.response.status === 401 && !isAuthRoute(error.config?.url)) {
       notifyAuthExpired();
-    } else if (error.response.status === 429) {
-      error.message = 'Too many requests. Please wait a moment before trying again.';
     }
 
     return Promise.reject(error);

@@ -287,6 +287,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         disabled={readLaterUpdating}
         className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border shadow-md transition-colors disabled:cursor-wait disabled:opacity-70 ${group.readLater ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100'}`}
         aria-label={group.readLater ? t('removeReadLater') : t('saveReadLater')}
+        aria-pressed={Boolean(group.readLater)}
         title={group.readLater ? t('removeReadLater') : t('saveReadLater')}
       >
         {group.readLater ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}

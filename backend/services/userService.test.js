@@ -305,4 +305,30 @@ describe('userService imports', () => {
       jest.useRealTimers();
     }
   });
+
+  test('rolls back authenticated public API usage flush on partial failure', async () => {
+    const firstUser = await userService.registerUser({ username: 'api-user-one', password: 'secret123' });
+    const secondUser = await userService.registerUser({ username: 'api-user-two', password: 'secret123' });
+    const originalIncrement = database.incrementUserPublicApiUsage;
+    const incrementSpy = jest.spyOn(database, 'incrementUserPublicApiUsage')
+      .mockImplementation((userId, usedAt, count) => {
+        if (userId === secondUser.user.id) {
+          throw new Error('simulated write failure');
+        }
+        return originalIncrement(userId, usedAt, count);
+      });
+
+    userService.recordPublicApiRequestUsage({ authenticated: true, userId: firstUser.user.id, usedAt: '2026-03-07T10:00:00.000Z' });
+    userService.recordPublicApiRequestUsage({ authenticated: true, userId: secondUser.user.id, usedAt: '2026-03-07T10:01:00.000Z' });
+
+    expect(() => userService.flushAnonymousPublicApiUsage({ force: true })).toThrow('simulated write failure');
+    expect(database.findUserById(firstUser.user.id).publicApiRequestCount).toBe(0);
+    expect(database.findUserById(secondUser.user.id).publicApiRequestCount).toBe(0);
+
+    incrementSpy.mockRestore();
+    userService.flushAnonymousPublicApiUsage({ force: true });
+
+    expect(database.findUserById(firstUser.user.id).publicApiRequestCount).toBe(1);
+    expect(database.findUserById(secondUser.user.id).publicApiRequestCount).toBe(1);
+  });
 });

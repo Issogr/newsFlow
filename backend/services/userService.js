@@ -74,9 +74,16 @@ function flushAuthenticatedPublicApiUsage({ force = false } = {}) {
   lastAuthenticatedPublicApiUsageFlushAt = now;
 
   try {
-    pendingEntries.forEach(([userId, usage]) => {
+    const flushEntries = () => pendingEntries.forEach(([userId, usage]) => {
       database.incrementUserPublicApiUsage(userId, usage.usedAt, usage.count);
     });
+
+    const db = typeof database.getDb === 'function' ? database.getDb() : null;
+    if (db && typeof db.transaction === 'function') {
+      db.transaction(flushEntries)();
+    } else {
+      flushEntries();
+    }
   } catch (error) {
     pendingEntries.forEach(([userId, usage]) => {
       const current = pendingAuthenticatedPublicApiRequests.get(userId) || { count: 0, usedAt: usage.usedAt };

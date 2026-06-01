@@ -33,6 +33,7 @@ const ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES = parseIntegerEnv(
 let refreshPromise = null;
 let lastRefreshAt = null;
 let schedulerHandle = null;
+let seedIngestionPromise = null;
 const usersRefreshedSinceScheduledIngestion = new Set();
 const userImmediateRefreshPromises = new Map();
 const userManualRefreshTimestamps = new Map();
@@ -299,8 +300,26 @@ async function ensureSeedData() {
   await ingestAllNews({ broadcast: false });
 }
 
+function startSeedDataRefresh() {
+  if (database.countArticles() > 0) {
+    return null;
+  }
+
+  if (!seedIngestionPromise) {
+    seedIngestionPromise = ingestAllNews({ broadcast: false })
+      .catch((error) => {
+        logger.warn(`Background seed ingestion failed: ${error.message}`);
+      })
+      .finally(() => {
+        seedIngestionPromise = null;
+      });
+  }
+
+  return seedIngestionPromise;
+}
+
 async function getNewsFeed(filters = {}, userContext = {}) {
-  await ensureSeedData();
+  startSeedDataRefresh();
 
   if (filters.refresh) {
     startUserAssignedSourceRefresh(userContext, { broadcast: false, force: true, manual: true, broadcastRefreshOnCompletion: true });
@@ -401,6 +420,7 @@ function resetImmediateRefreshState() {
   usersRefreshedSinceScheduledIngestion.clear();
   userImmediateRefreshPromises.clear();
   userManualRefreshTimestamps.clear();
+  seedIngestionPromise = null;
   resetFilterStatsCache();
 }
 
@@ -421,5 +441,7 @@ module.exports = {
   _hasPendingUserAssignedSourceRefresh: hasPendingUserAssignedSourceRefresh,
   _startUserAssignedSourceRefresh: startUserAssignedSourceRefresh,
   _waitForExistingUserAssignedSourceRefresh: waitForExistingUserAssignedSourceRefresh,
+  _ensureSeedData: ensureSeedData,
+  _startSeedDataRefresh: startSeedDataRefresh,
   _resetImmediateRefreshState: resetImmediateRefreshState
 };

@@ -16,6 +16,7 @@ const SUMMARY_CHECK_INTERVAL_MS = parseIntegerEnv('THEMATIC_SUMMARY_CHECK_INTERV
 const SUMMARY_MAX_ARTICLES_PER_TOPIC = parseIntegerEnv('AI_SUMMARY_MAX_ARTICLES_PER_TOPIC', 120, { min: 1, max: 300 });
 const SUMMARY_READER_PREWARM_MINUTES_BEFORE = parseIntegerEnv('AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE', 30, { min: 1, max: 180 });
 const SUMMARY_READER_PREWARM_CONCURRENCY = parseIntegerEnv('AI_SUMMARY_READER_PREWARM_CONCURRENCY', 2, { min: 1, max: 8 });
+const SUMMARY_GENERATION_CONCURRENCY = parseIntegerEnv('AI_SUMMARY_GENERATION_CONCURRENCY', 2, { min: 1, max: 6 });
 const SUMMARY_READER_TEXT_MAX_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MAX_CHARS', 3000, { min: 500, max: 12000 });
 const SUMMARY_READER_TEXT_MIN_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MIN_CHARS', 250, { min: 80, max: 2000 });
 const SUMMARY_FAILED_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
@@ -866,8 +867,18 @@ async function generateDueSummaries(options = {}) {
     let generatedPodcast = false;
     const canGenerateSummaries = aiSummaryGenerator.isAiSummaryGenerationAvailable();
 
-    for (const topicConfig of SUMMARY_TOPICS) {
-      const result = await generateSummaryForTopic(topicConfig, summaryWindow, { ...options, canGenerateSummaries });
+    const topicResults = await mapSettledWithConcurrency(SUMMARY_TOPICS, SUMMARY_GENERATION_CONCURRENCY, async (topicConfig) => ({
+      topicConfig,
+      result: await generateSummaryForTopic(topicConfig, summaryWindow, { ...options, canGenerateSummaries })
+    }));
+
+    for (const topicResult of topicResults) {
+      if (topicResult.status === 'rejected') {
+        logger.warn(`Thematic summary topic task failed: windowEnd=${summaryWindow.periodEnd}, error=${topicResult.reason?.message || topicResult.reason}`);
+        continue;
+      }
+
+      const { topicConfig, result } = topicResult.value;
       if (TERMINAL_SUMMARY_STATUSES.has(result.summary?.status)) {
         summaries.push(result.summary);
       }

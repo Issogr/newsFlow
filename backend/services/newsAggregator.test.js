@@ -207,6 +207,57 @@ describe('newsAggregator service flows', () => {
     expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({ limit: 251, offset: 0 }), expect.objectContaining({ userId: 'user-1' }));
   });
 
+  test('getNewsFeed returns immediately while empty-database seed ingestion runs in the background', async () => {
+    const deferred = createDeferred();
+    database.countArticles.mockReturnValue(0);
+    database.getArticles.mockReturnValue([]);
+    rssParser.parseFeed.mockReturnValue(deferred.promise);
+
+    const result = await newsAggregator.getNewsFeed({ page: 1, pageSize: 12 }, { userId: 'user-1' });
+
+    expect(result.items).toEqual([]);
+    expect(rssParser.parseFeed).toHaveBeenCalled();
+
+    const seedPromise = newsAggregator._startSeedDataRefresh();
+    deferred.resolve([]);
+    await seedPromise;
+  });
+
+  test('tracked ingestion skips run creation when no source tasks exist', async () => {
+    const result = await ingestSourceConfigs([], {
+      includeMaintenance: true,
+      trackIngestionRun: true,
+      updateRefreshTimestamp: true
+    }, {
+      getLastRefreshAt: () => null,
+      setLastRefreshAt: jest.fn()
+    });
+
+    expect(result).toEqual(expect.objectContaining({ success: true, fetchedCount: 0, insertedCount: 0, updatedCount: 0 }));
+    expect(database.createIngestionRun).not.toHaveBeenCalled();
+    expect(database.completeIngestionRun).not.toHaveBeenCalled();
+  });
+
+  test('failed RSS sources are skipped during failure backoff', async () => {
+    const source = { id: 'failing-source', name: 'Failing Source', url: 'https://example.com/failing.xml', language: 'en' };
+    rssParser.parseFeed.mockRejectedValueOnce(new Error('upstream timeout'));
+
+    await expect(ingestSourceConfigs([source], { broadcast: false }, {
+      getLastRefreshAt: () => null,
+      setLastRefreshAt: jest.fn()
+    })).rejects.toMatchObject({ status: 503, code: 'CONNECTION_ERROR' });
+
+    rssParser.parseFeed.mockClear();
+
+    const result = await ingestSourceConfigs([source], { broadcast: false }, {
+      getLastRefreshAt: () => null,
+      setLastRefreshAt: jest.fn()
+    });
+
+    expect(result).toEqual(expect.objectContaining({ success: true, fetchedCount: 0 }));
+    expect(rssParser.parseFeed).not.toHaveBeenCalled();
+  });
+
   test('caches filter stats for identical feed requests', async () => {
     database.getArticles.mockReturnValue([]);
     database.getLatestIngestionRun.mockReturnValue({ id: 7, status: 'completed', completedAt: '2026-03-07T10:00:00.000Z' });
