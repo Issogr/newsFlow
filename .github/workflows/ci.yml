@@ -11,51 +11,7 @@ permissions:
 
 jobs:
   validate:
-    name: Validate ${{ matrix.service.name }} on Node ${{ matrix.node-version }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: ['24']
-        service:
-          - name: backend
-            working_directory: backend
-          - name: bff
-            working_directory: bff
-          - name: frontend
-            working_directory: frontend
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-          cache-dependency-path: ${{ matrix.service.working_directory }}/package-lock.json
-
-      - name: Install dependencies
-        working-directory: ${{ matrix.service.working_directory }}
-        run: npm ci
-
-      - name: Lint
-        working-directory: ${{ matrix.service.working_directory }}
-        run: npm run lint
-
-      - name: Build frontend
-        if: matrix.service.name == 'frontend'
-        working-directory: ${{ matrix.service.working_directory }}
-        run: npm run build
-
-      - name: Test
-        working-directory: ${{ matrix.service.working_directory }}
-        run: npm test
-
-      - name: Audit production dependencies
-        working-directory: ${{ matrix.service.working_directory }}
-        run: npm audit --omit=dev
+    uses: ./.github/workflows/validate-services.yml
 
   docker-smoke:
     name: Docker Smoke ${{ matrix.service }}

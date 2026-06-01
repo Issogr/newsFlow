@@ -16,7 +16,7 @@ const {
   MAX_FEEDBACK_VIDEO_BYTES,
   getFeedbackAttachmentType,
 } = require('../utils/feedback');
-const { asyncHandler, createError } = require('../utils/errorHandler');
+const { asyncHandler, buildRateLimitMessage, createError } = require('../utils/errorHandler');
 const { sanitizeQuery, sanitizeBody, validateAndSanitizeParam } = require('../utils/inputValidator');
 const { requireAuthenticatedUser, requireAdminUser, SESSION_COOKIE_NAME } = require('../utils/auth');
 const { parseIntegerEnv } = require('../utils/env');
@@ -40,15 +40,6 @@ function refreshUserSourcesInBackground(userId, options = {}, label = 'user sour
   } catch (error) {
     logger.warn(`Background refresh failed for ${label}: ${error.message}`);
   }
-}
-
-function buildRateLimitMessage(message) {
-  return {
-    error: {
-      message,
-      code: 'RATE_LIMIT_EXCEEDED',
-    },
-  };
 }
 
 const feedbackRateLimit = rateLimit({

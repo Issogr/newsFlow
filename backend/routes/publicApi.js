@@ -3,7 +3,7 @@ const express = require('express');
 const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const newsService = require('../services/newsAggregator');
 const userService = require('../services/userService');
-const { asyncHandler, createError } = require('../utils/errorHandler');
+const { asyncHandler, buildRateLimitMessage, createError } = require('../utils/errorHandler');
 const { sanitizeQuery } = require('../utils/inputValidator');
 const { extractBearerToken, resolveOptionalExternalApiPrincipal } = require('../utils/auth');
 const { parseNewsQuery } = require('../utils/newsQuery');
@@ -24,15 +24,6 @@ function hashRateLimitToken(value = '') {
   return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16);
 }
 
-function buildPublicRateLimitMessage(message) {
-  return {
-    error: {
-      message,
-      code: 'RATE_LIMIT_EXCEEDED'
-    }
-  };
-}
-
 function requirePublicApiModeEnabled(req, res, next) {
   const bearerToken = getBearerTokenCandidate(req);
   const enabled = bearerToken ? isAuthenticatedPublicApiEnabled() : isAnonymousPublicApiEnabled();
@@ -49,8 +40,8 @@ function requirePublicApiModeEnabled(req, res, next) {
   ));
 }
 
-const anonymousPublicNewsRateLimitMessage = buildPublicRateLimitMessage('Too many anonymous public API requests. Please try again later.');
-const authenticatedPublicNewsRateLimitMessage = buildPublicRateLimitMessage('Too many authenticated public API requests. Please try again later.');
+const anonymousPublicNewsRateLimitMessage = buildRateLimitMessage('Too many anonymous public API requests. Please try again later.');
+const authenticatedPublicNewsRateLimitMessage = buildRateLimitMessage('Too many authenticated public API requests. Please try again later.');
 
 const anonymousPublicNewsRateLimit = rateLimit({
   windowMs: 60 * 1000,
@@ -99,7 +90,7 @@ const preAuthPublicNewsRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
-  message: buildPublicRateLimitMessage('Too many public API requests. Please try again later.')
+  message: buildRateLimitMessage('Too many public API requests. Please try again later.')
 });
 
 const bearerPublicNewsIpRateLimit = rateLimit({
@@ -109,7 +100,7 @@ const bearerPublicNewsIpRateLimit = rateLimit({
   legacyHeaders: false,
   skip: (req) => !getBearerTokenCandidate(req),
   keyGenerator: (req) => `bearer-ip:${ipKeyGenerator(req.ip)}`,
-  message: buildPublicRateLimitMessage('Too many public API token attempts. Please try again later.')
+  message: buildRateLimitMessage('Too many public API token attempts. Please try again later.')
 });
 
 const bearerPublicNewsTokenRateLimit = rateLimit({
@@ -119,7 +110,7 @@ const bearerPublicNewsTokenRateLimit = rateLimit({
   legacyHeaders: false,
   skip: (req) => !getBearerTokenCandidate(req),
   keyGenerator: (req) => `bearer-token:${ipKeyGenerator(req.ip)}:${hashRateLimitToken(getBearerTokenCandidate(req))}`,
-  message: buildPublicRateLimitMessage('Too many public API token attempts. Please try again later.')
+  message: buildRateLimitMessage('Too many public API token attempts. Please try again later.')
 });
 
 router.get('/news', [

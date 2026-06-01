@@ -12,6 +12,14 @@ function getSupportedLocale(locale) {
   return locale === 'it' ? 'it' : 'en';
 }
 
+export function isPodcastSummary(summary = {}) {
+  return summary?.type === 'podcast' || summary?.topicKey === 'podcast';
+}
+
+export function getThematicSummaryPresentationKey(summary = {}) {
+  return summary.topicKey || summary.topics?.[0] || summary.topicLabel;
+}
+
 export function getLocalizedThematicSummary(summary = {}, locale = 'en') {
   const supportedLocale = getSupportedLocale(locale);
   const fallbackLocale = supportedLocale === 'it' ? 'en' : 'it';

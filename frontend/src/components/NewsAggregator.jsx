@@ -27,6 +27,7 @@ import DesktopTopNavFilters from './DesktopTopNavFilters';
 import TopNavActionButton from './TopNavActionButton';
 import ThematicSummaryStories from './ThematicSummaryStories';
 import ThematicSummaryPanel from './ThematicSummaryPanel';
+import { isPodcastSummary } from '../utils/thematicSummaryLocale';
 
 const PAGE_SIZE = 12;
 const MAX_TOPIC_RELOAD_PAGE_SIZE = 30;
@@ -36,10 +37,6 @@ const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 const BACK_TO_TOP_THRESHOLD = 280;
 const TOP_NAV_SHRINK_THRESHOLD = 28;
 const READ_THEMATIC_SUMMARIES_STORAGE_PREFIX = 'newsflow-read-thematic-summaries';
-
-function isPodcastSummary(summary = {}) {
-  return summary?.type === 'podcast' || summary?.topicKey === 'podcast';
-}
 
 function getGroupMergeKeys(group = {}) {
   const keys = new Set();

@@ -3,7 +3,7 @@ import { ExternalLink, Newspaper, Sparkles, X } from 'lucide-react';
 import useLockBodyScroll from '../hooks/useLockBodyScroll';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { getTopicPresentation } from '../topicPresentation';
-import { getLocalizedThematicSummary } from '../utils/thematicSummaryLocale';
+import { getLocalizedThematicSummary, getThematicSummaryPresentationKey, isPodcastSummary } from '../utils/thematicSummaryLocale';
 import PodcastAudioPlayer from './PodcastAudioPlayer';
 
 const SUMMARY_SLOTS = new Set(['morning', 'lunch', 'evening']);
@@ -102,10 +102,6 @@ function splitSummaryParagraphs(summaryText = '', options = {}) {
     .map((paragraph) => paragraph.trim())
     .filter(Boolean)
     .flatMap((paragraph) => splitLongParagraph(paragraph, maxParagraphChars));
-}
-
-function isPodcastSummary(summary = {}) {
-  return summary?.type === 'podcast' || summary?.topicKey === 'podcast';
 }
 
 function getPodcastSlot(summary = {}) {
@@ -221,7 +217,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose }) =
   const paragraphs = useMemo(() => {
     return isPodcast ? [] : splitSummaryParagraphs(localizedSummary.displaySummaryText, { maxParagraphChars: 520 });
   }, [isPodcast, localizedSummary.displaySummaryText]);
-  const primaryPresentation = getTopicPresentation(summary?.topicKey || summary?.topics?.[0] || summary?.topicLabel);
+  const primaryPresentation = getTopicPresentation(getThematicSummaryPresentationKey(summary));
   const PrimaryIcon = primaryPresentation.Icon;
   const closeLabel = isPodcast ? t('closePodcastSummary') : t('closeThematicSummary');
 

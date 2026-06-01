@@ -153,7 +153,6 @@ describe('bff server', () => {
     process.env.BFF_SESSION_SECRET = 'test-bff-secret';
     process.env.INTERNAL_PROXY_TOKEN = 'test-proxy-token';
     process.env.INTERNAL_SERVICE_NAME = 'bff';
-    process.env.SESSION_STORE_CLEAR_INTERVAL_MS = '0';
     process.env.TRUST_PROXY = 'true';
 
     const backendApp = express();
@@ -262,7 +261,6 @@ describe('bff server', () => {
     delete process.env.BFF_SESSION_SECRET;
     delete process.env.INTERNAL_PROXY_TOKEN;
     delete process.env.INTERNAL_SERVICE_NAME;
-    delete process.env.SESSION_STORE_CLEAR_INTERVAL_MS;
     delete process.env.TRUST_PROXY;
     if (originalNodeEnv === undefined) {
       delete process.env.NODE_ENV;

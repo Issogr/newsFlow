@@ -508,7 +508,5 @@ module.exports = {
   getMaxArticleAgeHours,
   getNewsFeed,
   getReadLaterFeed,
-  getQueryOptions,
-  getAvailableSources,
   _resetFilterStatsCache: resetFilterStatsCache
 };

@@ -680,7 +680,6 @@ module.exports = {
   cleanupRemovedConfiguredSourceData,
   createEmptyRefreshPayload,
   ingestSourceConfigs,
-  mapSettledWithConcurrency,
   processAiTopicsForPendingArticles,
   scheduleAiTopicsForPendingArticles,
   processAiStoryGroupingForPendingArticles,

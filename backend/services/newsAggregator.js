@@ -418,14 +418,8 @@ module.exports = {
   stopScheduler,
   newsSources,
   _getActiveAssignedSourceConfigs: getActiveAssignedSourceConfigs,
-  _getUserAssignedSourceConfigs: getUserAssignedSourceConfigs,
-  _isConfiguredSourceAssignedToSettings: isConfiguredSourceAssignedToSettings,
-  _isRecentlyActive: isRecentlyActive,
-  _getManualRefreshMeta: getManualRefreshMeta,
-  _userManualRefreshTimestamps: userManualRefreshTimestamps,
   _hasPendingUserAssignedSourceRefresh: hasPendingUserAssignedSourceRefresh,
   _startUserAssignedSourceRefresh: startUserAssignedSourceRefresh,
   _waitForExistingUserAssignedSourceRefresh: waitForExistingUserAssignedSourceRefresh,
-  _resetImmediateRefreshState: resetImmediateRefreshState,
-  _resetFilterStatsCache: resetFilterStatsCache
+  _resetImmediateRefreshState: resetImmediateRefreshState
 };

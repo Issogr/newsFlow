@@ -530,6 +530,13 @@ function createApiTokenLabel(label) {
   return String(label || '').trim().slice(0, 80);
 }
 
+function validateInteractiveFeedUrl(url) {
+  return rssParser.validateFeedUrl(url, {
+    timeout: RSS_INTERACTIVE_VALIDATION_TIMEOUT,
+    maxRetries: RSS_INTERACTIVE_VALIDATION_RETRIES
+  });
+}
+
 function createUserApiToken(userId, options = {}) {
   if (!isAuthenticatedPublicApiEnabled()) {
     throw createError(404, 'Public API token access is disabled.', 'PUBLIC_API_DISABLED');
@@ -670,10 +677,7 @@ async function previewUserSource(payload = {}) {
   }
 
   try {
-    const preview = await rssParser.validateFeedUrl(url, {
-      timeout: RSS_INTERACTIVE_VALIDATION_TIMEOUT,
-      maxRetries: RSS_INTERACTIVE_VALIDATION_RETRIES
-    });
+    const preview = await validateInteractiveFeedUrl(url);
     return {
       name: preview.title || '',
       iconUrl: getProviderIconUrl(preview.siteUrl || url),
@@ -955,10 +959,7 @@ async function importUserSettings(userId, payload = {}) {
     }
 
     try {
-      await rssParser.validateFeedUrl(url, {
-        timeout: RSS_INTERACTIVE_VALIDATION_TIMEOUT,
-        maxRetries: RSS_INTERACTIVE_VALIDATION_RETRIES
-      });
+      await validateInteractiveFeedUrl(url);
     } catch (error) {
       throw createError(400, `Imported RSS URL is not valid: ${url}`, 'INVALID_RSS_URL', error);
     }

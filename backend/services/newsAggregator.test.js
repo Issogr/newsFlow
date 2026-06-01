@@ -81,7 +81,6 @@ const newsAggregator = require('./newsAggregator');
 const { normalizeIncomingArticles } = require('./newsAggregatorGrouping');
 const {
   ingestSourceConfigs,
-  mapSettledWithConcurrency,
   scheduleAiTopicsForPendingArticles,
   scheduleAiStoryGroupingForPendingArticles,
   _filterArticlesWithinRetention,
@@ -91,6 +90,7 @@ const {
   _pruneSourceFetchTimestamps,
   _sourceFetchTimestamps
 } = require('./newsAggregatorIngestion');
+const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const { getCanonicalSourceId, getCanonicalSourceName } = require('../utils/sourceCatalog');
 
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');

@@ -82,7 +82,6 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
   const [expandedSourceIds, setExpandedSourceIds] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const selectableSignature = allSelectableIds.join('\u0000');
 
   useLockBodyScroll();
 
@@ -92,7 +91,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
       const retained = current.filter((id) => selectableIdSet.has(id));
       return retained.length > 0 ? retained : initialSelectedIds;
     });
-  }, [allSelectableIds, initialSelectedIds, selectableSignature]);
+  }, [allSelectableIds, initialSelectedIds]);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedCount = selectedIds.length;

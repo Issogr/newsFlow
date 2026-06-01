@@ -75,6 +75,15 @@ const createError = (status, message, code, originalError = null) => {
   return error;
 };
 
+function buildRateLimitMessage(message) {
+  return {
+    error: {
+      message,
+      code: 'RATE_LIMIT_EXCEEDED'
+    }
+  };
+}
+
 /**
  * Middleware for centralized error handling
  */
@@ -145,5 +154,6 @@ const asyncHandler = (fn) => (req, res, next) => {
 module.exports = {
   createError,
   errorMiddleware,
-  asyncHandler
+  asyncHandler,
+  buildRateLimitMessage
 };

@@ -1,14 +1,10 @@
 import React from 'react';
 import { Sparkles } from 'lucide-react';
 import { getTopicPresentation } from '../topicPresentation';
-import { getLocalizedThematicSummary } from '../utils/thematicSummaryLocale';
+import { getLocalizedThematicSummary, getThematicSummaryPresentationKey, isPodcastSummary } from '../utils/thematicSummaryLocale';
 
 function removeHoverClasses(className = '') {
   return String(className).split(/\s+/u).filter((entry) => entry && !entry.startsWith('hover:')).join(' ');
-}
-
-function isPodcastSummary(summary = {}) {
-  return summary?.type === 'podcast' || summary?.topicKey === 'podcast';
 }
 
 const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t, onOpenSummary }) => {
@@ -26,7 +22,7 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
       <div className="flex justify-start gap-3 overflow-x-auto py-1 [scrollbar-width:none] md:justify-center [&::-webkit-scrollbar]:hidden">
         {sortedSummaries.map((summary) => {
           const localizedSummary = getLocalizedThematicSummary(summary, locale);
-          const primaryPresentation = getTopicPresentation(summary.topicKey || summary.topics?.[0] || summary.topicLabel);
+          const primaryPresentation = getTopicPresentation(getThematicSummaryPresentationKey(summary));
           const circleClassName = removeHoverClasses(primaryPresentation.iconBadgeClassName);
           const PrimaryIcon = primaryPresentation.Icon;
           const isPodcast = isPodcastSummary(summary);
