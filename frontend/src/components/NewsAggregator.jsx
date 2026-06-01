@@ -703,6 +703,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     loadThematicSummaries();
   }, [loadNews, loadThematicSummaries]);
 
+  const handlePendingNewsRefresh = useCallback(() => {
+    loadNews({ page: 1, append: false });
+  }, [loadNews]);
+
   const handleSourceSetupComplete = useCallback((settings) => {
     onUserUpdate({
       ...currentUser,
@@ -954,14 +958,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           <>
             {!isReadLaterView && pendingNewsCount > 0 && (
               <div className="mb-4 flex justify-center">
-                <div
-                  role="status"
+                <button
+                  type="button"
                   aria-live="polite"
-                  className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 shadow-sm"
+                  onClick={handlePendingNewsRefresh}
+                  disabled={isFeedRefreshActive}
+                  className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <RefreshCw className="h-4 w-4" aria-hidden="true" />
                   {t('newArticlesAvailable', { count: pendingNewsCount })}
-                </div>
+                </button>
               </div>
             )}
 

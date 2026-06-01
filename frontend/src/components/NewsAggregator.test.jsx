@@ -1020,26 +1020,24 @@ describe('NewsAggregator', () => {
     expect(screen.getByRole('button', { name: 'Load more' })).toBeEnabled();
   });
 
-  test('shows a passive pill for unseen new articles without triggering a refresh', async () => {
+  test('reloads cached feed from the new article pill', async () => {
     let socketHandlers;
 
     useTopicRefreshSocket.mockImplementation((handlers) => {
       socketHandlers = handlers;
     });
     fetchNews.mockReset();
-    fetchNews.mockImplementation(({ refresh }) => Promise.resolve(
-      refresh
-        ? {
-          items: [{ id: 'group-2', title: 'Fresh headline', items: [{ id: 'article-2', pubDate: '2026-03-14T11:00:00.000Z' }] }],
-          meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-          filters: { sources: [], sourceCatalog: [], topics: [] }
-        }
-        : {
-          items: [{ id: 'group-1', title: 'Current headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }],
-          meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-          filters: { sources: [], sourceCatalog: [], topics: [] }
-        }
-    ));
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [{ id: 'group-1', title: 'Current headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: 'group-2', title: 'Fresh headline', items: [{ id: 'article-2', pubDate: '2026-03-14T11:00:00.000Z' }] }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
 
     await renderNewsAggregator();
 
@@ -1052,10 +1050,18 @@ describe('NewsAggregator', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent('2 new articles available');
+    const newArticlesButton = screen.getByRole('button', { name: '2 new articles available' });
+    fireEvent.click(newArticlesButton);
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenCalledTimes(initialCallCount + 1);
+    });
+    expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
+      refresh: false,
+      includeFilters: true
+    }));
+    expect(await screen.findByText('Fresh headline')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '2 new articles available' })).not.toBeInTheDocument();
-    expect(fetchNews).toHaveBeenCalledTimes(initialCallCount);
-    expect(screen.queryByText('Fresh headline')).not.toBeInTheDocument();
   });
 
   test('uses the server cursor for load more requests', async () => {
