@@ -54,6 +54,7 @@ services:
       - AI_SUMMARY_READER_PREWARM_CONCURRENCY=${AI_SUMMARY_READER_PREWARM_CONCURRENCY:-2}
       - AI_SUMMARY_READER_TEXT_MAX_CHARS=${AI_SUMMARY_READER_TEXT_MAX_CHARS:-3000}
       - AI_SUMMARY_READER_TEXT_MIN_CHARS=${AI_SUMMARY_READER_TEXT_MIN_CHARS:-250}
+      - AI_PODCAST_LANGUAGES=${AI_PODCAST_LANGUAGES:-en}
       - SERVER_TIMEOUT=60000        # Server timeout in ms
       - LOG_LEVEL=info              # Logging level (debug, info, warn, error)
       - SCRAPE_INTERVAL_MS=900000   # Balanced scraping interval (15 min)

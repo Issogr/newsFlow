@@ -172,15 +172,16 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `AI_SUMMARY_READER_PREWARM_CONCURRENCY` | `2` | Max concurrent reader extraction requests during summary prewarm |
 | `AI_SUMMARY_READER_TEXT_MAX_CHARS` | `3000` | Max cached reader-text characters sent per article to the summary model |
 | `AI_SUMMARY_READER_TEXT_MIN_CHARS` | `250` | Minimum cached reader-text length considered useful for summary input |
+| `AI_PODCAST_LANGUAGES` | `en` | Comma-separated podcast script/audio locales to generate; currently supported: `en`, `it` |
 | `AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS` | `42000` | Approximate total cached text budget for one scheduled podcast script prompt |
-| `AI_PODCAST_TTS_ENABLED` | `auto` | Set to `false` to disable Italian podcast audio generation; `auto` enables it when `OPENROUTER_API_KEY` is present |
-| `OPENROUTER_PODCAST_AUDIO_MODEL` | `google/gemini-3.1-flash-tts-preview` | OpenRouter model id used for Italian podcast audio generation |
+| `AI_PODCAST_TTS_ENABLED` | `auto` | Set to `false` to disable podcast audio generation; `auto` enables it when `OPENROUTER_API_KEY` is present |
+| `OPENROUTER_PODCAST_AUDIO_MODEL` | `google/gemini-3.1-flash-tts-preview` | OpenRouter model id used for podcast audio generation |
 | `AI_PODCAST_TTS_TIMEOUT_MS` | `120000` | Timeout for one podcast audio generation request, configurable up to 120 seconds |
 | `AI_PODCAST_TTS_FORMAT` | `pcm` for Gemini TTS, otherwise `mp3` | Requested podcast audio format for the TTS model; Gemini TTS requires `pcm`, which the backend wraps into playable WAV audio before storing |
 | `AI_PODCAST_TTS_VOICE` | `Charon` | Requested podcast TTS voice; Gemini voices include `Charon`, `Puck`, and `Orus` |
 
 Thematic summaries are generated in both supported app languages, English and Italian; the frontend displays the version matching the current app language.
-Podcast briefings use the same scheduled, built-in article set as thematic-summary prewarming, generate English and Italian scripts with `OPENROUTER_PODCAST_SCRIPT_MODEL`, and use Italian script text for optional TTS audio through `OPENROUTER_PODCAST_AUDIO_MODEL`.
+Podcast briefings use the same scheduled, built-in article set as thematic-summary prewarming and generate scripts/audio only for locales enabled by `AI_PODCAST_LANGUAGES`. If the current UI language has no audio, the frontend lists the available audio language and still allows playback.
 Summary and podcast slots use `AI_SUMMARY_TIME_ZONE`, so the default Docker setup generates the `07:00` and `19:00` briefings at Italian local time instead of UTC.
 Reader-mode extraction is prewarmed before summary slots when enabled, but summary generation itself only reads cached reader text and falls back to RSS title/description when cached text is missing or not useful.
 AI-assisted story grouping runs after ingestion and uses `OPENROUTER_STORY_GROUPING_MODEL` on RSS title/description metadata only; feed requests keep using stored grouping decisions and never call the AI provider.

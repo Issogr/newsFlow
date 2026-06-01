@@ -92,10 +92,12 @@ describe('thematicSummaryService', () => {
 function mockAiPodcastGenerator(overrides = {}) {
   const mock = {
     generatePodcastForArticles: jest.fn().mockResolvedValue(null),
+    generateAudioForLocale: jest.fn().mockResolvedValue(null),
     generateItalianAudio: jest.fn().mockResolvedValue(null),
     _getScriptConfig: jest.fn(() => ({ model: 'test-summary-model' })),
     _getTtsConfig: jest.fn(() => ({ apiKey: 'test-key', enabled: true, model: 'test-tts-model' })),
     _getTtsVoice: jest.fn(() => 'Charon'),
+    _getEnabledPodcastLocales: jest.fn(() => ['en']),
     ...overrides
   };
 
@@ -920,7 +922,7 @@ describe('thematic summary generation retries', () => {
     }));
   });
 
-  test('retries missing podcast audio using the stored Italian script without regenerating text', async () => {
+  test('retries missing podcast audio using the stored enabled-language script without regenerating text', async () => {
     jest.resetModules();
 
     const summaryWindow = {
@@ -933,6 +935,14 @@ describe('thematic summary generation retries', () => {
       topicKey: 'podcast',
       status: 'completed',
       audioStatus: 'failed',
+      audioByLocale: {
+        en: {
+          audioStatus: 'failed',
+          audioModel: 'test-tts-model',
+          audioVoice: 'Charon',
+          audioRetryCount: 0
+        }
+      },
       periodStart: summaryWindow.periodStart,
       periodEnd: summaryWindow.periodEnd,
       title: 'News podcast',
@@ -963,7 +973,7 @@ describe('thematic summary generation retries', () => {
       databaseMock,
       aiSummaryGeneratorMock,
       aiPodcastGeneratorOverrides: {
-        generateItalianAudio: jest.fn().mockResolvedValue({
+        generateAudioForLocale: jest.fn().mockResolvedValue({
           data: Buffer.from('audio').toString('base64'),
           mimeType: 'audio/mpeg',
           model: 'test-tts-model',
@@ -977,17 +987,21 @@ describe('thematic summary generation retries', () => {
 
     expect(result).toEqual({ summary: completedPodcast, generatedNow: true });
     expect(aiPodcastGeneratorMock.generatePodcastForArticles).not.toHaveBeenCalled();
-    expect(aiPodcastGeneratorMock.generateItalianAudio).toHaveBeenCalledWith('Testo italiano gia generato');
+    expect(aiPodcastGeneratorMock.generateAudioForLocale).toHaveBeenCalledWith('English script', 'en');
     expect(databaseMock.upsertPodcastSummary).toHaveBeenCalledWith(expect.objectContaining({
       id: 'podcast-existing',
       titleByLocale: existingPodcast.titleByLocale,
       scriptTextByLocale: existingPodcast.summaryTextByLocale,
-      audioStatus: 'completed',
-      audioModel: 'test-tts-model',
-      audioVoice: 'Charon',
-      audioFailureCategory: '',
-      audioRetryCount: 0,
-      audioFailedAt: null,
+      audioByLocale: {
+        en: expect.objectContaining({
+          audioStatus: 'completed',
+          audioModel: 'test-tts-model',
+          audioVoice: 'Charon',
+          audioFailureCategory: '',
+          audioRetryCount: 0,
+          audioFailedAt: null
+        })
+      },
       status: 'completed'
     }));
   });
@@ -1005,6 +1019,13 @@ describe('thematic summary generation retries', () => {
       topicKey: 'podcast',
       status: 'completed',
       audioStatus: 'not_available',
+      audioByLocale: {
+        en: {
+          audioStatus: 'not_available',
+          audioModel: 'test-tts-model',
+          audioVoice: 'Charon'
+        }
+      },
       periodStart: summaryWindow.periodStart,
       periodEnd: summaryWindow.periodEnd,
       title: 'News podcast',
@@ -1023,7 +1044,7 @@ describe('thematic summary generation retries', () => {
       upsertPodcastSummary: jest.fn((payload) => ({ ...payload, type: 'podcast' }))
     };
     const aiPodcastGeneratorOverrides = {
-      generateItalianAudio: jest.fn().mockRejectedValue(new Error('Provider rejected audio'))
+      generateAudioForLocale: jest.fn().mockRejectedValue(new Error('Provider rejected audio'))
     };
     const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
 
@@ -1040,25 +1061,37 @@ describe('thematic summary generation retries', () => {
     const result = await service._generatePodcastForWindow(summaryWindow);
 
     expect(result.summary).toEqual(expect.objectContaining({
-      audioStatus: 'failed',
-      audioErrorMessage: 'Provider rejected audio'
+      audioByLocale: {
+        en: expect.objectContaining({
+          audioStatus: 'failed',
+          audioErrorMessage: 'Provider rejected audio'
+        })
+      }
     }));
     expect(result.generatedNow).toBe(false);
     expect(aiPodcastGeneratorMock.generatePodcastForArticles).not.toHaveBeenCalled();
-    expect(aiPodcastGeneratorMock.generateItalianAudio).toHaveBeenCalledWith('Testo italiano gia generato');
+    expect(aiPodcastGeneratorMock.generateAudioForLocale).toHaveBeenCalledWith('English script', 'en');
     expect(databaseMock.upsertPodcastSummary).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      audioStatus: 'generating',
-      audioModel: 'test-tts-model',
-      audioVoice: 'Charon'
+      audioByLocale: {
+        en: expect.objectContaining({
+          audioStatus: 'generating',
+          audioModel: 'test-tts-model',
+          audioVoice: 'Charon'
+        })
+      }
     }));
     expect(databaseMock.upsertPodcastSummary).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      audioStatus: 'failed',
-      audioErrorMessage: 'Provider rejected audio',
-      audioFailureCategory: 'tts_failed',
-      audioRetryCount: 1,
-      audioFailedAt: expect.any(String),
-      audioModel: 'test-tts-model',
-      audioVoice: 'Charon'
+      audioByLocale: {
+        en: expect.objectContaining({
+          audioStatus: 'failed',
+          audioErrorMessage: 'Provider rejected audio',
+          audioFailureCategory: 'tts_failed',
+          audioRetryCount: 1,
+          audioFailedAt: expect.any(String),
+          audioModel: 'test-tts-model',
+          audioVoice: 'Charon'
+        })
+      }
     }));
     expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledTimes(2);
     expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenNthCalledWith(1, { reason: 'summaries' });
@@ -1082,10 +1115,15 @@ describe('thematic summary generation retries', () => {
       type: 'podcast',
       status: 'completed',
       audioStatus: 'failed',
-      audioModel: 'test-tts-model',
-      audioVoice: 'Charon',
-      audioRetryCount: 2,
-      audioFailedAt: '2026-05-21T05:00:00.000Z',
+      audioByLocale: {
+        en: {
+          audioStatus: 'failed',
+          audioModel: 'test-tts-model',
+          audioVoice: 'Charon',
+          audioRetryCount: 2,
+          audioFailedAt: '2026-05-21T05:00:00.000Z'
+        }
+      },
       periodStart: summaryWindow.periodStart,
       periodEnd: summaryWindow.periodEnd,
       titleByLocale: { en: 'News podcast', it: 'Podcast news' },
@@ -1108,7 +1146,7 @@ describe('thematic summary generation retries', () => {
     });
 
     expect(result).toEqual({ summary: existingPodcast, generatedNow: false });
-    expect(aiPodcastGeneratorMock.generateItalianAudio).not.toHaveBeenCalled();
+    expect(aiPodcastGeneratorMock.generateAudioForLocale).not.toHaveBeenCalled();
     expect(databaseMock.upsertPodcastSummary).not.toHaveBeenCalled();
   });
 
@@ -1125,8 +1163,13 @@ describe('thematic summary generation retries', () => {
       topicKey: 'podcast',
       status: 'completed',
       audioStatus: 'completed',
-      audioModel: 'test-tts-model',
-      audioVoice: 'if_sara',
+      audioByLocale: {
+        en: {
+          audioStatus: 'completed',
+          audioModel: 'test-tts-model',
+          audioVoice: 'if_sara'
+        }
+      },
       periodStart: summaryWindow.periodStart,
       periodEnd: summaryWindow.periodEnd,
       title: 'News podcast',
@@ -1152,7 +1195,7 @@ describe('thematic summary generation retries', () => {
       databaseMock,
       aiSummaryGeneratorMock,
       aiPodcastGeneratorOverrides: {
-        generateItalianAudio: jest.fn().mockResolvedValue({
+        generateAudioForLocale: jest.fn().mockResolvedValue({
           data: Buffer.from('audio').toString('base64'),
           mimeType: 'audio/mpeg',
           model: 'test-tts-model',
@@ -1164,10 +1207,14 @@ describe('thematic summary generation retries', () => {
 
     expect(result.generatedNow).toBe(true);
     expect(aiPodcastGeneratorMock.generatePodcastForArticles).not.toHaveBeenCalled();
-    expect(aiPodcastGeneratorMock.generateItalianAudio).toHaveBeenCalledWith('Testo italiano gia generato');
+    expect(aiPodcastGeneratorMock.generateAudioForLocale).toHaveBeenCalledWith('English script', 'en');
     expect(databaseMock.upsertPodcastSummary).toHaveBeenCalledWith(expect.objectContaining({
-      audioStatus: 'completed',
-      audioVoice: 'Charon'
+      audioByLocale: {
+        en: expect.objectContaining({
+          audioStatus: 'completed',
+          audioVoice: 'Charon'
+        })
+      }
     }));
   });
 });

@@ -57,13 +57,14 @@ describe('database migrations', () => {
     const readLaterColumns = sqlite.prepare('PRAGMA table_info(user_read_later_articles)').all().map((column) => column.name);
     const thematicSummaryColumns = sqlite.prepare('PRAGMA table_info(thematic_summaries)').all().map((column) => column.name);
     const podcastSummaryColumns = sqlite.prepare('PRAGMA table_info(podcast_summaries)').all().map((column) => column.name);
+    const podcastSummaryAudioColumns = sqlite.prepare('PRAGMA table_info(podcast_summary_audio)').all().map((column) => column.name);
     const articleIndexNames = sqlite.prepare('PRAGMA index_list(articles)').all().map((index) => index.name);
     const userIndexNames = sqlite.prepare('PRAGMA index_list(users)').all().map((index) => index.name);
     const topicIndexNames = sqlite.prepare('PRAGMA index_list(article_topics)').all().map((index) => index.name);
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('36');
+    expect(migrationVersion).toBe('37');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -92,6 +93,7 @@ describe('database migrations', () => {
     expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['topic_key', 'period_start', 'period_end', 'summary_text', 'summary_text_en', 'summary_text_it', 'sources_json', 'failure_category', 'retry_count']));
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
     expect(podcastSummaryColumns).toEqual(expect.arrayContaining(['period_start', 'period_end', 'script_text', 'title_en', 'script_text_en', 'title_it', 'script_text_it', 'audio_blob', 'audio_status', 'audio_voice', 'sources_json', 'failure_category', 'retry_count', 'audio_failure_category', 'audio_retry_count', 'audio_failed_at']));
+    expect(podcastSummaryAudioColumns).toEqual(expect.arrayContaining(['podcast_id', 'locale', 'audio_blob', 'audio_status', 'audio_model', 'audio_voice', 'audio_retry_count', 'audio_failed_at']));
     expect(articleIndexNames).toContain('idx_articles_owner_published_id');
     expect(userIndexNames).toContain('idx_users_username_lower');
     expect(topicIndexNames).toContain('idx_article_topics_topic_article');
@@ -147,7 +149,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('36');
+    expect(migratedVersion).toBe('37');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
@@ -266,7 +268,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('36');
+    expect(migratedVersion).toBe('37');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -379,7 +381,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
 
-    expect(migratedVersion).toBe('36');
+    expect(migratedVersion).toBe('37');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -420,6 +422,22 @@ describe('database migrations', () => {
         UNIQUE(topic_key, period_start, period_end)
       );
 
+      CREATE TABLE podcast_summaries (
+        id TEXT PRIMARY KEY,
+        period_start TEXT NOT NULL DEFAULT '',
+        period_end TEXT NOT NULL DEFAULT '',
+        audio_model TEXT NOT NULL DEFAULT '',
+        audio_voice TEXT NOT NULL DEFAULT '',
+        audio_mime_type TEXT NOT NULL DEFAULT '',
+        audio_blob BLOB,
+        audio_status TEXT NOT NULL DEFAULT 'not_available',
+        audio_error_message TEXT,
+        audio_failure_category TEXT NOT NULL DEFAULT '',
+        audio_retry_count INTEGER NOT NULL DEFAULT 0,
+        audio_failed_at TEXT,
+        generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
       INSERT INTO app_meta (key, value) VALUES ('migration_version', '35');
       INSERT INTO thematic_summaries (
         id, topic_key, topic_label, period_start, period_end, title, summary_text,
@@ -449,12 +467,73 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('36');
+    expect(migratedVersion).toBe('37');
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
     expect(row).toEqual({
       summaryText: 'English text [1]',
       summaryTextEn: 'English text [1]',
       summaryTextIt: 'Testo italiano [1]'
+    });
+  });
+
+  test('migrates legacy podcast audio into per-locale audio rows', () => {
+    const sqlite = new SqliteDatabase(dbPath);
+    const legacyAudio = Buffer.from('legacy-italian-audio');
+
+    sqlite.exec(`
+      CREATE TABLE app_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      CREATE TABLE podcast_summaries (
+        id TEXT PRIMARY KEY,
+        period_start TEXT NOT NULL DEFAULT '',
+        period_end TEXT NOT NULL DEFAULT '',
+        audio_model TEXT NOT NULL DEFAULT '',
+        audio_voice TEXT NOT NULL DEFAULT '',
+        audio_mime_type TEXT NOT NULL DEFAULT '',
+        audio_blob BLOB,
+        audio_status TEXT NOT NULL DEFAULT 'not_available',
+        audio_error_message TEXT,
+        audio_failure_category TEXT NOT NULL DEFAULT '',
+        audio_retry_count INTEGER NOT NULL DEFAULT 0,
+        audio_failed_at TEXT,
+        generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      INSERT INTO app_meta (key, value) VALUES ('migration_version', '36');
+    `);
+    sqlite.prepare(`
+      INSERT INTO podcast_summaries (
+        id, audio_model, audio_voice, audio_mime_type, audio_blob, audio_status, generated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run('legacy-podcast', 'tts-model', 'Charon', 'audio/mpeg', legacyAudio, 'completed', '2026-05-21T13:05:00.000Z');
+    sqlite.close();
+
+    database = require('./database');
+    database.getDb();
+
+    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migratedVersion = migratedDb.prepare(`
+      SELECT value
+      FROM app_meta
+      WHERE key = 'migration_version'
+    `).get()?.value;
+    const audioRow = migratedDb.prepare(`
+      SELECT podcast_id AS podcastId, locale, audio_blob AS audioBlob, audio_status AS audioStatus
+      FROM podcast_summary_audio
+      WHERE podcast_id = 'legacy-podcast'
+    `).get();
+
+    migratedDb.close();
+
+    expect(migratedVersion).toBe('37');
+    expect(audioRow).toEqual({
+      podcastId: 'legacy-podcast',
+      locale: 'it',
+      audioBlob: legacyAudio,
+      audioStatus: 'completed'
     });
   });
 
@@ -1052,13 +1131,28 @@ describe('database queries and user data', () => {
       sources: [{ index: 1, articleId: 'podcast-article-1', title: 'Podcast article', source: primarySource.name, url: 'https://example.com/podcast' }],
       articleCount: 1,
       model: 'summary-model',
-      audio: {
-        data: Buffer.from('audio-data').toString('base64'),
-        mimeType: 'audio/mpeg',
-        model: 'tts-model',
-        voice: 'Charon'
+      audioByLocale: {
+        en: {
+          audio: {
+            data: Buffer.from('english-audio-data').toString('base64'),
+            mimeType: 'audio/mpeg',
+            model: 'tts-model',
+            voice: 'Charon',
+            generatedAt: '2025-05-21T13:05:00.000Z'
+          },
+          audioStatus: 'completed'
+        },
+        it: {
+          audio: {
+            data: Buffer.from('italian-audio-data').toString('base64'),
+            mimeType: 'audio/wav',
+            model: 'tts-model',
+            voice: 'Charon',
+            generatedAt: '2025-05-21T13:05:00.000Z'
+          },
+          audioStatus: 'completed'
+        }
       },
-      audioStatus: 'completed',
       audioFailureCategory: '',
       audioRetryCount: 0,
       audioFailedAt: null,
@@ -1079,13 +1173,29 @@ describe('database queries and user data', () => {
       audioVoice: 'Charon',
       failureCategory: '',
       retryCount: 0,
-      audioUrl: `/api/podcast-summary/podcast-summary-test/audio?v=${encodeURIComponent('2025-05-21T13:05:00.000Z:tts-model:Charon')}`
+      audioUrl: `/api/podcast-summary/podcast-summary-test/audio?locale=en&v=${encodeURIComponent('2025-05-21T13:05:00.000Z:tts-model:Charon')}`,
+      availableAudioLocales: ['en', 'it'],
+      audioByLocale: expect.objectContaining({
+        en: expect.objectContaining({
+          audioStatus: 'completed',
+          audioUrl: `/api/podcast-summary/podcast-summary-test/audio?locale=en&v=${encodeURIComponent('2025-05-21T13:05:00.000Z:tts-model:Charon')}`
+        }),
+        it: expect.objectContaining({
+          audioStatus: 'completed',
+          audioUrl: `/api/podcast-summary/podcast-summary-test/audio?locale=it&v=${encodeURIComponent('2025-05-21T13:05:00.000Z:tts-model:Charon')}`
+        })
+      })
     }));
     expect(database.getLatestPodcastSummary()).toEqual(expect.objectContaining({ id: 'podcast-summary-test' }));
     expect(database.getPodcastSummaryAudio('podcast-summary-test')).toEqual(expect.objectContaining({
-      data: Buffer.from('audio-data'),
+      data: Buffer.from('english-audio-data'),
       mimeType: 'audio/mpeg'
     }));
+    expect(database.getPodcastSummaryAudio('podcast-summary-test', 'it')).toEqual(expect.objectContaining({
+      data: Buffer.from('italian-audio-data'),
+      mimeType: 'audio/wav'
+    }));
+    expect(database.getPodcastSummaryAudio('podcast-summary-test', 'fr')).toBeNull();
   });
 
   test('prunes old summary and podcast windows after replacements exist', () => {

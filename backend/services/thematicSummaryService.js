@@ -430,10 +430,15 @@ function getPodcastScriptTextByLocale(summary = {}) {
   const summaryTextByLocale = summary.summaryTextByLocale && typeof summary.summaryTextByLocale === 'object'
     ? summary.summaryTextByLocale
     : {};
-  return {
-    en: String(summaryTextByLocale.en || summary.summaryText || '').trim(),
-    it: String(summaryTextByLocale.it || summaryTextByLocale.en || summary.summaryText || '').trim()
-  };
+  const entries = Object.entries(summaryTextByLocale)
+    .map(([locale, text]) => [String(locale || '').trim().toLowerCase(), String(text || '').trim()])
+    .filter(([locale, text]) => locale && text);
+
+  if (entries.length === 0 && summary.summaryText) {
+    entries.push(['en', String(summary.summaryText || '').trim()]);
+  }
+
+  return Object.fromEntries(entries);
 }
 
 function buildPodcastUpdatePayload(summary = {}, updates = {}) {
@@ -495,40 +500,50 @@ function isPodcastAudioRetryDue(summary = {}, options = {}) {
   return new Date(options.referenceDate || new Date()).getTime() - failedAtTime >= getAudioRetryDelayMs(summary);
 }
 
-function isSamePodcastAudioConfig(summary = {}, ttsConfig = {}, expectedVoice = '') {
-  return summary.audioModel === ttsConfig.model && summary.audioVoice === expectedVoice;
+function isSamePodcastAudioConfig(audio = {}, ttsConfig = {}, expectedVoice = '') {
+  return audio.audioModel === ttsConfig.model && audio.audioVoice === expectedVoice;
 }
 
-function shouldRetryPodcastAudio(summary = {}, options = {}) {
+function getPodcastAudioLocalesToGenerate(summary = {}, options = {}) {
   if (summary.status !== 'completed') {
-    return false;
+    return [];
   }
 
-  if (!getPodcastScriptTextByLocale(summary).it) {
-    return false;
+  const scriptTextByLocale = getPodcastScriptTextByLocale(summary);
+  const enabledLocales = aiPodcastGenerator._getEnabledPodcastLocales();
+  const localesWithScripts = enabledLocales.filter((locale) => scriptTextByLocale[locale]);
+  if (localesWithScripts.length === 0) {
+    return [];
   }
 
   const ttsConfig = aiPodcastGenerator._getTtsConfig();
   if (!ttsConfig.enabled) {
     logger.info(`AI podcast audio retry skipped: reason=${ttsConfig.apiKey ? 'disabled' : 'missing_api_key'}, windowEnd=${summary.periodEnd}`);
-    return false;
+    return [];
   }
 
   const expectedVoice = aiPodcastGenerator._getTtsVoice();
-  const sameAudioConfig = isSamePodcastAudioConfig(summary, ttsConfig, expectedVoice);
-  const audioMatchesConfig = summary.audioStatus === 'completed'
-    && summary.audioModel === ttsConfig.model
-    && summary.audioVoice === expectedVoice;
-  if (audioMatchesConfig) {
-    return false;
-  }
+  return localesWithScripts.filter((locale) => {
+    const audio = summary.audioByLocale?.[locale] || (summary.audioLocale === locale ? summary : null) || {};
+    const sameAudioConfig = isSamePodcastAudioConfig(audio, ttsConfig, expectedVoice);
+    const audioMatchesConfig = audio.audioStatus === 'completed'
+      && audio.audioModel === ttsConfig.model
+      && audio.audioVoice === expectedVoice;
+    if (audioMatchesConfig) {
+      return false;
+    }
 
-  if (summary.audioStatus === 'failed' && sameAudioConfig && !isPodcastAudioRetryDue(summary, options)) {
-    logger.debug(`AI podcast audio retry skipped during cooldown: windowEnd=${summary.periodEnd}`);
-    return false;
-  }
+    if (audio.audioStatus === 'failed' && sameAudioConfig && !isPodcastAudioRetryDue(audio, options)) {
+      logger.debug(`AI podcast audio retry skipped during cooldown: locale=${locale}, windowEnd=${summary.periodEnd}`);
+      return false;
+    }
 
-  return true;
+    return true;
+  });
+}
+
+function shouldRetryPodcastAudio(summary = {}, options = {}) {
+  return getPodcastAudioLocalesToGenerate(summary, options).length > 0;
 }
 
 async function retryPodcastAudio(summary = {}, options = {}) {
@@ -536,42 +551,37 @@ async function retryPodcastAudio(summary = {}, options = {}) {
     return { summary, generatedNow: false };
   }
 
-  const scriptTextByLocale = getPodcastScriptTextByLocale(summary);
   const ttsConfig = aiPodcastGenerator._getTtsConfig();
   const expectedVoice = aiPodcastGenerator._getTtsVoice();
-  const sameAudioConfig = isSamePodcastAudioConfig(summary, ttsConfig, expectedVoice);
-  const currentAudioRetryCount = sameAudioConfig ? Math.max(0, Number(summary.audioRetryCount) || 0) : 0;
+  const scriptTextByLocale = getPodcastScriptTextByLocale(summary);
+  const localesToGenerate = getPodcastAudioLocalesToGenerate(summary, options);
+  const generatingAudioByLocale = Object.fromEntries(localesToGenerate.map((locale) => {
+    const audio = summary.audioByLocale?.[locale] || {};
+    const sameAudioConfig = isSamePodcastAudioConfig(audio, ttsConfig, expectedVoice);
+    const currentAudioRetryCount = sameAudioConfig ? Math.max(0, Number(audio.audioRetryCount) || 0) : 0;
+    return [locale, {
+      audioStatus: 'generating',
+      audioErrorMessage: '',
+      audioFailureCategory: '',
+      audioModel: ttsConfig.model,
+      audioVoice: expectedVoice,
+      audioRetryCount: currentAudioRetryCount,
+      audioFailedAt: audio.audioFailedAt || null
+    }];
+  }));
   const generatingSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(summary, {
-    audioStatus: 'generating',
-    audioErrorMessage: '',
-    audioFailureCategory: '',
-    audioModel: ttsConfig.model,
-    audioVoice: expectedVoice,
-    audioRetryCount: currentAudioRetryCount,
-    audioFailedAt: summary.audioFailedAt || null,
+    audioByLocale: generatingAudioByLocale,
     status: 'completed'
   }));
   broadcastSummariesRefresh(options);
 
-  try {
-    const audio = await aiPodcastGenerator.generateItalianAudio(scriptTextByLocale.it);
-    if (!audio) {
-      const unavailableSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
-        audioStatus: 'not_available',
-        audioErrorMessage: '',
-        audioFailureCategory: '',
-        audioRetryCount: currentAudioRetryCount,
-        audioFailedAt: null,
-        audioModel: ttsConfig.model,
-        audioVoice: expectedVoice,
-        status: 'completed'
-      }));
-      broadcastSummariesRefresh(options);
-      return { summary: unavailableSummary, generatedNow: false };
-    }
-
-    return {
-      summary: database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
+  const completedAudioByLocale = {};
+  for (const locale of localesToGenerate) {
+    const previousAudio = generatingSummary.audioByLocale?.[locale] || {};
+    const currentAudioRetryCount = Math.max(0, Number(previousAudio.audioRetryCount) || 0);
+    try {
+      const audio = await aiPodcastGenerator.generateAudioForLocale(scriptTextByLocale[locale], locale);
+      completedAudioByLocale[locale] = audio ? {
         audio,
         audioStatus: 'completed',
         audioErrorMessage: '',
@@ -579,30 +589,40 @@ async function retryPodcastAudio(summary = {}, options = {}) {
         audioModel: audio.model || ttsConfig.model,
         audioVoice: audio.voice || expectedVoice,
         audioRetryCount: 0,
+        audioFailedAt: null
+      } : {
+        audioStatus: 'not_available',
+        audioErrorMessage: '',
+        audioFailureCategory: '',
+        audioRetryCount: currentAudioRetryCount,
         audioFailedAt: null,
-        status: 'completed'
-      })),
-      generatedNow: true
-    };
-  } catch (error) {
-    const failedAt = new Date().toISOString();
-    logger.warn(`AI podcast audio retry failed: windowEnd=${summary.periodEnd}, error=${error.message}`);
-    const failedSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
-      audioStatus: 'failed',
-      audioErrorMessage: error.message,
-      audioFailureCategory: getPodcastAudioFailureCategory(error),
-      audioModel: ttsConfig.model,
-      audioVoice: expectedVoice,
-      audioRetryCount: currentAudioRetryCount + 1,
-      audioFailedAt: failedAt,
-      status: 'completed'
-    }));
-    broadcastSummariesRefresh(options);
-    return {
-      summary: failedSummary,
-      generatedNow: false
-    };
+        audioModel: ttsConfig.model,
+        audioVoice: expectedVoice
+      };
+    } catch (error) {
+      const failedAt = new Date().toISOString();
+      logger.warn(`AI podcast audio retry failed: locale=${locale}, windowEnd=${summary.periodEnd}, error=${error.message}`);
+      completedAudioByLocale[locale] = {
+        audioStatus: 'failed',
+        audioErrorMessage: error.message,
+        audioFailureCategory: getPodcastAudioFailureCategory(error),
+        audioModel: ttsConfig.model,
+        audioVoice: expectedVoice,
+        audioRetryCount: currentAudioRetryCount + 1,
+        audioFailedAt: failedAt
+      };
+    }
   }
+
+  const completedSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
+    audioByLocale: completedAudioByLocale,
+    status: 'completed'
+  }));
+  broadcastSummariesRefresh(options);
+  return {
+    summary: completedSummary,
+    generatedNow: Object.values(completedAudioByLocale).some((audio) => audio.audioStatus === 'completed')
+  };
 }
 
 async function prewarmReaderCacheForDueWindow(options = {}) {
@@ -795,6 +815,8 @@ async function generatePodcastForWindow(window, options = {}) {
         titleByLocale: generated.titleByLocale,
         scriptTextByLocale: generated.scriptTextByLocale,
         model: generated.model,
+        audioByLocale: generated.audioByLocale,
+        audioLocale: generated.audioLocale,
         audio: generated.audio,
         audioStatus: generated.audioStatus,
         audioErrorMessage: generated.audioErrorMessage,

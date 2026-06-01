@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 36;
+  const CURRENT_SCHEMA_VERSION = 37;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getPodcastSummariesSchemaSql() {
@@ -41,6 +41,30 @@ function createDatabaseSchema({ logger }) {
 
       CREATE INDEX IF NOT EXISTS idx_podcast_summaries_period
       ON podcast_summaries (period_end DESC);
+    `;
+  }
+
+  function getPodcastSummaryAudioSchemaSql() {
+    return `
+      CREATE TABLE IF NOT EXISTS podcast_summary_audio (
+        podcast_id TEXT NOT NULL,
+        locale TEXT NOT NULL,
+        audio_model TEXT NOT NULL DEFAULT '',
+        audio_voice TEXT NOT NULL DEFAULT '',
+        audio_mime_type TEXT NOT NULL DEFAULT '',
+        audio_blob BLOB,
+        audio_status TEXT NOT NULL DEFAULT 'not_available',
+        audio_error_message TEXT,
+        audio_failure_category TEXT NOT NULL DEFAULT '',
+        audio_retry_count INTEGER NOT NULL DEFAULT 0,
+        audio_failed_at TEXT,
+        generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (podcast_id, locale),
+        FOREIGN KEY (podcast_id) REFERENCES podcast_summaries (id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_podcast_summary_audio_locale
+      ON podcast_summary_audio (locale, audio_status);
     `;
   }
 
@@ -291,6 +315,7 @@ function createDatabaseSchema({ logger }) {
       ON thematic_summaries (topic_key, period_end DESC);
 
       ${getPodcastSummariesSchemaSql()}
+      ${getPodcastSummaryAudioSchemaSql()}
 
       CREATE VIRTUAL TABLE IF NOT EXISTS article_search USING fts5(
         article_id UNINDEXED,
@@ -430,6 +455,10 @@ function createDatabaseSchema({ logger }) {
 
     if (thematicSummaryColumns.has('title') || thematicSummaryColumns.has('title_en') || thematicSummaryColumns.has('title_it')) {
       return 35;
+    }
+
+    if (!tableExists(database, 'podcast_summary_audio')) {
+      return 36;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -937,6 +966,28 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 36);
       logger.info('Migrated DB schema from version 35 to 36');
+      migrateSchema(database, 36);
+      return;
+    }
+
+    if (currentVersion === 36) {
+      database.exec(getPodcastSummaryAudioSchemaSql());
+      database.exec(`
+        INSERT INTO podcast_summary_audio (
+          podcast_id, locale, audio_model, audio_voice, audio_mime_type, audio_blob,
+          audio_status, audio_error_message, audio_failure_category, audio_retry_count,
+          audio_failed_at, generated_at
+        )
+        SELECT id, 'it', audio_model, audio_voice, audio_mime_type, audio_blob,
+               audio_status, audio_error_message, audio_failure_category, audio_retry_count,
+               audio_failed_at, generated_at
+        FROM podcast_summaries
+        WHERE audio_status != 'not_available' OR audio_blob IS NOT NULL OR audio_error_message IS NOT NULL
+        ON CONFLICT(podcast_id, locale) DO NOTHING
+      `);
+
+      setCurrentSchemaVersion(database, 37);
+      logger.info('Migrated DB schema from version 36 to 37');
       return;
     }
 

@@ -475,6 +475,7 @@ router.get('/thematic-summaries', requireAuthenticatedUser, asyncHandler(async (
 
 router.get('/podcast-summary/:summaryId/audio', [
   requireAuthenticatedUser,
+  sanitizeQuery('locale'),
   ...validateAndSanitizeParam('summaryId', 'Invalid podcast summary ID')
 ], asyncHandler(async (req, res) => {
   const summaryId = String(req.params.summaryId || '').trim();
@@ -482,7 +483,7 @@ router.get('/podcast-summary/:summaryId/audio', [
     throw createError(400, 'Invalid podcast summary ID', 'INVALID_PODCAST_SUMMARY_ID');
   }
 
-  const audio = database.getPodcastSummaryAudio(summaryId);
+  const audio = database.getPodcastSummaryAudio(summaryId, req.query.locale);
   if (!audio?.data) {
     throw createError(404, 'Podcast audio not found', 'RESOURCE_NOT_FOUND');
   }

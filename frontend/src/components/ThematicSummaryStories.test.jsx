@@ -12,15 +12,15 @@ const translations = {
   podcastBriefing: 'Podcast briefing',
   morningPodcast: 'Morning podcast',
   eveningPodcast: 'Evening podcast',
-  podcastItalianOnlyNotice: 'English podcast audio is not generated yet. The available podcast audio is in Italian.',
-  podcastItalianAudioLabel: 'Audio in Italian',
+  podcastAudioAvailableNotice: ({ languages }) => `Podcast audio is available in ${languages}.`,
+  podcastAudioLanguageLabel: ({ language }) => `Audio in ${language}`,
   thematicSummary: 'Thematic summary',
   summaryArticleCount: ({ count }) => `${count} articles evaluated`,
   summarySlotMorning: 'Morning',
   summarySlotLunch: 'Lunch time',
   summarySlotEvening: 'Evening',
   summarySlotRecent: 'Latest briefing',
-  podcastAudioTitle: 'Italian audio briefing',
+  podcastAudioTitle: 'Audio briefing',
   podcastAudioReady: 'Ready to play',
   podcastAudioLoadFailed: 'Unable to load audio',
   podcastAudioSeek: 'Seek podcast audio',
@@ -105,8 +105,14 @@ describe('thematic summary podcast UI', () => {
           articleCount: 2,
           titleByLocale: { en: 'Morning podcast', it: 'Podcast del mattino' },
           summaryTextByLocale: { en: 'English script', it: 'Testo podcast italiano' },
+          audioByLocale: {
+            en: {
+              audioStatus: 'completed',
+              audioUrl: '/api/podcast-summary/podcast-1/audio?locale=en'
+            }
+          },
           audioStatus: 'completed',
-          audioUrl: '/api/podcast-summary/podcast-1/audio'
+          audioUrl: '/api/podcast-summary/podcast-1/audio?locale=en'
         }}
         locale="en"
         t={t}
@@ -116,9 +122,9 @@ describe('thematic summary podcast UI', () => {
 
     expect(screen.getByText('Podcast briefing')).toBeInTheDocument();
     expect(screen.getByText('Morning podcast')).toBeInTheDocument();
-    expect(screen.getByText('English podcast audio is not generated yet. The available podcast audio is in Italian.')).toBeInTheDocument();
-    expect(screen.getByText('Audio in Italian')).toBeInTheDocument();
-    expect(screen.queryByText('Italian audio briefing')).not.toBeInTheDocument();
+    expect(screen.queryByText('Podcast audio is available in Italian.')).not.toBeInTheDocument();
+    expect(screen.getByText('Audio in English')).toBeInTheDocument();
+    expect(screen.queryByText('Audio briefing')).not.toBeInTheDocument();
     expect(screen.queryByText('Podcast del mattino')).not.toBeInTheDocument();
     const audio = document.querySelector('audio');
     Object.defineProperty(audio, 'duration', { configurable: true, value: 2 });
@@ -129,12 +135,44 @@ describe('thematic summary podcast UI', () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Play podcast audio' })).toBeInTheDocument();
     expect(screen.getByLabelText('Seek podcast audio')).toBeInTheDocument();
-    expect(audio?.getAttribute('src')).toBe('/api/podcast-summary/podcast-1/audio');
+    expect(audio?.getAttribute('src')).toBe('/api/podcast-summary/podcast-1/audio?locale=en');
     expect(audio?.getAttribute('preload')).toBe('metadata');
 
     fireEvent.click(screen.getByRole('button', { name: 'Play podcast audio' }));
 
     await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled());
+  });
+
+  test('shows available podcast audio language when current locale audio is missing', () => {
+    render(
+      <ThematicSummaryPanel
+        summary={{
+          id: 'podcast-1',
+          type: 'podcast',
+          topicKey: 'podcast',
+          topicLabel: 'Podcast',
+          periodStart: '2026-05-21T05:00:00.000Z',
+          periodEnd: '2026-05-21T11:00:00.000Z',
+          articleCount: 2,
+          titleByLocale: { en: 'Morning podcast', it: 'Podcast del mattino' },
+          summaryTextByLocale: { en: 'English script', it: 'Testo podcast italiano' },
+          audioByLocale: {
+            en: {
+              audioStatus: 'completed',
+              audioUrl: '/api/podcast-summary/podcast-1/audio?locale=en'
+            }
+          }
+        }}
+        locale="it"
+        t={t}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Podcast audio is available in inglese.')).toBeInTheDocument();
+    expect(screen.getByText('Audio in inglese')).toBeInTheDocument();
+    expect(screen.queryByText('Testo podcast italiano')).not.toBeInTheDocument();
+    expect(document.querySelector('audio')?.getAttribute('src')).toBe('/api/podcast-summary/podcast-1/audio?locale=en');
   });
 
   test('shows podcast audio generation feedback while audio is pending', () => {

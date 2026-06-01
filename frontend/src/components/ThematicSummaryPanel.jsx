@@ -7,6 +7,10 @@ import { getLocalizedThematicSummary, getThematicSummaryPresentationKey, isPodca
 import PodcastAudioPlayer from './PodcastAudioPlayer';
 
 const SUMMARY_SLOTS = new Set(['morning', 'lunch', 'evening']);
+const PODCAST_LANGUAGE_LABELS = {
+  en: { en: 'English', it: 'inglese' },
+  it: { en: 'Italian', it: 'italiano' }
+};
 
 function getFallbackSummarySlot(summary = {}) {
   const date = new Date(summary.periodEnd || '');
@@ -159,6 +163,50 @@ function getPodcastAudioStatusText(summary = {}, t) {
   return t('podcastAudioUnavailable');
 }
 
+function getPodcastLanguageLabel(audioLocale = '', locale = 'en') {
+  const normalizedLocale = String(audioLocale || '').trim().toLowerCase();
+  return PODCAST_LANGUAGE_LABELS[normalizedLocale]?.[locale === 'it' ? 'it' : 'en'] || normalizedLocale.toUpperCase();
+}
+
+function formatLanguageList(locales = [], locale = 'en') {
+  const labels = locales.map((audioLocale) => getPodcastLanguageLabel(audioLocale, locale)).filter(Boolean);
+  if (labels.length <= 1) {
+    return labels[0] || '';
+  }
+
+  const formatter = typeof Intl !== 'undefined' && Intl.ListFormat
+    ? new Intl.ListFormat(locale === 'it' ? 'it' : 'en', { style: 'long', type: 'conjunction' })
+    : null;
+  return formatter ? formatter.format(labels) : labels.join(', ');
+}
+
+function getPodcastAudioChoice(summary = {}, locale = 'en') {
+  const audioByLocale = summary.audioByLocale && typeof summary.audioByLocale === 'object' ? summary.audioByLocale : {};
+  const completedLocales = Object.entries(audioByLocale)
+    .filter(([, audio]) => audio?.audioStatus === 'completed' && audio?.audioUrl)
+    .map(([audioLocale]) => audioLocale);
+  const preferredLocale = completedLocales.includes(locale)
+    ? locale
+    : (completedLocales.includes('en') ? 'en' : completedLocales[0]);
+
+  if (preferredLocale) {
+    return {
+      locale: preferredLocale,
+      audio: audioByLocale[preferredLocale],
+      completedLocales
+    };
+  }
+
+  const statusLocale = audioByLocale[locale]
+    ? locale
+    : (audioByLocale.en ? 'en' : Object.keys(audioByLocale)[0]);
+  return {
+    locale: statusLocale || summary.audioLocale || '',
+    audio: statusLocale ? audioByLocale[statusLocale] : summary,
+    completedLocales
+  };
+}
+
 function renderSourceChip(source, key) {
   const safeUrl = getSafeExternalUrl(source?.url);
   const safeIconUrl = getSafeExternalUrl(source?.sourceIconUrl);
@@ -293,37 +341,48 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose }) =
               <article className="rounded-[2rem] border border-stone-200/80 bg-white/95 px-6 py-8 shadow-[0_24px_70px_rgba(15,23,42,0.08)] md:px-10 md:py-10">
                 {isPodcast ? (
                   <div className="space-y-5">
-                    {locale !== 'it' && (
-                      <div className="rounded-3xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-900" aria-live="polite">
-                        {t('podcastItalianOnlyNotice')}
-                      </div>
-                    )}
+                    {podcastSummaries.map((podcastSummary) => {
+                      const audioChoice = getPodcastAudioChoice(podcastSummary, locale);
+                      const selectedAudio = audioChoice.audio || {};
+                      const selectedLocale = audioChoice.locale;
+                      const selectedLanguageLabel = getPodcastLanguageLabel(selectedLocale, locale);
+                      const availableLanguageList = formatLanguageList(audioChoice.completedLocales, locale);
+                      const showAvailabilityNotice = audioChoice.completedLocales.length > 0 && selectedLocale !== locale;
 
-                    {podcastSummaries.map((podcastSummary) => (
-                      <section key={podcastSummary.id} className="space-y-4 border-b border-slate-200/80 pb-5 last:border-b-0 last:pb-0">
-                        <div className="flex flex-col gap-1 text-left sm:flex-row sm:items-end sm:justify-between">
-                          <div>
-                            <h3 className="text-lg font-semibold tracking-tight text-slate-950 md:text-xl">{getPodcastSlotLabel(podcastSummary, t)}</h3>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                              <span>{t('podcastItalianAudioLabel')}</span>
+                      return (
+                        <section key={podcastSummary.id} className="space-y-4 border-b border-slate-200/80 pb-5 last:border-b-0 last:pb-0">
+                          {showAvailabilityNotice && (
+                            <div className="rounded-3xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-900" aria-live="polite">
+                              {t('podcastAudioAvailableNotice', { languages: availableLanguageList })}
                             </div>
-                          </div>
-                          {Number(podcastSummary.articleCount) > 0 && (
-                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                              {t('summaryArticleCount', { count: Number(podcastSummary.articleCount) })}
-                            </p>
                           )}
-                        </div>
 
-                        {podcastSummary.audioStatus === 'completed' && podcastSummary.audioUrl ? (
-                          <PodcastAudioPlayer src={podcastSummary.audioUrl} t={t} />
-                        ) : (
-                          <div className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900" aria-live="polite">
-                            {getPodcastAudioStatusText(podcastSummary, t)}
+                          <div className="flex flex-col gap-1 text-left sm:flex-row sm:items-end sm:justify-between">
+                            <div>
+                              <h3 className="text-lg font-semibold tracking-tight text-slate-950 md:text-xl">{getPodcastSlotLabel(podcastSummary, t)}</h3>
+                              {selectedLanguageLabel && (
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                                  <span>{t('podcastAudioLanguageLabel', { language: selectedLanguageLabel })}</span>
+                                </div>
+                              )}
+                            </div>
+                            {Number(podcastSummary.articleCount) > 0 && (
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                                {t('summaryArticleCount', { count: Number(podcastSummary.articleCount) })}
+                              </p>
+                            )}
                           </div>
-                        )}
-                      </section>
-                    ))}
+
+                          {selectedAudio.audioStatus === 'completed' && selectedAudio.audioUrl ? (
+                            <PodcastAudioPlayer src={selectedAudio.audioUrl} t={t} />
+                          ) : (
+                            <div className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900" aria-live="polite">
+                              {getPodcastAudioStatusText(selectedAudio, t)}
+                            </div>
+                          )}
+                        </section>
+                      );
+                    })}
                   </div>
                 ) : (
                   <>
