@@ -46,6 +46,7 @@ let lastAnonymousPublicApiUsageFlushAt = Date.now();
 let pendingAuthenticatedPublicApiRequests = new Map();
 let pendingAuthenticatedPublicApiRequestCount = 0;
 let lastAuthenticatedPublicApiUsageFlushAt = Date.now();
+let publicApiUsageFlushTimer = null;
 
 function flushAuthenticatedPublicApiUsage({ force = false } = {}) {
   if (pendingAuthenticatedPublicApiRequestCount <= 0) {
@@ -840,6 +841,36 @@ function recordPublicApiRequestUsage({ authenticated = false, userId = null, use
   flushAnonymousPublicApiUsage();
 }
 
+function startPublicApiUsageFlushTimer() {
+  if (publicApiUsageFlushTimer) {
+    return publicApiUsageFlushTimer;
+  }
+
+  const intervalMs = Math.min(ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS, AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS);
+  if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+    return null;
+  }
+
+  publicApiUsageFlushTimer = setInterval(() => {
+    try {
+      flushAnonymousPublicApiUsage({ force: true });
+    } catch {
+      // Keep counters buffered in memory; a later tick or shutdown can retry.
+    }
+  }, intervalMs);
+  publicApiUsageFlushTimer.unref?.();
+  return publicApiUsageFlushTimer;
+}
+
+function stopPublicApiUsageFlushTimer() {
+  if (!publicApiUsageFlushTimer) {
+    return;
+  }
+
+  clearInterval(publicApiUsageFlushTimer);
+  publicApiUsageFlushTimer = null;
+}
+
 function createUserPasswordSetupLink(adminUserId, targetUserId) {
   const targetUser = database.findUserById(targetUserId);
   if (!targetUser) {
@@ -971,6 +1002,8 @@ module.exports = {
   listUsersForAdmin,
   recordPublicApiRequestUsage,
   flushAnonymousPublicApiUsage,
+  startPublicApiUsageFlushTimer,
+  stopPublicApiUsageFlushTimer,
   createUserPasswordSetupLink,
   deleteUserAsAdmin,
   updateUserSettings,

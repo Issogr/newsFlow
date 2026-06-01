@@ -105,23 +105,41 @@ jobs:
           docker logs newsflow-backend-ci
           exit 1
 
-      - name: Run BFF health check
+      - name: Run BFF proxy smoke check
         if: matrix.service == 'bff'
         run: |
-          docker run -d --name newsflow-bff-ci -p 8080:80 \
+          docker build -t newsflow-backend:ci -f ./backend/Dockerfile ./backend
+          docker network create newsflow-ci
+          docker run -d --name newsflow-backend-ci --network newsflow-ci \
+            -e INTERNAL_PROXY_TOKEN=ci-internal-token \
+            newsflow-backend:ci
+          for attempt in {1..30}; do
+            if docker exec newsflow-backend-ci wget -qO- http://127.0.0.1:5000/health; then
+              break
+            fi
+            if [ "$attempt" = "30" ]; then
+              docker logs newsflow-backend-ci
+              exit 1
+            fi
+            sleep 1
+          done
+          docker run -d --name newsflow-bff-ci --network newsflow-ci -p 8080:80 \
             -e INTERNAL_PROXY_TOKEN=ci-internal-token \
             -e BFF_SESSION_SECRET=ci-session-secret \
-            -e BACKEND_BASE_URL=http://127.0.0.1:5000 \
+            -e BACKEND_BASE_URL=http://newsflow-backend-ci:5000 \
             newsflow-bff:ci
           for attempt in {1..30}; do
-            if wget -qO- http://127.0.0.1:8080/health; then
+            if wget -qO- http://127.0.0.1:8080/api/public/news; then
               exit 0
             fi
             sleep 1
           done
+          docker logs newsflow-backend-ci
           docker logs newsflow-bff-ci
           exit 1
 
       - name: Stop smoke container
         if: always()
-        run: docker rm -f newsflow-${{ matrix.service }}-ci || true
+        run: |
+          docker rm -f newsflow-${{ matrix.service }}-ci newsflow-backend-ci || true
+          docker network rm newsflow-ci || true

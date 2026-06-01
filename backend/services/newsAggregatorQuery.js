@@ -8,6 +8,54 @@ const { parseIntegerEnv } = require('../utils/env');
 const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
 const GROUP_PAGINATION_ARTICLE_BATCH_SIZE = 250;
 const READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE = 250;
+const FILTER_STATS_CACHE_TTL_MS = parseIntegerEnv('FILTER_STATS_CACHE_TTL_MS', 10 * 1000, { min: 0, max: 5 * 60 * 1000 });
+const FILTER_STATS_CACHE_MAX_ENTRIES = parseIntegerEnv('FILTER_STATS_CACHE_MAX_ENTRIES', 200, { min: 1, max: 5000 });
+const filterStatsCache = new Map();
+
+function cloneJsonSafe(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function normalizeSignatureList(values = []) {
+  return (Array.isArray(values) ? values : [])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .sort();
+}
+
+function buildAvailableSourcesSignature(availableSources = []) {
+  return availableSources.map((source) => ({
+    id: source.id,
+    name: source.name,
+    language: source.language || null,
+    iconUrl: source.iconUrl || '',
+    subSources: (Array.isArray(source.subSources) ? source.subSources : []).map((subSource) => [subSource.id, subSource.name, subSource.language || null])
+  }));
+}
+
+function pruneFilterStatsCache(referenceTime = Date.now()) {
+  if (filterStatsCache.size === 0) {
+    return;
+  }
+
+  filterStatsCache.forEach((entry, key) => {
+    if (!entry?.cachedAt || referenceTime - entry.cachedAt > FILTER_STATS_CACHE_TTL_MS) {
+      filterStatsCache.delete(key);
+    }
+  });
+
+  while (filterStatsCache.size > FILTER_STATS_CACHE_MAX_ENTRIES) {
+    const oldestKey = filterStatsCache.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    filterStatsCache.delete(oldestKey);
+  }
+}
+
+function resetFilterStatsCache() {
+  filterStatsCache.clear();
+}
 
 function getPagination(filters = {}) {
   return {
@@ -314,6 +362,56 @@ function buildSourceCatalogResponse(availableSources = []) {
   }));
 }
 
+function buildFilterStatsCacheKey({ filters = {}, queryOptions = {}, availableSources = [], readLater = false, refreshVersion = null }) {
+  return JSON.stringify({
+    readLater: Boolean(readLater),
+    refreshVersion: refreshVersion || '',
+    userId: queryOptions.userId || null,
+    maxArticleAgeHours: queryOptions.maxArticleAgeHours ?? null,
+    excludedSourceIds: normalizeSignatureList(queryOptions.excludedSourceIds),
+    excludedSubSourceIds: normalizeSignatureList(queryOptions.excludedSubSourceIds),
+    search: String(filters.search || '').trim(),
+    sourceIds: normalizeSignatureList(filters.sourceIds),
+    recentHours: Number(filters.recentHours) || null,
+    availableSources: buildAvailableSourcesSignature(availableSources)
+  });
+}
+
+function getFilterStats({ filters = {}, queryOptions = {}, availableSources = [], readLater = false, refreshVersion = null }) {
+  if (!Number.isFinite(FILTER_STATS_CACHE_TTL_MS) || FILTER_STATS_CACHE_TTL_MS <= 0) {
+    return {
+      sources: database.getSourceStats(availableSources, queryOptions),
+      sourceCatalog: buildSourceCatalogResponse(availableSources),
+      topics: database.getTopicStatsByFilters({
+        search: filters.search,
+        sourceIds: filters.sourceIds,
+        recentHours: readLater ? undefined : filters.recentHours
+      }, 18, queryOptions)
+    };
+  }
+
+  const now = Date.now();
+  pruneFilterStatsCache(now);
+  const cacheKey = buildFilterStatsCacheKey({ filters, queryOptions, availableSources, readLater, refreshVersion });
+  const cached = filterStatsCache.get(cacheKey);
+  if (cached && now - cached.cachedAt <= FILTER_STATS_CACHE_TTL_MS) {
+    return cloneJsonSafe(cached.value);
+  }
+
+  const value = {
+    sources: database.getSourceStats(availableSources, queryOptions),
+    sourceCatalog: buildSourceCatalogResponse(availableSources),
+    topics: database.getTopicStatsByFilters({
+      search: filters.search,
+      sourceIds: filters.sourceIds,
+      recentHours: readLater ? undefined : filters.recentHours
+    }, 18, queryOptions)
+  };
+  filterStatsCache.set(cacheKey, { cachedAt: now, value: cloneJsonSafe(value) });
+  pruneFilterStatsCache(now);
+  return value;
+}
+
 async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   const {
     ensureSeedData = async () => {},
@@ -357,15 +455,12 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
       pendingUserRefresh: isUserRefreshPending(),
       ...manualRefreshMeta
     },
-    filters: includeFilters ? {
-      sources: database.getSourceStats(availableSources, queryOptions),
-      sourceCatalog: buildSourceCatalogResponse(availableSources),
-      topics: database.getTopicStatsByFilters({
-        search: filters.search,
-        sourceIds: filters.sourceIds,
-        recentHours: filters.recentHours
-      }, 18, queryOptions)
-    } : null
+    filters: includeFilters ? getFilterStats({
+      filters,
+      queryOptions,
+      availableSources,
+      refreshVersion: latestIngestion?.completedAt || latestIngestion?.startedAt || getLastRefreshAt()
+    }) : null
   };
 }
 
@@ -397,14 +492,12 @@ async function getReadLaterFeed(filters = {}, userContext = {}) {
       scannedArticles: groupedPage.articles.length,
       readLater: true
     },
-    filters: includeFilters ? {
-      sources: database.getSourceStats(availableSources, queryOptions),
-      sourceCatalog: buildSourceCatalogResponse(availableSources),
-      topics: database.getTopicStatsByFilters({
-        search: filters.search,
-        sourceIds: filters.sourceIds
-      }, 18, queryOptions)
-    } : null
+    filters: includeFilters ? getFilterStats({
+      filters,
+      queryOptions,
+      availableSources,
+      readLater: true
+    }) : null
   };
 }
 
@@ -416,5 +509,6 @@ module.exports = {
   getNewsFeed,
   getReadLaterFeed,
   getQueryOptions,
-  getAvailableSources
+  getAvailableSources,
+  _resetFilterStatsCache: resetFilterStatsCache
 };

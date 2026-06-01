@@ -21,12 +21,14 @@ const FilterBubbles = ({
       maxHeight={maxHeight}
       className={bubbleClassName}
     >
-      <SourceFilterList
-        sources={visibleSources}
-        activeSourceIds={activeFilters.sourceIds}
-        emptyLabel={emptyLabel}
-        onToggleSource={(sourceId) => onToggleFilter('sourceIds', sourceId)}
-      />
+      {openBubble === 'sources' && (
+        <SourceFilterList
+          sources={visibleSources}
+          activeSourceIds={activeFilters.sourceIds}
+          emptyLabel={emptyLabel}
+          onToggleSource={(sourceId) => onToggleFilter('sourceIds', sourceId)}
+        />
+      )}
     </FilterBubble>
 
     <FilterBubble
@@ -35,13 +37,15 @@ const FilterBubbles = ({
       maxHeight={maxHeight}
       className={bubbleClassName}
     >
-      <TopicFilterList
-        topics={availableTopics}
-        activeTopics={activeFilters.topics}
-        emptyLabel={emptyLabel}
-        locale={locale}
-        onToggleTopic={(topic) => onToggleFilter('topics', topic)}
-      />
+      {openBubble === 'topics' && (
+        <TopicFilterList
+          topics={availableTopics}
+          activeTopics={activeFilters.topics}
+          emptyLabel={emptyLabel}
+          locale={locale}
+          onToggleTopic={(topic) => onToggleFilter('topics', topic)}
+        />
+      )}
     </FilterBubble>
   </>
 );

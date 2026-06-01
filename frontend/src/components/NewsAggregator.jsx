@@ -617,11 +617,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       return;
     }
 
+    if (activeListLoadingRequestIdRef.current !== null) {
+      return;
+    }
+
+    const hasVisibleNews = Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current) > 0;
     loadNews({
       page: 1,
       append: false,
-      silent: true,
-      minimumItemCount: Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current)
+      silent: hasVisibleNews,
+      minimumItemCount: hasVisibleNews ? Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current) : 0
     });
   }, [loadNews, needsSourceSetup]);
 

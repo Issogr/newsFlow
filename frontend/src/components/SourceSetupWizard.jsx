@@ -15,12 +15,12 @@ const getSelectableIds = (sources = []) => {
 };
 
 const getInitialSelectedIds = (sources = [], currentSettings = {}) => {
-  if (currentSettings.sourceSetupCompleted === false) {
-    return [];
-  }
-
   const excludedSourceIds = currentSettings.excludedSourceIds || [];
   const excludedSubSourceIds = currentSettings.excludedSubSourceIds || [];
+  const hasExistingSelection = excludedSourceIds.length > 0 || excludedSubSourceIds.length > 0;
+  if (currentSettings.sourceSetupCompleted === false && !hasExistingSelection) {
+    return [];
+  }
 
   return sources.flatMap((source) => {
     if (excludedSourceIds.includes(source.id)) {
@@ -75,7 +75,8 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
   const allSelectableIds = useMemo(() => getSelectableIds(sources), [sources]);
   const initialSelectedIds = useMemo(() => getInitialSelectedIds(sources, currentSettings), [currentSettings, sources]);
   const sourceGroupsByLanguage = useMemo(() => groupSourcesByLanguage(sources), [sources]);
-  const isExistingSourceReview = currentSettings.sourceSetupCompleted === false && (currentSettings.excludedSourceIds || []).length > 0;
+  const isExistingSourceReview = currentSettings.sourceSetupCompleted === false
+    && (((currentSettings.excludedSourceIds || []).length > 0) || ((currentSettings.excludedSubSourceIds || []).length > 0));
 
   const [selectedIds, setSelectedIds] = useState(initialSelectedIds);
   const [expandedSourceIds, setExpandedSourceIds] = useState([]);

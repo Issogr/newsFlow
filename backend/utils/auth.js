@@ -20,18 +20,15 @@ let lastApiTokenPurgeAt = 0;
 let pendingApiTokenUsage = new Map();
 let pendingApiTokenUsageCount = 0;
 let lastApiTokenUsageFlushAt = Date.now();
+let apiTokenUsageFlushTimer = null;
 
 function extractBearerToken(authorizationHeader) {
   if (!authorizationHeader || typeof authorizationHeader !== 'string') {
     return '';
   }
 
-  const [scheme, token] = authorizationHeader.split(' ');
-  if (scheme !== 'Bearer' || !token) {
-    return '';
-  }
-
-  return token.trim();
+  const match = authorizationHeader.trim().match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
 }
 
 function parseCookieHeader(cookieHeader) {
@@ -252,6 +249,31 @@ function recordApiTokenUsage(tokenId, usedAt = new Date().toISOString()) {
   flushApiTokenUsage();
 }
 
+function startApiTokenUsageFlushTimer() {
+  if (apiTokenUsageFlushTimer || !Number.isFinite(API_TOKEN_USAGE_FLUSH_INTERVAL_MS) || API_TOKEN_USAGE_FLUSH_INTERVAL_MS <= 0) {
+    return null;
+  }
+
+  apiTokenUsageFlushTimer = setInterval(() => {
+    try {
+      flushApiTokenUsage({ force: true });
+    } catch {
+      // Keep buffered usage in memory; the next tick or shutdown flush can retry.
+    }
+  }, API_TOKEN_USAGE_FLUSH_INTERVAL_MS);
+  apiTokenUsageFlushTimer.unref?.();
+  return apiTokenUsageFlushTimer;
+}
+
+function stopApiTokenUsageFlushTimer() {
+  if (!apiTokenUsageFlushTimer) {
+    return;
+  }
+
+  clearInterval(apiTokenUsageFlushTimer);
+  apiTokenUsageFlushTimer = null;
+}
+
 function requireAuthenticatedUser(req, res, next) {
   try {
     req.user = resolveAuthenticatedSession({
@@ -336,6 +358,8 @@ module.exports = {
   purgeExpiredSessionsIfNeeded,
   purgeExpiredApiTokensIfNeeded,
   flushApiTokenUsage,
+  startApiTokenUsageFlushTimer,
+  stopApiTokenUsageFlushTimer,
   extractBearerToken,
   safeTokenCompare,
   hashPassword,

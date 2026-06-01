@@ -7,7 +7,8 @@ const {
   expandUserSources,
   getMaxArticleAgeHours,
   getNewsFeed: buildNewsFeed,
-  getReadLaterFeed: buildReadLaterFeed
+  getReadLaterFeed: buildReadLaterFeed,
+  _resetFilterStatsCache: resetFilterStatsCache
 } = require('./newsAggregatorQuery');
 const {
   getCanonicalSourceId
@@ -340,6 +341,7 @@ function saveReadLaterArticles(userContext = {}, articleIds = []) {
   if (result.savedArticleIds.length === 0) {
     throw createError(404, 'Article not found.', 'RESOURCE_NOT_FOUND');
   }
+  resetFilterStatsCache();
 
   return {
     success: true,
@@ -358,6 +360,7 @@ function removeReadLaterArticles(userContext = {}, articleIds = []) {
 
   const maxArticleAgeHours = getMaxArticleAgeHours(userContext, ARTICLE_RETENTION_HOURS);
   const result = database.removeReadLaterArticles(userId, normalizedArticleIds, { maxArticleAgeHours });
+  resetFilterStatsCache();
 
   return {
     success: true,
@@ -398,6 +401,7 @@ function resetImmediateRefreshState() {
   usersRefreshedSinceScheduledIngestion.clear();
   userImmediateRefreshPromises.clear();
   userManualRefreshTimestamps.clear();
+  resetFilterStatsCache();
 }
 
 process.on('exit', stopScheduler);
@@ -422,5 +426,6 @@ module.exports = {
   _hasPendingUserAssignedSourceRefresh: hasPendingUserAssignedSourceRefresh,
   _startUserAssignedSourceRefresh: startUserAssignedSourceRefresh,
   _waitForExistingUserAssignedSourceRefresh: waitForExistingUserAssignedSourceRefresh,
-  _resetImmediateRefreshState: resetImmediateRefreshState
+  _resetImmediateRefreshState: resetImmediateRefreshState,
+  _resetFilterStatsCache: resetFilterStatsCache
 };

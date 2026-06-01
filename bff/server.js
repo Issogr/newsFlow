@@ -1,5 +1,6 @@
 const http = require('http');
 const path = require('path');
+const { URL } = require('url');
 const express = require('express');
 const axios = require('axios');
 const helmet = require('helmet');
@@ -48,6 +49,23 @@ const UPSTREAM_ERROR_RESPONSE = {
     code: 'BFF_UPSTREAM_ERROR',
   },
 };
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+function getTrustProxySetting(value = process.env.TRUST_PROXY) {
+  const normalized = String(value || '').trim();
+  if (!normalized || normalized.toLowerCase() === 'false') {
+    return false;
+  }
+  if (normalized.toLowerCase() === 'true') {
+    return 1;
+  }
+  if (/^\d+$/u.test(normalized)) {
+    return Number(normalized);
+  }
+
+  const entries = normalized.split(',').map((entry) => entry.trim()).filter(Boolean);
+  return entries.length > 1 ? entries : normalized;
+}
 
 function createApp(options = {}) {
   const backendBaseUrl = String(options.backendBaseUrl || process.env.BACKEND_BASE_URL || 'http://backend:5000').trim().replace(/\/+$/, '');
@@ -57,6 +75,7 @@ function createApp(options = {}) {
   const sessionStore = createdSessionStore.store;
   const sessionDb = createdSessionStore.db;
   const sessionMiddleware = options.sessionMiddleware || buildSessionMiddleware(sessionStore, getBffSessionSecret());
+  const configuredAppOrigin = String(options.appBaseUrl || process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim().replace(/\/+$/, '');
   const backendHttp = options.backendHttp || axios.create({
     baseURL: backendBaseUrl,
     timeout: UPSTREAM_TIMEOUT_MS,
@@ -66,7 +85,7 @@ function createApp(options = {}) {
   const app = express();
   const jsonParser = express.json({ limit: '1mb' });
 
-  app.set('trust proxy', process.env.TRUST_PROXY === 'true');
+  app.set('trust proxy', getTrustProxySetting());
 
   app.use(helmet({
     contentSecurityPolicy: {
@@ -123,6 +142,52 @@ function createApp(options = {}) {
       error: {
         message: 'Authentication required',
         code: 'UNAUTHORIZED',
+      },
+    });
+  }
+
+  function getExpectedRequestOrigin(req) {
+    if (configuredAppOrigin) {
+      try {
+        return new URL(configuredAppOrigin).origin;
+      } catch {
+        return configuredAppOrigin;
+      }
+    }
+
+    return `${req.protocol}://${req.get('host')}`;
+  }
+
+  function headerMatchesExpectedOrigin(value, expectedOrigin) {
+    if (!value) {
+      return false;
+    }
+
+    try {
+      return new URL(value).origin === expectedOrigin;
+    } catch {
+      return false;
+    }
+  }
+
+  function requireSameOriginUnsafeRequest(req, res, next) {
+    if (SAFE_METHODS.has(String(req.method || '').toUpperCase())) {
+      next();
+      return;
+    }
+
+    const expectedOrigin = getExpectedRequestOrigin(req);
+    const origin = req.get('origin');
+    const referer = req.get('referer');
+    if (headerMatchesExpectedOrigin(origin, expectedOrigin) || (!origin && headerMatchesExpectedOrigin(referer, expectedOrigin))) {
+      next();
+      return;
+    }
+
+    res.status(403).json({
+      error: {
+        message: 'Cross-origin request rejected.',
+        code: 'CSRF_ORIGIN_MISMATCH',
       },
     });
   }
@@ -346,7 +411,7 @@ function createApp(options = {}) {
     }
   });
 
-  app.post('/api/auth/logout', async (req, res, next) => {
+  app.post('/api/auth/logout', requireSameOriginUnsafeRequest, async (req, res, next) => {
     const backendSessionCookie = getBackendSessionCookieFromRequest(req);
     let backendResponse = null;
 
@@ -377,7 +442,7 @@ function createApp(options = {}) {
     }
   });
 
-  app.use('/api', requireBackendSession, appApiProxy);
+  app.use('/api', requireBackendSession, requireSameOriginUnsafeRequest, appApiProxy);
   app.use('/socket.io', requireBackendSession, socketProxy);
 
   app.get(/.*/, (req, res) => {
@@ -460,5 +525,6 @@ if (require.main === module) {
 
 module.exports = {
   createApp,
-  createServer
+  createServer,
+  _getTrustProxySetting: getTrustProxySetting
 };

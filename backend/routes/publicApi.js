@@ -5,7 +5,7 @@ const newsService = require('../services/newsAggregator');
 const userService = require('../services/userService');
 const { asyncHandler } = require('../utils/errorHandler');
 const { sanitizeQuery } = require('../utils/inputValidator');
-const { resolveOptionalExternalApiPrincipal } = require('../utils/auth');
+const { extractBearerToken, resolveOptionalExternalApiPrincipal } = require('../utils/auth');
 const { parseNewsQuery } = require('../utils/newsQuery');
 const { buildUserContext } = require('../utils/userContext');
 
@@ -13,8 +13,7 @@ const router = express.Router();
 
 function getBearerTokenCandidate(req) {
   const authorization = String(req.get?.('authorization') || req.headers?.authorization || '').trim();
-  const match = authorization.match(/^Bearer\s+(.+)$/i);
-  return match ? match[1].trim() : '';
+  return extractBearerToken(authorization);
 }
 
 function hashRateLimitToken(value = '') {

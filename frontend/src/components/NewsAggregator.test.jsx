@@ -597,6 +597,41 @@ describe('NewsAggregator', () => {
     }));
   });
 
+  test('does not let silent topic refresh cancel the initial feed load', async () => {
+    let onTopicRefresh;
+    const initialRequest = createDeferred();
+    let initialRequestAborted = false;
+
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+    fetchNews.mockImplementationOnce(({ signal }) => {
+      signal.addEventListener('abort', () => {
+        initialRequestAborted = true;
+      });
+      return initialRequest.promise;
+    });
+
+    await renderNewsAggregator();
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(fetchNews).toHaveBeenCalledTimes(1);
+    expect(initialRequestAborted).toBe(false);
+
+    await resolveDeferred(initialRequest, {
+      items: [createGroup('group-1', 'Initial headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    expect(await screen.findByText('Initial headline')).toBeInTheDocument();
+    expect(screen.queryByText('Unexpected silent headline')).not.toBeInTheDocument();
+  });
+
   test('replaces stale fallback topics after a silent AI topic reload', async () => {
     let onTopicRefresh;
     const fallbackTopic = { topic: 'Economia', source: 'local' };
@@ -742,9 +777,10 @@ describe('NewsAggregator', () => {
     expect(screen.getByText('1 new article available')).toBeInTheDocument();
   });
 
-  test('clears manual refresh loading when a silent topic reload cancels it', async () => {
+  test('does not cancel manual refresh loading when a silent topic reload arrives', async () => {
     let onTopicRefresh;
     const manualRefreshRequest = createDeferred();
+    let manualRequestAborted = false;
 
     useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
       onTopicRefresh = handleTopicRefresh;
@@ -757,14 +793,9 @@ describe('NewsAggregator', () => {
       })
       .mockImplementationOnce(({ signal }) => {
         signal.addEventListener('abort', () => {
-          manualRefreshRequest.reject(Object.assign(new Error('canceled'), { code: 'ERR_CANCELED' }));
+          manualRequestAborted = true;
         });
         return manualRefreshRequest.promise;
-      })
-      .mockResolvedValueOnce({
-        items: [createGroup('group-1', 'Silently reloaded headline')],
-        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-        filters: { sources: [], sourceCatalog: [], topics: [] }
       });
 
     await renderNewsAggregator();
@@ -781,7 +812,17 @@ describe('NewsAggregator', () => {
       await Promise.resolve();
     });
 
-    expect(await screen.findByText('Silently reloaded headline')).toBeInTheDocument();
+    expect(fetchNews).toHaveBeenCalledTimes(2);
+    expect(manualRequestAborted).toBe(false);
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
+
+    await resolveDeferred(manualRefreshRequest, {
+      items: [createGroup('group-1', 'Manual refresh headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    expect(await screen.findByText('Manual refresh headline')).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
     });

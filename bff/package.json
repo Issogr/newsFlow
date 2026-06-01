@@ -34,6 +34,23 @@
     },
     "transformIgnorePatterns": [
       "/node_modules/(?!(http-proxy-middleware|httpxy|is-plain-obj)/)"
-    ]
+    ],
+    "collectCoverage": true,
+    "collectCoverageFrom": [
+      "server.js",
+      "lib/**/*.js"
+    ],
+    "coverageReporters": [
+      "text",
+      "lcov"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 55,
+        "functions": 70,
+        "lines": 70,
+        "statements": 70
+      }
+    }
   }
 }

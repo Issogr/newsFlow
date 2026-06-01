@@ -281,4 +281,28 @@ describe('userService imports', () => {
       publicApiLastUsedAt: '2026-03-07T10:01:00.000Z'
     });
   });
+
+  test('periodically flushes low-volume authenticated public API usage', async () => {
+    jest.useFakeTimers();
+
+    try {
+      const authPayload = await userService.registerUser({ username: 'timed-api-user', password: 'secret123' });
+      const userId = authPayload.user.id;
+
+      userService.recordPublicApiRequestUsage({ authenticated: true, userId, usedAt: '2026-03-07T10:00:00.000Z' });
+
+      expect(database.findUserById(userId).publicApiRequestCount).toBe(0);
+
+      userService.startPublicApiUsageFlushTimer();
+      jest.advanceTimersByTime(5000);
+
+      expect(database.findUserById(userId)).toMatchObject({
+        publicApiRequestCount: 1,
+        publicApiLastUsedAt: '2026-03-07T10:00:00.000Z'
+      });
+    } finally {
+      userService.stopPublicApiUsageFlushTimer();
+      jest.useRealTimers();
+    }
+  });
 });

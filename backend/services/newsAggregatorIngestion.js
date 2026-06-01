@@ -38,6 +38,7 @@ const EXISTING_STORY_GROUP_MERGE_MIN_CONFIDENCE = 0.9;
 const pendingAiTopicProcessingIds = new Set();
 const pendingAiStoryGroupingIds = new Set();
 const sourceFetchTimestamps = new Map();
+const sourceFetchPromises = new Map();
 
 function filterArticlesWithinRetention(articles = []) {
   if (!Array.isArray(articles) || articles.length === 0) {
@@ -215,12 +216,34 @@ async function fetchSourceTask(task, options = {}) {
     return [];
   }
 
-  const parsedArticles = await rssParser.parseFeed(task.fetchSource, {
-    imageFallback: Boolean(task.fetchSource?.ownerUserId),
-    throwOnError: true
-  });
+  const fetchKey = getSourceFetchKey(task.fetchSource);
+  const existingFetch = fetchKey ? sourceFetchPromises.get(fetchKey) : null;
+  const fetchPromise = existingFetch || (async () => {
+    const articles = await rssParser.parseFeed(task.fetchSource, {
+      imageFallback: Boolean(task.fetchSource?.ownerUserId),
+      throwOnError: true
+    });
 
-  markSourceFetched(task.fetchSource);
+    markSourceFetched(task.fetchSource);
+    return { articles, fetchSource: task.fetchSource };
+  })();
+
+  if (fetchKey && !existingFetch) {
+    sourceFetchPromises.set(fetchKey, fetchPromise);
+  }
+
+  let fetchResult;
+  try {
+    fetchResult = await fetchPromise;
+  } finally {
+    if (fetchKey && sourceFetchPromises.get(fetchKey) === fetchPromise) {
+      sourceFetchPromises.delete(fetchKey);
+    }
+  }
+
+  const parsedArticles = fetchResult.fetchSource?.id === task.fetchSource?.id
+    ? fetchResult.articles
+    : fetchResult.articles.map((article) => cloneArticleForSource(article, task.fetchSource));
 
   if (!task.fanOut) {
     return parsedArticles;
@@ -523,6 +546,7 @@ function resetPendingAiStoryGroupingIds() {
 
 function resetSourceFetchFreshness() {
   sourceFetchTimestamps.clear();
+  sourceFetchPromises.clear();
 }
 
 function mergeNormalizedArticleTopics(normalizedArticles = []) {
