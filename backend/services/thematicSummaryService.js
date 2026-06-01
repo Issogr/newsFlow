@@ -665,7 +665,7 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
 
 async function generateSummaryForTopic(topicConfig, window, options = {}) {
   const existingSummary = database.getThematicSummary(topicConfig.key, window.periodStart, window.periodEnd);
-  if (isTerminalSummary(existingSummary) && options.force !== true) {
+  if (existingSummary?.status === 'completed' && options.force !== true) {
     return { summary: existingSummary, generatedNow: false };
   }
   if (existingSummary?.status === 'failed' && options.force !== true && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
@@ -683,6 +683,10 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
   if (articles.length === 0) {
     if (options.force !== true && database.hasPendingTopicProcessingForThematicSummary?.(window)) {
       return { summary: null, generatedNow: false };
+    }
+
+    if (existingSummary?.status === 'empty' && options.force !== true) {
+      return { summary: existingSummary, generatedNow: false };
     }
 
     return {

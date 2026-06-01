@@ -531,6 +531,81 @@ describe('thematic summary generation retries', () => {
     expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'summaries' });
   });
 
+  test('regenerates an empty summary when articles arrive later for the same window', async () => {
+    jest.resetModules();
+    process.env = {
+      ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key'
+    };
+
+    const summaryWindow = {
+      periodStart: '2026-05-20T17:00:00.000Z',
+      periodEnd: '2026-05-21T05:00:00.000Z'
+    };
+    const emptyTechnologySummary = {
+      topicKey: 'technology',
+      status: 'empty',
+      periodStart: summaryWindow.periodStart,
+      periodEnd: summaryWindow.periodEnd
+    };
+    const completedSummary = {
+      ...emptyTechnologySummary,
+      status: 'completed',
+      summaryTextByLocale: { en: 'English text [1]', it: 'Testo italiano [1]' }
+    };
+    const article = {
+      id: 'article-1',
+      source: 'BBC',
+      title: 'Late AI update',
+      description: 'Late article description',
+      url: 'https://example.com/late-ai',
+      pubDate: '2026-05-20T18:00:00.000Z'
+    };
+    const databaseMock = {
+      getThematicSummary: jest.fn((topicKey) => (topicKey === 'technology'
+        ? emptyTechnologySummary
+        : { topicKey, status: 'completed', periodStart: summaryWindow.periodStart, periodEnd: summaryWindow.periodEnd })),
+      listLatestThematicSummaries: jest.fn(() => []),
+      getPodcastSummary: jest.fn(() => ({ id: 'podcast-existing', status: 'completed' })),
+      getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Tecnologia') ? [article] : []),
+      getReaderCache: jest.fn(() => null),
+      upsertThematicSummary: jest.fn(() => completedSummary),
+      pruneSummaryHistory: jest.fn(() => ({ thematicSummaries: 1, podcastSummaries: 0 }))
+    };
+    const aiSummaryGeneratorMock = {
+      isAiSummaryGenerationAvailable: jest.fn(() => true),
+      generateSummaryForArticles: jest.fn().mockResolvedValue({
+        summaryText: 'English text [1]',
+        summaryTextByLocale: { en: 'English text [1]', it: 'Testo italiano [1]' },
+        model: 'test-model'
+      }),
+      _getConfig: jest.fn(() => ({ model: 'test-model' }))
+    };
+    const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
+
+    const { service } = loadServiceWithMocks({
+      databaseMock,
+      aiSummaryGeneratorMock,
+      websocketServiceMock
+    });
+    const result = await service.generateDueSummaries({ window: summaryWindow });
+
+    expect(result.items).toEqual(expect.arrayContaining([completedSummary]));
+    expect(aiSummaryGeneratorMock.generateSummaryForArticles).toHaveBeenCalledTimes(1);
+    expect(aiSummaryGeneratorMock.generateSummaryForArticles.mock.calls[0][1]).toEqual([expect.objectContaining({ id: 'article-1' })]);
+    expect(databaseMock.upsertThematicSummary).toHaveBeenCalledWith(expect.objectContaining({
+      topicKey: 'technology',
+      status: 'completed',
+      articleCount: 1
+    }));
+    expect(databaseMock.pruneSummaryHistory).toHaveBeenCalledWith({
+      periodEnd: summaryWindow.periodEnd,
+      topicKeys: ['technology'],
+      podcast: false
+    });
+    expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'summaries' });
+  });
+
   test('does not retry recently failed summaries on every scheduler tick', async () => {
     jest.resetModules();
     process.env = {
@@ -610,7 +685,7 @@ describe('thematic summary generation retries', () => {
         : { topicKey, status: 'empty', periodStart: summaryWindow.periodStart, periodEnd: summaryWindow.periodEnd })),
       listLatestThematicSummaries: jest.fn(() => []),
       getPodcastSummary: jest.fn(() => ({ id: 'podcast-existing', status: 'completed' })),
-      getArticlesForThematicSummary: jest.fn(() => [{ id: 'article-1' }]),
+      getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Tecnologia') ? [{ id: 'article-1' }] : []),
       getReaderCache: jest.fn(() => null),
       upsertThematicSummary: jest.fn()
     };
