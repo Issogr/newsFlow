@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 35;
+  const CURRENT_SCHEMA_VERSION = 36;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getPodcastSummariesSchemaSql() {
@@ -273,11 +273,8 @@ function createDatabaseSchema({ logger }) {
         topics_json TEXT NOT NULL DEFAULT '[]',
         period_start TEXT NOT NULL,
         period_end TEXT NOT NULL,
-        title TEXT NOT NULL DEFAULT '',
         summary_text TEXT NOT NULL DEFAULT '',
-        title_en TEXT NOT NULL DEFAULT '',
         summary_text_en TEXT NOT NULL DEFAULT '',
-        title_it TEXT NOT NULL DEFAULT '',
         summary_text_it TEXT NOT NULL DEFAULT '',
         sources_json TEXT NOT NULL DEFAULT '[]',
         article_count INTEGER NOT NULL DEFAULT 0,
@@ -402,7 +399,7 @@ function createDatabaseSchema({ logger }) {
     }
 
     const thematicSummaryColumns = getColumnNames(database, 'thematic_summaries');
-    if (!thematicSummaryColumns.has('title_en') || !thematicSummaryColumns.has('summary_text_en') || !thematicSummaryColumns.has('title_it') || !thematicSummaryColumns.has('summary_text_it')) {
+    if (!thematicSummaryColumns.has('summary_text_en') || !thematicSummaryColumns.has('summary_text_it')) {
       return 27;
     }
 
@@ -429,6 +426,10 @@ function createDatabaseSchema({ logger }) {
 
     if (!podcastSummaryColumns.has('failure_category') || !podcastSummaryColumns.has('retry_count') || !podcastSummaryColumns.has('audio_failure_category') || !podcastSummaryColumns.has('audio_retry_count') || !podcastSummaryColumns.has('audio_failed_at')) {
       return 34;
+    }
+
+    if (thematicSummaryColumns.has('title') || thematicSummaryColumns.has('title_en') || thematicSummaryColumns.has('title_it')) {
+      return 35;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -777,13 +778,14 @@ function createDatabaseSchema({ logger }) {
 
     if (currentVersion === 27) {
       const summaryColumns = getColumnNames(database, 'thematic_summaries');
-      if (!summaryColumns.has('title_en')) {
+      const hasTitleColumn = summaryColumns.has('title');
+      if (hasTitleColumn && !summaryColumns.has('title_en')) {
         database.exec("ALTER TABLE thematic_summaries ADD COLUMN title_en TEXT NOT NULL DEFAULT ''");
       }
       if (!summaryColumns.has('summary_text_en')) {
         database.exec("ALTER TABLE thematic_summaries ADD COLUMN summary_text_en TEXT NOT NULL DEFAULT ''");
       }
-      if (!summaryColumns.has('title_it')) {
+      if (hasTitleColumn && !summaryColumns.has('title_it')) {
         database.exec("ALTER TABLE thematic_summaries ADD COLUMN title_it TEXT NOT NULL DEFAULT ''");
       }
       if (!summaryColumns.has('summary_text_it')) {
@@ -791,11 +793,16 @@ function createDatabaseSchema({ logger }) {
       }
       database.exec(`
         UPDATE thematic_summaries
-        SET title_en = CASE WHEN title_en = '' THEN title ELSE title_en END,
-            summary_text_en = CASE WHEN summary_text_en = '' THEN summary_text ELSE summary_text_en END,
-            title_it = CASE WHEN title_it = '' THEN title ELSE title_it END,
+        SET summary_text_en = CASE WHEN summary_text_en = '' THEN summary_text ELSE summary_text_en END,
             summary_text_it = CASE WHEN summary_text_it = '' THEN summary_text ELSE summary_text_it END
       `);
+      if (hasTitleColumn) {
+        database.exec(`
+          UPDATE thematic_summaries
+          SET title_en = CASE WHEN title_en = '' THEN title ELSE title_en END,
+              title_it = CASE WHEN title_it = '' THEN title ELSE title_it END
+        `);
+      }
 
       setCurrentSchemaVersion(database, 28);
       logger.info('Migrated DB schema from version 27 to 28');
@@ -912,6 +919,24 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 35);
       logger.info('Migrated DB schema from version 34 to 35');
+      migrateSchema(database, 35);
+      return;
+    }
+
+    if (currentVersion === 35) {
+      const thematicSummaryColumns = getColumnNames(database, 'thematic_summaries');
+      if (thematicSummaryColumns.has('title')) {
+        database.exec('ALTER TABLE thematic_summaries DROP COLUMN title');
+      }
+      if (thematicSummaryColumns.has('title_en')) {
+        database.exec('ALTER TABLE thematic_summaries DROP COLUMN title_en');
+      }
+      if (thematicSummaryColumns.has('title_it')) {
+        database.exec('ALTER TABLE thematic_summaries DROP COLUMN title_it');
+      }
+
+      setCurrentSchemaVersion(database, 36);
+      logger.info('Migrated DB schema from version 35 to 36');
       return;
     }
 

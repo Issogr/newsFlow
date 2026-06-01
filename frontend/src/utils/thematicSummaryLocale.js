@@ -20,7 +20,6 @@ export function getLocalizedThematicSummary(summary = {}, locale = 'en') {
   return {
     ...summary,
     displayTopicLabel: topicLabels[supportedLocale] || topicLabels[fallbackLocale] || summary.topicLabel || '',
-    displayTitle: summary.titleByLocale?.[supportedLocale] || summary.titleByLocale?.[fallbackLocale] || summary.title || '',
     displaySummaryText: summary.summaryTextByLocale?.[supportedLocale] || summary.summaryTextByLocale?.[fallbackLocale] || summary.summaryText || ''
   };
 }

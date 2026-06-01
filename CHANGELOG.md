@@ -2,6 +2,7 @@
 
 ## 3.5.2
 
+- stopped generating unused thematic summary titles and replaced exact summary time ranges with morning, lunch time, and evening labels
 - generated podcast briefings on morning and evening windows, retained the latest two podcast rows so both remain available, and simplified the podcast panel to audio players only
 
 ## 3.5.0

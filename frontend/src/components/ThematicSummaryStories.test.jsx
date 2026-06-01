@@ -16,6 +16,10 @@ const translations = {
   podcastItalianAudioLabel: 'Audio in Italian',
   thematicSummary: 'Thematic summary',
   summaryArticleCount: ({ count }) => `${count} articles evaluated`,
+  summarySlotMorning: 'Morning',
+  summarySlotLunch: 'Lunch time',
+  summarySlotEvening: 'Evening',
+  summarySlotRecent: 'Latest briefing',
   podcastAudioTitle: 'Italian audio briefing',
   podcastAudioReady: 'Ready to play',
   podcastAudioLoadFailed: 'Unable to load audio',
@@ -66,7 +70,6 @@ describe('thematic summary podcast UI', () => {
       topicKey: 'technology',
       topicLabel: 'Technology',
       topics: ['Tecnologia'],
-      titleByLocale: { en: 'Technology' },
       summaryTextByLocale: { en: 'Technology summary' }
     };
 
@@ -214,8 +217,8 @@ describe('thematic summary podcast UI', () => {
           topicLabel: 'Technology',
           periodStart: '2026-05-21T05:00:00.000Z',
           periodEnd: '2026-05-21T11:00:00.000Z',
+          summarySlot: 'lunch',
           articleCount: 2,
-          titleByLocale: { en: 'Technology briefing' },
           summaryTextByLocale: {
             en: 'The first argument covers chip supply and infrastructure.\nThe second argument moves to software policy and regulation.'
           }
@@ -226,6 +229,8 @@ describe('thematic summary podcast UI', () => {
       />
     );
 
+    expect(screen.getByText('Lunch time')).toBeInTheDocument();
+    expect(screen.queryByText(/2026/u)).not.toBeInTheDocument();
     expect(screen.getByText('The first argument covers chip supply and infrastructure.')).toBeInTheDocument();
     expect(screen.getByText('The second argument moves to software policy and regulation.')).toBeInTheDocument();
   });

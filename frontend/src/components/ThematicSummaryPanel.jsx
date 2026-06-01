@@ -6,16 +6,56 @@ import { getTopicPresentation } from '../topicPresentation';
 import { getLocalizedThematicSummary } from '../utils/thematicSummaryLocale';
 import PodcastAudioPlayer from './PodcastAudioPlayer';
 
-function formatSummaryDate(value, locale) {
-  const date = new Date(value);
+const SUMMARY_SLOTS = new Set(['morning', 'lunch', 'evening']);
+
+function getFallbackSummarySlot(summary = {}) {
+  const date = new Date(summary.periodEnd || '');
   if (Number.isNaN(date.getTime())) {
     return '';
   }
 
-  return new Intl.DateTimeFormat(locale, {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(date);
+  const hourPart = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Rome',
+    hour: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(date).find((part) => part.type === 'hour');
+  const hour = Number(hourPart?.value);
+  if (!Number.isFinite(hour)) {
+    return '';
+  }
+
+  if (hour < 10) {
+    return 'morning';
+  }
+  if (hour < 16) {
+    return 'lunch';
+  }
+
+  return 'evening';
+}
+
+function getSummarySlot(summary = {}) {
+  const slot = String(summary.summarySlot || '').toLowerCase();
+  if (SUMMARY_SLOTS.has(slot)) {
+    return slot;
+  }
+
+  return getFallbackSummarySlot(summary);
+}
+
+function getSummarySlotLabel(summary = {}, t) {
+  const slot = getSummarySlot(summary);
+  if (slot === 'morning') {
+    return t('summarySlotMorning');
+  }
+  if (slot === 'lunch') {
+    return t('summarySlotLunch');
+  }
+  if (slot === 'evening') {
+    return t('summarySlotEvening');
+  }
+
+  return t('summarySlotRecent');
 }
 
 function splitLongParagraph(paragraph = '', maxParagraphChars = 520) {
@@ -243,7 +283,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose }) =
                 <div className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">
                   <span className="inline-flex items-center justify-center gap-2">
                     <Sparkles className="h-3.5 w-3.5" />
-                    {formatSummaryDate(summary.periodStart, locale)} - {formatSummaryDate(summary.periodEnd, locale)}
+                    {getSummarySlotLabel(summary, t)}
                     {Number(summary.articleCount) > 0 && (
                       <>
                         <span aria-hidden="true">·</span>
@@ -269,7 +309,6 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose }) =
                           <div>
                             <h3 className="text-lg font-semibold tracking-tight text-slate-950 md:text-xl">{getPodcastSlotLabel(podcastSummary, t)}</h3>
                             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                              <span>{formatSummaryDate(podcastSummary.periodStart, locale)} - {formatSummaryDate(podcastSummary.periodEnd, locale)}</span>
                               <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5 text-sky-700">{t('podcastItalianAudioLabel')}</span>
                             </div>
                           </div>
@@ -292,10 +331,6 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose }) =
                   </div>
                 ) : (
                   <>
-                    {localizedSummary.displayTitle && (
-                      <h3 className="mb-6 text-2xl font-semibold tracking-tight text-stone-950 md:text-3xl">{localizedSummary.displayTitle}</h3>
-                    )}
-
                     <div className="space-y-6 text-[1.05rem] leading-8 tracking-[0.01em] text-stone-800 md:text-lg md:leading-9">
                       {paragraphs.map((paragraph, index) => (
                         <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex)}</p>

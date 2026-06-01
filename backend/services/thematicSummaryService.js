@@ -213,6 +213,23 @@ function getPodcastWindowSlot(summary = {}) {
   return getTimeZoneParts(periodEnd, SUMMARY_TIME_ZONE).hour < 12 ? 'morning' : 'evening';
 }
 
+function getSummaryWindowSlot(summary = {}) {
+  const periodEnd = new Date(summary.periodEnd || '');
+  if (Number.isNaN(periodEnd.getTime())) {
+    return '';
+  }
+
+  const hour = getTimeZoneParts(periodEnd, SUMMARY_TIME_ZONE).hour;
+  if (hour < 10) {
+    return 'morning';
+  }
+  if (hour < 16) {
+    return 'lunch';
+  }
+
+  return 'evening';
+}
+
 function getSummaryTopics() {
   return SUMMARY_TOPICS.map((topic) => ({ ...topic }));
 }
@@ -315,8 +332,6 @@ function buildSourceList(articles = []) {
 }
 
 function buildEmptySummaryPayload(topicConfig, window) {
-  const titleEn = `No ${topicConfig.label} stories`;
-  const titleIt = 'Nessuna notizia per questo topic';
   const textEn = `No ${topicConfig.label.toLowerCase()} stories were available for this summary window.`;
   const textIt = 'Nessuna notizia disponibile per questo topic in questa finestra di riepilogo.';
 
@@ -327,9 +342,7 @@ function buildEmptySummaryPayload(topicConfig, window) {
     topics: topicConfig.topics,
     periodStart: window.periodStart,
     periodEnd: window.periodEnd,
-    title: titleEn,
     summaryText: textEn,
-    titleByLocale: { en: titleEn, it: titleIt },
     summaryTextByLocale: { en: textEn, it: textIt },
     articleCount: 0,
     sources: [],
@@ -710,9 +723,7 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
     return {
       summary: database.upsertThematicSummary({
         ...basePayload,
-        title: generated.title,
         summaryText: generated.summaryText,
-        titleByLocale: generated.titleByLocale,
         summaryTextByLocale: generated.summaryTextByLocale,
         model: generated.model,
         status: 'completed',
@@ -726,7 +737,6 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
     logger.warn(`Thematic summary generation failed: topic=${topicConfig.key}, windowEnd=${window.periodEnd}, error=${error.message}`);
     database.upsertThematicSummary({
       ...basePayload,
-      title: topicConfig.label,
       summaryText: '',
       model: aiSummaryGenerator._getConfig().model,
       status: 'failed',
@@ -899,7 +909,7 @@ function getLatestSummaries() {
   const topicItems = topicConfigs
     .map((topic) => {
       const summary = latestByKey.get(topic.key);
-      return summary ? { ...summary, topicLabel: topic.label } : null;
+      return summary ? { ...summary, topicLabel: topic.label, summarySlot: getSummaryWindowSlot(summary) } : null;
     })
     .filter(Boolean);
   const latestPodcasts = (typeof database.listLatestPodcastSummaries === 'function'

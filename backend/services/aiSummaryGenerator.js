@@ -1,6 +1,6 @@
 const logger = require('../utils/logger');
 const { removePromotionalSentences } = require('../utils/promotionalContent');
-const { buildArticlePayload, getArticleTextLimit: getSharedArticleTextLimit, truncateText } = require('./aiArticlePayload');
+const { buildArticlePayload, getArticleTextLimit: getSharedArticleTextLimit } = require('./aiArticlePayload');
 const {
   createOpenRouterClient,
   extractAssistantContent,
@@ -41,10 +41,10 @@ function buildPrompt(topicConfig = {}, articles = []) {
     'Cite article references inline with bracketed numbers like [1] when mentioning a fact.',
     'Do not invent facts, do not use outside knowledge, and do not cite references that are not present in the input.',
     'Exclude promotional shopping deals, coupon or affiliate sale posts, and product price-drop blurbs; do not summarize them as news.',
-    'The schedule window is coverage metadata only. Do not name the title or opening after a time of day such as morning, noon, midday, afternoon, evening, night, mattina, mezzogiorno, pomeriggio, or sera.',
+    'Do not generate or include a title. The schedule window is coverage metadata only; do not name the opening after a time of day such as morning, noon, midday, afternoon, evening, night, mattina, mezzogiorno, pomeriggio, or sera.',
     'Generate the briefing in both supported languages: English and Italian.',
     'Return minified JSON only. Do not use markdown fences or prose outside JSON.',
-    'Return this exact shape: {"en":{"title":"Brief title","paragraphs":["paragraph with [1] citations"]},"it":{"title":"Titolo breve","paragraphs":["paragrafo con citazioni [1]"]}}.',
+    'Return this exact shape: {"en":{"paragraphs":["paragraph with [1] citations"]},"it":{"paragraphs":["paragrafo con citazioni [1]"]}}.',
     'Use two to four paragraphs per language. Start a new paragraph whenever the subject, argument, or subtopic changes. Keep each briefing easy to scan but written as prose.',
     '',
     JSON.stringify({
@@ -61,13 +61,12 @@ function getCompletionTokenBudget(articleCount) {
   return Math.min(4000, 900 + (Math.max(1, articleCount) * 55));
 }
 
-function normalizeLocalizedSummary(payload = {}, locale, fallbackTitle = '') {
+function normalizeLocalizedSummary(payload = {}, locale) {
   const localizedPayload = payload?.[locale] && typeof payload[locale] === 'object' ? payload[locale] : null;
   if (!localizedPayload) {
     return null;
   }
 
-  const title = truncateText(localizedPayload.title || fallbackTitle, 160);
   const paragraphs = Array.isArray(localizedPayload.paragraphs)
     ? localizedPayload.paragraphs
     : [];
@@ -85,26 +84,20 @@ function normalizeLocalizedSummary(payload = {}, locale, fallbackTitle = '') {
   }
 
   return {
-    title,
     summaryText
   };
 }
 
-function normalizeGeneratedSummary(payload = {}, fallbackTitle = '') {
-  const en = normalizeLocalizedSummary(payload, 'en', fallbackTitle);
-  const it = normalizeLocalizedSummary(payload, 'it', fallbackTitle);
+function normalizeGeneratedSummary(payload = {}) {
+  const en = normalizeLocalizedSummary(payload, 'en');
+  const it = normalizeLocalizedSummary(payload, 'it');
 
   if (!en?.summaryText || !it?.summaryText) {
     return null;
   }
 
   return {
-    title: en.title,
     summaryText: en.summaryText,
-    titleByLocale: {
-      en: en.title,
-      it: it.title
-    },
     summaryTextByLocale: {
       en: en.summaryText,
       it: it.summaryText
@@ -188,7 +181,7 @@ async function generateSummaryForArticles(topicConfig = {}, articles = []) {
     stream: false
   }, { timeoutMs: config.timeoutMs });
   const payload = parseJsonContent(extractAssistantContent(response));
-  const normalized = normalizeGeneratedSummary(payload, topicConfig.label || topicConfig.key || 'News briefing');
+  const normalized = normalizeGeneratedSummary(payload);
 
   if (!normalized) {
     throw new Error('AI summary response did not contain both English and Italian summary text');

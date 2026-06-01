@@ -237,12 +237,7 @@ describe('NewsAggregator', () => {
           topics: ['Tecnologia'],
           periodStart: '2026-05-21T07:00:00.000Z',
           periodEnd: '2026-05-21T13:00:00.000Z',
-          title: 'Technology briefing',
           summaryText: 'AI chips moved quickly during the window [1].',
-          titleByLocale: {
-            en: 'Technology briefing',
-            it: 'Sintesi tecnologia'
-          },
           summaryTextByLocale: {
             en: 'AI chips moved quickly during the window [1].',
             it: 'I chip AI sono avanzati rapidamente nella finestra [1].'
@@ -269,7 +264,7 @@ describe('NewsAggregator', () => {
 
     fireEvent.click(storyButton);
 
-    expect(screen.getByText('Sintesi tecnologia')).toBeInTheDocument();
+    expect(screen.getByText('Ora di pranzo')).toBeInTheDocument();
     expect(screen.getByText('1 articolo valutato')).toBeInTheDocument();
     expect(screen.queryByText('I chip AI sono avanzati rapidamente nella finestra [1].')).not.toBeInTheDocument();
     expect(screen.getAllByText('BBC')).not.toHaveLength(0);
@@ -298,7 +293,6 @@ describe('NewsAggregator', () => {
             topics: ['Scienza'],
             periodStart: '2026-05-21T07:00:00.000Z',
             periodEnd: '2026-05-21T13:00:00.000Z',
-            titleByLocale: { en: 'Science briefing', it: 'Sintesi scienza' },
             summaryTextByLocale: { en: 'Science update [1].', it: 'Aggiornamento scienza [1].' },
             sources: []
           }
@@ -336,7 +330,6 @@ describe('NewsAggregator', () => {
             topics: ['Technology'],
             periodStart: '2026-05-21T07:00:00.000Z',
             periodEnd: '2026-05-21T13:00:00.000Z',
-            titleByLocale: { en: 'Technology briefing', it: 'Sintesi tecnologia' },
             summaryTextByLocale: { en: 'First technology update [1].', it: 'Primo aggiornamento tecnologia [1].' },
             articleCount: 1,
             sources: []
@@ -352,7 +345,6 @@ describe('NewsAggregator', () => {
             topics: ['Technology'],
             periodStart: '2026-05-21T07:00:00.000Z',
             periodEnd: '2026-05-21T13:00:00.000Z',
-            titleByLocale: { en: 'Technology briefing', it: 'Sintesi tecnologia' },
             summaryTextByLocale: { en: 'Updated technology update [1].', it: 'Aggiornamento tecnologia aggiornato [1].' },
             articleCount: 2,
             sources: []
@@ -404,7 +396,6 @@ describe('NewsAggregator', () => {
           topics: ['Scienza'],
           periodStart: '2026-05-21T07:00:00.000Z',
           periodEnd: '2026-05-21T13:00:00.000Z',
-          titleByLocale: { en: 'Science briefing', it: 'Sintesi scienza' },
           summaryTextByLocale: { en: 'Science update [1].', it: 'Aggiornamento scienza [1].' },
           sources: []
         }
@@ -423,7 +414,6 @@ describe('NewsAggregator', () => {
           topics: ['Tecnologia'],
           periodStart: '2026-05-21T07:00:00.000Z',
           periodEnd: '2026-05-21T13:00:00.000Z',
-          titleByLocale: { en: 'Technology briefing', it: 'Sintesi tecnologia' },
           summaryTextByLocale: { en: 'Technology update [1].', it: 'Aggiornamento tecnologia [1].' },
           sources: []
         }

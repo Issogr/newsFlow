@@ -138,6 +138,47 @@ function loadServiceWithMocks({
   };
 }
 
+describe('thematic summary listing', () => {
+  const originalEnv = process.env;
+
+  afterEach(() => {
+    process.env = originalEnv;
+    jest.resetModules();
+  });
+
+  test('adds generic slots to latest topic summaries', () => {
+    jest.resetModules();
+    process.env = {
+      ...originalEnv,
+      AI_SUMMARY_TIME_ZONE: 'Europe/Rome'
+    };
+
+    const databaseMock = {
+      listLatestThematicSummaries: jest.fn(() => [
+        {
+          id: 'summary-technology',
+          topicKey: 'technology',
+          periodStart: '2026-05-21T05:00:00.000Z',
+          periodEnd: '2026-05-21T11:00:00.000Z',
+          status: 'completed'
+        }
+      ]),
+      listLatestPodcastSummaries: jest.fn(() => [])
+    };
+
+    const { service } = loadServiceWithMocks({ databaseMock });
+
+    expect(service.getLatestSummaries().items).toEqual([
+      expect.objectContaining({
+        id: 'summary-technology',
+        topicKey: 'technology',
+        topicLabel: 'Technology',
+        summarySlot: 'lunch'
+      })
+    ]);
+  });
+});
+
 describe('thematic summary reader prewarm', () => {
   const originalEnv = process.env;
 
@@ -321,9 +362,7 @@ describe('thematic summary generation retries', () => {
     const aiSummaryGeneratorMock = {
       isAiSummaryGenerationAvailable: jest.fn(() => true),
       generateSummaryForArticles: jest.fn().mockResolvedValue({
-        title: 'AI briefing',
         summaryText: 'English text',
-        titleByLocale: { en: 'AI briefing', it: 'Briefing AI' },
         summaryTextByLocale: { en: 'English text', it: 'Testo italiano' },
         model: 'test-model'
       }),
@@ -347,6 +386,8 @@ describe('thematic summary generation retries', () => {
       topicKey: 'technology',
       status: 'completed'
     }));
+    expect(databaseMock.upsertThematicSummary.mock.calls[0][0]).not.toHaveProperty('title');
+    expect(databaseMock.upsertThematicSummary.mock.calls[0][0]).not.toHaveProperty('titleByLocale');
     expect(databaseMock.pruneSummaryHistory).toHaveBeenCalledWith({
       periodEnd: summaryWindow.periodEnd,
       topicKeys: ['technology'],
@@ -485,6 +526,8 @@ describe('thematic summary generation retries', () => {
         it: expect.stringContaining('Nessuna notizia')
       })
     }));
+    expect(databaseMock.upsertThematicSummary.mock.calls[0][0]).not.toHaveProperty('title');
+    expect(databaseMock.upsertThematicSummary.mock.calls[0][0]).not.toHaveProperty('titleByLocale');
     expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'summaries' });
   });
 

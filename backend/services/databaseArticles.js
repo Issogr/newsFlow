@@ -1717,40 +1717,56 @@ function createArticleRepository({
     })).filter((source) => source.articleId && source.title);
   }
 
-  function normalizeLocalizedSummaryFields(summary = {}, textFieldName, textByLocaleFieldName) {
-    const titleByLocale = summary.titleByLocale && typeof summary.titleByLocale === 'object' ? summary.titleByLocale : {};
+  function normalizeLocalizedTextFields(summary = {}, textFieldName, textByLocaleFieldName) {
     const textByLocale = summary[textByLocaleFieldName] && typeof summary[textByLocaleFieldName] === 'object' ? summary[textByLocaleFieldName] : {};
     const textEnKey = `${textFieldName}En`;
     const textItKey = `${textFieldName}It`;
-    const titleEn = String(summary.titleEn || titleByLocale.en || summary.title || '').trim().slice(0, 180);
-    const titleIt = String(summary.titleIt || titleByLocale.it || titleEn || summary.title || '').trim().slice(0, 180);
     const textEn = String(summary[textEnKey] || textByLocale.en || summary[textFieldName] || '').trim();
     const textIt = String(summary[textItKey] || textByLocale.it || textEn || summary[textFieldName] || '').trim();
 
     return {
-      title: titleEn || titleIt,
       text: textEn || textIt,
-      titleEn,
-      titleIt,
       textEn,
       textIt
     };
   }
 
-  function getLocalizedSummaryRowFields(row = {}, textFieldName) {
+  function normalizeLocalizedSummaryFields(summary = {}, textFieldName, textByLocaleFieldName) {
+    const titleByLocale = summary.titleByLocale && typeof summary.titleByLocale === 'object' ? summary.titleByLocale : {};
+    const titleEn = String(summary.titleEn || titleByLocale.en || summary.title || '').trim().slice(0, 180);
+    const titleIt = String(summary.titleIt || titleByLocale.it || titleEn || summary.title || '').trim().slice(0, 180);
+    const localizedText = normalizeLocalizedTextFields(summary, textFieldName, textByLocaleFieldName);
+
+    return {
+      ...localizedText,
+      title: titleEn || titleIt,
+      titleEn,
+      titleIt
+    };
+  }
+
+  function getLocalizedTextRowFields(row = {}, textFieldName) {
     const textEnKey = `${textFieldName}En`;
     const textItKey = `${textFieldName}It`;
 
     return {
-      title: row.titleEn || row.title || row.titleIt || '',
       text: row[textEnKey] || row[textFieldName] || row[textItKey] || '',
-      titleByLocale: {
-        en: row.titleEn || row.title || row.titleIt || '',
-        it: row.titleIt || row.titleEn || row.title || ''
-      },
       textByLocale: {
         en: row[textEnKey] || row[textFieldName] || row[textItKey] || '',
         it: row[textItKey] || row[textEnKey] || row[textFieldName] || ''
+      }
+    };
+  }
+
+  function getLocalizedSummaryRowFields(row = {}, textFieldName) {
+    const localizedText = getLocalizedTextRowFields(row, textFieldName);
+
+    return {
+      ...localizedText,
+      title: row.titleEn || row.title || row.titleIt || '',
+      titleByLocale: {
+        en: row.titleEn || row.title || row.titleIt || '',
+        it: row.titleIt || row.titleEn || row.title || ''
       }
     };
   }
@@ -1765,7 +1781,7 @@ function createArticleRepository({
     }
 
     const id = String(summary.id || `${topicKey}:${periodStart}:${periodEnd}`).trim();
-    const localized = normalizeLocalizedSummaryFields(summary, 'summaryText', 'summaryTextByLocale');
+    const localized = normalizeLocalizedTextFields(summary, 'summaryText', 'summaryTextByLocale');
 
     return {
       id,
@@ -1774,11 +1790,8 @@ function createArticleRepository({
       topicsJson: JSON.stringify(Array.isArray(summary.topics) ? summary.topics : []),
       periodStart,
       periodEnd,
-      title: localized.title,
       summaryText: localized.text,
-      titleEn: localized.titleEn,
       summaryTextEn: localized.textEn,
-      titleIt: localized.titleIt,
       summaryTextIt: localized.textIt,
       sourcesJson: JSON.stringify(normalizeSummarySources(summary.sources || [])),
       articleCount: Math.max(0, Number(summary.articleCount) || 0),
@@ -1805,7 +1818,7 @@ function createArticleRepository({
       return null;
     }
 
-    const localized = getLocalizedSummaryRowFields(row, 'summaryText');
+    const localized = getLocalizedTextRowFields(row, 'summaryText');
 
     return {
       id: row.id,
@@ -1814,9 +1827,7 @@ function createArticleRepository({
       topics: parseSummaryJson(row.topicsJson),
       periodStart: row.periodStart,
       periodEnd: row.periodEnd,
-      title: localized.title,
       summaryText: localized.text,
-      titleByLocale: localized.titleByLocale,
       summaryTextByLocale: localized.textByLocale,
       sources: parseSummaryJson(row.sourcesJson),
       articleCount: row.articleCount,
@@ -1946,19 +1957,16 @@ function createArticleRepository({
 
     getDb().prepare(`
       INSERT INTO thematic_summaries (
-        id, topic_key, topic_label, topics_json, period_start, period_end, title,
-        summary_text, title_en, summary_text_en, title_it, summary_text_it,
+        id, topic_key, topic_label, topics_json, period_start, period_end,
+        summary_text, summary_text_en, summary_text_it,
         sources_json, article_count, model, status, failure_category, retry_count, error_message, generated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(topic_key, period_start, period_end) DO UPDATE SET
         topic_label = excluded.topic_label,
         topics_json = excluded.topics_json,
-        title = excluded.title,
         summary_text = excluded.summary_text,
-        title_en = excluded.title_en,
         summary_text_en = excluded.summary_text_en,
-        title_it = excluded.title_it,
         summary_text_it = excluded.summary_text_it,
         sources_json = excluded.sources_json,
         article_count = excluded.article_count,
@@ -1975,11 +1983,8 @@ function createArticleRepository({
       normalized.topicsJson,
       normalized.periodStart,
       normalized.periodEnd,
-      normalized.title,
       normalized.summaryText,
-      normalized.titleEn,
       normalized.summaryTextEn,
-      normalized.titleIt,
       normalized.summaryTextIt,
       normalized.sourcesJson,
       normalized.articleCount,
@@ -1997,9 +2002,8 @@ function createArticleRepository({
   function getThematicSummary(topicKey, periodStart, periodEnd) {
     const row = getDb().prepare(`
       SELECT id, topic_key AS topicKey, topic_label AS topicLabel, topics_json AS topicsJson,
-             period_start AS periodStart, period_end AS periodEnd, title, summary_text AS summaryText,
-             title_en AS titleEn, summary_text_en AS summaryTextEn,
-             title_it AS titleIt, summary_text_it AS summaryTextIt,
+             period_start AS periodStart, period_end AS periodEnd, summary_text AS summaryText,
+             summary_text_en AS summaryTextEn, summary_text_it AS summaryTextIt,
              sources_json AS sourcesJson, article_count AS articleCount, model, status,
              failure_category AS failureCategory, retry_count AS retryCount,
              error_message AS errorMessage, generated_at AS generatedAt
@@ -2021,9 +2025,8 @@ function createArticleRepository({
 
     const rows = getDb().prepare(`
       SELECT id, topic_key AS topicKey, topic_label AS topicLabel, topics_json AS topicsJson,
-             period_start AS periodStart, period_end AS periodEnd, title, summary_text AS summaryText,
-             title_en AS titleEn, summary_text_en AS summaryTextEn,
-             title_it AS titleIt, summary_text_it AS summaryTextIt,
+             period_start AS periodStart, period_end AS periodEnd, summary_text AS summaryText,
+             summary_text_en AS summaryTextEn, summary_text_it AS summaryTextIt,
              sources_json AS sourcesJson, article_count AS articleCount, model, status,
              failure_category AS failureCategory, retry_count AS retryCount,
              error_message AS errorMessage, generated_at AS generatedAt
