@@ -300,12 +300,12 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose }) =
                     )}
 
                     {podcastSummaries.map((podcastSummary) => (
-                      <section key={podcastSummary.id} className="rounded-[1.75rem] border border-slate-200 bg-slate-50/80 p-4 md:p-5">
-                        <div className="mb-4 flex flex-col gap-1 text-left sm:flex-row sm:items-end sm:justify-between">
+                      <section key={podcastSummary.id} className="space-y-4 border-b border-slate-200/80 pb-5 last:border-b-0 last:pb-0">
+                        <div className="flex flex-col gap-1 text-left sm:flex-row sm:items-end sm:justify-between">
                           <div>
                             <h3 className="text-lg font-semibold tracking-tight text-slate-950 md:text-xl">{getPodcastSlotLabel(podcastSummary, t)}</h3>
                             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                              <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5 text-sky-700">{t('podcastItalianAudioLabel')}</span>
+                              <span>{t('podcastItalianAudioLabel')}</span>
                             </div>
                           </div>
                           {Number(podcastSummary.articleCount) > 0 && (
