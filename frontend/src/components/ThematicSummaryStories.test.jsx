@@ -219,7 +219,7 @@ describe('thematic summary podcast UI', () => {
           titleByLocale: { en: 'Morning podcast', it: 'Podcast del mattino' },
           summaryTextByLocale: { en: 'English script', it: 'Testo podcast italiano' },
           generatedAt: '2026-05-21T06:15:00.000Z',
-          audioStatus: 'failed'
+          status: 'failed'
         }}
         locale="en"
         t={t}

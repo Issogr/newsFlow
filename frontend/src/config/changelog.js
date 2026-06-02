@@ -1,11 +1,12 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.5.4',
+  version: '3.5.5',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '🎙️ Show the podcast generation date in the podcast panel, including failed audio generation entries.'
+      '🎙️ Keep the podcast panel to one morning and one evening entry, showing failed generations in the affected slot instead of backfilling duplicates.',
+      '🔊 Let longer Italian podcast scripts generate audio when Gemini TTS needs more stitched chunks.'
     ]
   },
   it: {
@@ -13,7 +14,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '🎙️ Mostra la data di generazione del podcast nel pannello podcast, anche per gli audio non riusciti.'
+      '🎙️ Mantiene nel pannello podcast una voce del mattino e una della sera, mostrando gli errori nello slot corretto invece di riempirlo con duplicati.',
+      '🔊 Permette di generare l\'audio dei podcast italiani piu lunghi quando Gemini TTS richiede piu segmenti uniti.'
     ]
   }
 };

@@ -24,6 +24,7 @@ const SUMMARY_FAILED_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_SUMMARY_FAILED_RETR
 const PODCAST_TTS_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_PODCAST_TTS_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
 const PODCAST_TTS_MAX_RETRIES = parseIntegerEnv('AI_PODCAST_TTS_MAX_RETRIES', 4, { min: 0, max: 20 });
 const TERMINAL_SUMMARY_STATUSES = new Set(['completed', 'empty']);
+const TERMINAL_PODCAST_STATUSES = new Set(['completed', 'empty', 'failed']);
 const NON_RETRYABLE_SUMMARY_FAILURE_CATEGORIES = new Set(['invalid_output', 'invalid_script']);
 const SUMMARY_TOPICS = [
   {
@@ -229,6 +230,25 @@ function getPodcastWindowSlot(summary = {}) {
   }
 
   return getTimeZoneParts(periodEnd, SUMMARY_TIME_ZONE).hour < 12 ? 'morning' : 'evening';
+}
+
+function getLatestPodcastSummariesBySlot(limit = PODCAST_HISTORY_RETAIN_COUNT) {
+  const requestedLimit = Math.max(PODCAST_HISTORY_RETAIN_COUNT * 3, 6);
+  const summaries = typeof database.listLatestPodcastSummaries === 'function'
+    ? database.listLatestPodcastSummaries(requestedLimit)
+    : [database.getLatestPodcastSummary()].filter(Boolean);
+  const bySlot = new Map();
+
+  summaries.forEach((summary) => {
+    const podcastSlot = getPodcastWindowSlot(summary);
+    if (!podcastSlot || bySlot.has(podcastSlot)) {
+      return;
+    }
+
+    bySlot.set(podcastSlot, { ...summary, podcastSlot });
+  });
+
+  return [...bySlot.values()].slice(0, Math.max(1, Number(limit) || 1));
 }
 
 function getSummaryWindowSlot(summary = {}) {
@@ -888,20 +908,19 @@ async function generatePodcastForWindow(window, options = {}) {
   } catch (error) {
     const failureCategory = getSummaryFailureCategory(error);
     logger.warn(`AI podcast generation failed: windowEnd=${window.periodEnd}, error=${error.message}`);
-    database.upsertPodcastSummary({
+    const failedSummary = database.upsertPodcastSummary({
       ...basePayload,
       title: 'News podcast',
       scriptText: '',
       titleByLocale: { en: 'News podcast', it: 'Podcast news' },
       scriptTextByLocale: { en: '', it: '' },
       model: aiPodcastGenerator._getScriptConfig().model,
-      audioStatus: 'not_available',
       status: 'failed',
       failureCategory,
       retryCount: (existingSummary?.retryCount || 0) + 1,
       errorMessage: error.message
     });
-    return { summary: null, generatedNow: false };
+    return { summary: failedSummary, generatedNow: true };
   }
 }
 
@@ -944,12 +963,12 @@ async function generateDueSummaries(options = {}) {
     }
 
     const podcastResult = await generatePodcastForWindow(podcastWindow, options);
-    if (podcastResult.summary?.status === 'completed') {
+    if (TERMINAL_PODCAST_STATUSES.has(podcastResult.summary?.status)) {
       summaries.unshift(podcastResult.summary);
     }
     if (podcastResult.generatedNow) {
       generatedCount += 1;
-      if (TERMINAL_SUMMARY_STATUSES.has(podcastResult.summary?.status)) {
+      if (TERMINAL_PODCAST_STATUSES.has(podcastResult.summary?.status)) {
         generatedPodcast = true;
       }
     }
@@ -998,10 +1017,7 @@ function getLatestSummaries() {
       return summary ? { ...summary, topicLabel: topic.label, summarySlot: getSummaryWindowSlot(summary) } : null;
     })
     .filter(Boolean);
-  const latestPodcasts = (typeof database.listLatestPodcastSummaries === 'function'
-    ? database.listLatestPodcastSummaries(PODCAST_HISTORY_RETAIN_COUNT)
-    : [database.getLatestPodcastSummary()].filter(Boolean))
-    .map((summary) => ({ ...summary, podcastSlot: getPodcastWindowSlot(summary) }));
+  const latestPodcasts = getLatestPodcastSummariesBySlot(PODCAST_HISTORY_RETAIN_COUNT);
 
   return {
     items: [...latestPodcasts, ...topicItems],
