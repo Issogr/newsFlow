@@ -55,7 +55,7 @@ export function getTopicPresentation(topic) {
     return createTopicPresentation(Briefcase, TOPIC_BADGE_CLASSES.economy);
   }
 
-  if (/(tech|tecnolog|ai|software|digital|startup)/.test(normalized)) {
+  if (/(tech|tecnolog|\bai\b|artificial intelligence|intelligenza artificiale|software|digital|startup)/.test(normalized)) {
     return createTopicPresentation(Cpu, TOPIC_BADGE_CLASSES.technology);
   }
 

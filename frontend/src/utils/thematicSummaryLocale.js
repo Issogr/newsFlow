@@ -12,6 +12,14 @@ function getSupportedLocale(locale) {
   return locale === 'it' ? 'it' : 'en';
 }
 
+export function isPodcastSummary(summary = {}) {
+  return summary?.type === 'podcast' || summary?.topicKey === 'podcast';
+}
+
+export function getThematicSummaryPresentationKey(summary = {}) {
+  return summary.topicKey || summary.topics?.[0] || summary.topicLabel;
+}
+
 export function getLocalizedThematicSummary(summary = {}, locale = 'en') {
   const supportedLocale = getSupportedLocale(locale);
   const fallbackLocale = supportedLocale === 'it' ? 'en' : 'it';
@@ -20,7 +28,6 @@ export function getLocalizedThematicSummary(summary = {}, locale = 'en') {
   return {
     ...summary,
     displayTopicLabel: topicLabels[supportedLocale] || topicLabels[fallbackLocale] || summary.topicLabel || '',
-    displayTitle: summary.titleByLocale?.[supportedLocale] || summary.titleByLocale?.[fallbackLocale] || summary.title || '',
     displaySummaryText: summary.summaryTextByLocale?.[supportedLocale] || summary.summaryTextByLocale?.[fallbackLocale] || summary.summaryText || ''
   };
 }

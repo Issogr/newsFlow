@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 35;
+  const CURRENT_SCHEMA_VERSION = 37;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getPodcastSummariesSchemaSql() {
@@ -41,6 +41,30 @@ function createDatabaseSchema({ logger }) {
 
       CREATE INDEX IF NOT EXISTS idx_podcast_summaries_period
       ON podcast_summaries (period_end DESC);
+    `;
+  }
+
+  function getPodcastSummaryAudioSchemaSql() {
+    return `
+      CREATE TABLE IF NOT EXISTS podcast_summary_audio (
+        podcast_id TEXT NOT NULL,
+        locale TEXT NOT NULL,
+        audio_model TEXT NOT NULL DEFAULT '',
+        audio_voice TEXT NOT NULL DEFAULT '',
+        audio_mime_type TEXT NOT NULL DEFAULT '',
+        audio_blob BLOB,
+        audio_status TEXT NOT NULL DEFAULT 'not_available',
+        audio_error_message TEXT,
+        audio_failure_category TEXT NOT NULL DEFAULT '',
+        audio_retry_count INTEGER NOT NULL DEFAULT 0,
+        audio_failed_at TEXT,
+        generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (podcast_id, locale),
+        FOREIGN KEY (podcast_id) REFERENCES podcast_summaries (id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_podcast_summary_audio_locale
+      ON podcast_summary_audio (locale, audio_status);
     `;
   }
 
@@ -273,11 +297,8 @@ function createDatabaseSchema({ logger }) {
         topics_json TEXT NOT NULL DEFAULT '[]',
         period_start TEXT NOT NULL,
         period_end TEXT NOT NULL,
-        title TEXT NOT NULL DEFAULT '',
         summary_text TEXT NOT NULL DEFAULT '',
-        title_en TEXT NOT NULL DEFAULT '',
         summary_text_en TEXT NOT NULL DEFAULT '',
-        title_it TEXT NOT NULL DEFAULT '',
         summary_text_it TEXT NOT NULL DEFAULT '',
         sources_json TEXT NOT NULL DEFAULT '[]',
         article_count INTEGER NOT NULL DEFAULT 0,
@@ -294,6 +315,7 @@ function createDatabaseSchema({ logger }) {
       ON thematic_summaries (topic_key, period_end DESC);
 
       ${getPodcastSummariesSchemaSql()}
+      ${getPodcastSummaryAudioSchemaSql()}
 
       CREATE VIRTUAL TABLE IF NOT EXISTS article_search USING fts5(
         article_id UNINDEXED,
@@ -402,7 +424,7 @@ function createDatabaseSchema({ logger }) {
     }
 
     const thematicSummaryColumns = getColumnNames(database, 'thematic_summaries');
-    if (!thematicSummaryColumns.has('title_en') || !thematicSummaryColumns.has('summary_text_en') || !thematicSummaryColumns.has('title_it') || !thematicSummaryColumns.has('summary_text_it')) {
+    if (!thematicSummaryColumns.has('summary_text_en') || !thematicSummaryColumns.has('summary_text_it')) {
       return 27;
     }
 
@@ -429,6 +451,14 @@ function createDatabaseSchema({ logger }) {
 
     if (!podcastSummaryColumns.has('failure_category') || !podcastSummaryColumns.has('retry_count') || !podcastSummaryColumns.has('audio_failure_category') || !podcastSummaryColumns.has('audio_retry_count') || !podcastSummaryColumns.has('audio_failed_at')) {
       return 34;
+    }
+
+    if (thematicSummaryColumns.has('title') || thematicSummaryColumns.has('title_en') || thematicSummaryColumns.has('title_it')) {
+      return 35;
+    }
+
+    if (!tableExists(database, 'podcast_summary_audio')) {
+      return 36;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -777,13 +807,14 @@ function createDatabaseSchema({ logger }) {
 
     if (currentVersion === 27) {
       const summaryColumns = getColumnNames(database, 'thematic_summaries');
-      if (!summaryColumns.has('title_en')) {
+      const hasTitleColumn = summaryColumns.has('title');
+      if (hasTitleColumn && !summaryColumns.has('title_en')) {
         database.exec("ALTER TABLE thematic_summaries ADD COLUMN title_en TEXT NOT NULL DEFAULT ''");
       }
       if (!summaryColumns.has('summary_text_en')) {
         database.exec("ALTER TABLE thematic_summaries ADD COLUMN summary_text_en TEXT NOT NULL DEFAULT ''");
       }
-      if (!summaryColumns.has('title_it')) {
+      if (hasTitleColumn && !summaryColumns.has('title_it')) {
         database.exec("ALTER TABLE thematic_summaries ADD COLUMN title_it TEXT NOT NULL DEFAULT ''");
       }
       if (!summaryColumns.has('summary_text_it')) {
@@ -791,11 +822,16 @@ function createDatabaseSchema({ logger }) {
       }
       database.exec(`
         UPDATE thematic_summaries
-        SET title_en = CASE WHEN title_en = '' THEN title ELSE title_en END,
-            summary_text_en = CASE WHEN summary_text_en = '' THEN summary_text ELSE summary_text_en END,
-            title_it = CASE WHEN title_it = '' THEN title ELSE title_it END,
+        SET summary_text_en = CASE WHEN summary_text_en = '' THEN summary_text ELSE summary_text_en END,
             summary_text_it = CASE WHEN summary_text_it = '' THEN summary_text ELSE summary_text_it END
       `);
+      if (hasTitleColumn) {
+        database.exec(`
+          UPDATE thematic_summaries
+          SET title_en = CASE WHEN title_en = '' THEN title ELSE title_en END,
+              title_it = CASE WHEN title_it = '' THEN title ELSE title_it END
+        `);
+      }
 
       setCurrentSchemaVersion(database, 28);
       logger.info('Migrated DB schema from version 27 to 28');
@@ -912,6 +948,46 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 35);
       logger.info('Migrated DB schema from version 34 to 35');
+      migrateSchema(database, 35);
+      return;
+    }
+
+    if (currentVersion === 35) {
+      const thematicSummaryColumns = getColumnNames(database, 'thematic_summaries');
+      if (thematicSummaryColumns.has('title')) {
+        database.exec('ALTER TABLE thematic_summaries DROP COLUMN title');
+      }
+      if (thematicSummaryColumns.has('title_en')) {
+        database.exec('ALTER TABLE thematic_summaries DROP COLUMN title_en');
+      }
+      if (thematicSummaryColumns.has('title_it')) {
+        database.exec('ALTER TABLE thematic_summaries DROP COLUMN title_it');
+      }
+
+      setCurrentSchemaVersion(database, 36);
+      logger.info('Migrated DB schema from version 35 to 36');
+      migrateSchema(database, 36);
+      return;
+    }
+
+    if (currentVersion === 36) {
+      database.exec(getPodcastSummaryAudioSchemaSql());
+      database.exec(`
+        INSERT INTO podcast_summary_audio (
+          podcast_id, locale, audio_model, audio_voice, audio_mime_type, audio_blob,
+          audio_status, audio_error_message, audio_failure_category, audio_retry_count,
+          audio_failed_at, generated_at
+        )
+        SELECT id, 'it', audio_model, audio_voice, audio_mime_type, audio_blob,
+               audio_status, audio_error_message, audio_failure_category, audio_retry_count,
+               audio_failed_at, generated_at
+        FROM podcast_summaries
+        WHERE audio_status != 'not_available' OR audio_blob IS NOT NULL OR audio_error_message IS NOT NULL
+        ON CONFLICT(podcast_id, locale) DO NOTHING
+      `);
+
+      setCurrentSchemaVersion(database, 37);
+      logger.info('Migrated DB schema from version 36 to 37');
       return;
     }
 

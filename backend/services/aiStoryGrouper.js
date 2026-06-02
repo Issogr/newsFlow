@@ -24,7 +24,7 @@ function getConfig() {
     enabledEnvName: 'AI_STORY_GROUPING_ENABLED',
     modelEnvName: 'OPENROUTER_STORY_GROUPING_MODEL',
     defaultModel: DEFAULT_OPENROUTER_STORY_GROUPING_MODEL,
-    timeoutEnvName: 'AI_SUMMARY_REQUEST_TIMEOUT_MS',
+    timeoutEnvName: 'AI_STORY_GROUPING_REQUEST_TIMEOUT_MS',
     defaultTimeoutMs: DEFAULT_TIMEOUT_MS
   });
 }

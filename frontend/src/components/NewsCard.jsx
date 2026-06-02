@@ -3,6 +3,7 @@ import {
   BookOpenText,
   Bookmark,
   BookmarkCheck,
+  Clock3,
   ExternalLink,
   Share2,
   Sparkles,
@@ -128,6 +129,26 @@ function isAiGroupedStory(group) {
   return (group?.items || []).some((item) => {
     return item?.storyGroupId && String(item?.aiStoryGroupStatus || '').toLowerCase() === 'matched';
   });
+}
+
+function getPublishedAt(group, locale) {
+  const rawDate = group?.pubDate || group?.items?.[0]?.pubDate || '';
+  if (!rawDate) {
+    return null;
+  }
+
+  const date = new Date(rawDate);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return {
+    iso: date.toISOString(),
+    label: new Intl.DateTimeFormat(locale || 'en', {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    }).format(date)
+  };
 }
 
 const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onToggleReadLater, readLaterUpdating = false }) => {
@@ -274,6 +295,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     </div>
   ) : null;
   const sourceSummary = getSourceSummary(group, sourceEntries);
+  const publishedAt = getPublishedAt(group, locale);
   const shareControls = (
     <div className="relative flex items-center justify-end gap-2">
       <ShareStatusBubble
@@ -287,6 +309,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         disabled={readLaterUpdating}
         className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border shadow-md transition-colors disabled:cursor-wait disabled:opacity-70 ${group.readLater ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100'}`}
         aria-label={group.readLater ? t('removeReadLater') : t('saveReadLater')}
+        aria-pressed={Boolean(group.readLater)}
         title={group.readLater ? t('removeReadLater') : t('saveReadLater')}
       >
         {group.readLater ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
@@ -388,6 +411,16 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col px-4 pb-4 pt-3 sm:px-5">
+        {publishedAt ? (
+          <time
+            dateTime={publishedAt.iso}
+            aria-label={t('publishedAt', { date: publishedAt.label })}
+            className="mb-2 inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm"
+          >
+            <Clock3 className="h-3.5 w-3.5 text-sky-600" aria-hidden="true" />
+            {publishedAt.label}
+          </time>
+        ) : null}
         <h2
           className="text-lg font-semibold leading-6 text-slate-900 sm:text-xl"
           {...interactionPropsByArea.title}

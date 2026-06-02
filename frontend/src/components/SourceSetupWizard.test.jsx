@@ -26,6 +26,20 @@ describe('SourceSetupWizard', () => {
     }
   ];
 
+  const groupedSourceCatalog = [
+    {
+      id: 'source-group',
+      name: 'Source Group',
+      language: 'en',
+      iconUrl: '',
+      subSources: [
+        { id: 'source-group-main', name: 'Main Feed', language: 'en' },
+        { id: 'source-group-extra', name: 'Extra Feed', language: 'en' }
+      ]
+    },
+    ...sourceCatalog
+  ];
+
   test('selects sources when the catalog arrives after initial render', () => {
     const { rerender } = render(
       <SourceSetupWizard
@@ -43,6 +57,24 @@ describe('SourceSetupWizard', () => {
         t={t}
         sources={sourceCatalog}
         currentSettings={{}}
+        onComplete={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start reading' })).toBeEnabled();
+  });
+
+  test('preserves existing source review selections from saved exclusions', () => {
+    render(
+      <SourceSetupWizard
+        t={t}
+        sources={groupedSourceCatalog}
+        currentSettings={{
+          sourceSetupCompleted: false,
+          excludedSourceIds: ['source-b'],
+          excludedSubSourceIds: ['source-group-extra']
+        }}
         onComplete={vi.fn()}
       />
     );

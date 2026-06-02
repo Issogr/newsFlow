@@ -113,6 +113,7 @@ const ReaderPanel = ({
 }) => {
   const [selectedArticleId, setSelectedArticleId] = useState(initialArticleId || group?.items?.[0]?.id || null);
   const [readerByArticleId, setReaderByArticleId] = useState({});
+  const readerByArticleIdRef = useRef(readerByArticleId);
   const [loading, setLoading] = useState(false);
   const { shareState, shareArticle, resetShareState } = useShareArticle();
   const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
@@ -157,12 +158,16 @@ const ReaderPanel = ({
 
   const selectedReader = selectedArticleId ? readerByArticleId[selectedArticleId] : null;
 
+  useEffect(() => {
+    readerByArticleIdRef.current = readerByArticleId;
+  }, [readerByArticleId]);
+
   const loadReader = useCallback(async (articleId, { forceRefresh = false } = {}) => {
     if (!articleId) {
       return;
     }
 
-    if (!forceRefresh && readerByArticleId[articleId]) {
+    if (!forceRefresh && readerByArticleIdRef.current[articleId]) {
       resetLatestRequest();
       setLoading(false);
       setError(null);
@@ -185,10 +190,14 @@ const ReaderPanel = ({
         return;
       }
 
-      setReaderByArticleId((current) => ({
-        ...current,
-        [articleId]: payload
-      }));
+      setReaderByArticleId((current) => {
+        const next = {
+          ...current,
+          [articleId]: payload
+        };
+        readerByArticleIdRef.current = next;
+        return next;
+      });
     } catch (requestError) {
       if (!isRequestCanceled(requestError) && request.isLatest()) {
         setError(requestError);
@@ -198,7 +207,7 @@ const ReaderPanel = ({
         setLoading(false);
       }
     }
-  }, [readerByArticleId, resetLatestRequest, startLatestRequest]);
+  }, [resetLatestRequest, startLatestRequest]);
 
   useEffect(() => {
     if (selectedArticleId) {
@@ -364,6 +373,7 @@ const ReaderPanel = ({
                       key={item.id}
                       type="button"
                       onClick={() => setSelectedArticleId(item.id)}
+                      aria-pressed={isActive}
                       className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                         isActive
                           ? 'border-slate-900 bg-slate-900 text-white shadow-sm'

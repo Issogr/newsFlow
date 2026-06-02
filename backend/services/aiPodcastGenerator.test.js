@@ -34,7 +34,7 @@ describe('aiPodcastGenerator', () => {
     process.env = originalEnv;
   });
 
-  test('builds a bilingual podcast prompt from every provided article', () => {
+  test('builds a podcast prompt for enabled languages from every provided article', () => {
     const prompt = aiPodcastGenerator._buildPrompt({
       periodStart: '2026-05-21T07:00:00.000Z',
       periodEnd: '2026-05-21T13:00:00.000Z'
@@ -59,8 +59,14 @@ describe('aiPodcastGenerator', () => {
     ]);
     const payload = JSON.parse(prompt.split('\n').at(-1));
 
-    expect(prompt).toContain('Generate both supported languages: English and Italian');
+    expect(prompt).toContain('Generate only the enabled language: English');
+    expect(prompt).toContain('Act as the writer, editor, and producer for a daily news podcast with one narrator');
+    expect(prompt).toContain('Make editorial choices');
+    expect(prompt).toContain('opening hook, essential context, main fact, why it matters, what could happen next');
+    expect(prompt).toContain('Connect sections with smooth transitions');
+    expect(prompt).toContain('what to keep an eye on');
     expect(prompt).toContain('Skip promotional shopping deals');
+    expect(prompt).toContain('do not mention the same news twice');
     expect(prompt).toContain('Do not name the title or opening after a time of day');
     expect(prompt).toContain('Use short paragraphs separated by blank lines');
     expect(payload.articles).toHaveLength(2);
@@ -87,7 +93,7 @@ describe('aiPodcastGenerator', () => {
         title: 'Notiziario di Mezzogiorno',
         script: 'Benvenuti all\'aggiornamento di mezzogiorno. Prima notizia.'
       }
-    });
+    }, { locales: ['en', 'it'] });
 
     expect(normalized.titleByLocale.en).toBe('News briefing');
     expect(normalized.titleByLocale.it).toBe('Briefing notizie');
@@ -105,7 +111,7 @@ describe('aiPodcastGenerator', () => {
         title: 'Briefing notizie',
         script: 'La prima notizia riguarda i trasporti. Infine, per i viaggiatori, l\'adattatore Bluetooth AirFly Pro 2 di Twelve South ha raggiunto uno dei suoi prezzi migliori in vista dei viaggi estivi. La chiusura riguarda la scienza.'
       }
-    });
+    }, { locales: ['en', 'it'] });
 
     expect(normalized.scriptTextByLocale.en).toBe('The opening story covers transport policy. The closing story covers science.');
     expect(normalized.scriptTextByLocale.it).toBe('La prima notizia riguarda i trasporti. La chiusura riguarda la scienza.');
@@ -119,21 +125,21 @@ describe('aiPodcastGenerator', () => {
         en: `${validScript} Reference [1].`,
         it: 'Questa sintesi apre con il contesto principale e prosegue con una spiegazione naturale per l\'ascolto. Si chiude con una frase breve e chiara.'
       }
-    }, 1)).toThrow('bracket citations');
+    }, 1, { locales: ['en', 'it'] })).toThrow('bracket citations');
 
     expect(() => aiPodcastGenerator._validateGeneratedPodcast({
       scriptTextByLocale: {
         en: `- ${validScript}`,
         it: 'Questa sintesi apre con il contesto principale e prosegue con una spiegazione naturale per l\'ascolto. Si chiude con una frase breve e chiara.'
       }
-    }, 1)).toThrow('non-speakable formatting');
+    }, 1, { locales: ['en', 'it'] })).toThrow('non-speakable formatting');
 
     expect(() => aiPodcastGenerator._validateGeneratedPodcast({
       scriptTextByLocale: {
         en: validScript,
         it: validScript
       }
-    }, 1)).toThrow('identical');
+    }, 1, { locales: ['en', 'it'] })).toThrow('identical');
   });
 
   test('extracts base64 audio payloads from OpenRouter-style responses', () => {
@@ -192,6 +198,28 @@ describe('aiPodcastGenerator', () => {
       enabled,
       model: ttsModel
     }));
+  });
+
+  test('defaults podcast generation to English and filters unsupported configured languages', () => {
+    process.env = {
+      ...originalEnv,
+      AI_PODCAST_LANGUAGES: undefined
+    };
+
+    expect(aiPodcastGenerator._getEnabledPodcastLocales()).toEqual(['en']);
+
+    process.env = {
+      ...originalEnv,
+      AI_PODCAST_LANGUAGES: 'it, en, fr, IT'
+    };
+
+    expect(aiPodcastGenerator._getEnabledPodcastLocales()).toEqual(['it', 'en']);
+  });
+
+  test('builds narration instructions for Italian and future supported locales', () => {
+    expect(aiPodcastGenerator._getNarrationInstructions('it')).toContain('Italian single-narrator daily news podcast audio');
+    expect(aiPodcastGenerator._getNarrationInstructions('fr')).toContain('French single-narrator daily news podcast audio');
+    expect(aiPodcastGenerator._getNarrationInstructions('it')).toContain('matching the language of the provided script');
   });
 
   test('defaults Gemini TTS to the Charon voice', async () => {
@@ -294,7 +322,7 @@ describe('aiPodcastGenerator', () => {
         input: 'Testo podcast italiano',
         voice: 'Puck',
         response_format: 'wav',
-        instructions: expect.stringContaining('Italian')
+        instructions: expect.stringContaining('Italian single-narrator daily news podcast audio')
       }),
       expect.objectContaining({
         responseType: 'arraybuffer',
@@ -313,6 +341,8 @@ describe('aiPodcastGenerator', () => {
       model: 'tts-model',
       voice: 'Puck'
     }));
+    expect(httpClient.post.mock.calls[0][1].instructions).toContain('measured pace');
+    expect(httpClient.post.mock.calls[0][1].instructions).toContain('Do not add music, sound effects, extra words, or translation');
   });
 
   test('surfaces speech endpoint error messages', async () => {

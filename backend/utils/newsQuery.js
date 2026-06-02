@@ -1,5 +1,10 @@
+const { createError } = require('./errorHandler');
+
 const MAX_NEWS_PAGE = 20;
 const MAX_RECENT_HOURS = 24;
+const MAX_SOURCE_FILTERS = 80;
+const MAX_TOPIC_FILTERS = 40;
+const MAX_FILTER_VALUE_LENGTH = 120;
 
 function parseCsvParam(value) {
   if (!value) {
@@ -14,6 +19,20 @@ function parseCsvParam(value) {
 
 function parseLimitedCsvParam(value, limit) {
   return parseCsvParam(value).slice(0, limit);
+}
+
+function parseBoundedCsvParam(value, { limit, name }) {
+  const items = [...new Set(parseCsvParam(value))];
+  if (items.length > limit) {
+    throw createError(400, `${name} can include at most ${limit} values.`, 'INVALID_NEWS_QUERY');
+  }
+
+  const invalidItem = items.find((item) => item.length > MAX_FILTER_VALUE_LENGTH);
+  if (invalidItem) {
+    throw createError(400, `${name} values must be ${MAX_FILTER_VALUE_LENGTH} characters or fewer.`, 'INVALID_NEWS_QUERY');
+  }
+
+  return items;
 }
 
 function parseBoundedPositiveInteger(value, fallback, max) {
@@ -41,8 +60,8 @@ function parseOptionalBoundedPositiveInteger(value, max) {
 function parseNewsQuery(query = {}) {
   return {
     search: query.search || '',
-    sourceIds: parseCsvParam(query.sources),
-    topics: parseCsvParam(query.topics),
+    sourceIds: parseBoundedCsvParam(query.sources, { limit: MAX_SOURCE_FILTERS, name: 'sources' }),
+    topics: parseBoundedCsvParam(query.topics, { limit: MAX_TOPIC_FILTERS, name: 'topics' }),
     recentHours: parseOptionalBoundedPositiveInteger(query.recentHours, MAX_RECENT_HOURS),
     beforePubDate: query.beforePubDate || '',
     beforeId: query.beforeId || '',
@@ -57,5 +76,7 @@ function parseNewsQuery(query = {}) {
 module.exports = {
   MAX_NEWS_PAGE,
   MAX_RECENT_HOURS,
+  MAX_SOURCE_FILTERS,
+  MAX_TOPIC_FILTERS,
   parseNewsQuery,
 };

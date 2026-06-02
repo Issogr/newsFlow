@@ -1,16 +1,18 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.5.0',
+  version: '3.5.2',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '🎧 A new podcast briefing appears first in the topic story rail, generated from the same scheduled summary articles, with English/Italian scripts based on your app language and Italian Gemini TTS audio when available.',
-      '⚡ Podcast audio streams through the browser, while generation validates scripts and audio, caps TTS input size, retries failed audio without regenerating scripts, and stitches natural Gemini chunks into one WAV to avoid truncated narration with shorter pauses.',
-      '🧽 Older summary and podcast rows are removed after a replacement exists for the current scheduled window.',
-      '🧩 AI story grouping checks more nearby candidates, retries recent misses, and records match evidence while keeping model input small.',
-      '📰 Thematic summaries now wait for topic classification, validate citations, and show an explicit empty-window message when no topic news is available.',
-      '🛡️ Feed pagination, session handling, and settings drafts are more reliable.'
+      '🗂️ Thematic summaries now follow the same morning and evening schedule as podcasts, no longer generate unused titles, and use simple slot labels instead of exact time ranges.',
+      '🧽 Podcast briefings now run for morning and evening windows, keep both latest players available, and hide script text from the player panel.',
+      '🎧 Podcast script and audio generation can now be limited by enabled language, defaults to English audio, and shows which audio language is available when it differs from the app language.',
+      '🔁 Podcast scripts now avoid repeating the same news when an article appears across multiple topics.',
+      '🎙️ Podcast scripts and audio now favor stronger editorial selection, smoother transitions, and a more natural single-narrator delivery.',
+      '🕒 News cards now show the article published date and time in a compact pill.',
+      '🛡️ Background refreshes, source setup, public API counters, and the BFF proxy are now more resilient under concurrent use.',
+      '🔒 Anonymous and token-authenticated public API access are now separate opt-in server settings, and token controls appear only when token access is enabled.'
     ]
   },
   it: {
@@ -18,12 +20,14 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '🎧 Un nuovo briefing podcast appare per primo nella barra delle storie per topic, generato dagli stessi articoli delle sintesi programmate, con testi in inglese/italiano in base alla lingua dell\'app e audio italiano Gemini TTS quando disponibile.',
-      '⚡ L\'audio podcast viene riprodotto in streaming dal browser; la generazione valida testi e audio, limita l\'input TTS, ritenta l\'audio fallito senza rigenerare i testi e unisce segmenti Gemini naturali in un unico WAV per evitare narrazioni troncate con pause piu brevi.',
-      '🧽 Le righe vecchie di sintesi e podcast vengono rimosse dopo che esiste una sostituzione per la finestra programmata corrente.',
-      '🧩 Il raggruppamento AI delle storie controlla piu candidati vicini, ritenta i match recenti mancati e conserva le prove del match mantenendo piccolo l\'input del modello.',
-      '📰 Le sintesi tematiche ora aspettano la classificazione dei topic, validano le citazioni e mostrano un messaggio esplicito quando non ci sono notizie per la finestra.',
-      '🛡️ Paginazione del feed, sessioni e bozze delle impostazioni sono piu affidabili.'
+      '🗂️ Le sintesi tematiche ora seguono la stessa programmazione mattina e sera dei podcast, non generano piu titoli inutilizzati e usano etichette semplici invece di fasce orarie precise.',
+      '🧽 I briefing podcast ora seguono le finestre mattina e sera, tengono disponibili entrambi i player piu recenti e nascondono il testo nel pannello audio.',
+      '🎧 Script e audio dei podcast possono ora essere limitati per lingua abilitata, partono dall\'audio inglese e mostrano quale lingua audio e disponibile quando differisce dalla lingua dell\'app.',
+      '🔁 Gli script podcast ora evitano di ripetere la stessa notizia quando un articolo compare in piu topic.',
+      '🎙️ Script e audio dei podcast ora puntano su una selezione editoriale migliore, transizioni piu fluide e una narrazione singola piu naturale.',
+      '🕒 Le card delle notizie ora mostrano data e ora di pubblicazione in una pill compatta.',
+      '🛡️ Refresh in background, scelta fonti, contatori API pubbliche e proxy BFF sono piu solidi con utilizzo concorrente.',
+      '🔒 Accesso API pubblico anonimo e con token sono ora opzioni server separate, e i controlli token compaiono solo quando l\'accesso con token e attivo.'
     ]
   }
 };

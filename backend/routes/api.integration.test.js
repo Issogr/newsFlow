@@ -3,6 +3,8 @@ const { getCanonicalSourceId } = require('../utils/sourceCatalog');
 const { cleanupTempNewsDb, setupTempNewsDb } = require('../test-utils/tempNewsDb');
 
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
+const originalAnonymousPublicApiEnabled = process.env.PUBLIC_API_ANONYMOUS_ENABLED;
+const originalAuthenticatedPublicApiEnabled = process.env.PUBLIC_API_AUTHENTICATED_ENABLED;
 
 function buildApiTestApp() {
   const express = require('express');
@@ -37,6 +39,8 @@ describe('API auth and user flows', () => {
 
   beforeEach(() => {
     jest.resetModules();
+    process.env.PUBLIC_API_ANONYMOUS_ENABLED = 'true';
+    process.env.PUBLIC_API_AUTHENTICATED_ENABLED = 'true';
     ({ tempDir } = setupTempNewsDb('news-api-test-'));
 
     jest.doMock('../services/newsAggregator', () => ({
@@ -76,6 +80,20 @@ describe('API auth and user flows', () => {
     jest.clearAllMocks();
   });
 
+  afterAll(() => {
+    if (originalAnonymousPublicApiEnabled === undefined) {
+      delete process.env.PUBLIC_API_ANONYMOUS_ENABLED;
+    } else {
+      process.env.PUBLIC_API_ANONYMOUS_ENABLED = originalAnonymousPublicApiEnabled;
+    }
+
+    if (originalAuthenticatedPublicApiEnabled === undefined) {
+      delete process.env.PUBLIC_API_AUTHENTICATED_ENABLED;
+    } else {
+      process.env.PUBLIC_API_AUTHENTICATED_ENABLED = originalAuthenticatedPublicApiEnabled;
+    }
+  });
+
   test('registers and logs in a user with independent sessions', async () => {
     const registerResponse = await request(app)
       .post('/api/auth/register')
@@ -111,6 +129,12 @@ describe('API auth and user flows', () => {
         apiTokenTtlDays: 30
       },
       customSources: []
+    });
+    expect(registerResponse.body.features).toEqual({
+      publicApi: {
+        anonymousEnabled: true,
+        authenticatedEnabled: true
+      }
     });
     expect(registerResponse.body.token).toBeUndefined();
     expect(getSessionCookie(registerResponse)).toContain('newsflow_session=');
@@ -398,6 +422,93 @@ describe('API auth and user flows', () => {
     }), expect.objectContaining({
       userId: registerResponse.body.user.id
     }));
+  });
+
+  test('keeps public API modes disabled when the feature flags are off', async () => {
+    process.env.PUBLIC_API_ANONYMOUS_ENABLED = 'false';
+    process.env.PUBLIC_API_AUTHENTICATED_ENABLED = 'false';
+
+    await request(app)
+      .get('/api/public/news')
+      .expect(404);
+
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'disabled-api-user', password: 'secret123' })
+      .expect(201);
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    expect(registerResponse.body.features).toEqual({
+      publicApi: {
+        anonymousEnabled: false,
+        authenticatedEnabled: false
+      }
+    });
+    expect(registerResponse.body.apiToken).toBeNull();
+
+    const currentUserResponse = await request(app)
+      .get('/api/me')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(currentUserResponse.body.features.publicApi).toEqual({
+      anonymousEnabled: false,
+      authenticatedEnabled: false
+    });
+    expect(currentUserResponse.body.apiToken).toBeNull();
+
+    await request(app)
+      .post('/api/me/api-token')
+      .set('Cookie', sessionCookie)
+      .send({})
+      .expect(404);
+  });
+
+  test('allows token public API access while anonymous public API access is disabled', async () => {
+    process.env.PUBLIC_API_ANONYMOUS_ENABLED = 'false';
+    process.env.PUBLIC_API_AUTHENTICATED_ENABLED = 'true';
+
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'token-only-api-user', password: 'secret123' })
+      .expect(201);
+    const tokenResult = userService.createUserApiToken(registerResponse.body.user.id);
+
+    await request(app)
+      .get('/api/public/news')
+      .expect(404);
+
+    const response = await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${tokenResult.token}`)
+      .expect(200);
+
+    expect(response.body.access.mode).toBe('token');
+  });
+
+  test('allows anonymous public API access while token public API access is disabled', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'anonymous-only-api-user', password: 'secret123' })
+      .expect(201);
+    const tokenResult = userService.createUserApiToken(registerResponse.body.user.id);
+    const lookupSpy = jest.spyOn(database, 'findActiveApiTokenByHash');
+
+    process.env.PUBLIC_API_ANONYMOUS_ENABLED = 'true';
+    process.env.PUBLIC_API_AUTHENTICATED_ENABLED = 'false';
+
+    const anonymousResponse = await request(app)
+      .get('/api/public/news')
+      .expect(200);
+
+    expect(anonymousResponse.body.access.mode).toBe('anonymous');
+
+    await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${tokenResult.token}`)
+      .expect(404);
+
+    expect(lookupSpy).not.toHaveBeenCalled();
   });
 
   test('serves public cached news anonymously without user context', async () => {

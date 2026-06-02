@@ -30,6 +30,8 @@ const SOURCE_FETCH_FRESHNESS_RETENTION_MS = parseIntegerEnv(
   Math.max((Number.isFinite(SOURCE_FETCH_FRESHNESS_MS) ? SOURCE_FETCH_FRESHNESS_MS : 0) * 6, 60 * 60 * 1000),
   { min: 1000 }
 );
+const SOURCE_FETCH_FAILURE_BACKOFF_MS = parseIntegerEnv('SOURCE_FETCH_FAILURE_BACKOFF_MS', 2 * 60 * 1000, { min: 0 });
+const SOURCE_FETCH_FAILURE_MAX_BACKOFF_MS = parseIntegerEnv('SOURCE_FETCH_FAILURE_MAX_BACKOFF_MS', 30 * 60 * 1000, { min: 1000 });
 const AI_STORY_GROUPING_CONCURRENCY = parseIntegerEnv('AI_STORY_GROUPING_CONCURRENCY', 1, { min: 1, max: 4 });
 const AI_STORY_GROUPING_WINDOW_HOURS = parseIntegerEnv('AI_STORY_GROUPING_WINDOW_HOURS', 24, { min: 1, max: 72 });
 const AI_STORY_GROUPING_CANDIDATE_LIMIT = parseIntegerEnv('AI_STORY_GROUPING_CANDIDATE_LIMIT', 64, { min: 8, max: 100 });
@@ -38,6 +40,8 @@ const EXISTING_STORY_GROUP_MERGE_MIN_CONFIDENCE = 0.9;
 const pendingAiTopicProcessingIds = new Set();
 const pendingAiStoryGroupingIds = new Set();
 const sourceFetchTimestamps = new Map();
+const sourceFetchFailures = new Map();
+const sourceFetchPromises = new Map();
 
 function filterArticlesWithinRetention(articles = []) {
   if (!Array.isArray(articles) || articles.length === 0) {
@@ -117,10 +121,6 @@ function getSourceFetchKey(source = {}) {
 }
 
 function pruneSourceFetchTimestamps(referenceTime = Date.now()) {
-  if (sourceFetchTimestamps.size === 0) {
-    return 0;
-  }
-
   let removedCount = 0;
   sourceFetchTimestamps.forEach((timestamp, fetchKey) => {
     if (!Number.isFinite(timestamp) || referenceTime - timestamp > SOURCE_FETCH_FRESHNESS_RETENTION_MS) {
@@ -129,13 +129,21 @@ function pruneSourceFetchTimestamps(referenceTime = Date.now()) {
     }
   });
 
-  while (sourceFetchTimestamps.size > SOURCE_FETCH_FRESHNESS_MAX_ENTRIES) {
-    const oldestFetchKey = sourceFetchTimestamps.keys().next().value;
+  sourceFetchFailures.forEach((failure, fetchKey) => {
+    if (!failure || !Number.isFinite(failure.failedAt) || !Number.isFinite(failure.retryAfter) || referenceTime - failure.failedAt > SOURCE_FETCH_FAILURE_MAX_BACKOFF_MS * 2) {
+      sourceFetchFailures.delete(fetchKey);
+      removedCount += 1;
+    }
+  });
+
+  while ((sourceFetchTimestamps.size + sourceFetchFailures.size) > SOURCE_FETCH_FRESHNESS_MAX_ENTRIES) {
+    const oldestFetchKey = sourceFetchTimestamps.keys().next().value || sourceFetchFailures.keys().next().value;
     if (!oldestFetchKey) {
       break;
     }
 
     sourceFetchTimestamps.delete(oldestFetchKey);
+    sourceFetchFailures.delete(oldestFetchKey);
     removedCount += 1;
   }
 
@@ -157,9 +165,40 @@ function markSourceFetched(source = {}, referenceTime = Date.now()) {
   const fetchKey = getSourceFetchKey(source);
   if (fetchKey) {
     sourceFetchTimestamps.delete(fetchKey);
+    sourceFetchFailures.delete(fetchKey);
     sourceFetchTimestamps.set(fetchKey, referenceTime);
     pruneSourceFetchTimestamps(referenceTime);
   }
+}
+
+function getSourceFailureBackoffMs(failureCount = 1) {
+  if (!Number.isFinite(SOURCE_FETCH_FAILURE_BACKOFF_MS) || SOURCE_FETCH_FAILURE_BACKOFF_MS <= 0) {
+    return 0;
+  }
+
+  const multiplier = 2 ** Math.min(Math.max(Number(failureCount) - 1, 0), 5);
+  return Math.min(SOURCE_FETCH_FAILURE_BACKOFF_MS * multiplier, SOURCE_FETCH_FAILURE_MAX_BACKOFF_MS);
+}
+
+function markSourceFetchFailed(source = {}, referenceTime = Date.now()) {
+  const fetchKey = getSourceFetchKey(source);
+  if (!fetchKey) {
+    return;
+  }
+
+  const previousFailure = sourceFetchFailures.get(fetchKey) || { failureCount: 0 };
+  const failureCount = Math.max(0, Number(previousFailure.failureCount) || 0) + 1;
+  const retryAfter = referenceTime + getSourceFailureBackoffMs(failureCount);
+  sourceFetchFailures.delete(fetchKey);
+  sourceFetchFailures.set(fetchKey, { failedAt: referenceTime, retryAfter, failureCount });
+  pruneSourceFetchTimestamps(referenceTime);
+}
+
+function isSourceFetchFailureBackoffActive(source = {}, referenceTime = Date.now()) {
+  pruneSourceFetchTimestamps(referenceTime);
+  const fetchKey = getSourceFetchKey(source);
+  const failure = fetchKey ? sourceFetchFailures.get(fetchKey) : null;
+  return Boolean(failure && Number.isFinite(failure.retryAfter) && failure.retryAfter > referenceTime);
 }
 
 function cloneArticleForSource(article = {}, source = {}) {
@@ -215,12 +254,45 @@ async function fetchSourceTask(task, options = {}) {
     return [];
   }
 
-  const parsedArticles = await rssParser.parseFeed(task.fetchSource, {
-    imageFallback: Boolean(task.fetchSource?.ownerUserId),
-    throwOnError: true
-  });
+  if (!bypassSourceFreshness && isSourceFetchFailureBackoffActive(task.fetchSource)) {
+    logger.debug(`Skipping RSS fetch during failure backoff: source=${task.fetchSource?.id || task.fetchSource?.name || task.fetchSource?.url}`);
+    return [];
+  }
 
-  markSourceFetched(task.fetchSource);
+  const fetchKey = getSourceFetchKey(task.fetchSource);
+  const existingFetch = fetchKey ? sourceFetchPromises.get(fetchKey) : null;
+  const fetchPromise = existingFetch || (async () => {
+    let articles;
+    try {
+      articles = await rssParser.parseFeed(task.fetchSource, {
+        imageFallback: Boolean(task.fetchSource?.ownerUserId),
+        throwOnError: true
+      });
+    } catch (error) {
+      markSourceFetchFailed(task.fetchSource);
+      throw error;
+    }
+
+    markSourceFetched(task.fetchSource);
+    return { articles, fetchSource: task.fetchSource };
+  })();
+
+  if (fetchKey && !existingFetch) {
+    sourceFetchPromises.set(fetchKey, fetchPromise);
+  }
+
+  let fetchResult;
+  try {
+    fetchResult = await fetchPromise;
+  } finally {
+    if (fetchKey && sourceFetchPromises.get(fetchKey) === fetchPromise) {
+      sourceFetchPromises.delete(fetchKey);
+    }
+  }
+
+  const parsedArticles = fetchResult.fetchSource?.id === task.fetchSource?.id
+    ? fetchResult.articles
+    : fetchResult.articles.map((article) => cloneArticleForSource(article, task.fetchSource));
 
   if (!task.fanOut) {
     return parsedArticles;
@@ -523,6 +595,8 @@ function resetPendingAiStoryGroupingIds() {
 
 function resetSourceFetchFreshness() {
   sourceFetchTimestamps.clear();
+  sourceFetchFailures.clear();
+  sourceFetchPromises.clear();
 }
 
 function mergeNormalizedArticleTopics(normalizedArticles = []) {
@@ -578,7 +652,7 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
     getLastRefreshAt = () => null,
     setLastRefreshAt = () => null
   } = runtime;
-  const ingestionRun = trackIngestionRun ? database.createIngestionRun() : null;
+  let ingestionRun = null;
 
   try {
     if (includeMaintenance) {
@@ -587,6 +661,10 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
     }
 
     const sourceFetchTasks = buildSourceFetchTasks(sourceConfigs);
+    if (trackIngestionRun && sourceFetchTasks.length > 0) {
+      ingestionRun = database.createIngestionRun();
+    }
+
     const results = await mapSettledWithConcurrency(sourceFetchTasks, RSS_INGESTION_CONCURRENCY, (task) => fetchSourceTask(task, {
       bypassSourceFreshness: bypassSourceFreshness || failWhenEmpty,
       sourceFetchFreshnessMs
@@ -656,7 +734,6 @@ module.exports = {
   cleanupRemovedConfiguredSourceData,
   createEmptyRefreshPayload,
   ingestSourceConfigs,
-  mapSettledWithConcurrency,
   processAiTopicsForPendingArticles,
   scheduleAiTopicsForPendingArticles,
   processAiStoryGroupingForPendingArticles,

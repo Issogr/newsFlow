@@ -1,0 +1,57 @@
+name: Validate Services
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate ${{ matrix.service.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: backend
+            working_directory: backend
+            test_command: npm test
+          - name: bff
+            working_directory: bff
+            test_command: npm test
+          - name: frontend
+            working_directory: frontend
+            test_command: npm run test:coverage
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ${{ matrix.service.working_directory }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.service.working_directory }}
+        run: npm ci
+
+      - name: Lint
+        working-directory: ${{ matrix.service.working_directory }}
+        run: npm run lint
+
+      - name: Build frontend
+        if: matrix.service.name == 'frontend'
+        working-directory: ${{ matrix.service.working_directory }}
+        run: npm run build
+
+      - name: Test
+        working-directory: ${{ matrix.service.working_directory }}
+        run: ${{ matrix.service.test_command }}
+
+      - name: Audit production dependencies
+        working-directory: ${{ matrix.service.working_directory }}
+        run: npm audit --omit=dev

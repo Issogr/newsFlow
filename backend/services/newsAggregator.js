@@ -7,7 +7,8 @@ const {
   expandUserSources,
   getMaxArticleAgeHours,
   getNewsFeed: buildNewsFeed,
-  getReadLaterFeed: buildReadLaterFeed
+  getReadLaterFeed: buildReadLaterFeed,
+  _resetFilterStatsCache: resetFilterStatsCache
 } = require('./newsAggregatorQuery');
 const {
   getCanonicalSourceId
@@ -32,6 +33,7 @@ const ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES = parseIntegerEnv(
 let refreshPromise = null;
 let lastRefreshAt = null;
 let schedulerHandle = null;
+let seedIngestionPromise = null;
 const usersRefreshedSinceScheduledIngestion = new Set();
 const userImmediateRefreshPromises = new Map();
 const userManualRefreshTimestamps = new Map();
@@ -290,16 +292,26 @@ async function refreshUserSources(userId, options = {}) {
   })();
 }
 
-async function ensureSeedData() {
+function startSeedDataRefresh() {
   if (database.countArticles() > 0) {
-    return;
+    return null;
   }
 
-  await ingestAllNews({ broadcast: false });
+  if (!seedIngestionPromise) {
+    seedIngestionPromise = ingestAllNews({ broadcast: false })
+      .catch((error) => {
+        logger.warn(`Background seed ingestion failed: ${error.message}`);
+      })
+      .finally(() => {
+        seedIngestionPromise = null;
+      });
+  }
+
+  return seedIngestionPromise;
 }
 
 async function getNewsFeed(filters = {}, userContext = {}) {
-  await ensureSeedData();
+  startSeedDataRefresh();
 
   if (filters.refresh) {
     startUserAssignedSourceRefresh(userContext, { broadcast: false, force: true, manual: true, broadcastRefreshOnCompletion: true });
@@ -340,6 +352,7 @@ function saveReadLaterArticles(userContext = {}, articleIds = []) {
   if (result.savedArticleIds.length === 0) {
     throw createError(404, 'Article not found.', 'RESOURCE_NOT_FOUND');
   }
+  resetFilterStatsCache();
 
   return {
     success: true,
@@ -358,6 +371,7 @@ function removeReadLaterArticles(userContext = {}, articleIds = []) {
 
   const maxArticleAgeHours = getMaxArticleAgeHours(userContext, ARTICLE_RETENTION_HOURS);
   const result = database.removeReadLaterArticles(userId, normalizedArticleIds, { maxArticleAgeHours });
+  resetFilterStatsCache();
 
   return {
     success: true,
@@ -398,6 +412,8 @@ function resetImmediateRefreshState() {
   usersRefreshedSinceScheduledIngestion.clear();
   userImmediateRefreshPromises.clear();
   userManualRefreshTimestamps.clear();
+  seedIngestionPromise = null;
+  resetFilterStatsCache();
 }
 
 process.on('exit', stopScheduler);
@@ -414,13 +430,9 @@ module.exports = {
   stopScheduler,
   newsSources,
   _getActiveAssignedSourceConfigs: getActiveAssignedSourceConfigs,
-  _getUserAssignedSourceConfigs: getUserAssignedSourceConfigs,
-  _isConfiguredSourceAssignedToSettings: isConfiguredSourceAssignedToSettings,
-  _isRecentlyActive: isRecentlyActive,
-  _getManualRefreshMeta: getManualRefreshMeta,
-  _userManualRefreshTimestamps: userManualRefreshTimestamps,
   _hasPendingUserAssignedSourceRefresh: hasPendingUserAssignedSourceRefresh,
   _startUserAssignedSourceRefresh: startUserAssignedSourceRefresh,
   _waitForExistingUserAssignedSourceRefresh: waitForExistingUserAssignedSourceRefresh,
+  _startSeedDataRefresh: startSeedDataRefresh,
   _resetImmediateRefreshState: resetImmediateRefreshState
 };

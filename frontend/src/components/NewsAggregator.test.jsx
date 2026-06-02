@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import NewsAggregator from './NewsAggregator';
-import { fetchNews, fetchThematicSummaries, isRequestCanceled, updateUserSettings } from '../services/api';
+import { fetchNews, fetchReadLaterNews, fetchThematicSummaries, isRequestCanceled, updateUserSettings } from '../services/api';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 import { createDeferred, resolveDeferred } from '../test-utils/deferred';
 
@@ -169,6 +169,37 @@ describe('NewsAggregator', () => {
     jest.useRealTimers();
   });
 
+  test('ignores main-feed refresh socket events while viewing read later', async () => {
+    let onTopicRefresh;
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+    fetchNews.mockResolvedValue({
+      items: [createGroup('news', 'News headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    fetchReadLaterNews.mockResolvedValue({
+      items: [createGroup('saved', 'Saved headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    await renderNewsAggregator();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Read later' })[0]);
+    await waitFor(() => expect(fetchReadLaterNews).toHaveBeenCalled());
+    fetchNews.mockClear();
+    fetchReadLaterNews.mockClear();
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'news' });
+      await Promise.resolve();
+    });
+
+    expect(fetchNews).not.toHaveBeenCalled();
+    expect(fetchReadLaterNews).not.toHaveBeenCalled();
+  });
+
   test('keeps the latest news response when an older request resolves later', async () => {
     const firstRequest = createDeferred();
     const secondRequest = createDeferred();
@@ -237,12 +268,7 @@ describe('NewsAggregator', () => {
           topics: ['Tecnologia'],
           periodStart: '2026-05-21T07:00:00.000Z',
           periodEnd: '2026-05-21T13:00:00.000Z',
-          title: 'Technology briefing',
           summaryText: 'AI chips moved quickly during the window [1].',
-          titleByLocale: {
-            en: 'Technology briefing',
-            it: 'Sintesi tecnologia'
-          },
           summaryTextByLocale: {
             en: 'AI chips moved quickly during the window [1].',
             it: 'I chip AI sono avanzati rapidamente nella finestra [1].'
@@ -269,7 +295,7 @@ describe('NewsAggregator', () => {
 
     fireEvent.click(storyButton);
 
-    expect(screen.getByText('Sintesi tecnologia')).toBeInTheDocument();
+    expect(screen.getByText('Ora di pranzo')).toBeInTheDocument();
     expect(screen.getByText('1 articolo valutato')).toBeInTheDocument();
     expect(screen.queryByText('I chip AI sono avanzati rapidamente nella finestra [1].')).not.toBeInTheDocument();
     expect(screen.getAllByText('BBC')).not.toHaveLength(0);
@@ -298,7 +324,6 @@ describe('NewsAggregator', () => {
             topics: ['Scienza'],
             periodStart: '2026-05-21T07:00:00.000Z',
             periodEnd: '2026-05-21T13:00:00.000Z',
-            titleByLocale: { en: 'Science briefing', it: 'Sintesi scienza' },
             summaryTextByLocale: { en: 'Science update [1].', it: 'Aggiornamento scienza [1].' },
             sources: []
           }
@@ -336,7 +361,6 @@ describe('NewsAggregator', () => {
             topics: ['Technology'],
             periodStart: '2026-05-21T07:00:00.000Z',
             periodEnd: '2026-05-21T13:00:00.000Z',
-            titleByLocale: { en: 'Technology briefing', it: 'Sintesi tecnologia' },
             summaryTextByLocale: { en: 'First technology update [1].', it: 'Primo aggiornamento tecnologia [1].' },
             articleCount: 1,
             sources: []
@@ -352,7 +376,6 @@ describe('NewsAggregator', () => {
             topics: ['Technology'],
             periodStart: '2026-05-21T07:00:00.000Z',
             periodEnd: '2026-05-21T13:00:00.000Z',
-            titleByLocale: { en: 'Technology briefing', it: 'Sintesi tecnologia' },
             summaryTextByLocale: { en: 'Updated technology update [1].', it: 'Aggiornamento tecnologia aggiornato [1].' },
             articleCount: 2,
             sources: []
@@ -370,6 +393,61 @@ describe('NewsAggregator', () => {
     });
 
     expect(await screen.findByText('2 articles evaluated')).toBeInTheDocument();
+    expect(screen.queryByText('1 article evaluated')).not.toBeInTheDocument();
+  });
+
+  test('closes an open summary panel when refreshed summaries no longer include it', async () => {
+    let onSummariesRefresh;
+
+    useTopicRefreshSocket.mockImplementation(({ onSummariesRefresh: handleSummariesRefresh }) => {
+      onSummariesRefresh = handleSummariesRefresh;
+    });
+    fetchNews.mockResolvedValue({
+      items: [createGroup('group-1', 'Top headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    fetchThematicSummaries
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'summary-technology',
+            topicKey: 'technology',
+            topicLabel: 'Technology',
+            topics: ['Technology'],
+            periodStart: '2026-05-21T07:00:00.000Z',
+            periodEnd: '2026-05-21T13:00:00.000Z',
+            summaryTextByLocale: { en: 'Technology update [1].', it: 'Aggiornamento tecnologia [1].' },
+            articleCount: 1,
+            sources: []
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'summary-science',
+            topicKey: 'science',
+            topicLabel: 'Science',
+            topics: ['Science'],
+            periodStart: '2026-05-21T07:00:00.000Z',
+            periodEnd: '2026-05-21T13:00:00.000Z',
+            summaryTextByLocale: { en: 'Science update [1].', it: 'Aggiornamento scienza [1].' },
+            articleCount: 1,
+            sources: []
+          }
+        ]
+      });
+
+    await renderNewsAggregator();
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Technology summary' }));
+    expect(screen.getByText('1 article evaluated')).toBeInTheDocument();
+
+    await act(async () => {
+      await onSummariesRefresh({ refresh: true, reason: 'summaries' });
+    });
+
+    expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
     expect(screen.queryByText('1 article evaluated')).not.toBeInTheDocument();
   });
 
@@ -404,7 +482,6 @@ describe('NewsAggregator', () => {
           topics: ['Scienza'],
           periodStart: '2026-05-21T07:00:00.000Z',
           periodEnd: '2026-05-21T13:00:00.000Z',
-          titleByLocale: { en: 'Science briefing', it: 'Sintesi scienza' },
           summaryTextByLocale: { en: 'Science update [1].', it: 'Aggiornamento scienza [1].' },
           sources: []
         }
@@ -423,7 +500,6 @@ describe('NewsAggregator', () => {
           topics: ['Tecnologia'],
           periodStart: '2026-05-21T07:00:00.000Z',
           periodEnd: '2026-05-21T13:00:00.000Z',
-          titleByLocale: { en: 'Technology briefing', it: 'Sintesi tecnologia' },
           summaryTextByLocale: { en: 'Technology update [1].', it: 'Aggiornamento tecnologia [1].' },
           sources: []
         }
@@ -607,6 +683,41 @@ describe('NewsAggregator', () => {
     }));
   });
 
+  test('does not let silent topic refresh cancel the initial feed load', async () => {
+    let onTopicRefresh;
+    const initialRequest = createDeferred();
+    let initialRequestAborted = false;
+
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+    fetchNews.mockImplementationOnce(({ signal }) => {
+      signal.addEventListener('abort', () => {
+        initialRequestAborted = true;
+      });
+      return initialRequest.promise;
+    });
+
+    await renderNewsAggregator();
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    expect(fetchNews).toHaveBeenCalledTimes(1);
+    expect(initialRequestAborted).toBe(false);
+
+    await resolveDeferred(initialRequest, {
+      items: [createGroup('group-1', 'Initial headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    expect(await screen.findByText('Initial headline')).toBeInTheDocument();
+    expect(screen.queryByText('Unexpected silent headline')).not.toBeInTheDocument();
+  });
+
   test('replaces stale fallback topics after a silent AI topic reload', async () => {
     let onTopicRefresh;
     const fallbackTopic = { topic: 'Economia', source: 'local' };
@@ -752,9 +863,10 @@ describe('NewsAggregator', () => {
     expect(screen.getByText('1 new article available')).toBeInTheDocument();
   });
 
-  test('clears manual refresh loading when a silent topic reload cancels it', async () => {
+  test('does not cancel manual refresh loading when a silent topic reload arrives', async () => {
     let onTopicRefresh;
     const manualRefreshRequest = createDeferred();
+    let manualRequestAborted = false;
 
     useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
       onTopicRefresh = handleTopicRefresh;
@@ -767,14 +879,9 @@ describe('NewsAggregator', () => {
       })
       .mockImplementationOnce(({ signal }) => {
         signal.addEventListener('abort', () => {
-          manualRefreshRequest.reject(Object.assign(new Error('canceled'), { code: 'ERR_CANCELED' }));
+          manualRequestAborted = true;
         });
         return manualRefreshRequest.promise;
-      })
-      .mockResolvedValueOnce({
-        items: [createGroup('group-1', 'Silently reloaded headline')],
-        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-        filters: { sources: [], sourceCatalog: [], topics: [] }
       });
 
     await renderNewsAggregator();
@@ -791,7 +898,17 @@ describe('NewsAggregator', () => {
       await Promise.resolve();
     });
 
-    expect(await screen.findByText('Silently reloaded headline')).toBeInTheDocument();
+    expect(fetchNews).toHaveBeenCalledTimes(2);
+    expect(manualRequestAborted).toBe(false);
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
+
+    await resolveDeferred(manualRefreshRequest, {
+      items: [createGroup('group-1', 'Manual refresh headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    expect(await screen.findByText('Manual refresh headline')).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
     });
@@ -989,26 +1106,24 @@ describe('NewsAggregator', () => {
     expect(screen.getByRole('button', { name: 'Load more' })).toBeEnabled();
   });
 
-  test('shows a passive pill for unseen new articles without triggering a refresh', async () => {
+  test('reloads cached feed from the new article pill', async () => {
     let socketHandlers;
 
     useTopicRefreshSocket.mockImplementation((handlers) => {
       socketHandlers = handlers;
     });
     fetchNews.mockReset();
-    fetchNews.mockImplementation(({ refresh }) => Promise.resolve(
-      refresh
-        ? {
-          items: [{ id: 'group-2', title: 'Fresh headline', items: [{ id: 'article-2', pubDate: '2026-03-14T11:00:00.000Z' }] }],
-          meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-          filters: { sources: [], sourceCatalog: [], topics: [] }
-        }
-        : {
-          items: [{ id: 'group-1', title: 'Current headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }],
-          meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
-          filters: { sources: [], sourceCatalog: [], topics: [] }
-        }
-    ));
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [{ id: 'group-1', title: 'Current headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: 'group-2', title: 'Fresh headline', items: [{ id: 'article-2', pubDate: '2026-03-14T11:00:00.000Z' }] }],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      });
 
     await renderNewsAggregator();
 
@@ -1021,10 +1136,18 @@ describe('NewsAggregator', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent('2 new articles available');
+    const newArticlesButton = screen.getByRole('button', { name: '2 new articles available' });
+    fireEvent.click(newArticlesButton);
+
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenCalledTimes(initialCallCount + 1);
+    });
+    expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
+      refresh: false,
+      includeFilters: true
+    }));
+    expect(await screen.findByText('Fresh headline')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '2 new articles available' })).not.toBeInTheDocument();
-    expect(fetchNews).toHaveBeenCalledTimes(initialCallCount);
-    expect(screen.queryByText('Fresh headline')).not.toBeInTheDocument();
   });
 
   test('uses the server cursor for load more requests', async () => {
@@ -1277,7 +1400,7 @@ describe('NewsAggregator', () => {
     await renderNewsAggregator();
 
     openDesktopSearch();
-    const searchInput = screen.getByRole('searchbox');
+    const searchInput = screen.getByRole('searchbox', { name: 'Search' });
     fireEvent.change(searchInput, { target: { value: 'economy' } });
 
     expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();

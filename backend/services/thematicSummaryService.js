@@ -7,13 +7,17 @@ const websocketService = require('./websocketService');
 const { parseIntegerEnv } = require('../utils/env');
 const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const { isPromotionalDealArticle } = require('../utils/promotionalContent');
+const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
 
 const DEFAULT_SUMMARY_TIME_ZONE = 'Europe/Rome';
-const SUMMARY_GENERATION_HOURS = [7, 13, 19];
+const SUMMARY_GENERATION_HOURS = [7, 19];
+const PODCAST_GENERATION_HOURS = [7, 19];
+const PODCAST_HISTORY_RETAIN_COUNT = parseIntegerEnv('AI_PODCAST_HISTORY_RETAIN_COUNT', 2, { min: 1, max: 10 });
 const SUMMARY_CHECK_INTERVAL_MS = parseIntegerEnv('THEMATIC_SUMMARY_CHECK_INTERVAL_MS', 60 * 1000, { min: 1000 });
 const SUMMARY_MAX_ARTICLES_PER_TOPIC = parseIntegerEnv('AI_SUMMARY_MAX_ARTICLES_PER_TOPIC', 120, { min: 1, max: 300 });
 const SUMMARY_READER_PREWARM_MINUTES_BEFORE = parseIntegerEnv('AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE', 30, { min: 1, max: 180 });
 const SUMMARY_READER_PREWARM_CONCURRENCY = parseIntegerEnv('AI_SUMMARY_READER_PREWARM_CONCURRENCY', 2, { min: 1, max: 8 });
+const SUMMARY_GENERATION_CONCURRENCY = parseIntegerEnv('AI_SUMMARY_GENERATION_CONCURRENCY', 2, { min: 1, max: 6 });
 const SUMMARY_READER_TEXT_MAX_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MAX_CHARS', 3000, { min: 500, max: 12000 });
 const SUMMARY_READER_TEXT_MIN_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MIN_CHARS', 250, { min: 80, max: 2000 });
 const SUMMARY_FAILED_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
@@ -142,16 +146,16 @@ function createZonedSlotDate(localDate, hour, timeZone = SUMMARY_TIME_ZONE) {
   }, timeZone);
 }
 
-function getLatestDueWindow(referenceDate = new Date()) {
+function getLatestDueWindow(referenceDate = new Date(), generationHours = SUMMARY_GENERATION_HOURS) {
   const reference = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
   const localToday = getTimeZoneParts(reference, SUMMARY_TIME_ZONE);
-  const todaySlots = SUMMARY_GENERATION_HOURS.map((hour) => createZonedSlotDate(localToday, hour, SUMMARY_TIME_ZONE));
+  const todaySlots = generationHours.map((hour) => createZonedSlotDate(localToday, hour, SUMMARY_TIME_ZONE));
   const dueSlotIndex = todaySlots.findLastIndex((slotDate) => slotDate.getTime() <= reference.getTime());
 
   if (dueSlotIndex >= 0) {
     const periodEnd = todaySlots[dueSlotIndex];
     const periodStart = dueSlotIndex === 0
-      ? createZonedSlotDate(addCalendarDays(localToday, -1), SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1], SUMMARY_TIME_ZONE)
+      ? createZonedSlotDate(addCalendarDays(localToday, -1), generationHours[generationHours.length - 1], SUMMARY_TIME_ZONE)
       : todaySlots[dueSlotIndex - 1];
 
     return {
@@ -161,8 +165,8 @@ function getLatestDueWindow(referenceDate = new Date()) {
   }
 
   const yesterday = addCalendarDays(localToday, -1);
-  const periodEnd = createZonedSlotDate(yesterday, SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1], SUMMARY_TIME_ZONE);
-  const periodStart = createZonedSlotDate(yesterday, SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 2], SUMMARY_TIME_ZONE);
+  const periodEnd = createZonedSlotDate(yesterday, generationHours[generationHours.length - 1], SUMMARY_TIME_ZONE);
+  const periodStart = createZonedSlotDate(yesterday, generationHours[generationHours.length - 2], SUMMARY_TIME_ZONE);
 
   return {
     periodStart: periodStart.toISOString(),
@@ -170,16 +174,16 @@ function getLatestDueWindow(referenceDate = new Date()) {
   };
 }
 
-function getNextDueWindow(referenceDate = new Date()) {
+function getNextDueWindow(referenceDate = new Date(), generationHours = SUMMARY_GENERATION_HOURS) {
   const reference = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
   const localToday = getTimeZoneParts(reference, SUMMARY_TIME_ZONE);
-  const todaySlots = SUMMARY_GENERATION_HOURS.map((hour) => createZonedSlotDate(localToday, hour, SUMMARY_TIME_ZONE));
+  const todaySlots = generationHours.map((hour) => createZonedSlotDate(localToday, hour, SUMMARY_TIME_ZONE));
   const nextSlotIndex = todaySlots.findIndex((slotDate) => slotDate.getTime() > reference.getTime());
 
   if (nextSlotIndex >= 0) {
     const periodEnd = todaySlots[nextSlotIndex];
     const periodStart = nextSlotIndex === 0
-      ? createZonedSlotDate(addCalendarDays(localToday, -1), SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1], SUMMARY_TIME_ZONE)
+      ? createZonedSlotDate(addCalendarDays(localToday, -1), generationHours[generationHours.length - 1], SUMMARY_TIME_ZONE)
       : todaySlots[nextSlotIndex - 1];
 
     return {
@@ -189,13 +193,43 @@ function getNextDueWindow(referenceDate = new Date()) {
   }
 
   const tomorrow = addCalendarDays(localToday, 1);
-  const periodStart = createZonedSlotDate(localToday, SUMMARY_GENERATION_HOURS[SUMMARY_GENERATION_HOURS.length - 1], SUMMARY_TIME_ZONE);
-  const periodEnd = createZonedSlotDate(tomorrow, SUMMARY_GENERATION_HOURS[0], SUMMARY_TIME_ZONE);
+  const periodStart = createZonedSlotDate(localToday, generationHours[generationHours.length - 1], SUMMARY_TIME_ZONE);
+  const periodEnd = createZonedSlotDate(tomorrow, generationHours[0], SUMMARY_TIME_ZONE);
 
   return {
     periodStart: periodStart.toISOString(),
     periodEnd: periodEnd.toISOString()
   };
+}
+
+function getLatestDuePodcastWindow(referenceDate = new Date()) {
+  return getLatestDueWindow(referenceDate, PODCAST_GENERATION_HOURS);
+}
+
+function getPodcastWindowSlot(summary = {}) {
+  const periodEnd = new Date(summary.periodEnd || '');
+  if (Number.isNaN(periodEnd.getTime())) {
+    return '';
+  }
+
+  return getTimeZoneParts(periodEnd, SUMMARY_TIME_ZONE).hour < 12 ? 'morning' : 'evening';
+}
+
+function getSummaryWindowSlot(summary = {}) {
+  const periodEnd = new Date(summary.periodEnd || '');
+  if (Number.isNaN(periodEnd.getTime())) {
+    return '';
+  }
+
+  const hour = getTimeZoneParts(periodEnd, SUMMARY_TIME_ZONE).hour;
+  if (hour < 10) {
+    return 'morning';
+  }
+  if (hour < 16) {
+    return 'lunch';
+  }
+
+  return 'evening';
 }
 
 function getSummaryTopics() {
@@ -231,10 +265,6 @@ function buildSummaryId(topicKey, periodStart, periodEnd) {
 
 function buildPodcastSummaryId(periodStart, periodEnd) {
   return buildSummaryId('podcast', periodStart, periodEnd);
-}
-
-function isTerminalSummary(summary = {}) {
-  return Boolean(summary) && TERMINAL_SUMMARY_STATUSES.has(summary.status);
 }
 
 function getSummaryFailureCategory(error = {}) {
@@ -300,8 +330,6 @@ function buildSourceList(articles = []) {
 }
 
 function buildEmptySummaryPayload(topicConfig, window) {
-  const titleEn = `No ${topicConfig.label} stories`;
-  const titleIt = 'Nessuna notizia per questo topic';
   const textEn = `No ${topicConfig.label.toLowerCase()} stories were available for this summary window.`;
   const textIt = 'Nessuna notizia disponibile per questo topic in questa finestra di riepilogo.';
 
@@ -312,9 +340,7 @@ function buildEmptySummaryPayload(topicConfig, window) {
     topics: topicConfig.topics,
     periodStart: window.periodStart,
     periodEnd: window.periodEnd,
-    title: titleEn,
     summaryText: textEn,
-    titleByLocale: { en: titleEn, it: titleIt },
     summaryTextByLocale: { en: textEn, it: textIt },
     articleCount: 0,
     sources: [],
@@ -377,8 +403,49 @@ function withCachedReaderText(articles = []) {
   }));
 }
 
+function getPodcastArticleIdentityKeys(article = {}) {
+  const keys = [];
+  const articleId = String(article.id || '').trim();
+  const storyGroupId = String(article.storyGroupId || '').trim();
+  const articleUrl = normalizeArticleUrl(article.canonicalUrl || article.url || '');
+  const title = normalizeIdentityText(article.title || '', { lowercase: true });
+  const source = normalizeIdentityText(article.source || article.rawSource || article.sourceId || '', { lowercase: true });
+
+  if (articleId) {
+    keys.push(`id:${articleId}`);
+  }
+  if (storyGroupId) {
+    keys.push(`story:${storyGroupId}`);
+  }
+  if (articleUrl) {
+    keys.push(`url:${articleUrl}`);
+  }
+  if (title && source) {
+    keys.push(`title-source:${source}:${title}`);
+  }
+
+  return keys;
+}
+
+function dedupePodcastCandidateArticles(articles = []) {
+  const seenKeys = new Set();
+  const deduped = [];
+
+  (Array.isArray(articles) ? articles : []).forEach((article) => {
+    const keys = getPodcastArticleIdentityKeys(article);
+    if (keys.length > 0 && keys.some((key) => seenKeys.has(key))) {
+      return;
+    }
+
+    deduped.push(article);
+    keys.forEach((key) => seenKeys.add(key));
+  });
+
+  return deduped;
+}
+
 function getCandidateArticlesForWindow(window) {
-  const byId = new Map();
+  const candidates = [];
   SUMMARY_TOPICS.forEach((topicConfig) => {
     filterNewsworthySummaryArticles(database.getArticlesForThematicSummary({
       topics: topicConfig.topics,
@@ -386,13 +453,13 @@ function getCandidateArticlesForWindow(window) {
       periodEnd: window.periodEnd,
       limit: SUMMARY_MAX_ARTICLES_PER_TOPIC
     })).forEach((article) => {
-      if (article?.id && !byId.has(article.id)) {
-        byId.set(article.id, article);
+      if (article?.id) {
+        candidates.push(article);
       }
     });
   });
 
-  return [...byId.values()];
+  return dedupePodcastCandidateArticles(candidates);
 }
 
 function sortArticlesForPodcast(articles = []) {
@@ -406,10 +473,15 @@ function getPodcastScriptTextByLocale(summary = {}) {
   const summaryTextByLocale = summary.summaryTextByLocale && typeof summary.summaryTextByLocale === 'object'
     ? summary.summaryTextByLocale
     : {};
-  return {
-    en: String(summaryTextByLocale.en || summary.summaryText || '').trim(),
-    it: String(summaryTextByLocale.it || summaryTextByLocale.en || summary.summaryText || '').trim()
-  };
+  const entries = Object.entries(summaryTextByLocale)
+    .map(([locale, text]) => [String(locale || '').trim().toLowerCase(), String(text || '').trim()])
+    .filter(([locale, text]) => locale && text);
+
+  if (entries.length === 0 && summary.summaryText) {
+    entries.push(['en', String(summary.summaryText || '').trim()]);
+  }
+
+  return Object.fromEntries(entries);
 }
 
 function buildPodcastUpdatePayload(summary = {}, updates = {}) {
@@ -471,40 +543,50 @@ function isPodcastAudioRetryDue(summary = {}, options = {}) {
   return new Date(options.referenceDate || new Date()).getTime() - failedAtTime >= getAudioRetryDelayMs(summary);
 }
 
-function isSamePodcastAudioConfig(summary = {}, ttsConfig = {}, expectedVoice = '') {
-  return summary.audioModel === ttsConfig.model && summary.audioVoice === expectedVoice;
+function isSamePodcastAudioConfig(audio = {}, ttsConfig = {}, expectedVoice = '') {
+  return audio.audioModel === ttsConfig.model && audio.audioVoice === expectedVoice;
 }
 
-function shouldRetryPodcastAudio(summary = {}, options = {}) {
+function getPodcastAudioLocalesToGenerate(summary = {}, options = {}) {
   if (summary.status !== 'completed') {
-    return false;
+    return [];
   }
 
-  if (!getPodcastScriptTextByLocale(summary).it) {
-    return false;
+  const scriptTextByLocale = getPodcastScriptTextByLocale(summary);
+  const enabledLocales = aiPodcastGenerator._getEnabledPodcastLocales();
+  const localesWithScripts = enabledLocales.filter((locale) => scriptTextByLocale[locale]);
+  if (localesWithScripts.length === 0) {
+    return [];
   }
 
   const ttsConfig = aiPodcastGenerator._getTtsConfig();
   if (!ttsConfig.enabled) {
     logger.info(`AI podcast audio retry skipped: reason=${ttsConfig.apiKey ? 'disabled' : 'missing_api_key'}, windowEnd=${summary.periodEnd}`);
-    return false;
+    return [];
   }
 
   const expectedVoice = aiPodcastGenerator._getTtsVoice();
-  const sameAudioConfig = isSamePodcastAudioConfig(summary, ttsConfig, expectedVoice);
-  const audioMatchesConfig = summary.audioStatus === 'completed'
-    && summary.audioModel === ttsConfig.model
-    && summary.audioVoice === expectedVoice;
-  if (audioMatchesConfig) {
-    return false;
-  }
+  return localesWithScripts.filter((locale) => {
+    const audio = summary.audioByLocale?.[locale] || (summary.audioLocale === locale ? summary : null) || {};
+    const sameAudioConfig = isSamePodcastAudioConfig(audio, ttsConfig, expectedVoice);
+    const audioMatchesConfig = audio.audioStatus === 'completed'
+      && audio.audioModel === ttsConfig.model
+      && audio.audioVoice === expectedVoice;
+    if (audioMatchesConfig) {
+      return false;
+    }
 
-  if (summary.audioStatus === 'failed' && sameAudioConfig && !isPodcastAudioRetryDue(summary, options)) {
-    logger.debug(`AI podcast audio retry skipped during cooldown: windowEnd=${summary.periodEnd}`);
-    return false;
-  }
+    if (audio.audioStatus === 'failed' && sameAudioConfig && !isPodcastAudioRetryDue(audio, options)) {
+      logger.debug(`AI podcast audio retry skipped during cooldown: locale=${locale}, windowEnd=${summary.periodEnd}`);
+      return false;
+    }
 
-  return true;
+    return true;
+  });
+}
+
+function shouldRetryPodcastAudio(summary = {}, options = {}) {
+  return getPodcastAudioLocalesToGenerate(summary, options).length > 0;
 }
 
 async function retryPodcastAudio(summary = {}, options = {}) {
@@ -512,42 +594,37 @@ async function retryPodcastAudio(summary = {}, options = {}) {
     return { summary, generatedNow: false };
   }
 
-  const scriptTextByLocale = getPodcastScriptTextByLocale(summary);
   const ttsConfig = aiPodcastGenerator._getTtsConfig();
   const expectedVoice = aiPodcastGenerator._getTtsVoice();
-  const sameAudioConfig = isSamePodcastAudioConfig(summary, ttsConfig, expectedVoice);
-  const currentAudioRetryCount = sameAudioConfig ? Math.max(0, Number(summary.audioRetryCount) || 0) : 0;
+  const scriptTextByLocale = getPodcastScriptTextByLocale(summary);
+  const localesToGenerate = getPodcastAudioLocalesToGenerate(summary, options);
+  const generatingAudioByLocale = Object.fromEntries(localesToGenerate.map((locale) => {
+    const audio = summary.audioByLocale?.[locale] || {};
+    const sameAudioConfig = isSamePodcastAudioConfig(audio, ttsConfig, expectedVoice);
+    const currentAudioRetryCount = sameAudioConfig ? Math.max(0, Number(audio.audioRetryCount) || 0) : 0;
+    return [locale, {
+      audioStatus: 'generating',
+      audioErrorMessage: '',
+      audioFailureCategory: '',
+      audioModel: ttsConfig.model,
+      audioVoice: expectedVoice,
+      audioRetryCount: currentAudioRetryCount,
+      audioFailedAt: audio.audioFailedAt || null
+    }];
+  }));
   const generatingSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(summary, {
-    audioStatus: 'generating',
-    audioErrorMessage: '',
-    audioFailureCategory: '',
-    audioModel: ttsConfig.model,
-    audioVoice: expectedVoice,
-    audioRetryCount: currentAudioRetryCount,
-    audioFailedAt: summary.audioFailedAt || null,
+    audioByLocale: generatingAudioByLocale,
     status: 'completed'
   }));
   broadcastSummariesRefresh(options);
 
-  try {
-    const audio = await aiPodcastGenerator.generateItalianAudio(scriptTextByLocale.it);
-    if (!audio) {
-      const unavailableSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
-        audioStatus: 'not_available',
-        audioErrorMessage: '',
-        audioFailureCategory: '',
-        audioRetryCount: currentAudioRetryCount,
-        audioFailedAt: null,
-        audioModel: ttsConfig.model,
-        audioVoice: expectedVoice,
-        status: 'completed'
-      }));
-      broadcastSummariesRefresh(options);
-      return { summary: unavailableSummary, generatedNow: false };
-    }
-
-    return {
-      summary: database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
+  const completedAudioByLocale = {};
+  for (const locale of localesToGenerate) {
+    const previousAudio = generatingSummary.audioByLocale?.[locale] || {};
+    const currentAudioRetryCount = Math.max(0, Number(previousAudio.audioRetryCount) || 0);
+    try {
+      const audio = await aiPodcastGenerator.generateAudioForLocale(scriptTextByLocale[locale], locale);
+      completedAudioByLocale[locale] = audio ? {
         audio,
         audioStatus: 'completed',
         audioErrorMessage: '',
@@ -555,30 +632,40 @@ async function retryPodcastAudio(summary = {}, options = {}) {
         audioModel: audio.model || ttsConfig.model,
         audioVoice: audio.voice || expectedVoice,
         audioRetryCount: 0,
+        audioFailedAt: null
+      } : {
+        audioStatus: 'not_available',
+        audioErrorMessage: '',
+        audioFailureCategory: '',
+        audioRetryCount: currentAudioRetryCount,
         audioFailedAt: null,
-        status: 'completed'
-      })),
-      generatedNow: true
-    };
-  } catch (error) {
-    const failedAt = new Date().toISOString();
-    logger.warn(`AI podcast audio retry failed: windowEnd=${summary.periodEnd}, error=${error.message}`);
-    const failedSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
-      audioStatus: 'failed',
-      audioErrorMessage: error.message,
-      audioFailureCategory: getPodcastAudioFailureCategory(error),
-      audioModel: ttsConfig.model,
-      audioVoice: expectedVoice,
-      audioRetryCount: currentAudioRetryCount + 1,
-      audioFailedAt: failedAt,
-      status: 'completed'
-    }));
-    broadcastSummariesRefresh(options);
-    return {
-      summary: failedSummary,
-      generatedNow: false
-    };
+        audioModel: ttsConfig.model,
+        audioVoice: expectedVoice
+      };
+    } catch (error) {
+      const failedAt = new Date().toISOString();
+      logger.warn(`AI podcast audio retry failed: locale=${locale}, windowEnd=${summary.periodEnd}, error=${error.message}`);
+      completedAudioByLocale[locale] = {
+        audioStatus: 'failed',
+        audioErrorMessage: error.message,
+        audioFailureCategory: getPodcastAudioFailureCategory(error),
+        audioModel: ttsConfig.model,
+        audioVoice: expectedVoice,
+        audioRetryCount: currentAudioRetryCount + 1,
+        audioFailedAt: failedAt
+      };
+    }
   }
+
+  const completedSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
+    audioByLocale: completedAudioByLocale,
+    status: 'completed'
+  }));
+  broadcastSummariesRefresh(options);
+  return {
+    summary: completedSummary,
+    generatedNow: Object.values(completedAudioByLocale).some((audio) => audio.audioStatus === 'completed')
+  };
 }
 
 async function prewarmReaderCacheForDueWindow(options = {}) {
@@ -637,7 +724,7 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
 
 async function generateSummaryForTopic(topicConfig, window, options = {}) {
   const existingSummary = database.getThematicSummary(topicConfig.key, window.periodStart, window.periodEnd);
-  if (isTerminalSummary(existingSummary) && options.force !== true) {
+  if (existingSummary?.status === 'completed' && options.force !== true) {
     return { summary: existingSummary, generatedNow: false };
   }
   if (existingSummary?.status === 'failed' && options.force !== true && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
@@ -655,6 +742,10 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
   if (articles.length === 0) {
     if (options.force !== true && database.hasPendingTopicProcessingForThematicSummary?.(window)) {
       return { summary: null, generatedNow: false };
+    }
+
+    if (existingSummary?.status === 'empty' && options.force !== true) {
+      return { summary: existingSummary, generatedNow: false };
     }
 
     return {
@@ -695,9 +786,7 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
     return {
       summary: database.upsertThematicSummary({
         ...basePayload,
-        title: generated.title,
         summaryText: generated.summaryText,
-        titleByLocale: generated.titleByLocale,
         summaryTextByLocale: generated.summaryTextByLocale,
         model: generated.model,
         status: 'completed',
@@ -711,7 +800,6 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
     logger.warn(`Thematic summary generation failed: topic=${topicConfig.key}, windowEnd=${window.periodEnd}, error=${error.message}`);
     database.upsertThematicSummary({
       ...basePayload,
-      title: topicConfig.label,
       summaryText: '',
       model: aiSummaryGenerator._getConfig().model,
       status: 'failed',
@@ -770,6 +858,8 @@ async function generatePodcastForWindow(window, options = {}) {
         titleByLocale: generated.titleByLocale,
         scriptTextByLocale: generated.scriptTextByLocale,
         model: generated.model,
+        audioByLocale: generated.audioByLocale,
+        audioLocale: generated.audioLocale,
         audio: generated.audio,
         audioStatus: generated.audioStatus,
         audioErrorMessage: generated.audioErrorMessage,
@@ -810,15 +900,27 @@ async function generateDueSummaries(options = {}) {
   }
 
   generationPromise = (async () => {
-    const window = options.window || getLatestDueWindow(options.referenceDate || new Date());
+    const referenceDate = options.referenceDate || new Date();
+    const summaryWindow = options.summaryWindow || options.window || getLatestDueWindow(referenceDate);
+    const podcastWindow = options.podcastWindow || options.window || getLatestDuePodcastWindow(referenceDate);
     const summaries = [];
     let generatedCount = 0;
     const generatedTopicKeys = [];
     let generatedPodcast = false;
     const canGenerateSummaries = aiSummaryGenerator.isAiSummaryGenerationAvailable();
 
-    for (const topicConfig of SUMMARY_TOPICS) {
-      const result = await generateSummaryForTopic(topicConfig, window, { ...options, canGenerateSummaries });
+    const topicResults = await mapSettledWithConcurrency(SUMMARY_TOPICS, SUMMARY_GENERATION_CONCURRENCY, async (topicConfig) => ({
+      topicConfig,
+      result: await generateSummaryForTopic(topicConfig, summaryWindow, { ...options, canGenerateSummaries })
+    }));
+
+    for (const topicResult of topicResults) {
+      if (topicResult.status === 'rejected') {
+        logger.warn(`Thematic summary topic task failed: windowEnd=${summaryWindow.periodEnd}, error=${topicResult.reason?.message || topicResult.reason}`);
+        continue;
+      }
+
+      const { topicConfig, result } = topicResult.value;
       if (TERMINAL_SUMMARY_STATUSES.has(result.summary?.status)) {
         summaries.push(result.summary);
       }
@@ -830,7 +932,7 @@ async function generateDueSummaries(options = {}) {
       }
     }
 
-    const podcastResult = await generatePodcastForWindow(window, options);
+    const podcastResult = await generatePodcastForWindow(podcastWindow, options);
     if (podcastResult.summary?.status === 'completed') {
       summaries.unshift(podcastResult.summary);
     }
@@ -842,17 +944,28 @@ async function generateDueSummaries(options = {}) {
     }
 
     if (generatedCount > 0) {
-      pruneGeneratedSummaryHistory({
-        periodEnd: window.periodEnd,
-        topicKeys: generatedTopicKeys,
-        podcast: generatedPodcast
-      });
-      logger.info(`Thematic summaries ready: windowEnd=${window.periodEnd}, count=${generatedCount}`);
+      if (generatedTopicKeys.length > 0) {
+        pruneGeneratedSummaryHistory({
+          periodEnd: summaryWindow.periodEnd,
+          topicKeys: generatedTopicKeys,
+          podcast: false
+        });
+      }
+      if (generatedPodcast) {
+        pruneGeneratedSummaryHistory({
+          periodEnd: podcastWindow.periodEnd,
+          topicKeys: [],
+          podcast: true,
+          podcastRetainCount: PODCAST_HISTORY_RETAIN_COUNT
+        });
+      }
+      logger.info(`Thematic summaries ready: summaryWindowEnd=${summaryWindow.periodEnd}, podcastWindowEnd=${podcastWindow.periodEnd}, count=${generatedCount}`);
       broadcastSummariesRefresh(options);
     }
 
     return {
-      window,
+      window: summaryWindow,
+      podcastWindow,
       items: summaries
     };
   })().finally(() => {
@@ -871,13 +984,16 @@ function getLatestSummaries() {
   const topicItems = topicConfigs
     .map((topic) => {
       const summary = latestByKey.get(topic.key);
-      return summary ? { ...summary, topicLabel: topic.label } : null;
+      return summary ? { ...summary, topicLabel: topic.label, summarySlot: getSummaryWindowSlot(summary) } : null;
     })
     .filter(Boolean);
-  const latestPodcast = database.getLatestPodcastSummary();
+  const latestPodcasts = (typeof database.listLatestPodcastSummaries === 'function'
+    ? database.listLatestPodcastSummaries(PODCAST_HISTORY_RETAIN_COUNT)
+    : [database.getLatestPodcastSummary()].filter(Boolean))
+    .map((summary) => ({ ...summary, podcastSlot: getPodcastWindowSlot(summary) }));
 
   return {
-    items: latestPodcast ? [latestPodcast, ...topicItems] : topicItems,
+    items: [...latestPodcasts, ...topicItems],
     topics: topicConfigs
   };
 }
@@ -916,11 +1032,12 @@ module.exports = {
   startScheduler,
   stopScheduler,
   _getLatestDueWindow: getLatestDueWindow,
+  _getLatestDuePodcastWindow: getLatestDuePodcastWindow,
   _getNextDueWindow: getNextDueWindow,
-  _isReaderPrewarmEnabled: isReaderPrewarmEnabled,
   _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,
   _getSummaryTopics: getSummaryTopics,
   _generatePodcastForWindow: generatePodcastForWindow,
+  _dedupePodcastCandidateArticles: dedupePodcastCandidateArticles,
   _isPromotionalDealArticle: isPromotionalDealArticle,
   _getPrewarmAttemptWindowCount: () => attemptedPrewarmArticleIdsByWindow.size,
   _prunePrewarmAttempts: prunePrewarmAttempts

@@ -9,6 +9,8 @@ describe('auth utils', () => {
 
   test('extractBearerToken returns token for valid bearer header', () => {
     expect(extractBearerToken('Bearer my-token')).toBe('my-token');
+    expect(extractBearerToken('bearer my-token')).toBe('my-token');
+    expect(extractBearerToken('Bearer    my-token')).toBe('my-token');
   });
 
   test('safeTokenCompare validates equal token only', () => {
@@ -136,5 +138,39 @@ describe('auth session cleanup throttling', () => {
 
       expect(databaseMock.touchApiTokenUsage).toHaveBeenCalledWith('token-1', expect.any(String));
     });
+  });
+
+  test('periodic timer flushes low-volume API token usage', () => {
+    jest.resetModules();
+    jest.useFakeTimers();
+
+    const databaseMock = {
+      findActiveApiTokenByHash: jest.fn(() => ({
+        id: 'token-1',
+        userId: 'user-1',
+        username: 'alice',
+        expiresAt: new Date(Date.now() + (60 * 60 * 1000)).toISOString()
+      })),
+      touchApiTokenUsage: jest.fn(() => 1),
+      purgeExpiredApiTokens: jest.fn(() => 0)
+    };
+
+    jest.doMock('../services/database', () => databaseMock);
+
+    jest.isolateModules(() => {
+      const auth = require('./auth');
+
+      auth.resolveAuthenticatedApiToken({ headers: { authorization: 'Bearer nfapi_secret' } });
+      auth.startApiTokenUsageFlushTimer();
+
+      expect(databaseMock.touchApiTokenUsage).not.toHaveBeenCalled();
+
+      jest.advanceTimersByTime(5000);
+
+      expect(databaseMock.touchApiTokenUsage).toHaveBeenCalledWith('token-1', expect.any(String));
+      auth.stopApiTokenUsageFlushTimer();
+    });
+
+    jest.useRealTimers();
   });
 });

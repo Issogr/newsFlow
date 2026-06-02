@@ -27,6 +27,7 @@ import DesktopTopNavFilters from './DesktopTopNavFilters';
 import TopNavActionButton from './TopNavActionButton';
 import ThematicSummaryStories from './ThematicSummaryStories';
 import ThematicSummaryPanel from './ThematicSummaryPanel';
+import { isPodcastSummary } from '../utils/thematicSummaryLocale';
 
 const PAGE_SIZE = 12;
 const MAX_TOPIC_RELOAD_PAGE_SIZE = 30;
@@ -58,6 +59,23 @@ function getGroupMergeKeys(group = {}) {
   });
 
   return keys;
+}
+
+function getCurrentThematicSummarySelection(selectedSummary, summaries = []) {
+  if (!selectedSummary?.id) {
+    return null;
+  }
+
+  const sameIdSummary = summaries.find((summary) => summary?.id === selectedSummary.id);
+  if (sameIdSummary) {
+    return sameIdSummary;
+  }
+
+  if (isPodcastSummary(selectedSummary)) {
+    return summaries.find(isPodcastSummary) || null;
+  }
+
+  return summaries.find((summary) => !isPodcastSummary(summary) && summary?.topicKey === selectedSummary.topicKey) || null;
 }
 
 function cloneGroup(group) {
@@ -373,8 +391,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       return null;
     }
 
-    return thematicSummaries.find((summary) => summary?.id === selectedThematicSummary.id) || selectedThematicSummary;
+    return getCurrentThematicSummarySelection(selectedThematicSummary, thematicSummaries);
   }, [selectedThematicSummary, thematicSummaries]);
+
+  useEffect(() => {
+    if (selectedThematicSummary?.id && !displayedThematicSummary) {
+      setSelectedThematicSummary(null);
+    }
+  }, [displayedThematicSummary, selectedThematicSummary?.id]);
 
   const visibleAvailableSources = useMemo(() => {
     return availableSources.filter((source) => !excludedSourceIds.includes(source.id));
@@ -609,17 +633,26 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     }
 
     if (payload.reason === 'news') {
+      if (isReadLaterView) {
+        return;
+      }
+
       loadNews({ page: 1, append: false });
       return;
     }
 
+    if (activeListLoadingRequestIdRef.current !== null) {
+      return;
+    }
+
+    const hasVisibleNews = Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current) > 0;
     loadNews({
       page: 1,
       append: false,
-      silent: true,
-      minimumItemCount: Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current)
+      silent: hasVisibleNews,
+      minimumItemCount: hasVisibleNews ? Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current) : 0
     });
-  }, [loadNews, needsSourceSetup]);
+  }, [isReadLaterView, loadNews, needsSourceSetup]);
 
   const handleNewsUpdate = useCallback((payload = {}) => {
     const incomingGroupIds = (Array.isArray(payload.groupIds) ? payload.groupIds : []).filter(Boolean);
@@ -697,6 +730,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     loadThematicSummaries();
   }, [loadNews, loadThematicSummaries]);
 
+  const handlePendingNewsRefresh = useCallback(() => {
+    loadNews({ page: 1, append: false });
+  }, [loadNews]);
+
   const handleSourceSetupComplete = useCallback((settings) => {
     onUserUpdate({
       ...currentUser,
@@ -731,15 +768,20 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
     setSelectedThematicSummary(summary);
     setReadThematicSummaryIds((current) => {
-      if (current.includes(summary.id)) {
+      const summaryIds = [...new Set(isPodcastSummary(summary)
+        ? [summary.id, ...thematicSummaries.filter(isPodcastSummary).map((podcastSummary) => podcastSummary.id)].filter(Boolean)
+        : [summary.id])];
+      const unreadSummaryIds = summaryIds.filter((summaryId) => !current.includes(summaryId));
+
+      if (unreadSummaryIds.length === 0) {
         return current;
       }
 
-      const next = [...current, summary.id];
+      const next = [...current, ...unreadSummaryIds];
       setStoredReadThematicSummaryIds(readThematicSummariesStorageKey, next);
       return next;
     });
-  }, [readThematicSummariesStorageKey]);
+  }, [readThematicSummariesStorageKey, thematicSummaries]);
 
   const handleToggleReadLater = useCallback(async (group) => {
     const articleIds = (group?.readLater ? (group.readLaterArticleIds || []) : (group?.items || []).map((item) => item.id)).filter(Boolean);
@@ -943,14 +985,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           <>
             {!isReadLaterView && pendingNewsCount > 0 && (
               <div className="mb-4 flex justify-center">
-                <div
-                  role="status"
+                <button
+                  type="button"
                   aria-live="polite"
-                  className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 shadow-sm"
+                  onClick={handlePendingNewsRefresh}
+                  disabled={isFeedRefreshActive}
+                  className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <RefreshCw className="h-4 w-4" aria-hidden="true" />
                   {t('newArticlesAvailable', { count: pendingNewsCount })}
-                </div>
+                </button>
               </div>
             )}
 
@@ -1010,6 +1054,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       {displayedThematicSummary && (
         <ThematicSummaryPanel
           summary={displayedThematicSummary}
+          summaries={thematicSummaries}
           locale={locale}
           t={t}
           onClose={() => setSelectedThematicSummary(null)}
@@ -1058,7 +1103,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         <ArrowUp className="h-5 w-5" aria-hidden="true" />
       </button>
 
-      {!readerState.isOpen && !selectedThematicSummary && !settingsOpen && !feedbackOpen ? (
+      {!readerState.isOpen && !displayedThematicSummary && !settingsOpen && !feedbackOpen ? (
         <MobileBottomNav
           visibleSources={visibleAvailableSources}
           availableTopics={availableTopics}

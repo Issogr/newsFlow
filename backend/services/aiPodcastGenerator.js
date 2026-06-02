@@ -30,6 +30,19 @@ const MIN_PODCAST_SCRIPT_CHARS = 120;
 const GEMINI_TTS_PCM_SAMPLE_RATE_HZ = 24000;
 const GEMINI_TTS_PCM_CHANNELS = 1;
 const GEMINI_TTS_PCM_BITS_PER_SAMPLE = 16;
+const DEFAULT_PODCAST_LANGUAGES = ['en'];
+const PODCAST_LANGUAGE_CONFIGS = {
+  en: {
+    label: 'English',
+    titleFallback: 'News briefing',
+    scriptDescription: 'speakable English script'
+  },
+  it: {
+    label: 'Italian',
+    titleFallback: 'Briefing notizie',
+    scriptDescription: 'testo podcast parlato in italiano'
+  }
+};
 
 let audioSpeechHttpClient = axios;
 
@@ -64,6 +77,46 @@ function getArticleTextLimit(articleCount) {
   });
 }
 
+function normalizePodcastLocale(locale = '') {
+  return String(locale || '').trim().toLowerCase().replace(/_/gu, '-');
+}
+
+function getEnabledPodcastLocales() {
+  const configuredLocales = String(process.env.AI_PODCAST_LANGUAGES || '')
+    .split(',')
+    .map(normalizePodcastLocale)
+    .filter((locale) => PODCAST_LANGUAGE_CONFIGS[locale]);
+  const locales = configuredLocales.length > 0 ? configuredLocales : DEFAULT_PODCAST_LANGUAGES;
+
+  return [...new Set(locales)];
+}
+
+function getLocaleConfig(locale = 'en') {
+  return PODCAST_LANGUAGE_CONFIGS[normalizePodcastLocale(locale)] || PODCAST_LANGUAGE_CONFIGS.en;
+}
+
+function getPodcastLanguageLabel(locale = 'en') {
+  const normalizedLocale = normalizePodcastLocale(locale) || 'en';
+  if (PODCAST_LANGUAGE_CONFIGS[normalizedLocale]) {
+    return PODCAST_LANGUAGE_CONFIGS[normalizedLocale].label;
+  }
+
+  try {
+    const displayName = new Intl.DisplayNames(['en'], { type: 'language' }).of(normalizedLocale);
+    if (displayName) {
+      return displayName;
+    }
+  } catch {
+    // Fall through to the normalized locale code.
+  }
+
+  return normalizedLocale;
+}
+
+function getPodcastLanguageLabels(locales = getEnabledPodcastLocales()) {
+  return locales.map(getPodcastLanguageLabel);
+}
+
 function getTtsMaxInputBytes(model = '') {
   const defaultLimit = isGeminiTtsModel(model) ? DEFAULT_GEMINI_TTS_MAX_INPUT_BYTES : DEFAULT_TTS_MAX_INPUT_BYTES;
   return parseIntegerEnv('AI_PODCAST_TTS_MAX_INPUT_BYTES', defaultLimit, { min: 500, max: 16000 });
@@ -87,23 +140,46 @@ function getTtsChunkSilenceMs() {
   return parseIntegerEnv('AI_PODCAST_TTS_CHUNK_SILENCE_MS', DEFAULT_TTS_CHUNK_SILENCE_MS, { min: 0, max: 500 });
 }
 
-function buildPrompt(window = {}, articles = []) {
+function getNarrationInstructions(locale = 'en') {
+  const languageLabel = getPodcastLanguageLabel(locale);
+  return `Generate ${languageLabel} single-narrator daily news podcast audio, matching the language of the provided script, with a warm, intelligent, conversational delivery. Keep a measured pace, clear pronunciation, natural emphasis, and short pauses between paragraphs. Do not sound like a bulletin, a press release, or an advertisement. Do not add music, sound effects, extra words, or translation.`;
+}
+
+function buildPrompt(window = {}, articles = [], options = {}) {
   const articleTextLimit = getArticleTextLimit(articles.length);
   const ttsInputTarget = Math.floor(getTtsMaxInputBytes(getTtsConfig().model) * 0.85);
+  const enabledLocales = Array.isArray(options.locales) && options.locales.length > 0 ? options.locales : getEnabledPodcastLocales();
+  const languageLabels = getPodcastLanguageLabels(enabledLocales);
+  const responseShape = Object.fromEntries(enabledLocales.map((locale) => [
+    locale,
+    {
+      title: getLocaleConfig(locale).titleFallback,
+      script: getLocaleConfig(locale).scriptDescription
+    }
+  ]));
 
   return [
-    'Write a single podcast-style news script using only the provided articles.',
-    'This is not topic-specific: include every newsworthy article in the input exactly once or as part of a coherent connected segment.',
+    'Act as the writer, editor, and producer for a daily news podcast with one narrator.',
+    'Write a single guided podcast episode using only the provided articles; do not produce a flat bulletin or a list.',
+    'Make editorial choices: prioritize the most important, useful, interesting, or meaningful stories for listeners. If there are too many items, group related stories, summarize minor ones briefly, or leave out low-value items.',
+    'For each major story, use a natural narrative arc: opening hook, essential context, main fact, why it matters, what could happen next, and a clear closing thought or question.',
+    'If multiple input articles describe the same event or facts, combine them into one segment and do not mention the same news twice.',
+    'Alternate heavier stories with lighter, practical, or human stories when the source material allows it.',
+    'Connect sections with smooth transitions that fit the target language. Avoid abrupt jumps between unrelated topics.',
+    'Use occasional spoken signposts when useful, such as the equivalent of "The point is", "Why it matters", "The detail to watch", "What happens next", or "The story behind the headline". Weave them into the narration; do not format them as lists or headings.',
+    'Explain technical or complex stories through concrete consequences and clear examples without oversimplifying the facts.',
+    'Be non-partisan but editorially useful: help listeners understand what matters, what is noise, and what may have consequences in the coming days.',
     'Skip promotional shopping deals, coupon or affiliate sale posts, and product price-drop blurbs; do not read them as news.',
     'The schedule window is coverage metadata only. Do not name the title or opening after a time of day such as morning, noon, midday, afternoon, evening, night, mattina, mezzogiorno, pomeriggio, or sera.',
-    'The script should feel natural when read aloud: quick introduction, fluid transitions, concise context, then a short closing.',
-    'Use short paragraphs separated by blank lines. Start a new paragraph after the intro, when changing story or subject, and before the closing.',
+    'Use a short recognizable opening, introduce the main themes, develop the news in narrative blocks, and close with what to keep an eye on.',
+    'Write in elegant, accessible spoken language. Prefer short sentences, natural pauses, and clear conversational formulations. Avoid bureaucratic, academic, stiff, or overly formal language.',
+    'Use short paragraphs separated by blank lines. Start a new paragraph after the opening, when changing story or subject, and before the closing.',
     'Do not invent facts, do not use outside knowledge, and do not add bracket citations because the script may be converted to speech.',
     'Mention source names naturally only when useful. Avoid bullet lists, markdown, stage directions, timestamps, and sound effects.',
     `Keep each localized script under ${ttsInputTarget} UTF-8 bytes; concise scripts are more reliable for text-to-speech conversion.`,
-    'Generate both supported languages: English and Italian. The Italian script will be used for text-to-speech audio.',
+    `Generate only the enabled ${enabledLocales.length === 1 ? 'language' : 'languages'}: ${languageLabels.join(', ')}. Do not include disabled languages.`,
     'Return minified JSON only. Do not use markdown fences or prose outside JSON.',
-    'Return this exact shape: {"en":{"title":"News briefing","script":"speakable script"},"it":{"title":"Briefing notizie","script":"testo podcast parlato"}}.',
+    `Return this exact shape: ${JSON.stringify(responseShape)}.`,
     '',
     JSON.stringify({
       periodStart: window.periodStart,
@@ -166,25 +242,27 @@ function normalizeLocalizedPodcast(payload = {}, locale, fallbackTitle = '') {
   return { title, script };
 }
 
-function normalizeGeneratedPodcast(payload = {}) {
-  const en = normalizeLocalizedPodcast(payload, 'en', 'News briefing');
-  const it = normalizeLocalizedPodcast(payload, 'it', 'Briefing notizie');
+function normalizeGeneratedPodcast(payload = {}, options = {}) {
+  const enabledLocales = Array.isArray(options.locales) && options.locales.length > 0 ? options.locales : getEnabledPodcastLocales();
+  const localizedEntries = enabledLocales.map((locale) => {
+    const entry = normalizeLocalizedPodcast(payload, locale, getLocaleConfig(locale).titleFallback);
+    return entry ? { locale, ...entry } : null;
+  });
 
-  if (!en?.script || !it?.script) {
+  if (localizedEntries.some((entry) => !entry)) {
     return null;
   }
 
+  const titleByLocale = Object.fromEntries(localizedEntries.map((entry) => [entry.locale, entry.title]));
+  const scriptTextByLocale = Object.fromEntries(localizedEntries.map((entry) => [entry.locale, entry.script]));
+  const primaryEntry = localizedEntries.find((entry) => entry.locale === 'en') || localizedEntries[0];
+
   return {
-    title: en.title,
-    scriptText: en.script,
-    titleByLocale: {
-      en: en.title,
-      it: it.title
-    },
-    scriptTextByLocale: {
-      en: en.script,
-      it: it.script
-    }
+    title: primaryEntry.title,
+    scriptText: primaryEntry.script,
+    titleByLocale,
+    scriptTextByLocale,
+    enabledLocales
   };
 }
 
@@ -220,15 +298,17 @@ function validatePodcastScriptText(script = '', locale = 'en', articleCount = 1)
   }
 }
 
-function validateGeneratedPodcast(podcast = {}, articleCount = 1) {
-  const enScript = String(podcast.scriptTextByLocale?.en || '').trim();
-  const itScript = String(podcast.scriptTextByLocale?.it || '').trim();
+function validateGeneratedPodcast(podcast = {}, articleCount = 1, options = {}) {
+  const enabledLocales = Array.isArray(options.locales) && options.locales.length > 0 ? options.locales : getEnabledPodcastLocales();
+  const scriptEntries = enabledLocales.map((locale) => {
+    const script = String(podcast.scriptTextByLocale?.[locale] || '').trim();
+    validatePodcastScriptText(script, getLocaleConfig(locale).label, articleCount);
+    return { locale, script };
+  });
 
-  validatePodcastScriptText(enScript, 'English', articleCount);
-  validatePodcastScriptText(itScript, 'Italian', articleCount);
-
-  if (enScript.toLowerCase() === itScript.toLowerCase()) {
-    throw createPodcastValidationError('AI podcast English and Italian scripts are identical');
+  const normalizedScripts = scriptEntries.map((entry) => entry.script.toLowerCase());
+  if (new Set(normalizedScripts).size !== normalizedScripts.length) {
+    throw createPodcastValidationError('AI podcast localized scripts are identical');
   }
 }
 
@@ -742,8 +822,8 @@ function extractAudioPayload(response = {}, fallbackMimeType = 'audio/mpeg') {
   return null;
 }
 
-async function requestItalianAudioBuffer(text = '', options = {}) {
-  const { config, audioFormat, ttsVoice, fallbackMimeType } = options;
+async function requestAudioBuffer(text = '', options = {}) {
+  const { config, audioFormat, ttsVoice, fallbackMimeType, locale = 'en' } = options;
   const response = await audioSpeechHttpClient.post(
     getAudioSpeechUrl(config),
     {
@@ -751,7 +831,7 @@ async function requestItalianAudioBuffer(text = '', options = {}) {
       input: text,
       voice: ttsVoice,
       response_format: audioFormat,
-      instructions: 'Generate clear, natural Italian podcast narration audio. Do not translate the input text.'
+      instructions: getNarrationInstructions(locale)
     },
     {
       headers: getOpenRouterHeaders(config),
@@ -795,8 +875,8 @@ async function requestItalianAudioBuffer(text = '', options = {}) {
   };
 }
 
-async function generateChunkedItalianAudio(text = '', options = {}) {
-  const { config, audioFormat, ttsVoice, fallbackMimeType } = options;
+async function generateChunkedAudio(text = '', options = {}) {
+  const { config, audioFormat, ttsVoice, fallbackMimeType, locale = 'en' } = options;
   const chunks = splitTextIntoTtsChunks(text, getTtsChunkMaxBytes(config.model));
   const maxChunks = getTtsMaxChunks();
   if (chunks.length > maxChunks) {
@@ -809,7 +889,7 @@ async function generateChunkedItalianAudio(text = '', options = {}) {
   const pcmChunks = [];
   for (const chunk of chunks) {
     assertTtsInputWithinLimit(chunk, config.model);
-    const audio = await requestItalianAudioBuffer(chunk, { config, audioFormat, ttsVoice, fallbackMimeType });
+    const audio = await requestAudioBuffer(chunk, { config, audioFormat, ttsVoice, fallbackMimeType, locale });
     pcmChunks.push(normalizeAudioBufferToPcm(audio.audioBuffer, audio.mimeType, audioFormat));
   }
 
@@ -820,15 +900,16 @@ async function generateChunkedItalianAudio(text = '', options = {}) {
   };
 }
 
-async function generateSingleItalianAudio(text = '', options = {}) {
-  const { config, audioFormat, ttsVoice, fallbackMimeType } = options;
+async function generateSingleAudio(text = '', options = {}) {
+  const { config, audioFormat, ttsVoice, fallbackMimeType, locale = 'en' } = options;
   assertTtsInputWithinLimit(text, config.model);
-  const audio = await requestItalianAudioBuffer(text, { config, audioFormat, ttsVoice, fallbackMimeType });
+  const audio = await requestAudioBuffer(text, { config, audioFormat, ttsVoice, fallbackMimeType, locale });
   return normalizeAudioBufferForStorage(audio.audioBuffer, audio.mimeType, audioFormat);
 }
 
 async function generatePodcastScript(window = {}, articles = []) {
   const config = getScriptConfig();
+  const enabledLocales = getEnabledPodcastLocales();
   if (!Array.isArray(articles) || articles.length === 0) {
     return null;
   }
@@ -850,7 +931,7 @@ async function generatePodcastScript(window = {}, articles = []) {
       },
       {
         role: 'user',
-        content: buildPrompt(window, articles)
+        content: buildPrompt(window, articles, { locales: enabledLocales })
       }
     ],
     temperature: 0.35,
@@ -865,13 +946,13 @@ async function generatePodcastScript(window = {}, articles = []) {
     stream: false
   }, { timeoutMs: config.timeoutMs });
   const payload = parseJsonContent(extractAssistantContent(response));
-  const normalized = normalizeGeneratedPodcast(payload);
+  const normalized = normalizeGeneratedPodcast(payload, { locales: enabledLocales });
 
   if (!normalized) {
-    throw new Error('AI podcast response did not contain both English and Italian script text');
+    throw new Error(`AI podcast response did not contain script text for enabled languages: ${getPodcastLanguageLabels(enabledLocales).join(', ')}`);
   }
 
-  validateGeneratedPodcast(normalized, articles.length);
+  validateGeneratedPodcast(normalized, articles.length, { locales: enabledLocales });
 
   logger.info(`AI podcast script generated: model=${config.model}, articles=${articles.length}, durationMs=${Date.now() - startedAt}`);
   return {
@@ -880,8 +961,9 @@ async function generatePodcastScript(window = {}, articles = []) {
   };
 }
 
-async function generateItalianAudio(scriptText = '') {
+async function generateAudioForLocale(scriptText = '', locale = 'en') {
   const config = getTtsConfig();
+  const normalizedLocale = normalizePodcastLocale(locale) || 'en';
   const text = String(scriptText || '').trim();
   if (!text) {
     return null;
@@ -897,11 +979,11 @@ async function generateItalianAudio(scriptText = '') {
   const fallbackMimeType = getAudioMimeType(audioFormat);
   const startedAt = Date.now();
   const playableAudio = canStitchTtsAudio(config.model, audioFormat)
-    ? await generateChunkedItalianAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType })
-    : await generateSingleItalianAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType });
+    ? await generateChunkedAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType, locale: normalizedLocale })
+    : await generateSingleAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType, locale: normalizedLocale });
   const { chunkCount, ...audioForStorage } = playableAudio;
 
-  logger.info(`AI podcast audio generated: model=${config.model}, chunks=${chunkCount || 1}, durationMs=${Date.now() - startedAt}`);
+  logger.info(`AI podcast audio generated: locale=${normalizedLocale}, model=${config.model}, chunks=${chunkCount || 1}, durationMs=${Date.now() - startedAt}`);
   return {
     ...audioForStorage,
     model: config.model,
@@ -910,35 +992,62 @@ async function generateItalianAudio(scriptText = '') {
   };
 }
 
+async function generateItalianAudio(scriptText = '') {
+  return generateAudioForLocale(scriptText, 'it');
+}
+
+async function generateAudioByLocale(scriptTextByLocale = {}, locales = getEnabledPodcastLocales()) {
+  const audioByLocale = {};
+  const ttsConfig = getTtsConfig();
+  const ttsVoice = getTtsVoice();
+
+  for (const locale of locales) {
+    const scriptText = String(scriptTextByLocale?.[locale] || '').trim();
+    try {
+      const audio = await generateAudioForLocale(scriptText, locale);
+      audioByLocale[locale] = {
+        audio,
+        audioStatus: audio ? 'completed' : 'not_available',
+        audioErrorMessage: '',
+        audioFailureCategory: '',
+        audioModel: audio?.model || ttsConfig.model,
+        audioVoice: audio?.voice || ttsVoice
+      };
+    } catch (error) {
+      logger.warn(`AI podcast audio generation failed: locale=${locale}, model=${ttsConfig.model}, error=${error.message}`);
+      audioByLocale[locale] = {
+        audio: null,
+        audioStatus: 'failed',
+        audioErrorMessage: error.message,
+        audioFailureCategory: getTtsFailureCategory(error),
+        audioModel: ttsConfig.model,
+        audioVoice: ttsVoice
+      };
+    }
+  }
+
+  return audioByLocale;
+}
+
 async function generatePodcastForArticles(window = {}, articles = []) {
   const script = await generatePodcastScript(window, articles);
   if (!script) {
     return null;
   }
 
-  let audio = null;
-  let audioErrorMessage = '';
-  try {
-    audio = await generateItalianAudio(script.scriptTextByLocale.it);
-  } catch (error) {
-    audioErrorMessage = error.message;
-    const audioFailureCategory = getTtsFailureCategory(error);
-    logger.warn(`AI podcast audio generation failed: model=${getTtsConfig().model}, error=${error.message}`);
-    return {
-      ...script,
-      audio: null,
-      audioStatus: 'failed',
-      audioErrorMessage,
-      audioFailureCategory
-    };
-  }
+  const enabledLocales = getEnabledPodcastLocales();
+  const audioByLocale = await generateAudioByLocale(script.scriptTextByLocale, enabledLocales);
+  const primaryLocale = enabledLocales.find((locale) => audioByLocale[locale]?.audioStatus === 'completed') || enabledLocales[0];
+  const primaryAudio = audioByLocale[primaryLocale] || {};
 
   return {
     ...script,
-    audio,
-    audioStatus: audio ? 'completed' : 'not_available',
-    audioErrorMessage,
-    audioFailureCategory: ''
+    audioByLocale,
+    audio: primaryAudio.audio || null,
+    audioLocale: primaryLocale,
+    audioStatus: primaryAudio.audioStatus || 'not_available',
+    audioErrorMessage: primaryAudio.audioErrorMessage || '',
+    audioFailureCategory: primaryAudio.audioFailureCategory || ''
   };
 }
 
@@ -948,21 +1057,20 @@ function isAiPodcastGenerationAvailable() {
 
 module.exports = {
   generatePodcastForArticles,
+  generateAudioForLocale,
   generateItalianAudio,
   isAiPodcastGenerationAvailable,
   _buildPrompt: buildPrompt,
   _extractAudioPayload: extractAudioPayload,
   _generateItalianAudio: generateItalianAudio,
-  _getAudioSpeechUrl: getAudioSpeechUrl,
+  _getEnabledPodcastLocales: getEnabledPodcastLocales,
+  _getNarrationInstructions: getNarrationInstructions,
   _getArticleTextLimit: getArticleTextLimit,
   _getScriptConfig: getScriptConfig,
   _getTtsConfig: getTtsConfig,
-  _getTtsChunkMaxBytes: getTtsChunkMaxBytes,
-  _getTtsMaxInputBytes: getTtsMaxInputBytes,
   _getTtsVoice: getTtsVoice,
   _normalizeGeneratedPodcast: normalizeGeneratedPodcast,
   _parseJsonContent: parseJsonContent,
-  _splitTextIntoTtsChunks: splitTextIntoTtsChunks,
   _validateGeneratedPodcast: validateGeneratedPodcast,
   _setAudioSpeechHttpClient: setAudioSpeechHttpClient,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader

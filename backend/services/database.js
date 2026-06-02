@@ -221,6 +221,7 @@ module.exports = {
   pruneSummaryHistory: articleRepository.pruneSummaryHistory,
   upsertPodcastSummary: articleRepository.upsertPodcastSummary,
   getPodcastSummary: articleRepository.getPodcastSummary,
+  listLatestPodcastSummaries: articleRepository.listLatestPodcastSummaries,
   getLatestPodcastSummary: articleRepository.getLatestPodcastSummary,
   getPodcastSummaryAudio: articleRepository.getPodcastSummaryAudio,
   getReadLaterArticleIdSet: articleRepository.getReadLaterArticleIdSet,

@@ -29,7 +29,10 @@ describe('aiSummaryGenerator', () => {
     const payload = JSON.parse(prompt.split('\n').at(-1));
 
     expect(prompt).toContain('Exclude promotional shopping deals');
-    expect(prompt).toContain('Do not name the title or opening after a time of day');
+    expect(prompt).toContain('Do not generate or include a title');
+    expect(prompt).toContain('{"en":{"paragraphs"');
+    expect(prompt).not.toContain('Brief title');
+    expect(prompt).not.toContain('Titolo breve');
     expect(prompt).toContain('Start a new paragraph whenever the subject, argument, or subtopic changes');
     expect(payload.articles[0]).toEqual(expect.objectContaining({
       ref: 1,
@@ -80,8 +83,10 @@ describe('aiSummaryGenerator', () => {
           'I regolatori hanno discusso nuove regole sui chip [1]. L\'adattatore Bluetooth AirFly Pro 2 ha raggiunto uno dei suoi prezzi migliori in vista dei viaggi estivi.'
         ]
       }
-    }, 'Technology');
+    });
 
+    expect(normalized).not.toHaveProperty('title');
+    expect(normalized).not.toHaveProperty('titleByLocale');
     expect(normalized.summaryTextByLocale.en).toBe('Policy makers discussed chip rules [1].');
     expect(normalized.summaryTextByLocale.it).toBe('I regolatori hanno discusso nuove regole sui chip [1].');
   });

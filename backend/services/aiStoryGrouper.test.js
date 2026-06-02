@@ -31,6 +31,8 @@ describe('aiStoryGrouper', () => {
   afterEach(() => {
     delete process.env.OPENROUTER_API_KEY;
     delete process.env.OPENROUTER_STORY_GROUPING_MODEL;
+    delete process.env.AI_STORY_GROUPING_REQUEST_TIMEOUT_MS;
+    delete process.env.AI_SUMMARY_REQUEST_TIMEOUT_MS;
   });
 
   test('uses the story grouping model to classify candidate story matches', async () => {
@@ -97,6 +99,15 @@ describe('aiStoryGrouper', () => {
 
     expect(aiStoryGrouper._getConfig()).toEqual(expect.objectContaining({
       model: 'deepseek/deepseek-v4-flash'
+    }));
+  });
+
+  test('uses story-grouping-specific timeout instead of summary timeout', () => {
+    process.env.AI_SUMMARY_REQUEST_TIMEOUT_MS = '9000';
+    process.env.AI_STORY_GROUPING_REQUEST_TIMEOUT_MS = '7000';
+
+    expect(aiStoryGrouper._getConfig()).toEqual(expect.objectContaining({
+      timeoutMs: 7000
     }));
   });
 });

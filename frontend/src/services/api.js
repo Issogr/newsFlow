@@ -26,13 +26,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.code === 'ECONNABORTED') {
-      error.message = 'The request timed out. Please try again in a few seconds.';
+      error.newsFlowClientCode = 'timeout';
     } else if (!error.response) {
-      error.message = 'Unable to connect to the server. Check your connection.';
+      error.newsFlowClientCode = 'network';
     } else if (error.response.status === 401 && !isAuthRoute(error.config?.url)) {
       notifyAuthExpired();
-    } else if (error.response.status === 429) {
-      error.message = 'Too many requests. Please wait a moment before trying again.';
     }
 
     return Promise.reject(error);
@@ -43,51 +41,47 @@ export const isRequestCanceled = (error) => {
   return axios.isCancel?.(error) || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';
 };
 
-export const registerUser = async ({ username, password }) => {
-  const response = await api.post('/auth/register', { username, password });
+async function responseData(request) {
+  const response = await request;
   return response.data;
+}
+
+export const registerUser = async ({ username, password }) => {
+  return responseData(api.post('/auth/register', { username, password }));
 };
 
 export const loginUser = async ({ username, password }) => {
-  const response = await api.post('/auth/login', { username, password });
-  return response.data;
+  return responseData(api.post('/auth/login', { username, password }));
 };
 
 export const validatePasswordSetupToken = async (token) => {
-  const response = await api.get('/auth/password-setup/validate', {
+  return responseData(api.get('/auth/password-setup/validate', {
     params: { token }
-  });
-  return response.data;
+  }));
 };
 
 export const completePasswordSetup = async ({ token, password }) => {
-  const response = await api.post('/auth/password-setup/complete', { token, password });
-  return response.data;
+  return responseData(api.post('/auth/password-setup/complete', { token, password }));
 };
 
 export const logoutUser = async () => {
-  const response = await api.post('/auth/logout');
-  return response.data;
+  return responseData(api.post('/auth/logout'));
 };
 
 export const fetchCurrentUser = async () => {
-  const response = await api.get('/me');
-  return response.data;
+  return responseData(api.get('/me'));
 };
 
 export const createApiToken = async (payload = {}) => {
-  const response = await api.post('/me/api-token', payload);
-  return response.data;
+  return responseData(api.post('/me/api-token', payload));
 };
 
 export const revokeApiToken = async () => {
-  const response = await api.delete('/me/api-token');
-  return response.data;
+  return responseData(api.delete('/me/api-token'));
 };
 
 export const updateUserSettings = async (payload) => {
-  const response = await api.patch('/me/settings', payload);
-  return response.data;
+  return responseData(api.patch('/me/settings', payload));
 };
 
 export const submitFeedback = async ({ category, title, description, attachment = null }) => {
@@ -100,50 +94,41 @@ export const submitFeedback = async ({ category, title, description, attachment 
     formData.append('attachment', attachment);
   }
 
-  const response = await api.post('/me/feedback', formData, {
+  return responseData(api.post('/me/feedback', formData, {
     timeout: FEEDBACK_REQUEST_TIMEOUT_MS
-  });
-  return response.data;
+  }));
 };
 
 export const exportUserSettings = async () => {
-  const response = await api.get('/me/settings/export');
-  return response.data;
+  return responseData(api.get('/me/settings/export'));
 };
 
 export const importUserSettings = async (payload) => {
-  const response = await api.post('/me/settings/import', payload);
-  return response.data;
+  return responseData(api.post('/me/settings/import', payload));
 };
 
 export const addUserSource = async (payload) => {
-  const response = await api.post('/me/sources', payload);
-  return response.data;
+  return responseData(api.post('/me/sources', payload));
 };
 
 export const updateUserSource = async (sourceId, payload) => {
-  const response = await api.patch(`/me/sources/${sourceId}`, payload);
-  return response.data;
+  return responseData(api.patch(`/me/sources/${sourceId}`, payload));
 };
 
 export const deleteUserSource = async (sourceId) => {
-  const response = await api.delete(`/me/sources/${sourceId}`);
-  return response.data;
+  return responseData(api.delete(`/me/sources/${sourceId}`));
 };
 
 export const fetchAdminUsers = async ({ signal } = {}) => {
-  const response = await api.get('/admin/users', { signal });
-  return response.data;
+  return responseData(api.get('/admin/users', { signal }));
 };
 
 export const createAdminPasswordSetupLink = async (userId) => {
-  const response = await api.post(`/admin/users/${userId}/password-setup-link`);
-  return response.data;
+  return responseData(api.post(`/admin/users/${userId}/password-setup-link`));
 };
 
 export const deleteAdminUser = async (userId) => {
-  const response = await api.delete(`/admin/users/${userId}`);
-  return response.data;
+  return responseData(api.delete(`/admin/users/${userId}`));
 };
 
 function buildFeedParams({
@@ -217,8 +202,7 @@ export const fetchNews = async ({
     params.refresh = 'true';
   }
 
-  const response = await api.get('/news', { params, signal });
-  return response.data;
+  return responseData(api.get('/news', { params, signal }));
 };
 
 export const fetchReadLaterNews = async ({
@@ -233,31 +217,25 @@ export const fetchReadLaterNews = async ({
 } = {}) => {
   const params = buildFeedParams({ page, pageSize, search, sourceIds, topics, recentHours, includeFilters });
 
-  const response = await api.get('/read-later', { params, signal });
-  return response.data;
+  return responseData(api.get('/read-later', { params, signal }));
 };
 
 export const fetchThematicSummaries = async ({ signal } = {}) => {
-  const response = await api.get('/thematic-summaries', { signal });
-  return response.data;
+  return responseData(api.get('/thematic-summaries', { signal }));
 };
 
 export const saveReadLaterArticles = async (articleIds = []) => {
-  const response = await api.post('/me/read-later', { articleIds });
-  return response.data;
+  return responseData(api.post('/me/read-later', { articleIds }));
 };
 
 export const removeReadLaterArticles = async (articleIds = []) => {
-  const response = await api.post('/me/read-later/remove', { articleIds });
-  return response.data;
+  return responseData(api.post('/me/read-later/remove', { articleIds }));
 };
 
 export const fetchReaderArticle = async (articleId, { refresh = false, signal } = {}) => {
-  const response = await api.get(`/articles/${encodeURIComponent(articleId)}/reader`, {
+  return responseData(api.get(`/articles/${encodeURIComponent(articleId)}/reader`, {
     params: refresh ? { refresh: 'true' } : undefined,
     signal,
     timeout: READER_REQUEST_TIMEOUT_MS
-  });
-
-  return response.data;
+  }));
 };

@@ -1,4 +1,5 @@
 import { getTopicPresentation } from './topicPresentation';
+import { Cpu, Film } from 'lucide-react';
 
 describe('getTopicPresentation', () => {
   test('keeps topic families visually distinguishable with explicit badge palettes', () => {
@@ -25,5 +26,10 @@ describe('getTopicPresentation', () => {
     ['Politica', 'Economia', 'Cronaca', 'Esteri', 'Misc'].forEach((topic) => {
       expect(getTopicPresentation(topic).iconBadgeClassName).toContain('bg-[#');
     });
+  });
+
+  test('does not classify entertainment as technology because it contains ai', () => {
+    expect(getTopicPresentation('Entertainment').Icon).toBe(Film);
+    expect(getTopicPresentation('AI').Icon).toBe(Cpu);
   });
 });

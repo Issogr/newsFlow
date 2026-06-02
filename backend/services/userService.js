@@ -7,6 +7,10 @@ const { mapWithConcurrency } = require('../utils/concurrency');
 const { parseIntegerEnv } = require('../utils/env');
 const { getProviderIconUrl } = require('../utils/sourceIcons');
 const {
+  getPublicApiFeatures,
+  isAuthenticatedPublicApiEnabled
+} = require('../config/publicApi');
+const {
   MAX_FEEDBACK_DESCRIPTION_LENGTH,
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_TITLE_LENGTH,
@@ -46,6 +50,7 @@ let lastAnonymousPublicApiUsageFlushAt = Date.now();
 let pendingAuthenticatedPublicApiRequests = new Map();
 let pendingAuthenticatedPublicApiRequestCount = 0;
 let lastAuthenticatedPublicApiUsageFlushAt = Date.now();
+let publicApiUsageFlushTimer = null;
 
 function flushAuthenticatedPublicApiUsage({ force = false } = {}) {
   if (pendingAuthenticatedPublicApiRequestCount <= 0) {
@@ -69,9 +74,16 @@ function flushAuthenticatedPublicApiUsage({ force = false } = {}) {
   lastAuthenticatedPublicApiUsageFlushAt = now;
 
   try {
-    pendingEntries.forEach(([userId, usage]) => {
+    const flushEntries = () => pendingEntries.forEach(([userId, usage]) => {
       database.incrementUserPublicApiUsage(userId, usage.usedAt, usage.count);
     });
+
+    const db = typeof database.getDb === 'function' ? database.getDb() : null;
+    if (db && typeof db.transaction === 'function') {
+      db.transaction(flushEntries)();
+    } else {
+      flushEntries();
+    }
   } catch (error) {
     pendingEntries.forEach(([userId, usage]) => {
       const current = pendingAuthenticatedPublicApiRequests.get(userId) || { count: 0, usedAt: usage.usedAt };
@@ -322,14 +334,17 @@ function buildUserPayload(user) {
 }
 
 function buildAuthResponse(user, sessionToken) {
+  const features = getPublicApiFeatures();
+
   return {
     token: sessionToken,
     user: buildUserPayload(user),
     settings: getUserSettings(user.id),
     limits: getUserLimits(),
+    features,
     sourceCatalog: getConfiguredSourceGroups(),
     customSources: database.listUserSources(user.id),
-    apiToken: getUserApiToken(user.id)
+    apiToken: features.publicApi.authenticatedEnabled ? getUserApiToken(user.id) : null
   };
 }
 
@@ -511,9 +526,10 @@ function getCurrentUser(userId) {
     user: buildUserPayload(user),
     settings: getUserSettings(userId),
     limits: getUserLimits(),
+    features: getPublicApiFeatures(),
     sourceCatalog: getConfiguredSourceGroups(),
     customSources: database.listUserSources(userId),
-    apiToken: getUserApiToken(userId)
+    apiToken: isAuthenticatedPublicApiEnabled() ? getUserApiToken(userId) : null
   };
 }
 
@@ -521,7 +537,18 @@ function createApiTokenLabel(label) {
   return String(label || '').trim().slice(0, 80);
 }
 
+function validateInteractiveFeedUrl(url) {
+  return rssParser.validateFeedUrl(url, {
+    timeout: RSS_INTERACTIVE_VALIDATION_TIMEOUT,
+    maxRetries: RSS_INTERACTIVE_VALIDATION_RETRIES
+  });
+}
+
 function createUserApiToken(userId, options = {}) {
+  if (!isAuthenticatedPublicApiEnabled()) {
+    throw createError(404, 'Public API token access is disabled.', 'PUBLIC_API_DISABLED');
+  }
+
   const user = database.findUserById(userId);
   if (!user) {
     throw createError(404, 'User not found', 'RESOURCE_NOT_FOUND');
@@ -657,10 +684,7 @@ async function previewUserSource(payload = {}) {
   }
 
   try {
-    const preview = await rssParser.validateFeedUrl(url, {
-      timeout: RSS_INTERACTIVE_VALIDATION_TIMEOUT,
-      maxRetries: RSS_INTERACTIVE_VALIDATION_RETRIES
-    });
+    const preview = await validateInteractiveFeedUrl(url);
     return {
       name: preview.title || '',
       iconUrl: getProviderIconUrl(preview.siteUrl || url),
@@ -840,6 +864,36 @@ function recordPublicApiRequestUsage({ authenticated = false, userId = null, use
   flushAnonymousPublicApiUsage();
 }
 
+function startPublicApiUsageFlushTimer() {
+  if (publicApiUsageFlushTimer) {
+    return publicApiUsageFlushTimer;
+  }
+
+  const intervalMs = Math.min(ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS, AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS);
+  if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+    return null;
+  }
+
+  publicApiUsageFlushTimer = setInterval(() => {
+    try {
+      flushAnonymousPublicApiUsage({ force: true });
+    } catch {
+      // Keep counters buffered in memory; a later tick or shutdown can retry.
+    }
+  }, intervalMs);
+  publicApiUsageFlushTimer.unref?.();
+  return publicApiUsageFlushTimer;
+}
+
+function stopPublicApiUsageFlushTimer() {
+  if (!publicApiUsageFlushTimer) {
+    return;
+  }
+
+  clearInterval(publicApiUsageFlushTimer);
+  publicApiUsageFlushTimer = null;
+}
+
 function createUserPasswordSetupLink(adminUserId, targetUserId) {
   const targetUser = database.findUserById(targetUserId);
   if (!targetUser) {
@@ -912,10 +966,7 @@ async function importUserSettings(userId, payload = {}) {
     }
 
     try {
-      await rssParser.validateFeedUrl(url, {
-        timeout: RSS_INTERACTIVE_VALIDATION_TIMEOUT,
-        maxRetries: RSS_INTERACTIVE_VALIDATION_RETRIES
-      });
+      await validateInteractiveFeedUrl(url);
     } catch (error) {
       throw createError(400, `Imported RSS URL is not valid: ${url}`, 'INVALID_RSS_URL', error);
     }
@@ -971,6 +1022,8 @@ module.exports = {
   listUsersForAdmin,
   recordPublicApiRequestUsage,
   flushAnonymousPublicApiUsage,
+  startPublicApiUsageFlushTimer,
+  stopPublicApiUsageFlushTimer,
   createUserPasswordSetupLink,
   deleteUserAsAdmin,
   updateUserSettings,

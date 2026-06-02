@@ -170,6 +170,7 @@ function App() {
       user: payload.user,
       settings: payload.settings,
       limits: payload.limits,
+      features: payload.features || {},
       sourceCatalog: payload.sourceCatalog || [],
       customSources: payload.customSources,
       apiToken: payload.apiToken || null

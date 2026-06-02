@@ -17,22 +17,14 @@ module.exports = [
         URL: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
-        afterAll: 'readonly',
-        afterEach: 'readonly',
-        beforeAll: 'readonly',
-        beforeEach: 'readonly',
         clearInterval: 'readonly',
         clearTimeout: 'readonly',
         console: 'readonly',
-        describe: 'readonly',
-        expect: 'readonly',
-        jest: 'readonly',
         module: 'readonly',
         process: 'readonly',
         require: 'readonly',
         setInterval: 'readonly',
-        setTimeout: 'readonly',
-        test: 'readonly'
+        setTimeout: 'readonly'
       }
     },
     rules: {
@@ -41,6 +33,21 @@ module.exports = [
         args: 'none',
         ignoreRestSiblings: true
       }]
+    }
+  },
+  {
+    files: ['**/*.test.js'],
+    languageOptions: {
+      globals: {
+        afterAll: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        beforeEach: 'readonly',
+        describe: 'readonly',
+        expect: 'readonly',
+        jest: 'readonly',
+        test: 'readonly'
+      }
     }
   }
 ];
