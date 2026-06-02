@@ -246,6 +246,7 @@ function buildSourceFetchTasks(sourceConfigs = []) {
 
 async function fetchSourceTask(task, options = {}) {
   const {
+    bypassSourceFailureBackoff = false,
     bypassSourceFreshness = false,
     sourceFetchFreshnessMs = SOURCE_FETCH_FRESHNESS_MS
   } = options;
@@ -254,7 +255,7 @@ async function fetchSourceTask(task, options = {}) {
     return [];
   }
 
-  if (!bypassSourceFreshness && isSourceFetchFailureBackoffActive(task.fetchSource)) {
+  if (!bypassSourceFailureBackoff && isSourceFetchFailureBackoffActive(task.fetchSource)) {
     logger.debug(`Skipping RSS fetch during failure backoff: source=${task.fetchSource?.id || task.fetchSource?.name || task.fetchSource?.url}`);
     return [];
   }
@@ -637,6 +638,7 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
     broadcast = true,
     includeMaintenance = false,
     failWhenEmpty = false,
+    bypassSourceFailureBackoff = false,
     bypassSourceFreshness = false,
     sourceFetchFreshnessMs = SOURCE_FETCH_FRESHNESS_MS,
     updateRefreshTimestamp = false,
@@ -660,6 +662,7 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
     }
 
     const results = await mapSettledWithConcurrency(sourceFetchTasks, RSS_INGESTION_CONCURRENCY, (task) => fetchSourceTask(task, {
+      bypassSourceFailureBackoff,
       bypassSourceFreshness: bypassSourceFreshness || failWhenEmpty,
       sourceFetchFreshnessMs
     }));

@@ -38,16 +38,19 @@ vi.mock('./NewsCard', () => {
   };
 
   return {
-    default: ({ group }) => (
+    default: ({ group, onOpenReader }) => (
       <div>
         <div>{group.title}</div>
         <div data-testid={`topics-${group.id}`}>{getRenderedTopicSummary(group)}</div>
+        <button type="button" onClick={() => onOpenReader(group, group.items?.[0]?.id)}>
+          Open reader {group.id}
+        </button>
       </div>
     )
   };
 });
 vi.mock('./ReaderPanel', () => ({
-  default: () => null
+  default: ({ group }) => <div data-testid="reader-item-count">{group.items?.length || 0}</div>
 }));
 vi.mock('./BrandMark', () => ({
   default: () => <div />
@@ -198,6 +201,44 @@ describe('NewsAggregator', () => {
 
     expect(fetchNews).not.toHaveBeenCalled();
     expect(fetchReadLaterNews).not.toHaveBeenCalled();
+  });
+
+  test('keeps an open reader synchronized with refreshed feed groups', async () => {
+    let onTopicRefresh;
+    const initialGroup = createGroup('group-1', 'Current headline');
+    const refreshedGroup = {
+      ...initialGroup,
+      items: [
+        ...initialGroup.items,
+        { id: 'article-group-1-extra', title: 'Extra source', pubDate: '2026-03-14T10:01:00.000Z' }
+      ]
+    };
+    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
+      onTopicRefresh = handleTopicRefresh;
+    });
+    fetchNews
+      .mockResolvedValueOnce({
+        items: [initialGroup],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+        filters: { sources: [], sourceCatalog: [], topics: [] }
+      })
+      .mockResolvedValueOnce({
+        items: [refreshedGroup],
+        meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 }
+      });
+
+    await renderNewsAggregator();
+    expect(await screen.findByText('Current headline')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open reader group-1' }));
+    expect(screen.getByTestId('reader-item-count')).toHaveTextContent('1');
+
+    await act(async () => {
+      onTopicRefresh({ refresh: true, reason: 'topics' });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(screen.getByTestId('reader-item-count')).toHaveTextContent('2'));
   });
 
   test('keeps the latest news response when an older request resolves later', async () => {

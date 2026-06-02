@@ -425,6 +425,18 @@ describe('bff server', () => {
       .expect(403);
   });
 
+  test('does not let static files shadow protected API routes', async () => {
+    fs.mkdirSync(path.join(frontendDistDir, 'api'), { recursive: true });
+    fs.writeFileSync(path.join(frontendDistDir, 'api', 'me'), 'static api shadow');
+
+    const response = await request(app)
+      .get('/api/me')
+      .expect(401);
+
+    expect(response.body.error).toEqual(expect.objectContaining({ code: 'UNAUTHORIZED' }));
+    expect(response.text).not.toContain('static api shadow');
+  });
+
   test('parses trust proxy settings without trusting every forwarded header for boolean true', () => {
     expect(_getTrustProxySetting('true')).toBe(1);
     expect(_getTrustProxySetting('2')).toBe(2);
@@ -580,6 +592,23 @@ describe('bff server', () => {
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
   });
 
+  test('rejects authenticated socket.io requests from another origin', async () => {
+    const { cookie: bffSessionCookie } = await login(app);
+    lastBackendHeaders = {};
+
+    const response = await request(app)
+      .get('/socket.io/ping')
+      .set('Cookie', bffSessionCookie)
+      .set('Origin', 'https://evil.example')
+      .expect(403);
+
+    expect(response.body.error).toEqual({
+      message: 'Cross-origin request rejected.',
+      code: 'CSRF_ORIGIN_MISMATCH',
+    });
+    expect(lastBackendHeaders.cookie).toBeUndefined();
+  });
+
   test('rejects unauthenticated raw socket upgrades before proxying to the backend', async () => {
     const bffServer = createServer({ backendBaseUrl, frontendDistDir, sessionDbPath });
     await listen(bffServer);
@@ -627,6 +656,29 @@ describe('bff server', () => {
       expect(backendUpgradeHeaders['x-newsflow-app']).toBeUndefined();
       expect(backendUpgradeHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
       expect(backendUpgradeHeaders['x-newsflow-proxy']).toBe('test-proxy-token');
+    } finally {
+      await close(bffServer);
+    }
+  });
+
+  test('rejects authenticated raw socket upgrades from another origin', async () => {
+    const bffServer = createServer({ backendBaseUrl, frontendDistDir, sessionDbPath, appBaseUrl: SAME_ORIGIN });
+    await listen(bffServer);
+
+    try {
+      const { cookie: bffSessionCookie } = await login(bffServer);
+
+      const response = await requestUpgrade(bffServer, {
+        cookie: bffSessionCookie,
+        headers: {
+          Origin: 'https://evil.example',
+        },
+      });
+
+      expect(response).toEqual(expect.objectContaining({
+        statusCode: 403,
+        upgraded: false,
+      }));
     } finally {
       await close(bffServer);
     }

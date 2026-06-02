@@ -822,9 +822,6 @@ async function generatePodcastForWindow(window, options = {}) {
   if (existingSummary?.status === 'completed' && options.force !== true) {
     return retryPodcastAudio(existingSummary, options);
   }
-  if (existingSummary?.status === 'empty' && options.force !== true) {
-    return { summary: existingSummary, generatedNow: false };
-  }
   if (existingSummary?.status === 'failed' && options.force !== true && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
     logger.debug(`AI podcast retry skipped during cooldown: windowEnd=${window.periodEnd}`);
     return { summary: null, generatedNow: false };
@@ -832,6 +829,14 @@ async function generatePodcastForWindow(window, options = {}) {
 
   const articles = sortArticlesForPodcast(getCandidateArticlesForWindow(window));
   if (articles.length === 0) {
+    if (options.force !== true && database.hasPendingTopicProcessingForThematicSummary?.(window)) {
+      return { summary: null, generatedNow: false };
+    }
+
+    if (existingSummary?.status === 'empty' && options.force !== true) {
+      return { summary: existingSummary, generatedNow: false };
+    }
+
     return {
       summary: database.upsertPodcastSummary(buildEmptyPodcastPayload(window)),
       generatedNow: true

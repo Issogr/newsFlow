@@ -55,9 +55,9 @@ Open `http://localhost`.
 
 Runtime requirements:
 
-- Backend: Node.js `^24.0.0`
-- BFF: Node.js `^24.0.0`
-- Frontend: Node.js `^24.0.0`
+- Backend: Node.js `24.16.0`
+- BFF: Node.js `24.16.0`
+- Frontend: Node.js `24.16.0`
 
 ## Local Development
 

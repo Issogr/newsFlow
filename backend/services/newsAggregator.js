@@ -285,6 +285,7 @@ async function refreshUserSources(userId, options = {}) {
       broadcast: options.broadcast === true,
       includeMaintenance: false,
       failWhenEmpty: false,
+      bypassSourceFailureBackoff: options.bypassSourceFailureBackoff === true,
       bypassSourceFreshness: options.bypassSourceFreshness !== false,
       updateRefreshTimestamp: false,
       trackIngestionRun: false

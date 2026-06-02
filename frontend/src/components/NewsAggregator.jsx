@@ -391,6 +391,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
     return getCurrentThematicSummarySelection(selectedThematicSummary, thematicSummaries);
   }, [selectedThematicSummary, thematicSummaries]);
+  const currentReaderGroup = useMemo(() => {
+    if (!readerState.isOpen || !readerState.group) {
+      return null;
+    }
+
+    const readerGroupKeys = getGroupMergeKeys(readerState.group);
+    return news.find((group) => groupSharesAnyKey(group, readerGroupKeys)) || readerState.group;
+  }, [news, readerState.group, readerState.isOpen]);
 
   useEffect(() => {
     if (selectedThematicSummary?.id && !displayedThematicSummary) {
@@ -1038,9 +1046,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         )}
       </main>
 
-      {readerState.isOpen && readerState.group && (
+      {readerState.isOpen && currentReaderGroup && (
         <ReaderPanel
-          group={readerState.group}
+          group={currentReaderGroup}
           initialArticleId={readerState.articleId}
           readerPosition={currentUser?.settings?.readerPanelPosition || 'right'}
           t={t}

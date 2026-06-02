@@ -899,6 +899,86 @@ describe('thematic summary generation retries', () => {
     }));
   });
 
+  test('regenerates a previously empty podcast window when articles become available', async () => {
+    jest.resetModules();
+
+    const summaryWindow = {
+      periodStart: '2026-05-20T17:00:00.000Z',
+      periodEnd: '2026-05-21T05:00:00.000Z'
+    };
+    const article = {
+      id: 'article-1',
+      source: 'BBC',
+      title: 'AI update',
+      description: 'AI update description',
+      pubDate: '2026-05-20T18:00:00.000Z',
+      topics: ['Tecnologia']
+    };
+    const completedPodcast = {
+      id: 'podcast-completed',
+      status: 'completed',
+      periodStart: summaryWindow.periodStart,
+      periodEnd: summaryWindow.periodEnd
+    };
+    const databaseMock = {
+      getPodcastSummary: jest.fn(() => ({
+        id: 'podcast-empty',
+        status: 'empty',
+        periodStart: summaryWindow.periodStart,
+        periodEnd: summaryWindow.periodEnd
+      })),
+      getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Tecnologia') ? [article] : []),
+      getReaderCache: jest.fn(() => null),
+      hasPendingTopicProcessingForThematicSummary: jest.fn(() => false),
+      upsertPodcastSummary: jest.fn(() => completedPodcast)
+    };
+    const { service, aiPodcastGeneratorMock } = loadServiceWithMocks({
+      databaseMock,
+      aiPodcastGeneratorOverrides: {
+        generatePodcastForArticles: jest.fn().mockResolvedValue({
+          title: 'News podcast',
+          scriptText: 'English script',
+          titleByLocale: { en: 'News podcast', it: 'Podcast news' },
+          scriptTextByLocale: { en: 'English script', it: 'Testo italiano' },
+          model: 'test-summary-model',
+          audio: null,
+          audioStatus: 'not_available',
+          audioErrorMessage: ''
+        })
+      }
+    });
+
+    const result = await service._generatePodcastForWindow(summaryWindow);
+
+    expect(result).toEqual({ summary: completedPodcast, generatedNow: true });
+    expect(aiPodcastGeneratorMock.generatePodcastForArticles).toHaveBeenCalledWith(summaryWindow, [expect.objectContaining({ id: 'article-1' })]);
+    expect(databaseMock.upsertPodcastSummary).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'completed',
+      articleCount: 1
+    }));
+  });
+
+  test('does not persist empty podcast windows while topic processing is pending', async () => {
+    jest.resetModules();
+
+    const summaryWindow = {
+      periodStart: '2026-05-20T17:00:00.000Z',
+      periodEnd: '2026-05-21T05:00:00.000Z'
+    };
+    const databaseMock = {
+      getPodcastSummary: jest.fn(() => null),
+      getArticlesForThematicSummary: jest.fn(() => []),
+      getReaderCache: jest.fn(() => null),
+      hasPendingTopicProcessingForThematicSummary: jest.fn(() => true),
+      upsertPodcastSummary: jest.fn()
+    };
+    const { service, aiPodcastGeneratorMock } = loadServiceWithMocks({ databaseMock });
+
+    await expect(service._generatePodcastForWindow(summaryWindow)).resolves.toEqual({ summary: null, generatedNow: false });
+    expect(aiPodcastGeneratorMock.generatePodcastForArticles).not.toHaveBeenCalled();
+    expect(databaseMock.upsertPodcastSummary).not.toHaveBeenCalled();
+  });
+
   test('stores invalid podcast scripts as non-retryable failures', async () => {
     jest.resetModules();
 

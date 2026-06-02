@@ -1931,6 +1931,8 @@ describe('database queries and user data', () => {
       contentBlocks: null,
       minutesToRead: 2
     }));
+
+    expect(database.getReaderCache('article-1', 0)).toBeNull();
   });
 
   test('builds source and topic stats with canonical source ids and search filters', () => {

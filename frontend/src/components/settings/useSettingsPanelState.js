@@ -28,10 +28,11 @@ const areSettingValuesEqual = (left, right) => {
   return left === right;
 };
 
-const createSettingsPatch = (nextSettings, currentUser) => {
+const createSettingsPatch = (nextSettings, currentUser, dirtyKeys = null) => {
   const initialSettings = getInitialSettings(currentUser);
+  const candidateKeys = Array.isArray(dirtyKeys) ? dirtyKeys : Object.keys(nextSettings);
 
-  return Object.keys(nextSettings).reduce((patch, key) => {
+  return candidateKeys.reduce((patch, key) => {
     if (!areSettingValuesEqual(nextSettings[key], initialSettings[key])) {
       patch[key] = nextSettings[key];
     }
@@ -53,6 +54,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   const [editingSourceForm, setEditingSourceForm] = useState(createInitialEditingSourceForm);
   const importInputRef = useRef(null);
   const userIdentityRef = useRef(getCurrentUserIdentity(currentUser));
+  const dirtySettingKeysRef = useRef(new Set());
   const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
 
   const excludedSourceCatalog = useMemo(() => {
@@ -81,12 +83,29 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     const nextUserIdentity = getCurrentUserIdentity(currentUser);
     if (userIdentityRef.current !== nextUserIdentity) {
       userIdentityRef.current = nextUserIdentity;
+      dirtySettingKeysRef.current.clear();
       setSettings(getInitialSettings(currentUser));
       setNewApiToken('');
       setSourceError(null);
       setSourceForm(createInitialSourceForm());
       setEditingSourceId('');
       setEditingSourceForm(createInitialEditingSourceForm());
+    } else {
+      setSettings((current) => {
+        const latestPersistedSettings = getInitialSettings(currentUser);
+        const dirtyKeys = dirtySettingKeysRef.current;
+        let changed = false;
+        const nextSettings = { ...current };
+
+        Object.entries(latestPersistedSettings).forEach(([key, value]) => {
+          if (!dirtyKeys.has(key) && !areSettingValuesEqual(current[key], value)) {
+            nextSettings[key] = value;
+            changed = true;
+          }
+        });
+
+        return changed ? nextSettings : current;
+      });
     }
 
     setCustomSources(currentUser.customSources || []);
@@ -94,6 +113,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   }, [currentUser]);
 
   const syncPersistedUserState = useCallback((nextSettings, nextCustomSources) => {
+    dirtySettingKeysRef.current.clear();
     setSettings(nextSettings);
     setCustomSources(nextCustomSources);
     onUserUpdate({
@@ -130,6 +150,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   }, []);
 
   const setSetting = useCallback((key, value) => {
+    dirtySettingKeysRef.current.add(key);
     setSettings((current) => ({
       ...current,
       [key]: value
@@ -141,6 +162,8 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   }, [setSetting]);
 
   const toggleExcludedSource = useCallback((sourceId) => {
+    dirtySettingKeysRef.current.add('excludedSourceIds');
+    dirtySettingKeysRef.current.add('excludedSubSourceIds');
     setSettings((current) => {
       const excludedSourceIds = current.excludedSourceIds || [];
       const excludedSubSourceIds = current.excludedSubSourceIds || [];
@@ -159,6 +182,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   }, [subSourceIdsBySourceId]);
 
   const toggleExcludedSubFeed = useCallback((subSourceId) => {
+    dirtySettingKeysRef.current.add('excludedSubSourceIds');
     setSettings((current) => {
       const excludedSubSourceIds = current.excludedSubSourceIds || [];
       const exists = excludedSubSourceIds.includes(subSourceId);
@@ -174,8 +198,10 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
 
   const handleSave = useCallback(async () => {
     await runSavingAction(async () => {
-      const settingsPatch = createSettingsPatch(settings, currentUser);
+      const dirtySettingKeys = [...dirtySettingKeysRef.current];
+      const settingsPatch = createSettingsPatch(settings, currentUser, dirtySettingKeys);
       if (Object.keys(settingsPatch).length === 0) {
+        dirtySettingKeysRef.current.clear();
         onClose();
         return;
       }
