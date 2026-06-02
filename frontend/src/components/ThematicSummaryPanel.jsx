@@ -133,6 +133,18 @@ function getPodcastSlotLabel(summary = {}, t) {
   return t('podcastBriefing');
 }
 
+function formatPodcastGeneratedAt(value, locale = 'en') {
+  const date = new Date(value || '');
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(date);
+}
+
 function getPodcastSummariesForPanel(summary = {}, summaries = []) {
   const byId = new Map();
   [summary, ...summaries].filter(isPodcastSummary).forEach((podcastSummary) => {
@@ -325,6 +337,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose }) =
                       const selectedLanguageLabel = getPodcastLanguageLabel(selectedLocale, locale);
                       const availableLanguageList = formatLanguageList(audioChoice.completedLocales, locale);
                       const showAvailabilityNotice = audioChoice.completedLocales.length > 0 && selectedLocale !== locale;
+                      const generatedAtLabel = formatPodcastGeneratedAt(podcastSummary.generatedAt, locale);
 
                       return (
                         <section key={podcastSummary.id} className="space-y-4 border-b border-slate-200/80 pb-5 last:border-b-0 last:pb-0">
@@ -337,9 +350,14 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose }) =
                           <div className="flex flex-col gap-1 text-left sm:flex-row sm:items-end sm:justify-between">
                             <div>
                               <h3 className="text-lg font-semibold tracking-tight text-slate-950 md:text-xl">{getPodcastSlotLabel(podcastSummary, t)}</h3>
-                              {selectedLanguageLabel && (
+                              {(selectedLanguageLabel || generatedAtLabel) && (
                                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                                  <span>{t('podcastAudioLanguageLabel', { language: selectedLanguageLabel })}</span>
+                                  {selectedLanguageLabel && <span>{t('podcastAudioLanguageLabel', { language: selectedLanguageLabel })}</span>}
+                                  {generatedAtLabel && (
+                                    <time dateTime={podcastSummary.generatedAt} aria-label={t('podcastGeneratedAt', { date: generatedAtLabel })}>
+                                      {t('podcastGeneratedAt', { date: generatedAtLabel })}
+                                    </time>
+                                  )}
                                 </div>
                               )}
                             </div>
