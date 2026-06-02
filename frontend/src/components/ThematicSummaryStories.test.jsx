@@ -13,6 +13,7 @@ const translations = {
   eveningPodcast: 'Evening podcast',
   podcastAudioAvailableNotice: ({ languages }) => `Podcast audio is available in ${languages}.`,
   podcastAudioLanguageLabel: ({ language }) => `Audio in ${language}`,
+  podcastGeneratedAt: ({ date }) => `Generated ${date}`,
   thematicSummary: 'Thematic summary',
   summaryArticleCount: ({ count }) => `${count} articles evaluated`,
   summarySlotMorning: 'Morning',
@@ -104,6 +105,7 @@ describe('thematic summary podcast UI', () => {
           articleCount: 2,
           titleByLocale: { en: 'Morning podcast', it: 'Podcast del mattino' },
           summaryTextByLocale: { en: 'English script', it: 'Testo podcast italiano' },
+          generatedAt: '2026-05-21T06:15:00.000Z',
           audioByLocale: {
             en: {
               audioStatus: 'completed',
@@ -123,6 +125,7 @@ describe('thematic summary podcast UI', () => {
     expect(screen.getByText('Morning podcast')).toBeInTheDocument();
     expect(screen.queryByText('Podcast audio is available in Italian.')).not.toBeInTheDocument();
     expect(screen.getByText('Audio in English')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Generated /u)).toHaveAttribute('dateTime', '2026-05-21T06:15:00.000Z');
     expect(screen.queryByText('Audio briefing')).not.toBeInTheDocument();
     expect(screen.queryByText('Podcast del mattino')).not.toBeInTheDocument();
     const audio = document.querySelector('audio');
@@ -187,6 +190,7 @@ describe('thematic summary podcast UI', () => {
           articleCount: 2,
           titleByLocale: { en: 'Morning podcast', it: 'Podcast del mattino' },
           summaryTextByLocale: { en: 'English script', it: 'Testo podcast italiano' },
+          generatedAt: '2026-05-21T06:15:00.000Z',
           audioStatus: 'generating'
         }}
         locale="en"
@@ -196,8 +200,36 @@ describe('thematic summary podcast UI', () => {
     );
 
     expect(screen.getByText('Audio generation is in progress. This panel will update when it is ready.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Generated /u)).toHaveAttribute('dateTime', '2026-05-21T06:15:00.000Z');
     expect(screen.queryByRole('button', { name: 'Play podcast audio' })).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('shows the podcast generation date when audio generation failed', () => {
+    render(
+      <ThematicSummaryPanel
+        summary={{
+          id: 'podcast-1',
+          type: 'podcast',
+          topicKey: 'podcast',
+          topicLabel: 'Podcast',
+          periodStart: '2026-05-21T05:00:00.000Z',
+          periodEnd: '2026-05-21T11:00:00.000Z',
+          articleCount: 2,
+          titleByLocale: { en: 'Morning podcast', it: 'Podcast del mattino' },
+          summaryTextByLocale: { en: 'English script', it: 'Testo podcast italiano' },
+          generatedAt: '2026-05-21T06:15:00.000Z',
+          audioStatus: 'failed'
+        }}
+        locale="en"
+        t={t}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Audio generation failed for this briefing.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Generated /u)).toHaveAttribute('dateTime', '2026-05-21T06:15:00.000Z');
+    expect(screen.queryByRole('button', { name: 'Play podcast audio' })).not.toBeInTheDocument();
   });
 
   test('shows morning and evening podcast players together', () => {
