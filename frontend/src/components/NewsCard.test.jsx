@@ -202,6 +202,15 @@ describe('NewsCard', () => {
     expect(screen.queryByText('Economy')).not.toBeInTheDocument();
   });
 
+  test('renders the published date and time pill', () => {
+    renderNewsCard();
+
+    const publishedAt = screen.getByLabelText('publishedAt');
+    expect(publishedAt.tagName).toBe('TIME');
+    expect(publishedAt).toHaveAttribute('dateTime', '2026-03-07T10:00:00.000Z');
+    expect(publishedAt).toHaveTextContent(/\d/);
+  });
+
   test('renders source favicons and a social source summary', () => {
     render(
       <NewsCard
