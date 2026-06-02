@@ -221,7 +221,7 @@ function createApp(options = {}) {
   }
 
   function requireSameOriginSocketRequest(req, res, next) {
-    if (hasSameOriginRequestHeaders(req, { allowMissingHeaders: true })) {
+    if (isSameOriginSocketRequest(req)) {
       next();
       return;
     }

@@ -1,4 +1,3 @@
-import React from 'react';
 import { getLocalizedTopic } from '../i18n';
 import { getTopicPresentation } from '../topicPresentation';
 import SourceIcon from './SourceIcon';

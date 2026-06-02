@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, Newspaper, RefreshCw } from 'lucide-react';
 import SourceIcon from './SourceIcon';
 import useLockBodyScroll from '../hooks/useLockBodyScroll';

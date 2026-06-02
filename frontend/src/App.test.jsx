@@ -1,4 +1,3 @@
-import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import { CURRENT_CHANGELOG_ENTRY } from './config/changelog';

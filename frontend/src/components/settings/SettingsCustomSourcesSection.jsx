@@ -1,4 +1,3 @@
-import React from 'react';
 import { Pencil, Plus, Rss, Trash2 } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 import SourceIcon from '../SourceIcon';

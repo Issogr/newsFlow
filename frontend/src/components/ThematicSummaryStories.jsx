@@ -1,4 +1,3 @@
-import React from 'react';
 import { Sparkles } from 'lucide-react';
 import { getTopicPresentation } from '../topicPresentation';
 import { getLocalizedThematicSummary, getThematicSummaryPresentationKey, isPodcastSummary } from '../utils/thematicSummaryLocale';

@@ -1,4 +1,3 @@
-import React from 'react';
 import BrandMark from './BrandMark';
 
 const policyContent = {

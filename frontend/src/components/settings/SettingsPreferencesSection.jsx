@@ -1,4 +1,3 @@
-import React from 'react';
 import { Clock3, Globe2, Image as ImageIcon, MonitorSmartphone, PanelRightOpen, Radio, TimerReset, Type } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORDER } from '../../config/readerTextSize';

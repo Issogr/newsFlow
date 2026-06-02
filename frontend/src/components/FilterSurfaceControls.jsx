@@ -1,4 +1,3 @@
-import React from 'react';
 import { Search, X } from 'lucide-react';
 
 export function FilterBubble({ children, open, className, closedClassName = 'translate-y-2', maxHeight }) {

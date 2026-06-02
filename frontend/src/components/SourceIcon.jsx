@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 const getSourceInitial = (name = '') => String(name || '?').trim().charAt(0).toUpperCase() || '?';
 

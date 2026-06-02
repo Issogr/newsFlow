@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AdminDashboard from './AdminDashboard';
 import { createTranslator } from '../i18n';
@@ -304,7 +304,7 @@ describe('AdminDashboard', () => {
       }
     });
     const ThemeHarness = () => {
-      const [userState, setUserState] = React.useState(currentUser);
+      const [userState, setUserState] = useState(currentUser);
 
       return (
         <AdminDashboard

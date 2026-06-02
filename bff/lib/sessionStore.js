@@ -327,7 +327,6 @@ async function persistSessionUserId(req, userId, sessionDb = null) {
 
 module.exports = {
   buildSessionMiddleware,
-  cleanupStoredSessionUsers,
   createSessionStore,
   destroySession,
   destroyStoredSessionsByUserId,

@@ -1,4 +1,3 @@
-import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ReaderPanel from './ReaderPanel';
 import { fetchReaderArticle, updateUserSettings } from '../services/api';

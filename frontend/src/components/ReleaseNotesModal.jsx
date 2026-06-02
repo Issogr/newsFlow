@@ -1,4 +1,3 @@
-import React from 'react';
 import { Sparkles, X } from 'lucide-react';
 import GitHubIcon from './icons/GitHubIcon';
 import { PROJECT_GITHUB_URL } from '../config/projectLinks';

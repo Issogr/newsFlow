@@ -1,4 +1,3 @@
-import React from 'react';
 import { Ban, FilterX } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 import SourceIcon from '../SourceIcon';

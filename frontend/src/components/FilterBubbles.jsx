@@ -1,4 +1,3 @@
-import React from 'react';
 import { FilterBubble } from './FilterSurfaceControls';
 import { SourceFilterList, TopicFilterList } from './FilterOptionLists';
 

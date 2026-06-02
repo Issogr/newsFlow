@@ -1,4 +1,4 @@
-import React from 'react';
+import { Fragment } from 'react';
 import BrandMark from './BrandMark';
 
 function renderTextWithInlineCode(text) {
@@ -17,7 +17,7 @@ function renderTextWithInlineCode(text) {
       );
     }
 
-    return <React.Fragment key={`${segment}-${index}`}>{segment}</React.Fragment>;
+    return <Fragment key={`${segment}-${index}`}>{segment}</Fragment>;
   });
 }
 

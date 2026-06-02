@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { ExternalLink, Newspaper, Sparkles, X } from 'lucide-react';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { getTopicPresentation } from '../topicPresentation';

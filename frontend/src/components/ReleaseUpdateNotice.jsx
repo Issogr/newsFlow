@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sparkles, X } from 'lucide-react';
 
 const DEFAULT_DURATION_MS = 30000;

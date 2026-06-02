@@ -649,7 +649,7 @@ function createArticleRepository({
         topic: row.topic,
         source: row.source || 'legacy',
         confidence: row.confidence,
-        evidence: parseEvidence(row.evidence),
+        evidence: parseJsonArray(row.evidence),
         reasonCode: row.reasonCode || null
       });
       topicDetailsMap.set(row.articleId, topics);
@@ -731,15 +731,6 @@ function createArticleRepository({
         seen.add(key);
         return true;
       });
-  }
-
-  function parseEvidence(value) {
-    try {
-      const parsed = JSON.parse(value || '[]');
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
   }
 
   function upsertArticles(articles = []) {
@@ -1324,7 +1315,7 @@ function createArticleRepository({
       article,
       storedTopics: topicRows.map((row) => ({
         ...row,
-        evidence: parseEvidence(row.evidence)
+        evidence: parseJsonArray(row.evidence)
       })),
       localCandidates
     };
@@ -1818,15 +1809,6 @@ function createArticleRepository({
     };
   }
 
-  function parseSummaryJson(value, fallback = []) {
-    try {
-      const parsed = JSON.parse(value || '');
-      return Array.isArray(parsed) ? parsed : fallback;
-    } catch {
-      return fallback;
-    }
-  }
-
   function mapThematicSummaryRow(row) {
     if (!row) {
       return null;
@@ -1838,12 +1820,12 @@ function createArticleRepository({
       id: row.id,
       topicKey: row.topicKey,
       topicLabel: row.topicLabel,
-      topics: parseSummaryJson(row.topicsJson),
+      topics: parseJsonArray(row.topicsJson),
       periodStart: row.periodStart,
       periodEnd: row.periodEnd,
       summaryText: localized.text,
       summaryTextByLocale: localized.textByLocale,
-      sources: parseSummaryJson(row.sourcesJson),
+      sources: parseJsonArray(row.sourcesJson),
       articleCount: row.articleCount,
       model: row.model,
       status: row.status,
@@ -2001,7 +1983,7 @@ function createArticleRepository({
       summaryText: localized.text,
       titleByLocale: localized.titleByLocale,
       summaryTextByLocale: localized.textByLocale,
-      sources: parseSummaryJson(row.sourcesJson),
+      sources: parseJsonArray(row.sourcesJson),
       articleCount: row.articleCount,
       model: row.scriptModel,
       audioByLocale,

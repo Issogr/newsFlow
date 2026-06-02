@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Activity, Copy, Globe, LogOut, Moon, RefreshCw, Sun, Trash2, UserCheck, Users } from 'lucide-react';
 import BrandMark from './BrandMark';
 import useLatestRequest from '../hooks/useLatestRequest';

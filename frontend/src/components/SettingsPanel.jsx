@@ -1,4 +1,3 @@
-import React from 'react';
 import { Settings, X } from 'lucide-react';
 import GitHubIcon from './icons/GitHubIcon';
 import SettingsAccessSection from './settings/SettingsAccessSection';

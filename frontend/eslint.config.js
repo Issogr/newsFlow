@@ -49,8 +49,7 @@ module.exports = [
       'no-undef': 'error',
       'no-unused-vars': ['error', {
         args: 'none',
-        ignoreRestSiblings: true,
-        varsIgnorePattern: '^React$'
+        ignoreRestSiblings: true
       }],
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'error',

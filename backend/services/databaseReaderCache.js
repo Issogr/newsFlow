@@ -1,14 +1,4 @@
-function parseJsonValue(value, fallback = null) {
-  if (!value) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
+const { parseJsonValue } = require('../utils/json');
 
 function createReaderCacheRepository({ getDb }) {
   function getReaderCache(articleId, maxAgeMs) {
