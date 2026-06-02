@@ -2217,7 +2217,7 @@ function createArticleRepository({
             SELECT period_end
             FROM podcast_summaries
             WHERE period_end <= ?
-              AND status IN ('completed', 'empty')
+              AND status IN ('completed', 'empty', 'failed')
             ORDER BY period_end DESC
             LIMIT ?
           )
@@ -2332,7 +2332,7 @@ function createArticleRepository({
              status, failure_category AS failureCategory, retry_count AS retryCount, error_message AS errorMessage,
              generated_at AS generatedAt
       FROM podcast_summaries
-      WHERE status = 'completed'
+      WHERE status IN ('completed', 'empty', 'failed')
       ORDER BY period_end DESC
       LIMIT ?
     `).all(normalizedLimit);

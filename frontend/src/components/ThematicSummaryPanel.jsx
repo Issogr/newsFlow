@@ -165,6 +165,9 @@ function getPodcastSummariesForPanel(summary = {}, summaries = []) {
 }
 
 function getPodcastAudioStatusText(summary = {}, t) {
+  if (summary.status === 'failed') {
+    return t('podcastAudioFailed');
+  }
   if (summary.audioStatus === 'generating') {
     return t('podcastAudioGenerating');
   }

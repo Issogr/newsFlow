@@ -2,6 +2,9 @@
 
 ## 3.5.5
 
+- keep the podcast panel to one morning and one evening entry, showing failed generations in the affected slot instead of backfilling duplicates
+- let longer Italian podcast scripts generate audio when Gemini TTS needs more stitched chunks
+
 ## 3.5.4
 
 - show the podcast generation date in the podcast panel, including failed audio generation entries
