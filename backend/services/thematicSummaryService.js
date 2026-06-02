@@ -7,6 +7,7 @@ const websocketService = require('./websocketService');
 const { parseIntegerEnv } = require('../utils/env');
 const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const { isPromotionalDealArticle } = require('../utils/promotionalContent');
+const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
 
 const DEFAULT_SUMMARY_TIME_ZONE = 'Europe/Rome';
 const SUMMARY_GENERATION_HOURS = [7, 19];
@@ -402,8 +403,49 @@ function withCachedReaderText(articles = []) {
   }));
 }
 
+function getPodcastArticleIdentityKeys(article = {}) {
+  const keys = [];
+  const articleId = String(article.id || '').trim();
+  const storyGroupId = String(article.storyGroupId || '').trim();
+  const articleUrl = normalizeArticleUrl(article.canonicalUrl || article.url || '');
+  const title = normalizeIdentityText(article.title || '', { lowercase: true });
+  const source = normalizeIdentityText(article.source || article.rawSource || article.sourceId || '', { lowercase: true });
+
+  if (articleId) {
+    keys.push(`id:${articleId}`);
+  }
+  if (storyGroupId) {
+    keys.push(`story:${storyGroupId}`);
+  }
+  if (articleUrl) {
+    keys.push(`url:${articleUrl}`);
+  }
+  if (title && source) {
+    keys.push(`title-source:${source}:${title}`);
+  }
+
+  return keys;
+}
+
+function dedupePodcastCandidateArticles(articles = []) {
+  const seenKeys = new Set();
+  const deduped = [];
+
+  (Array.isArray(articles) ? articles : []).forEach((article) => {
+    const keys = getPodcastArticleIdentityKeys(article);
+    if (keys.length > 0 && keys.some((key) => seenKeys.has(key))) {
+      return;
+    }
+
+    deduped.push(article);
+    keys.forEach((key) => seenKeys.add(key));
+  });
+
+  return deduped;
+}
+
 function getCandidateArticlesForWindow(window) {
-  const byId = new Map();
+  const candidates = [];
   SUMMARY_TOPICS.forEach((topicConfig) => {
     filterNewsworthySummaryArticles(database.getArticlesForThematicSummary({
       topics: topicConfig.topics,
@@ -411,13 +453,13 @@ function getCandidateArticlesForWindow(window) {
       periodEnd: window.periodEnd,
       limit: SUMMARY_MAX_ARTICLES_PER_TOPIC
     })).forEach((article) => {
-      if (article?.id && !byId.has(article.id)) {
-        byId.set(article.id, article);
+      if (article?.id) {
+        candidates.push(article);
       }
     });
   });
 
-  return [...byId.values()];
+  return dedupePodcastCandidateArticles(candidates);
 }
 
 function sortArticlesForPodcast(articles = []) {
@@ -995,6 +1037,7 @@ module.exports = {
   _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,
   _getSummaryTopics: getSummaryTopics,
   _generatePodcastForWindow: generatePodcastForWindow,
+  _dedupePodcastCandidateArticles: dedupePodcastCandidateArticles,
   _isPromotionalDealArticle: isPromotionalDealArticle,
   _getPrewarmAttemptWindowCount: () => attemptedPrewarmArticleIdsByWindow.size,
   _prunePrewarmAttempts: prunePrewarmAttempts

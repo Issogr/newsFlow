@@ -764,8 +764,30 @@ describe('thematic summary generation retries', () => {
       source: 'BBC',
       title: 'AI update',
       description: 'AI update description',
-      url: 'https://example.com/ai',
+      canonicalUrl: 'https://example.com/ai',
+      url: 'https://example.com/ai?utm_source=rss',
+      storyGroupId: 'story-ai-update',
       pubDate: '2026-05-20T18:00:00.000Z'
+    };
+    const articleOneSameUrl = {
+      ...articleOne,
+      id: 'article-1-same-url',
+      url: 'https://example.com/ai?utm_campaign=topic-science',
+      canonicalUrl: 'https://example.com/ai'
+    };
+    const articleOneSameStory = {
+      ...articleOne,
+      id: 'article-1-same-story',
+      source: 'Wired',
+      url: 'https://wired.example.com/ai-update',
+      canonicalUrl: 'https://wired.example.com/ai-update'
+    };
+    const articleOneSameTitleSource = {
+      ...articleOne,
+      id: 'article-1-same-title-source',
+      url: '',
+      canonicalUrl: '',
+      storyGroupId: ''
     };
     const articleTwo = {
       id: 'article-2',
@@ -786,10 +808,10 @@ describe('thematic summary generation retries', () => {
       getPodcastSummary: jest.fn(() => null),
       getArticlesForThematicSummary: jest.fn(({ topics }) => {
         if (topics.includes('Tecnologia')) {
-          return [articleOne, dealArticle];
+          return [articleOne, articleOneSameUrl, articleOneSameTitleSource, dealArticle];
         }
         if (topics.includes('Scienza')) {
-          return [articleOne, articleTwo, dealArticle];
+          return [articleOneSameStory, articleOne, articleTwo, dealArticle];
         }
         return [];
       }),

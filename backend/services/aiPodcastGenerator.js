@@ -138,6 +138,7 @@ function buildPrompt(window = {}, articles = [], options = {}) {
   return [
     'Write a single podcast-style news script using only the provided articles.',
     'This is not topic-specific: include every newsworthy article in the input exactly once or as part of a coherent connected segment.',
+    'If multiple input articles describe the same event or facts, combine them into one segment and do not mention the same news twice.',
     'Skip promotional shopping deals, coupon or affiliate sale posts, and product price-drop blurbs; do not read them as news.',
     'The schedule window is coverage metadata only. Do not name the title or opening after a time of day such as morning, noon, midday, afternoon, evening, night, mattina, mezzogiorno, pomeriggio, or sera.',
     'The script should feel natural when read aloud: quick introduction, fluid transitions, concise context, then a short closing.',
