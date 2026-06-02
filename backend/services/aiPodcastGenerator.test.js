@@ -294,6 +294,31 @@ describe('aiPodcastGenerator', () => {
     expect(wavBytes.readUInt32LE(40)).toBe(expectedDataBytes);
   });
 
+  test('allows longer Gemini TTS scripts that need ten stitched chunks', async () => {
+    process.env = {
+      ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key',
+      AI_PODCAST_TTS_CHUNK_MAX_BYTES: '300'
+    };
+    const pcmByteLength = 2400;
+    const httpClient = {
+      post: jest.fn().mockResolvedValue({
+        status: 200,
+        headers: { 'content-type': 'audio/pcm' },
+        data: createTestPcmBuffer(pcmByteLength)
+      })
+    };
+    const paragraph = 'Questa parte del podcast spiega una notizia importante con contesto chiaro, conseguenze pratiche, una transizione naturale per chi ascolta e un dettaglio finale che mantiene il racconto parlato fluido.';
+    const longScript = Array.from({ length: 10 }, () => paragraph).join('\n\n');
+    aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
+
+    const audio = await aiPodcastGenerator._generateItalianAudio(longScript);
+
+    expect(httpClient.post).toHaveBeenCalledTimes(10);
+    expect(audio.mimeType).toBe('audio/wav');
+    expect(Buffer.from(audio.data, 'base64').subarray(0, 4).toString('ascii')).toBe('RIFF');
+  });
+
   test('uses the OpenRouter audio speech endpoint for Italian TTS', async () => {
     process.env = {
       ...originalEnv,
