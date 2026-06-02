@@ -29,6 +29,7 @@ describe('aiSummaryGenerator', () => {
     const payload = JSON.parse(prompt.split('\n').at(-1));
 
     expect(prompt).toContain('Exclude promotional shopping deals');
+    expect(prompt).toContain('Ignore crossover articles where another category is the main story');
     expect(prompt).toContain('Do not generate or include a title');
     expect(prompt).toContain('{"en":{"paragraphs"');
     expect(prompt).not.toContain('Brief title');

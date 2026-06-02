@@ -1633,15 +1633,28 @@ function createArticleRepository({
     return hydrateArticleRows(rows, { ...options, userId: normalizedUserId });
   }
 
-  function getArticlesForThematicSummary({ topics = [], periodStart, periodEnd, limit = 80 } = {}) {
+  function getArticlesForThematicSummary({ topics = [], excludedTopics = [], periodStart, periodEnd, limit = 80 } = {}) {
     const normalizedTopics = [...new Set((Array.isArray(topics) ? topics : [])
       .map((topic) => topicNormalizer.normalizeTopic(topic))
       .filter((topic) => topic && topicNormalizer.isCanonicalTopic(topic)))];
+    const normalizedExcludedTopics = [...new Set((Array.isArray(excludedTopics) ? excludedTopics : [])
+      .map((topic) => topicNormalizer.normalizeTopic(topic))
+      .filter((topic) => topic && topicNormalizer.isCanonicalTopic(topic) && !normalizedTopics.includes(topic)))];
     const normalizedLimit = Math.max(1, Math.min(Number(limit) || 80, 200));
 
     if (normalizedTopics.length === 0 || !periodStart || !periodEnd) {
       return [];
     }
+
+    const excludedTopicClause = normalizedExcludedTopics.length > 0 ? `
+        AND NOT EXISTS (
+          SELECT 1
+          FROM article_topics competing_topics
+          WHERE competing_topics.article_id = a.id
+            AND competing_topics.topic IN (${normalizedExcludedTopics.map(() => '?').join(', ')})
+            AND COALESCE(competing_topics.confidence, 0) > COALESCE(at.confidence, 0)
+        )
+    ` : '';
 
     const rows = getDb().prepare(`
       SELECT DISTINCT
@@ -1672,9 +1685,10 @@ function createArticleRepository({
         AND a.published_at < ?
         AND a.published_at <= ?
         AND at.topic IN (${normalizedTopics.map(() => '?').join(', ')})
+        ${excludedTopicClause}
       ORDER BY a.published_at DESC, a.id DESC
       LIMIT ?
-    `).all(periodStart, periodEnd, new Date().toISOString(), ...normalizedTopics, normalizedLimit);
+    `).all(periodStart, periodEnd, new Date().toISOString(), ...normalizedTopics, ...normalizedExcludedTopics, normalizedLimit);
 
     return hydrateArticleRows(rows, { userId: null });
   }
