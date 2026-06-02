@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.5.5
+
 ## 3.5.4
 
 - show the podcast generation date in the podcast panel, including failed audio generation entries
