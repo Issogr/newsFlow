@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
+const cookie = require('cookie');
 const session = require('express-session');
 const { parseIntegerEnv } = require('./env');
 const {
@@ -10,7 +11,6 @@ const {
   decryptBackendSessionCookie,
   getSessionCookieOptions,
   isValidSessionPayload,
-  parseCookieHeader,
   unsignSessionId
 } = require('./sessionPolicy');
 
@@ -57,10 +57,9 @@ function getSessionExpireValue(sessionData = {}) {
 }
 
 class ManagedSqliteStore extends session.Store {
-  constructor(db, options = {}) {
+  constructor(db) {
     super();
     this.db = db;
-    this.expired = options.expired || {};
     this.cleanupInterval = null;
 
     this.db.exec(`
@@ -73,9 +72,7 @@ class ManagedSqliteStore extends session.Store {
       CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions (expire);
     `);
 
-    if (this.expired.clear !== false) {
-      this.startInterval();
-    }
+    this.startInterval();
   }
 
   startInterval() {
@@ -83,7 +80,7 @@ class ManagedSqliteStore extends session.Store {
       return;
     }
 
-    this.cleanupInterval = setInterval(() => this.clearExpiredSessions(), this.expired.intervalMs || SESSION_STORE_CLEAR_INTERVAL_MS);
+    this.cleanupInterval = setInterval(() => this.clearExpiredSessions(), SESSION_STORE_CLEAR_INTERVAL_MS);
     this.cleanupInterval?.unref?.();
   }
 
@@ -170,12 +167,7 @@ function createSessionStore(options = {}) {
     CREATE INDEX IF NOT EXISTS idx_session_users_user_id ON session_users (user_id);
   `);
 
-  const store = new ManagedSqliteStore(db, {
-    expired: {
-      clear: true,
-      intervalMs: SESSION_STORE_CLEAR_INTERVAL_MS,
-    },
-  });
+  const store = new ManagedSqliteStore(db);
 
   return { store, db };
 }
@@ -283,7 +275,7 @@ function normalizeSessionState(req, res, next, sessionDb = null) {
 }
 
 function loadUpgradeSession(req, sessionStore, secret) {
-  const cookies = parseCookieHeader(req.headers.cookie);
+  const cookies = typeof req.headers.cookie === 'string' ? cookie.parse(req.headers.cookie) : {};
   const sessionId = unsignSessionId(cookies[BFF_SESSION_COOKIE_NAME], secret);
 
   if (!sessionId) {

@@ -216,20 +216,6 @@ function classifyTopicsFromText(article = {}, options = {}) {
     .sort((left, right) => right.score - left.score || left.topic.localeCompare(right.topic));
 }
 
-function formatTopic(topic) {
-  const cleaned = cleanTopicValue(topic);
-  if (!isMeaningfulTopic(cleaned) || !CANONICAL_TOPIC_SET.has(cleaned)) {
-    return null;
-  }
-
-  const canonicalMatch = CANONICAL_TOPICS.find((item) => cleanTopicValue(item) === cleaned);
-  if (canonicalMatch) {
-    return canonicalMatch;
-  }
-
-  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
-}
-
 function normalizeTopic(topic) {
   const cleaned = cleanTopicValue(topic);
   if (!isMeaningfulTopic(cleaned)) {
@@ -351,7 +337,6 @@ module.exports = {
   CANONICAL_TOPICS,
   cleanTopicValue,
   isMeaningfulTopic,
-  formatTopic,
   normalizeTopic,
   isCanonicalTopic,
   removeDuplicates,

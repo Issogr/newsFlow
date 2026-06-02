@@ -66,18 +66,6 @@ function decryptBackendSessionCookie(value) {
   }
 }
 
-function parseCookieHeader(cookieHeader) {
-  if (!cookieHeader || typeof cookieHeader !== 'string') {
-    return {};
-  }
-
-  return cookie.parse(cookieHeader);
-}
-
-function serializeCookie(name, value, options = {}) {
-  return cookie.serialize(name, value, options);
-}
-
 function getCookieSecureSetting() {
   if (process.env.COOKIE_SECURE === 'true') {
     return true;
@@ -105,17 +93,13 @@ function getSessionCookieOptions() {
   };
 }
 
-function getCookieClearOptions() {
-  return {
+function clearBffSessionCookie(res) {
+  res.append('Set-Cookie', cookie.serialize(BFF_SESSION_COOKIE_NAME, '', {
     httpOnly: true,
     sameSite: 'strict',
     path: '/',
     maxAge: 0,
-  };
-}
-
-function clearBffSessionCookie(res) {
-  res.append('Set-Cookie', serializeCookie(BFF_SESSION_COOKIE_NAME, '', getCookieClearOptions()));
+  }));
 }
 
 function extractBackendSessionCookie(setCookieHeader) {
@@ -167,6 +151,5 @@ module.exports = {
   getInternalProxyToken,
   getSessionCookieOptions,
   isValidSessionPayload,
-  parseCookieHeader,
   unsignSessionId
 };

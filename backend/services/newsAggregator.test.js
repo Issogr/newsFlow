@@ -84,9 +84,7 @@ const {
   scheduleAiTopicsForPendingArticles,
   scheduleAiStoryGroupingForPendingArticles,
   _filterArticlesWithinRetention,
-  _resetPendingAiTopicProcessingIds,
-  _resetPendingAiStoryGroupingIds,
-  _resetSourceFetchFreshness,
+  _resetRuntimeStateForTests,
   _pruneSourceFetchTimestamps,
   _sourceFetchTimestamps
 } = require('./newsAggregatorIngestion');
@@ -120,9 +118,7 @@ describe('newsAggregator service flows', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     newsAggregator._resetImmediateRefreshState();
-    _resetPendingAiTopicProcessingIds();
-    _resetPendingAiStoryGroupingIds();
-    _resetSourceFetchFreshness();
+    _resetRuntimeStateForTests();
     database.countArticles.mockReturnValue(1);
     database.deleteArticlesOlderThan.mockReturnValue(0);
     database.normalizeFuturePublicationDates.mockReturnValue(0);

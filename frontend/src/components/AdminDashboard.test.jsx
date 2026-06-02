@@ -8,6 +8,7 @@ vi.mock('../services/api', () => ({
   fetchAdminUsers: vi.fn(),
   createAdminPasswordSetupLink: vi.fn(),
   deleteAdminUser: vi.fn(),
+  isRequestCanceled: vi.fn((error) => error?.code === 'ERR_CANCELED'),
   updateUserSettings: vi.fn()
 }));
 

@@ -585,15 +585,9 @@ function scheduleAiStoryGroupingForPendingArticles(normalizedArticles = [], opti
   return true;
 }
 
-function resetPendingAiTopicProcessingIds() {
+function resetRuntimeStateForTests() {
   pendingAiTopicProcessingIds.clear();
-}
-
-function resetPendingAiStoryGroupingIds() {
   pendingAiStoryGroupingIds.clear();
-}
-
-function resetSourceFetchFreshness() {
   sourceFetchTimestamps.clear();
   sourceFetchFailures.clear();
   sourceFetchPromises.clear();
@@ -739,9 +733,7 @@ module.exports = {
   processAiStoryGroupingForPendingArticles,
   scheduleAiStoryGroupingForPendingArticles,
   _filterArticlesWithinRetention: filterArticlesWithinRetention,
-  _resetPendingAiTopicProcessingIds: resetPendingAiTopicProcessingIds,
-  _resetPendingAiStoryGroupingIds: resetPendingAiStoryGroupingIds,
-  _resetSourceFetchFreshness: resetSourceFetchFreshness,
+  _resetRuntimeStateForTests: resetRuntimeStateForTests,
   _pruneSourceFetchTimestamps: pruneSourceFetchTimestamps,
   _sourceFetchTimestamps: sourceFetchTimestamps,
   buildSourceFetchTasks,

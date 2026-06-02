@@ -1,3 +1,16 @@
+const BLOCKED_BACKEND_RESPONSE_HEADERS = new Set([
+  'connection',
+  'content-length',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'set-cookie',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+]);
+
 function clearForwardedHeaders(proxyReq) {
   proxyReq.removeHeader('x-forwarded-for');
   proxyReq.removeHeader('x-forwarded-host');
@@ -39,23 +52,10 @@ function applySanitizedForwardedHeaders(proxyReq, req) {
 }
 
 function copyBackendResponseHeaders(res, headers = {}) {
-  const blockedHeaders = new Set([
-    'connection',
-    'content-length',
-    'keep-alive',
-    'proxy-authenticate',
-    'proxy-authorization',
-    'set-cookie',
-    'te',
-    'trailer',
-    'transfer-encoding',
-    'upgrade',
-  ]);
-
   Object.entries(headers).forEach(([name, value]) => {
     const lowerName = String(name || '').toLowerCase();
 
-    if (blockedHeaders.has(lowerName)) {
+    if (BLOCKED_BACKEND_RESPONSE_HEADERS.has(lowerName)) {
       return;
     }
 

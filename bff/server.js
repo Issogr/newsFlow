@@ -193,16 +193,23 @@ function createApp(options = {}) {
   }
 
   async function requestInternalBackend(req, pathName, options = {}) {
-    return backendHttp.request({
+    const requestOptions = {
       url: `/internal-api${pathName}`,
       method: options.method || req.method,
-      ...(Object.prototype.hasOwnProperty.call(options, 'data') ? { data: options.data } : {}),
-      ...(Object.prototype.hasOwnProperty.call(options, 'params') ? { params: options.params } : {}),
       headers: {
         ...buildInternalHeaders(req),
         ...(options.backendSessionCookie ? { Cookie: options.backendSessionCookie } : {}),
       },
-    });
+    };
+
+    if (Object.prototype.hasOwnProperty.call(options, 'data')) {
+      requestOptions.data = options.data;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, 'params')) {
+      requestOptions.params = options.params;
+    }
+
+    return backendHttp.request(requestOptions);
   }
 
   function sendBackendResponse(res, response) {
@@ -211,12 +218,7 @@ function createApp(options = {}) {
   }
 
   function handleProxyError(error, req, res) {
-    if (typeof res?.setHeader !== 'function' || typeof res?.end !== 'function') {
-      res?.destroy?.();
-      return;
-    }
-
-    if (!res || res.headersSent) {
+    if (!res || res.headersSent || typeof res.setHeader !== 'function' || typeof res.end !== 'function') {
       res?.destroy?.();
       return;
     }

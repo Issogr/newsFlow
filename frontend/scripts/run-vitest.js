@@ -2,16 +2,7 @@
 
 const { spawnSync } = require('child_process');
 const path = require('path');
-
-const WEBSTORAGE_FLAG = '--no-experimental-webstorage';
-
-function supportsNodeFlag(flag) {
-  const result = spawnSync(process.execPath, [flag, '--version'], {
-    stdio: 'ignore'
-  });
-
-  return result.status === 0;
-}
+const { getStableNodeRuntimeArgs } = require('../../scripts/nodeRuntimeFlags');
 
 const args = process.argv.slice(2);
 const normalizedArgs = [];
@@ -30,7 +21,7 @@ const shouldRunOnce = !normalizedArgs.includes('--watch') && !normalizedArgs.inc
 const vitestArgs = shouldRunOnce ? ['run', ...normalizedArgs] : [];
 const vitestPackagePath = require.resolve('vitest/package.json');
 const vitestBinPath = path.join(path.dirname(vitestPackagePath), 'vitest.mjs');
-const nodeArgs = supportsNodeFlag(WEBSTORAGE_FLAG) ? [WEBSTORAGE_FLAG] : [];
+const nodeArgs = getStableNodeRuntimeArgs();
 
 const result = spawnSync(process.execPath, [...nodeArgs, vitestBinPath, ...vitestArgs], {
   stdio: 'inherit'

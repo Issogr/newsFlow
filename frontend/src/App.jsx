@@ -184,11 +184,11 @@ function App() {
     handleAuthSuccess(payload);
   }, [handleAuthSuccess]);
 
-  const handleLogin = useCallback(async (credentials) => {
+  const runAuthAction = useCallback(async (authAction, credentials) => {
     setAuthBusy(true);
     setAuthError(null);
     try {
-      handleAuthSuccess(await loginUser(credentials));
+      handleAuthSuccess(await authAction(credentials));
     } catch (error) {
       setAuthError(error);
     } finally {
@@ -196,17 +196,9 @@ function App() {
     }
   }, [handleAuthSuccess]);
 
-  const handleRegister = useCallback(async (credentials) => {
-    setAuthBusy(true);
-    setAuthError(null);
-    try {
-      handleAuthSuccess(await registerUser(credentials));
-    } catch (error) {
-      setAuthError(error);
-    } finally {
-      setAuthBusy(false);
-    }
-  }, [handleAuthSuccess]);
+  const handleLogin = useCallback((credentials) => runAuthAction(loginUser, credentials), [runAuthAction]);
+
+  const handleRegister = useCallback((credentials) => runAuthAction(registerUser, credentials), [runAuthAction]);
 
   const handleLogout = useCallback(async () => {
     try {
