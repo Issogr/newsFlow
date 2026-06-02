@@ -1,5 +1,5 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.5.3',
+  version: '3.5.4',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
