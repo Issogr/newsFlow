@@ -6,6 +6,7 @@
 - generated podcast briefings on morning and evening windows, retained the latest two podcast rows so both remain available, and simplified the podcast panel to audio players only
 - made podcast script and audio generation configurable by enabled language, defaulting to English audio while showing available-language playback notices when the current UI language has no audio
 - prevented podcast scripts from repeating the same news when one article appears across multiple topics or duplicate article identities
+- improved podcast script and narration prompts so briefings use stronger editorial selection, smoother transitions, and a more natural single-narrator delivery
 - kept background AI topic refreshes from interrupting active feed loads and preserved existing source selections during one-time source review
 - showed each news card's published date and time in a compact pill
 - reduced repeated feed filter-stat work, de-duplicated simultaneous RSS fetches for shared URLs, and made public API usage counters flush reliably on timers and shutdown

@@ -60,6 +60,11 @@ describe('aiPodcastGenerator', () => {
     const payload = JSON.parse(prompt.split('\n').at(-1));
 
     expect(prompt).toContain('Generate only the enabled language: English');
+    expect(prompt).toContain('Act as the writer, editor, and producer for a daily news podcast with one narrator');
+    expect(prompt).toContain('Make editorial choices');
+    expect(prompt).toContain('opening hook, essential context, main fact, why it matters, what could happen next');
+    expect(prompt).toContain('Connect sections with smooth transitions');
+    expect(prompt).toContain('what to keep an eye on');
     expect(prompt).toContain('Skip promotional shopping deals');
     expect(prompt).toContain('do not mention the same news twice');
     expect(prompt).toContain('Do not name the title or opening after a time of day');
@@ -211,6 +216,12 @@ describe('aiPodcastGenerator', () => {
     expect(aiPodcastGenerator._getEnabledPodcastLocales()).toEqual(['it', 'en']);
   });
 
+  test('builds narration instructions for Italian and future supported locales', () => {
+    expect(aiPodcastGenerator._getNarrationInstructions('it')).toContain('Italian single-narrator daily news podcast audio');
+    expect(aiPodcastGenerator._getNarrationInstructions('fr')).toContain('French single-narrator daily news podcast audio');
+    expect(aiPodcastGenerator._getNarrationInstructions('it')).toContain('matching the language of the provided script');
+  });
+
   test('defaults Gemini TTS to the Charon voice', async () => {
     process.env = {
       ...originalEnv,
@@ -311,7 +322,7 @@ describe('aiPodcastGenerator', () => {
         input: 'Testo podcast italiano',
         voice: 'Puck',
         response_format: 'wav',
-        instructions: expect.stringContaining('Italian')
+        instructions: expect.stringContaining('Italian single-narrator daily news podcast audio')
       }),
       expect.objectContaining({
         responseType: 'arraybuffer',
@@ -330,6 +341,8 @@ describe('aiPodcastGenerator', () => {
       model: 'tts-model',
       voice: 'Puck'
     }));
+    expect(httpClient.post.mock.calls[0][1].instructions).toContain('measured pace');
+    expect(httpClient.post.mock.calls[0][1].instructions).toContain('Do not add music, sound effects, extra words, or translation');
   });
 
   test('surfaces speech endpoint error messages', async () => {

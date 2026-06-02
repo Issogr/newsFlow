@@ -95,8 +95,26 @@ function getLocaleConfig(locale = 'en') {
   return PODCAST_LANGUAGE_CONFIGS[normalizePodcastLocale(locale)] || PODCAST_LANGUAGE_CONFIGS.en;
 }
 
+function getPodcastLanguageLabel(locale = 'en') {
+  const normalizedLocale = normalizePodcastLocale(locale) || 'en';
+  if (PODCAST_LANGUAGE_CONFIGS[normalizedLocale]) {
+    return PODCAST_LANGUAGE_CONFIGS[normalizedLocale].label;
+  }
+
+  try {
+    const displayName = new Intl.DisplayNames(['en'], { type: 'language' }).of(normalizedLocale);
+    if (displayName) {
+      return displayName;
+    }
+  } catch {
+    // Fall through to the normalized locale code.
+  }
+
+  return normalizedLocale;
+}
+
 function getPodcastLanguageLabels(locales = getEnabledPodcastLocales()) {
-  return locales.map((locale) => getLocaleConfig(locale).label);
+  return locales.map(getPodcastLanguageLabel);
 }
 
 function getTtsMaxInputBytes(model = '') {
@@ -122,6 +140,11 @@ function getTtsChunkSilenceMs() {
   return parseIntegerEnv('AI_PODCAST_TTS_CHUNK_SILENCE_MS', DEFAULT_TTS_CHUNK_SILENCE_MS, { min: 0, max: 500 });
 }
 
+function getNarrationInstructions(locale = 'en') {
+  const languageLabel = getPodcastLanguageLabel(locale);
+  return `Generate ${languageLabel} single-narrator daily news podcast audio, matching the language of the provided script, with a warm, intelligent, conversational delivery. Keep a measured pace, clear pronunciation, natural emphasis, and short pauses between paragraphs. Do not sound like a bulletin, a press release, or an advertisement. Do not add music, sound effects, extra words, or translation.`;
+}
+
 function buildPrompt(window = {}, articles = [], options = {}) {
   const articleTextLimit = getArticleTextLimit(articles.length);
   const ttsInputTarget = Math.floor(getTtsMaxInputBytes(getTtsConfig().model) * 0.85);
@@ -136,13 +159,21 @@ function buildPrompt(window = {}, articles = [], options = {}) {
   ]));
 
   return [
-    'Write a single podcast-style news script using only the provided articles.',
-    'This is not topic-specific: include every newsworthy article in the input exactly once or as part of a coherent connected segment.',
+    'Act as the writer, editor, and producer for a daily news podcast with one narrator.',
+    'Write a single guided podcast episode using only the provided articles; do not produce a flat bulletin or a list.',
+    'Make editorial choices: prioritize the most important, useful, interesting, or meaningful stories for listeners. If there are too many items, group related stories, summarize minor ones briefly, or leave out low-value items.',
+    'For each major story, use a natural narrative arc: opening hook, essential context, main fact, why it matters, what could happen next, and a clear closing thought or question.',
     'If multiple input articles describe the same event or facts, combine them into one segment and do not mention the same news twice.',
+    'Alternate heavier stories with lighter, practical, or human stories when the source material allows it.',
+    'Connect sections with smooth transitions that fit the target language. Avoid abrupt jumps between unrelated topics.',
+    'Use occasional spoken signposts when useful, such as the equivalent of "The point is", "Why it matters", "The detail to watch", "What happens next", or "The story behind the headline". Weave them into the narration; do not format them as lists or headings.',
+    'Explain technical or complex stories through concrete consequences and clear examples without oversimplifying the facts.',
+    'Be non-partisan but editorially useful: help listeners understand what matters, what is noise, and what may have consequences in the coming days.',
     'Skip promotional shopping deals, coupon or affiliate sale posts, and product price-drop blurbs; do not read them as news.',
     'The schedule window is coverage metadata only. Do not name the title or opening after a time of day such as morning, noon, midday, afternoon, evening, night, mattina, mezzogiorno, pomeriggio, or sera.',
-    'The script should feel natural when read aloud: quick introduction, fluid transitions, concise context, then a short closing.',
-    'Use short paragraphs separated by blank lines. Start a new paragraph after the intro, when changing story or subject, and before the closing.',
+    'Use a short recognizable opening, introduce the main themes, develop the news in narrative blocks, and close with what to keep an eye on.',
+    'Write in elegant, accessible spoken language. Prefer short sentences, natural pauses, and clear conversational formulations. Avoid bureaucratic, academic, stiff, or overly formal language.',
+    'Use short paragraphs separated by blank lines. Start a new paragraph after the opening, when changing story or subject, and before the closing.',
     'Do not invent facts, do not use outside knowledge, and do not add bracket citations because the script may be converted to speech.',
     'Mention source names naturally only when useful. Avoid bullet lists, markdown, stage directions, timestamps, and sound effects.',
     `Keep each localized script under ${ttsInputTarget} UTF-8 bytes; concise scripts are more reliable for text-to-speech conversion.`,
@@ -793,7 +824,6 @@ function extractAudioPayload(response = {}, fallbackMimeType = 'audio/mpeg') {
 
 async function requestAudioBuffer(text = '', options = {}) {
   const { config, audioFormat, ttsVoice, fallbackMimeType, locale = 'en' } = options;
-  const languageLabel = getLocaleConfig(locale).label;
   const response = await audioSpeechHttpClient.post(
     getAudioSpeechUrl(config),
     {
@@ -801,7 +831,7 @@ async function requestAudioBuffer(text = '', options = {}) {
       input: text,
       voice: ttsVoice,
       response_format: audioFormat,
-      instructions: `Generate clear, natural ${languageLabel} podcast narration audio. Do not translate the input text.`
+      instructions: getNarrationInstructions(locale)
     },
     {
       headers: getOpenRouterHeaders(config),
@@ -1034,6 +1064,7 @@ module.exports = {
   _extractAudioPayload: extractAudioPayload,
   _generateItalianAudio: generateItalianAudio,
   _getEnabledPodcastLocales: getEnabledPodcastLocales,
+  _getNarrationInstructions: getNarrationInstructions,
   _getArticleTextLimit: getArticleTextLimit,
   _getScriptConfig: getScriptConfig,
   _getTtsConfig: getTtsConfig,
