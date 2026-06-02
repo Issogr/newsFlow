@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { KeyRound, ShieldCheck } from 'lucide-react';
 import BrandMark from './BrandMark';
 import { completePasswordSetup, validatePasswordSetupToken } from '../services/api';

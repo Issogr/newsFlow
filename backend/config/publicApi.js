@@ -35,6 +35,5 @@ function getPublicApiFeatures() {
 module.exports = {
   getPublicApiFeatures,
   isAnonymousPublicApiEnabled,
-  isAuthenticatedPublicApiEnabled,
-  parseBooleanEnv
+  isAuthenticatedPublicApiEnabled
 };

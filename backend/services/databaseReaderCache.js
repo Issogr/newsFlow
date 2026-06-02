@@ -1,14 +1,4 @@
-function parseJsonValue(value, fallback = null) {
-  if (!value) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
+const { parseJsonValue } = require('../utils/json');
 
 function createReaderCacheRepository({ getDb }) {
   function getReaderCache(articleId, maxAgeMs) {
@@ -28,9 +18,9 @@ function createReaderCacheRepository({ getDb }) {
       return null;
     }
 
-    if (maxAgeMs) {
+    if (Number.isFinite(maxAgeMs)) {
       const ageMs = Date.now() - new Date(row.fetchedAt).getTime();
-      if (ageMs > maxAgeMs) {
+      if (!Number.isFinite(ageMs) || ageMs >= maxAgeMs) {
         return null;
       }
     }

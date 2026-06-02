@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, Pause, Play, RotateCcw, SkipForward } from 'lucide-react';
 
 function formatDuration(value) {

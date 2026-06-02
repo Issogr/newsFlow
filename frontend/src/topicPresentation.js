@@ -39,7 +39,6 @@ function normalizeTopic(topic) {
 function createTopicPresentation(Icon, iconBadgeClassName) {
   return {
     Icon,
-    className: iconBadgeClassName,
     iconBadgeClassName
   };
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -11,14 +11,15 @@ import {
 } from 'lucide-react';
 import { fetchReaderArticle, isRequestCanceled, updateUserSettings } from '../services/api';
 import useLatestRequest from '../hooks/useLatestRequest';
-import useLockBodyScroll from '../hooks/useLockBodyScroll';
 import useShareArticle from '../hooks/useShareArticle';
 import { getSafeExternalUrl } from '../utils/urlSafety';
+import FullscreenModalFrame from './FullscreenModalFrame';
 import ShareStatusBubble from './ShareStatusBubble';
 import {
   DEFAULT_READER_TEXT_SIZE,
   READER_TEXT_SIZE_ORDER,
-  READER_TEXT_SIZE_STYLES
+  READER_TEXT_SIZE_STYLES,
+  normalizeReaderTextSize
 } from '../config/readerTextSize';
 import { getStoredReaderTextSizePreference, setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
 
@@ -132,22 +133,6 @@ const ReaderPanel = ({
     setReaderTextSize(getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   }, [currentUser?.settings?.readerTextSize]);
 
-  useLockBodyScroll();
-
-  useEffect(() => {
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [onClose]);
-
   const selectedArticle = useMemo(() => {
     return group?.items?.find((item) => item.id === selectedArticleId) || group?.items?.[0] || null;
   }, [group?.items, selectedArticleId]);
@@ -229,7 +214,7 @@ const ReaderPanel = ({
   }, [safeOriginalUrl, selectedArticle?.title, selectedReader?.title, shareArticle]);
 
   const updateReaderTextSize = useCallback(async (nextValue) => {
-    const normalizedNextValue = READER_TEXT_SIZE_ORDER.includes(nextValue) ? nextValue : DEFAULT_READER_TEXT_SIZE;
+    const normalizedNextValue = normalizeReaderTextSize(nextValue);
     if (normalizedNextValue === readerTextSize) {
       return;
     }
@@ -277,14 +262,7 @@ const ReaderPanel = ({
   }, [loadReader, loading, selectedArticleId]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/35 backdrop-blur-sm">
-      <button
-        type="button"
-        className="absolute inset-0 hidden cursor-default lg:block"
-        aria-label={t('closeReader')}
-        onClick={onClose}
-      />
-
+    <FullscreenModalFrame closeLabel={t('closeReader')} onClose={onClose}>
       <div className={`relative flex h-full w-full ${desktopPositionClassName}`}>
         <section className="flex h-full w-full flex-col bg-slate-50 shadow-2xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(72rem,calc(100vw-2rem))] lg:overflow-hidden lg:rounded-[2rem] lg:border lg:border-slate-200/80">
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-200/80 bg-white/85 px-5 py-4 backdrop-blur-md md:px-6">
@@ -455,7 +433,7 @@ const ReaderPanel = ({
           </div>
         </section>
       </div>
-    </div>
+    </FullscreenModalFrame>
   );
 };
 

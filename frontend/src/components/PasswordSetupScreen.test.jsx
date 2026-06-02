@@ -1,4 +1,3 @@
-import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PasswordSetupScreen from './PasswordSetupScreen';
 import { createTranslator } from '../i18n';

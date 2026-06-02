@@ -52,9 +52,6 @@ const anonymousPublicNewsRateLimit = rateLimit({
   keyGenerator: (req) => {
     return `anon:${ipKeyGenerator(req.ip)}`;
   },
-  handler: (req, res) => {
-    res.status(429).json(anonymousPublicNewsRateLimitMessage);
-  },
   message: anonymousPublicNewsRateLimitMessage
 });
 
@@ -67,9 +64,6 @@ const authenticatedPublicNewsRateLimit = rateLimit({
   keyGenerator: (req) => {
     const apiTokenId = req.externalApi?.tokenInfo?.id || '';
     return `token:${apiTokenId}`;
-  },
-  handler: (req, res) => {
-    res.status(429).json(authenticatedPublicNewsRateLimitMessage);
   },
   message: authenticatedPublicNewsRateLimitMessage
 });

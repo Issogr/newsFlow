@@ -649,7 +649,7 @@ function createArticleRepository({
         topic: row.topic,
         source: row.source || 'legacy',
         confidence: row.confidence,
-        evidence: parseEvidence(row.evidence),
+        evidence: parseJsonArray(row.evidence),
         reasonCode: row.reasonCode || null
       });
       topicDetailsMap.set(row.articleId, topics);
@@ -731,15 +731,6 @@ function createArticleRepository({
         seen.add(key);
         return true;
       });
-  }
-
-  function parseEvidence(value) {
-    try {
-      const parsed = JSON.parse(value || '[]');
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
   }
 
   function upsertArticles(articles = []) {
@@ -1324,7 +1315,7 @@ function createArticleRepository({
       article,
       storedTopics: topicRows.map((row) => ({
         ...row,
-        evidence: parseEvidence(row.evidence)
+        evidence: parseJsonArray(row.evidence)
       })),
       localCandidates
     };
@@ -1633,15 +1624,28 @@ function createArticleRepository({
     return hydrateArticleRows(rows, { ...options, userId: normalizedUserId });
   }
 
-  function getArticlesForThematicSummary({ topics = [], periodStart, periodEnd, limit = 80 } = {}) {
+  function getArticlesForThematicSummary({ topics = [], excludedTopics = [], periodStart, periodEnd, limit = 80 } = {}) {
     const normalizedTopics = [...new Set((Array.isArray(topics) ? topics : [])
       .map((topic) => topicNormalizer.normalizeTopic(topic))
       .filter((topic) => topic && topicNormalizer.isCanonicalTopic(topic)))];
+    const normalizedExcludedTopics = [...new Set((Array.isArray(excludedTopics) ? excludedTopics : [])
+      .map((topic) => topicNormalizer.normalizeTopic(topic))
+      .filter((topic) => topic && topicNormalizer.isCanonicalTopic(topic) && !normalizedTopics.includes(topic)))];
     const normalizedLimit = Math.max(1, Math.min(Number(limit) || 80, 200));
 
     if (normalizedTopics.length === 0 || !periodStart || !periodEnd) {
       return [];
     }
+
+    const excludedTopicClause = normalizedExcludedTopics.length > 0 ? `
+        AND NOT EXISTS (
+          SELECT 1
+          FROM article_topics competing_topics
+          WHERE competing_topics.article_id = a.id
+            AND competing_topics.topic IN (${normalizedExcludedTopics.map(() => '?').join(', ')})
+            AND COALESCE(competing_topics.confidence, 0) > COALESCE(at.confidence, 0)
+        )
+    ` : '';
 
     const rows = getDb().prepare(`
       SELECT DISTINCT
@@ -1672,9 +1676,10 @@ function createArticleRepository({
         AND a.published_at < ?
         AND a.published_at <= ?
         AND at.topic IN (${normalizedTopics.map(() => '?').join(', ')})
+        ${excludedTopicClause}
       ORDER BY a.published_at DESC, a.id DESC
       LIMIT ?
-    `).all(periodStart, periodEnd, new Date().toISOString(), ...normalizedTopics, normalizedLimit);
+    `).all(periodStart, periodEnd, new Date().toISOString(), ...normalizedTopics, ...normalizedExcludedTopics, normalizedLimit);
 
     return hydrateArticleRows(rows, { userId: null });
   }
@@ -1804,15 +1809,6 @@ function createArticleRepository({
     };
   }
 
-  function parseSummaryJson(value, fallback = []) {
-    try {
-      const parsed = JSON.parse(value || '');
-      return Array.isArray(parsed) ? parsed : fallback;
-    } catch {
-      return fallback;
-    }
-  }
-
   function mapThematicSummaryRow(row) {
     if (!row) {
       return null;
@@ -1824,12 +1820,12 @@ function createArticleRepository({
       id: row.id,
       topicKey: row.topicKey,
       topicLabel: row.topicLabel,
-      topics: parseSummaryJson(row.topicsJson),
+      topics: parseJsonArray(row.topicsJson),
       periodStart: row.periodStart,
       periodEnd: row.periodEnd,
       summaryText: localized.text,
       summaryTextByLocale: localized.textByLocale,
-      sources: parseSummaryJson(row.sourcesJson),
+      sources: parseJsonArray(row.sourcesJson),
       articleCount: row.articleCount,
       model: row.model,
       status: row.status,
@@ -1987,7 +1983,7 @@ function createArticleRepository({
       summaryText: localized.text,
       titleByLocale: localized.titleByLocale,
       summaryTextByLocale: localized.textByLocale,
-      sources: parseSummaryJson(row.sourcesJson),
+      sources: parseJsonArray(row.sourcesJson),
       articleCount: row.articleCount,
       model: row.scriptModel,
       audioByLocale,

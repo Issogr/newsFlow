@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -238,8 +238,6 @@ const mergeGroups = (primaryGroups, secondaryGroups) => {
   return mergedGroups;
 };
 
-const appendUniqueGroups = (currentGroups, incomingGroups) => mergeGroups(currentGroups, incomingGroups);
-
 function buildFeedRequestParams({
   activeFilters,
   append,
@@ -277,7 +275,7 @@ function getLoadedNewsGroups(currentGroups, {
   responseItems,
   silent,
 }) {
-  let nextNews = append ? appendUniqueGroups(currentGroups, responseItems) : mergedItems;
+  let nextNews = append ? mergeGroups(currentGroups, responseItems) : mergedItems;
 
   if (!append && silent) {
     nextNews = mergeGroups(currentGroups, filterGroupsMatchingCurrent(currentGroups, mergedItems));
@@ -285,7 +283,7 @@ function getLoadedNewsGroups(currentGroups, {
 
   if (!append && silent && currentGroups.length > nextNews.length) {
     const preservedTail = currentGroups.slice(nextNews.length);
-    nextNews = appendUniqueGroups(nextNews, preservedTail).slice(0, currentGroups.length);
+    nextNews = mergeGroups(nextNews, preservedTail).slice(0, currentGroups.length);
   }
 
   if (!isReadLaterView && nextNews.length > MAX_RETAINED_NEWS_GROUPS) {
@@ -393,6 +391,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
     return getCurrentThematicSummarySelection(selectedThematicSummary, thematicSummaries);
   }, [selectedThematicSummary, thematicSummaries]);
+  const currentReaderGroup = useMemo(() => {
+    if (!readerState.isOpen || !readerState.group) {
+      return null;
+    }
+
+    const readerGroupKeys = getGroupMergeKeys(readerState.group);
+    return news.find((group) => groupSharesAnyKey(group, readerGroupKeys)) || readerState.group;
+  }, [news, readerState.group, readerState.isOpen]);
 
   useEffect(() => {
     if (selectedThematicSummary?.id && !displayedThematicSummary) {
@@ -581,7 +587,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           return;
         }
 
-        mergedItems.splice(0, mergedItems.length, ...appendUniqueGroups(mergedItems, nextPage.items || []));
+        mergedItems.splice(0, mergedItems.length, ...mergeGroups(mergedItems, nextPage.items || []));
         nextMeta = nextPage.meta || nextMeta;
       }
 
@@ -1040,9 +1046,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         )}
       </main>
 
-      {readerState.isOpen && readerState.group && (
+      {readerState.isOpen && currentReaderGroup && (
         <ReaderPanel
-          group={readerState.group}
+          group={currentReaderGroup}
           initialArticleId={readerState.articleId}
           readerPosition={currentUser?.settings?.readerPanelPosition || 'right'}
           t={t}

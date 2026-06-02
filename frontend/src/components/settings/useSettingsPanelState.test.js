@@ -116,6 +116,53 @@ describe('useSettingsPanelState', () => {
     expect(result.current.newApiToken).toBe('raw-token');
   });
 
+  test('does not overwrite same-user settings updates for untouched fields', async () => {
+    const onClose = jest.fn();
+    const onUserUpdate = jest.fn();
+    const initialUser = {
+      ...baseCurrentUser,
+      settings: {
+        ...baseCurrentUser.settings,
+        lastSeenReleaseNotesVersion: '3.5.2'
+      }
+    };
+    const updatedUser = {
+      ...initialUser,
+      settings: {
+        ...initialUser.settings,
+        lastSeenReleaseNotesVersion: '3.5.3'
+      }
+    };
+    updateUserSettings.mockResolvedValue({
+      settings: {
+        ...updatedUser.settings,
+        themeMode: 'dark'
+      }
+    });
+
+    const { result, rerender } = renderHook(({ currentUser }) => useSettingsPanelState({
+      currentUser,
+      availableSources: [],
+      onClose,
+      onUserUpdate
+    }), { initialProps: { currentUser: initialUser } });
+
+    rerender({ currentUser: updatedUser });
+
+    expect(result.current.settings.lastSeenReleaseNotesVersion).toBe('3.5.3');
+
+    act(() => {
+      result.current.setSetting('themeMode', 'dark');
+    });
+
+    await act(async () => {
+      await result.current.handleSave();
+    });
+
+    expect(updateUserSettings).toHaveBeenCalledWith({ themeMode: 'dark' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   test('surfaces source add failures near the custom source form', async () => {
     const requestError = new Error('The request timed out. Please try again in a few seconds.');
     addUserSource.mockRejectedValue(requestError);

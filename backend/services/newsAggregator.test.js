@@ -84,9 +84,7 @@ const {
   scheduleAiTopicsForPendingArticles,
   scheduleAiStoryGroupingForPendingArticles,
   _filterArticlesWithinRetention,
-  _resetPendingAiTopicProcessingIds,
-  _resetPendingAiStoryGroupingIds,
-  _resetSourceFetchFreshness,
+  _resetRuntimeStateForTests,
   _pruneSourceFetchTimestamps,
   _sourceFetchTimestamps
 } = require('./newsAggregatorIngestion');
@@ -120,9 +118,7 @@ describe('newsAggregator service flows', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     newsAggregator._resetImmediateRefreshState();
-    _resetPendingAiTopicProcessingIds();
-    _resetPendingAiStoryGroupingIds();
-    _resetSourceFetchFreshness();
+    _resetRuntimeStateForTests();
     database.countArticles.mockReturnValue(1);
     database.deleteArticlesOlderThan.mockReturnValue(0);
     database.normalizeFuturePublicationDates.mockReturnValue(0);
@@ -253,6 +249,28 @@ describe('newsAggregator service flows', () => {
       getLastRefreshAt: () => null,
       setLastRefreshAt: jest.fn()
     });
+
+    expect(result).toEqual(expect.objectContaining({ success: true, fetchedCount: 0 }));
+    expect(rssParser.parseFeed).not.toHaveBeenCalled();
+  });
+
+  test('custom source refreshes bypass freshness but still honor failure backoff', async () => {
+    const source = {
+      id: 'custom-failing',
+      name: 'Failing Custom Feed',
+      url: 'https://example.com/custom-failing.xml',
+      language: 'en',
+      userId: 'user-1',
+      isActive: true
+    };
+    database.listUserSources.mockReturnValue([source]);
+    rssParser.parseFeed.mockRejectedValueOnce(new Error('upstream timeout'));
+
+    await expect(newsAggregator.refreshUserSources('user-1')).rejects.toMatchObject({ status: 503, code: 'CONNECTION_ERROR' });
+
+    rssParser.parseFeed.mockClear();
+
+    const result = await newsAggregator.refreshUserSources('user-1');
 
     expect(result).toEqual(expect.objectContaining({ success: true, fetchedCount: 0 }));
     expect(rssParser.parseFeed).not.toHaveBeenCalled();

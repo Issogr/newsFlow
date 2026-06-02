@@ -38,6 +38,7 @@ function buildPrompt(topicConfig = {}, articles = []) {
   return [
     'Write concise, fluid news briefings for the requested topic using only the provided articles.',
     'The style should feel like a clean ChatGPT reading experience: clear context, compact paragraphs, no hype, no bullet spam.',
+    'Keep the briefing tightly focused on the requested topic and its canonical topics. Ignore crossover articles where another category is the main story, even if the article has a tangential connection to the requested topic.',
     'Cite article references inline with bracketed numbers like [1] when mentioning a fact.',
     'Do not invent facts, do not use outside knowledge, and do not cite references that are not present in the input.',
     'Exclude promotional shopping deals, coupon or affiliate sale posts, and product price-drop blurbs; do not summarize them as news.',

@@ -1,16 +1,21 @@
-function parseJsonArray(value) {
+function parseJsonValue(value, fallback = null) {
   if (!value) {
-    return [];
+    return fallback;
   }
 
   try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
+    return JSON.parse(value);
   } catch {
-    return [];
+    return fallback;
   }
+}
+
+function parseJsonArray(value, fallback = []) {
+  const parsed = parseJsonValue(value, fallback);
+  return Array.isArray(parsed) ? parsed : fallback;
 }
 
 module.exports = {
   parseJsonArray,
+  parseJsonValue,
 };

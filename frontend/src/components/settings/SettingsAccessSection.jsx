@@ -1,4 +1,3 @@
-import React from 'react';
 import { Download, ExternalLink, KeyRound, ShieldCheck, Upload } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 

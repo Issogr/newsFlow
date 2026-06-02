@@ -291,6 +291,5 @@ module.exports = {
   deleteAllUserSources: userStateRepository.deleteAllUserSources,
   importUserState: userStateRepository.importUserState,
   verifyWriteAccess,
-  getWriteAccessStatus,
-  buildSearchQuery: articleRepository.buildSearchQuery
+  getWriteAccessStatus
 };

@@ -58,6 +58,22 @@ const SUMMARY_TOPICS = [
   }
 ];
 
+function getOtherSummaryTopics(topicConfig = {}) {
+  return [...new Set(SUMMARY_TOPICS
+    .filter((summaryTopic) => summaryTopic.key !== topicConfig.key)
+    .flatMap((summaryTopic) => summaryTopic.topics))];
+}
+
+function buildSummaryArticleQuery(topicConfig, window) {
+  return {
+    topics: topicConfig.topics,
+    excludedTopics: getOtherSummaryTopics(topicConfig),
+    periodStart: window.periodStart,
+    periodEnd: window.periodEnd,
+    limit: SUMMARY_MAX_ARTICLES_PER_TOPIC
+  };
+}
+
 let schedulerHandle = null;
 let generationPromise = null;
 let prewarmPromise = null;
@@ -447,12 +463,7 @@ function dedupePodcastCandidateArticles(articles = []) {
 function getCandidateArticlesForWindow(window) {
   const candidates = [];
   SUMMARY_TOPICS.forEach((topicConfig) => {
-    filterNewsworthySummaryArticles(database.getArticlesForThematicSummary({
-      topics: topicConfig.topics,
-      periodStart: window.periodStart,
-      periodEnd: window.periodEnd,
-      limit: SUMMARY_MAX_ARTICLES_PER_TOPIC
-    })).forEach((article) => {
+    filterNewsworthySummaryArticles(database.getArticlesForThematicSummary(buildSummaryArticleQuery(topicConfig, window))).forEach((article) => {
       if (article?.id) {
         candidates.push(article);
       }
@@ -732,12 +743,7 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
     return { summary: null, generatedNow: false };
   }
 
-  const articles = filterNewsworthySummaryArticles(database.getArticlesForThematicSummary({
-    topics: topicConfig.topics,
-    periodStart: window.periodStart,
-    periodEnd: window.periodEnd,
-    limit: SUMMARY_MAX_ARTICLES_PER_TOPIC
-  }));
+  const articles = filterNewsworthySummaryArticles(database.getArticlesForThematicSummary(buildSummaryArticleQuery(topicConfig, window)));
 
   if (articles.length === 0) {
     if (options.force !== true && database.hasPendingTopicProcessingForThematicSummary?.(window)) {
@@ -816,9 +822,6 @@ async function generatePodcastForWindow(window, options = {}) {
   if (existingSummary?.status === 'completed' && options.force !== true) {
     return retryPodcastAudio(existingSummary, options);
   }
-  if (existingSummary?.status === 'empty' && options.force !== true) {
-    return { summary: existingSummary, generatedNow: false };
-  }
   if (existingSummary?.status === 'failed' && options.force !== true && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
     logger.debug(`AI podcast retry skipped during cooldown: windowEnd=${window.periodEnd}`);
     return { summary: null, generatedNow: false };
@@ -826,6 +829,14 @@ async function generatePodcastForWindow(window, options = {}) {
 
   const articles = sortArticlesForPodcast(getCandidateArticlesForWindow(window));
   if (articles.length === 0) {
+    if (options.force !== true && database.hasPendingTopicProcessingForThematicSummary?.(window)) {
+      return { summary: null, generatedNow: false };
+    }
+
+    if (existingSummary?.status === 'empty' && options.force !== true) {
+      return { summary: existingSummary, generatedNow: false };
+    }
+
     return {
       summary: database.upsertPodcastSummary(buildEmptyPodcastPayload(window)),
       generatedNow: true
@@ -1037,7 +1048,6 @@ module.exports = {
   _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,
   _getSummaryTopics: getSummaryTopics,
   _generatePodcastForWindow: generatePodcastForWindow,
-  _dedupePodcastCandidateArticles: dedupePodcastCandidateArticles,
   _isPromotionalDealArticle: isPromotionalDealArticle,
   _getPrewarmAttemptWindowCount: () => attemptedPrewarmArticleIdsByWindow.size,
   _prunePrewarmAttempts: prunePrewarmAttempts

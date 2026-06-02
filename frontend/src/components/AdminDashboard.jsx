@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Activity, Copy, Globe, LogOut, Moon, RefreshCw, Sun, Trash2, UserCheck, Users } from 'lucide-react';
 import BrandMark from './BrandMark';
-import { createAdminPasswordSetupLink, deleteAdminUser, fetchAdminUsers, updateUserSettings } from '../services/api';
+import useLatestRequest from '../hooks/useLatestRequest';
+import { createAdminPasswordSetupLink, deleteAdminUser, fetchAdminUsers, isRequestCanceled, updateUserSettings } from '../services/api';
 
 const REFRESH_INTERVAL_MS = 30000;
 
@@ -29,10 +30,10 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
   const [deletingUserId, setDeletingUserId] = useState('');
   const [latestGeneratedLink, setLatestGeneratedLink] = useState(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const { startLatestRequest } = useLatestRequest();
   const hasLoadedRef = useRef(false);
   const isMountedRef = useRef(false);
-  const latestRequestIdRef = useRef(0);
-  const usersRequestControllerRef = useRef(null);
+  const usersRequestInFlightRef = useRef(false);
   const copyTimeoutRef = useRef(null);
 
   useEffect(() => {
@@ -40,8 +41,6 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
 
     return () => {
       isMountedRef.current = false;
-      latestRequestIdRef.current += 1;
-      usersRequestControllerRef.current?.abort();
       if (copyTimeoutRef.current) {
         window.clearTimeout(copyTimeoutRef.current);
       }
@@ -49,14 +48,12 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
   }, []);
 
   const loadUsers = useCallback(async ({ showRefreshingIndicator = false } = {}) => {
-    if (usersRequestControllerRef.current) {
+    if (usersRequestInFlightRef.current) {
       return;
     }
 
-    const requestId = latestRequestIdRef.current + 1;
-    latestRequestIdRef.current = requestId;
-    const controller = new AbortController();
-    usersRequestControllerRef.current = controller;
+    const request = startLatestRequest();
+    usersRequestInFlightRef.current = true;
 
     if (!hasLoadedRef.current) {
       setLoading(true);
@@ -65,8 +62,8 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
     }
 
     try {
-      const response = await fetchAdminUsers({ signal: controller.signal });
-      if (!isMountedRef.current || latestRequestIdRef.current !== requestId) {
+      const response = await fetchAdminUsers({ signal: request.signal });
+      if (!isMountedRef.current || !request.isLatest()) {
         return;
       }
 
@@ -75,19 +72,17 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
       setSummary(response.summary || { totalUsers: 0, onlineUsers: 0, activeUsers: 0, onlineWindowMinutes: 5 });
       setError('');
     } catch (requestError) {
-      if (requestError?.name === 'CanceledError' || requestError?.code === 'ERR_CANCELED') {
+      if (isRequestCanceled(requestError)) {
         return;
       }
 
-      if (isMountedRef.current && latestRequestIdRef.current === requestId) {
+      if (isMountedRef.current && request.isLatest()) {
         setError(requestError.message || t('genericError'));
       }
     } finally {
-      if (usersRequestControllerRef.current === controller) {
-        usersRequestControllerRef.current = null;
-      }
+      usersRequestInFlightRef.current = false;
 
-      if (isMountedRef.current && latestRequestIdRef.current === requestId) {
+      if (isMountedRef.current && request.isLatest()) {
         setLoading(false);
       }
 
@@ -95,7 +90,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
         setRefreshing(false);
       }
     }
-  }, [t]);
+  }, [startLatestRequest, t]);
 
   useEffect(() => {
     loadUsers();
@@ -115,8 +110,8 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
     };
   }, [loadUsers]);
 
-  const managedUsers = useMemo(() => users.filter((user) => !user.isAdmin), [users]);
-  const activeTheme = useMemo(() => {
+  const managedUsers = users.filter((user) => !user.isAdmin);
+  const activeTheme = (() => {
     const themeMode = String(currentUser?.settings?.themeMode || '').trim();
     if (themeMode === 'dark' || themeMode === 'light') {
       return themeMode;
@@ -124,9 +119,9 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
 
     const appliedTheme = String(document.documentElement?.dataset?.theme || '').trim();
     return appliedTheme === 'dark' ? 'dark' : 'light';
-  }, [currentUser?.settings?.themeMode]);
+  })();
   const nextThemeMode = activeTheme === 'dark' ? 'light' : 'dark';
-  const summaryCards = useMemo(() => ([
+  const summaryCards = [
     {
       key: 'online',
       label: t('adminOnlineUsers'),
@@ -155,7 +150,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
       icon: Globe,
       accent: 'bg-violet-100 text-violet-700',
     },
-  ]), [summary.activeUsers, summary.anonymousPublicApiRequests, summary.onlineUsers, summary.totalUsers, t]);
+  ];
 
   const handleCreateLink = async (user) => {
     setCreatingForUserId(user.id);

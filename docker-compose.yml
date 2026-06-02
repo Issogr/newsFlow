@@ -26,6 +26,8 @@ services:
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
       - NEWS_DB_PATH=/usr/src/app/data/news.db
       - ADMIN_USERNAME=admin
+      - PUBLIC_API_ANONYMOUS_ENABLED=${PUBLIC_API_ANONYMOUS_ENABLED:-false}
+      - PUBLIC_API_AUTHENTICATED_ENABLED=${PUBLIC_API_AUTHENTICATED_ENABLED:-false}
       # Performance tuning variables
       - MAX_ARTICLES_PER_SOURCE=25  # Maximum number of articles to process per source
       - RSS_MAX_RETRIES=5           # Retry attempts for DNS-related issues

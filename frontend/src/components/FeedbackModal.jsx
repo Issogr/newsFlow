@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Bug, CheckCircle2, ImagePlus, Lightbulb, MessageSquare, Paperclip, Send, Trash2, X } from 'lucide-react';
 import { submitFeedback } from '../services/api';
 import useLockBodyScroll from '../hooks/useLockBodyScroll';

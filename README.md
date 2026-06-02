@@ -55,9 +55,9 @@ Open `http://localhost`.
 
 Runtime requirements:
 
-- Backend: Node.js `^24.0.0`
-- BFF: Node.js `^24.0.0`
-- Frontend: Node.js `^24.0.0`
+- Backend: Node.js `24.16.0`
+- BFF: Node.js `24.16.0`
+- Frontend: Node.js `24.16.0`
 
 ## Local Development
 
@@ -113,7 +113,7 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | --- | --- | --- |
 | `SESSION_TTL_DAYS` | `30` | Session lifetime in days |
 | `SESSION_TOUCH_RENEWAL_WINDOW_MS` | `86400000` | BFF renews persisted sessions only inside this remaining-lifetime window |
-| `SESSION_PURGE_INTERVAL_MS` | `300000` | Expired-session cleanup interval in ms |
+| `SESSION_PURGE_INTERVAL_MS` | `300000` | Backend expired auth/session cleanup interval in ms |
 | `SESSION_STORE_CLEAR_INTERVAL_MS` | `300000` | BFF persisted session-store cleanup interval in ms |
 | `ADMIN_USERNAME` | `admin` | Reserved dedicated admin username |
 | `INTERNAL_PROXY_TOKEN` | `development-only-change-me` | Shared token used by the BFF when calling the private backend app API and Socket.IO surface |

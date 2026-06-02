@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ExternalLink, LogIn, UserPlus } from 'lucide-react';
 import BrandMark from './BrandMark';
 

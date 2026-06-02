@@ -1054,6 +1054,17 @@ describe('database queries and user data', () => {
         url: 'https://example.com/politics',
         language: 'en',
         pubDate: '2025-05-21T11:00:00.000Z'
+      },
+      {
+        id: 'summary-entertainment-crossover',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Streaming platform launches a music show',
+        description: 'Entertainment update with a minor app mention',
+        content: '',
+        url: 'https://example.com/entertainment-crossover',
+        language: 'en',
+        pubDate: '2025-05-21T12:00:00.000Z'
       }
     ]);
     database.mergeTopicsForArticles([
@@ -1061,9 +1072,19 @@ describe('database queries and user data', () => {
       { articleId: 'summary-private-tech', topics: ['Tecnologia'] },
       { articleId: 'summary-global-politics', topics: ['Politica'] }
     ]);
+    database.replaceTopicsForArticles([
+      {
+        articleId: 'summary-entertainment-crossover',
+        topics: [
+          { topic: 'Spettacolo', source: 'ai', confidence: 0.91 },
+          { topic: 'Tecnologia', source: 'ai', confidence: 0.68 }
+        ]
+      }
+    ]);
 
     const articles = database.getArticlesForThematicSummary({
       topics: ['Tecnologia'],
+      excludedTopics: ['Spettacolo'],
       periodStart: windowStart,
       periodEnd: windowEnd
     });
@@ -1910,6 +1931,8 @@ describe('database queries and user data', () => {
       contentBlocks: null,
       minutesToRead: 2
     }));
+
+    expect(database.getReaderCache('article-1', 0)).toBeNull();
   });
 
   test('builds source and topic stats with canonical source ids and search filters', () => {

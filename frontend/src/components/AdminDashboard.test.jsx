@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AdminDashboard from './AdminDashboard';
 import { createTranslator } from '../i18n';
@@ -8,6 +8,7 @@ vi.mock('../services/api', () => ({
   fetchAdminUsers: vi.fn(),
   createAdminPasswordSetupLink: vi.fn(),
   deleteAdminUser: vi.fn(),
+  isRequestCanceled: vi.fn((error) => error?.code === 'ERR_CANCELED'),
   updateUserSettings: vi.fn()
 }));
 
@@ -303,7 +304,7 @@ describe('AdminDashboard', () => {
       }
     });
     const ThemeHarness = () => {
-      const [userState, setUserState] = React.useState(currentUser);
+      const [userState, setUserState] = useState(currentUser);
 
       return (
         <AdminDashboard

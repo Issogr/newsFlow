@@ -146,6 +146,15 @@ function createApp(options = {}) {
     });
   }
 
+  function getRequestHeader(req, name) {
+    if (typeof req.get === 'function') {
+      return req.get(name);
+    }
+
+    const value = req.headers?.[String(name || '').toLowerCase()];
+    return Array.isArray(value) ? value[0] : value;
+  }
+
   function getExpectedRequestOrigin(req) {
     if (configuredAppOrigin) {
       try {
@@ -155,7 +164,9 @@ function createApp(options = {}) {
       }
     }
 
-    return `${req.protocol}://${req.get('host')}`;
+    const forwardedProtocol = String(getRequestHeader(req, 'x-forwarded-proto') || '').split(',')[0].trim();
+    const protocol = req.protocol || forwardedProtocol || (req.socket?.encrypted ? 'https' : 'http');
+    return `${protocol}://${getRequestHeader(req, 'host')}`;
   }
 
   function headerMatchesExpectedOrigin(value, expectedOrigin) {
@@ -170,20 +181,23 @@ function createApp(options = {}) {
     }
   }
 
-  function requireSameOriginUnsafeRequest(req, res, next) {
-    if (SAFE_METHODS.has(String(req.method || '').toUpperCase())) {
-      next();
-      return;
-    }
-
+  function hasSameOriginRequestHeaders(req, options = {}) {
     const expectedOrigin = getExpectedRequestOrigin(req);
-    const origin = req.get('origin');
-    const referer = req.get('referer');
-    if (headerMatchesExpectedOrigin(origin, expectedOrigin) || (!origin && headerMatchesExpectedOrigin(referer, expectedOrigin))) {
-      next();
-      return;
+    const origin = getRequestHeader(req, 'origin');
+    const referer = getRequestHeader(req, 'referer');
+
+    if (!origin && !referer && options.allowMissingHeaders === true) {
+      return true;
     }
 
+    if (headerMatchesExpectedOrigin(origin, expectedOrigin) || (!origin && headerMatchesExpectedOrigin(referer, expectedOrigin))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function sendCrossOriginRejected(res) {
     res.status(403).json({
       error: {
         message: 'Cross-origin request rejected.',
@@ -192,17 +206,51 @@ function createApp(options = {}) {
     });
   }
 
+  function requireSameOriginUnsafeRequest(req, res, next) {
+    if (SAFE_METHODS.has(String(req.method || '').toUpperCase())) {
+      next();
+      return;
+    }
+
+    if (hasSameOriginRequestHeaders(req)) {
+      next();
+      return;
+    }
+
+    sendCrossOriginRejected(res);
+  }
+
+  function requireSameOriginSocketRequest(req, res, next) {
+    if (isSameOriginSocketRequest(req)) {
+      next();
+      return;
+    }
+
+    sendCrossOriginRejected(res);
+  }
+
+  function isSameOriginSocketRequest(req) {
+    return hasSameOriginRequestHeaders(req, { allowMissingHeaders: true });
+  }
+
   async function requestInternalBackend(req, pathName, options = {}) {
-    return backendHttp.request({
+    const requestOptions = {
       url: `/internal-api${pathName}`,
       method: options.method || req.method,
-      ...(Object.prototype.hasOwnProperty.call(options, 'data') ? { data: options.data } : {}),
-      ...(Object.prototype.hasOwnProperty.call(options, 'params') ? { params: options.params } : {}),
       headers: {
         ...buildInternalHeaders(req),
         ...(options.backendSessionCookie ? { Cookie: options.backendSessionCookie } : {}),
       },
-    });
+    };
+
+    if (Object.prototype.hasOwnProperty.call(options, 'data')) {
+      requestOptions.data = options.data;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, 'params')) {
+      requestOptions.params = options.params;
+    }
+
+    return backendHttp.request(requestOptions);
   }
 
   function sendBackendResponse(res, response) {
@@ -211,12 +259,7 @@ function createApp(options = {}) {
   }
 
   function handleProxyError(error, req, res) {
-    if (typeof res?.setHeader !== 'function' || typeof res?.end !== 'function') {
-      res?.destroy?.();
-      return;
-    }
-
-    if (!res || res.headersSent) {
+    if (!res || res.headersSent || typeof res.setHeader !== 'function' || typeof res.end !== 'function') {
       res?.destroy?.();
       return;
     }
@@ -337,19 +380,6 @@ function createApp(options = {}) {
     serveSpaIndex(res);
   });
 
-  app.use(express.static(frontendDistDir, {
-    index: false,
-    setHeaders: (res, filePath) => {
-      const normalizedPath = String(filePath || '').split(path.sep).join('/');
-      if (normalizedPath.includes('/assets/')) {
-        res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
-        return;
-      }
-
-      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
-    },
-  }));
-
   app.use((req, res, next) => {
     if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
       next();
@@ -443,7 +473,20 @@ function createApp(options = {}) {
   });
 
   app.use('/api', requireBackendSession, requireSameOriginUnsafeRequest, appApiProxy);
-  app.use('/socket.io', requireBackendSession, socketProxy);
+  app.use('/socket.io', requireBackendSession, requireSameOriginSocketRequest, socketProxy);
+
+  app.use(express.static(frontendDistDir, {
+    index: false,
+    setHeaders: (res, filePath) => {
+      const normalizedPath = String(filePath || '').split(path.sep).join('/');
+      if (normalizedPath.includes('/assets/')) {
+        res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        return;
+      }
+
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    },
+  }));
 
   app.get(/.*/, (req, res) => {
     serveSpaIndex(res);
@@ -473,12 +516,13 @@ function createApp(options = {}) {
     sessionDb,
     sessionSecret: getBffSessionSecret(),
     sessionStore,
+    isSameOriginSocketRequest,
     socketProxy,
   };
 }
 
 function createServer(options = {}) {
-  const { app, sessionDb, sessionSecret, sessionStore, socketProxy } = createApp(options);
+  const { app, isSameOriginSocketRequest, sessionDb, sessionSecret, sessionStore, socketProxy } = createApp(options);
   const server = http.createServer(app);
   let closedResources = false;
 
@@ -494,6 +538,12 @@ function createServer(options = {}) {
 
   server.on('upgrade', (req, socket, head) => {
     if (!req.url?.startsWith('/socket.io')) {
+      socket.destroy();
+      return;
+    }
+
+    if (!isSameOriginSocketRequest(req)) {
+      socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
       socket.destroy();
       return;
     }
