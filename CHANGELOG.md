@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.5.3
+
 ## 3.5.2
 
 - aligned thematic summaries with the podcast morning and evening schedule, stopped generating unused thematic summary titles, and replaced exact summary time ranges with simple slot labels
