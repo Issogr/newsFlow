@@ -401,28 +401,22 @@ describe('bff server', () => {
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-admin-id');
   });
 
-  test('rejects unsafe authenticated API proxy requests without same-origin headers', async () => {
+  test.each([
+    { name: 'without same-origin headers', headers: {} },
+    { name: 'from another origin', headers: { Origin: 'https://evil.example' } },
+  ])('rejects unsafe authenticated API proxy requests $name', async ({ headers }) => {
     const { cookie: adminBffSessionCookie } = await login(app, { username: 'admin' });
 
     const response = await request(app)
       .delete('/api/admin/users/user-1')
       .set('Cookie', adminBffSessionCookie)
+      .set(headers)
       .expect(403);
 
     expect(response.body.error).toEqual({
       message: 'Cross-origin request rejected.',
       code: 'CSRF_ORIGIN_MISMATCH',
     });
-  });
-
-  test('rejects unsafe authenticated API proxy requests from another origin', async () => {
-    const { cookie: adminBffSessionCookie } = await login(app, { username: 'admin' });
-
-    await request(app)
-      .delete('/api/admin/users/user-1')
-      .set('Cookie', adminBffSessionCookie)
-      .set('Origin', 'https://evil.example')
-      .expect(403);
   });
 
   test('does not let static files shadow protected API routes', async () => {
