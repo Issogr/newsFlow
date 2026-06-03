@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.5.6
+
 ## 3.5.5
 
 - keep the podcast panel to one morning and one evening entry, showing failed generations in the affected slot instead of backfilling duplicates
