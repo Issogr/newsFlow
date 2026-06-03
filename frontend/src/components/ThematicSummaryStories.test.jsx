@@ -38,6 +38,33 @@ function t(key, params = {}) {
   return typeof entry === 'function' ? entry(params) : entry;
 }
 
+function createPodcastSummary(overrides = {}) {
+  return {
+    id: 'podcast-1',
+    type: 'podcast',
+    topicKey: 'podcast',
+    topicLabel: 'Podcast',
+    periodStart: '2026-05-21T05:00:00.000Z',
+    periodEnd: '2026-05-21T11:00:00.000Z',
+    articleCount: 2,
+    titleByLocale: { en: 'Morning podcast', it: 'Podcast del mattino' },
+    summaryTextByLocale: { en: 'English script', it: 'Testo podcast italiano' },
+    ...overrides
+  };
+}
+
+function renderPodcastPanel(summaryOverrides = {}, propsOverrides = {}) {
+  return render(
+    <ThematicSummaryPanel
+      summary={createPodcastSummary(summaryOverrides)}
+      locale="en"
+      t={t}
+      onClose={vi.fn()}
+      {...propsOverrides}
+    />
+  );
+}
+
 describe('thematic summary podcast UI', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
@@ -54,8 +81,7 @@ describe('thematic summary podcast UI', () => {
   test('places the podcast story first and opens the selected item', () => {
     const onOpenSummary = vi.fn();
     const podcast = {
-      id: 'podcast-1',
-      type: 'podcast',
+      ...createPodcastSummary(),
       topicKey: 'podcast',
       topicLabel: 'Podcast',
       titleByLocale: { en: 'News podcast' },
@@ -93,33 +119,17 @@ describe('thematic summary podcast UI', () => {
   });
 
   test('renders custom podcast audio controls without script text and starts playback', async () => {
-    render(
-      <ThematicSummaryPanel
-        summary={{
-          id: 'podcast-1',
-          type: 'podcast',
-          topicKey: 'podcast',
-          topicLabel: 'Podcast',
-          periodStart: '2026-05-21T05:00:00.000Z',
-          periodEnd: '2026-05-21T11:00:00.000Z',
-          articleCount: 2,
-          titleByLocale: { en: 'Morning podcast', it: 'Podcast del mattino' },
-          summaryTextByLocale: { en: 'English script', it: 'Testo podcast italiano' },
-          generatedAt: '2026-05-21T06:15:00.000Z',
-          audioByLocale: {
-            en: {
-              audioStatus: 'completed',
-              audioUrl: '/api/podcast-summary/podcast-1/audio?locale=en'
-            }
-          },
+    renderPodcastPanel({
+      generatedAt: '2026-05-21T06:15:00.000Z',
+      audioByLocale: {
+        en: {
           audioStatus: 'completed',
           audioUrl: '/api/podcast-summary/podcast-1/audio?locale=en'
-        }}
-        locale="en"
-        t={t}
-        onClose={vi.fn()}
-      />
-    );
+        }
+      },
+      audioStatus: 'completed',
+      audioUrl: '/api/podcast-summary/podcast-1/audio?locale=en'
+    });
 
     expect(screen.getByText('Podcast briefing')).toBeInTheDocument();
     expect(screen.getByText('Morning podcast')).toBeInTheDocument();
@@ -146,30 +156,14 @@ describe('thematic summary podcast UI', () => {
   });
 
   test('shows available podcast audio language when current locale audio is missing', () => {
-    render(
-      <ThematicSummaryPanel
-        summary={{
-          id: 'podcast-1',
-          type: 'podcast',
-          topicKey: 'podcast',
-          topicLabel: 'Podcast',
-          periodStart: '2026-05-21T05:00:00.000Z',
-          periodEnd: '2026-05-21T11:00:00.000Z',
-          articleCount: 2,
-          titleByLocale: { en: 'Morning podcast', it: 'Podcast del mattino' },
-          summaryTextByLocale: { en: 'English script', it: 'Testo podcast italiano' },
-          audioByLocale: {
-            en: {
-              audioStatus: 'completed',
-              audioUrl: '/api/podcast-summary/podcast-1/audio?locale=en'
-            }
-          }
-        }}
-        locale="it"
-        t={t}
-        onClose={vi.fn()}
-      />
-    );
+    renderPodcastPanel({
+      audioByLocale: {
+        en: {
+          audioStatus: 'completed',
+          audioUrl: '/api/podcast-summary/podcast-1/audio?locale=en'
+        }
+      }
+    }, { locale: 'it' });
 
     expect(screen.getByText('Podcast audio is available in inglese.')).toBeInTheDocument();
     expect(screen.getByText('Audio in inglese')).toBeInTheDocument();
@@ -178,26 +172,10 @@ describe('thematic summary podcast UI', () => {
   });
 
   test('shows podcast audio generation feedback while audio is pending', () => {
-    render(
-      <ThematicSummaryPanel
-        summary={{
-          id: 'podcast-1',
-          type: 'podcast',
-          topicKey: 'podcast',
-          topicLabel: 'Podcast',
-          periodStart: '2026-05-21T05:00:00.000Z',
-          periodEnd: '2026-05-21T11:00:00.000Z',
-          articleCount: 2,
-          titleByLocale: { en: 'Morning podcast', it: 'Podcast del mattino' },
-          summaryTextByLocale: { en: 'English script', it: 'Testo podcast italiano' },
-          generatedAt: '2026-05-21T06:15:00.000Z',
-          audioStatus: 'generating'
-        }}
-        locale="en"
-        t={t}
-        onClose={vi.fn()}
-      />
-    );
+    renderPodcastPanel({
+      generatedAt: '2026-05-21T06:15:00.000Z',
+      audioStatus: 'generating'
+    });
 
     expect(screen.getByText('Audio generation is in progress. This panel will update when it is ready.')).toBeInTheDocument();
     expect(screen.getByLabelText(/^Generated /u)).toHaveAttribute('dateTime', '2026-05-21T06:15:00.000Z');
@@ -206,26 +184,10 @@ describe('thematic summary podcast UI', () => {
   });
 
   test('shows the podcast generation date when audio generation failed', () => {
-    render(
-      <ThematicSummaryPanel
-        summary={{
-          id: 'podcast-1',
-          type: 'podcast',
-          topicKey: 'podcast',
-          topicLabel: 'Podcast',
-          periodStart: '2026-05-21T05:00:00.000Z',
-          periodEnd: '2026-05-21T11:00:00.000Z',
-          articleCount: 2,
-          titleByLocale: { en: 'Morning podcast', it: 'Podcast del mattino' },
-          summaryTextByLocale: { en: 'English script', it: 'Testo podcast italiano' },
-          generatedAt: '2026-05-21T06:15:00.000Z',
-          status: 'failed'
-        }}
-        locale="en"
-        t={t}
-        onClose={vi.fn()}
-      />
-    );
+    renderPodcastPanel({
+      generatedAt: '2026-05-21T06:15:00.000Z',
+      status: 'failed'
+    });
 
     expect(screen.getByText('Audio generation failed for this briefing.')).toBeInTheDocument();
     expect(screen.getByLabelText(/^Generated /u)).toHaveAttribute('dateTime', '2026-05-21T06:15:00.000Z');
@@ -233,24 +195,17 @@ describe('thematic summary podcast UI', () => {
   });
 
   test('shows morning and evening podcast players together', () => {
-    const morningPodcast = {
+    const morningPodcast = createPodcastSummary({
       id: 'podcast-morning',
-      type: 'podcast',
-      topicKey: 'podcast',
-      topicLabel: 'Podcast',
       periodStart: '2026-05-20T17:00:00.000Z',
       periodEnd: '2026-05-21T05:00:00.000Z',
-      articleCount: 2,
       titleByLocale: { en: 'Morning podcast' },
       summaryTextByLocale: { en: 'Morning script' },
       audioStatus: 'completed',
       audioUrl: '/api/podcast-summary/podcast-morning/audio'
-    };
-    const eveningPodcast = {
+    });
+    const eveningPodcast = createPodcastSummary({
       id: 'podcast-evening',
-      type: 'podcast',
-      topicKey: 'podcast',
-      topicLabel: 'Podcast',
       periodStart: '2026-05-21T05:00:00.000Z',
       periodEnd: '2026-05-21T17:00:00.000Z',
       articleCount: 3,
@@ -258,7 +213,7 @@ describe('thematic summary podcast UI', () => {
       summaryTextByLocale: { en: 'Evening script' },
       audioStatus: 'completed',
       audioUrl: '/api/podcast-summary/podcast-evening/audio'
-    };
+    });
 
     render(
       <ThematicSummaryPanel

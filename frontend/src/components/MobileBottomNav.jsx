@@ -10,43 +10,13 @@ import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import useFilterSurfaceState from '../hooks/useFilterSurfaceState';
 import { FilterSearchInput } from './FilterSurfaceControls';
 import FilterBubbles from './FilterBubbles';
+import TopNavActionButton from './TopNavActionButton';
 
 const BUBBLE_MAX_HEIGHT = 'min(50vh, 24rem)';
 const MOBILE_BUBBLE_CLASS_NAME = 'absolute bottom-full left-2 right-2 z-[60] mb-3 overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur-md';
 
-function MobileNavButton({
-  active,
-  activeClassName,
-  ariaExpanded,
-  badge = null,
-  badgeClassName,
-  icon: Icon,
-  label,
-  onClick,
-  onPointerDown,
-}) {
-  return (
-    <button
-      type="button"
-      onPointerDown={onPointerDown}
-      onClick={onClick}
-      aria-expanded={ariaExpanded}
-      className={`relative flex h-full flex-col items-center justify-center gap-0.5 px-1 transition-colors ${
-        active ? activeClassName : 'text-slate-500 hover:text-slate-700'
-      }`}
-    >
-      <div className="relative flex h-5 w-5 items-center justify-center">
-        <Icon className="h-5 w-5" />
-        {badge !== null && badge !== undefined && (
-          <span className={`absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[8px] font-bold ${badgeClassName}`}>
-            {badge}
-          </span>
-        )}
-      </div>
-      <span className="h-3.5 text-center text-[10px] font-medium leading-none">{label}</span>
-    </button>
-  );
-}
+const MOBILE_NAV_BUTTON_SIZE_CLASS_NAME = 'h-full min-w-0 rounded-none px-1';
+const MOBILE_NAV_BADGE_SIZE_CLASS_NAME = 'h-3.5 w-3.5 px-0';
 
 const MobileBottomNav = ({
   visibleSources,
@@ -143,57 +113,67 @@ const MobileBottomNav = ({
                 : 'translate-x-0 scale-100 opacity-100 blur-0'
             }`}
           >
-            <MobileNavButton
+            <TopNavActionButton
               icon={Rss}
               label={t('sources')}
               onPointerDown={(event) => handleBubbleButtonPress(event, 'sources')}
               onClick={(event) => handleBubbleButtonClick(event, 'sources')}
-              ariaExpanded={openBubble === 'sources'}
+              aria-expanded={openBubble === 'sources'}
               active={openBubble === 'sources'}
               activeClassName="text-sky-600"
+              sizeClassName={MOBILE_NAV_BUTTON_SIZE_CLASS_NAME}
               badge={sourceCount > 0 ? sourceCount : null}
+              badgeSizeClassName={MOBILE_NAV_BADGE_SIZE_CLASS_NAME}
               badgeClassName="bg-sky-600 text-white"
             />
 
-            <MobileNavButton
+            <TopNavActionButton
               icon={Tags}
               label={t('topics')}
               onPointerDown={(event) => handleBubbleButtonPress(event, 'topics')}
               onClick={(event) => handleBubbleButtonClick(event, 'topics')}
-              ariaExpanded={openBubble === 'topics'}
+              aria-expanded={openBubble === 'topics'}
               active={openBubble === 'topics'}
               activeClassName="text-emerald-600"
+              sizeClassName={MOBILE_NAV_BUTTON_SIZE_CLASS_NAME}
               badge={topicCount > 0 ? topicCount : null}
+              badgeSizeClassName={MOBILE_NAV_BADGE_SIZE_CLASS_NAME}
               badgeClassName="bg-emerald-600 text-white"
             />
 
-            <MobileNavButton
+            <TopNavActionButton
               icon={Clock3}
               label={t('latestHours', { hours: recentHours })}
               onClick={onToggleRecent}
               active={showRecentOnly}
               activeClassName="text-amber-600"
+              sizeClassName={MOBILE_NAV_BUTTON_SIZE_CLASS_NAME}
               badge={timeCount > 0 ? '' : null}
+              badgeSizeClassName={MOBILE_NAV_BADGE_SIZE_CLASS_NAME}
               badgeClassName="bg-amber-500 text-white"
             />
 
-            <MobileNavButton
+            <TopNavActionButton
               icon={Bookmark}
               label={t('readLaterShort')}
               onClick={() => onViewChange?.(readLaterActive ? 'news' : 'readLater')}
               active={readLaterActive}
               activeClassName="text-amber-600"
+              sizeClassName={MOBILE_NAV_BUTTON_SIZE_CLASS_NAME}
               badge={readLaterActive ? '' : null}
+              badgeSizeClassName={MOBILE_NAV_BADGE_SIZE_CLASS_NAME}
               badgeClassName="bg-amber-500 text-white"
             />
 
-            <MobileNavButton
+            <TopNavActionButton
               icon={Search}
               label={t('searchLabel')}
               onClick={handleEnterSearch}
               active={searchCount > 0}
               activeClassName="text-slate-900"
+              sizeClassName={MOBILE_NAV_BUTTON_SIZE_CLASS_NAME}
               badge={searchCount > 0 ? '' : null}
+              badgeSizeClassName={MOBILE_NAV_BADGE_SIZE_CLASS_NAME}
               badgeClassName="bg-slate-800 text-white"
             />
           </div>

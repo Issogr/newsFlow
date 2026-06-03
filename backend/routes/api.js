@@ -456,7 +456,7 @@ router.get('/admin/articles/:articleId/topics/debug', [
   res.json(report);
 }));
 
-router.get('/news', [requireAuthenticatedUser, sanitizeQuery('search'), sanitizeQuery('beforePubDate'), sanitizeQuery('beforeId')], asyncHandler(async (req, res) => {
+router.get('/news', [requireAuthenticatedUser, sanitizeQuery(['search', 'beforePubDate', 'beforeId'])], asyncHandler(async (req, res) => {
   const filters = parseNewsQuery(req.query);
   const result = await newsService.getNewsFeed(filters, getUserContext(req));
   res.json(result);

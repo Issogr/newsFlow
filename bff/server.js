@@ -32,7 +32,8 @@ const {
   buildTrustedForwardedHeaders,
   clearForwardedHeaders,
   copyBackendResponseHeaders,
-  extractDeletedAdminUserId
+  extractDeletedAdminUserId,
+  getRequestHeader
 } = require('./lib/proxyHelpers');
 
 const DEFAULT_FRONTEND_DIST_DIR = path.join(__dirname, 'public');
@@ -144,15 +145,6 @@ function createApp(options = {}) {
         code: 'UNAUTHORIZED',
       },
     });
-  }
-
-  function getRequestHeader(req, name) {
-    if (typeof req.get === 'function') {
-      return req.get(name);
-    }
-
-    const value = req.headers?.[String(name || '').toLowerCase()];
-    return Array.isArray(value) ? value[0] : value;
   }
 
   function getExpectedRequestOrigin(req) {

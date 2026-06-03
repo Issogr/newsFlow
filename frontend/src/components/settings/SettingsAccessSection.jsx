@@ -1,6 +1,31 @@
 import { Download, ExternalLink, KeyRound, ShieldCheck, Upload } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 
+const ExternalPillLink = ({ href, children, className = 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100' }) => (
+  <a
+    href={href}
+    target="_blank"
+    rel="noopener noreferrer"
+    className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${className}`}
+  >
+    <span>{children}</span>
+    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+  </a>
+);
+
+const SettingsActionButton = ({ icon: Icon, iconClassName, children, ...buttonProps }) => (
+  <button
+    type="button"
+    className="flex items-center gap-3 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-60"
+    {...buttonProps}
+  >
+    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm">
+      <Icon className={`h-4 w-4 ${iconClassName}`} />
+    </span>
+    <span>{children}</span>
+  </button>
+);
+
 const SettingsAccessSection = ({
   t,
   saving,
@@ -32,15 +57,9 @@ const SettingsAccessSection = ({
               </p>
               <p className="max-w-2xl text-sm text-slate-600">{t('apiTokenHelp')}</p>
               <div className="flex flex-wrap gap-2">
-                <a
-                  href="/api/docs"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex w-fit items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 transition-colors hover:bg-sky-100"
-                >
-                  <span>{t('apiTokenDocsLink')}</span>
-                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                </a>
+                <ExternalPillLink href="/api/docs" className="border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100">
+                  {t('apiTokenDocsLink')}
+                </ExternalPillLink>
                 <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600">
                   {t('apiTokenExpiryHelp', { days: settingsLimits.apiTokenTtlDays || 30 })}
                 </span>
@@ -109,51 +128,29 @@ const SettingsAccessSection = ({
             </p>
             <p className="max-w-2xl text-sm text-slate-600">{t('legalDocsHelp')}</p>
             <div className="flex flex-wrap gap-2">
-              <a
-                href="/privacy-policy"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-              >
-                <span>{t('privacyPolicyLink')}</span>
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-              </a>
-              <a
-                href="/cookie-policy"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-              >
-                <span>{t('cookiePolicyLink')}</span>
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-              </a>
+              <ExternalPillLink href="/privacy-policy">{t('privacyPolicyLink')}</ExternalPillLink>
+              <ExternalPillLink href="/cookie-policy">{t('cookiePolicyLink')}</ExternalPillLink>
             </div>
           </div>
         </div>
 
-        <button
-          type="button"
+        <SettingsActionButton
           onClick={onExport}
           disabled={saving}
-          className="flex items-center gap-3 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-60"
+          icon={Download}
+          iconClassName="text-sky-700"
         >
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm">
-            <Download className="h-4 w-4 text-sky-700" />
-          </span>
-          <span>{t('exportSettings')}</span>
-        </button>
+          {t('exportSettings')}
+        </SettingsActionButton>
 
-        <button
-          type="button"
+        <SettingsActionButton
           onClick={onImportClick}
           disabled={saving}
-          className="flex items-center gap-3 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-60"
+          icon={Upload}
+          iconClassName="text-emerald-700"
         >
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm">
-            <Upload className="h-4 w-4 text-emerald-700" />
-          </span>
-          <span>{t('importSettings')}</span>
-        </button>
+          {t('importSettings')}
+        </SettingsActionButton>
       </div>
 
       <input

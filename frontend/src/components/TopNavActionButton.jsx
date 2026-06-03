@@ -6,8 +6,10 @@ const TopNavActionButton = ({
   inactiveClassName = 'text-slate-500 hover:text-slate-700',
   disabledClassName = 'cursor-not-allowed text-slate-300',
   minWidthClassName = 'min-w-14',
+  sizeClassName = `h-12 ${minWidthClassName} rounded-2xl px-2`,
   badge = null,
   badgeClassName = 'bg-slate-800 text-white',
+  badgeSizeClassName = 'h-3.5 min-w-3.5 px-1',
   iconClassName = '',
   labelClassName = '',
   className = '',
@@ -25,13 +27,13 @@ const TopNavActionButton = ({
     <button
       type={type}
       disabled={disabled}
-      className={`relative flex h-12 ${minWidthClassName} flex-col items-center justify-center gap-0.5 rounded-2xl px-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 ${stateClassName} ${className}`}
+      className={`relative flex ${sizeClassName} flex-col items-center justify-center gap-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 ${stateClassName} ${className}`}
       {...buttonProps}
     >
       <span className="relative flex h-5 w-5 items-center justify-center">
         <Icon className={`h-5 w-5 ${iconClassName}`} aria-hidden="true" />
         {badge !== null && badge !== undefined && (
-          <span className={`absolute -right-1.5 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[8px] font-bold ${badgeClassName}`}>
+          <span className={`absolute -right-1.5 -top-1 flex ${badgeSizeClassName} items-center justify-center rounded-full text-[8px] font-bold ${badgeClassName}`}>
             {badge}
           </span>
         )}

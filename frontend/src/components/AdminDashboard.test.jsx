@@ -15,6 +15,57 @@ vi.mock('../services/api', () => ({
 describe('AdminDashboard', () => {
   const t = createTranslator('en');
   const currentUser = { user: { username: 'admin', isAdmin: true }, settings: { themeMode: 'light' } };
+  const defaultDate = '2026-03-27T10:00:00.000Z';
+  const defaultLoginDate = '2026-03-27T11:00:00.000Z';
+  const defaultActivityDate = '2026-03-27T11:02:00.000Z';
+
+  function adminSummary(overrides = {}) {
+    return {
+      totalUsers: 1,
+      onlineUsers: 0,
+      activeUsers: 0,
+      anonymousPublicApiRequests: 0,
+      onlineWindowMinutes: 5,
+      ...overrides
+    };
+  }
+
+  function adminUser(overrides = {}) {
+    return {
+      id: 'admin-id',
+      username: 'admin',
+      isAdmin: true,
+      isOnline: false,
+      passwordConfigured: true,
+      createdAt: defaultDate,
+      lastLoginAt: defaultLoginDate,
+      lastActivityAt: defaultActivityDate,
+      ...overrides
+    };
+  }
+
+  function regularUser(overrides = {}) {
+    return {
+      id: 'user-1',
+      username: 'alice',
+      isAdmin: false,
+      isOnline: false,
+      passwordConfigured: true,
+      publicApiRequestCount: 0,
+      publicApiLastUsedAt: null,
+      createdAt: defaultDate,
+      lastLoginAt: defaultLoginDate,
+      lastActivityAt: defaultActivityDate,
+      ...overrides
+    };
+  }
+
+  function usersResponse(users = [], summaryOverrides = {}) {
+    return {
+      summary: adminSummary(summaryOverrides),
+      users
+    };
+  }
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -40,10 +91,7 @@ describe('AdminDashboard', () => {
       expect(fetchAdminUsers).toHaveBeenCalledTimes(1);
 
       await act(async () => {
-        resolveUsers({
-          summary: { totalUsers: 1, onlineUsers: 0, activeUsers: 0, anonymousPublicApiRequests: 0, onlineWindowMinutes: 5 },
-          users: []
-        });
+        resolveUsers(usersResponse());
       });
 
       act(() => {
@@ -57,39 +105,19 @@ describe('AdminDashboard', () => {
   });
 
   test('shows the top bar, summary cards, and user table', async () => {
-    fetchAdminUsers.mockResolvedValue({
-      summary: {
-        totalUsers: 3,
-        onlineUsers: 1,
-        activeUsers: 2,
-        anonymousPublicApiRequests: 9,
-        onlineWindowMinutes: 5
-      },
-      users: [
-        {
-          id: 'admin-id',
-          username: 'admin',
-          isAdmin: true,
-          isOnline: true,
-          passwordConfigured: true,
-          createdAt: '2026-03-27T10:00:00.000Z',
-          lastLoginAt: '2026-03-27T11:00:00.000Z',
-          lastActivityAt: '2026-03-27T11:02:00.000Z'
-        },
-        {
-          id: 'user-1',
-          username: 'alice',
-          isAdmin: false,
-          isOnline: true,
-          passwordConfigured: true,
-          publicApiRequestCount: 3,
-          publicApiLastUsedAt: '2026-03-27T11:05:00.000Z',
-          createdAt: '2026-03-27T10:00:00.000Z',
-          lastLoginAt: '2026-03-27T11:00:00.000Z',
-          lastActivityAt: '2026-03-27T11:02:00.000Z'
-        }
-      ]
-    });
+    fetchAdminUsers.mockResolvedValue(usersResponse([
+      adminUser({ isOnline: true }),
+      regularUser({
+        isOnline: true,
+        publicApiRequestCount: 3,
+        publicApiLastUsedAt: '2026-03-27T11:05:00.000Z'
+      })
+    ], {
+      totalUsers: 3,
+      onlineUsers: 1,
+      activeUsers: 2,
+      anonymousPublicApiRequests: 9
+    }));
 
     render(<AdminDashboard t={t} currentUser={currentUser} onLogout={jest.fn()} onUserUpdate={jest.fn()} />);
 
@@ -110,94 +138,11 @@ describe('AdminDashboard', () => {
   });
 
   test('creates a password setup link for a user and allows deleting a user', async () => {
+    const adminAndAliceResponse = usersResponse([adminUser(), regularUser()], { totalUsers: 2, activeUsers: 1 });
     fetchAdminUsers
-      .mockResolvedValueOnce({
-        summary: {
-          totalUsers: 2,
-          onlineUsers: 0,
-          activeUsers: 1,
-          anonymousPublicApiRequests: 0,
-          onlineWindowMinutes: 5
-        },
-        users: [
-          {
-            id: 'admin-id',
-            username: 'admin',
-            isAdmin: true,
-            isOnline: false,
-            passwordConfigured: true,
-            createdAt: '2026-03-27T10:00:00.000Z',
-            lastLoginAt: '2026-03-27T11:00:00.000Z',
-            lastActivityAt: '2026-03-27T11:02:00.000Z'
-          },
-          {
-            id: 'user-1',
-            username: 'alice',
-            isAdmin: false,
-            isOnline: false,
-            passwordConfigured: true,
-            publicApiRequestCount: 0,
-            publicApiLastUsedAt: null,
-            createdAt: '2026-03-27T10:00:00.000Z',
-            lastLoginAt: '2026-03-27T11:00:00.000Z',
-            lastActivityAt: '2026-03-27T11:02:00.000Z'
-          }
-        ]
-      })
-      .mockResolvedValueOnce({
-        summary: {
-          totalUsers: 2,
-          onlineUsers: 0,
-          activeUsers: 1,
-          anonymousPublicApiRequests: 0,
-          onlineWindowMinutes: 5
-        },
-        users: [
-          {
-            id: 'admin-id',
-            username: 'admin',
-            isAdmin: true,
-            isOnline: false,
-            passwordConfigured: true,
-            createdAt: '2026-03-27T10:00:00.000Z',
-            lastLoginAt: '2026-03-27T11:00:00.000Z',
-            lastActivityAt: '2026-03-27T11:02:00.000Z'
-          },
-          {
-            id: 'user-1',
-            username: 'alice',
-            isAdmin: false,
-            isOnline: false,
-            passwordConfigured: true,
-            publicApiRequestCount: 0,
-            publicApiLastUsedAt: null,
-            createdAt: '2026-03-27T10:00:00.000Z',
-            lastLoginAt: '2026-03-27T11:00:00.000Z',
-            lastActivityAt: '2026-03-27T11:02:00.000Z'
-          }
-        ]
-      })
-      .mockResolvedValueOnce({
-        summary: {
-          totalUsers: 1,
-          onlineUsers: 0,
-          activeUsers: 1,
-          anonymousPublicApiRequests: 0,
-          onlineWindowMinutes: 5
-        },
-        users: [
-          {
-            id: 'admin-id',
-            username: 'admin',
-            isAdmin: true,
-            isOnline: false,
-            passwordConfigured: true,
-            createdAt: '2026-03-27T10:00:00.000Z',
-            lastLoginAt: '2026-03-27T11:00:00.000Z',
-            lastActivityAt: '2026-03-27T11:02:00.000Z'
-          }
-        ]
-      });
+      .mockResolvedValueOnce(adminAndAliceResponse)
+      .mockResolvedValueOnce(adminAndAliceResponse)
+      .mockResolvedValueOnce(usersResponse([adminUser()], { activeUsers: 1 }));
 
     createAdminPasswordSetupLink.mockResolvedValue({
       setupLink: 'http://localhost/password/setup#token=abc',
@@ -227,39 +172,7 @@ describe('AdminDashboard', () => {
 
   test('removes a deleted user locally even when the follow-up reload fails', async () => {
     fetchAdminUsers
-      .mockResolvedValueOnce({
-        summary: {
-          totalUsers: 2,
-          onlineUsers: 0,
-          activeUsers: 1,
-          anonymousPublicApiRequests: 0,
-          onlineWindowMinutes: 5
-        },
-        users: [
-          {
-            id: 'admin-id',
-            username: 'admin',
-            isAdmin: true,
-            isOnline: false,
-            passwordConfigured: true,
-            createdAt: '2026-03-27T10:00:00.000Z',
-            lastLoginAt: '2026-03-27T11:00:00.000Z',
-            lastActivityAt: '2026-03-27T11:02:00.000Z'
-          },
-          {
-            id: 'user-1',
-            username: 'alice',
-            isAdmin: false,
-            isOnline: false,
-            passwordConfigured: true,
-            publicApiRequestCount: 0,
-            publicApiLastUsedAt: null,
-            createdAt: '2026-03-27T10:00:00.000Z',
-            lastLoginAt: '2026-03-27T11:00:00.000Z',
-            lastActivityAt: '2026-03-27T11:02:00.000Z'
-          }
-        ]
-      })
+      .mockResolvedValueOnce(usersResponse([adminUser(), regularUser()], { totalUsers: 2, activeUsers: 1 }))
       .mockRejectedValueOnce(new Error('Reload failed'));
     deleteAdminUser.mockResolvedValue({ success: true });
 
@@ -276,27 +189,7 @@ describe('AdminDashboard', () => {
   });
 
   test('toggles the admin theme with the header button', async () => {
-    fetchAdminUsers.mockResolvedValue({
-      summary: {
-        totalUsers: 1,
-        onlineUsers: 0,
-        activeUsers: 0,
-        anonymousPublicApiRequests: 0,
-        onlineWindowMinutes: 5
-      },
-      users: [
-        {
-          id: 'admin-id',
-          username: 'admin',
-          isAdmin: true,
-          isOnline: false,
-          passwordConfigured: true,
-          createdAt: '2026-03-27T10:00:00.000Z',
-          lastLoginAt: '2026-03-27T11:00:00.000Z',
-          lastActivityAt: '2026-03-27T11:02:00.000Z'
-        }
-      ]
-    });
+    fetchAdminUsers.mockResolvedValue(usersResponse([adminUser()]));
     updateUserSettings.mockResolvedValue({
       settings: {
         ...currentUser.settings,

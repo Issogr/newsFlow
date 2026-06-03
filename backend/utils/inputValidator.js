@@ -26,38 +26,28 @@ function sanitizeHtml(input) {
     .trim();
 }
 
-function validateParam(paramName, errorMessage = 'Parameter missing or invalid') {
-  return (req, res, next) => {
-    if (!req.params[paramName]) {
-      return next(createError(400, errorMessage, 'MISSING_PARAM'));
-    }
-    return next();
-  };
-}
+function sanitizeQuery(paramNames) {
+  const names = Array.isArray(paramNames) ? paramNames : [paramNames];
 
-function sanitizeQuery(paramName) {
   return (req, res, next) => {
-    if (req.query[paramName]) {
-      req.query[paramName] = sanitizeString(req.query[paramName]);
-    }
-    return next();
-  };
-}
-
-function sanitizeParam(paramName) {
-  return (req, res, next) => {
-    if (req.params[paramName]) {
-      req.params[paramName] = sanitizeString(req.params[paramName]);
-    }
+    names.forEach((paramName) => {
+      if (req.query[paramName]) {
+        req.query[paramName] = sanitizeString(req.query[paramName]);
+      }
+    });
     return next();
   };
 }
 
 function validateAndSanitizeParam(paramName, errorMessage = 'Parameter missing or invalid') {
-  return [
-    validateParam(paramName, errorMessage),
-    sanitizeParam(paramName)
-  ];
+  return [(req, res, next) => {
+    if (!req.params[paramName]) {
+      return next(createError(400, errorMessage, 'MISSING_PARAM'));
+    }
+
+    req.params[paramName] = sanitizeString(req.params[paramName]);
+    return next();
+  }];
 }
 
 function sanitizeBody(fieldNames = []) {
