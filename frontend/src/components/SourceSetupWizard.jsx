@@ -6,12 +6,14 @@ import { updateUserSettings } from '../services/api';
 
 const hasSelectableSubSources = (source) => Array.isArray(source.subSources) && source.subSources.length > 1;
 
+const getSourceSelectionIds = (source) => (
+  hasSelectableSubSources(source)
+    ? source.subSources.map((subSource) => subSource.id)
+    : [source.id]
+);
+
 const getSelectableIds = (sources = []) => {
-  return sources.flatMap((source) => (
-    hasSelectableSubSources(source)
-      ? source.subSources.map((subSource) => subSource.id)
-      : [source.id]
-  ));
+  return sources.flatMap(getSourceSelectionIds);
 };
 
 const getInitialSelectedIds = (sources = [], currentSettings = {}) => {
@@ -28,12 +30,11 @@ const getInitialSelectedIds = (sources = [], currentSettings = {}) => {
     }
 
     if (hasSelectableSubSources(source)) {
-      return source.subSources
-        .map((subSource) => subSource.id)
+      return getSourceSelectionIds(source)
         .filter((subSourceId) => !excludedSubSourceIds.includes(subSourceId));
     }
 
-    return [source.id];
+    return getSourceSelectionIds(source);
   });
 };
 
@@ -114,9 +115,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
   };
 
   const setSourceSelection = (source, selected) => {
-    const sourceSelectionIds = hasSelectableSubSources(source)
-      ? source.subSources.map((subSource) => subSource.id)
-      : [source.id];
+    const sourceSelectionIds = getSourceSelectionIds(source);
     const sourceSelectionIdSet = new Set(sourceSelectionIds);
 
     setSelectedIds((current) => {
@@ -148,17 +147,15 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
 
       sources.forEach((source) => {
         if (hasSelectableSubSources(source)) {
-          const selectedSubSourceIds = source.subSources
-            .map((subSource) => subSource.id)
-            .filter((subSourceId) => selectedIdValues.has(subSourceId));
+          const sourceSelectionIds = getSourceSelectionIds(source);
+          const selectedSubSourceIds = sourceSelectionIds.filter((subSourceId) => selectedIdValues.has(subSourceId));
 
           if (selectedSubSourceIds.length === 0) {
             excludedSourceIds.push(source.id);
             return;
           }
 
-          source.subSources
-            .map((subSource) => subSource.id)
+          sourceSelectionIds
             .filter((subSourceId) => !selectedIdValues.has(subSourceId))
             .forEach((subSourceId) => excludedSubSourceIds.push(subSourceId));
           return;
@@ -227,7 +224,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                 <div className="grid gap-3 sm:grid-cols-2">
                   {languageSources.map((source) => {
               if (hasSelectableSubSources(source)) {
-                const sourceSelectionIds = source.subSources.map((subSource) => subSource.id);
+                const sourceSelectionIds = getSourceSelectionIds(source);
                 const selectedSubSourceCount = sourceSelectionIds.filter((subSourceId) => selectedIdSet.has(subSourceId)).length;
                 const sourceFullySelected = selectedSubSourceCount === sourceSelectionIds.length;
                 const sourcePartiallySelected = selectedSubSourceCount > 0 && !sourceFullySelected;

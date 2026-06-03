@@ -40,14 +40,14 @@ function sanitizeQuery(paramNames) {
 }
 
 function validateAndSanitizeParam(paramName, errorMessage = 'Parameter missing or invalid') {
-  return [(req, res, next) => {
+  return (req, res, next) => {
     if (!req.params[paramName]) {
       return next(createError(400, errorMessage, 'MISSING_PARAM'));
     }
 
     req.params[paramName] = sanitizeString(req.params[paramName]);
     return next();
-  }];
+  };
 }
 
 function sanitizeBody(fieldNames = []) {

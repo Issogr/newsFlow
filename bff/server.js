@@ -228,7 +228,7 @@ function createApp(options = {}) {
   async function requestInternalBackend(req, pathName, options = {}) {
     const requestOptions = {
       url: `/internal-api${pathName}`,
-      method: options.method || req.method,
+      method: req.method,
       headers: {
         ...buildInternalHeaders(req),
         ...(options.backendSessionCookie ? { Cookie: options.backendSessionCookie } : {}),
@@ -416,7 +416,6 @@ function createApp(options = {}) {
     try {
       const backendSessionCookie = getBackendSessionCookieFromRequest(req);
       const response = await requestInternalBackend(req, '/me', {
-        method: 'GET',
         backendSessionCookie,
       });
 
@@ -440,7 +439,6 @@ function createApp(options = {}) {
     try {
       if (backendSessionCookie) {
         backendResponse = await requestInternalBackend(req, '/auth/logout', {
-          method: 'POST',
           data: {},
           backendSessionCookie,
         });

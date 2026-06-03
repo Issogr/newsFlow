@@ -406,7 +406,7 @@ router.post('/me/sources', requireAuthenticatedUser, asyncHandler(async (req, re
 
 router.patch('/me/sources/:sourceId', [
   requireAuthenticatedUser,
-  ...validateAndSanitizeParam('sourceId', 'Invalid source ID')
+  validateAndSanitizeParam('sourceId', 'Invalid source ID')
 ], asyncHandler(async (req, res) => {
   const source = await userService.updateUserSource(req.user.id, req.params.sourceId, req.body || {});
   refreshUserSourceInBackground(req.user.id, source.id);
@@ -415,7 +415,7 @@ router.patch('/me/sources/:sourceId', [
 
 router.delete('/me/sources/:sourceId', [
   requireAuthenticatedUser,
-  ...validateAndSanitizeParam('sourceId', 'Invalid source ID')
+  validateAndSanitizeParam('sourceId', 'Invalid source ID')
 ], asyncHandler(async (req, res) => {
   userService.removeUserSource(req.user.id, req.params.sourceId);
   res.json({ success: true });
@@ -428,7 +428,7 @@ router.get('/admin/users', [requireAuthenticatedUser, requireAdminUser], asyncHa
 router.post('/admin/users/:userId/password-setup-link', [
   requireAuthenticatedUser,
   requireAdminUser,
-  ...validateAndSanitizeParam('userId', 'Invalid user ID')
+  validateAndSanitizeParam('userId', 'Invalid user ID')
 ], asyncHandler(async (req, res) => {
   const result = userService.createUserPasswordSetupLink(req.user.id, req.params.userId);
   res.json({ success: true, ...result });
@@ -437,7 +437,7 @@ router.post('/admin/users/:userId/password-setup-link', [
 router.delete('/admin/users/:userId', [
   requireAuthenticatedUser,
   requireAdminUser,
-  ...validateAndSanitizeParam('userId', 'Invalid user ID')
+  validateAndSanitizeParam('userId', 'Invalid user ID')
 ], asyncHandler(async (req, res) => {
   const result = userService.deleteUserAsAdmin(req.user.id, req.params.userId);
   res.json(result);
@@ -446,7 +446,7 @@ router.delete('/admin/users/:userId', [
 router.get('/admin/articles/:articleId/topics/debug', [
   requireAuthenticatedUser,
   requireAdminUser,
-  ...validateAndSanitizeParam('articleId', 'Invalid article ID')
+  validateAndSanitizeParam('articleId', 'Invalid article ID')
 ], asyncHandler(async (req, res) => {
   const report = database.getTopicClassificationReport(req.params.articleId);
   if (!report) {
@@ -476,7 +476,7 @@ router.get('/thematic-summaries', requireAuthenticatedUser, asyncHandler(async (
 router.get('/podcast-summary/:summaryId/audio', [
   requireAuthenticatedUser,
   sanitizeQuery('locale'),
-  ...validateAndSanitizeParam('summaryId', 'Invalid podcast summary ID')
+  validateAndSanitizeParam('summaryId', 'Invalid podcast summary ID')
 ], asyncHandler(async (req, res) => {
   const summaryId = String(req.params.summaryId || '').trim();
   if (summaryId.length < 5) {
@@ -504,7 +504,7 @@ router.post('/me/read-later/remove', requireAuthenticatedUser, asyncHandler(asyn
 router.get('/articles/:articleId/reader', [
   requireAuthenticatedUser,
   readerRateLimit,
-  ...validateAndSanitizeParam('articleId', 'ID articolo non valido')
+  validateAndSanitizeParam('articleId', 'ID articolo non valido')
 ], asyncHandler(async (req, res) => {
   const { articleId } = req.params;
   const userContext = getUserContext(req);

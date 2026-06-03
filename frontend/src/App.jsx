@@ -253,9 +253,6 @@ function App() {
     }
   }, [needsReleaseNotesAck]);
 
-  const handleDismissReleaseNotes = acknowledgeCurrentReleaseNotes;
-  const handleDismissReleaseNotice = acknowledgeCurrentReleaseNotes;
-
   const handleOpenReleaseNotes = useCallback(() => {
     setReleaseNotesState((current) => ({
       ...current,
@@ -325,8 +322,8 @@ function App() {
           t={t}
           releaseNotes={releaseNotes}
           onOpen={handleOpenReleaseNotes}
-          onExpire={handleDismissReleaseNotice}
-          onDismiss={handleDismissReleaseNotice}
+          onExpire={acknowledgeCurrentReleaseNotes}
+          onDismiss={acknowledgeCurrentReleaseNotes}
         />
       )}
       {shouldShowReleaseNotesModal && (
@@ -334,7 +331,7 @@ function App() {
           t={t}
           releaseNotes={releaseNotes}
           saving={releaseNotesState.saving}
-          onDismiss={handleDismissReleaseNotes}
+          onDismiss={acknowledgeCurrentReleaseNotes}
         />
       )}
     </div>

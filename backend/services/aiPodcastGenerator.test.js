@@ -238,7 +238,7 @@ describe('aiPodcastGenerator', () => {
     };
     aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
 
-    const audio = await aiPodcastGenerator._generateItalianAudio('Testo podcast italiano');
+    const audio = await aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it');
 
     expect(httpClient.post.mock.calls[0][1]).toEqual(expect.objectContaining({
       model: 'google/gemini-3.1-flash-tts-preview',
@@ -276,7 +276,7 @@ describe('aiPodcastGenerator', () => {
     const longScript = `${sentence} ${sentence} ${sentence}\n\n${sentence} ${sentence} ${sentence}\n\n${sentence} ${sentence} ${sentence}`;
     aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
 
-    const audio = await aiPodcastGenerator._generateItalianAudio(longScript);
+    const audio = await aiPodcastGenerator.generateAudioForLocale(longScript, 'it');
 
     expect(httpClient.post.mock.calls.length).toBeGreaterThan(1);
     httpClient.post.mock.calls.forEach((call) => {
@@ -312,7 +312,7 @@ describe('aiPodcastGenerator', () => {
     const longScript = Array.from({ length: 10 }, () => paragraph).join('\n\n');
     aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
 
-    const audio = await aiPodcastGenerator._generateItalianAudio(longScript);
+    const audio = await aiPodcastGenerator.generateAudioForLocale(longScript, 'it');
 
     expect(httpClient.post).toHaveBeenCalledTimes(10);
     expect(audio.mimeType).toBe('audio/wav');
@@ -338,7 +338,7 @@ describe('aiPodcastGenerator', () => {
     };
     aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
 
-    const audio = await aiPodcastGenerator._generateItalianAudio('Testo podcast italiano');
+    const audio = await aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it');
 
     expect(httpClient.post).toHaveBeenCalledWith(
       'https://openrouter.ai/api/v1/audio/speech',
@@ -383,7 +383,7 @@ describe('aiPodcastGenerator', () => {
       })
     });
 
-    await expect(aiPodcastGenerator._generateItalianAudio('Testo podcast italiano'))
+    await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it'))
       .rejects.toThrow('AI podcast TTS request failed (400): Unsupported voice');
   });
 
@@ -405,7 +405,7 @@ describe('aiPodcastGenerator', () => {
       })
     });
 
-    await expect(aiPodcastGenerator._generateItalianAudio('Testo podcast italiano'))
+    await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it'))
       .rejects.toThrow('AI podcast TTS request failed (400): Provider returned 400: Invalid voice: UnknownVoice');
   });
 
@@ -419,7 +419,7 @@ describe('aiPodcastGenerator', () => {
     const httpClient = { post: jest.fn() };
     aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
 
-    await expect(aiPodcastGenerator._generateItalianAudio('Testo podcast italiano. '.repeat(200)))
+    await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano. '.repeat(200), 'it'))
       .rejects.toThrow('TTS input is too long');
     expect(httpClient.post).not.toHaveBeenCalled();
   });
@@ -437,7 +437,7 @@ describe('aiPodcastGenerator', () => {
       })
     });
 
-    await expect(aiPodcastGenerator._generateItalianAudio('Testo podcast italiano'))
+    await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it'))
       .rejects.toThrow('audio is too small');
   });
 });

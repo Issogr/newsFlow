@@ -992,10 +992,6 @@ async function generateAudioForLocale(scriptText = '', locale = 'en') {
   };
 }
 
-async function generateItalianAudio(scriptText = '') {
-  return generateAudioForLocale(scriptText, 'it');
-}
-
 async function generateAudioByLocale(scriptTextByLocale = {}, locales = getEnabledPodcastLocales()) {
   const audioByLocale = {};
   const ttsConfig = getTtsConfig();
@@ -1051,18 +1047,11 @@ async function generatePodcastForArticles(window = {}, articles = []) {
   };
 }
 
-function isAiPodcastGenerationAvailable() {
-  return getScriptConfig().enabled;
-}
-
 module.exports = {
   generatePodcastForArticles,
   generateAudioForLocale,
-  generateItalianAudio,
-  isAiPodcastGenerationAvailable,
   _buildPrompt: buildPrompt,
   _extractAudioPayload: extractAudioPayload,
-  _generateItalianAudio: generateItalianAudio,
   _getEnabledPodcastLocales: getEnabledPodcastLocales,
   _getNarrationInstructions: getNarrationInstructions,
   _getArticleTextLimit: getArticleTextLimit,

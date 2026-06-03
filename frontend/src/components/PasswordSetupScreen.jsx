@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyRound, ShieldCheck } from 'lucide-react';
 import BrandMark from './BrandMark';
 import { completePasswordSetup, validatePasswordSetupToken } from '../services/api';
@@ -69,15 +69,11 @@ const PasswordSetupScreen = ({ t, token, onComplete }) => {
   const isAdminBootstrap = tokenDetails?.purpose === 'admin-bootstrap';
   const title = isAdminBootstrap ? t('adminSetupTitle') : t('passwordSetupTitle');
   const subtitle = isAdminBootstrap ? t('adminSetupSubtitle') : t('passwordSetupSubtitle');
-  const expiresAtLabel = useMemo(() => {
-    if (!tokenDetails?.expiresAt) {
-      return '';
-    }
-
-    return t('expiresAtLabel', {
+  const expiresAtLabel = tokenDetails?.expiresAt
+    ? t('expiresAtLabel', {
       time: new Date(tokenDetails.expiresAt).toLocaleString()
-    });
-  }, [t, tokenDetails?.expiresAt]);
+    })
+    : '';
 
   const handleSubmit = async (event) => {
     event.preventDefault();
