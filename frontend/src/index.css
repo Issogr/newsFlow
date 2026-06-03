@@ -216,10 +216,6 @@ body {
   color: rgb(248 250 252) !important;
 }
 
-.share-status-pill {
-  white-space: nowrap;
-}
-
 .share-status-pill-from-button {
   position: absolute;
   right: 100%;

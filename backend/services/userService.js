@@ -1034,6 +1034,5 @@ module.exports = {
   updateUserSource,
   removeUserSource,
   exportUserSettings,
-  importUserSettings,
-  getDefaultSettings
+  importUserSettings
 };

@@ -34,13 +34,10 @@ module.exports = [
     files: ['**/*.test.js'],
     languageOptions: {
       globals: {
-        afterAll: 'readonly',
         afterEach: 'readonly',
-        beforeAll: 'readonly',
         beforeEach: 'readonly',
         describe: 'readonly',
         expect: 'readonly',
-        jest: 'readonly',
         test: 'readonly'
       }
     }

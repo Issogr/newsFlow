@@ -33,7 +33,7 @@ const ShareStatusBubble = ({ shareState, t, className = '' }) => {
 
   return (
     <div
-      className={`share-status-pill pointer-events-none inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium shadow-lg ${bubbleClassName} ${className}`.trim()}
+      className={`pointer-events-none inline-flex whitespace-nowrap items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium shadow-lg ${bubbleClassName} ${className}`.trim()}
       role="status"
       aria-live="polite"
     >

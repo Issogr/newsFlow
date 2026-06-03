@@ -336,13 +336,9 @@ function extractTopicDetails(article = {}, rawTopics = []) {
 module.exports = {
   CANONICAL_TOPICS,
   cleanTopicValue,
-  isMeaningfulTopic,
   normalizeTopic,
   isCanonicalTopic,
-  removeDuplicates,
-  limitTopics,
   classifyTopicsFromText,
-  inferTopicsFromText,
   extractTopics,
   extractTopicDetails
 };

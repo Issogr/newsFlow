@@ -322,9 +322,7 @@ function buildInsertedGroupsByOwner(normalizedArticles = [], insertedIds = []) {
 }
 
 module.exports = {
-  buildStableGroupId,
   TITLE_GROUP_WINDOW_MS,
-  sortGroupsByPubDate,
   groupSimilarNews,
   normalizeIncomingArticles,
   buildInsertedGroupsByOwner
