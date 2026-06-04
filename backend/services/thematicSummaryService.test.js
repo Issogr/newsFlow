@@ -236,7 +236,7 @@ describe('thematic summary reader prewarm', () => {
     process.env = {
       ...originalEnv,
       OPENROUTER_API_KEY: 'test-key',
-      AI_SUMMARY_READER_PREWARM_ENABLED: 'auto'
+      AI_SUMMARY_READER_PREWARM_ENABLED: 'true'
     };
 
     const article = {
@@ -287,7 +287,7 @@ describe('thematic summary reader prewarm', () => {
     process.env = {
       ...originalEnv,
       OPENROUTER_API_KEY: 'test-key',
-      AI_SUMMARY_READER_PREWARM_ENABLED: 'auto'
+      AI_SUMMARY_READER_PREWARM_ENABLED: 'true'
     };
 
     const article = {

@@ -5,7 +5,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '🧠 Added independent AI feature switches and hide disabled summary or podcast sections automatically.'
+      '🧠 Added independent true/false AI feature switches and hide disabled summary or podcast sections automatically.'
     ]
   },
   it: {
@@ -13,7 +13,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '🧠 Aggiunti interruttori separati per le funzioni AI e nascoste automaticamente le sezioni sintesi o podcast disabilitate.'
+      '🧠 Aggiunti interruttori true/false separati per le funzioni AI e nascoste automaticamente le sezioni sintesi o podcast disabilitate.'
     ]
   }
 };

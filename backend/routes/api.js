@@ -88,8 +88,9 @@ const readerRateLimit = rateLimit({
 function getSessionCookieOptions() {
   const ttlDays = parseIntegerEnv('SESSION_TTL_DAYS', 30, { min: 1 });
   const appBaseUrl = String(process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim();
-  const secure = process.env.COOKIE_SECURE === 'true'
-    || (process.env.COOKIE_SECURE !== 'false' && appBaseUrl.startsWith('https://'));
+  const cookieSecureValue = String(process.env.COOKIE_SECURE || 'auto').trim().toLowerCase();
+  const secure = cookieSecureValue === 'true'
+    || (cookieSecureValue === 'auto' && appBaseUrl.startsWith('https://'));
 
   return {
     httpOnly: true,

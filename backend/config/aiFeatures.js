@@ -1,10 +1,10 @@
-const VALID_AI_TOGGLE_VALUES = new Set(['auto', 'true', 'false']);
+const VALID_AI_TOGGLE_VALUES = new Set(['true', 'false']);
 
 function hasOpenRouterApiKey() {
   return Boolean(String(process.env.OPENROUTER_API_KEY || '').trim());
 }
 
-function readAiToggleValue(envName, fallback = 'auto') {
+function readAiToggleValue(envName, fallback = 'true') {
   const rawValue = process.env[envName];
   if (rawValue === undefined || rawValue === null || rawValue === '') {
     return fallback;

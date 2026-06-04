@@ -9,6 +9,7 @@ const { createApp, createServer, _getTrustProxySetting } = require('./server');
 const {
   encryptBackendSessionCookie,
   getBffSessionSecret,
+  getSessionCookieOptions,
   isValidSessionPayload,
   unsignSessionId
 } = require('./lib/sessionPolicy');
@@ -729,6 +730,8 @@ describe('bff server', () => {
 describe('session policy helpers', () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalSessionSecret = process.env.BFF_SESSION_SECRET;
+  const originalCookieSecure = process.env.COOKIE_SECURE;
+  const originalAppBaseUrl = process.env.APP_BASE_URL;
 
   beforeEach(() => {
     process.env.BFF_SESSION_SECRET = 'test-bff-secret';
@@ -737,6 +740,8 @@ describe('session policy helpers', () => {
   afterEach(() => {
     restoreEnvValue('NODE_ENV', originalNodeEnv);
     restoreEnvValue('BFF_SESSION_SECRET', originalSessionSecret);
+    restoreEnvValue('COOKIE_SECURE', originalCookieSecure);
+    restoreEnvValue('APP_BASE_URL', originalAppBaseUrl);
   });
 
   test('requires a non-default BFF session secret in production', () => {
@@ -762,5 +767,24 @@ describe('session policy helpers', () => {
     expect(isValidSessionPayload({ version: 1, backendSessionCookie: 'newsflow_session=abc' })).toBe(false);
     expect(isValidSessionPayload({ version: 2, backendSessionCookie: 'newsflow_session=abc' })).toBe(false);
     expect(isValidSessionPayload({ version: 1, backendSessionCookie: '' })).toBe(false);
+  });
+
+  test('accepts only auto, true, and false for secure cookie mode', () => {
+    process.env.APP_BASE_URL = 'https://news.example';
+
+    delete process.env.COOKIE_SECURE;
+    expect(getSessionCookieOptions().secure).toBe(true);
+
+    process.env.COOKIE_SECURE = 'auto';
+    expect(getSessionCookieOptions().secure).toBe(true);
+
+    process.env.COOKIE_SECURE = 'true';
+    expect(getSessionCookieOptions().secure).toBe(true);
+
+    process.env.COOKIE_SECURE = 'false';
+    expect(getSessionCookieOptions().secure).toBe(false);
+
+    process.env.COOKIE_SECURE = 'yes';
+    expect(getSessionCookieOptions().secure).toBe(false);
   });
 });

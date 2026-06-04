@@ -122,6 +122,7 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `INTERNAL_SERVICE_NAME` | `bff` | Expected internal caller name for backend app-private traffic |
 | `APP_BASE_URL` | `http://localhost` | Public BFF or app URL for generated setup links and secure-cookie decisions |
 | `FRONTEND_BASE_URL` | unset | Fallback alias for `APP_BASE_URL` |
+| `COOKIE_SECURE` | `auto` | Session-cookie secure mode; accepts only `auto`, `true`, or `false` |
 | `PUBLIC_API_ANONYMOUS_ENABLED` | `false` | Enables unauthenticated external access to `GET /api/public/news` only when set to `true` |
 | `PUBLIC_API_AUTHENTICATED_ENABLED` | `false` | Enables external API-token access to `GET /api/public/news` and shows API-token controls in Settings only when set to `true` |
 | `PASSWORD_SETUP_TTL_MINUTES` | `60` | User password setup or reset link lifetime |
@@ -154,9 +155,9 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | unset | Server-side OpenRouter API key used only by backend AI jobs |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL |
-| `AI_*_ENABLED` values | `auto` | AI feature toggles accept only `auto`, `true`, or `false`; `auto` and `true` require `OPENROUTER_API_KEY`, while `false` or any other value disables the feature |
+| `AI_*_ENABLED` values | `true` | AI feature toggles accept only `true` or `false`; `true` still requires `OPENROUTER_API_KEY` for provider-backed work, while `false` or any other value disables the feature |
 | `OPENROUTER_TOPIC_MODEL` | `qwen/qwen3.5-9b` | OpenRouter model id used for topic classification |
-| `AI_TOPIC_DETECTION_ENABLED` | `auto` | Set to `false` to disable AI topics; `auto` enables AI only when `OPENROUTER_API_KEY` is present |
+| `AI_TOPIC_DETECTION_ENABLED` | `true` | Set to `false` to disable AI topics; `true` enables AI only when `OPENROUTER_API_KEY` is present |
 | `AI_TOPIC_BATCH_SIZE` | `4` | Max new articles sent in one AI topic-classification request |
 | `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Max concurrent AI topic-classification requests during ingestion |
 | `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles classified by AI per refresh before falling back to local detection |
@@ -165,23 +166,23 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for thematic summaries, independent from topic classification |
 | `OPENROUTER_PODCAST_SCRIPT_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for podcast script generation |
 | `OPENROUTER_STORY_GROUPING_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for AI-assisted story grouping/news duplicate prevention |
-| `AI_STORY_GROUPING_ENABLED` | `auto` | Set to `false` to disable AI-assisted story grouping; `auto` enables it when `OPENROUTER_API_KEY` is present |
+| `AI_STORY_GROUPING_ENABLED` | `true` | Set to `false` to disable AI-assisted story grouping; `true` enables it when `OPENROUTER_API_KEY` is present |
 | `AI_STORY_GROUPING_CONCURRENCY` | `1` | Max concurrent AI story-grouping checks during ingestion |
 | `AI_STORY_GROUPING_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one AI story-grouping request, independent from thematic summary requests |
-| `AI_SUMMARY_GENERATION_ENABLED` | `auto` | Set to `false` to disable thematic summaries; `auto` enables them when `OPENROUTER_API_KEY` is present |
-| `AI_PODCAST_GENERATION_ENABLED` | `auto` | Set to `false` to disable podcast briefing script generation and hide podcast UI; `auto` enables podcasts when `OPENROUTER_API_KEY` is present |
+| `AI_SUMMARY_GENERATION_ENABLED` | `true` | Set to `false` to disable thematic summaries; `true` enables them when `OPENROUTER_API_KEY` is present |
+| `AI_PODCAST_GENERATION_ENABLED` | `true` | Set to `false` to disable podcast briefing script generation and hide podcast UI; `true` enables podcasts when `OPENROUTER_API_KEY` is present |
 | `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for thematic summary and podcast slots (`07:00`, `19:00`) regardless of the container/server UTC clock |
 | `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in, topic-tagged articles sent to one thematic summary request |
 | `AI_SUMMARY_GENERATION_CONCURRENCY` | `2` | Max topic summary generations run concurrently for one due window |
 | `AI_SUMMARY_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one thematic summary request, configurable up to 120 seconds |
-| `AI_SUMMARY_READER_PREWARM_ENABLED` | `auto` | Prewarm reader-mode cache before summary slots when summary generation is available; set to `false` to disable article-page extraction prewarm |
+| `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarm reader-mode cache before summary slots when summary generation is available; set to `false` to disable article-page extraction prewarm |
 | `AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE` | `30` | Minutes before a summary slot when reader-cache prewarm can start |
 | `AI_SUMMARY_READER_PREWARM_CONCURRENCY` | `2` | Max concurrent reader extraction requests during summary prewarm |
 | `AI_SUMMARY_READER_TEXT_MAX_CHARS` | `3000` | Max cached reader-text characters sent per article to the summary model |
 | `AI_SUMMARY_READER_TEXT_MIN_CHARS` | `250` | Minimum cached reader-text length considered useful for summary input |
 | `AI_PODCAST_LANGUAGES` | `en` | Comma-separated podcast script/audio locales to generate; currently supported: `en`, `it` |
 | `AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS` | `42000` | Approximate total cached text budget for one scheduled podcast script prompt |
-| `AI_PODCAST_TTS_ENABLED` | `auto` | Set to `false` to disable podcast audio generation while keeping podcast scripts enabled; `auto` enables audio when `OPENROUTER_API_KEY` is present |
+| `AI_PODCAST_TTS_ENABLED` | `true` | Set to `false` to disable podcast audio generation while keeping podcast scripts enabled; `true` enables audio when `OPENROUTER_API_KEY` is present |
 | `OPENROUTER_PODCAST_AUDIO_MODEL` | `google/gemini-3.1-flash-tts-preview` | OpenRouter model id used for podcast audio generation |
 | `AI_PODCAST_TTS_TIMEOUT_MS` | `120000` | Timeout for one podcast audio generation request, configurable up to 120 seconds |
 | `AI_PODCAST_TTS_FORMAT` | `pcm` for Gemini TTS, otherwise `mp3` | Requested podcast audio format for the TTS model; Gemini TTS requires `pcm`, which the backend wraps into playable WAV audio before storing |
