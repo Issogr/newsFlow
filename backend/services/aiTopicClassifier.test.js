@@ -144,6 +144,22 @@ describe('aiTopicClassifier', () => {
     expect(hasInfoLogMatching('AI topic batch classifications (dev):')).toBe(false);
   });
 
+  test('does not accept legacy true-like values for AI article debug logging', async () => {
+    process.env.AI_TOPIC_DEBUG_LOG_ARTICLES = '1';
+    chatSend.mockResolvedValue({
+      choices: [
+        { message: { content: JSON.stringify({ topicsById: [{ id: 'article-1', topics: [{ topic: 'Technology', confidence: 0.9, evidence: ['AI chips'] }] }] }) } }
+      ]
+    });
+
+    await aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus([
+      { id: 'article-1', title: 'AI chips arrive for data centers', description: 'New hardware accelerates cloud workloads.' }
+    ]);
+
+    expect(hasInfoLogMatching('AI topic batch articles (dev):')).toBe(false);
+    expect(hasInfoLogMatching('AI topic batch classifications (dev):')).toBe(false);
+  });
+
   test('returns no AI topics when disabled or unconfigured', async () => {
     delete process.env.OPENROUTER_API_KEY;
 

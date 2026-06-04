@@ -5,10 +5,10 @@ function parseBooleanEnv(name, fallback = false) {
   }
 
   const normalized = String(rawValue).trim().toLowerCase();
-  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+  if (normalized === 'true') {
     return true;
   }
-  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+  if (normalized === 'false') {
     return false;
   }
 

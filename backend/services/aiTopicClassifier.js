@@ -1,4 +1,5 @@
 const logger = require('../utils/logger');
+const { readAiToggleValue } = require('../config/aiFeatures');
 const topicNormalizer = require('./topicNormalizer');
 const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const { parseIntegerEnv } = require('../utils/env');
@@ -32,7 +33,7 @@ const TOPIC_GUIDANCE = [
 ];
 
 function isAiArticleDebugLoggingEnabled() {
-  return ['1', 'true', 'yes', 'on'].includes(String(process.env.AI_TOPIC_DEBUG_LOG_ARTICLES || '').trim().toLowerCase());
+  return readAiToggleValue('AI_TOPIC_DEBUG_LOG_ARTICLES', 'false') === 'true';
 }
 
 function summarizeArticleForDebug(article = {}) {

@@ -5,6 +5,7 @@ const aiPodcastGenerator = require('./aiPodcastGenerator');
 const readerService = require('./readerService');
 const websocketService = require('./websocketService');
 const { parseIntegerEnv } = require('../utils/env');
+const { readAiToggleValue } = require('../config/aiFeatures');
 const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const { isPromotionalDealArticle } = require('../utils/promotionalContent');
 const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
@@ -95,7 +96,7 @@ function getConfiguredSummaryTimeZone() {
 const SUMMARY_TIME_ZONE = getConfiguredSummaryTimeZone();
 
 function isReaderPrewarmEnabled() {
-  const enabledValue = String(process.env.AI_SUMMARY_READER_PREWARM_ENABLED || 'auto').trim().toLowerCase();
+  const enabledValue = readAiToggleValue('AI_SUMMARY_READER_PREWARM_ENABLED');
   return enabledValue !== 'false' && aiSummaryGenerator.isAiSummaryGenerationAvailable();
 }
 
@@ -938,11 +939,14 @@ async function generateDueSummaries(options = {}) {
     const generatedTopicKeys = [];
     let generatedPodcast = false;
     const canGenerateSummaries = aiSummaryGenerator.isAiSummaryGenerationAvailable();
+    const canGeneratePodcast = aiPodcastGenerator.isAiPodcastGenerationAvailable();
 
-    const topicResults = await mapSettledWithConcurrency(SUMMARY_TOPICS, SUMMARY_GENERATION_CONCURRENCY, async (topicConfig) => ({
-      topicConfig,
-      result: await generateSummaryForTopic(topicConfig, summaryWindow, { ...options, canGenerateSummaries })
-    }));
+    const topicResults = canGenerateSummaries
+      ? await mapSettledWithConcurrency(SUMMARY_TOPICS, SUMMARY_GENERATION_CONCURRENCY, async (topicConfig) => ({
+        topicConfig,
+        result: await generateSummaryForTopic(topicConfig, summaryWindow, { ...options, canGenerateSummaries })
+      }))
+      : [];
 
     for (const topicResult of topicResults) {
       if (topicResult.status === 'rejected') {
@@ -962,14 +966,16 @@ async function generateDueSummaries(options = {}) {
       }
     }
 
-    const podcastResult = await generatePodcastForWindow(podcastWindow, options);
-    if (TERMINAL_PODCAST_STATUSES.has(podcastResult.summary?.status)) {
-      summaries.unshift(podcastResult.summary);
-    }
-    if (podcastResult.generatedNow) {
-      generatedCount += 1;
+    if (canGeneratePodcast) {
+      const podcastResult = await generatePodcastForWindow(podcastWindow, options);
       if (TERMINAL_PODCAST_STATUSES.has(podcastResult.summary?.status)) {
-        generatedPodcast = true;
+        summaries.unshift(podcastResult.summary);
+      }
+      if (podcastResult.generatedNow) {
+        generatedCount += 1;
+        if (TERMINAL_PODCAST_STATUSES.has(podcastResult.summary?.status)) {
+          generatedPodcast = true;
+        }
       }
     }
 
@@ -1006,7 +1012,9 @@ async function generateDueSummaries(options = {}) {
 }
 
 function getLatestSummaries() {
-  const topicConfigs = getSummaryTopics();
+  const canShowSummaries = aiSummaryGenerator.isAiSummaryGenerationAvailable();
+  const canShowPodcasts = aiPodcastGenerator.isAiPodcastGenerationAvailable();
+  const topicConfigs = canShowSummaries ? getSummaryTopics() : [];
   const latestByKey = new Map(
     database.listLatestThematicSummaries(topicConfigs.map((topic) => topic.key)).map((summary) => [summary.topicKey, summary])
   );
@@ -1017,7 +1025,7 @@ function getLatestSummaries() {
       return summary ? { ...summary, topicLabel: topic.label, summarySlot: getSummaryWindowSlot(summary) } : null;
     })
     .filter(Boolean);
-  const latestPodcasts = getLatestPodcastSummariesBySlot(PODCAST_HISTORY_RETAIN_COUNT);
+  const latestPodcasts = canShowPodcasts ? getLatestPodcastSummariesBySlot(PODCAST_HISTORY_RETAIN_COUNT) : [];
 
   return {
     items: [...latestPodcasts, ...topicItems],

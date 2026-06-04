@@ -122,8 +122,8 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `INTERNAL_SERVICE_NAME` | `bff` | Expected internal caller name for backend app-private traffic |
 | `APP_BASE_URL` | `http://localhost` | Public BFF or app URL for generated setup links and secure-cookie decisions |
 | `FRONTEND_BASE_URL` | unset | Fallback alias for `APP_BASE_URL` |
-| `PUBLIC_API_ANONYMOUS_ENABLED` | `false` | Enables unauthenticated external access to `GET /api/public/news` when set to `true`, `1`, `yes`, or `on` |
-| `PUBLIC_API_AUTHENTICATED_ENABLED` | `false` | Enables external API-token access to `GET /api/public/news` and shows API-token controls in Settings when set to `true`, `1`, `yes`, or `on` |
+| `PUBLIC_API_ANONYMOUS_ENABLED` | `false` | Enables unauthenticated external access to `GET /api/public/news` only when set to `true` |
+| `PUBLIC_API_AUTHENTICATED_ENABLED` | `false` | Enables external API-token access to `GET /api/public/news` and shows API-token controls in Settings only when set to `true` |
 | `PASSWORD_SETUP_TTL_MINUTES` | `60` | User password setup or reset link lifetime |
 | `ADMIN_BOOTSTRAP_TTL_MINUTES` | `30` | Admin bootstrap link lifetime |
 | `ONLINE_ACTIVITY_WINDOW_MINUTES` | `5` | Window used to consider a user online in the admin dashboard |
@@ -154,12 +154,14 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | unset | Server-side OpenRouter API key used only by backend AI jobs |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL |
+| `AI_*_ENABLED` values | `auto` | AI feature toggles accept only `auto`, `true`, or `false`; `auto` and `true` require `OPENROUTER_API_KEY`, while `false` or any other value disables the feature |
 | `OPENROUTER_TOPIC_MODEL` | `qwen/qwen3.5-9b` | OpenRouter model id used for topic classification |
 | `AI_TOPIC_DETECTION_ENABLED` | `auto` | Set to `false` to disable AI topics; `auto` enables AI only when `OPENROUTER_API_KEY` is present |
 | `AI_TOPIC_BATCH_SIZE` | `4` | Max new articles sent in one AI topic-classification request |
 | `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Max concurrent AI topic-classification requests during ingestion |
 | `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles classified by AI per refresh before falling back to local detection |
 | `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one AI topic-classification request, configurable up to 120 seconds for slower models |
+| `AI_TOPIC_DEBUG_LOG_ARTICLES` | `false` | Enables verbose AI topic debug logs only when set to `true` |
 | `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for thematic summaries, independent from topic classification |
 | `OPENROUTER_PODCAST_SCRIPT_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for podcast script generation |
 | `OPENROUTER_STORY_GROUPING_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for AI-assisted story grouping/news duplicate prevention |
@@ -167,6 +169,7 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `AI_STORY_GROUPING_CONCURRENCY` | `1` | Max concurrent AI story-grouping checks during ingestion |
 | `AI_STORY_GROUPING_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one AI story-grouping request, independent from thematic summary requests |
 | `AI_SUMMARY_GENERATION_ENABLED` | `auto` | Set to `false` to disable thematic summaries; `auto` enables them when `OPENROUTER_API_KEY` is present |
+| `AI_PODCAST_GENERATION_ENABLED` | `auto` | Set to `false` to disable podcast briefing script generation and hide podcast UI; `auto` enables podcasts when `OPENROUTER_API_KEY` is present |
 | `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for thematic summary and podcast slots (`07:00`, `19:00`) regardless of the container/server UTC clock |
 | `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in, topic-tagged articles sent to one thematic summary request |
 | `AI_SUMMARY_GENERATION_CONCURRENCY` | `2` | Max topic summary generations run concurrently for one due window |
@@ -178,14 +181,14 @@ Container publishing runs from `v*` tags that point to commits on `main`; each i
 | `AI_SUMMARY_READER_TEXT_MIN_CHARS` | `250` | Minimum cached reader-text length considered useful for summary input |
 | `AI_PODCAST_LANGUAGES` | `en` | Comma-separated podcast script/audio locales to generate; currently supported: `en`, `it` |
 | `AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS` | `42000` | Approximate total cached text budget for one scheduled podcast script prompt |
-| `AI_PODCAST_TTS_ENABLED` | `auto` | Set to `false` to disable podcast audio generation; `auto` enables it when `OPENROUTER_API_KEY` is present |
+| `AI_PODCAST_TTS_ENABLED` | `auto` | Set to `false` to disable podcast audio generation while keeping podcast scripts enabled; `auto` enables audio when `OPENROUTER_API_KEY` is present |
 | `OPENROUTER_PODCAST_AUDIO_MODEL` | `google/gemini-3.1-flash-tts-preview` | OpenRouter model id used for podcast audio generation |
 | `AI_PODCAST_TTS_TIMEOUT_MS` | `120000` | Timeout for one podcast audio generation request, configurable up to 120 seconds |
 | `AI_PODCAST_TTS_FORMAT` | `pcm` for Gemini TTS, otherwise `mp3` | Requested podcast audio format for the TTS model; Gemini TTS requires `pcm`, which the backend wraps into playable WAV audio before storing |
 | `AI_PODCAST_TTS_VOICE` | `Charon` | Requested podcast TTS voice; Gemini voices include `Charon`, `Puck`, and `Orus` |
 
-Thematic summaries are generated in both supported app languages, English and Italian; the frontend displays the version matching the current app language.
-Podcast briefings use the same scheduled, built-in article set as thematic-summary prewarming and generate scripts/audio only for locales enabled by `AI_PODCAST_LANGUAGES`. If the current UI language has no audio, the frontend lists the available audio language and still allows playback.
+Thematic summaries are generated in both supported app languages, English and Italian; the frontend displays the version matching the current app language. When `AI_SUMMARY_GENERATION_ENABLED=false`, thematic summary generation and its frontend story UI are hidden.
+Podcast briefings use the same scheduled, built-in article set as thematic-summary prewarming and generate scripts/audio only for locales enabled by `AI_PODCAST_LANGUAGES`. If the current UI language has no audio, the frontend lists the available audio language and still allows playback. When `AI_PODCAST_GENERATION_ENABLED=false`, podcast generation and podcast story UI are hidden.
 Summary and podcast slots use `AI_SUMMARY_TIME_ZONE`, so the default Docker setup generates the `07:00` and `19:00` briefings at Italian local time instead of UTC.
 Reader-mode extraction is prewarmed before summary slots when enabled, but summary generation itself only reads cached reader text and falls back to RSS title/description when cached text is missing or not useful.
 AI-assisted story grouping runs after ingestion and uses `OPENROUTER_STORY_GROUPING_MODEL` on RSS title/description metadata only; feed requests keep using stored grouping decisions and never call the AI provider.

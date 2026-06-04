@@ -4,13 +4,17 @@ export const CURRENT_CHANGELOG_ENTRY = {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
-    items: []
+    items: [
+      '🧠 Added independent AI feature switches and hide disabled summary or podcast sections automatically.'
+    ]
   },
   it: {
     eyebrow: 'Ultimo aggiornamento',
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
-    items: []
+    items: [
+      '🧠 Aggiunti interruttori separati per le funzioni AI e nascoste automaticamente le sezioni sintesi o podcast disabilitate.'
+    ]
   }
 };
 

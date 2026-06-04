@@ -93,6 +93,7 @@ function mockAiPodcastGenerator(overrides = {}) {
   const mock = {
     generatePodcastForArticles: jest.fn().mockResolvedValue(null),
     generateAudioForLocale: jest.fn().mockResolvedValue(null),
+    isAiPodcastGenerationAvailable: jest.fn(() => true),
     _getScriptConfig: jest.fn(() => ({ model: 'test-summary-model' })),
     _getTtsConfig: jest.fn(() => ({ apiKey: 'test-key', enabled: true, model: 'test-tts-model' })),
     _getTtsVoice: jest.fn(() => 'Charon'),
@@ -151,6 +152,7 @@ describe('thematic summary listing', () => {
     jest.resetModules();
     process.env = {
       ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key',
       AI_SUMMARY_TIME_ZONE: 'Europe/Rome'
     };
 
@@ -183,6 +185,7 @@ describe('thematic summary listing', () => {
     jest.resetModules();
     process.env = {
       ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key',
       AI_SUMMARY_TIME_ZONE: 'Europe/Rome'
     };
 

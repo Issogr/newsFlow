@@ -10,6 +10,7 @@ const {
   getPublicApiFeatures,
   isAuthenticatedPublicApiEnabled
 } = require('../config/publicApi');
+const { getAiFeatures } = require('../config/aiFeatures');
 const {
   MAX_FEEDBACK_DESCRIPTION_LENGTH,
   MAX_FEEDBACK_IMAGE_BYTES,
@@ -334,7 +335,7 @@ function buildUserPayload(user) {
 }
 
 function buildAuthResponse(user, sessionToken) {
-  const features = getPublicApiFeatures();
+  const features = getUserFeatures();
 
   return {
     token: sessionToken,
@@ -345,6 +346,13 @@ function buildAuthResponse(user, sessionToken) {
     sourceCatalog: getConfiguredSourceGroups(),
     customSources: database.listUserSources(user.id),
     apiToken: features.publicApi.authenticatedEnabled ? getUserApiToken(user.id) : null
+  };
+}
+
+function getUserFeatures() {
+  return {
+    ...getPublicApiFeatures(),
+    ...getAiFeatures()
   };
 }
 
@@ -526,7 +534,7 @@ function getCurrentUser(userId) {
     user: buildUserPayload(user),
     settings: getUserSettings(userId),
     limits: getUserLimits(),
-    features: getPublicApiFeatures(),
+    features: getUserFeatures(),
     sourceCatalog: getConfiguredSourceGroups(),
     customSources: database.listUserSources(userId),
     apiToken: isAuthenticatedPublicApiEnabled() ? getUserApiToken(userId) : null

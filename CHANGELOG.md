@@ -2,6 +2,8 @@
 
 ## 3.5.7
 
+- added independent AI feature switches, including separate podcast generation control, and hide disabled summary or podcast surfaces in the frontend
+
 ## 3.5.6
 
 - fixed BFF login sessions behind HTTPS reverse proxies by allowing secure browser session cookies to honor `X-Forwarded-Proto` without enabling global proxy trust
