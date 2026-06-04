@@ -2,6 +2,8 @@
 
 ## 3.5.6
 
+- fixed BFF login sessions behind HTTPS reverse proxies by allowing secure browser session cookies to honor `X-Forwarded-Proto` without enabling global proxy trust
+
 ## 3.5.5
 
 - keep the podcast panel to one morning and one evening entry, showing failed generations in the affected slot instead of backfilling duplicates

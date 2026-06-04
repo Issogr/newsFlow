@@ -4,13 +4,17 @@ export const CURRENT_CHANGELOG_ENTRY = {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
-    items: []
+    items: [
+      '🔐 Fixed login sessions behind HTTPS reverse proxies.'
+    ]
   },
   it: {
     eyebrow: 'Ultimo aggiornamento',
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
-    items: []
+    items: [
+      '🔐 Corrette le sessioni di login dietro reverse proxy HTTPS.'
+    ]
   }
 };
 

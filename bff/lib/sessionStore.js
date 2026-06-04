@@ -228,6 +228,8 @@ function destroySession(req, sessionDb = null) {
 }
 
 function buildSessionMiddleware(store, secret) {
+  const cookieOptions = getSessionCookieOptions();
+
   return session({
     name: BFF_SESSION_COOKIE_NAME,
     store,
@@ -236,7 +238,10 @@ function buildSessionMiddleware(store, secret) {
     saveUninitialized: false,
     rolling: false,
     unset: 'destroy',
-    cookie: getSessionCookieOptions(),
+    // Let express-session honor X-Forwarded-Proto for Secure cookies without
+    // enabling global proxy trust for req.ip and forwarded-header handling.
+    ...(cookieOptions.secure === true ? { proxy: true } : {}),
+    cookie: cookieOptions,
   });
 }
 

@@ -534,6 +534,38 @@ describe('bff server', () => {
     });
   });
 
+  test('sets a secure BFF session cookie behind an HTTPS proxy without global proxy trust', async () => {
+    const secureProxySession = createSessionDbPath();
+
+    await withEnv({
+      APP_BASE_URL: 'https://news.example',
+      TRUST_PROXY: undefined,
+      NODE_ENV: 'production'
+    }, async () => {
+      let secureProxyApp;
+
+      try {
+        secureProxyApp = createApp({
+          backendBaseUrl,
+          frontendDistDir,
+          sessionDbPath: secureProxySession.sessionDbPath,
+        });
+
+        const response = await request(secureProxyApp.app)
+          .post('/api/auth/login')
+          .set('Host', 'news.example')
+          .set('X-Forwarded-Proto', 'https')
+          .send({ username: 'alice', password: 'secret123' })
+          .expect(200);
+
+        expect(getBffSessionCookie(response)).toContain('Secure');
+        expect(lastBackendHeaders['x-forwarded-proto']).toBe('http');
+      } finally {
+        cleanupCreatedApp(secureProxyApp, secureProxySession.tempDir);
+      }
+    });
+  });
+
   test('rebuilds forwarded headers on authenticated app routes from trusted request values', async () => {
     const { cookie: bffSessionCookie } = await login(app, {
       headers: {
