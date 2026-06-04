@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.5.7
+
+- added independent `true`/`false` AI feature switches, with one podcast switch controlling script generation, audio generation, and frontend visibility
+
 ## 3.5.6
 
 - fixed BFF login sessions behind HTTPS reverse proxies by allowing secure browser session cookies to honor `X-Forwarded-Proto` without enabling global proxy trust

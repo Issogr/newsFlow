@@ -52,7 +52,7 @@ function setAudioSpeechHttpClient(client) {
 
 function getScriptConfig() {
   return getOpenRouterConfig({
-    enabledEnvName: 'AI_SUMMARY_GENERATION_ENABLED',
+    enabledEnvName: 'AI_PODCAST_GENERATION_ENABLED',
     modelEnvName: 'OPENROUTER_PODCAST_SCRIPT_MODEL',
     defaultModel: DEFAULT_PODCAST_SCRIPT_MODEL,
     timeoutEnvName: 'AI_SUMMARY_REQUEST_TIMEOUT_MS',
@@ -62,7 +62,7 @@ function getScriptConfig() {
 
 function getTtsConfig() {
   return getOpenRouterConfig({
-    enabledEnvName: 'AI_PODCAST_TTS_ENABLED',
+    enabledEnvName: 'AI_PODCAST_GENERATION_ENABLED',
     modelEnvName: 'OPENROUTER_PODCAST_AUDIO_MODEL',
     defaultModel: DEFAULT_PODCAST_AUDIO_MODEL,
     timeoutEnvName: 'AI_PODCAST_TTS_TIMEOUT_MS',
@@ -1025,6 +1025,10 @@ async function generateAudioByLocale(scriptTextByLocale = {}, locales = getEnabl
   return audioByLocale;
 }
 
+function isAiPodcastGenerationAvailable() {
+  return getScriptConfig().enabled;
+}
+
 async function generatePodcastForArticles(window = {}, articles = []) {
   const script = await generatePodcastScript(window, articles);
   if (!script) {
@@ -1050,6 +1054,7 @@ async function generatePodcastForArticles(window = {}, articles = []) {
 module.exports = {
   generatePodcastForArticles,
   generateAudioForLocale,
+  isAiPodcastGenerationAvailable,
   _buildPrompt: buildPrompt,
   _extractAudioPayload: extractAudioPayload,
   _getEnabledPodcastLocales: getEnabledPodcastLocales,

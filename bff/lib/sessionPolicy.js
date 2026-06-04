@@ -67,11 +67,17 @@ function decryptBackendSessionCookie(value) {
 }
 
 function getCookieSecureSetting() {
-  if (process.env.COOKIE_SECURE === 'true') {
+  const cookieSecureValue = String(process.env.COOKIE_SECURE || 'auto').trim().toLowerCase();
+
+  if (cookieSecureValue === 'true') {
     return true;
   }
 
-  if (process.env.COOKIE_SECURE === 'false') {
+  if (cookieSecureValue === 'false') {
+    return false;
+  }
+
+  if (cookieSecureValue !== 'auto') {
     return false;
   }
 

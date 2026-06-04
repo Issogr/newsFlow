@@ -342,6 +342,71 @@ describe('NewsAggregator', () => {
     expect(screen.queryByText('AI chips accelerate')).not.toBeInTheDocument();
   });
 
+  test('does not fetch thematic summaries when summary and podcast features are disabled', async () => {
+    fetchNews.mockResolvedValue({
+      items: [createGroup('group-1', 'Top headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+
+    await renderNewsAggregator({
+      currentUser: {
+        ...currentUser,
+        features: {
+          ai: {
+            thematicSummariesEnabled: false,
+            podcastsEnabled: false
+          }
+        }
+      }
+    });
+
+    expect(await screen.findByText('Top headline')).toBeInTheDocument();
+    expect(fetchThematicSummaries).not.toHaveBeenCalled();
+  });
+
+  test('hides podcast stories when the podcast feature is disabled', async () => {
+    fetchNews.mockResolvedValue({
+      items: [createGroup('group-1', 'Top headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    fetchThematicSummaries.mockResolvedValue({
+      items: [
+        {
+          id: 'podcast-1',
+          type: 'podcast',
+          topicKey: 'podcast',
+          titleByLocale: { en: 'News podcast' },
+          summaryTextByLocale: { en: 'Podcast script' }
+        },
+        {
+          id: 'summary-technology',
+          topicKey: 'technology',
+          topicLabel: 'Technology',
+          topics: ['Technology'],
+          summaryTextByLocale: { en: 'Technology update [1].', it: 'Aggiornamento tecnologia [1].' },
+          sources: []
+        }
+      ]
+    });
+
+    await renderNewsAggregator({
+      currentUser: {
+        ...currentUser,
+        features: {
+          ai: {
+            thematicSummariesEnabled: true,
+            podcastsEnabled: false
+          }
+        }
+      }
+    });
+
+    expect(await screen.findByRole('button', { name: 'Open Technology summary' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open podcast briefing' })).not.toBeInTheDocument();
+  });
+
   test('refreshes thematic stories when summary socket refresh arrives', async () => {
     let onSummariesRefresh;
 

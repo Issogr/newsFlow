@@ -1,4 +1,5 @@
 const { parseIntegerEnv } = require('../utils/env');
+const { isOpenRouterFeatureEnabled } = require('../config/aiFeatures');
 
 const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_TIMEOUT_MS = 120000;
@@ -28,12 +29,11 @@ function getOpenRouterConfig({
   clampTimeout = false
 } = {}) {
   const apiKey = String(process.env.OPENROUTER_API_KEY || '').trim();
-  const enabledValue = String(process.env[enabledEnvName] || 'auto').trim().toLowerCase();
   const resolvedDefaultModel = String(defaultModel || '').trim();
 
   return {
     apiKey,
-    enabled: enabledValue !== 'false' && Boolean(apiKey),
+    enabled: isOpenRouterFeatureEnabled(enabledEnvName),
     model: String(process.env[modelEnvName] || resolvedDefaultModel).trim() || resolvedDefaultModel,
     baseUrl: String(process.env.OPENROUTER_BASE_URL || DEFAULT_OPENROUTER_BASE_URL).trim().replace(/\/+$/u, ''),
     timeoutMs: parseIntegerEnv(timeoutEnvName, defaultTimeoutMs, { min: 1000, max: 120000, clamp: clampTimeout, strict: true })

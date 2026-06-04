@@ -96,6 +96,25 @@ function getCurrentThematicSummarySelection(selectedSummary, summaries = []) {
   return summaries.find((summary) => !isPodcastSummary(summary) && summary?.topicKey === selectedSummary.topicKey) || null;
 }
 
+function getAiSummaryFeatureState(aiFeatures = {}) {
+  const thematicSummariesEnabled = aiFeatures.thematicSummariesEnabled !== false;
+  const podcastsEnabled = aiFeatures.podcastsEnabled !== false;
+
+  return {
+    thematicSummariesEnabled,
+    podcastsEnabled,
+    surfaceEnabled: thematicSummariesEnabled || podcastsEnabled
+  };
+}
+
+function filterThematicSummariesForFeatures(summaries = [], featureState = {}) {
+  return (Array.isArray(summaries) ? summaries : []).filter((summary) => {
+    return isPodcastSummary(summary)
+      ? featureState.podcastsEnabled !== false
+      : featureState.thematicSummariesEnabled !== false;
+  });
+}
+
 function cloneGroup(group) {
   return {
     ...group,
@@ -402,13 +421,18 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     ? currentUser.sourceCatalog
     : sourceCatalog;
   const readThematicSummariesStorageKey = useMemo(() => getReadThematicSummariesStorageKey(currentUser), [currentUser]);
+  const aiFeatureOptions = currentUser?.features?.ai;
+  const aiSummaryFeatureState = useMemo(() => getAiSummaryFeatureState(aiFeatureOptions), [aiFeatureOptions]);
+  const visibleThematicSummaries = useMemo(() => {
+    return filterThematicSummariesForFeatures(thematicSummaries, aiSummaryFeatureState);
+  }, [aiSummaryFeatureState, thematicSummaries]);
   const displayedThematicSummary = useMemo(() => {
     if (!selectedThematicSummary?.id) {
       return null;
     }
 
-    return getCurrentThematicSummarySelection(selectedThematicSummary, thematicSummaries);
-  }, [selectedThematicSummary, thematicSummaries]);
+    return getCurrentThematicSummarySelection(selectedThematicSummary, visibleThematicSummaries);
+  }, [selectedThematicSummary, visibleThematicSummaries]);
   const currentReaderGroup = useMemo(() => {
     if (!readerState.isOpen || !readerState.group) {
       return null;
@@ -693,7 +717,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, []);
 
   const loadThematicSummaries = useCallback(async () => {
-    if (needsSourceSetup) {
+    if (needsSourceSetup || !aiSummaryFeatureState.surfaceEnabled) {
       cancelSummaryRequest();
       setThematicSummaries([]);
       return;
@@ -704,14 +728,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     try {
       const response = await fetchThematicSummaries({ signal: request.signal });
       if (request.isLatest()) {
-        setThematicSummaries(response.items || []);
+        setThematicSummaries(filterThematicSummariesForFeatures(response.items || [], aiSummaryFeatureState));
       }
     } catch (requestError) {
       if (!isRequestCanceled(requestError) && request.isLatest()) {
         setThematicSummaries([]);
       }
     }
-  }, [cancelSummaryRequest, needsSourceSetup, startSummaryRequest]);
+  }, [aiSummaryFeatureState, cancelSummaryRequest, needsSourceSetup, startSummaryRequest]);
 
   useTopicRefreshSocket({
     onTopicRefresh: handleTopicRefresh,
@@ -793,7 +817,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     setSelectedThematicSummary(summary);
     setReadThematicSummaryIds((current) => {
       const summaryIds = [...new Set(isPodcastSummary(summary)
-        ? [summary.id, ...thematicSummaries.filter(isPodcastSummary).map((podcastSummary) => podcastSummary.id)].filter(Boolean)
+        ? [summary.id, ...visibleThematicSummaries.filter(isPodcastSummary).map((podcastSummary) => podcastSummary.id)].filter(Boolean)
         : [summary.id])];
       const unreadSummaryIds = summaryIds.filter((summaryId) => !current.includes(summaryId));
 
@@ -805,7 +829,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       setStoredReadThematicSummaryIds(readThematicSummariesStorageKey, next);
       return next;
     });
-  }, [readThematicSummariesStorageKey, thematicSummaries]);
+  }, [readThematicSummariesStorageKey, visibleThematicSummaries]);
 
   const handleToggleReadLater = useCallback(async (group) => {
     const articleIds = (group?.readLater ? (group.readLaterArticleIds || []) : (group?.items || []).map((item) => item.id)).filter(Boolean);
@@ -964,9 +988,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       </header>
 
       <main className="mx-auto w-full max-w-7xl px-4 py-4 pb-24 md:pb-10 lg:px-6">
-        {!isReadLaterView && thematicSummaries.length > 0 && (
+        {!isReadLaterView && visibleThematicSummaries.length > 0 && (
           <ThematicSummaryStories
-            summaries={thematicSummaries}
+            summaries={visibleThematicSummaries}
             locale={locale}
             readSummaryIds={readThematicSummaryIds}
             t={t}
@@ -1058,7 +1082,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       {displayedThematicSummary && (
         <ThematicSummaryPanel
           summary={displayedThematicSummary}
-          summaries={thematicSummaries}
+          summaries={visibleThematicSummaries}
           locale={locale}
           t={t}
           onClose={() => setSelectedThematicSummary(null)}
