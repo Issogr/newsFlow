@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.5.7
+
 ## 3.5.6
 
 - fixed BFF login sessions behind HTTPS reverse proxies by allowing secure browser session cookies to honor `X-Forwarded-Proto` without enabling global proxy trust
