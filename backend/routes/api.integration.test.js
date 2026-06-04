@@ -5,6 +5,14 @@ const { cleanupTempNewsDb, setupTempNewsDb } = require('../test-utils/tempNewsDb
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
 const originalAnonymousPublicApiEnabled = process.env.PUBLIC_API_ANONYMOUS_ENABLED;
 const originalAuthenticatedPublicApiEnabled = process.env.PUBLIC_API_AUTHENTICATED_ENABLED;
+const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
+
+const expectedDisabledAiFeatures = {
+  topicDetectionEnabled: false,
+  storyGroupingEnabled: false,
+  thematicSummariesEnabled: false,
+  podcastsEnabled: false
+};
 
 function buildApiTestApp() {
   const express = require('express');
@@ -41,6 +49,7 @@ describe('API auth and user flows', () => {
     jest.resetModules();
     process.env.PUBLIC_API_ANONYMOUS_ENABLED = 'true';
     process.env.PUBLIC_API_AUTHENTICATED_ENABLED = 'true';
+    delete process.env.OPENROUTER_API_KEY;
     ({ tempDir } = setupTempNewsDb('news-api-test-'));
 
     jest.doMock('../services/newsAggregator', () => ({
@@ -92,6 +101,12 @@ describe('API auth and user flows', () => {
     } else {
       process.env.PUBLIC_API_AUTHENTICATED_ENABLED = originalAuthenticatedPublicApiEnabled;
     }
+
+    if (originalOpenRouterApiKey === undefined) {
+      delete process.env.OPENROUTER_API_KEY;
+    } else {
+      process.env.OPENROUTER_API_KEY = originalOpenRouterApiKey;
+    }
   });
 
   test('registers and logs in a user with independent sessions', async () => {
@@ -131,6 +146,7 @@ describe('API auth and user flows', () => {
       customSources: []
     });
     expect(registerResponse.body.features).toEqual({
+      ai: expectedDisabledAiFeatures,
       publicApi: {
         anonymousEnabled: true,
         authenticatedEnabled: true
@@ -439,6 +455,7 @@ describe('API auth and user flows', () => {
     const sessionCookie = getSessionCookie(registerResponse);
 
     expect(registerResponse.body.features).toEqual({
+      ai: expectedDisabledAiFeatures,
       publicApi: {
         anonymousEnabled: false,
         authenticatedEnabled: false
@@ -455,6 +472,7 @@ describe('API auth and user flows', () => {
       anonymousEnabled: false,
       authenticatedEnabled: false
     });
+    expect(currentUserResponse.body.features.ai).toEqual(expectedDisabledAiFeatures);
     expect(currentUserResponse.body.apiToken).toBeNull();
 
     await request(app)
