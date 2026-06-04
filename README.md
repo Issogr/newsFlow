@@ -315,6 +315,7 @@ docker compose up --build -d
 - `docker compose` expects `INTERNAL_PROXY_TOKEN` and `BFF_SESSION_SECRET` to be set explicitly before startup instead of falling back to insecure defaults.
 - If you change either secret, existing users may need to sign in again, but user data remains intact.
 - If the values do not match, the backend rejects app-private HTTP and Socket.IO traffic from the BFF.
+- For HTTPS deployments behind a reverse proxy, set `APP_BASE_URL=https://...` and ensure the proxy forwards `X-Forwarded-Proto: https`; set BFF `TRUST_PROXY=true` only when that proxy is trusted and you need forwarded client IP/header handling.
 
 ## Ingestion Behavior
 

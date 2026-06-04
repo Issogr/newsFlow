@@ -625,7 +625,7 @@ async function addUserSource(userId, payload = {}) {
   try {
     database.createUserSource(source);
   } catch (error) {
-    if (String(error.message || '').includes('UNIQUE')) {
+    if (isUniqueConstraintError(error)) {
       throw createError(409, 'This RSS source already exists for the user', 'SOURCE_ALREADY_EXISTS', error);
     }
     throw error;
@@ -664,7 +664,7 @@ async function updateUserSource(userId, sourceId, payload = {}) {
   try {
     database.updateUserSource(userId, sourceId, nextSource);
   } catch (error) {
-    if (String(error.message || '').includes('UNIQUE')) {
+    if (isUniqueConstraintError(error)) {
       throw createError(409, 'This RSS source already exists for the user', 'SOURCE_ALREADY_EXISTS', error);
     }
     throw error;
@@ -1034,6 +1034,5 @@ module.exports = {
   updateUserSource,
   removeUserSource,
   exportUserSettings,
-  importUserSettings,
-  getDefaultSettings
+  importUserSettings
 };

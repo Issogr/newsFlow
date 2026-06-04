@@ -30,6 +30,19 @@ function resolveAppliedTheme(themeMode, mediaQuery) {
   return mediaQuery?.matches ? 'dark' : 'light';
 }
 
+const PASSWORD_SETUP_PATHS = new Set(['/password/setup', '/admin/setup']);
+const API_DOCS_PATHS = new Set(['/api/docs', '/api/docs/']);
+const LEGAL_POLICY_BY_PATH = {
+  '/privacy-policy': 'privacy',
+  '/cookie-policy': 'cookie'
+};
+
+function shouldLoadSessionForPath(pathname) {
+  return !PASSWORD_SETUP_PATHS.has(pathname)
+    && !API_DOCS_PATHS.has(pathname)
+    && !LEGAL_POLICY_BY_PATH[pathname];
+}
+
 function App() {
   const [locationState, setLocationState] = useState(() => ({
     pathname: window.location.pathname,
@@ -38,15 +51,7 @@ function App() {
   const [authData, setAuthData] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
-  const [loadingSession, setLoadingSession] = useState(() => {
-    const pathname = window.location.pathname;
-    return pathname !== '/password/setup'
-      && pathname !== '/admin/setup'
-      && pathname !== '/api/docs'
-      && pathname !== '/api/docs/'
-      && pathname !== '/privacy-policy'
-      && pathname !== '/cookie-policy';
-  });
+  const [loadingSession, setLoadingSession] = useState(() => shouldLoadSessionForPath(window.location.pathname));
   const [releaseNotesState, setReleaseNotesState] = useState({
     hiddenVersion: '',
     noticeHiddenVersion: '',
@@ -67,10 +72,9 @@ function App() {
     const hash = String(window.location.hash || '').replace(/^#/, '');
     return new URLSearchParams(hash).get('token') || '';
   })();
-  const isPasswordSetupRoute = locationState.pathname === '/password/setup' || locationState.pathname === '/admin/setup';
-  const isApiDocsRoute = locationState.pathname === '/api/docs' || locationState.pathname === '/api/docs/';
-  const isPrivacyPolicyRoute = locationState.pathname === '/privacy-policy';
-  const isCookiePolicyRoute = locationState.pathname === '/cookie-policy';
+  const isPasswordSetupRoute = PASSWORD_SETUP_PATHS.has(locationState.pathname);
+  const isApiDocsRoute = API_DOCS_PATHS.has(locationState.pathname);
+  const legalPolicy = LEGAL_POLICY_BY_PATH[locationState.pathname] || '';
   const needsReleaseNotesAck = authData?.settings?.lastSeenReleaseNotesVersion !== releaseNotes.version;
   const shouldShowReleaseNotesModal = Boolean(
     authData
@@ -89,7 +93,7 @@ function App() {
   );
 
   const loadSession = useCallback(async () => {
-    if (isPasswordSetupRoute || isApiDocsRoute || isPrivacyPolicyRoute || isCookiePolicyRoute) {
+    if (!shouldLoadSessionForPath(locationState.pathname)) {
       setLoadingSession(false);
       return;
     }
@@ -103,7 +107,7 @@ function App() {
     } finally {
       setLoadingSession(false);
     }
-  }, [isApiDocsRoute, isCookiePolicyRoute, isPasswordSetupRoute, isPrivacyPolicyRoute]);
+  }, [locationState.pathname]);
 
   useEffect(() => {
     const syncLocationState = () => {
@@ -249,9 +253,6 @@ function App() {
     }
   }, [needsReleaseNotesAck]);
 
-  const handleDismissReleaseNotes = acknowledgeCurrentReleaseNotes;
-  const handleDismissReleaseNotice = acknowledgeCurrentReleaseNotes;
-
   const handleOpenReleaseNotes = useCallback(() => {
     setReleaseNotesState((current) => ({
       ...current,
@@ -268,12 +269,8 @@ function App() {
     return <ApiDocsPage locale={locale} />;
   }
 
-  if (isPrivacyPolicyRoute) {
-    return <LegalPolicyPage policy="privacy" />;
-  }
-
-  if (isCookiePolicyRoute) {
-    return <LegalPolicyPage policy="cookie" />;
+  if (legalPolicy) {
+    return <LegalPolicyPage policy={legalPolicy} />;
   }
 
   if (isPasswordSetupRoute) {
@@ -325,8 +322,8 @@ function App() {
           t={t}
           releaseNotes={releaseNotes}
           onOpen={handleOpenReleaseNotes}
-          onExpire={handleDismissReleaseNotice}
-          onDismiss={handleDismissReleaseNotice}
+          onExpire={acknowledgeCurrentReleaseNotes}
+          onDismiss={acknowledgeCurrentReleaseNotes}
         />
       )}
       {shouldShowReleaseNotesModal && (
@@ -334,7 +331,7 @@ function App() {
           t={t}
           releaseNotes={releaseNotes}
           saving={releaseNotesState.saving}
-          onDismiss={handleDismissReleaseNotes}
+          onDismiss={acknowledgeCurrentReleaseNotes}
         />
       )}
     </div>

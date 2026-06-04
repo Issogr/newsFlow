@@ -727,18 +727,13 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
 }
 
 module.exports = {
-  purgeExpiredArticles,
   cleanupRemovedConfiguredSourceData,
   createEmptyRefreshPayload,
   ingestSourceConfigs,
-  processAiTopicsForPendingArticles,
   scheduleAiTopicsForPendingArticles,
-  processAiStoryGroupingForPendingArticles,
   scheduleAiStoryGroupingForPendingArticles,
   _filterArticlesWithinRetention: filterArticlesWithinRetention,
   _resetRuntimeStateForTests: resetRuntimeStateForTests,
   _pruneSourceFetchTimestamps: pruneSourceFetchTimestamps,
-  _sourceFetchTimestamps: sourceFetchTimestamps,
-  buildSourceFetchTasks,
-  cloneArticleForSource
+  _sourceFetchTimestamps: sourceFetchTimestamps
 };

@@ -32,7 +32,8 @@ const {
   buildTrustedForwardedHeaders,
   clearForwardedHeaders,
   copyBackendResponseHeaders,
-  extractDeletedAdminUserId
+  extractDeletedAdminUserId,
+  getRequestHeader
 } = require('./lib/proxyHelpers');
 
 const DEFAULT_FRONTEND_DIST_DIR = path.join(__dirname, 'public');
@@ -146,15 +147,6 @@ function createApp(options = {}) {
     });
   }
 
-  function getRequestHeader(req, name) {
-    if (typeof req.get === 'function') {
-      return req.get(name);
-    }
-
-    const value = req.headers?.[String(name || '').toLowerCase()];
-    return Array.isArray(value) ? value[0] : value;
-  }
-
   function getExpectedRequestOrigin(req) {
     if (configuredAppOrigin) {
       try {
@@ -236,7 +228,7 @@ function createApp(options = {}) {
   async function requestInternalBackend(req, pathName, options = {}) {
     const requestOptions = {
       url: `/internal-api${pathName}`,
-      method: options.method || req.method,
+      method: req.method,
       headers: {
         ...buildInternalHeaders(req),
         ...(options.backendSessionCookie ? { Cookie: options.backendSessionCookie } : {}),
@@ -424,7 +416,6 @@ function createApp(options = {}) {
     try {
       const backendSessionCookie = getBackendSessionCookieFromRequest(req);
       const response = await requestInternalBackend(req, '/me', {
-        method: 'GET',
         backendSessionCookie,
       });
 
@@ -448,7 +439,6 @@ function createApp(options = {}) {
     try {
       if (backendSessionCookie) {
         backendResponse = await requestInternalBackend(req, '/auth/logout', {
-          method: 'POST',
           data: {},
           backendSessionCookie,
         });

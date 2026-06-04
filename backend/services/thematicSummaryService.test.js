@@ -93,7 +93,6 @@ function mockAiPodcastGenerator(overrides = {}) {
   const mock = {
     generatePodcastForArticles: jest.fn().mockResolvedValue(null),
     generateAudioForLocale: jest.fn().mockResolvedValue(null),
-    generateItalianAudio: jest.fn().mockResolvedValue(null),
     _getScriptConfig: jest.fn(() => ({ model: 'test-summary-model' })),
     _getTtsConfig: jest.fn(() => ({ apiKey: 'test-key', enabled: true, model: 'test-tts-model' })),
     _getTtsVoice: jest.fn(() => 'Charon'),

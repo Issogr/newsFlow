@@ -102,8 +102,10 @@ describe('App', () => {
     render(<App />);
 
     expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
-    expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(document.documentElement.style.colorScheme).toBe('dark');
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe('dark');
+      expect(document.documentElement.style.colorScheme).toBe('dark');
+    });
   });
 
   test('shows an update notice after login and persists the version only after the changelog modal is dismissed', async () => {

@@ -713,8 +713,7 @@ describe('newsAggregator service flows', () => {
     database.listUserSources.mockReturnValue([customSource]);
     rssParser.parseFeed.mockResolvedValue([]);
 
-    await newsAggregator.getNewsFeed({ refresh: true }, userContext);
-    await newsAggregator._waitForExistingUserAssignedSourceRefresh(userContext);
+    await newsAggregator._startUserAssignedSourceRefresh(userContext, { force: true, manual: true });
 
     const secondResult = await newsAggregator.getNewsFeed({ refresh: true }, userContext);
 

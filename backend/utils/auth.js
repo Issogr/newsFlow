@@ -356,7 +356,6 @@ module.exports = {
   resolveAuthenticatedApiToken,
   resolveAuthenticatedSession,
   purgeExpiredSessionsIfNeeded,
-  purgeExpiredApiTokensIfNeeded,
   flushApiTokenUsage,
   startApiTokenUsageFlushTimer,
   stopApiTokenUsageFlushTimer,
@@ -367,10 +366,8 @@ module.exports = {
   generateSessionToken,
   hashSessionToken,
   createSessionExpiryDate,
-  shouldRefreshSessionExpiry,
   createApiTokenExpiryDate,
   API_TOKEN_TTL_DAYS,
   SESSION_COOKIE_NAME,
-  parseCookieHeader,
   extractSessionCookie
 };

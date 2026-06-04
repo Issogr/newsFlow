@@ -214,17 +214,6 @@ function startUserAssignedSourceRefresh(userContext = {}, options = {}) {
   return refreshTask;
 }
 
-async function waitForExistingUserAssignedSourceRefresh(userContext = {}) {
-  const userId = userContext.userId;
-  const existingRefresh = userImmediateRefreshPromises.get(userId);
-
-  if (!existingRefresh) {
-    return createEmptyRefreshPayload(getLastRefreshAt());
-  }
-
-  return existingRefresh;
-}
-
 async function ingestAllNews(options = {}) {
   const broadcast = options.broadcast !== false;
 
@@ -433,7 +422,6 @@ module.exports = {
   _getActiveAssignedSourceConfigs: getActiveAssignedSourceConfigs,
   _hasPendingUserAssignedSourceRefresh: hasPendingUserAssignedSourceRefresh,
   _startUserAssignedSourceRefresh: startUserAssignedSourceRefresh,
-  _waitForExistingUserAssignedSourceRefresh: waitForExistingUserAssignedSourceRefresh,
   _startSeedDataRefresh: startSeedDataRefresh,
   _resetImmediateRefreshState: resetImmediateRefreshState
 };

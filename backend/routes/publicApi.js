@@ -115,9 +115,7 @@ router.get('/news', [
   resolveOptionalExternalApiPrincipal,
   anonymousPublicNewsRateLimit,
   authenticatedPublicNewsRateLimit,
-  sanitizeQuery('search'),
-  sanitizeQuery('beforePubDate'),
-  sanitizeQuery('beforeId')
+  sanitizeQuery(['search', 'beforePubDate', 'beforeId'])
 ], asyncHandler(async (req, res) => {
   const filters = parseNewsQuery(req.query);
   const result = await newsService.getCachedNewsFeed(filters, getExternalUserContext(req));

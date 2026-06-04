@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bug, CheckCircle2, ImagePlus, Lightbulb, MessageSquare, Paperclip, Send, Trash2, X } from 'lucide-react';
 import { submitFeedback } from '../services/api';
 import useLockBodyScroll from '../hooks/useLockBodyScroll';
@@ -81,49 +81,32 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
-  const attachmentLabel = useMemo(() => {
-    if (!attachment) {
-      return '';
-    }
-
-    const attachmentSizeKb = Math.max(1, Math.round(attachment.size / 1024));
-    return `${attachment.name} (${attachmentSizeKb} KB)`;
-  }, [attachment]);
+  const attachmentLabel = attachment
+    ? `${attachment.name} (${Math.max(1, Math.round(attachment.size / 1024))} KB)`
+    : '';
   const attachmentType = String(attachment?.type || '');
   const isVideoAttachment = attachmentType.startsWith('video/');
-  const attachmentStatus = useMemo(() => {
-    if (!attachment) {
-      return {
-        text: t('feedbackImageHelp'),
-        className: 'text-slate-500',
-      };
-    }
-
-    if (attachmentType.startsWith('image/')) {
-      return {
-        text: t('feedbackAttachmentStatusImage', {
-          size: formatAttachmentSize(attachment.size),
-          limit: formatAttachmentSize(limits.feedbackImageMaxBytes),
-        }),
-        className: 'text-emerald-600',
-      };
-    }
-
-    if (attachmentType.startsWith('video/')) {
-      return {
-        text: t('feedbackAttachmentStatusVideo', {
-          size: formatAttachmentSize(attachment.size),
-          limit: formatAttachmentSize(limits.feedbackVideoMaxBytes),
-        }),
-        className: 'text-emerald-600',
-      };
-    }
-
-    return {
-      text: t('feedbackImageHelp'),
-      className: 'text-slate-500',
+  let attachmentStatus = {
+    text: t('feedbackImageHelp'),
+    className: 'text-slate-500',
+  };
+  if (attachmentType.startsWith('image/')) {
+    attachmentStatus = {
+      text: t('feedbackAttachmentStatusImage', {
+        size: formatAttachmentSize(attachment.size),
+        limit: formatAttachmentSize(limits.feedbackImageMaxBytes),
+      }),
+      className: 'text-emerald-600',
     };
-  }, [attachment, attachmentType, limits.feedbackImageMaxBytes, limits.feedbackVideoMaxBytes, t]);
+  } else if (attachmentType.startsWith('video/')) {
+    attachmentStatus = {
+      text: t('feedbackAttachmentStatusVideo', {
+        size: formatAttachmentSize(attachment.size),
+        limit: formatAttachmentSize(limits.feedbackVideoMaxBytes),
+      }),
+      className: 'text-emerald-600',
+    };
+  }
 
   useLockBodyScroll();
 

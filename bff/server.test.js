@@ -401,28 +401,22 @@ describe('bff server', () => {
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-admin-id');
   });
 
-  test('rejects unsafe authenticated API proxy requests without same-origin headers', async () => {
+  test.each([
+    { name: 'without same-origin headers', headers: {} },
+    { name: 'from another origin', headers: { Origin: 'https://evil.example' } },
+  ])('rejects unsafe authenticated API proxy requests $name', async ({ headers }) => {
     const { cookie: adminBffSessionCookie } = await login(app, { username: 'admin' });
 
     const response = await request(app)
       .delete('/api/admin/users/user-1')
       .set('Cookie', adminBffSessionCookie)
+      .set(headers)
       .expect(403);
 
     expect(response.body.error).toEqual({
       message: 'Cross-origin request rejected.',
       code: 'CSRF_ORIGIN_MISMATCH',
     });
-  });
-
-  test('rejects unsafe authenticated API proxy requests from another origin', async () => {
-    const { cookie: adminBffSessionCookie } = await login(app, { username: 'admin' });
-
-    await request(app)
-      .delete('/api/admin/users/user-1')
-      .set('Cookie', adminBffSessionCookie)
-      .set('Origin', 'https://evil.example')
-      .expect(403);
   });
 
   test('does not let static files shadow protected API routes', async () => {
@@ -536,6 +530,38 @@ describe('bff server', () => {
         expect(lastBackendHeaders['x-forwarded-proto']).toBe('http');
       } finally {
         cleanupCreatedApp(directApp, directSession.tempDir);
+      }
+    });
+  });
+
+  test('sets a secure BFF session cookie behind an HTTPS proxy without global proxy trust', async () => {
+    const secureProxySession = createSessionDbPath();
+
+    await withEnv({
+      APP_BASE_URL: 'https://news.example',
+      TRUST_PROXY: undefined,
+      NODE_ENV: 'production'
+    }, async () => {
+      let secureProxyApp;
+
+      try {
+        secureProxyApp = createApp({
+          backendBaseUrl,
+          frontendDistDir,
+          sessionDbPath: secureProxySession.sessionDbPath,
+        });
+
+        const response = await request(secureProxyApp.app)
+          .post('/api/auth/login')
+          .set('Host', 'news.example')
+          .set('X-Forwarded-Proto', 'https')
+          .send({ username: 'alice', password: 'secret123' })
+          .expect(200);
+
+        expect(getBffSessionCookie(response)).toContain('Secure');
+        expect(lastBackendHeaders['x-forwarded-proto']).toBe('http');
+      } finally {
+        cleanupCreatedApp(secureProxyApp, secureProxySession.tempDir);
       }
     });
   });

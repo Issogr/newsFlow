@@ -38,6 +38,24 @@ const BACK_TO_TOP_THRESHOLD = 280;
 const TOP_NAV_SHRINK_THRESHOLD = 28;
 const READ_THEMATIC_SUMMARIES_STORAGE_PREFIX = 'newsflow-read-thematic-summaries';
 
+function UserMenuItem({ icon: Icon, label, onClick, className, iconClassName }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={className || 'flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100'}
+      role="menuitem"
+    >
+      <span className="flex items-center gap-3">
+        <span className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${iconClassName}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+        {label}
+      </span>
+    </button>
+  );
+}
+
 function getGroupMergeKeys(group = {}) {
   const keys = new Set();
 
@@ -909,52 +927,32 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
                     <div className="space-y-3 p-3">
                       <div className="space-y-2 pt-1">
-                      <button
-                        type="button"
+                        <UserMenuItem
+                          icon={Cog}
+                          label={t('settings')}
                           onClick={() => {
                             setSettingsOpen(true);
                             setUserMenuOpen(false);
                           }}
-                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
-                          role="menuitem"
-                        >
-                          <span className="flex items-center gap-3">
-                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
-                              <Cog className="h-4 w-4" />
-                            </span>
-                            {t('settings')}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
+                          iconClassName="bg-sky-100 text-sky-700"
+                        />
+                        <UserMenuItem
+                          icon={MessageSquare}
+                          label={t('feedbackMenuItem')}
                           onClick={() => {
                             setFeedbackOpen(true);
                             setUserMenuOpen(false);
                           }}
-                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
-                          role="menuitem"
-                        >
-                          <span className="flex items-center gap-3">
-                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-                              <MessageSquare className="h-4 w-4" />
-                            </span>
-                            {t('feedbackMenuItem')}
-                          </span>
-                        </button>
-                      <button
-                        type="button"
-                        onClick={onLogout}
-                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-left text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100"
-                        role="menuitem"
-                      >
-                        <span className="flex items-center gap-3">
-                          <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-rose-700">
-                            <LogOut className="h-4 w-4" />
-                          </span>
-                          {t('logout')}
-                        </span>
-                      </button>
-                    </div>
+                          iconClassName="bg-emerald-100 text-emerald-700"
+                        />
+                        <UserMenuItem
+                          icon={LogOut}
+                          label={t('logout')}
+                          onClick={onLogout}
+                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-left text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100"
+                          iconClassName="bg-white text-rose-700"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}

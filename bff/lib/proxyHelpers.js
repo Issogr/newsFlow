@@ -18,9 +18,11 @@ function clearForwardedHeaders(proxyReq) {
 }
 
 function getRequestHeader(req, name) {
-  return typeof req.get === 'function'
+  const value = typeof req.get === 'function'
     ? req.get(name)
     : req.headers?.[String(name || '').toLowerCase()];
+
+  return Array.isArray(value) ? value[0] : value;
 }
 
 function buildTrustedForwardedHeaders(req, options = {}) {
@@ -80,5 +82,6 @@ module.exports = {
   buildTrustedForwardedHeaders,
   clearForwardedHeaders,
   copyBackendResponseHeaders,
-  extractDeletedAdminUserId
+  extractDeletedAdminUserId,
+  getRequestHeader
 };

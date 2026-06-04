@@ -201,7 +201,6 @@ module.exports = {
   findSimilarStoriesForArticle,
   isAiStoryGroupingAvailable,
   buildStoryGroupId,
-  filterCandidateArticles,
   _buildPrompt: buildPrompt,
   _getConfig: getConfig,
   _parseJsonContent: parseJsonContent,
