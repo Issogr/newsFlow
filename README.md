@@ -9,59 +9,34 @@
   <img src="https://img.shields.io/badge/license-GPL--3.0-1d4ed8" alt="License: GPL-3.0" />
 </p>
 
-<p align="center">
-  A calm, personal RSS news hub that cuts through the noise with smart grouping, clean reader mode, manual refreshes, and full control over your sources.
-</p>
+News Flow is a self-hosted RSS news hub with grouped stories, clean reader mode, per-user sources, and optional AI-powered topics, summaries, story grouping, and podcasts.
 
-## Table of Contents
+## Features
 
-- [Why News Flow](#why-news-flow)
-- [Key Features](#key-features)
-- [Quick Start](#quick-start)
-- [Local Development](#local-development)
-- [Container Images](#container-images)
-- [Configuration](#configuration)
-- [BFF and Security Boundary](#bff-and-security-boundary)
-- [Ingestion Behavior](#ingestion-behavior)
-- [Project Layout](#project-layout)
-- [Operational Notes](#operational-notes)
-- [License](#license)
-
-## Why News Flow
-
-- News Flow reduces RSS noise by grouping overlapping coverage into cleaner story clusters instead of showing the same story repeated across many feeds.
-- It stays lightweight and self-hostable with local SQLite storage, built-in full-text search, and a small two-tier web architecture.
-- It gives each user control over relevance and reading flow through exclusions, recent filters, retention limits, personal RSS feeds, manual refreshes, and a cleaner in-app reader mode.
-
-## Key Features
-
-- Grouped stories across overlapping feeds
-- Source families by publisher domain
-- Server-side full-text search
-- Reader mode with cleaned article extraction and caching
-- Personal custom RSS feeds
-- Account-based access with persistent settings
-- Settings import and export
-- Manual top-navbar feed refreshes
-- In-app feedback flow with optional Telegram forwarding
+- Group overlapping RSS articles into story cards.
+- Search cached news server-side.
+- Use account-based access with persistent settings import and export.
+- Add personal RSS feeds and source exclusions.
+- Read articles in a cleaned in-app reader.
+- Save read-later articles outside normal retention.
+- Use optional OpenRouter AI jobs for topic detection, story grouping, thematic summaries, and podcast briefings.
+- Keep browser traffic behind the BFF on `/api/*`; the backend private API stays on `/internal-api/*`.
 
 ## Quick Start
 
 ```bash
-INTERNAL_PROXY_TOKEN=<change-me> BFF_SESSION_SECRET=<change-me> docker compose up --build -d
+export INTERNAL_PROXY_TOKEN="$(openssl rand -hex 32)"
+export BFF_SESSION_SECRET="$(openssl rand -hex 32)"
+docker compose up --build -d
 ```
 
 Open `http://localhost`.
 
-Runtime requirements:
-
-- Backend: Node.js `24.16.0`
-- BFF: Node.js `24.16.0`
-- Frontend: Node.js `24.16.0`
+Runtime target for all packages is Node.js `24.16.0`.
 
 ## Local Development
 
-Install dependencies per app:
+There is no root `package.json`; install and run each app separately.
 
 ```bash
 cd backend && npm install
@@ -69,7 +44,7 @@ cd ../bff && npm install
 cd ../frontend && npm install
 ```
 
-Run the apps in separate terminals:
+Run in separate terminals:
 
 ```bash
 cd backend && npm run dev
@@ -77,299 +52,123 @@ cd bff && npm start
 cd frontend && npm start
 ```
 
-Notes:
+Useful checks:
 
-- The frontend talks to the BFF on `/api/*` in development.
-- The backend uses `backend/data/news.db` by default.
-- The BFF uses `bff/data/sessions.sqlite` by default.
-- After switching Node versions, rerun `npm install` or `npm rebuild` in `backend/` and `bff/` so `better-sqlite3` native bindings match the active Node runtime.
+```bash
+cd backend && npm run lint && npm test
+cd bff && npm run lint && npm test
+cd frontend && npm run lint && npm test && npm run build
+```
 
-## Container Images
+Local data defaults:
 
-Each published GitHub release builds and publishes two public GHCR images:
+- Backend database: `backend/data/news.db`
+- BFF sessions: `bff/data/sessions.sqlite`
+- If Node changes, rerun `npm install` or `npm rebuild` in `backend/` and `bff/` for `better-sqlite3`.
+
+## Deployment
+
+Docker Compose needs two secrets:
+
+- `INTERNAL_PROXY_TOKEN`: shared by BFF and backend for private backend access.
+- `BFF_SESSION_SECRET`: signs BFF browser sessions. Keep it stable or users will be logged out.
+
+For HTTPS behind a reverse proxy:
+
+- Set `APP_BASE_URL=https://your-domain`.
+- Ensure the proxy forwards `X-Forwarded-Proto: https`.
+- Set BFF `TRUST_PROXY=true` only when the BFF is reachable only through a trusted proxy and you need forwarded client IP/header handling.
+
+Published images:
 
 - `ghcr.io/issogr/newsflow-backend:<release-tag>`
 - `ghcr.io/issogr/newsflow-bff:<release-tag>`
 
-Container publishing runs from `v*` tags that point to commits on `main`; each image is tagged with the release tag.
-
 ## Configuration
+Full configuration reference: [`CONFIGURATION.md`](CONFIGURATION.md).
 
-### Backend Runtime
+### Required And Security
 
-| Variable | Default | Purpose |
+| Variable | Default | Notes |
 | --- | --- | --- |
-| `NODE_ENV` | development behavior when unset | Runtime mode |
-| `PORT` | `5000` | Backend HTTP port |
-| `SERVER_TIMEOUT` | `60000` | HTTP server timeout in ms |
-| `LOG_LEVEL` | `debug` in development, `info` in production | Logger verbosity |
-| `NEWS_DB_PATH` | `backend/data/news.db` | SQLite file path |
-| `ALLOWED_ORIGINS` | empty | Comma-separated CORS allowlist |
-| `TRUST_PROXY` | backend auto in production, BFF `false` | Explicit proxy trust toggle; set only when the service is behind a trusted reverse proxy |
+| `INTERNAL_PROXY_TOKEN` | required in Compose | Must match between BFF and backend. |
+| `BFF_SESSION_SECRET` | required in Compose | Use a stable random value in production. |
+| `APP_BASE_URL` | `http://localhost` | Public app URL; controls setup links and secure-cookie decisions. |
+| `ALLOWED_ORIGINS` | empty | Backend CORS allowlist, for example `https://news.example`. |
+| `COOKIE_SECURE` | `auto` | Accepts `auto`, `true`, or `false`. |
+| `TRUST_PROXY` | backend auto in production, BFF `false` | Use only behind a trusted reverse proxy. |
+| `SESSION_TTL_DAYS` | `30` | Browser/backend session lifetime. |
 
-### BFF, Auth, and Session
+### Public API
 
-| Variable | Default | Purpose |
+| Variable | Default | Notes |
 | --- | --- | --- |
-| `SESSION_TTL_DAYS` | `30` | Session lifetime in days |
-| `SESSION_TOUCH_RENEWAL_WINDOW_MS` | `86400000` | BFF renews persisted sessions only inside this remaining-lifetime window |
-| `SESSION_PURGE_INTERVAL_MS` | `300000` | Backend expired auth/session cleanup interval in ms |
-| `SESSION_STORE_CLEAR_INTERVAL_MS` | `300000` | BFF persisted session-store cleanup interval in ms |
-| `ADMIN_USERNAME` | `admin` | Reserved dedicated admin username |
-| `INTERNAL_PROXY_TOKEN` | `development-only-change-me` | Shared token used by the BFF when calling the private backend app API and Socket.IO surface |
-| `BFF_SESSION_SECRET` | `development-only-change-me` | Secret used by the BFF to sign browser session cookies; must be set to a non-default value in production |
-| `BFF_SESSION_DB_PATH` | `bff/data/sessions.sqlite` | SQLite path used by the BFF persistent session store |
-| `INTERNAL_SERVICE_NAME` | `bff` | Expected internal caller name for backend app-private traffic |
-| `APP_BASE_URL` | `http://localhost` | Public BFF or app URL for generated setup links and secure-cookie decisions |
-| `FRONTEND_BASE_URL` | unset | Fallback alias for `APP_BASE_URL` |
-| `COOKIE_SECURE` | `auto` | Session-cookie secure mode; accepts only `auto`, `true`, or `false` |
-| `PUBLIC_API_ANONYMOUS_ENABLED` | `false` | Enables unauthenticated external access to `GET /api/public/news` only when set to `true` |
-| `PUBLIC_API_AUTHENTICATED_ENABLED` | `false` | Enables external API-token access to `GET /api/public/news` and shows API-token controls in Settings only when set to `true` |
-| `PASSWORD_SETUP_TTL_MINUTES` | `60` | User password setup or reset link lifetime |
-| `ADMIN_BOOTSTRAP_TTL_MINUTES` | `30` | Admin bootstrap link lifetime |
-| `ONLINE_ACTIVITY_WINDOW_MINUTES` | `5` | Window used to consider a user online in the admin dashboard |
-| `USER_ACTIVITY_TOUCH_INTERVAL_SECONDS` | `60` | Minimum interval between persisted activity updates |
+| `PUBLIC_API_ANONYMOUS_ENABLED` | `false` | Enables `GET /api/public/news` without a token only when set to `true`. |
+| `PUBLIC_API_AUTHENTICATED_ENABLED` | `false` | Enables API-token access and Settings token controls only when set to `true`. |
 
-### Feed Ingestion and Querying
+The public API is read-only and cache-only. It must not trigger RSS refreshes or article extraction.
+Public API docs are available at `/api/docs`.
 
-| Variable | Default | Purpose |
+### Feed And Storage
+
+| Variable | Default | Notes |
 | --- | --- | --- |
-| `SCRAPE_INTERVAL_MS` | `900000` | Scheduled ingestion interval in ms |
-| `SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES` | `ONLINE_ACTIVITY_WINDOW_MINUTES` or `5` | Recent-activity window used to decide which users have assigned sources eligible for scheduled refresh |
-| `MANUAL_REFRESH_COOLDOWN_MS` | `300000` | Per-user backend cooldown for manual refresh attempts; repeated clicks keep serving cached feed data |
-| `SOURCE_FETCH_FRESHNESS_MS` | `300000` | Shared upstream RSS freshness window that skips refetching a source recently fetched by any refresh path |
-| `SOURCE_FETCH_FAILURE_BACKOFF_MS` | `120000` | Initial per-source backoff after a failed RSS fetch to avoid retry storms against broken feeds |
-| `SOURCE_FETCH_FAILURE_MAX_BACKOFF_MS` | `1800000` | Maximum per-source RSS failure backoff |
-| `ARTICLE_RETENTION_HOURS` | `24` | Article and reader-cache retention window in hours |
-| `MAX_ARTICLES_PER_SOURCE` | `25` | Max parsed items per feed |
-| `RSS_MAX_RETRIES` | `4` | Feed retry attempts for transient failures |
-| `RSS_RETRY_DELAY` | `1500` | Base delay between feed retries in ms |
-| `RSS_TIMEOUT` | `15000` | RSS fetch timeout in ms |
-| `RSS_CACHE_TTL` | `60000` | Feed response cache TTL in ms |
-| `RSS_CACHE_MAX_ENTRIES` | `200` | Max cached feed responses |
-| `RSS_INGESTION_CONCURRENCY` | `8` | Max feed requests processed concurrently during ingestion |
+| `NEWS_DB_PATH` | `backend/data/news.db` | Backend SQLite path. |
+| `BFF_SESSION_DB_PATH` | `bff/data/sessions.sqlite` | BFF session SQLite path. |
+| `SCRAPE_INTERVAL_MS` | `900000` | Scheduled ingestion interval. |
+| `SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES` | `ONLINE_ACTIVITY_WINDOW_MINUTES` or `5` | Scheduled ingestion refreshes sources assigned to recently active users. |
+| `MANUAL_REFRESH_COOLDOWN_MS` | `300000` | Per-user manual refresh cooldown. |
+| `SOURCE_FETCH_FRESHNESS_MS` | `300000` | Skips repeated source fetches across refresh paths. |
+| `ARTICLE_RETENTION_HOURS` | `24` | Article and reader-cache retention. |
+| `MAX_ARTICLES_PER_SOURCE` | `25` | Max parsed items per RSS feed. |
 
-### AI Features
+### AI
 
-| Variable | Default | Purpose |
+AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed jobs. Feature toggles accept only `true` or `false`; invalid values disable the feature.
+
+| Variable | Default | Notes |
 | --- | --- | --- |
-| `OPENROUTER_API_KEY` | unset | Server-side OpenRouter API key used only by backend AI jobs |
-| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL |
-| `AI_*_ENABLED` values | `true` | AI feature toggles accept only `true` or `false`; `true` still requires `OPENROUTER_API_KEY` for provider-backed work, while `false` or any other value disables the feature |
-| `OPENROUTER_TOPIC_MODEL` | `qwen/qwen3.5-9b` | OpenRouter model id used for topic classification |
-| `AI_TOPIC_DETECTION_ENABLED` | `true` | Set to `false` to disable AI topics; `true` enables AI only when `OPENROUTER_API_KEY` is present |
-| `AI_TOPIC_BATCH_SIZE` | `4` | Max new articles sent in one AI topic-classification request |
-| `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Max concurrent AI topic-classification requests during ingestion |
-| `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles classified by AI per refresh before falling back to local detection |
-| `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one AI topic-classification request, configurable up to 120 seconds for slower models |
-| `AI_TOPIC_DEBUG_LOG_ARTICLES` | `false` | Enables verbose AI topic debug logs only when set to `true` |
-| `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for thematic summaries, independent from topic classification |
-| `OPENROUTER_PODCAST_SCRIPT_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for podcast script generation |
-| `OPENROUTER_STORY_GROUPING_MODEL` | `deepseek/deepseek-v4-flash` | Model id used for AI-assisted story grouping/news duplicate prevention |
-| `AI_STORY_GROUPING_ENABLED` | `true` | Set to `false` to disable AI-assisted story grouping; `true` enables it when `OPENROUTER_API_KEY` is present |
-| `AI_STORY_GROUPING_CONCURRENCY` | `1` | Max concurrent AI story-grouping checks during ingestion |
-| `AI_STORY_GROUPING_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one AI story-grouping request, independent from thematic summary requests |
-| `AI_SUMMARY_GENERATION_ENABLED` | `true` | Set to `false` to disable thematic summaries; `true` enables them when `OPENROUTER_API_KEY` is present |
-| `AI_PODCAST_GENERATION_ENABLED` | `true` | Set to `false` to disable podcast briefing script generation and hide podcast UI; `true` enables podcasts when `OPENROUTER_API_KEY` is present |
-| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for thematic summary and podcast slots (`07:00`, `19:00`) regardless of the container/server UTC clock |
-| `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in, topic-tagged articles sent to one thematic summary request |
-| `AI_SUMMARY_GENERATION_CONCURRENCY` | `2` | Max topic summary generations run concurrently for one due window |
-| `AI_SUMMARY_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one thematic summary request, configurable up to 120 seconds |
-| `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarm reader-mode cache before summary slots when summary generation is available; set to `false` to disable article-page extraction prewarm |
-| `AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE` | `30` | Minutes before a summary slot when reader-cache prewarm can start |
-| `AI_SUMMARY_READER_PREWARM_CONCURRENCY` | `2` | Max concurrent reader extraction requests during summary prewarm |
-| `AI_SUMMARY_READER_TEXT_MAX_CHARS` | `3000` | Max cached reader-text characters sent per article to the summary model |
-| `AI_SUMMARY_READER_TEXT_MIN_CHARS` | `250` | Minimum cached reader-text length considered useful for summary input |
-| `AI_PODCAST_LANGUAGES` | `en` | Comma-separated podcast script/audio locales to generate; currently supported: `en`, `it` |
-| `AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS` | `42000` | Approximate total cached text budget for one scheduled podcast script prompt |
-| `AI_PODCAST_TTS_ENABLED` | `true` | Set to `false` to disable podcast audio generation while keeping podcast scripts enabled; `true` enables audio when `OPENROUTER_API_KEY` is present |
-| `OPENROUTER_PODCAST_AUDIO_MODEL` | `google/gemini-3.1-flash-tts-preview` | OpenRouter model id used for podcast audio generation |
-| `AI_PODCAST_TTS_TIMEOUT_MS` | `120000` | Timeout for one podcast audio generation request, configurable up to 120 seconds |
-| `AI_PODCAST_TTS_FORMAT` | `pcm` for Gemini TTS, otherwise `mp3` | Requested podcast audio format for the TTS model; Gemini TTS requires `pcm`, which the backend wraps into playable WAV audio before storing |
-| `AI_PODCAST_TTS_VOICE` | `Charon` | Requested podcast TTS voice; Gemini voices include `Charon`, `Puck`, and `Orus` |
+| `OPENROUTER_API_KEY` | unset | Required for AI provider calls. |
+| `AI_TOPIC_DETECTION_ENABLED` | `true` | Adds AI topic metadata during ingestion. |
+| `AI_STORY_GROUPING_ENABLED` | `true` | Groups articles describing the same story after ingestion. |
+| `AI_SUMMARY_GENERATION_ENABLED` | `true` | Generates thematic summaries; hides summary UI when `false`. |
+| `AI_PODCAST_GENERATION_ENABLED` | `true` | Generates podcast scripts; hides podcast UI when `false`. |
+| `AI_PODCAST_TTS_ENABLED` | `true` | Generates podcast audio; scripts can remain enabled. |
+| `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarms reader text before summary windows when summaries are enabled. |
+| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | Time zone for `07:00` and `19:00` summary/podcast slots. |
+| `AI_PODCAST_LANGUAGES` | `en` | Comma-separated locales: `en`, `it`. |
 
-Thematic summaries are generated in both supported app languages, English and Italian; the frontend displays the version matching the current app language. When `AI_SUMMARY_GENERATION_ENABLED=false`, thematic summary generation and its frontend story UI are hidden.
-Podcast briefings use the same scheduled, built-in article set as thematic-summary prewarming and generate scripts/audio only for locales enabled by `AI_PODCAST_LANGUAGES`. If the current UI language has no audio, the frontend lists the available audio language and still allows playback. When `AI_PODCAST_GENERATION_ENABLED=false`, podcast generation and podcast story UI are hidden.
-Summary and podcast slots use `AI_SUMMARY_TIME_ZONE`, so the default Docker setup generates the `07:00` and `19:00` briefings at Italian local time instead of UTC.
-Reader-mode extraction is prewarmed before summary slots when enabled, but summary generation itself only reads cached reader text and falls back to RSS title/description when cached text is missing or not useful.
-AI-assisted story grouping runs after ingestion and uses `OPENROUTER_STORY_GROUPING_MODEL` on RSS title/description metadata only; feed requests keep using stored grouping decisions and never call the AI provider.
+Model overrides:
 
-AI topic detection uses the official `@openrouter/sdk` package from the backend.
+| Variable | Default |
+| --- | --- |
+| `OPENROUTER_TOPIC_MODEL` | `qwen/qwen3.5-9b` |
+| `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` |
+| `OPENROUTER_STORY_GROUPING_MODEL` | `deepseek/deepseek-v4-flash` |
+| `OPENROUTER_PODCAST_SCRIPT_MODEL` | `deepseek/deepseek-v4-flash` |
+| `OPENROUTER_PODCAST_AUDIO_MODEL` | `google/gemini-3.1-flash-tts-preview` |
 
-- It sends only compact metadata for newly inserted articles: title, short description, and the internal article id used to map results back.
-- Full article bodies, provider RSS categories, and source names are not sent to the model.
-- Local fallback topics use weighted phrase scoring with positive and negative evidence instead of broad substring matching, with regression fixtures for difficult Italian headlines.
-- Classifier requests disable model reasoning and ask for JSON-object responses with topic confidence. Optional evidence can still be stored when available.
-- AI topics are accepted only when the topic is canonical and confidence is high enough.
-- The existing local or RSS-derived taxonomy is used immediately as fallback, so ingestion does not wait for the AI request.
-- When AI returns at least one valid canonical topic, the backend replaces the fallback topics in the background.
-- Each stored topic includes source, confidence, evidence, and reason-code metadata.
-- Each article also stores AI-processing metadata so attempted articles, including no-topic results, are not reprocessed on later refreshes or service restarts.
-- Admins can inspect classification details with `GET /internal-api/admin/articles/:articleId/topics/debug`.
+### Feedback
 
-For Docker Compose development, AI topic activity is visible in backend logs without exposing prompts or secrets:
-
-- `AI topic detection skipped: ...`
-- `AI topic detection started: model=..., articles=..., batches=...`
-- `AI topic batch completed: model=..., articles=..., classified=..., durationMs=...`
-- `AI topic batch produced no valid topics: reason=..., responseChars=..., finishReason=...`
-- `AI topic detection completed: model=..., requested=..., classified=..., durationMs=...`
-- `AI topic batch failed: OpenRouter request timed out; keeping local fallback topics`
-
-Use `docker compose logs -f backend` to follow these messages while debugging.
-
-### Reader and Image Extraction
-
-| Variable | Default | Purpose |
+| Variable | Default | Notes |
 | --- | --- | --- |
-| `READER_TIMEOUT` | `12000` | Article reader fetch timeout in ms |
-| `READER_CACHE_TTL_MS` | `86400000` | Reader cache TTL in ms |
-| `ARTICLE_IMAGE_TIMEOUT` | `8000` | Article-page image fallback timeout in ms |
-| `ARTICLE_IMAGE_CACHE_TTL` | `21600000` | Article image fallback cache TTL in ms |
-| `ARTICLE_IMAGE_CACHE_MAX_ENTRIES` | `500` | Max cached image fallback entries |
-| `ARTICLE_IMAGE_FALLBACK_LIMIT` | `4` | Max recent articles per refresh that trigger image fallback extraction |
+| `TELEGRAM_BOT_TOKEN` | unset | Enables feedback forwarding to Telegram. |
+| `TELEGRAM_CHAT_ID` | unset | Target chat or channel id. |
+| `TELEGRAM_MESSAGE_THREAD_ID` | unset | Optional forum topic id. |
 
-### Outbound Request Safety
+## Admin Setup
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `OUTBOUND_MAX_REDIRECTS` | `5` | Max followed redirects for outbound fetches |
-| `OUTBOUND_MAX_RESPONSE_BYTES` | `2097152` (2 MB) | Default max size for generic outbound HTTP response bodies |
-| `RSS_MAX_RESPONSE_BYTES` | `1048576` (1 MB) | Max size for fetched RSS/XML feed bodies |
-| `READER_MAX_RESPONSE_BYTES` | `2097152` (2 MB) | Max size for fetched article HTML used by reader mode |
-| `ARTICLE_IMAGE_MAX_RESPONSE_BYTES` | `524288` (512 KB) | Max size for fetched article HTML used for image fallback extraction |
-
-### WebSocket
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `WS_PING_TIMEOUT` | `60000` | Socket.IO ping timeout in ms |
-| `WS_PING_INTERVAL` | `25000` | Socket.IO ping interval in ms |
-
-### Feedback and Telegram Delivery
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `TELEGRAM_BOT_TOKEN` | unset | Bot token used to forward feedback submissions to Telegram |
-| `TELEGRAM_CHAT_ID` | unset | Target chat or channel id that receives forwarded feedback |
-| `TELEGRAM_MESSAGE_THREAD_ID` | unset | Optional Telegram forum topic id when feedback should be sent into a specific topic inside a forum-enabled supergroup |
-| `TELEGRAM_API_BASE_URL` | `https://api.telegram.org` | Optional Telegram API base URL override |
-
-### Admin Access
-
-- On startup, the backend ensures a reserved admin account exists.
-- If the admin password is not configured yet, the backend logs a warning with the bootstrap-link expiry time and the current single-use setup link.
-- Generate a fresh admin bootstrap link manually from `backend/` with:
-  `node -e "const userService=require('./services/userService'); const result=userService.ensureAdminBootstrap(); console.log(result);"`
-- The returned `setupLink` opens the admin password setup flow at `/admin/setup#token=...`.
-- Calling `ensureAdminBootstrap()` again invalidates any previous unused admin bootstrap token and returns a new one.
-- Set `APP_BASE_URL` so generated setup links point to the correct public BFF or app origin in your environment.
-- The outbound response-size limits above are optional; if unset, News Flow uses the listed safe defaults.
-
-## BFF and Security Boundary
-
-### HTTP Surface
-
-- The browser-facing app talks to the BFF on `/api/*`.
-- The backend app-private API remains on `/internal-api/*` and is intended to stay reachable only from the BFF on the private Docker network.
-- The external cached-news API remains public on `/api/public/*`.
-- Public API docs are available at `/api/docs`.
-
-### Internal Trust
-
-- `INTERNAL_PROXY_TOKEN` is a shared secret used only between the BFF and the backend.
-- Set the same `INTERNAL_PROXY_TOKEN` value in both services.
-- Do not keep the development default in production.
-- Do not commit the production value to the repository.
-- `BFF_SESSION_SECRET` is the secret used by the BFF session middleware to sign the browser-facing session cookie.
-- Set a stable `BFF_SESSION_SECRET` value in production so browser sessions survive BFF restarts and browser reopen flows.
-- `INTERNAL_SERVICE_NAME` is not a secret. It is an identifier the backend expects from the trusted internal caller.
-- Keep `INTERNAL_SERVICE_NAME=bff` unless you intentionally rename the BFF service and update both sides together.
-
-### Recommended Token Generation
-
-- Use a long random value, for example 32 bytes or more.
-
-Example with OpenSSL:
+The backend creates a reserved admin account on startup. If the admin password is missing, it logs a single-use setup link. To generate a fresh link manually from `backend/`:
 
 ```bash
-openssl rand -hex 32
+node -e "const userService=require('./services/userService'); console.log(userService.ensureAdminBootstrap());"
 ```
 
-Example with Node.js:
+## Repository Layout
 
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-Example shell export before `docker compose up`:
-
-```bash
-export INTERNAL_PROXY_TOKEN="$(openssl rand -hex 32)"
-export BFF_SESSION_SECRET="$(openssl rand -hex 32)"
-export INTERNAL_SERVICE_NAME="bff"
-docker compose up --build -d
-```
-
-### Operational Guidance
-
-- Treat `INTERNAL_PROXY_TOKEN` like an application secret.
-- Treat `BFF_SESSION_SECRET` like an application secret too.
-- Store them in your shell environment, deployment secret manager, or an untracked local env file used only on your host.
-- `docker compose` expects `INTERNAL_PROXY_TOKEN` and `BFF_SESSION_SECRET` to be set explicitly before startup instead of falling back to insecure defaults.
-- If you change either secret, existing users may need to sign in again, but user data remains intact.
-- If the values do not match, the backend rejects app-private HTTP and Socket.IO traffic from the BFF.
-- For HTTPS deployments behind a reverse proxy, set `APP_BASE_URL=https://...` and ensure the proxy forwards `X-Forwarded-Proto: https`; set BFF `TRUST_PROXY=true` only when that proxy is trusted and you need forwarded client IP/header handling.
-
-## Ingestion Behavior
-
-### Assigned-Source Refresh
-
-Scheduled ingestion refreshes only sources assigned to recently active users.
-
-- Default sources are considered assigned when a user has not excluded the source family or subsource.
-- Custom sources are assigned to their owning user.
-- Normal app feed loads read cached articles without triggering upstream RSS requests.
-- Clicking the top-navbar refresh button returns the cached feed immediately and queues a refresh for the user's assigned default and custom sources when the backend cooldown allows it.
-- Repeated manual refresh clicks during `MANUAL_REFRESH_COOLDOWN_MS` keep serving cached data and do not start another upstream refresh.
-- Upstream RSS fetches are shared-throttled by `SOURCE_FETCH_FRESHNESS_MS`, so if any user recently fetched a source, another refresh can reuse the cached database state instead of hitting that RSS endpoint again.
-- AI topic completion can update the visible cached feed automatically, but this does not trigger another RSS/source refresh.
-- If another `/news` request arrives while that manual refresh is still running, it keeps serving cached articles and reports the refresh as pending.
-- If the database is empty, the backend still seeds the default source set so first-run startup has data.
-
-### Shared Custom RSS URLs
-
-When multiple users add the same custom RSS URL, ingestion fetches that URL once per refresh and fans parsed articles out into each owning user source.
-
-- Each user source still owns its private article rows.
-- Deleting or updating one user source removes only that user source data.
-- Other users with the same RSS URL are unaffected.
-
-## Project Layout
-
-- `backend/server.js` - backend HTTP and WebSocket entrypoint
-- `backend/routes/api.js` - app-private REST API behind the BFF
-- `backend/routes/publicApi.js` - public cached-news API
-- `backend/services/` - ingestion, grouping, querying, users, database, reader extraction, and realtime services
-- `backend/utils/` - auth, validation, logging, network safety, and shared helpers
-- `bff/server.js` - browser-facing BFF, session bridge, static frontend host, and proxy layer
-- `frontend/src/components/` - UI screens, cards, panels, and settings views
-- `frontend/src/hooks/` - request and interaction helpers
-- `frontend/src/services/api.js` - frontend API client
-- `frontend/src/config/` - changelog and frontend config modules
-- `frontend/src/utils/` - frontend utility helpers
-- `frontend/public/` - static frontend assets
-
-## Operational Notes
-
-- Data is stored locally in `backend/data/news.db` by default.
-- The app is optimized for a simple self-hosted deployment model.
-- Users can only lower personal retention or recent windows within server-defined limits.
-- Authenticated users can open `Send feedback` from the user menu.
-- Each feedback submission includes a category, title, description, and the authenticated username automatically.
-- Users can optionally attach one image up to 5 MB or one short video up to 12 MB.
-- Attachments and feedback text are forwarded to the configured Telegram chat through the backend so the bot token never reaches the browser.
-- If you use a Telegram forum-enabled supergroup, set `TELEGRAM_CHAT_ID` to the supergroup id like `-100...` and `TELEGRAM_MESSAGE_THREAD_ID` to the numeric topic id instead of combining both values into a single string.
+- `backend/`: Express, Socket.IO, SQLite, ingestion, auth, reader extraction, public API, and AI jobs.
+- `bff/`: browser-facing security boundary, session bridge, static frontend host, and proxy layer.
+- `frontend/`: Vite React app. Browser API calls go through `/api/*` on the BFF.
 
 ## License
 
