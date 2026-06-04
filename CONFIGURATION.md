@@ -139,8 +139,7 @@ AI features run only in the backend. Feature switches default to `true`, but pro
 | `AI_TOPIC_DETECTION_ENABLED` | `true` | Enables AI topic classification when the API key is present. Invalid values disable it. |
 | `AI_STORY_GROUPING_ENABLED` | `true` | Enables AI-assisted story grouping when the API key is present. Invalid values disable it. |
 | `AI_SUMMARY_GENERATION_ENABLED` | `true` | Enables thematic summaries when the API key is present and controls summary UI visibility. Invalid values disable it. |
-| `AI_PODCAST_GENERATION_ENABLED` | `true` | Enables podcast script generation when the API key is present and controls podcast UI visibility. Invalid values disable it. |
-| `AI_PODCAST_TTS_ENABLED` | `true` | Enables podcast audio generation when the API key is present. Scripts can remain enabled without audio. Invalid values disable it. |
+| `AI_PODCAST_GENERATION_ENABLED` | `true` | Enables podcast script and audio generation when the API key is present and controls podcast UI visibility. Invalid values disable it. |
 
 ## AI Topic Detection
 
@@ -184,6 +183,8 @@ AI features run only in the backend. Feature switches default to `true`, but pro
 | `AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS` | `600000` | Cooldown before retrying failed summaries. Minimum `0`, maximum `86400000`. |
 
 ## AI Podcasts And TTS
+
+`AI_PODCAST_GENERATION_ENABLED` is the only podcast on/off switch. The variables below only tune podcast scripts or audio when podcast generation is enabled.
 
 | Variable | Default | Details |
 | --- | --- | --- |

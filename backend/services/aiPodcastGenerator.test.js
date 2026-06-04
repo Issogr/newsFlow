@@ -35,6 +35,11 @@ describe('aiPodcastGenerator', () => {
   });
 
   test('builds a podcast prompt for enabled languages from every provided article', () => {
+    process.env = {
+      ...originalEnv,
+      AI_PODCAST_LANGUAGES: undefined
+    };
+
     const prompt = aiPodcastGenerator._buildPrompt({
       periodStart: '2026-05-21T07:00:00.000Z',
       periodEnd: '2026-05-21T13:00:00.000Z'
@@ -182,6 +187,15 @@ describe('aiPodcastGenerator', () => {
       scriptModel: 'deepseek/deepseek-v4-flash',
       ttsModel: 'google/gemini-3.1-flash-tts-preview',
       enabled: true
+    },
+    {
+      name: 'the shared podcast feature toggle is disabled',
+      env: {
+        AI_PODCAST_GENERATION_ENABLED: 'false'
+      },
+      scriptModel: 'deepseek/deepseek-v4-flash',
+      ttsModel: 'google/gemini-3.1-flash-tts-preview',
+      enabled: false
     }
   ])('uses $name', ({ env, scriptModel, ttsModel, enabled }) => {
     process.env = {
@@ -226,7 +240,8 @@ describe('aiPodcastGenerator', () => {
     process.env = {
       ...originalEnv,
       OPENROUTER_API_KEY: 'test-key',
-      AI_PODCAST_TTS_FORMAT: 'mp3'
+      AI_PODCAST_TTS_FORMAT: 'mp3',
+      AI_PODCAST_TTS_VOICE: undefined
     };
     const pcmBytes = Buffer.alloc(48000);
     const httpClient = {

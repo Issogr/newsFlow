@@ -2,7 +2,7 @@
 
 ## 3.5.7
 
-- added independent `true`/`false` AI feature switches, including separate podcast generation control, and hide disabled summary or podcast surfaces in the frontend
+- added independent `true`/`false` AI feature switches, with one podcast switch controlling script generation, audio generation, and frontend visibility
 
 ## 3.5.6
 

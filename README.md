@@ -132,8 +132,7 @@ AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed 
 | `AI_TOPIC_DETECTION_ENABLED` | `true` | Adds AI topic metadata during ingestion. |
 | `AI_STORY_GROUPING_ENABLED` | `true` | Groups articles describing the same story after ingestion. |
 | `AI_SUMMARY_GENERATION_ENABLED` | `true` | Generates thematic summaries; hides summary UI when `false`. |
-| `AI_PODCAST_GENERATION_ENABLED` | `true` | Generates podcast scripts; hides podcast UI when `false`. |
-| `AI_PODCAST_TTS_ENABLED` | `true` | Generates podcast audio; scripts can remain enabled. |
+| `AI_PODCAST_GENERATION_ENABLED` | `true` | Set to `false` to disable podcast scripts, audio, and UI. |
 | `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarms reader text before summary windows when summaries are enabled. |
 | `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | Time zone for `07:00` and `19:00` summary/podcast slots. |
 | `AI_PODCAST_LANGUAGES` | `en` | Comma-separated locales: `en`, `it`. |

@@ -62,7 +62,7 @@ function getScriptConfig() {
 
 function getTtsConfig() {
   return getOpenRouterConfig({
-    enabledEnvName: 'AI_PODCAST_TTS_ENABLED',
+    enabledEnvName: 'AI_PODCAST_GENERATION_ENABLED',
     modelEnvName: 'OPENROUTER_PODCAST_AUDIO_MODEL',
     defaultModel: DEFAULT_PODCAST_AUDIO_MODEL,
     timeoutEnvName: 'AI_PODCAST_TTS_TIMEOUT_MS',

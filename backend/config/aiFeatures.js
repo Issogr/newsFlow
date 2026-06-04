@@ -35,18 +35,13 @@ function isAiPodcastGenerationEnabled() {
   return isOpenRouterFeatureEnabled('AI_PODCAST_GENERATION_ENABLED');
 }
 
-function isAiPodcastTtsEnabled() {
-  return isOpenRouterFeatureEnabled('AI_PODCAST_TTS_ENABLED');
-}
-
 function getAiFeatures() {
   return {
     ai: {
       topicDetectionEnabled: isAiTopicDetectionEnabled(),
       storyGroupingEnabled: isAiStoryGroupingEnabled(),
       thematicSummariesEnabled: isAiSummaryGenerationEnabled(),
-      podcastsEnabled: isAiPodcastGenerationEnabled(),
-      podcastAudioEnabled: isAiPodcastTtsEnabled()
+      podcastsEnabled: isAiPodcastGenerationEnabled()
     }
   };
 }
@@ -54,7 +49,6 @@ function getAiFeatures() {
 module.exports = {
   getAiFeatures,
   isAiPodcastGenerationEnabled,
-  isAiPodcastTtsEnabled,
   isAiStoryGroupingEnabled,
   isAiSummaryGenerationEnabled,
   isAiTopicDetectionEnabled,

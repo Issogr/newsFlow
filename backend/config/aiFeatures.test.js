@@ -20,8 +20,7 @@ describe('aiFeatures config', () => {
         topicDetectionEnabled: true,
         storyGroupingEnabled: true,
         thematicSummariesEnabled: true,
-        podcastsEnabled: true,
-        podcastAudioEnabled: true
+        podcastsEnabled: true
       }
     });
   });
@@ -36,8 +35,7 @@ describe('aiFeatures config', () => {
         topicDetectionEnabled: false,
         storyGroupingEnabled: false,
         thematicSummariesEnabled: false,
-        podcastsEnabled: false,
-        podcastAudioEnabled: false
+        podcastsEnabled: false
       }
     });
   });
@@ -48,7 +46,6 @@ describe('aiFeatures config', () => {
     process.env.AI_STORY_GROUPING_ENABLED = 'false';
     process.env.AI_SUMMARY_GENERATION_ENABLED = 'false';
     process.env.AI_PODCAST_GENERATION_ENABLED = 'false';
-    process.env.AI_PODCAST_TTS_ENABLED = 'false';
 
     const { getAiFeatures } = require('./aiFeatures');
 
@@ -57,8 +54,7 @@ describe('aiFeatures config', () => {
         topicDetectionEnabled: false,
         storyGroupingEnabled: false,
         thematicSummariesEnabled: false,
-        podcastsEnabled: false,
-        podcastAudioEnabled: false
+        podcastsEnabled: false
       }
     });
   });
@@ -80,7 +76,6 @@ describe('aiFeatures config', () => {
     process.env.AI_STORY_GROUPING_ENABLED = '1';
     process.env.AI_SUMMARY_GENERATION_ENABLED = 'yes';
     process.env.AI_PODCAST_GENERATION_ENABLED = '0';
-    process.env.AI_PODCAST_TTS_ENABLED = 'off';
 
     const { getAiFeatures } = require('./aiFeatures');
 
@@ -89,8 +84,7 @@ describe('aiFeatures config', () => {
         topicDetectionEnabled: false,
         storyGroupingEnabled: false,
         thematicSummariesEnabled: false,
-        podcastsEnabled: false,
-        podcastAudioEnabled: false
+        podcastsEnabled: false
       }
     });
   });
