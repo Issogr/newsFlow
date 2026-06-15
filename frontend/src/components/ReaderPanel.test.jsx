@@ -250,6 +250,45 @@ describe('ReaderPanel', () => {
     }));
   });
 
+  test('keeps many grouped source versions in one horizontal scroll row', async () => {
+    fetchReaderArticle.mockResolvedValue({
+      title: 'Reader title',
+      language: 'en',
+      excerpt: 'Excerpt',
+      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
+      minutesToRead: 1
+    });
+    const sixSourceGroup = {
+      ...group,
+      items: Array.from({ length: 6 }, (_, index) => ({
+        id: `similar-article-${index + 1}`,
+        sourceId: `source-${index + 1}`,
+        source: `Source ${index + 1}`,
+        title: `Similar article ${index + 1}`,
+        url: `https://example.com/similar-${index + 1}`,
+        pubDate: `2026-03-07T1${index}:00:00.000Z`,
+        language: 'en'
+      }))
+    };
+
+    renderReaderPanel({
+      group: sixSourceGroup,
+      initialArticleId: 'similar-article-1'
+    });
+
+    expect(await screen.findByText('Body')).toBeInTheDocument();
+
+    const sourceVersionRow = screen.getByText('sourceVersions').nextElementSibling;
+    expect(sourceVersionRow).toHaveClass('overflow-x-auto');
+    expect(sourceVersionRow).not.toHaveClass('flex-wrap');
+
+    for (let index = 1; index <= 6; index += 1) {
+      const button = screen.getByRole('button', { name: `Source ${index}` });
+      expect(button).toHaveClass('shrink-0');
+      expect(button).toHaveClass('whitespace-nowrap');
+    }
+  });
+
   test('disables unsafe original-source links', async () => {
     fetchReaderArticle.mockResolvedValue({
       title: 'Unsafe reader title',

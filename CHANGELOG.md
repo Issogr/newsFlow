@@ -4,6 +4,7 @@
 
 - kept reader mode titles anchored to the feed article title so loading reader content no longer replaces them
 - synced AI summary read badges across devices so summaries opened elsewhere no longer appear new
+- kept grouped reader-mode source links in one horizontal scroll row so large story clusters stay readable
 
 ## 3.5.7
 

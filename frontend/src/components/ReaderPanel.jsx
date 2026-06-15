@@ -343,7 +343,7 @@ const ReaderPanel = ({
                 <Newspaper className="h-4 w-4" />
                 {t('sourceVersions')}
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300 [&::-webkit-scrollbar-track]:bg-transparent">
                 {sourceVersionItems.map(({ item, label }) => {
                   const isActive = item.id === selectedArticle?.id;
                   return (
@@ -352,7 +352,7 @@ const ReaderPanel = ({
                       type="button"
                       onClick={() => setSelectedArticleId(item.id)}
                       aria-pressed={isActive}
-                      className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                      className={`shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                         isActive
                           ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
                           : 'border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100'

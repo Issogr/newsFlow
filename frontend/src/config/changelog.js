@@ -6,7 +6,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     intro: 'A quick summary of the latest update.',
     items: [
       '📖 Kept reader mode titles anchored to the feed article title so loading reader content no longer replaces them.',
-      '✨ Synced AI summary read badges across devices so summaries opened elsewhere no longer appear new.'
+      '✨ Synced AI summary read badges across devices so summaries opened elsewhere no longer appear new.',
+      '📰 Kept grouped reader-mode source links in one horizontal scroll row so large story clusters stay readable.'
     ]
   },
   it: {
@@ -15,7 +16,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
       '📖 Mantenuto il titolo della modalita lettura uguale a quello del feed, evitando che il contenuto caricato lo sostituisca.',
-      '✨ Sincronizzati tra dispositivi gli indicatori delle sintesi AI lette, cosi quelle gia aperte altrove non risultano nuove.'
+      '✨ Sincronizzati tra dispositivi gli indicatori delle sintesi AI lette, cosi quelle gia aperte altrove non risultano nuove.',
+      '📰 Mantenuti i link alle fonti raggruppate in una sola riga scorrevole nella modalita lettura, cosi i gruppi grandi restano leggibili.'
     ]
   }
 };
