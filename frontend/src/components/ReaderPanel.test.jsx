@@ -97,7 +97,8 @@ describe('ReaderPanel', () => {
       minutesToRead: 1
     });
 
-    expect(await screen.findByText('Latest reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Latest body')).toBeInTheDocument();
+    expect(screen.getByText('Article two')).toBeInTheDocument();
 
     await resolveDeferred(firstRequest, {
       title: 'Stale reader title',
@@ -108,8 +109,8 @@ describe('ReaderPanel', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Latest reader title')).toBeInTheDocument();
-      expect(screen.queryByText('Stale reader title')).not.toBeInTheDocument();
+      expect(screen.getByText('Latest body')).toBeInTheDocument();
+      expect(screen.queryByText('Stale body')).not.toBeInTheDocument();
     });
   });
 
@@ -124,7 +125,9 @@ describe('ReaderPanel', () => {
 
     renderReaderPanel();
 
-    expect(await screen.findByText('Backend cached reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Cached body')).toBeInTheDocument();
+    expect(screen.getByText('Article one')).toBeInTheDocument();
+    expect(screen.queryByText('Backend cached reader title')).not.toBeInTheDocument();
     expect(fetchReaderArticle).toHaveBeenCalledWith('article-1', expect.objectContaining({
       refresh: false
     }));
@@ -165,7 +168,8 @@ describe('ReaderPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
 
-    expect(await screen.findByText('Second reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Second body')).toBeInTheDocument();
+    expect(screen.getByText('Article two')).toBeInTheDocument();
     expect(screen.queryByText('readerUnavailable')).not.toBeInTheDocument();
   });
 
@@ -188,12 +192,12 @@ describe('ReaderPanel', () => {
 
     renderReaderPanel();
 
-    expect(await screen.findByText('First reader title')).toBeInTheDocument();
+    expect(await screen.findByText('First body')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
-    expect(await screen.findByText('Second reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Second body')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Source A' }));
 
-    expect(await screen.findByText('First reader title')).toBeInTheDocument();
+    expect(await screen.findByText('First body')).toBeInTheDocument();
     expect(fetchReaderArticle).toHaveBeenCalledTimes(2);
   });
 
@@ -235,12 +239,12 @@ describe('ReaderPanel', () => {
       initialArticleId: 'same-source-1'
     });
 
-    expect(await screen.findByText('First same-source reader title')).toBeInTheDocument();
+    expect(await screen.findByText('First body')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Source A #1' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Source A #2' }));
 
-    expect(await screen.findByText('Second same-source reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Second body')).toBeInTheDocument();
     expect(fetchReaderArticle).toHaveBeenNthCalledWith(2, 'same-source-2', expect.objectContaining({
       refresh: false
     }));
@@ -265,7 +269,7 @@ describe('ReaderPanel', () => {
         }
     });
 
-    await screen.findByText('Unsafe reader title');
+    await screen.findByText('Unsafe body');
 
     expect(screen.queryByRole('link', { name: 'openOriginalSource' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'shareArticle' })).toBeDisabled();
@@ -283,13 +287,13 @@ describe('ReaderPanel', () => {
 
     renderReaderPanel();
 
-    await screen.findByText('Reader title');
+    await screen.findByText('Body');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
     });
 
     expect(navigator.share).toHaveBeenCalledWith({
-      title: 'Reader title',
+      title: 'Article one',
       url: 'https://example.com/one'
     });
   });
@@ -311,7 +315,7 @@ describe('ReaderPanel', () => {
 
     renderReaderPanel();
 
-    await screen.findByText('Reader title');
+    await screen.findByText('Body');
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'increaseReaderTextSize' }));
@@ -340,7 +344,7 @@ describe('ReaderPanel', () => {
 
     renderReaderPanel();
 
-    await screen.findByText('Reader title');
+    await screen.findByText('Body');
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'refreshReader' }));
@@ -349,7 +353,8 @@ describe('ReaderPanel', () => {
     expect(fetchReaderArticle).toHaveBeenNthCalledWith(2, 'article-1', expect.objectContaining({
       refresh: true
     }));
-    expect(await screen.findByText('Refreshed reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Updated body')).toBeInTheDocument();
+    expect(screen.getByText('Article one')).toBeInTheDocument();
   });
 
   test('keeps stale reader content visible when manual refresh fails', async () => {
@@ -365,13 +370,13 @@ describe('ReaderPanel', () => {
 
     renderReaderPanel();
 
-    expect(await screen.findByText('Reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Body')).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'refreshReader' }));
     });
 
-    expect(screen.getByText('Reader title')).toBeInTheDocument();
+    expect(screen.getByText('Body')).toBeInTheDocument();
     expect(screen.getByText('readerUnavailable')).toBeInTheDocument();
   });
 

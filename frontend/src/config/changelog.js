@@ -4,13 +4,17 @@ export const CURRENT_CHANGELOG_ENTRY = {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
-    items: []
+    items: [
+      '📖 Kept reader mode titles anchored to the feed article title so loading reader content no longer replaces them.'
+    ]
   },
   it: {
     eyebrow: 'Ultimo aggiornamento',
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
-    items: []
+    items: [
+      '📖 Mantenuto il titolo della modalita lettura uguale a quello del feed, evitando che il contenuto caricato lo sostituisca.'
+    ]
   }
 };
 

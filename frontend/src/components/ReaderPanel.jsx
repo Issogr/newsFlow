@@ -209,9 +209,9 @@ const ReaderPanel = ({
   const handleShare = useCallback(async () => {
     await shareArticle({
       url: safeOriginalUrl,
-      title: selectedReader?.title || selectedArticle?.title || ''
+      title: selectedArticle?.title || ''
     });
-  }, [safeOriginalUrl, selectedArticle?.title, selectedReader?.title, shareArticle]);
+  }, [safeOriginalUrl, selectedArticle?.title, shareArticle]);
 
   const updateReaderTextSize = useCallback(async (nextValue) => {
     const normalizedNextValue = normalizeReaderTextSize(nextValue);
@@ -371,7 +371,7 @@ const ReaderPanel = ({
               <div className="mx-auto max-w-[58rem] space-y-5">
                 <div className="rounded-[2rem] border border-stone-200/80 bg-white/85 px-6 py-6 shadow-sm backdrop-blur-sm md:px-8 md:py-7">
                   <h2 className="text-2xl font-semibold leading-tight tracking-tight text-stone-900 md:text-[2rem] md:leading-[1.15]">
-                    {selectedReader?.title || selectedArticle?.title || t('readerMode')}
+                    {selectedArticle?.title || t('readerMode')}
                   </h2>
 
                   <div className="mt-5 flex flex-wrap items-center gap-2 sm:gap-3">

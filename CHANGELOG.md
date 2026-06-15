@@ -2,6 +2,8 @@
 
 ## 3.5.8
 
+- kept reader mode titles anchored to the feed article title so loading reader content no longer replaces them
+
 ## 3.5.7
 
 - added independent `true`/`false` AI feature switches, with one podcast switch controlling script generation, audio generation, and frontend visibility
