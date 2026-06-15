@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.5.8
+
 ## 3.5.7
 
 - added independent `true`/`false` AI feature switches, with one podcast switch controlling script generation, audio generation, and frontend visibility
