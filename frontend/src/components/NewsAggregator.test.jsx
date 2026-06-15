@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import NewsAggregator from './NewsAggregator';
-import { fetchNews, fetchReadLaterNews, fetchThematicSummaries, isRequestCanceled, updateUserSettings } from '../services/api';
+import { fetchNews, fetchReadLaterNews, fetchThematicSummaries, isRequestCanceled, markThematicSummariesRead, updateUserSettings } from '../services/api';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 import { createDeferred, resolveDeferred } from '../test-utils/deferred';
 
@@ -8,6 +8,7 @@ vi.mock('../services/api', () => ({
   fetchNews: vi.fn(),
   fetchReadLaterNews: vi.fn(),
   fetchThematicSummaries: vi.fn(),
+  markThematicSummariesRead: vi.fn(),
   saveReadLaterArticles: vi.fn(),
   removeReadLaterArticles: vi.fn(),
   updateUserSettings: vi.fn(),
@@ -161,6 +162,7 @@ describe('NewsAggregator', () => {
     };
     window.matchMedia = jest.fn().mockImplementation(() => desktopMediaQuery);
     fetchThematicSummaries.mockResolvedValue({ items: [] });
+    markThematicSummariesRead.mockResolvedValue({ readSummaryIds: [] });
     useTopicRefreshSocket.mockImplementation(() => {});
   });
 
@@ -333,13 +335,45 @@ describe('NewsAggregator', () => {
     expect(screen.queryByText('Storie per topic')).not.toBeInTheDocument();
     expect(screen.queryByText('Tecnologia')).not.toBeInTheDocument();
 
-    fireEvent.click(storyButton);
+    await act(async () => {
+      fireEvent.click(storyButton);
+      await Promise.resolve();
+    });
 
+    expect(markThematicSummariesRead).toHaveBeenCalledWith(['summary-technology']);
     expect(screen.getByText('Ora di pranzo')).toBeInTheDocument();
     expect(screen.getByText('1 articolo valutato')).toBeInTheDocument();
     expect(screen.queryByText('I chip AI sono avanzati rapidamente nella finestra [1].')).not.toBeInTheDocument();
     expect(screen.getAllByText('BBC')).not.toHaveLength(0);
     expect(screen.queryByText('AI chips accelerate')).not.toBeInTheDocument();
+  });
+
+  test('uses server read summary ids to hide already-read thematic summary badges', async () => {
+    fetchNews.mockResolvedValue({
+      items: [createGroup('group-1', 'Top headline')],
+      meta: { page: 1, pageSize: 12, hasMore: false, totalGroups: 1 },
+      filters: { sources: [], sourceCatalog: [], topics: [] }
+    });
+    fetchThematicSummaries.mockResolvedValue({
+      readSummaryIds: ['summary-technology'],
+      items: [
+        {
+          id: 'summary-technology',
+          topicKey: 'technology',
+          topicLabel: 'Technology',
+          topics: ['Technology'],
+          periodStart: '2026-05-21T07:00:00.000Z',
+          periodEnd: '2026-05-21T13:00:00.000Z',
+          summaryTextByLocale: { en: 'Technology update [1].', it: 'Aggiornamento tecnologia [1].' },
+          sources: []
+        }
+      ]
+    });
+
+    await renderNewsAggregator();
+
+    const storyButton = await screen.findByRole('button', { name: 'Open Technology summary' });
+    expect(storyButton.querySelector('.lucide-sparkles')).toBeNull();
   });
 
   test('does not fetch thematic summaries when summary and podcast features are disabled', async () => {
@@ -489,7 +523,10 @@ describe('NewsAggregator', () => {
       });
 
     await renderNewsAggregator();
-    fireEvent.click(await screen.findByRole('button', { name: 'Open Technology summary' }));
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Technology summary' }));
+      await Promise.resolve();
+    });
 
     expect(screen.getByText('1 article evaluated')).toBeInTheDocument();
 
@@ -545,7 +582,10 @@ describe('NewsAggregator', () => {
       });
 
     await renderNewsAggregator();
-    fireEvent.click(await screen.findByRole('button', { name: 'Open Technology summary' }));
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Technology summary' }));
+      await Promise.resolve();
+    });
     expect(screen.getByText('1 article evaluated')).toBeInTheDocument();
 
     await act(async () => {

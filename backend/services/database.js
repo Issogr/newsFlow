@@ -289,6 +289,8 @@ module.exports = {
   deleteArticlesForUserSource: userStateRepository.deleteArticlesForUserSource,
   deleteUserSource: userStateRepository.deleteUserSource,
   deleteAllUserSources: userStateRepository.deleteAllUserSources,
+  listReadThematicSummaryIds: userStateRepository.listReadThematicSummaryIds,
+  markThematicSummariesRead: userStateRepository.markThematicSummariesRead,
   importUserState: userStateRepository.importUserState,
   verifyWriteAccess,
   getWriteAccessStatus

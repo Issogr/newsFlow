@@ -224,6 +224,10 @@ export const fetchThematicSummaries = async ({ signal } = {}) => {
   return responseData(api.get('/thematic-summaries', { signal }));
 };
 
+export const markThematicSummariesRead = async (summaryIds = []) => {
+  return responseData(api.post('/me/thematic-summaries/read', { summaryIds }));
+};
+
 export const saveReadLaterArticles = async (articleIds = []) => {
   return responseData(api.post('/me/read-later', { articleIds }));
 };

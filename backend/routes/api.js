@@ -195,6 +195,14 @@ function getRequestArticleIds(req) {
   return rawArticleIds.map((articleId) => String(articleId || '').trim()).filter(Boolean);
 }
 
+function getRequestSummaryIds(req) {
+  const rawSummaryIds = Array.isArray(req.body?.summaryIds)
+    ? req.body.summaryIds
+    : [req.body?.summaryId];
+
+  return rawSummaryIds.map((summaryId) => String(summaryId || '').trim()).filter(Boolean);
+}
+
 function requireAuthenticatedPublicApiFeature(req, res, next) {
   if (isAuthenticatedPublicApiEnabled()) {
     next();
@@ -471,7 +479,15 @@ router.get('/read-later', [requireAuthenticatedUser, sanitizeQuery('search')], a
 
 router.get('/thematic-summaries', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'private, no-store, max-age=0');
-  res.json(thematicSummaryService.getLatestSummaries());
+  res.json({
+    ...thematicSummaryService.getLatestSummaries(),
+    readSummaryIds: database.listReadThematicSummaryIds(req.user.id)
+  });
+}));
+
+router.post('/me/thematic-summaries/read', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+  const readSummaryIds = database.markThematicSummariesRead(req.user.id, getRequestSummaryIds(req));
+  res.status(201).json({ success: true, readSummaryIds });
 }));
 
 router.get('/podcast-summary/:summaryId/audio', [

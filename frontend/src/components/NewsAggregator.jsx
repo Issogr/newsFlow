@@ -8,7 +8,7 @@ import {
   RefreshCw,
   User,
 } from 'lucide-react';
-import { fetchNews, fetchReadLaterNews, fetchThematicSummaries, isRequestCanceled, removeReadLaterArticles, saveReadLaterArticles } from '../services/api';
+import { fetchNews, fetchReadLaterNews, fetchThematicSummaries, isRequestCanceled, markThematicSummariesRead, removeReadLaterArticles, saveReadLaterArticles } from '../services/api';
 import ErrorMessage from './ErrorMessage';
 import NewsCard from './NewsCard';
 import ReaderPanel from './ReaderPanel';
@@ -356,6 +356,13 @@ function setStoredReadThematicSummaryIds(storageKey, summaryIds = []) {
   } catch {
     // Keep unread indicators in memory when browser storage is unavailable.
   }
+}
+
+function mergeReadThematicSummaryIds(...summaryIdGroups) {
+  return [...new Set(summaryIdGroups
+    .flatMap((summaryIds) => (Array.isArray(summaryIds) ? summaryIds : []))
+    .map((summaryId) => String(summaryId || '').trim())
+    .filter(Boolean))];
 }
 
 const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogVersion, onOpenReleaseNotes }) => {
@@ -729,13 +736,19 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       const response = await fetchThematicSummaries({ signal: request.signal });
       if (request.isLatest()) {
         setThematicSummaries(filterThematicSummariesForFeatures(response.items || [], aiSummaryFeatureState));
+        const readSummaryIds = mergeReadThematicSummaryIds(
+          getStoredReadThematicSummaryIds(readThematicSummariesStorageKey),
+          response.readSummaryIds
+        );
+        setReadThematicSummaryIds(readSummaryIds);
+        setStoredReadThematicSummaryIds(readThematicSummariesStorageKey, readSummaryIds);
       }
     } catch (requestError) {
       if (!isRequestCanceled(requestError) && request.isLatest()) {
         setThematicSummaries([]);
       }
     }
-  }, [aiSummaryFeatureState, cancelSummaryRequest, needsSourceSetup, startSummaryRequest]);
+  }, [aiSummaryFeatureState, cancelSummaryRequest, needsSourceSetup, readThematicSummariesStorageKey, startSummaryRequest]);
 
   useTopicRefreshSocket({
     onTopicRefresh: handleTopicRefresh,
@@ -744,6 +757,26 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     subscription: socketSubscription,
     enabled: !needsSourceSetup
   });
+
+  useEffect(() => {
+    if (needsSourceSetup || !aiSummaryFeatureState.surfaceEnabled) {
+      return undefined;
+    }
+
+    const refreshVisibleSummaries = () => {
+      if (!document.hidden) {
+        loadThematicSummaries();
+      }
+    };
+
+    window.addEventListener('focus', refreshVisibleSummaries);
+    document.addEventListener('visibilitychange', refreshVisibleSummaries);
+
+    return () => {
+      window.removeEventListener('focus', refreshVisibleSummaries);
+      document.removeEventListener('visibilitychange', refreshVisibleSummaries);
+    };
+  }, [aiSummaryFeatureState.surfaceEnabled, loadThematicSummaries, needsSourceSetup]);
 
   useEffect(() => {
     if (needsSourceSetup) {
@@ -815,10 +848,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     }
 
     setSelectedThematicSummary(summary);
+    const summaryIds = [...new Set(isPodcastSummary(summary)
+      ? [summary.id, ...visibleThematicSummaries.filter(isPodcastSummary).map((podcastSummary) => podcastSummary.id)].filter(Boolean)
+      : [summary.id])];
+
     setReadThematicSummaryIds((current) => {
-      const summaryIds = [...new Set(isPodcastSummary(summary)
-        ? [summary.id, ...visibleThematicSummaries.filter(isPodcastSummary).map((podcastSummary) => podcastSummary.id)].filter(Boolean)
-        : [summary.id])];
       const unreadSummaryIds = summaryIds.filter((summaryId) => !current.includes(summaryId));
 
       if (unreadSummaryIds.length === 0) {
@@ -829,6 +863,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       setStoredReadThematicSummaryIds(readThematicSummariesStorageKey, next);
       return next;
     });
+
+    markThematicSummariesRead(summaryIds)
+      .then((response) => {
+        setReadThematicSummaryIds((current) => {
+          const next = mergeReadThematicSummaryIds(current, response?.readSummaryIds);
+          setStoredReadThematicSummaryIds(readThematicSummariesStorageKey, next);
+          return next;
+        });
+      })
+      .catch(() => {});
   }, [readThematicSummariesStorageKey, visibleThematicSummaries]);
 
   const handleToggleReadLater = useCallback(async (group) => {
