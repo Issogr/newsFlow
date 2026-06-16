@@ -1,6 +1,6 @@
 import { DEFAULT_READER_TEXT_SIZE, normalizeReaderTextSize } from '../config/readerTextSize';
 
-export const READER_TEXT_SIZE_STORAGE_KEY = 'news-flow-reader-text-size';
+const READER_TEXT_SIZE_STORAGE_KEY = 'news-flow-reader-text-size';
 
 export function getStoredReaderTextSizePreference(fallback = DEFAULT_READER_TEXT_SIZE) {
   try {

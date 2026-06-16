@@ -3,7 +3,6 @@ const logger = require('../utils/logger');
 const { createError } = require('../utils/errorHandler');
 const {
   newsSources,
-  expandConfiguredSources,
   expandUserSources,
   getMaxArticleAgeHours,
   getNewsFeed: buildNewsFeed,
@@ -117,7 +116,7 @@ function getAssignedConfiguredSourcesForUsers(users = []) {
 
   users.forEach((user) => {
     const settings = getSettingsForSourceAssignment(user.id);
-    expandConfiguredSources()
+    newsSources
       .filter((source) => isConfiguredSourceAssignedToSettings(source, settings))
       .forEach((source) => assignedSources.set(source.id, source));
   });
@@ -152,7 +151,7 @@ function getUserAssignedSourceConfigs(userContext = {}) {
     excludedSourceIds: Array.isArray(userContext.excludedSourceIds) ? userContext.excludedSourceIds : storedSettings.excludedSourceIds,
     excludedSubSourceIds: Array.isArray(userContext.excludedSubSourceIds) ? userContext.excludedSubSourceIds : storedSettings.excludedSubSourceIds
   };
-  const assignedConfiguredSources = expandConfiguredSources()
+  const assignedConfiguredSources = newsSources
     .filter((source) => isConfiguredSourceAssignedToSettings(source, settings));
   const assignedUserSources = database.listUserSources(userContext.userId)
     .filter((source) => source?.isActive !== false);
@@ -226,7 +225,7 @@ async function ingestAllNews(options = {}) {
       const databaseIsEmpty = database.countArticles() === 0;
       const sourceConfigs = databaseIsEmpty
         ? [
-            ...expandConfiguredSources(),
+            ...newsSources,
             ...expandUserSources(database.listAllActiveUserSources())
           ]
         : getActiveAssignedSourceConfigs();
@@ -308,7 +307,6 @@ async function getNewsFeed(filters = {}, userContext = {}) {
   }
 
   return buildNewsFeed(filters, userContext, {
-    ensureSeedData: async () => {},
     getLastRefreshAt,
     isUserRefreshPending: () => hasPendingUserAssignedSourceRefresh(userContext),
     getManualRefreshMeta: () => getManualRefreshMeta(userContext)
@@ -317,7 +315,6 @@ async function getNewsFeed(filters = {}, userContext = {}) {
 
 async function getCachedNewsFeed(filters = {}, userContext = {}) {
   return buildNewsFeed(filters, userContext, {
-    ensureSeedData: async () => {},
     getLastRefreshAt,
     isUserRefreshPending: () => false
   });

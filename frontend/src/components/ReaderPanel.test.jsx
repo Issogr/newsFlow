@@ -62,6 +62,17 @@ function renderReaderPanel(props = {}) {
   );
 }
 
+function createReaderPayload(text = 'Body', overrides = {}) {
+  return {
+    title: 'Reader title',
+    language: 'en',
+    excerpt: 'Excerpt',
+    contentBlocks: [{ type: 'paragraph', text }],
+    minutesToRead: 1,
+    ...overrides
+  };
+}
+
 describe('ReaderPanel', () => {
   const originalShare = navigator.share;
   const originalClipboard = navigator.clipboard;
@@ -89,24 +100,18 @@ describe('ReaderPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
 
-    await resolveDeferred(secondRequest, {
+    await resolveDeferred(secondRequest, createReaderPayload('Latest body', {
       title: 'Latest reader title',
-      language: 'en',
-      excerpt: 'Latest excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Latest body' }],
-      minutesToRead: 1
-    });
+      excerpt: 'Latest excerpt'
+    }));
 
     expect(await screen.findByText('Latest body')).toBeInTheDocument();
     expect(screen.getByText('Article two')).toBeInTheDocument();
 
-    await resolveDeferred(firstRequest, {
+    await resolveDeferred(firstRequest, createReaderPayload('Stale body', {
       title: 'Stale reader title',
-      language: 'en',
-      excerpt: 'Stale excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Stale body' }],
-      minutesToRead: 1
-    });
+      excerpt: 'Stale excerpt'
+    }));
 
     await waitFor(() => {
       expect(screen.getByText('Latest body')).toBeInTheDocument();
@@ -115,13 +120,11 @@ describe('ReaderPanel', () => {
   });
 
   test('fetches reader content from the backend on open', async () => {
-    fetchReaderArticle.mockResolvedValue({
+    fetchReaderArticle.mockResolvedValue(createReaderPayload('Cached body', {
       title: 'Backend cached reader title',
-      language: 'en',
       excerpt: 'Cached excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Cached body' }],
       minutesToRead: 2
-    });
+    }));
 
     renderReaderPanel();
 
@@ -135,16 +138,15 @@ describe('ReaderPanel', () => {
   });
 
   test('ignores malformed reader list blocks without crashing', async () => {
-    fetchReaderArticle.mockResolvedValue({
+    fetchReaderArticle.mockResolvedValue(createReaderPayload('Visible body', {
       title: 'Reader title',
-      language: 'en',
       excerpt: 'Excerpt',
       contentBlocks: [
         { type: 'paragraph', text: 'Visible body' },
         { type: 'unordered-list', items: null }
       ],
       minutesToRead: 1
-    });
+    }));
 
     renderReaderPanel();
 
@@ -154,13 +156,11 @@ describe('ReaderPanel', () => {
   test('clears a stale reader error when switching to another article', async () => {
     fetchReaderArticle
       .mockRejectedValueOnce(new Error('Reader failed'))
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce(createReaderPayload('Second body', {
         title: 'Second reader title',
-        language: 'en',
         excerpt: 'Cached excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'Second body' }],
         minutesToRead: 2
-      });
+      }));
 
     renderReaderPanel();
 
@@ -175,20 +175,14 @@ describe('ReaderPanel', () => {
 
   test('reuses cached reader content when returning to a source version', async () => {
     fetchReaderArticle
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce(createReaderPayload('First body', {
         title: 'First reader title',
-        language: 'en',
-        excerpt: 'First excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'First body' }],
-        minutesToRead: 1
-      })
-      .mockResolvedValueOnce({
+        excerpt: 'First excerpt'
+      }))
+      .mockResolvedValueOnce(createReaderPayload('Second body', {
         title: 'Second reader title',
-        language: 'en',
-        excerpt: 'Second excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'Second body' }],
-        minutesToRead: 1
-      });
+        excerpt: 'Second excerpt'
+      }));
 
     renderReaderPanel();
 
@@ -203,20 +197,14 @@ describe('ReaderPanel', () => {
 
   test('keeps same-source grouped articles selectable as separate versions', async () => {
     fetchReaderArticle
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce(createReaderPayload('First body', {
         title: 'First same-source reader title',
-        language: 'en',
-        excerpt: 'First excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'First body' }],
-        minutesToRead: 1
-      })
-      .mockResolvedValueOnce({
+        excerpt: 'First excerpt'
+      }))
+      .mockResolvedValueOnce(createReaderPayload('Second body', {
         title: 'Second same-source reader title',
-        language: 'en',
-        excerpt: 'Second excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'Second body' }],
-        minutesToRead: 1
-      });
+        excerpt: 'Second excerpt'
+      }));
 
     renderReaderPanel({
       group: {
@@ -251,13 +239,7 @@ describe('ReaderPanel', () => {
   });
 
   test('keeps many grouped source versions in one horizontal scroll row', async () => {
-    fetchReaderArticle.mockResolvedValue({
-      title: 'Reader title',
-      language: 'en',
-      excerpt: 'Excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
-      minutesToRead: 1
-    });
+    fetchReaderArticle.mockResolvedValue(createReaderPayload());
     const sixSourceGroup = {
       ...group,
       items: Array.from({ length: 6 }, (_, index) => ({
@@ -290,13 +272,10 @@ describe('ReaderPanel', () => {
   });
 
   test('disables unsafe original-source links', async () => {
-    fetchReaderArticle.mockResolvedValue({
+    fetchReaderArticle.mockResolvedValue(createReaderPayload('Unsafe body', {
       title: 'Unsafe reader title',
-      language: 'en',
-      excerpt: 'Unsafe excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Unsafe body' }],
-      minutesToRead: 1
-    });
+      excerpt: 'Unsafe excerpt'
+    }));
 
     renderReaderPanel({
       group: {
@@ -316,13 +295,7 @@ describe('ReaderPanel', () => {
 
   test('shares the original article url from reader mode', async () => {
     navigator.share = jest.fn().mockResolvedValue(undefined);
-    fetchReaderArticle.mockResolvedValue({
-      title: 'Reader title',
-      language: 'en',
-      excerpt: 'Excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
-      minutesToRead: 1
-    });
+    fetchReaderArticle.mockResolvedValue(createReaderPayload());
 
     renderReaderPanel();
 
@@ -338,13 +311,7 @@ describe('ReaderPanel', () => {
   });
 
   test('updates reader text size and persists it without reloading parent state', async () => {
-    fetchReaderArticle.mockResolvedValue({
-      title: 'Reader title',
-      language: 'en',
-      excerpt: 'Excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
-      minutesToRead: 1
-    });
+    fetchReaderArticle.mockResolvedValue(createReaderPayload());
     updateUserSettings.mockResolvedValue({
       settings: {
         ...currentUser.settings,
@@ -366,20 +333,11 @@ describe('ReaderPanel', () => {
 
   test('refreshes reader mode and bypasses the cached article payload', async () => {
     fetchReaderArticle
-      .mockResolvedValueOnce({
-        title: 'Reader title',
-        language: 'en',
-        excerpt: 'Excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'Body' }],
-        minutesToRead: 1
-      })
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce(createReaderPayload())
+      .mockResolvedValueOnce(createReaderPayload('Updated body', {
         title: 'Refreshed reader title',
-        language: 'en',
-        excerpt: 'Updated excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'Updated body' }],
-        minutesToRead: 1
-      });
+        excerpt: 'Updated excerpt'
+      }));
 
     renderReaderPanel();
 
@@ -398,13 +356,7 @@ describe('ReaderPanel', () => {
 
   test('keeps stale reader content visible when manual refresh fails', async () => {
     fetchReaderArticle
-      .mockResolvedValueOnce({
-        title: 'Reader title',
-        language: 'en',
-        excerpt: 'Excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'Body' }],
-        minutesToRead: 1
-      })
+      .mockResolvedValueOnce(createReaderPayload())
       .mockRejectedValueOnce(new Error('Refresh failed'));
 
     renderReaderPanel();

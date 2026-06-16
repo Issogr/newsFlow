@@ -26,22 +26,11 @@ function redactSensitiveObject(value) {
 const ERROR_MESSAGES = {
   'SERVER_ERROR': 'An internal error occurred. Please try again later.',
   'CONNECTION_ERROR': 'Unable to connect to news feeds. Please try again later.',
-  'SEARCH_ERROR': 'An error occurred while searching. Please try again later.',
-  'TOPICS_ERROR': 'An error occurred while loading topics. Please try again later.',
-  'TOPIC_MAP_ERROR': 'An error occurred while loading topic mappings.',
-  'SOURCES_ERROR': 'An error occurred while loading sources. Please try again later.',
-  'MISSING_QUERY': 'A search term is required',
-  'INVALID_SEARCH_QUERY': 'The search term must contain at least 2 characters',
-  'NO_NEWS_AVAILABLE': 'No news is currently available',
   'RESOURCE_NOT_FOUND': 'The requested resource was not found',
   'INVALID_ARTICLE_ID': 'Invalid article ID',
   'RATE_LIMIT_EXCEEDED': 'Too many requests. Please try again later.',
-  'REFRESH_RATE_LIMIT_EXCEEDED': 'Too many refresh requests. Please try again later.',
-  'WS_RATE_LIMIT_EXCEEDED': 'Too many WebSocket requests. Please try again later.',
-  'VALIDATION_ERROR': 'The provided data is invalid',
   'UNAUTHORIZED': 'You are not authorized to access this resource',
   'FORBIDDEN': 'Access to this resource is denied',
-  'ADMIN_TOKEN_NOT_CONFIGURED': 'The admin token is not configured on the server',
   'INVALID_URL': 'The provided URL is invalid',
   'FORBIDDEN_URL': 'The provided URL cannot be reached by the server'
 };

@@ -64,10 +64,6 @@ function getPagination(filters = {}) {
   };
 }
 
-function expandConfiguredSources() {
-  return newsSources;
-}
-
 function expandUserSources(userSources = []) {
   return userSources
     .filter((source) => source?.isActive !== false)
@@ -414,13 +410,10 @@ function getFilterStats({ filters = {}, queryOptions = {}, availableSources = []
 
 async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   const {
-    ensureSeedData = async () => {},
     getLastRefreshAt = () => null,
     getManualRefreshMeta = () => ({}),
     isUserRefreshPending = () => false
   } = runtime;
-
-  await ensureSeedData();
 
   const userSources = userContext.userId ? database.listUserSources(userContext.userId) : [];
   const customSourceGroups = buildDomainSourceGroups(userSources);
@@ -503,7 +496,6 @@ async function getReadLaterFeed(filters = {}, userContext = {}) {
 
 module.exports = {
   newsSources,
-  expandConfiguredSources,
   expandUserSources,
   getMaxArticleAgeHours,
   getNewsFeed,

@@ -1,7 +1,7 @@
-export const SUPPORTED_LOCALES = ['en', 'it'];
+const SUPPORTED_LOCALES = ['en', 'it'];
 export const LOCALE_STORAGE_KEY = 'newsflow-locale';
 
-export const translations = {
+const translations = {
   en: {
     pageTitle: 'News Flow',
     liveActive: 'On',
@@ -528,7 +528,7 @@ export const translations = {
   }
 };
 
-export function detectBrowserLocale() {
+function detectBrowserLocale() {
   const preferredLanguages = Array.isArray(navigator.languages) && navigator.languages.length > 0
     ? navigator.languages
     : [navigator.language || 'en'];
@@ -540,11 +540,11 @@ export function detectBrowserLocale() {
   return match?.startsWith('it') ? 'it' : 'en';
 }
 
-export function isSupportedLocale(locale) {
+function isSupportedLocale(locale) {
   return SUPPORTED_LOCALES.includes(locale);
 }
 
-export function readStoredLocale() {
+function readStoredLocale() {
   try {
     const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
     return isSupportedLocale(storedLocale) ? storedLocale : '';
