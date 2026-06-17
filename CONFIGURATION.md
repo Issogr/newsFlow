@@ -175,9 +175,12 @@ AI features run only in the backend. Feature switches default to `true`, but pro
 | `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in topic-tagged articles sent to one thematic-summary request. Minimum `1`, maximum `300`. |
 | `AI_SUMMARY_GENERATION_CONCURRENCY` | `2` | Max topic summary generations run concurrently for one due window. Minimum `1`, maximum `6`. |
 | `AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS` | `30000` | Approximate total article text budget for one summary prompt. Minimum `10000`, maximum `240000`. |
+| `AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES` | `2` | Additional retries for invalid summary or podcast-script model output before treating it as terminal. Minimum `0`, maximum `10`. |
+| `AI_SUMMARY_PENDING_TOPIC_GRACE_MS` | `900000` | How long after a summary slot to wait for pending topic classification before persisting an empty window from available data. Minimum `0`, maximum `21600000`. |
 | `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarms reader-mode text before summary windows when summary generation is available. Invalid values disable it. |
 | `AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE` | `30` | Minutes before a summary slot when prewarm can start. Minimum `1`, maximum `180`. |
 | `AI_SUMMARY_READER_PREWARM_CONCURRENCY` | `2` | Concurrent reader extractions during summary prewarm. Minimum `1`, maximum `8`. |
+| `AI_SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS` | `300000` | Cooldown before retrying a failed reader prewarm attempt for the same article/window. Minimum `0`, maximum `3600000`. |
 | `AI_SUMMARY_READER_TEXT_MAX_CHARS` | `3000` | Max cached reader-text chars sent per article to summary prompts. Minimum `500`, maximum `12000`. |
 | `AI_SUMMARY_READER_TEXT_MIN_CHARS` | `250` | Minimum cached reader-text length considered useful for summary input. Minimum `80`, maximum `2000`. |
 | `AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS` | `600000` | Cooldown before retrying failed summaries. Minimum `0`, maximum `86400000`. |

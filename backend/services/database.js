@@ -251,6 +251,7 @@ module.exports = {
   completeIngestionRun: articleRepository.completeIngestionRun,
   getLatestIngestionRun: articleRepository.getLatestIngestionRun,
   getReaderCache: readerCacheRepository.getReaderCache,
+  getReaderCaches: readerCacheRepository.getReaderCaches,
   upsertReaderCache: readerCacheRepository.upsertReaderCache,
   createUser: authRepository.createUser,
   findUserByUsername: authRepository.findUserByUsername,

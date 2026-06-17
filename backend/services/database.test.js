@@ -1950,6 +1950,62 @@ describe('database queries and user data', () => {
     expect(database.getReaderCache('article-1', 0)).toBeNull();
   });
 
+  test('loads reader cache entries in batches', () => {
+    const now = new Date().toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'reader-batch-1',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Reader batch one',
+        description: 'Reader description one',
+        content: 'Reader content one',
+        url: 'https://example.com/reader-batch-1',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'reader-batch-2',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Reader batch two',
+        description: 'Reader description two',
+        content: 'Reader content two',
+        url: 'https://example.com/reader-batch-2',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+    database.upsertReaderCache('reader-batch-1', {
+      url: 'https://example.com/reader-batch-1',
+      title: 'Reader batch one',
+      contentText: 'Cached reader text one',
+      contentBlocks: [{ type: 'paragraph', text: 'Cached reader text one' }],
+      fetchedAt: now
+    });
+    database.upsertReaderCache('reader-batch-2', {
+      url: 'https://example.com/reader-batch-2',
+      title: 'Reader batch two',
+      contentText: 'Cached reader text two',
+      fetchedAt: now
+    });
+
+    const cacheByArticleId = database.getReaderCaches(['reader-batch-1', 'reader-batch-2', 'missing-reader']);
+
+    expect(cacheByArticleId.get('reader-batch-1')).toEqual(expect.objectContaining({
+      articleId: 'reader-batch-1',
+      contentText: 'Cached reader text one',
+      contentBlocks: [{ type: 'paragraph', text: 'Cached reader text one' }]
+    }));
+    expect(cacheByArticleId.get('reader-batch-2')).toEqual(expect.objectContaining({
+      articleId: 'reader-batch-2',
+      contentText: 'Cached reader text two'
+    }));
+    expect(cacheByArticleId.has('missing-reader')).toBe(false);
+    expect(database.getReaderCaches(['reader-batch-1'], 0).size).toBe(0);
+  });
+
   test('builds source and topic stats with canonical source ids and search filters', () => {
     const now = Date.now();
     const recentIso = new Date(now - (30 * 60 * 1000)).toISOString();

@@ -134,6 +134,9 @@ AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed 
 | `AI_SUMMARY_GENERATION_ENABLED` | `true` | Generates thematic summaries; hides summary UI when `false`. |
 | `AI_PODCAST_GENERATION_ENABLED` | `true` | Set to `false` to disable podcast scripts, audio, and UI. |
 | `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarms reader text before summary windows when summaries are enabled. |
+| `AI_SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS` | `300000` | Cooldown before retrying failed reader prewarm attempts. |
+| `AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES` | `2` | Additional retries for invalid summary or podcast-script output. |
+| `AI_SUMMARY_PENDING_TOPIC_GRACE_MS` | `900000` | Grace period after a summary slot for pending topic classification. |
 | `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | Time zone for `07:00` and `19:00` summary/podcast slots. |
 | `AI_PODCAST_LANGUAGES` | `en` | Comma-separated locales: `en`, `it`. |
 

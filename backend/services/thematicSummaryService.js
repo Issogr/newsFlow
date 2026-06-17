@@ -18,10 +18,13 @@ const SUMMARY_CHECK_INTERVAL_MS = parseIntegerEnv('THEMATIC_SUMMARY_CHECK_INTERV
 const SUMMARY_MAX_ARTICLES_PER_TOPIC = parseIntegerEnv('AI_SUMMARY_MAX_ARTICLES_PER_TOPIC', 120, { min: 1, max: 300 });
 const SUMMARY_READER_PREWARM_MINUTES_BEFORE = parseIntegerEnv('AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE', 30, { min: 1, max: 180 });
 const SUMMARY_READER_PREWARM_CONCURRENCY = parseIntegerEnv('AI_SUMMARY_READER_PREWARM_CONCURRENCY', 2, { min: 1, max: 8 });
+const SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS', 5 * 60 * 1000, { min: 0, max: 60 * 60 * 1000 });
 const SUMMARY_GENERATION_CONCURRENCY = parseIntegerEnv('AI_SUMMARY_GENERATION_CONCURRENCY', 2, { min: 1, max: 6 });
 const SUMMARY_READER_TEXT_MAX_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MAX_CHARS', 3000, { min: 500, max: 12000 });
 const SUMMARY_READER_TEXT_MIN_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MIN_CHARS', 250, { min: 80, max: 2000 });
 const SUMMARY_FAILED_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
+const SUMMARY_INVALID_OUTPUT_MAX_RETRIES = parseIntegerEnv('AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES', 2, { min: 0, max: 10 });
+const SUMMARY_PENDING_TOPIC_GRACE_MS = parseIntegerEnv('AI_SUMMARY_PENDING_TOPIC_GRACE_MS', 15 * 60 * 1000, { min: 0, max: 6 * 60 * 60 * 1000 });
 const PODCAST_TTS_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_PODCAST_TTS_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
 const PODCAST_TTS_MAX_RETRIES = parseIntegerEnv('AI_PODCAST_TTS_MAX_RETRIES', 4, { min: 0, max: 20 });
 const TERMINAL_SUMMARY_STATUSES = new Set(['completed', 'empty']);
@@ -284,14 +287,33 @@ function prunePrewarmAttempts(referenceDate = new Date()) {
   const retainedWindowEnds = getRetainedPrewarmWindowEnds(referenceDate);
   let removedCount = 0;
 
-  attemptedPrewarmArticleIdsByWindow.forEach((attemptedIds, windowEnd) => {
+  attemptedPrewarmArticleIdsByWindow.forEach((attemptedArticles, windowEnd) => {
     if (!retainedWindowEnds.has(windowEnd)) {
       attemptedPrewarmArticleIdsByWindow.delete(windowEnd);
-      removedCount += attemptedIds?.size || 0;
+      removedCount += attemptedArticles?.size || 0;
     }
   });
 
   return { removedCount, retainedWindowEnds };
+}
+
+function isPrewarmAttemptDue(attempt = null, referenceDate = new Date()) {
+  if (!attempt) {
+    return true;
+  }
+  if (attempt.succeeded) {
+    return false;
+  }
+  if (SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS <= 0) {
+    return true;
+  }
+
+  const attemptedAtTime = Date.parse(attempt.attemptedAt || '');
+  if (!Number.isFinite(attemptedAtTime)) {
+    return true;
+  }
+
+  return new Date(referenceDate).getTime() - attemptedAtTime >= SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS;
 }
 
 function buildSummaryId(topicKey, periodStart, periodEnd) {
@@ -338,7 +360,8 @@ function isFailedSummaryRetryDue(summary = {}, referenceDate = new Date()) {
     return true;
   }
 
-  if (NON_RETRYABLE_SUMMARY_FAILURE_CATEGORIES.has(summary.failureCategory)) {
+  if (NON_RETRYABLE_SUMMARY_FAILURE_CATEGORIES.has(summary.failureCategory)
+    && Math.max(0, Number(summary.retryCount || 0) - 1) >= SUMMARY_INVALID_OUTPUT_MAX_RETRIES) {
     return false;
   }
 
@@ -352,6 +375,26 @@ function isFailedSummaryRetryDue(summary = {}, referenceDate = new Date()) {
   }
 
   return new Date(referenceDate).getTime() - generatedAtTime >= SUMMARY_FAILED_RETRY_COOLDOWN_MS;
+}
+
+function shouldWaitForPendingTopicProcessing(window = {}, options = {}) {
+  if (options.force === true || typeof database.hasPendingTopicProcessingForThematicSummary !== 'function') {
+    return false;
+  }
+  if (!database.hasPendingTopicProcessingForThematicSummary(window)) {
+    return false;
+  }
+  if (SUMMARY_PENDING_TOPIC_GRACE_MS <= 0) {
+    return false;
+  }
+
+  const periodEndTime = Date.parse(window.periodEnd || '');
+  const referenceTime = new Date(options.referenceDate || new Date()).getTime();
+  if (!Number.isFinite(periodEndTime) || !Number.isFinite(referenceTime)) {
+    return true;
+  }
+
+  return referenceTime - periodEndTime < SUMMARY_PENDING_TOPIC_GRACE_MS;
 }
 
 function buildSourceList(articles = []) {
@@ -423,8 +466,86 @@ function filterNewsworthySummaryArticles(articles = []) {
   return (Array.isArray(articles) ? articles : []).filter((article) => !isPromotionalDealArticle(article));
 }
 
-function getCachedReaderText(articleId) {
-  const cached = database.getReaderCache(articleId, null);
+function getThematicArticleIdentityKeys(article = {}) {
+  const keys = [];
+  const storyGroupId = String(article.storyGroupId || '').trim();
+  const articleUrl = normalizeArticleUrl(article.canonicalUrl || article.url || '');
+  const title = normalizeIdentityText(article.title || '', { lowercase: true });
+
+  if (storyGroupId) {
+    keys.push(`story:${storyGroupId}`);
+  }
+  if (articleUrl) {
+    keys.push(`url:${articleUrl}`);
+  }
+  if (title.length >= 16) {
+    keys.push(`title:${title}`);
+  }
+
+  return keys;
+}
+
+function dedupeArticlesByIdentity(articles = [], getIdentityKeys) {
+  const seenKeys = new Set();
+  const deduped = [];
+
+  (Array.isArray(articles) ? articles : []).forEach((article) => {
+    const keys = getIdentityKeys(article);
+    if (keys.length > 0 && keys.some((key) => seenKeys.has(key))) {
+      return;
+    }
+
+    deduped.push(article);
+    keys.forEach((key) => seenKeys.add(key));
+  });
+
+  return deduped;
+}
+
+function dedupeThematicCandidateArticles(articles = []) {
+  return dedupeArticlesByIdentity(articles, getThematicArticleIdentityKeys);
+}
+
+function getArticlesForSummaryTopic(topicConfig, window) {
+  return dedupeThematicCandidateArticles(filterNewsworthySummaryArticles(
+    database.getArticlesForThematicSummary(buildSummaryArticleQuery(topicConfig, window))
+  ));
+}
+
+function createSummaryArticleContext(window) {
+  const articlesByTopicKey = new Map();
+
+  return {
+    getArticlesForTopic(topicConfig) {
+      if (!articlesByTopicKey.has(topicConfig.key)) {
+        articlesByTopicKey.set(topicConfig.key, getArticlesForSummaryTopic(topicConfig, window));
+      }
+
+      return articlesByTopicKey.get(topicConfig.key) || [];
+    }
+  };
+}
+
+function getReaderCacheMap(articleIds = []) {
+  const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : [])
+    .map((articleId) => String(articleId || '').trim())
+    .filter(Boolean))];
+
+  if (normalizedArticleIds.length === 0) {
+    return new Map();
+  }
+
+  if (typeof database.getReaderCaches === 'function') {
+    return database.getReaderCaches(normalizedArticleIds, null);
+  }
+
+  return new Map(normalizedArticleIds.map((articleId) => [articleId, database.getReaderCache(articleId, null)]));
+}
+
+function getCachedReaderText(articleId, cacheByArticleId = null) {
+  const cached = cacheByArticleId instanceof Map
+    ? cacheByArticleId.get(articleId)
+    : database.getReaderCache(articleId, null);
   if (!isUsefulReaderText(cached?.contentText)) {
     return '';
   }
@@ -433,9 +554,11 @@ function getCachedReaderText(articleId) {
 }
 
 function withCachedReaderText(articles = []) {
+  const cacheByArticleId = getReaderCacheMap(articles.map((article) => article.id));
+
   return articles.map((article) => ({
     ...article,
-    readerText: getCachedReaderText(article.id),
+    readerText: getCachedReaderText(article.id, cacheByArticleId),
     readerTextMaxChars: SUMMARY_READER_TEXT_MAX_CHARS
   }));
 }
@@ -481,10 +604,14 @@ function dedupePodcastCandidateArticles(articles = []) {
   return deduped;
 }
 
-function getCandidateArticlesForWindow(window) {
+function getCandidateArticlesForWindow(window, articleContext = null) {
   const candidates = [];
   SUMMARY_TOPICS.forEach((topicConfig) => {
-    filterNewsworthySummaryArticles(database.getArticlesForThematicSummary(buildSummaryArticleQuery(topicConfig, window))).forEach((article) => {
+    const articles = articleContext?.getArticlesForTopic
+      ? articleContext.getArticlesForTopic(topicConfig)
+      : getArticlesForSummaryTopic(topicConfig, window);
+
+    articles.forEach((article) => {
       if (article?.id) {
         candidates.push(article);
       }
@@ -722,18 +849,25 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
 
     const { retainedWindowEnds } = prunePrewarmAttempts(referenceDate);
     const shouldRetainAttempts = retainedWindowEnds.has(window.periodEnd);
-    const attemptedIds = shouldRetainAttempts ? (attemptedPrewarmArticleIdsByWindow.get(window.periodEnd) || new Set()) : new Set();
-    const candidates = getCandidateArticlesForWindow(window).filter((article) => {
-      return article?.id && !attemptedIds.has(article.id) && !isUsefulReaderText(database.getReaderCache(article.id, null)?.contentText);
+    const attemptedArticles = shouldRetainAttempts ? (attemptedPrewarmArticleIdsByWindow.get(window.periodEnd) || new Map()) : new Map();
+    const candidateArticles = getCandidateArticlesForWindow(window);
+    const readerCacheByArticleId = getReaderCacheMap(candidateArticles.map((article) => article.id));
+    const candidates = candidateArticles.filter((article) => {
+      return article?.id
+        && (options.force === true || isPrewarmAttemptDue(attemptedArticles.get(article.id), referenceDate))
+        && !isUsefulReaderText(readerCacheByArticleId.get(article.id)?.contentText);
     });
 
     if (candidates.length === 0) {
       return { skipped: false, attemptedCount: 0, window };
     }
 
-    candidates.forEach((article) => attemptedIds.add(article.id));
+    const attemptedAt = new Date(referenceDate).toISOString();
+    candidates.forEach((article) => {
+      attemptedArticles.set(article.id, { attemptedAt, succeeded: false });
+    });
     if (shouldRetainAttempts) {
-      attemptedPrewarmArticleIdsByWindow.set(window.periodEnd, attemptedIds);
+      attemptedPrewarmArticleIdsByWindow.set(window.periodEnd, attemptedArticles);
     }
 
     const results = await mapSettledWithConcurrency(candidates, SUMMARY_READER_PREWARM_CONCURRENCY, async (article) => {
@@ -742,6 +876,13 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
         maxArticleAgeHours: null
       });
       return payload && !payload.fallback && isUsefulReaderText(payload.contentText);
+    });
+    results.forEach((result, index) => {
+      const article = candidates[index];
+      const attempt = attemptedArticles.get(article.id);
+      if (attempt) {
+        attempt.succeeded = result.status === 'fulfilled' && result.value === true;
+      }
     });
     const cachedCount = results.filter((result) => result.status === 'fulfilled' && result.value === true).length;
 
@@ -764,10 +905,12 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
     return { summary: null, generatedNow: false };
   }
 
-  const articles = filterNewsworthySummaryArticles(database.getArticlesForThematicSummary(buildSummaryArticleQuery(topicConfig, window)));
+  const articles = options.articleContext?.getArticlesForTopic
+    ? options.articleContext.getArticlesForTopic(topicConfig)
+    : getArticlesForSummaryTopic(topicConfig, window);
 
   if (articles.length === 0) {
-    if (options.force !== true && database.hasPendingTopicProcessingForThematicSummary?.(window)) {
+    if (shouldWaitForPendingTopicProcessing(window, options)) {
       return { summary: null, generatedNow: false };
     }
 
@@ -848,9 +991,9 @@ async function generatePodcastForWindow(window, options = {}) {
     return { summary: null, generatedNow: false };
   }
 
-  const articles = sortArticlesForPodcast(getCandidateArticlesForWindow(window));
+  const articles = sortArticlesForPodcast(getCandidateArticlesForWindow(window, options.articleContext));
   if (articles.length === 0) {
-    if (options.force !== true && database.hasPendingTopicProcessingForThematicSummary?.(window)) {
+    if (shouldWaitForPendingTopicProcessing(window, options)) {
       return { summary: null, generatedNow: false };
     }
 
@@ -934,6 +1077,11 @@ async function generateDueSummaries(options = {}) {
     const referenceDate = options.referenceDate || new Date();
     const summaryWindow = options.summaryWindow || options.window || getLatestDueWindow(referenceDate);
     const podcastWindow = options.podcastWindow || options.window || getLatestDuePodcastWindow(referenceDate);
+    const summaryArticleContext = options.summaryArticleContext || options.articleContext || createSummaryArticleContext(summaryWindow);
+    const podcastArticleContext = options.podcastArticleContext
+      || (summaryWindow.periodStart === podcastWindow.periodStart && summaryWindow.periodEnd === podcastWindow.periodEnd
+        ? summaryArticleContext
+        : createSummaryArticleContext(podcastWindow));
     const summaries = [];
     let generatedCount = 0;
     const generatedTopicKeys = [];
@@ -944,7 +1092,7 @@ async function generateDueSummaries(options = {}) {
     const topicResults = canGenerateSummaries
       ? await mapSettledWithConcurrency(SUMMARY_TOPICS, SUMMARY_GENERATION_CONCURRENCY, async (topicConfig) => ({
         topicConfig,
-        result: await generateSummaryForTopic(topicConfig, summaryWindow, { ...options, canGenerateSummaries })
+        result: await generateSummaryForTopic(topicConfig, summaryWindow, { ...options, canGenerateSummaries, articleContext: summaryArticleContext })
       }))
       : [];
 
@@ -967,7 +1115,7 @@ async function generateDueSummaries(options = {}) {
     }
 
     if (canGeneratePodcast) {
-      const podcastResult = await generatePodcastForWindow(podcastWindow, options);
+      const podcastResult = await generatePodcastForWindow(podcastWindow, { ...options, articleContext: podcastArticleContext });
       if (TERMINAL_PODCAST_STATUSES.has(podcastResult.summary?.status)) {
         summaries.unshift(podcastResult.summary);
       }
@@ -1011,18 +1159,32 @@ async function generateDueSummaries(options = {}) {
   return generationPromise;
 }
 
-function getLatestSummaries() {
+function getLatestSummaries(options = {}) {
   const canShowSummaries = aiSummaryGenerator.isAiSummaryGenerationAvailable();
   const canShowPodcasts = aiPodcastGenerator.isAiPodcastGenerationAvailable();
   const topicConfigs = canShowSummaries ? getSummaryTopics() : [];
+  const latestDueWindow = getLatestDueWindow(options.referenceDate || new Date());
+  const latestSummaries = database.listLatestThematicSummaries(topicConfigs.map((topic) => topic.key));
+  const latestTopicPeriodEnd = latestSummaries.reduce((latestPeriodEnd, summary) => {
+    return !latestPeriodEnd || String(summary.periodEnd || '') > latestPeriodEnd
+      ? String(summary.periodEnd || '')
+      : latestPeriodEnd;
+  }, '');
   const latestByKey = new Map(
-    database.listLatestThematicSummaries(topicConfigs.map((topic) => topic.key)).map((summary) => [summary.topicKey, summary])
+    latestSummaries
+      .filter((summary) => !latestTopicPeriodEnd || summary.periodEnd === latestTopicPeriodEnd)
+      .map((summary) => [summary.topicKey, summary])
   );
 
   const topicItems = topicConfigs
     .map((topic) => {
       const summary = latestByKey.get(topic.key);
-      return summary ? { ...summary, topicLabel: topic.label, summarySlot: getSummaryWindowSlot(summary) } : null;
+      return summary ? {
+        ...summary,
+        topicLabel: topic.label,
+        summarySlot: getSummaryWindowSlot(summary),
+        isStale: summary.periodEnd !== latestDueWindow.periodEnd
+      } : null;
     })
     .filter(Boolean);
   const latestPodcasts = canShowPodcasts ? getLatestPodcastSummariesBySlot(PODCAST_HISTORY_RETAIN_COUNT) : [];
