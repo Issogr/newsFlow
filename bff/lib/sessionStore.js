@@ -18,10 +18,6 @@ const DEFAULT_SESSION_DB_PATH = path.join(__dirname, '..', 'data', 'sessions.sql
 const SESSION_STORE_CLEAR_INTERVAL_MS = parseIntegerEnv('SESSION_STORE_CLEAR_INTERVAL_MS', 300000, { min: 1000 });
 const SESSION_TOUCH_RENEWAL_WINDOW_MS = parseIntegerEnv('SESSION_TOUCH_RENEWAL_WINDOW_MS', 24 * 60 * 60 * 1000, { min: 1000 });
 
-function ensureSessionDbDirectory(sessionDbPath) {
-  fs.mkdirSync(path.dirname(sessionDbPath), { recursive: true });
-}
-
 function cleanupStoredSessionUsers(sessionDb) {
   if (!sessionDb) {
     return 0;
@@ -71,14 +67,6 @@ class ManagedSqliteStore extends session.Store {
 
       CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions (expire);
     `);
-
-    this.startInterval();
-  }
-
-  startInterval() {
-    if (this.cleanupInterval) {
-      return;
-    }
 
     this.cleanupInterval = setInterval(() => this.clearExpiredSessions(), SESSION_STORE_CLEAR_INTERVAL_MS);
     this.cleanupInterval?.unref?.();
@@ -152,12 +140,11 @@ class ManagedSqliteStore extends session.Store {
 
 function createSessionStore(options = {}) {
   const sessionDbPath = options.sessionDbPath || process.env.BFF_SESSION_DB_PATH || DEFAULT_SESSION_DB_PATH;
-  ensureSessionDbDirectory(sessionDbPath);
+  fs.mkdirSync(path.dirname(sessionDbPath), { recursive: true });
 
   const db = new Database(sessionDbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
-  db.pragma('foreign_keys = ON');
   db.exec(`
     CREATE TABLE IF NOT EXISTS session_users (
       sid TEXT PRIMARY KEY,

@@ -588,20 +588,7 @@ function getPodcastArticleIdentityKeys(article = {}) {
 }
 
 function dedupePodcastCandidateArticles(articles = []) {
-  const seenKeys = new Set();
-  const deduped = [];
-
-  (Array.isArray(articles) ? articles : []).forEach((article) => {
-    const keys = getPodcastArticleIdentityKeys(article);
-    if (keys.length > 0 && keys.some((key) => seenKeys.has(key))) {
-      return;
-    }
-
-    deduped.push(article);
-    keys.forEach((key) => seenKeys.add(key));
-  });
-
-  return deduped;
+  return dedupeArticlesByIdentity(articles, getPodcastArticleIdentityKeys);
 }
 
 function getCandidateArticlesForWindow(window, articleContext = null) {

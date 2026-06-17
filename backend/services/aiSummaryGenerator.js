@@ -6,8 +6,7 @@ const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
-  sendChatCompletion,
-  setOpenRouterSdkLoader
+  sendChatCompletion
 } = require('./openRouterClient');
 
 const DEFAULT_OPENROUTER_SUMMARY_MODEL = 'deepseek/deepseek-v4-flash';
@@ -208,7 +207,5 @@ module.exports = {
   _getArticleTextLimit: getArticleTextLimit,
   _getConfig: getConfig,
   _normalizeGeneratedSummary: normalizeGeneratedSummary,
-  _validateGeneratedSummary: validateGeneratedSummary,
-  _parseJsonContent: parseJsonContent,
-  _setOpenRouterSdkLoader: setOpenRouterSdkLoader
+  _validateGeneratedSummary: validateGeneratedSummary
 };

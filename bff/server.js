@@ -198,32 +198,25 @@ function createApp(options = {}) {
     });
   }
 
-  function requireSameOriginUnsafeRequest(req, res, next) {
-    if (SAFE_METHODS.has(String(req.method || '').toUpperCase())) {
-      next();
-      return;
-    }
+  function requireSameOriginRequest(options = {}) {
+    return (req, res, next) => {
+      if (options.allowSafeMethods === true && SAFE_METHODS.has(String(req.method || '').toUpperCase())) {
+        next();
+        return;
+      }
 
-    if (hasSameOriginRequestHeaders(req)) {
-      next();
-      return;
-    }
+      if (hasSameOriginRequestHeaders(req, options)) {
+        next();
+        return;
+      }
 
-    sendCrossOriginRejected(res);
+      sendCrossOriginRejected(res);
+    };
   }
 
-  function requireSameOriginSocketRequest(req, res, next) {
-    if (isSameOriginSocketRequest(req)) {
-      next();
-      return;
-    }
-
-    sendCrossOriginRejected(res);
-  }
-
-  function isSameOriginSocketRequest(req) {
-    return hasSameOriginRequestHeaders(req, { allowMissingHeaders: true });
-  }
+  const requireSameOriginUnsafeRequest = requireSameOriginRequest({ allowSafeMethods: true });
+  const isSameOriginSocketRequest = (req) => hasSameOriginRequestHeaders(req, { allowMissingHeaders: true });
+  const requireSameOriginSocketRequest = requireSameOriginRequest({ allowMissingHeaders: true });
 
   async function requestInternalBackend(req, pathName, options = {}) {
     const requestOptions = {

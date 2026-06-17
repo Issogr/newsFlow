@@ -201,14 +201,6 @@ function getRequestIds(req, pluralKey, singularKey) {
   return rawIds.map((id) => String(id || '').trim()).filter(Boolean);
 }
 
-function getRequestArticleIds(req) {
-  return getRequestIds(req, 'articleIds', 'articleId');
-}
-
-function getRequestSummaryIds(req) {
-  return getRequestIds(req, 'summaryIds', 'summaryId');
-}
-
 function requireAuthenticatedPublicApiFeature(req, res, next) {
   if (isAuthenticatedPublicApiEnabled()) {
     next();
@@ -486,7 +478,7 @@ router.get('/thematic-summaries', requireAuthenticatedUser, asyncHandler(async (
 }));
 
 router.post('/me/thematic-summaries/read', requireAuthenticatedUser, asyncHandler(async (req, res) => {
-  const readSummaryIds = database.markThematicSummariesRead(req.user.id, getRequestSummaryIds(req));
+  const readSummaryIds = database.markThematicSummariesRead(req.user.id, getRequestIds(req, 'summaryIds', 'summaryId'));
   res.status(201).json({ success: true, readSummaryIds });
 }));
 
@@ -509,12 +501,12 @@ router.get('/podcast-summary/:summaryId/audio', [
 }));
 
 router.post('/me/read-later', requireAuthenticatedUser, asyncHandler(async (req, res) => {
-  const result = newsService.saveReadLaterArticles(getUserContext(req), getRequestArticleIds(req));
+  const result = newsService.saveReadLaterArticles(getUserContext(req), getRequestIds(req, 'articleIds', 'articleId'));
   res.status(201).json(result);
 }));
 
 router.post('/me/read-later/remove', requireAuthenticatedUser, asyncHandler(async (req, res) => {
-  const result = newsService.removeReadLaterArticles(getUserContext(req), getRequestArticleIds(req));
+  const result = newsService.removeReadLaterArticles(getUserContext(req), getRequestIds(req, 'articleIds', 'articleId'));
   res.json(result);
 }));
 

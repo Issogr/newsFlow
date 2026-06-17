@@ -8,8 +8,7 @@ const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
-  sendChatCompletion,
-  setOpenRouterSdkLoader
+  sendChatCompletion
 } = require('./openRouterClient');
 
 const DEFAULT_PODCAST_SCRIPT_MODEL = 'deepseek/deepseek-v4-flash';
@@ -1064,8 +1063,6 @@ module.exports = {
   _getTtsConfig: getTtsConfig,
   _getTtsVoice: getTtsVoice,
   _normalizeGeneratedPodcast: normalizeGeneratedPodcast,
-  _parseJsonContent: parseJsonContent,
   _validateGeneratedPodcast: validateGeneratedPodcast,
-  _setAudioSpeechHttpClient: setAudioSpeechHttpClient,
-  _setOpenRouterSdkLoader: setOpenRouterSdkLoader
+  _setAudioSpeechHttpClient: setAudioSpeechHttpClient
 };

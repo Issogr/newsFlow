@@ -19,39 +19,19 @@ function isOpenRouterFeatureEnabled(envName) {
   return enabledValue !== 'false' && hasOpenRouterApiKey();
 }
 
-function isAiTopicDetectionEnabled() {
-  return isOpenRouterFeatureEnabled('AI_TOPIC_DETECTION_ENABLED');
-}
-
-function isAiStoryGroupingEnabled() {
-  return isOpenRouterFeatureEnabled('AI_STORY_GROUPING_ENABLED');
-}
-
-function isAiSummaryGenerationEnabled() {
-  return isOpenRouterFeatureEnabled('AI_SUMMARY_GENERATION_ENABLED');
-}
-
-function isAiPodcastGenerationEnabled() {
-  return isOpenRouterFeatureEnabled('AI_PODCAST_GENERATION_ENABLED');
-}
-
 function getAiFeatures() {
   return {
     ai: {
-      topicDetectionEnabled: isAiTopicDetectionEnabled(),
-      storyGroupingEnabled: isAiStoryGroupingEnabled(),
-      thematicSummariesEnabled: isAiSummaryGenerationEnabled(),
-      podcastsEnabled: isAiPodcastGenerationEnabled()
+      topicDetectionEnabled: isOpenRouterFeatureEnabled('AI_TOPIC_DETECTION_ENABLED'),
+      storyGroupingEnabled: isOpenRouterFeatureEnabled('AI_STORY_GROUPING_ENABLED'),
+      thematicSummariesEnabled: isOpenRouterFeatureEnabled('AI_SUMMARY_GENERATION_ENABLED'),
+      podcastsEnabled: isOpenRouterFeatureEnabled('AI_PODCAST_GENERATION_ENABLED')
     }
   };
 }
 
 module.exports = {
   getAiFeatures,
-  isAiPodcastGenerationEnabled,
-  isAiStoryGroupingEnabled,
-  isAiSummaryGenerationEnabled,
-  isAiTopicDetectionEnabled,
   isOpenRouterFeatureEnabled,
   readAiToggleValue
 };

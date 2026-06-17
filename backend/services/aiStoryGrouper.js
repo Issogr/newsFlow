@@ -203,6 +203,5 @@ module.exports = {
   buildStoryGroupId,
   _buildPrompt: buildPrompt,
   _getConfig: getConfig,
-  _parseJsonContent: parseJsonContent,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };
