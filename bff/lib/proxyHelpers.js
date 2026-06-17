@@ -53,6 +53,32 @@ function applySanitizedForwardedHeaders(proxyReq, req) {
   });
 }
 
+function stripClientCredentials(proxyReq) {
+  proxyReq.removeHeader('authorization');
+  proxyReq.removeHeader('x-session-token');
+  proxyReq.removeHeader('x-newsflow-app');
+}
+
+function applyProxyRequestHeaders(proxyReq, req, options = {}) {
+  if (options.mode === 'private') {
+    stripClientCredentials(proxyReq);
+    clearForwardedHeaders(proxyReq);
+    Object.entries(options.internalHeaders || {}).forEach(([name, value]) => {
+      proxyReq.setHeader(name, value);
+    });
+
+    if (options.backendSessionCookie) {
+      proxyReq.setHeader('cookie', options.backendSessionCookie);
+    } else {
+      proxyReq.removeHeader('cookie');
+    }
+    return;
+  }
+
+  proxyReq.removeHeader('cookie');
+  applySanitizedForwardedHeaders(proxyReq, req);
+}
+
 function copyBackendResponseHeaders(res, headers = {}) {
   Object.entries(headers).forEach(([name, value]) => {
     const lowerName = String(name || '').toLowerCase();
@@ -78,9 +104,8 @@ function extractDeletedAdminUserId(req, statusCode) {
 }
 
 module.exports = {
-  applySanitizedForwardedHeaders,
+  applyProxyRequestHeaders,
   buildTrustedForwardedHeaders,
-  clearForwardedHeaders,
   copyBackendResponseHeaders,
   extractDeletedAdminUserId,
   getRequestHeader

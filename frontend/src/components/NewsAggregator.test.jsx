@@ -3,6 +3,7 @@ import NewsAggregator from './NewsAggregator';
 import { fetchNews, fetchReadLaterNews, fetchThematicSummaries, isRequestCanceled, markThematicSummariesRead, updateUserSettings } from '../services/api';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 import { createDeferred, resolveDeferred } from '../test-utils/deferred';
+import { createTestCurrentUser } from '../test-utils/currentUser';
 
 vi.mock('../services/api', () => ({
   fetchNews: vi.fn(),
@@ -128,27 +129,7 @@ function createFeedResponse(items = [], overrides = {}) {
   };
 }
 
-const currentUser = {
-  user: { username: 'alice' },
-  settings: {
-    defaultLanguage: 'en',
-    themeMode: 'system',
-    articleRetentionHours: 24,
-    recentHours: 3,
-    showNewsImages: true,
-    readerPanelPosition: 'right',
-    readerTextSize: 'medium',
-    excludedSourceIds: [],
-    excludedSubSourceIds: []
-  },
-  limits: {
-    articleRetentionHoursMax: 24,
-    recentHoursMax: 3,
-    apiTokenTtlDays: 30
-  },
-  customSources: [],
-  apiToken: null
-};
+const currentUser = createTestCurrentUser();
 
 describe('NewsAggregator', () => {
   let desktopMediaQuery;

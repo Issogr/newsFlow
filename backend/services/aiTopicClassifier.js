@@ -8,7 +8,7 @@ const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
-  sendChatCompletion,
+  sendJsonChatCompletion,
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
 const { truncateText } = require('./aiArticlePayload');
@@ -314,7 +314,7 @@ async function classifyBatch(batch, config, context = {}) {
   logBatchArticlesForDebug(batch, config, context.batchIndex || 0, context.batchCount || 0);
   const openRouter = context.openRouter || await createOpenRouterClient(config);
   const tokenBudget = getCompletionTokenBudget(batch.length);
-  const response = await sendChatCompletion(openRouter, {
+  const response = await sendJsonChatCompletion(openRouter, {
     model: config.model,
     messages: [
       {
@@ -327,15 +327,7 @@ async function classifyBatch(batch, config, context = {}) {
       }
     ],
     temperature: 0,
-    maxTokens: tokenBudget,
-    maxCompletionTokens: tokenBudget,
-    reasoning: {
-      enabled: false,
-      effort: 'none',
-      maxTokens: 0
-    },
-    responseFormat: { type: 'json_object' },
-    stream: false
+    maxTokens: tokenBudget
   }, { timeoutMs: config.timeoutMs });
 
   const content = extractAssistantContent(response);

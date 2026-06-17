@@ -7,6 +7,7 @@ import {
   updateUserSource,
   updateUserSettings
 } from '../../services/api';
+import { createTestCurrentUser } from '../../test-utils/currentUser';
 
 vi.mock('../../services/api', () => ({
   addUserSource: vi.fn(),
@@ -19,28 +20,7 @@ vi.mock('../../services/api', () => ({
   updateUserSettings: vi.fn()
 }));
 
-const baseCurrentUser = {
-  user: { id: 'user-1', username: 'alice' },
-  settings: {
-    defaultLanguage: 'en',
-    themeMode: 'system',
-    articleRetentionHours: 24,
-    recentHours: 3,
-    showNewsImages: true,
-    readerPanelPosition: 'right',
-    readerTextSize: 'medium',
-    lastSeenReleaseNotesVersion: '',
-    excludedSourceIds: [],
-    excludedSubSourceIds: []
-  },
-  limits: {
-    articleRetentionHoursMax: 24,
-    recentHoursMax: 3,
-    apiTokenTtlDays: 30
-  },
-  customSources: [],
-  apiToken: null
-};
+const baseCurrentUser = createTestCurrentUser({ user: { id: 'user-1', username: 'alice' } });
 
 describe('useSettingsPanelState', () => {
   beforeEach(() => {

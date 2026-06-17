@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import { CURRENT_CHANGELOG_ENTRY } from './config/changelog';
+import { createTestCurrentUser } from './test-utils/currentUser';
 import {
   AUTH_EXPIRED_EVENT,
   completePasswordSetup,
@@ -35,32 +36,6 @@ vi.mock('./components/AdminDashboard', () => ({
   default: ({ currentUser }) => <div>Admin dashboard for {currentUser?.user?.username}</div>
 }));
 
-function createCurrentUser(settings = {}) {
-  return {
-    user: { username: 'alice', isAdmin: false },
-    settings: {
-      defaultLanguage: 'en',
-      themeMode: 'system',
-      articleRetentionHours: 24,
-      recentHours: 3,
-      showNewsImages: true,
-      readerPanelPosition: 'right',
-      readerTextSize: 'medium',
-      lastSeenReleaseNotesVersion: '',
-      excludedSourceIds: [],
-      excludedSubSourceIds: [],
-      ...settings
-    },
-    limits: {
-      articleRetentionHoursMax: 24,
-      recentHoursMax: 3,
-      apiTokenTtlDays: 30
-    },
-    customSources: [],
-    apiToken: null
-  };
-}
-
 describe('App', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -86,7 +61,7 @@ describe('App', () => {
 
   test('renders the admin dashboard instead of the news home for admin sessions', async () => {
     fetchCurrentUser.mockResolvedValue({
-      ...createCurrentUser({ lastSeenReleaseNotesVersion: '3.2.5' }),
+      ...createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: '3.2.5' } }),
       user: { username: 'admin', isAdmin: true }
     });
 
@@ -97,7 +72,7 @@ describe('App', () => {
   });
 
   test('applies the selected dark theme to the document root after session load', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ themeMode: 'dark', lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION }));
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { themeMode: 'dark', lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION } }));
 
     render(<App />);
 
@@ -109,10 +84,10 @@ describe('App', () => {
   });
 
   test('shows an update notice after login and persists the version only after the changelog modal is dismissed', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser());
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-      settings: createCurrentUser({ lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION }).settings
+      settings: createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION } }).settings
     });
 
     render(<App />);
@@ -155,10 +130,10 @@ describe('App', () => {
     if (useFakeTimers) {
       vi.useFakeTimers();
     }
-    fetchCurrentUser.mockResolvedValue(createCurrentUser());
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser());
     updateUserSettings.mockResolvedValue({
       success: true,
-      settings: createCurrentUser({ lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION }).settings
+      settings: createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION } }).settings
     });
 
     render(<App />);
@@ -175,7 +150,7 @@ describe('App', () => {
   });
 
   test('reopens release notes manually from the authenticated app', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION }));
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION } }));
 
     render(<App />);
 
@@ -198,7 +173,7 @@ describe('App', () => {
   });
 
   test('returns to the authentication screen immediately after an auth-expired event', async () => {
-    fetchCurrentUser.mockResolvedValue(createCurrentUser({ lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION }));
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION } }));
 
     render(<App />);
 
@@ -220,8 +195,8 @@ describe('App', () => {
     });
     completePasswordSetup.mockResolvedValue({
       user: { id: 'admin-id', username: 'admin', isAdmin: true },
-      settings: createCurrentUser().settings,
-      limits: createCurrentUser().limits,
+      settings: createTestCurrentUser().settings,
+      limits: createTestCurrentUser().limits,
       customSources: []
     });
     window.history.replaceState({}, '', '/admin/setup#token=bootstrap-token');

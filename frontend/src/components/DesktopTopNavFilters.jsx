@@ -1,15 +1,12 @@
 import {
   Bookmark,
-  Clock3,
-  Rss,
-  Search,
-  Tags,
 } from 'lucide-react';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import useFilterSurfaceState from '../hooks/useFilterSurfaceState';
 import { FilterSearchInput } from './FilterSurfaceControls';
 import TopNavActionButton from './TopNavActionButton';
 import FilterBubbles from './FilterBubbles';
+import FilterNavActions from './FilterNavActions';
 
 const TOP_BUBBLE_MAX_HEIGHT = 'min(55vh, 28rem)';
 
@@ -46,10 +43,6 @@ const DesktopTopNavFilters = ({
 
   useOnClickOutside(surfaceRef, () => closeAll({ closeSearch: true }));
 
-  const sourceCount = activeFilters.sourceIds.length;
-  const topicCount = activeFilters.topics.length;
-  const timeCount = showRecentOnly ? 1 : 0;
-  const searchCount = search ? 1 : 0;
   const bubbleClassName = `absolute right-0 ${compact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]'} z-50 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md`;
 
   return (
@@ -91,59 +84,24 @@ const DesktopTopNavFilters = ({
         </div>
       ) : (
         <div className="flex items-center gap-1.5">
-          <TopNavActionButton
-            icon={Rss}
-            label={t('sources')}
-            onPointerDown={(event) => handleBubbleButtonPress(event, 'sources')}
-            onClick={(event) => handleBubbleButtonClick(event, 'sources')}
-            aria-expanded={openBubble === 'sources'}
-            active={openBubble === 'sources'}
-            activeClassName="text-sky-600"
-            badge={sourceCount > 0 ? sourceCount : null}
-            badgeClassName="bg-sky-600 text-white"
-          />
-
-          <TopNavActionButton
-            icon={Tags}
-            label={t('topics')}
-            onPointerDown={(event) => handleBubbleButtonPress(event, 'topics')}
-            onClick={(event) => handleBubbleButtonClick(event, 'topics')}
-            aria-expanded={openBubble === 'topics'}
-            active={openBubble === 'topics'}
-            activeClassName="text-emerald-600"
-            badge={topicCount > 0 ? topicCount : null}
-            badgeClassName="bg-emerald-600 text-white"
-          />
-
-          <TopNavActionButton
-            icon={Clock3}
-            label={t('latestHours', { hours: recentHours })}
-            onClick={onToggleRecent}
-            active={showRecentOnly}
-            activeClassName="text-amber-600"
-            minWidthClassName="min-w-16"
-            badge={timeCount > 0 ? '' : null}
-            badgeClassName="bg-amber-500 text-white"
-            labelClassName="whitespace-nowrap"
-          />
-
-          <TopNavActionButton
-            icon={Bookmark}
-            label={t('readLater')}
-            onClick={onToggleReadLater}
-            active={readLaterActive}
-            activeClassName="text-amber-600"
-            aria-label={t('readLater')}
-            title={t('readLater')}
-          />
-
-          <TopNavActionButton
-            icon={Search}
-            label={t('searchLabel')}
-            onClick={handleEnterSearch}
-            active={searchCount > 0}
-            badge={searchCount > 0 ? '' : null}
-            badgeClassName="bg-slate-800 text-white"
+          <FilterNavActions
+            activeFilters={activeFilters}
+            handleBubbleButtonClick={handleBubbleButtonClick}
+            handleBubbleButtonPress={handleBubbleButtonPress}
+            handleEnterSearch={handleEnterSearch}
+            onReadLaterClick={onToggleReadLater}
+            onToggleRecent={onToggleRecent}
+            openBubble={openBubble}
+            readLaterActive={readLaterActive}
+            readLaterAriaLabel={t('readLater')}
+            readLaterLabel={t('readLater')}
+            readLaterTitle={t('readLater')}
+            recentHours={recentHours}
+            search={search}
+            showRecentOnly={showRecentOnly}
+            t={t}
+            timeLabelClassName="whitespace-nowrap"
+            timeMinWidthClassName="min-w-16"
           />
         </div>
       )}

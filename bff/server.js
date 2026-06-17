@@ -28,9 +28,8 @@ const {
   upsertStoredSessionUser
 } = require('./lib/sessionStore');
 const {
-  applySanitizedForwardedHeaders,
+  applyProxyRequestHeaders,
   buildTrustedForwardedHeaders,
-  clearForwardedHeaders,
   copyBackendResponseHeaders,
   extractDeletedAdminUserId,
   getRequestHeader
@@ -111,25 +110,12 @@ function createApp(options = {}) {
     };
   }
 
-  function stripClientCredentials(proxyReq) {
-    proxyReq.removeHeader('authorization');
-    proxyReq.removeHeader('x-session-token');
-    proxyReq.removeHeader('x-newsflow-app');
-  }
-
   function applyBackendSessionProxyHeaders(proxyReq, req) {
-    stripClientCredentials(proxyReq);
-    clearForwardedHeaders(proxyReq);
-    Object.entries(buildInternalHeaders(req)).forEach(([name, value]) => {
-      proxyReq.setHeader(name, value);
+    applyProxyRequestHeaders(proxyReq, req, {
+      mode: 'private',
+      internalHeaders: buildInternalHeaders(req),
+      backendSessionCookie: getBackendSessionCookieFromRequest(req),
     });
-
-    const backendSessionCookie = getBackendSessionCookieFromRequest(req);
-    if (backendSessionCookie) {
-      proxyReq.setHeader('cookie', backendSessionCookie);
-    } else {
-      proxyReq.removeHeader('cookie');
-    }
   }
 
   function requireBackendSession(req, res, next) {
@@ -300,8 +286,7 @@ function createApp(options = {}) {
     ...BACKEND_PROXY_DEFAULTS,
     on: {
       proxyReq: (proxyReq, req) => {
-        proxyReq.removeHeader('cookie');
-        applySanitizedForwardedHeaders(proxyReq, req);
+        applyProxyRequestHeaders(proxyReq, req);
       },
       proxyRes: (proxyRes) => {
         delete proxyRes.headers['set-cookie'];
