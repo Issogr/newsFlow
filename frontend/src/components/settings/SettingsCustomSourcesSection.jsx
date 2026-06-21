@@ -1,4 +1,5 @@
 import { Pencil, Plus, Rss, Trash2 } from 'lucide-react';
+import InlineAlert from '../InlineAlert';
 import SettingsSectionCard from './SettingsSectionCard';
 import SourceIcon from '../SourceIcon';
 
@@ -46,9 +47,9 @@ const SettingsCustomSourcesSection = ({
         </form>
         <p className="mt-3 text-sm text-slate-500">{t('sourceAutoDetectedOnSave')}</p>
         {sourceError ? (
-          <p className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <InlineAlert as="p" className="mt-3">
             {sourceError.message}
-          </p>
+          </InlineAlert>
         ) : null}
       </div>
 

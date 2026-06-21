@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Activity, Copy, Globe, LogOut, Moon, RefreshCw, Sun, Trash2, UserCheck, Users } from 'lucide-react';
 import BrandMark from './BrandMark';
+import InlineAlert from './InlineAlert';
 import useLatestRequest from '../hooks/useLatestRequest';
 import { createAdminPasswordSetupLink, deleteAdminUser, fetchAdminUsers, isRequestCanceled, updateUserSettings } from '../services/api';
 
@@ -424,9 +425,9 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
           ) : null}
 
           {error ? (
-            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <InlineAlert className="mt-4">
               {error}
-            </div>
+            </InlineAlert>
           ) : null}
         </main>
       </div>

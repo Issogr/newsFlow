@@ -129,6 +129,45 @@ function createFeedResponse(items = [], overrides = {}) {
   };
 }
 
+function createThematicSummary(overrides = {}) {
+  const topicKey = overrides.topicKey || 'technology';
+  const topicLabel = overrides.topicLabel || `${topicKey.charAt(0).toUpperCase()}${topicKey.slice(1)}`;
+
+  return {
+    id: `summary-${topicKey}`,
+    topicKey,
+    topicLabel,
+    topics: [topicLabel],
+    periodStart: '2026-05-21T07:00:00.000Z',
+    periodEnd: '2026-05-21T13:00:00.000Z',
+    summaryTextByLocale: {
+      en: `${topicLabel} update [1].`,
+      it: `Aggiornamento ${topicKey} [1].`
+    },
+    sources: [],
+    ...overrides
+  };
+}
+
+function createPodcastSummary(overrides = {}) {
+  return {
+    id: 'podcast-1',
+    type: 'podcast',
+    topicKey: 'podcast',
+    titleByLocale: { en: 'News podcast' },
+    summaryTextByLocale: { en: 'Podcast script' },
+    ...overrides
+  };
+}
+
+function captureSocketHandlers() {
+  const socketHandlers = {};
+  useTopicRefreshSocket.mockImplementation((handlers) => {
+    Object.assign(socketHandlers, handlers);
+  });
+  return socketHandlers;
+}
+
 const currentUser = createTestCurrentUser();
 
 describe('NewsAggregator', () => {
@@ -164,10 +203,7 @@ describe('NewsAggregator', () => {
   });
 
   test('ignores main-feed refresh socket events while viewing read later', async () => {
-    let onTopicRefresh;
-    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
-      onTopicRefresh = handleTopicRefresh;
-    });
+    const socketHandlers = captureSocketHandlers();
     fetchNews.mockResolvedValue(createFeedResponse([createGroup('news', 'News headline')]));
     fetchReadLaterNews.mockResolvedValue(createFeedResponse([createGroup('saved', 'Saved headline')]));
 
@@ -178,7 +214,7 @@ describe('NewsAggregator', () => {
     fetchReadLaterNews.mockClear();
 
     await act(async () => {
-      onTopicRefresh({ refresh: true, reason: 'news' });
+      socketHandlers.onTopicRefresh({ refresh: true, reason: 'news' });
       await Promise.resolve();
     });
 
@@ -187,7 +223,7 @@ describe('NewsAggregator', () => {
   });
 
   test('keeps an open reader synchronized with refreshed feed groups', async () => {
-    let onTopicRefresh;
+    const socketHandlers = captureSocketHandlers();
     const initialGroup = createGroup('group-1', 'Current headline');
     const refreshedGroup = {
       ...initialGroup,
@@ -196,9 +232,6 @@ describe('NewsAggregator', () => {
         { id: 'article-group-1-extra', title: 'Extra source', pubDate: '2026-03-14T10:01:00.000Z' }
       ]
     };
-    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
-      onTopicRefresh = handleTopicRefresh;
-    });
     fetchNews
       .mockResolvedValueOnce(createFeedResponse([initialGroup]))
       .mockResolvedValueOnce(createFeedResponse([refreshedGroup]));
@@ -210,7 +243,7 @@ describe('NewsAggregator', () => {
     expect(screen.getByTestId('reader-item-count')).toHaveTextContent('1');
 
     await act(async () => {
-      onTopicRefresh({ refresh: true, reason: 'topics' });
+      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
       await Promise.resolve();
     });
 
@@ -262,13 +295,8 @@ describe('NewsAggregator', () => {
     fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
     fetchThematicSummaries.mockResolvedValue({
       items: [
-        {
-          id: 'summary-technology',
-          topicKey: 'technology',
-          topicLabel: 'Technology',
+        createThematicSummary({
           topics: ['Tecnologia'],
-          periodStart: '2026-05-21T07:00:00.000Z',
-          periodEnd: '2026-05-21T13:00:00.000Z',
           summaryText: 'AI chips moved quickly during the window [1].',
           summaryTextByLocale: {
             en: 'AI chips moved quickly during the window [1].',
@@ -276,7 +304,7 @@ describe('NewsAggregator', () => {
           },
           articleCount: 1,
           sources: [{ index: 1, articleId: 'article-1', title: 'AI chips accelerate', source: 'BBC', sourceIconUrl: 'https://example.com/favicon.ico', url: 'https://example.com/ai' }]
-        }
+        })
       ]
     });
 
@@ -312,16 +340,10 @@ describe('NewsAggregator', () => {
     fetchThematicSummaries.mockResolvedValue({
       readSummaryIds: ['summary-technology'],
       items: [
-        {
-          id: 'summary-technology',
-          topicKey: 'technology',
-          topicLabel: 'Technology',
-          topics: ['Technology'],
-          periodStart: '2026-05-21T07:00:00.000Z',
-          periodEnd: '2026-05-21T13:00:00.000Z',
+        createThematicSummary({
           summaryTextByLocale: { en: 'Technology update [1].', it: 'Aggiornamento tecnologia [1].' },
           sources: []
-        }
+        })
       ]
     });
 
@@ -354,21 +376,11 @@ describe('NewsAggregator', () => {
     fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
     fetchThematicSummaries.mockResolvedValue({
       items: [
-        {
-          id: 'podcast-1',
-          type: 'podcast',
-          topicKey: 'podcast',
-          titleByLocale: { en: 'News podcast' },
-          summaryTextByLocale: { en: 'Podcast script' }
-        },
-        {
-          id: 'summary-technology',
-          topicKey: 'technology',
-          topicLabel: 'Technology',
-          topics: ['Technology'],
+        createPodcastSummary(),
+        createThematicSummary({
           summaryTextByLocale: { en: 'Technology update [1].', it: 'Aggiornamento tecnologia [1].' },
           sources: []
-        }
+        })
       ]
     });
 
@@ -389,26 +401,19 @@ describe('NewsAggregator', () => {
   });
 
   test('refreshes thematic stories when summary socket refresh arrives', async () => {
-    let onSummariesRefresh;
-
-    useTopicRefreshSocket.mockImplementation(({ onSummariesRefresh: handleSummariesRefresh }) => {
-      onSummariesRefresh = handleSummariesRefresh;
-    });
+    const socketHandlers = captureSocketHandlers();
     fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
     fetchThematicSummaries
       .mockResolvedValueOnce({ items: [] })
       .mockResolvedValueOnce({
         items: [
-          {
-            id: 'summary-science',
+          createThematicSummary({
             topicKey: 'science',
             topicLabel: 'Science',
             topics: ['Scienza'],
-            periodStart: '2026-05-21T07:00:00.000Z',
-            periodEnd: '2026-05-21T13:00:00.000Z',
             summaryTextByLocale: { en: 'Science update [1].', it: 'Aggiornamento scienza [1].' },
             sources: []
-          }
+          })
         ]
       });
 
@@ -416,48 +421,32 @@ describe('NewsAggregator', () => {
     expect(screen.queryByRole('button', { name: 'Open Science summary' })).not.toBeInTheDocument();
 
     await act(async () => {
-      await onSummariesRefresh({ refresh: true, reason: 'summaries' });
+      await socketHandlers.onSummariesRefresh({ refresh: true, reason: 'summaries' });
     });
 
     expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
   });
 
   test('updates the open summary panel when refreshed summary data arrives', async () => {
-    let onSummariesRefresh;
-
-    useTopicRefreshSocket.mockImplementation(({ onSummariesRefresh: handleSummariesRefresh }) => {
-      onSummariesRefresh = handleSummariesRefresh;
-    });
+    const socketHandlers = captureSocketHandlers();
     fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
     fetchThematicSummaries
       .mockResolvedValueOnce({
         items: [
-          {
-            id: 'summary-technology',
-            topicKey: 'technology',
-            topicLabel: 'Technology',
-            topics: ['Technology'],
-            periodStart: '2026-05-21T07:00:00.000Z',
-            periodEnd: '2026-05-21T13:00:00.000Z',
+          createThematicSummary({
             summaryTextByLocale: { en: 'First technology update [1].', it: 'Primo aggiornamento tecnologia [1].' },
             articleCount: 1,
             sources: []
-          }
+          })
         ]
       })
       .mockResolvedValueOnce({
         items: [
-          {
-            id: 'summary-technology',
-            topicKey: 'technology',
-            topicLabel: 'Technology',
-            topics: ['Technology'],
-            periodStart: '2026-05-21T07:00:00.000Z',
-            periodEnd: '2026-05-21T13:00:00.000Z',
+          createThematicSummary({
             summaryTextByLocale: { en: 'Updated technology update [1].', it: 'Aggiornamento tecnologia aggiornato [1].' },
             articleCount: 2,
             sources: []
-          }
+          })
         ]
       });
 
@@ -470,7 +459,7 @@ describe('NewsAggregator', () => {
     expect(screen.getByText('1 article evaluated')).toBeInTheDocument();
 
     await act(async () => {
-      await onSummariesRefresh({ refresh: true, reason: 'summaries' });
+      await socketHandlers.onSummariesRefresh({ refresh: true, reason: 'summaries' });
     });
 
     expect(await screen.findByText('2 articles evaluated')).toBeInTheDocument();
@@ -478,41 +467,27 @@ describe('NewsAggregator', () => {
   });
 
   test('closes an open summary panel when refreshed summaries no longer include it', async () => {
-    let onSummariesRefresh;
-
-    useTopicRefreshSocket.mockImplementation(({ onSummariesRefresh: handleSummariesRefresh }) => {
-      onSummariesRefresh = handleSummariesRefresh;
-    });
+    const socketHandlers = captureSocketHandlers();
     fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
     fetchThematicSummaries
       .mockResolvedValueOnce({
         items: [
-          {
-            id: 'summary-technology',
-            topicKey: 'technology',
-            topicLabel: 'Technology',
-            topics: ['Technology'],
-            periodStart: '2026-05-21T07:00:00.000Z',
-            periodEnd: '2026-05-21T13:00:00.000Z',
+          createThematicSummary({
             summaryTextByLocale: { en: 'Technology update [1].', it: 'Aggiornamento tecnologia [1].' },
             articleCount: 1,
             sources: []
-          }
+          })
         ]
       })
       .mockResolvedValueOnce({
         items: [
-          {
-            id: 'summary-science',
+          createThematicSummary({
             topicKey: 'science',
             topicLabel: 'Science',
-            topics: ['Science'],
-            periodStart: '2026-05-21T07:00:00.000Z',
-            periodEnd: '2026-05-21T13:00:00.000Z',
             summaryTextByLocale: { en: 'Science update [1].', it: 'Aggiornamento scienza [1].' },
             articleCount: 1,
             sources: []
-          }
+          })
         ]
       });
 
@@ -524,7 +499,7 @@ describe('NewsAggregator', () => {
     expect(screen.getByText('1 article evaluated')).toBeInTheDocument();
 
     await act(async () => {
-      await onSummariesRefresh({ refresh: true, reason: 'summaries' });
+      await socketHandlers.onSummariesRefresh({ refresh: true, reason: 'summaries' });
     });
 
     expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
@@ -532,13 +507,10 @@ describe('NewsAggregator', () => {
   });
 
   test('ignores stale thematic summary responses after a newer refresh', async () => {
-    let onSummariesRefresh;
+    const socketHandlers = captureSocketHandlers();
     const firstSummariesRequest = createDeferred();
     const secondSummariesRequest = createDeferred();
 
-    useTopicRefreshSocket.mockImplementation(({ onSummariesRefresh: handleSummariesRefresh }) => {
-      onSummariesRefresh = handleSummariesRefresh;
-    });
     fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
     fetchThematicSummaries
       .mockImplementationOnce(() => firstSummariesRequest.promise)
@@ -546,39 +518,35 @@ describe('NewsAggregator', () => {
 
     await renderNewsAggregator();
 
-    const refreshPromise = act(async () => {
-      await onSummariesRefresh({ refresh: true, reason: 'summaries' });
+    let refreshPromise;
+    await act(async () => {
+      refreshPromise = socketHandlers.onSummariesRefresh({ refresh: true, reason: 'summaries' });
+      await Promise.resolve();
     });
     await resolveDeferred(secondSummariesRequest, {
       items: [
-        {
-          id: 'summary-science',
+        createThematicSummary({
           topicKey: 'science',
           topicLabel: 'Science',
           topics: ['Scienza'],
-          periodStart: '2026-05-21T07:00:00.000Z',
-          periodEnd: '2026-05-21T13:00:00.000Z',
           summaryTextByLocale: { en: 'Science update [1].', it: 'Aggiornamento scienza [1].' },
           sources: []
-        }
+        })
       ]
     });
-    await refreshPromise;
+    await act(async () => {
+      await refreshPromise;
+    });
 
     expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
 
     await resolveDeferred(firstSummariesRequest, {
       items: [
-        {
-          id: 'summary-technology',
-          topicKey: 'technology',
-          topicLabel: 'Technology',
+        createThematicSummary({
           topics: ['Tecnologia'],
-          periodStart: '2026-05-21T07:00:00.000Z',
-          periodEnd: '2026-05-21T13:00:00.000Z',
           summaryTextByLocale: { en: 'Technology update [1].', it: 'Aggiornamento tecnologia [1].' },
           sources: []
-        }
+        })
       ]
     });
 
@@ -707,11 +675,7 @@ describe('NewsAggregator', () => {
   });
 
   test('reloads cached feed silently when AI topic updates complete', async () => {
-    let onTopicRefresh;
-
-    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
-      onTopicRefresh = handleTopicRefresh;
-    });
+    const socketHandlers = captureSocketHandlers();
     fetchNews
       .mockResolvedValueOnce(createFeedResponse([createGroup('group-1', 'Fallback topic headline')]))
       .mockResolvedValue(createFeedResponse([createGroup('group-1', 'AI topic headline')]));
@@ -723,7 +687,7 @@ describe('NewsAggregator', () => {
     const initialCallCount = fetchNews.mock.calls.length;
 
     await act(async () => {
-      onTopicRefresh({ refresh: true, reason: 'topics' });
+      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
       await Promise.resolve();
     });
 
@@ -738,13 +702,10 @@ describe('NewsAggregator', () => {
   });
 
   test('does not let silent topic refresh cancel the initial feed load', async () => {
-    let onTopicRefresh;
+    const socketHandlers = captureSocketHandlers();
     const initialRequest = createDeferred();
     let initialRequestAborted = false;
 
-    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
-      onTopicRefresh = handleTopicRefresh;
-    });
     fetchNews.mockImplementationOnce(({ signal }) => {
       signal.addEventListener('abort', () => {
         initialRequestAborted = true;
@@ -755,7 +716,7 @@ describe('NewsAggregator', () => {
     await renderNewsAggregator();
 
     await act(async () => {
-      onTopicRefresh({ refresh: true, reason: 'topics' });
+      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
       await Promise.resolve();
     });
 
@@ -769,13 +730,10 @@ describe('NewsAggregator', () => {
   });
 
   test('replaces stale fallback topics after a silent AI topic reload', async () => {
-    let onTopicRefresh;
+    const socketHandlers = captureSocketHandlers();
     const fallbackTopic = { topic: 'Economia', source: 'local' };
     const aiTopic = { topic: 'Tecnologia', source: 'ai', confidence: 0.9 };
 
-    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
-      onTopicRefresh = handleTopicRefresh;
-    });
     fetchNews
       .mockResolvedValueOnce(createFeedResponse([{
           id: 'group-1',
@@ -808,7 +766,7 @@ describe('NewsAggregator', () => {
     expect(await screen.findByTestId('topics-group-1')).toHaveTextContent('Economia:local');
 
     await act(async () => {
-      onTopicRefresh({ refresh: true, reason: 'topics' });
+      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
       await Promise.resolve();
     });
 
@@ -819,11 +777,7 @@ describe('NewsAggregator', () => {
   });
 
   test('adds brand-new cards when a manual refresh completion reload arrives', async () => {
-    let socketHandlers;
-
-    useTopicRefreshSocket.mockImplementation((handlers) => {
-      socketHandlers = handlers;
-    });
+    const socketHandlers = captureSocketHandlers();
     fetchNews
       .mockResolvedValueOnce(createFeedResponse([createGroup('group-current', 'Current headline')]))
       .mockResolvedValueOnce(createFeedResponse([createGroup('group-current', 'Current headline')], { meta: { pendingUserRefresh: true } }))
@@ -853,11 +807,7 @@ describe('NewsAggregator', () => {
   });
 
   test('keeps pending new article notice after silent topic reloads', async () => {
-    let socketHandlers;
-
-    useTopicRefreshSocket.mockImplementation((handlers) => {
-      socketHandlers = handlers;
-    });
+    const socketHandlers = captureSocketHandlers();
     fetchNews
       .mockResolvedValueOnce(createFeedResponse([createGroup('group-current', 'Current headline')], { meta: { hasMore: true, totalGroups: 2 } }))
       .mockResolvedValueOnce(createFeedResponse([
@@ -886,13 +836,10 @@ describe('NewsAggregator', () => {
   });
 
   test('does not cancel manual refresh loading when a silent topic reload arrives', async () => {
-    let onTopicRefresh;
+    const socketHandlers = captureSocketHandlers();
     const manualRefreshRequest = createDeferred();
     let manualRequestAborted = false;
 
-    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
-      onTopicRefresh = handleTopicRefresh;
-    });
     fetchNews
       .mockResolvedValueOnce(createFeedResponse([createGroup('group-1', 'Current headline')]))
       .mockImplementationOnce(({ signal }) => {
@@ -912,7 +859,7 @@ describe('NewsAggregator', () => {
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
 
     await act(async () => {
-      onTopicRefresh({ refresh: true, reason: 'topics' });
+      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
       await Promise.resolve();
     });
 
@@ -929,11 +876,7 @@ describe('NewsAggregator', () => {
   });
 
   test('keeps loaded-more articles during silent AI topic reloads', async () => {
-    let onTopicRefresh;
-
-    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
-      onTopicRefresh = handleTopicRefresh;
-    });
+    const socketHandlers = captureSocketHandlers();
 
     fetchNews.mockImplementation(({ beforeId, pageSize }) => {
       if (beforeId === 'article-initial-12') {
@@ -965,7 +908,7 @@ describe('NewsAggregator', () => {
     expect(await screen.findByText('older headline 13')).toBeInTheDocument();
 
     await act(async () => {
-      onTopicRefresh({ refresh: true, reason: 'topics' });
+      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
       await Promise.resolve();
     });
 
@@ -981,12 +924,8 @@ describe('NewsAggregator', () => {
   });
 
   test('preserves the loaded article count when a topic refresh lands right after load more resolves', async () => {
-    let onTopicRefresh;
+    const socketHandlers = captureSocketHandlers();
     const appendRequest = createDeferred();
-
-    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
-      onTopicRefresh = handleTopicRefresh;
-    });
 
     fetchNews.mockImplementation(({ beforeId, pageSize }) => {
       if (beforeId === 'article-initial-12') {
@@ -1017,7 +956,7 @@ describe('NewsAggregator', () => {
     await act(async () => {
       appendRequest.resolve(createFeedResponse(createGroups('older', 13, 1), { meta: { nextCursor: null } }));
       await appendRequest.promise;
-      onTopicRefresh({ refresh: true, reason: 'topics' });
+      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
       await Promise.resolve();
     });
 
@@ -1031,11 +970,7 @@ describe('NewsAggregator', () => {
   });
 
   test('keeps the visible tail if a silent topic refresh only returns the first page', async () => {
-    let onTopicRefresh;
-
-    useTopicRefreshSocket.mockImplementation(({ onTopicRefresh: handleTopicRefresh }) => {
-      onTopicRefresh = handleTopicRefresh;
-    });
+    const socketHandlers = captureSocketHandlers();
 
     fetchNews.mockImplementation(({ beforeId, pageSize }) => {
       if (beforeId === 'article-initial-12') {
@@ -1072,7 +1007,7 @@ describe('NewsAggregator', () => {
     expect(await screen.findByText('older headline 24')).toBeInTheDocument();
 
     await act(async () => {
-      onTopicRefresh({ refresh: true, reason: 'topics' });
+      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
       await Promise.resolve();
     });
 
@@ -1082,11 +1017,7 @@ describe('NewsAggregator', () => {
   });
 
   test('reloads cached feed from the new article pill', async () => {
-    let socketHandlers;
-
-    useTopicRefreshSocket.mockImplementation((handlers) => {
-      socketHandlers = handlers;
-    });
+    const socketHandlers = captureSocketHandlers();
     fetchNews.mockReset();
     fetchNews
       .mockResolvedValueOnce(createFeedResponse([{ id: 'group-1', title: 'Current headline', items: [{ id: 'article-1', pubDate: '2026-03-14T10:00:00.000Z' }] }]))

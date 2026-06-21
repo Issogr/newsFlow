@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Bug, CheckCircle2, ImagePlus, Lightbulb, MessageSquare, Paperclip, Send, Trash2, X } from 'lucide-react';
 import { submitFeedback } from '../services/api';
+import InlineAlert from './InlineAlert';
 import SlideOverPanelFrame from './SlideOverPanelFrame';
 
 const DEFAULT_MAX_TITLE_LENGTH = 120;
@@ -335,9 +336,9 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
               </div>
 
               {error && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <InlineAlert>
                   {error}
-                </div>
+                </InlineAlert>
               )}
             </form>
           )}

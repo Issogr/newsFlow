@@ -5,6 +5,7 @@ import SettingsCustomSourcesSection from './settings/SettingsCustomSourcesSectio
 import SettingsExclusionsSection from './settings/SettingsExclusionsSection';
 import SettingsPreferencesSection from './settings/SettingsPreferencesSection';
 import useSettingsPanelState from './settings/useSettingsPanelState';
+import InlineAlert from './InlineAlert';
 import SlideOverPanelFrame from './SlideOverPanelFrame';
 import { PROJECT_GITHUB_URL } from '../config/projectLinks';
 
@@ -104,9 +105,9 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
             />
 
             {error && (
-              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <InlineAlert>
                 {error.message}
-              </div>
+              </InlineAlert>
             )}
 
             <SettingsAccessSection

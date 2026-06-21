@@ -248,6 +248,39 @@ function createApp(options = {}) {
     res.end(JSON.stringify(UPSTREAM_ERROR_RESPONSE));
   }
 
+  function createBackendProxy({ includeBackendSession = false, onProxyResponse, pathRewrite, stripSetCookie = false, target, ws = false }) {
+    const on = {
+      proxyReq: includeBackendSession
+        ? (proxyReq, req) => applyBackendSessionProxyHeaders(proxyReq, req)
+        : (proxyReq, req) => applyProxyRequestHeaders(proxyReq, req),
+      error: handleProxyError,
+    };
+
+    if (stripSetCookie || onProxyResponse) {
+      on.proxyRes = (proxyRes, req, res) => {
+        if (stripSetCookie) {
+          delete proxyRes.headers['set-cookie'];
+        }
+
+        onProxyResponse?.(proxyRes, req, res);
+      };
+    }
+
+    if (ws && includeBackendSession) {
+      on.proxyReqWs = (proxyReq, req) => {
+        applyBackendSessionProxyHeaders(proxyReq, req);
+      };
+    }
+
+    return createProxyMiddleware({
+      target,
+      ...BACKEND_PROXY_DEFAULTS,
+      ...(ws ? { ws: true } : {}),
+      ...(pathRewrite ? { pathRewrite } : {}),
+      on,
+    });
+  }
+
   async function handleSessionAuthRequest(req, res, next, pathName) {
     try {
       const response = await requestInternalBackend(req, pathName, {
@@ -289,59 +322,34 @@ function createApp(options = {}) {
     res.sendFile(path.join(frontendDistDir, 'index.html'));
   }
 
-  const publicApiProxy = createProxyMiddleware({
+  const publicApiProxy = createBackendProxy({
     target: `${backendBaseUrl}/api/public`,
-    ...BACKEND_PROXY_DEFAULTS,
-    on: {
-      proxyReq: (proxyReq, req) => {
-        applyProxyRequestHeaders(proxyReq, req);
-      },
-      proxyRes: (proxyRes) => {
-        delete proxyRes.headers['set-cookie'];
-      },
-      error: handleProxyError,
-    },
+    stripSetCookie: true,
   });
 
-  const appApiProxy = createProxyMiddleware({
+  const appApiProxy = createBackendProxy({
     target: `${backendBaseUrl}/internal-api`,
-    ...BACKEND_PROXY_DEFAULTS,
-    on: {
-      proxyReq: (proxyReq, req) => {
-        applyBackendSessionProxyHeaders(proxyReq, req);
-      },
-      proxyRes: (proxyRes, req, res) => {
-        delete proxyRes.headers['set-cookie'];
+    includeBackendSession: true,
+    stripSetCookie: true,
+    onProxyResponse: (proxyRes, req, res) => {
+      if (proxyRes.statusCode === 401) {
+        clearBffSessionCookie(res);
+        destroySession(req, sessionDb).catch(() => {});
+        return;
+      }
 
-        if (proxyRes.statusCode === 401) {
-          clearBffSessionCookie(res);
-          destroySession(req, sessionDb).catch(() => {});
-          return;
-        }
-
-        const deletedUserId = extractDeletedAdminUserId(req, proxyRes.statusCode || 0);
-        if (deletedUserId) {
-          destroyStoredSessionsByUserId(sessionStore, sessionDb, deletedUserId);
-        }
-      },
-      error: handleProxyError,
+      const deletedUserId = extractDeletedAdminUserId(req, proxyRes.statusCode || 0);
+      if (deletedUserId) {
+        destroyStoredSessionsByUserId(sessionStore, sessionDb, deletedUserId);
+      }
     },
   });
 
-  const socketProxy = createProxyMiddleware({
+  const socketProxy = createBackendProxy({
     target: backendBaseUrl,
-    ...BACKEND_PROXY_DEFAULTS,
+    includeBackendSession: true,
     ws: true,
     pathRewrite: (proxyPath, req) => req.originalUrl || proxyPath,
-    on: {
-      proxyReq: (proxyReq, req) => {
-        applyBackendSessionProxyHeaders(proxyReq, req);
-      },
-      proxyReqWs: (proxyReq, req) => {
-        applyBackendSessionProxyHeaders(proxyReq, req);
-      },
-      error: handleProxyError,
-    },
   });
 
   app.get('/health', (req, res) => {

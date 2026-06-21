@@ -8,6 +8,7 @@ import AuthCard, {
   getPasswordApiErrorMessage,
   getPasswordValidationError,
 } from './AuthCard';
+import InlineAlert from './InlineAlert';
 
 function getSetupErrorMessage(error, t) {
   const apiMessage = error?.response?.data?.error?.message;
@@ -134,9 +135,9 @@ const PasswordSetupScreen = ({ t, token, onComplete }) => {
           <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">{t('passwordHelp')}</p>
 
           {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <InlineAlert>
               {error}
-            </div>
+            </InlineAlert>
           )}
 
           <button

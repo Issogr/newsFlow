@@ -6,14 +6,13 @@ import {
   Clock3,
   Newspaper,
   RefreshCw,
-  Share2,
-  X
+  Share2
 } from 'lucide-react';
 import { fetchReaderArticle, isRequestCanceled, updateUserSettings } from '../services/api';
 import useLatestRequest from '../hooks/useLatestRequest';
 import useShareArticle from '../hooks/useShareArticle';
 import { getSafeExternalUrl } from '../utils/urlSafety';
-import FullscreenModalFrame from './FullscreenModalFrame';
+import { FullscreenPanelFrame } from './FullscreenModalFrame';
 import ShareStatusBubble from './ShareStatusBubble';
 import {
   DEFAULT_READER_TEXT_SIZE,
@@ -261,82 +260,75 @@ const ReaderPanel = ({
     loadReader(selectedArticleId, { forceRefresh: true });
   }, [loadReader, loading, selectedArticleId]);
 
+  const headerStart = (
+    <div className="flex items-center gap-2">
+      <div className="relative inline-flex items-center">
+        <ShareStatusBubble
+          shareState={shareState}
+          t={t}
+          className="share-status-pill-from-button mr-2 max-w-[min(18rem,calc(100vw-6rem))]"
+        />
+        <button
+          type="button"
+          onClick={handleShare}
+          disabled={!safeOriginalUrl}
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+          aria-label={t('shareArticle')}
+        >
+          <Share2 className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="flex h-11 items-center gap-1 rounded-full border border-stone-300 bg-white px-1.5 shadow-sm">
+        <button
+          type="button"
+          onClick={decreaseReaderTextSize}
+          disabled={readerTextSizeIndex === 0}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-medium text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label={t('decreaseReaderTextSize')}
+          title={t('decreaseReaderTextSize')}
+        >
+          -
+        </button>
+        <span
+          className="min-w-[2.5rem] text-center text-sm font-semibold tracking-[0.08em] text-stone-500"
+          aria-hidden="true"
+        >
+          aA
+        </span>
+        <button
+          type="button"
+          onClick={increaseReaderTextSize}
+          disabled={readerTextSizeIndex === READER_TEXT_SIZE_ORDER.length - 1}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-medium text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label={t('increaseReaderTextSize')}
+          title={t('increaseReaderTextSize')}
+        >
+          +
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={refreshReader}
+        disabled={!selectedArticleId || loading}
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+        aria-label={t('refreshReader')}
+        title={t('refreshReader')}
+      >
+        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+      </button>
+    </div>
+  );
+
   return (
-    <FullscreenModalFrame closeLabel={t('closeReader')} onClose={onClose}>
-      <div className={`relative flex h-full w-full ${desktopPositionClassName}`}>
-        <section className="flex h-full w-full flex-col bg-slate-50 shadow-2xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(72rem,calc(100vw-2rem))] lg:overflow-hidden lg:rounded-[2rem] lg:border lg:border-slate-200/80">
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-200/80 bg-white/85 px-5 py-4 backdrop-blur-md md:px-6">
-            <div className="flex items-center gap-2">
-              <div className="relative inline-flex items-center">
-                <ShareStatusBubble
-                  shareState={shareState}
-                  t={t}
-                  className="share-status-pill-from-button mr-2 max-w-[min(18rem,calc(100vw-6rem))]"
-                />
-                <button
-                  type="button"
-                  onClick={handleShare}
-                  disabled={!safeOriginalUrl}
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  aria-label={t('shareArticle')}
-                >
-                  <Share2 className="h-4 w-4" />
-                </button>
-              </div>
-
-              <div className="flex h-11 items-center gap-1 rounded-full border border-stone-300 bg-white px-1.5 shadow-sm">
-                <button
-                  type="button"
-                  onClick={decreaseReaderTextSize}
-                  disabled={readerTextSizeIndex === 0}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-medium text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-label={t('decreaseReaderTextSize')}
-                  title={t('decreaseReaderTextSize')}
-                >
-                  -
-                </button>
-                <span
-                  className="min-w-[2.5rem] text-center text-sm font-semibold tracking-[0.08em] text-stone-500"
-                  aria-hidden="true"
-                >
-                  aA
-                </span>
-                <button
-                  type="button"
-                  onClick={increaseReaderTextSize}
-                  disabled={readerTextSizeIndex === READER_TEXT_SIZE_ORDER.length - 1}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-medium text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-label={t('increaseReaderTextSize')}
-                  title={t('increaseReaderTextSize')}
-                >
-                  +
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={refreshReader}
-                disabled={!selectedArticleId || loading}
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
-                aria-label={t('refreshReader')}
-                title={t('refreshReader')}
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-500 shadow-sm transition-colors hover:bg-stone-100 hover:text-stone-800"
-                aria-label={t('closeReader')}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-
+    <FullscreenPanelFrame
+      closeLabel={t('closeReader')}
+      containerClassName={`relative flex h-full w-full ${desktopPositionClassName}`}
+      headerStart={headerStart}
+      onClose={onClose}
+      panelClassName="flex h-full w-full flex-col bg-slate-50 shadow-2xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(72rem,calc(100vw-2rem))] lg:overflow-hidden lg:rounded-[2rem] lg:border lg:border-slate-200/80"
+    >
           {sourceVersionItems.length > 1 && (
             <div className="border-b border-stone-200/80 bg-white/70 px-5 py-4 backdrop-blur-sm md:px-6">
               <p className="mb-3 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
@@ -431,9 +423,7 @@ const ReaderPanel = ({
               </div>
             )}
           </div>
-        </section>
-      </div>
-    </FullscreenModalFrame>
+    </FullscreenPanelFrame>
   );
 };
 

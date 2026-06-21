@@ -7,6 +7,7 @@ import AuthCard, {
   getPasswordApiErrorMessage,
   getPasswordValidationError,
 } from './AuthCard';
+import InlineAlert from './InlineAlert';
 
 const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
   const [mode, setMode] = useState('login');
@@ -152,12 +153,12 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
         )}
 
         {(clientError || error) && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <InlineAlert>
             <p className="font-medium">{friendlyError}</p>
             {rawErrorMessage && rawErrorMessage !== friendlyError && (
               <p className="mt-1 text-xs text-red-600">{rawErrorMessage}</p>
             )}
-          </div>
+          </InlineAlert>
         )}
 
         <button
