@@ -306,7 +306,7 @@ describe('NewsCard', () => {
 
     onOpenReader.mockClear();
     jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000);
-    fireEvent.click(screen.getByRole('button', { name: 'readerMode' }));
+    fireEvent.click(screen.getByRole('button', { name: 'readHere' }));
 
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
   });

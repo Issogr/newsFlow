@@ -5,6 +5,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
+      '📌 Clarified card actions with Read here for the in-app reader and Open original for publisher links.',
       '📖 Kept reader mode titles anchored to the feed article title so loading reader content no longer replaces them.',
       '✨ Synced AI summary read badges across devices so summaries opened elsewhere no longer appear new.',
       '📰 Kept grouped reader-mode source links in one horizontal scroll row so large story clusters stay readable.',
@@ -17,6 +18,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
+      '📌 Chiarite le azioni delle card: Leggi qui apre la lettura interna, Apri originale apre il sito dell\'editore.',
       '📖 Mantenuto il titolo della modalita lettura uguale a quello del feed, evitando che il contenuto caricato lo sostituisca.',
       '✨ Sincronizzati tra dispositivi gli indicatori delle sintesi AI lette, cosi quelle gia aperte altrove non risultano nuove.',
       '📰 Mantenuti i link alle fonti raggruppate in una sola riga scorrevole nella modalita lettura, cosi i gruppi grandi restano leggibili.',

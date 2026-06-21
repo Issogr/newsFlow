@@ -2,6 +2,7 @@
 
 ## 3.5.8
 
+- clarified news-card actions by renaming the in-app reader button to `Read here` and the source link to `Open original`
 - kept reader mode titles anchored to the feed article title so loading reader content no longer replaces them
 - synced AI summary read badges across devices so summaries opened elsewhere no longer appear new
 - kept grouped reader-mode source links in one horizontal scroll row so large story clusters stay readable

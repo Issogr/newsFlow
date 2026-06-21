@@ -233,8 +233,8 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     }
   };
 
-  const readerActionButtonClassName = 'inline-flex min-w-0 items-center justify-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-800 no-underline shadow-sm transition-colors hover:bg-indigo-100';
-  const originalActionButtonClassName = 'inline-flex min-w-0 items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 no-underline shadow-sm transition-colors hover:bg-emerald-100';
+  const readerActionButtonClassName = 'inline-flex min-w-0 items-center justify-center gap-2 rounded-full border border-violet-300 bg-violet-100 px-4 py-2.5 text-sm font-semibold text-violet-950 no-underline shadow-sm transition-colors hover:bg-violet-200';
+  const originalActionButtonClassName = 'inline-flex min-w-0 items-center justify-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 no-underline shadow-sm transition-colors hover:bg-emerald-100';
   const disabledActionButtonClassName = 'inline-flex min-w-0 cursor-not-allowed items-center justify-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-400';
   const openOriginalSourceUnavailableMessage = t('openOriginalSourceUnavailable');
 
@@ -245,10 +245,12 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
           type="button"
           onClick={openReader}
           className={readerActionButtonClassName}
-          aria-label={t('readerMode')}
+          aria-label={t('readHere')}
+          title={t('readHereHelp')}
         >
           <BookOpenText className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 text-center leading-tight">{t('readerMode')}</span>
+          <span className="min-w-0 text-center leading-tight sm:hidden">{t('readHereShort')}</span>
+          <span className="hidden min-w-0 text-center leading-tight sm:inline">{t('readHere')}</span>
         </button>
         <button
           type="button"
@@ -259,10 +261,11 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
             : disabledActionButtonClassName}
           aria-label={t('openOriginalSource')}
           aria-describedby={!safeOriginalUrl ? `open-original-source-help-${group?.id}` : undefined}
-          title={!safeOriginalUrl ? openOriginalSourceUnavailableMessage : undefined}
+          title={safeOriginalUrl ? t('openOriginalSourceHelp') : openOriginalSourceUnavailableMessage}
         >
           <ExternalLink className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 text-center leading-tight">{t('openOriginalSource')}</span>
+          <span className="min-w-0 text-center leading-tight sm:hidden">{t('openOriginalSourceShort')}</span>
+          <span className="hidden min-w-0 text-center leading-tight sm:inline">{t('openOriginalSource')}</span>
         </button>
       </div>
       {!safeOriginalUrl ? (
