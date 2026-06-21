@@ -6,6 +6,7 @@
 - synced AI summary read badges across devices so summaries opened elsewhere no longer appear new
 - kept grouped reader-mode source links in one horizontal scroll row so large story clusters stay readable
 - made AI summaries faster and more reliable by reusing per-window article queries, avoiding mixed-window topic stories, retrying transient invalid outputs, and letting pending topic windows settle after a grace period
+- moved AI summary and podcast briefing windows to `08:00` and `20:00` local time
 
 ## 3.5.7
 

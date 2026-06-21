@@ -170,7 +170,7 @@ AI features run only in the backend. Feature switches default to `true`, but pro
 | --- | --- | --- |
 | `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` | Model used for thematic summaries. |
 | `AI_SUMMARY_REQUEST_TIMEOUT_MS` | `120000` | Timeout for thematic-summary requests and podcast-script requests. Strict integer, valid `1000..120000`; invalid/out-of-range falls back. |
-| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for `07:00` and `19:00` summary and podcast slots. Invalid zones fall back to `Europe/Rome`. |
+| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for `08:00` and `20:00` summary and podcast slots. Invalid zones fall back to `Europe/Rome`. |
 | `THEMATIC_SUMMARY_CHECK_INTERVAL_MS` | `60000` | Scheduler interval for checking due summaries and podcasts. Minimum `1000`. |
 | `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in topic-tagged articles sent to one thematic-summary request. Minimum `1`, maximum `300`. |
 | `AI_SUMMARY_GENERATION_CONCURRENCY` | `2` | Max topic summary generations run concurrently for one due window. Minimum `1`, maximum `6`. |

@@ -11,8 +11,8 @@ const { isPromotionalDealArticle } = require('../utils/promotionalContent');
 const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
 
 const DEFAULT_SUMMARY_TIME_ZONE = 'Europe/Rome';
-const SUMMARY_GENERATION_HOURS = [7, 19];
-const PODCAST_GENERATION_HOURS = [7, 19];
+const SUMMARY_GENERATION_HOURS = [8, 20];
+const PODCAST_GENERATION_HOURS = [8, 20];
 const PODCAST_HISTORY_RETAIN_COUNT = parseIntegerEnv('AI_PODCAST_HISTORY_RETAIN_COUNT', 2, { min: 1, max: 10 });
 const SUMMARY_CHECK_INTERVAL_MS = parseIntegerEnv('THEMATIC_SUMMARY_CHECK_INTERVAL_MS', 60 * 1000, { min: 1000 });
 const SUMMARY_MAX_ARTICLES_PER_TOPIC = parseIntegerEnv('AI_SUMMARY_MAX_ARTICLES_PER_TOPIC', 120, { min: 1, max: 300 });

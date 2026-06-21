@@ -137,7 +137,7 @@ AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed 
 | `AI_SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS` | `300000` | Cooldown before retrying failed reader prewarm attempts. |
 | `AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES` | `2` | Additional retries for invalid summary or podcast-script output. |
 | `AI_SUMMARY_PENDING_TOPIC_GRACE_MS` | `900000` | Grace period after a summary slot for pending topic classification. |
-| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | Time zone for `07:00` and `19:00` summary/podcast slots. |
+| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | Time zone for `08:00` and `20:00` summary/podcast slots. |
 | `AI_PODCAST_LANGUAGES` | `en` | Comma-separated locales: `en`, `it`. |
 
 Model overrides:
