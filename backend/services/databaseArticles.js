@@ -992,21 +992,37 @@ function createArticleRepository({
     return [...retryIds];
   }
 
-  function markArticlesAiStoryGrouping(articleIds = [], status = 'completed', model = '') {
+  function markArticlesAiStoryGrouping(articleIds = [], status = 'completed', model = '', metadata = {}) {
     const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     if (normalizedArticleIds.length === 0) {
       return 0;
     }
 
     const processedAt = new Date().toISOString();
+    const matchIds = Array.isArray(metadata.matchIds)
+      ? JSON.stringify([...new Set(metadata.matchIds.map((id) => String(id || '').trim()).filter(Boolean))].slice(0, 20))
+      : null;
+    const confidence = Number.isFinite(Number(metadata.confidence)) ? Number(metadata.confidence) : null;
+    const reason = metadata.reason ? String(metadata.reason).replace(/\s+/g, ' ').trim().slice(0, 500) : null;
     return chunkValues(normalizedArticleIds).reduce((total, ids) => {
       return total + getDb().prepare(`
         UPDATE articles
         SET ai_story_group_processed_at = ?,
             ai_story_group_status = ?,
-            ai_story_group_model = ?
+            ai_story_group_model = ?,
+            ai_story_group_match_ids = COALESCE(?, ai_story_group_match_ids),
+            ai_story_group_confidence = ?,
+            ai_story_group_reason = ?
         WHERE id IN (${ids.map(() => '?').join(', ')})
-      `).run(processedAt, status, String(model || '').slice(0, 160), ...ids).changes;
+      `).run(
+        processedAt,
+        status,
+        String(model || '').slice(0, 160),
+        matchIds,
+        confidence,
+        reason,
+        ...ids
+      ).changes;
     }, 0);
   }
 

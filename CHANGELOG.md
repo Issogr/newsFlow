@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.5.9
+
+- reduced AI provider usage with larger topic batches, high-confidence local topic skips, prompt article caps, and unchanged story-grouping retry skips
+- made thematic summary refreshes less noisy by debouncing post-topic checks and avoiding unchanged summary reloads on manual feed refresh
+- saved podcast scripts before TTS audio generation, generated audio in the background, and allowed private browser caching for podcast audio
+- added structured AI request metrics for chat, podcast script, and TTS calls
+
 ## 3.5.8
 
 - clarified news-card actions by renaming the in-app reader button to `Read here` and the source link to `Open original`

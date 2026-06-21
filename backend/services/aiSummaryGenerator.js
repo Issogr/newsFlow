@@ -171,7 +171,15 @@ async function generateSummaryForArticles(topicConfig = {}, articles = []) {
     ],
     temperature: 0.25,
     maxTokens: tokenBudget
-  }, { timeoutMs: config.timeoutMs });
+  }, {
+    timeoutMs: config.timeoutMs,
+    metrics: {
+      feature: 'thematic_summary',
+      topicKey: topicConfig.key,
+      articleCount: articles.length,
+      maxTokens: tokenBudget
+    }
+  });
   const payload = parseJsonContent(extractAssistantContent(response));
   const normalized = normalizeGeneratedSummary(payload);
 

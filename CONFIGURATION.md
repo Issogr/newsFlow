@@ -146,10 +146,11 @@ AI features run only in the backend. Feature switches default to `true`, but pro
 | Variable | Default | Details |
 | --- | --- | --- |
 | `OPENROUTER_TOPIC_MODEL` | `qwen/qwen3.5-9b` | Model used for AI topic classification. |
-| `AI_TOPIC_BATCH_SIZE` | `4` | Articles per topic-classification request. Strict integer, clamped to `1..50`. |
+| `AI_TOPIC_BATCH_SIZE` | `10` | Articles per topic-classification request. Strict integer, clamped to `1..50`. |
 | `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Concurrent topic-classification requests. Strict integer, clamped to `1..4`. |
 | `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles sent to AI per refresh. Strict integer, clamped to `1..1000`. |
 | `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one topic-classification request. Strict integer, clamped to `1000..120000`. |
+| `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips OpenRouter classification for articles with high-confidence local topic matches. Invalid values disable it. |
 | `AI_TOPIC_DEBUG_LOG_ARTICLES` | `false` | Enables verbose topic debug logging only when set to `true`. Invalid values disable it. |
 
 ## AI Story Grouping
@@ -173,10 +174,12 @@ AI features run only in the backend. Feature switches default to `true`, but pro
 | `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for `08:00` and `20:00` summary and podcast slots. Invalid zones fall back to `Europe/Rome`. |
 | `THEMATIC_SUMMARY_CHECK_INTERVAL_MS` | `60000` | Scheduler interval for checking due summaries and podcasts. Minimum `1000`. |
 | `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in topic-tagged articles sent to one thematic-summary request. Minimum `1`, maximum `300`. |
+| `AI_SUMMARY_PROMPT_MAX_ARTICLES` | `60` | Max deduped/source-balanced articles included in one thematic-summary prompt. Minimum `1`, maximum `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC`. |
 | `AI_SUMMARY_GENERATION_CONCURRENCY` | `2` | Max topic summary generations run concurrently for one due window. Minimum `1`, maximum `6`. |
 | `AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS` | `30000` | Approximate total article text budget for one summary prompt. Minimum `10000`, maximum `240000`. |
 | `AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES` | `2` | Additional retries for invalid summary or podcast-script model output before treating it as terminal. Minimum `0`, maximum `10`. |
 | `AI_SUMMARY_PENDING_TOPIC_GRACE_MS` | `900000` | How long after a summary slot to wait for pending topic classification before persisting an empty window from available data. Minimum `0`, maximum `21600000`. |
+| `AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS` | `5000` | Debounce delay for summary checks triggered by completed topic-classification batches. Minimum `0`, maximum `60000`. |
 | `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarms reader-mode text before summary windows when summary generation is available. Invalid values disable it. |
 | `AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE` | `30` | Minutes before a summary slot when prewarm can start. Minimum `1`, maximum `180`. |
 | `AI_SUMMARY_READER_PREWARM_CONCURRENCY` | `2` | Concurrent reader extractions during summary prewarm. Minimum `1`, maximum `8`. |
@@ -193,7 +196,9 @@ AI features run only in the backend. Feature switches default to `true`, but pro
 | --- | --- | --- |
 | `OPENROUTER_PODCAST_SCRIPT_MODEL` | `deepseek/deepseek-v4-flash` | Model used for podcast script generation. |
 | `AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS` | `42000` | Approximate total article text budget for one podcast script prompt. Minimum `10000`, maximum `240000`. |
+| `AI_PODCAST_PROMPT_MAX_ARTICLES` | `40` | Max deduped/source-balanced articles included in one podcast-script prompt. Minimum `1`, maximum `300`. |
 | `AI_PODCAST_LANGUAGES` | `en` | Comma-separated podcast locales. Supported values are `en` and `it`; invalid entries are ignored. |
+| `AI_PODCAST_BACKGROUND_AUDIO_ENABLED` | `true` | Persists podcast scripts with audio marked `generating`, then runs TTS audio generation in the background. Invalid values disable background startup. |
 | `AI_PODCAST_HISTORY_RETAIN_COUNT` | `2` | Number of historical podcast entries retained. Minimum `1`, maximum `10`. |
 | `OPENROUTER_PODCAST_AUDIO_MODEL` | `google/gemini-3.1-flash-tts-preview` | Model used for podcast TTS audio generation. |
 | `AI_PODCAST_TTS_TIMEOUT_MS` | `120000` | Timeout for one podcast audio request. Strict integer, valid `1000..120000`; invalid/out-of-range falls back. |

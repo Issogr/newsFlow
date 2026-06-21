@@ -29,7 +29,8 @@ describe('aiTopicClassifier', () => {
       AI_TOPIC_BATCH_SIZE: undefined,
       AI_TOPIC_BATCH_CONCURRENCY: undefined,
       AI_TOPIC_MAX_ARTICLES_PER_REFRESH: undefined,
-      AI_TOPIC_REQUEST_TIMEOUT_MS: undefined
+      AI_TOPIC_REQUEST_TIMEOUT_MS: undefined,
+      AI_TOPIC_DETERMINISTIC_SKIP_ENABLED: 'false'
     };
   });
 
@@ -271,6 +272,28 @@ describe('aiTopicClassifier', () => {
   test('uses a larger completion budget for structured JSON output', () => {
     expect(aiTopicClassifier._getCompletionTokenBudget(1)).toBe(440);
     expect(aiTopicClassifier._getCompletionTokenBudget(4)).toBe(800);
+  });
+
+  test('skips provider calls for high-confidence deterministic local topics', async () => {
+    process.env.AI_TOPIC_DETERMINISTIC_SKIP_ENABLED = 'true';
+
+    const result = await aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus([
+      {
+        id: 'article-1',
+        title: 'AI software and cloud cybersecurity startup launches new chip platform',
+        description: 'The digital hardware update includes new semiconductor tools for data centers.'
+      }
+    ]);
+
+    expect(chatSend).not.toHaveBeenCalled();
+    expect(result.topicsByArticleId.get('article-1')).toEqual([
+      expect.objectContaining({
+        topic: 'Tecnologia',
+        source: 'local',
+        reasonCode: 'local_high_confidence_skip'
+      })
+    ]);
+    expect(result.attemptedArticleIds).toEqual(['article-1']);
   });
 
   test('logs a safe reason when a completed AI response has no usable topics', async () => {

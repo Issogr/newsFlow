@@ -170,7 +170,15 @@ async function findSimilarStoriesForArticle(target = {}, candidates = [], option
     ],
     temperature: 0,
     maxTokens: 900
-  }, { timeoutMs: config.timeoutMs });
+  }, {
+    timeoutMs: config.timeoutMs,
+    metrics: {
+      feature: 'story_grouping',
+      articleCount: 1,
+      candidateCount: filteredCandidates.length,
+      maxTokens: 900
+    }
+  });
   const payload = parseJsonContent(extractAssistantContent(response));
   if (!payload) {
     throw new Error('AI story grouping response did not contain valid JSON');
@@ -185,6 +193,13 @@ async function findSimilarStoriesForArticle(target = {}, candidates = [], option
   };
 }
 
+function getCandidateSignature(target = {}, candidates = [], options = {}) {
+  return filterCandidateArticles(target, candidates, options)
+    .map((candidate) => candidate.id)
+    .filter(Boolean)
+    .sort();
+}
+
 function isAiStoryGroupingAvailable() {
   return getConfig().enabled;
 }
@@ -193,6 +208,7 @@ module.exports = {
   findSimilarStoriesForArticle,
   isAiStoryGroupingAvailable,
   buildStoryGroupId,
+  _getCandidateSignature: getCandidateSignature,
   _buildPrompt: buildPrompt,
   _getConfig: getConfig,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader

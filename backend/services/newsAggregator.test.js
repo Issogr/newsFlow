@@ -60,6 +60,7 @@ jest.mock('./aiTopicClassifier', () => ({
 
 jest.mock('./aiStoryGrouper', () => ({
   buildStoryGroupId: jest.fn((articleIds = []) => `ai-story-${articleIds.filter(Boolean).sort().join('-')}`),
+  _getCandidateSignature: jest.fn((target = {}, candidates = []) => candidates.map((candidate) => candidate.id).filter(Boolean).sort()),
   findSimilarStoriesForArticle: jest.fn(async () => ({ matches: [], model: 'test-story-model' })),
   isAiStoryGroupingAvailable: jest.fn(() => false)
 }));
@@ -69,6 +70,8 @@ jest.mock('./thematicSummaryService', () => ({
   startScheduler: jest.fn(),
   stopScheduler: jest.fn()
 }));
+
+process.env.AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS = '0';
 
 const rssParser = require('./rssParser');
 const database = require('./database');

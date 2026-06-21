@@ -1184,7 +1184,7 @@ describe('API auth and user flows', () => {
       .expect(200);
 
     expect(fullResponse.headers['accept-ranges']).toBe('bytes');
-    expect(fullResponse.headers['cache-control']).toContain('no-store');
+    expect(fullResponse.headers['cache-control']).toBe('private, max-age=86400, immutable');
     expect(fullResponse.headers['content-length']).toBe(String(audioBytes.length));
     expect(fullResponse.headers['content-type']).toContain('audio/mpeg');
 

@@ -14,7 +14,7 @@ const {
 const { truncateText } = require('./aiArticlePayload');
 
 const DEFAULT_OPENROUTER_TOPIC_MODEL = 'qwen/qwen3.5-9b';
-const DEFAULT_BATCH_SIZE = 4;
+const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_BATCH_CONCURRENCY = 1;
 const DEFAULT_MAX_ARTICLES_PER_REFRESH = 160;
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -76,7 +76,8 @@ function getConfig() {
     ...openRouterConfig,
     batchSize: parseIntegerEnv('AI_TOPIC_BATCH_SIZE', DEFAULT_BATCH_SIZE, { min: 1, max: 50, clamp: true, strict: true }),
     batchConcurrency: parseIntegerEnv('AI_TOPIC_BATCH_CONCURRENCY', DEFAULT_BATCH_CONCURRENCY, { min: 1, max: 4, clamp: true, strict: true }),
-    maxArticlesPerRefresh: parseIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, { min: 1, max: 1000, clamp: true, strict: true })
+    maxArticlesPerRefresh: parseIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, { min: 1, max: 1000, clamp: true, strict: true }),
+    deterministicSkipEnabled: readAiToggleValue('AI_TOPIC_DETERMINISTIC_SKIP_ENABLED') !== 'false'
   };
 }
 
@@ -131,6 +132,36 @@ function buildPrompt(batch = []) {
 
 function getCompletionTokenBudget(batchLength) {
   return Math.min(2000, 320 + (Math.max(1, batchLength) * 120));
+}
+
+function getDeterministicTopicDetails(article = {}) {
+  return topicNormalizer.classifyTopicsFromText(article, { threshold: 6 })
+    .filter((entry) => Number(entry.confidence) >= 0.8)
+    .slice(0, 3)
+    .map((entry) => ({
+      topic: entry.topic,
+      confidence: entry.confidence,
+      evidence: entry.evidence || [],
+      source: 'local',
+      reasonCode: 'local_high_confidence_skip'
+    }));
+}
+
+function splitDeterministicAndAiArticles(articles = [], config = {}) {
+  const deterministicTopicsByArticleId = new Map();
+  const aiArticles = [];
+
+  articles.forEach((article) => {
+    const deterministicTopics = config.deterministicSkipEnabled ? getDeterministicTopicDetails(article) : [];
+    if (deterministicTopics.length > 0) {
+      deterministicTopicsByArticleId.set(article.id, deterministicTopics);
+      return;
+    }
+
+    aiArticles.push(article);
+  });
+
+  return { aiArticles, deterministicTopicsByArticleId };
 }
 
 function getClassifierEntries(payload) {
@@ -328,7 +359,16 @@ async function classifyBatch(batch, config, context = {}) {
     ],
     temperature: 0,
     maxTokens: tokenBudget
-  }, { timeoutMs: config.timeoutMs });
+  }, {
+    timeoutMs: config.timeoutMs,
+    metrics: {
+      feature: 'topic_detection',
+      articleCount: batch.length,
+      batchIndex: context.batchIndex,
+      batchCount: context.batchCount,
+      maxTokens: tokenBudget
+    }
+  });
 
   const content = extractAssistantContent(response);
   const payload = parseJsonContent(content);
@@ -371,15 +411,16 @@ async function classifyTopicDetailsForArticlesWithStatus(articles = []) {
     logger.warn(`AI topic detection capped at ${limitedArticles.length}/${articles.length} new articles for this refresh`);
   }
 
-  const batches = chunkItems(limitedArticles, config.batchSize);
-  const openRouter = await createOpenRouterClient(config);
-  logger.info(`AI topic detection started: model=${config.model}, articles=${limitedArticles.length}, batches=${batches.length}`);
+  const { aiArticles, deterministicTopicsByArticleId } = splitDeterministicAndAiArticles(limitedArticles, config);
+  const batches = chunkItems(aiArticles, config.batchSize);
+  const openRouter = batches.length > 0 ? await createOpenRouterClient(config) : null;
+  logger.info(`AI topic detection started: model=${config.model}, articles=${limitedArticles.length}, deterministic=${deterministicTopicsByArticleId.size}, aiArticles=${aiArticles.length}, batches=${batches.length}`);
   const batchResults = await mapSettledWithConcurrency(batches, config.batchConcurrency, (batch, batchIndex) => classifyBatch(batch, config, {
     batchIndex,
     batchCount: batches.length,
     openRouter
   }));
-  const result = new Map();
+  const result = new Map(deterministicTopicsByArticleId);
   const failedArticleIds = [];
 
   batchResults.forEach((batchResult, index) => {
@@ -394,7 +435,7 @@ async function classifyTopicDetailsForArticlesWithStatus(articles = []) {
     });
   });
 
-  logger.info(`AI topic detection completed: model=${config.model}, requested=${limitedArticles.length}, classified=${result.size}, durationMs=${Date.now() - startedAt}`);
+  logger.info(`AI topic detection completed: model=${config.model}, requested=${limitedArticles.length}, deterministic=${deterministicTopicsByArticleId.size}, aiRequested=${aiArticles.length}, classified=${result.size}, durationMs=${Date.now() - startedAt}`);
   return {
     topicsByArticleId: result,
     attemptedArticleIds: limitedArticles.map((article) => article?.id).filter(Boolean),
@@ -413,6 +454,7 @@ module.exports = {
   _buildPrompt: buildPrompt,
   _getConfig: getConfig,
   _getCompletionTokenBudget: getCompletionTokenBudget,
+  _getDeterministicTopicDetails: getDeterministicTopicDetails,
   _extractAssistantContent: extractAssistantContent,
   _normalizeClassifierDetails: normalizeClassifierDetails,
   _parseJsonContent: parseJsonContent,

@@ -1,6 +1,7 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
 const { parseIntegerEnv } = require('../utils/env');
+const { estimateTokenCountFromChars, logAiRequestMetric } = require('../utils/aiMetrics');
 const { removePromotionalSentences } = require('../utils/promotionalContent');
 const { buildArticlePayload, getArticleTextLimit: getSharedArticleTextLimit, truncateText } = require('./aiArticlePayload');
 const {
@@ -935,7 +936,15 @@ async function generatePodcastScript(window = {}, articles = []) {
     ],
     temperature: 0.35,
     maxTokens: tokenBudget
-  }, { timeoutMs: config.timeoutMs });
+  }, {
+    timeoutMs: config.timeoutMs,
+    metrics: {
+      feature: 'podcast_script',
+      articleCount: articles.length,
+      localeCount: enabledLocales.length,
+      maxTokens: tokenBudget
+    }
+  });
   const payload = parseJsonContent(extractAssistantContent(response));
   const normalized = normalizeGeneratedPodcast(payload, { locales: enabledLocales });
 
@@ -969,11 +978,43 @@ async function generateAudioForLocale(scriptText = '', locale = 'en') {
   const ttsVoice = getTtsVoice();
   const fallbackMimeType = getAudioMimeType(audioFormat);
   const startedAt = Date.now();
-  const playableAudio = canStitchTtsAudio(config.model, audioFormat)
-    ? await generateChunkedAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType, locale: normalizedLocale })
-    : await generateSingleAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType, locale: normalizedLocale });
+  const inputBytes = Buffer.byteLength(text, 'utf8');
+  let playableAudio;
+  try {
+    playableAudio = canStitchTtsAudio(config.model, audioFormat)
+      ? await generateChunkedAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType, locale: normalizedLocale })
+      : await generateSingleAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType, locale: normalizedLocale });
+  } catch (error) {
+    logAiRequestMetric({
+      provider: 'openrouter',
+      type: 'audio_speech',
+      feature: 'podcast_tts',
+      model: config.model,
+      status: 'failed',
+      locale: normalizedLocale,
+      inputBytes,
+      estimatedInputTokens: estimateTokenCountFromChars(text.length),
+      durationMs: Date.now() - startedAt,
+      errorCode: error?.code,
+      errorMessage: error?.message
+    }, 'warn');
+    throw error;
+  }
   const { chunkCount, ...audioForStorage } = playableAudio;
 
+  logAiRequestMetric({
+    provider: 'openrouter',
+    type: 'audio_speech',
+    feature: 'podcast_tts',
+    model: config.model,
+    status: 'completed',
+    locale: normalizedLocale,
+    inputBytes,
+    estimatedInputTokens: estimateTokenCountFromChars(text.length),
+    chunkCount: chunkCount || 1,
+    audioBytes: Buffer.byteLength(audioForStorage.data || '', 'base64'),
+    durationMs: Date.now() - startedAt
+  });
   logger.info(`AI podcast audio generated: locale=${normalizedLocale}, model=${config.model}, chunks=${chunkCount || 1}, durationMs=${Date.now() - startedAt}`);
   return {
     ...audioForStorage,
@@ -981,6 +1022,10 @@ async function generateAudioForLocale(scriptText = '', locale = 'en') {
     voice: ttsVoice,
     generatedAt: new Date().toISOString()
   };
+}
+
+async function generatePodcastScriptForArticles(window = {}, articles = []) {
+  return generatePodcastScript(window, articles);
 }
 
 async function generateAudioByLocale(scriptTextByLocale = {}, locales = getEnabledPodcastLocales()) {
@@ -1044,7 +1089,9 @@ async function generatePodcastForArticles(window = {}, articles = []) {
 
 module.exports = {
   generatePodcastForArticles,
+  generatePodcastScriptForArticles,
   generateAudioForLocale,
+  generateAudioByLocale,
   isAiPodcastGenerationAvailable,
   _buildPrompt: buildPrompt,
   _extractAudioPayload: extractAudioPayload,

@@ -17,6 +17,7 @@ const {
 } = require('./newsAggregatorGrouping');
 const {
   buildStoryGroupId,
+  _getCandidateSignature: getStoryGroupingCandidateSignature,
   findSimilarStoriesForArticle,
   isAiStoryGroupingAvailable
 } = require('./aiStoryGrouper');
@@ -37,11 +38,13 @@ const AI_STORY_GROUPING_WINDOW_HOURS = parseIntegerEnv('AI_STORY_GROUPING_WINDOW
 const AI_STORY_GROUPING_CANDIDATE_LIMIT = parseIntegerEnv('AI_STORY_GROUPING_CANDIDATE_LIMIT', 64, { min: 8, max: 100 });
 const AI_STORY_GROUPING_RETRY_LIMIT = parseIntegerEnv('AI_STORY_GROUPING_RETRY_LIMIT', 12, { min: 0, max: 50 });
 const EXISTING_STORY_GROUP_MERGE_MIN_CONFIDENCE = 0.9;
+const SUMMARY_POST_TOPIC_DEBOUNCE_MS = parseIntegerEnv('AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS', 5000, { min: 0, max: 60000 });
 const pendingAiTopicProcessingIds = new Set();
 const pendingAiStoryGroupingIds = new Set();
 const sourceFetchTimestamps = new Map();
 const sourceFetchFailures = new Map();
 const sourceFetchPromises = new Map();
+let summaryAfterTopicTimer = null;
 
 function filterArticlesWithinRetention(articles = []) {
   if (!Array.isArray(articles) || articles.length === 0) {
@@ -384,11 +387,17 @@ function scheduleThematicSummariesAfterTopicProcessing(classifiedArticleIds = []
     return;
   }
 
-  setTimeout(() => {
+  if (summaryAfterTopicTimer) {
+    clearTimeout(summaryAfterTopicTimer);
+  }
+
+  summaryAfterTopicTimer = setTimeout(() => {
+    summaryAfterTopicTimer = null;
     thematicSummaryService.generateDueSummaries({ broadcast: true }).catch((error) => {
       logger.warn(`Thematic summary generation after topic processing failed: ${error.message}`);
     });
-  }, 0);
+  }, SUMMARY_POST_TOPIC_DEBOUNCE_MS);
+  summaryAfterTopicTimer.unref?.();
 }
 
 function scheduleAiTopicsForPendingArticles(normalizedArticles = [], options = {}) {
@@ -472,6 +481,17 @@ async function processAiStoryGroupingForArticle(article = {}) {
     return;
   }
 
+  const candidateSignature = getStoryGroupingCandidateSignature(target, candidates);
+  if (target.aiStoryGroupStatus === 'no_match'
+    && candidateSignature.length > 0
+    && Array.isArray(target.aiStoryGroupMatchIds)
+    && target.aiStoryGroupMatchIds.length === candidateSignature.length
+    && target.aiStoryGroupMatchIds.every((candidateId, index) => candidateId === candidateSignature[index])) {
+    logger.debug(`AI story grouping retry skipped: article=${articleId}, reason=unchanged_candidates, candidates=${candidateSignature.length}`);
+    pendingAiStoryGroupingIds.delete(articleId);
+    return;
+  }
+
   const result = await findSimilarStoriesForArticle(target, candidates);
   if (result.skipped === 'no_candidates') {
     database.markArticlesAiStoryGrouping([articleId], 'no_candidates', result.model);
@@ -485,7 +505,10 @@ async function processAiStoryGroupingForArticle(article = {}) {
 
   const matches = selectMatchesForConservativeMerge(target, candidates, result.matches || []);
   if (matches.length === 0) {
-    database.markArticlesAiStoryGrouping([articleId], 'no_match', result.model);
+    database.markArticlesAiStoryGrouping([articleId], 'no_match', result.model, {
+      matchIds: (result.candidates || []).map((candidate) => candidate.id).filter(Boolean).sort(),
+      reason: 'unchanged_candidate_signature'
+    });
     return;
   }
 
@@ -592,6 +615,10 @@ function resetRuntimeStateForTests() {
   sourceFetchTimestamps.clear();
   sourceFetchFailures.clear();
   sourceFetchPromises.clear();
+  if (summaryAfterTopicTimer) {
+    clearTimeout(summaryAfterTopicTimer);
+    summaryAfterTopicTimer = null;
+  }
 }
 
 function mergeNormalizedArticleTopics(normalizedArticles = []) {

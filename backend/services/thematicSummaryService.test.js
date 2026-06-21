@@ -5,6 +5,7 @@ function resetServiceRuntime(env = {}) {
   jest.resetModules();
   process.env = {
     ...originalEnv,
+    AI_PODCAST_BACKGROUND_AUDIO_ENABLED: 'false',
     ...env
   };
 }
@@ -108,8 +109,12 @@ describe('thematicSummaryService', () => {
 });
 
 function mockAiPodcastGenerator(overrides = {}) {
+  const podcastScriptGenerator = overrides.generatePodcastScriptForArticles
+    || overrides.generatePodcastForArticles
+    || jest.fn().mockResolvedValue(null);
   const mock = {
-    generatePodcastForArticles: jest.fn().mockResolvedValue(null),
+    generatePodcastForArticles: podcastScriptGenerator,
+    generatePodcastScriptForArticles: podcastScriptGenerator,
     generateAudioForLocale: jest.fn().mockResolvedValue(null),
     isAiPodcastGenerationAvailable: jest.fn(() => true),
     _getScriptConfig: jest.fn(() => ({ model: 'test-summary-model' })),
@@ -118,6 +123,9 @@ function mockAiPodcastGenerator(overrides = {}) {
     _getEnabledPodcastLocales: jest.fn(() => ['en']),
     ...overrides
   };
+  if (!overrides.generatePodcastScriptForArticles && overrides.generatePodcastForArticles) {
+    mock.generatePodcastScriptForArticles = mock.generatePodcastForArticles;
+  }
 
   jest.doMock('./aiPodcastGenerator', () => mock);
   return mock;

@@ -130,15 +130,20 @@ AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed 
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | unset | Required for AI provider calls. |
 | `AI_TOPIC_DETECTION_ENABLED` | `true` | Adds AI topic metadata during ingestion. |
+| `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips provider calls for articles the local classifier can topic with high confidence. |
 | `AI_STORY_GROUPING_ENABLED` | `true` | Groups articles describing the same story after ingestion. |
 | `AI_SUMMARY_GENERATION_ENABLED` | `true` | Generates thematic summaries; hides summary UI when `false`. |
 | `AI_PODCAST_GENERATION_ENABLED` | `true` | Set to `false` to disable podcast scripts, audio, and UI. |
+| `AI_SUMMARY_PROMPT_MAX_ARTICLES` | `60` | Max selected articles included in one thematic-summary prompt after dedupe/source balancing. |
+| `AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS` | `5000` | Debounces summary checks triggered by topic-classification completion. |
 | `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarms reader text before summary windows when summaries are enabled. |
 | `AI_SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS` | `300000` | Cooldown before retrying failed reader prewarm attempts. |
 | `AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES` | `2` | Additional retries for invalid summary or podcast-script output. |
 | `AI_SUMMARY_PENDING_TOPIC_GRACE_MS` | `900000` | Grace period after a summary slot for pending topic classification. |
 | `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | Time zone for `08:00` and `20:00` summary/podcast slots. |
 | `AI_PODCAST_LANGUAGES` | `en` | Comma-separated locales: `en`, `it`. |
+| `AI_PODCAST_PROMPT_MAX_ARTICLES` | `40` | Max selected articles included in one podcast-script prompt after dedupe/source balancing. |
+| `AI_PODCAST_BACKGROUND_AUDIO_ENABLED` | `true` | Saves podcast scripts first and generates TTS audio in the background when enabled. |
 
 Model overrides:
 

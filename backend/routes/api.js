@@ -278,7 +278,7 @@ function sendAudioResponse(req, res, audio) {
   const mimeType = sniffAudioMimeType(audioBuffer, audio.mimeType || 'audio/mpeg');
 
   res.set('Content-Type', mimeType);
-  res.set('Cache-Control', 'private, no-store, max-age=0');
+  res.set('Cache-Control', 'private, max-age=86400, immutable');
   res.set('Accept-Ranges', 'bytes');
   res.set('Content-Disposition', 'inline');
 

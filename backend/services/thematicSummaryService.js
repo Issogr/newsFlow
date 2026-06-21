@@ -25,6 +25,8 @@ const SUMMARY_READER_TEXT_MIN_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MI
 const SUMMARY_FAILED_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
 const SUMMARY_INVALID_OUTPUT_MAX_RETRIES = parseIntegerEnv('AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES', 2, { min: 0, max: 10 });
 const SUMMARY_PENDING_TOPIC_GRACE_MS = parseIntegerEnv('AI_SUMMARY_PENDING_TOPIC_GRACE_MS', 15 * 60 * 1000, { min: 0, max: 6 * 60 * 60 * 1000 });
+const SUMMARY_PROMPT_MAX_ARTICLES = parseIntegerEnv('AI_SUMMARY_PROMPT_MAX_ARTICLES', 60, { min: 1, max: SUMMARY_MAX_ARTICLES_PER_TOPIC });
+const PODCAST_PROMPT_MAX_ARTICLES = parseIntegerEnv('AI_PODCAST_PROMPT_MAX_ARTICLES', 40, { min: 1, max: 300 });
 const PODCAST_TTS_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_PODCAST_TTS_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
 const PODCAST_TTS_MAX_RETRIES = parseIntegerEnv('AI_PODCAST_TTS_MAX_RETRIES', 4, { min: 0, max: 20 });
 const TERMINAL_SUMMARY_STATUSES = new Set(['completed', 'empty']);
@@ -83,6 +85,8 @@ let schedulerHandle = null;
 let generationPromise = null;
 let prewarmPromise = null;
 const attemptedPrewarmArticleIdsByWindow = new Map();
+const podcastAudioGenerationPromises = new Map();
+const podcastAudioGenerationTimers = new Map();
 
 function getConfiguredSummaryTimeZone() {
   const configuredTimeZone = String(process.env.AI_SUMMARY_TIME_ZONE || DEFAULT_SUMMARY_TIME_ZONE).trim() || DEFAULT_SUMMARY_TIME_ZONE;
@@ -615,6 +619,44 @@ function sortArticlesForPodcast(articles = []) {
   });
 }
 
+function getPromptArticleSourceKey(article = {}) {
+  return normalizeIdentityText(article.source || article.rawSource || article.sourceId || '', { lowercase: true }) || 'unknown';
+}
+
+function selectPromptArticles(articles = [], maxArticles = 40) {
+  const normalizedLimit = Math.max(1, Number(maxArticles) || 40);
+  const uniqueArticles = dedupeThematicCandidateArticles(Array.isArray(articles) ? articles : []);
+  if (uniqueArticles.length <= normalizedLimit) {
+    return uniqueArticles;
+  }
+
+  const selected = [];
+  const selectedIds = new Set();
+  const sourceCounts = new Map();
+  const softSourceLimit = Math.max(2, Math.ceil(normalizedLimit / 6));
+
+  const addArticle = (article, enforceSourceLimit = true) => {
+    if (!article?.id || selectedIds.has(article.id) || selected.length >= normalizedLimit) {
+      return false;
+    }
+
+    const sourceKey = getPromptArticleSourceKey(article);
+    if (enforceSourceLimit && (sourceCounts.get(sourceKey) || 0) >= softSourceLimit) {
+      return false;
+    }
+
+    selected.push(article);
+    selectedIds.add(article.id);
+    sourceCounts.set(sourceKey, (sourceCounts.get(sourceKey) || 0) + 1);
+    return true;
+  };
+
+  uniqueArticles.forEach((article) => addArticle(article, true));
+  uniqueArticles.forEach((article) => addArticle(article, false));
+
+  return selected;
+}
+
 function getPodcastScriptTextByLocale(summary = {}) {
   const summaryTextByLocale = summary.summaryTextByLocale && typeof summary.summaryTextByLocale === 'object'
     ? summary.summaryTextByLocale
@@ -814,6 +856,59 @@ async function retryPodcastAudio(summary = {}, options = {}) {
   };
 }
 
+function startPodcastAudioGeneration(summary = {}, options = {}) {
+  const summaryId = String(summary.id || '').trim();
+  if (options.startPodcastAudioGeneration === false
+    || readAiToggleValue('AI_PODCAST_BACKGROUND_AUDIO_ENABLED') === 'false'
+    || !summaryId
+    || !shouldRetryPodcastAudio(summary, options)) {
+    return null;
+  }
+
+  if (podcastAudioGenerationPromises.has(summaryId) || podcastAudioGenerationTimers.has(summaryId)) {
+    return podcastAudioGenerationPromises.get(summaryId) || null;
+  }
+
+  const timer = setTimeout(() => {
+    podcastAudioGenerationTimers.delete(summaryId);
+    const promise = retryPodcastAudio(summary, { ...options, broadcast: true })
+      .catch((error) => {
+        logger.warn(`Background AI podcast audio generation failed: windowEnd=${summary.periodEnd}, error=${error.message}`);
+      })
+      .finally(() => {
+        podcastAudioGenerationPromises.delete(summaryId);
+      });
+
+    podcastAudioGenerationPromises.set(summaryId, promise);
+  }, 0);
+  timer.unref?.();
+  podcastAudioGenerationTimers.set(summaryId, timer);
+  return null;
+}
+
+function buildInitialPodcastAudioByLocale(scriptTextByLocale = {}) {
+  const ttsConfig = aiPodcastGenerator._getTtsConfig();
+  const expectedVoice = aiPodcastGenerator._getTtsVoice();
+  const enabledLocales = aiPodcastGenerator._getEnabledPodcastLocales();
+  const audioStatus = ttsConfig.enabled ? 'generating' : 'not_available';
+
+  if (!ttsConfig.enabled) {
+    logger.info(`AI podcast audio generation skipped: reason=${ttsConfig.apiKey ? 'disabled' : 'missing_api_key'}`);
+  }
+
+  return Object.fromEntries(enabledLocales
+    .filter((locale) => String(scriptTextByLocale?.[locale] || '').trim())
+    .map((locale) => [locale, {
+      audioStatus,
+      audioErrorMessage: '',
+      audioFailureCategory: '',
+      audioModel: ttsConfig.model,
+      audioVoice: expectedVoice,
+      audioRetryCount: 0,
+      audioFailedAt: null
+    }]));
+}
+
 async function prewarmReaderCacheForDueWindow(options = {}) {
   if (!isReaderPrewarmEnabled() && options.force !== true) {
     return { skipped: true, reason: 'disabled', attemptedCount: 0 };
@@ -915,7 +1010,7 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
     return { summary: null, generatedNow: false };
   }
 
-  const enrichedArticles = withCachedReaderText(articles);
+  const enrichedArticles = selectPromptArticles(withCachedReaderText(articles), SUMMARY_PROMPT_MAX_ARTICLES);
   const sources = buildSourceList(enrichedArticles);
   const basePayload = {
     id: buildSummaryId(topicConfig.key, window.periodStart, window.periodEnd),
@@ -924,7 +1019,7 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
     topics: topicConfig.topics,
     periodStart: window.periodStart,
     periodEnd: window.periodEnd,
-    articleCount: articles.length,
+    articleCount: enrichedArticles.length,
     sources,
     generatedAt: new Date().toISOString()
   };
@@ -971,6 +1066,9 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
 async function generatePodcastForWindow(window, options = {}) {
   const existingSummary = database.getPodcastSummary(window.periodStart, window.periodEnd);
   if (existingSummary?.status === 'completed' && options.force !== true) {
+    if (podcastAudioGenerationTimers.has(existingSummary.id) || podcastAudioGenerationPromises.has(existingSummary.id)) {
+      return { summary: existingSummary, generatedNow: false };
+    }
     return retryPodcastAudio(existingSummary, options);
   }
   if (existingSummary?.status === 'failed' && options.force !== true && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
@@ -994,7 +1092,7 @@ async function generatePodcastForWindow(window, options = {}) {
     };
   }
 
-  const enrichedArticles = withCachedReaderText(articles);
+  const enrichedArticles = selectPromptArticles(withCachedReaderText(articles), PODCAST_PROMPT_MAX_ARTICLES);
   const sources = buildSourceList(enrichedArticles);
   const basePayload = {
     id: buildPodcastSummaryId(window.periodStart, window.periodEnd),
@@ -1006,34 +1104,40 @@ async function generatePodcastForWindow(window, options = {}) {
   };
 
   try {
-    const generated = await aiPodcastGenerator.generatePodcastForArticles(window, enrichedArticles);
+    const generateScript = aiPodcastGenerator.generatePodcastScriptForArticles || aiPodcastGenerator.generatePodcastForArticles;
+    const generated = await generateScript(window, enrichedArticles);
     if (!generated) {
       return { summary: null, generatedNow: false };
     }
-    const audioFailedAt = generated.audioStatus === 'failed' ? new Date().toISOString() : null;
+    const audioByLocale = buildInitialPodcastAudioByLocale(generated.scriptTextByLocale || {});
+    const primaryLocale = Object.keys(audioByLocale)[0] || aiPodcastGenerator._getEnabledPodcastLocales()[0] || 'en';
+    const primaryAudio = audioByLocale[primaryLocale] || {};
+    const completedSummary = database.upsertPodcastSummary({
+      ...basePayload,
+      title: generated.title,
+      scriptText: generated.scriptText,
+      titleByLocale: generated.titleByLocale,
+      scriptTextByLocale: generated.scriptTextByLocale,
+      model: generated.model,
+      audioByLocale,
+      audioLocale: primaryLocale,
+      audio: null,
+      audioStatus: primaryAudio.audioStatus || 'not_available',
+      audioErrorMessage: '',
+      audioFailureCategory: '',
+      audioModel: primaryAudio.audioModel || aiPodcastGenerator._getTtsConfig().model,
+      audioVoice: primaryAudio.audioVoice || aiPodcastGenerator._getTtsVoice(),
+      audioRetryCount: 0,
+      audioFailedAt: null,
+      status: 'completed',
+      failureCategory: '',
+      retryCount: 0
+    });
+
+    startPodcastAudioGeneration(completedSummary, options);
 
     return {
-      summary: database.upsertPodcastSummary({
-        ...basePayload,
-        title: generated.title,
-        scriptText: generated.scriptText,
-        titleByLocale: generated.titleByLocale,
-        scriptTextByLocale: generated.scriptTextByLocale,
-        model: generated.model,
-        audioByLocale: generated.audioByLocale,
-        audioLocale: generated.audioLocale,
-        audio: generated.audio,
-        audioStatus: generated.audioStatus,
-        audioErrorMessage: generated.audioErrorMessage,
-        audioFailureCategory: generated.audioFailureCategory || '',
-        audioModel: generated.audio?.model || aiPodcastGenerator._getTtsConfig().model,
-        audioVoice: generated.audio?.voice || aiPodcastGenerator._getTtsVoice(),
-        audioRetryCount: generated.audioStatus === 'failed' ? 1 : 0,
-        audioFailedAt,
-        status: 'completed',
-        failureCategory: '',
-        retryCount: 0
-      }),
+      summary: completedSummary,
       generatedNow: true
     };
   } catch (error) {
@@ -1206,6 +1310,8 @@ function stopScheduler() {
     clearInterval(schedulerHandle);
     schedulerHandle = null;
   }
+  podcastAudioGenerationTimers.forEach((timer) => clearTimeout(timer));
+  podcastAudioGenerationTimers.clear();
   attemptedPrewarmArticleIdsByWindow.clear();
 }
 
@@ -1221,6 +1327,7 @@ module.exports = {
   _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,
   _getSummaryTopics: getSummaryTopics,
   _generatePodcastForWindow: generatePodcastForWindow,
+  _selectPromptArticles: selectPromptArticles,
   _isPromotionalDealArticle: isPromotionalDealArticle,
   _getPrewarmAttemptWindowCount: () => attemptedPrewarmArticleIdsByWindow.size,
   _prunePrewarmAttempts: prunePrewarmAttempts

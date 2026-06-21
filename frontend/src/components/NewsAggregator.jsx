@@ -808,8 +808,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
   const handleManualRefresh = useCallback(() => {
     loadNews({ page: 1, append: false, forceRefresh: true });
-    loadThematicSummaries();
-  }, [loadNews, loadThematicSummaries]);
+  }, [loadNews]);
 
   const handlePendingNewsRefresh = useCallback(() => {
     loadNews({ page: 1, append: false });

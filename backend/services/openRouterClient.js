@@ -1,5 +1,13 @@
 const { parseIntegerEnv } = require('../utils/env');
 const { isOpenRouterFeatureEnabled } = require('../config/aiFeatures');
+const {
+  estimateTokenCountFromChars,
+  extractUsage,
+  getChatOutputCharCount,
+  getChatPromptCharCount,
+  getFinishReason,
+  logAiRequestMetric
+} = require('../utils/aiMetrics');
 
 const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_TIMEOUT_MS = 120000;
@@ -140,7 +148,46 @@ function buildJsonChatRequest(request = {}) {
 }
 
 async function sendJsonChatCompletion(openRouter, chatRequest, options = {}) {
-  return sendChatCompletion(openRouter, buildJsonChatRequest(chatRequest), options);
+  const request = buildJsonChatRequest(chatRequest);
+  const startedAt = Date.now();
+  const promptChars = getChatPromptCharCount(request);
+  const baseMetric = {
+    provider: 'openrouter',
+    type: 'chat_completion',
+    feature: options.metrics?.feature || 'unknown',
+    model: request.model || options.metrics?.model,
+    promptChars,
+    estimatedPromptTokens: estimateTokenCountFromChars(promptChars),
+    ...options.metrics
+  };
+
+  try {
+    const response = await sendChatCompletion(openRouter, request, options);
+    const outputChars = getChatOutputCharCount(response);
+    const usage = extractUsage(response);
+
+    logAiRequestMetric({
+      ...baseMetric,
+      status: 'completed',
+      durationMs: Date.now() - startedAt,
+      outputChars,
+      estimatedOutputTokens: estimateTokenCountFromChars(outputChars),
+      finishReason: getFinishReason(response),
+      ...(usage || {})
+    });
+
+    return response;
+  } catch (error) {
+    logAiRequestMetric({
+      ...baseMetric,
+      status: 'failed',
+      durationMs: Date.now() - startedAt,
+      errorName: error?.name || 'Error',
+      errorCode: error?.code,
+      errorMessage: error?.message
+    }, 'warn');
+    throw error;
+  }
 }
 
 module.exports = {

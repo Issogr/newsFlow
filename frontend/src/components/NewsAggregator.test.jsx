@@ -636,7 +636,7 @@ describe('NewsAggregator', () => {
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
   });
 
-  test('forces a source refresh and reloads existing thematic summaries from the top navigation refresh button', async () => {
+  test('forces a source refresh without reloading unchanged thematic summaries from the refresh button', async () => {
     fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Current headline')]));
 
     await renderNewsAggregator();
@@ -648,7 +648,7 @@ describe('NewsAggregator', () => {
     await waitFor(() => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
     });
-    expect(fetchThematicSummaries).toHaveBeenCalledTimes(2);
+    expect(fetchThematicSummaries).toHaveBeenCalledTimes(1);
     expect(await screen.findByText('You reached the end of the available results.')).toBeInTheDocument();
   });
 
