@@ -1,5 +1,34 @@
 const { parseJsonValue } = require('../utils/json');
 
+function chunkValues(values = [], size = 500) {
+  const chunks = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+
+  return chunks;
+}
+
+function mapReaderCacheRow(row) {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...row,
+    contentBlocks: parseJsonValue(row.contentBlocks, null)
+  };
+}
+
+function isReaderCacheFresh(row, maxAgeMs) {
+  if (!Number.isFinite(maxAgeMs)) {
+    return true;
+  }
+
+  const ageMs = Date.now() - new Date(row.fetchedAt).getTime();
+  return Number.isFinite(ageMs) && ageMs < maxAgeMs;
+}
+
 function createReaderCacheRepository({ getDb }) {
   function getReaderCache(articleId, maxAgeMs) {
     if (!articleId) {
@@ -18,17 +47,40 @@ function createReaderCacheRepository({ getDb }) {
       return null;
     }
 
-    if (Number.isFinite(maxAgeMs)) {
-      const ageMs = Date.now() - new Date(row.fetchedAt).getTime();
-      if (!Number.isFinite(ageMs) || ageMs >= maxAgeMs) {
-        return null;
-      }
+    if (!isReaderCacheFresh(row, maxAgeMs)) {
+      return null;
     }
 
-    return {
-      ...row,
-      contentBlocks: parseJsonValue(row.contentBlocks, null)
-    };
+    return mapReaderCacheRow(row);
+  }
+
+  function getReaderCaches(articleIds = [], maxAgeMs) {
+    const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : [])
+      .map((articleId) => String(articleId || '').trim())
+      .filter(Boolean))];
+    const cacheByArticleId = new Map();
+
+    if (normalizedArticleIds.length === 0) {
+      return cacheByArticleId;
+    }
+
+    chunkValues(normalizedArticleIds).forEach((ids) => {
+      const rows = getDb().prepare(`
+        SELECT article_id AS articleId, url, title, site_name AS siteName,
+               byline, language, excerpt, content_text AS contentText,
+               content_blocks AS contentBlocks, minutes_to_read AS minutesToRead, fetched_at AS fetchedAt
+        FROM reader_cache
+        WHERE article_id IN (${ids.map(() => '?').join(', ')})
+      `).all(...ids);
+
+      rows.forEach((row) => {
+        if (isReaderCacheFresh(row, maxAgeMs)) {
+          cacheByArticleId.set(row.articleId, mapReaderCacheRow(row));
+        }
+      });
+    });
+
+    return cacheByArticleId;
   }
 
   function upsertReaderCache(articleId, payload = {}) {
@@ -78,6 +130,7 @@ function createReaderCacheRepository({ getDb }) {
 
   return {
     getReaderCache,
+    getReaderCaches,
     upsertReaderCache
   };
 }

@@ -6,8 +6,7 @@ const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
-  sendChatCompletion,
-  setOpenRouterSdkLoader
+  sendJsonChatCompletion
 } = require('./openRouterClient');
 
 const DEFAULT_OPENROUTER_SUMMARY_MODEL = 'deepseek/deepseek-v4-flash';
@@ -158,7 +157,7 @@ async function generateSummaryForArticles(topicConfig = {}, articles = []) {
   const startedAt = Date.now();
   const openRouter = await createOpenRouterClient(config);
   const tokenBudget = getCompletionTokenBudget(articles.length);
-  const response = await sendChatCompletion(openRouter, {
+  const response = await sendJsonChatCompletion(openRouter, {
     model: config.model,
     messages: [
       {
@@ -171,15 +170,7 @@ async function generateSummaryForArticles(topicConfig = {}, articles = []) {
       }
     ],
     temperature: 0.25,
-    maxTokens: tokenBudget,
-    maxCompletionTokens: tokenBudget,
-    reasoning: {
-      enabled: false,
-      effort: 'none',
-      maxTokens: 0
-    },
-    responseFormat: { type: 'json_object' },
-    stream: false
+    maxTokens: tokenBudget
   }, { timeoutMs: config.timeoutMs });
   const payload = parseJsonContent(extractAssistantContent(response));
   const normalized = normalizeGeneratedSummary(payload);
@@ -208,7 +199,5 @@ module.exports = {
   _getArticleTextLimit: getArticleTextLimit,
   _getConfig: getConfig,
   _normalizeGeneratedSummary: normalizeGeneratedSummary,
-  _validateGeneratedSummary: validateGeneratedSummary,
-  _parseJsonContent: parseJsonContent,
-  _setOpenRouterSdkLoader: setOpenRouterSdkLoader
+  _validateGeneratedSummary: validateGeneratedSummary
 };

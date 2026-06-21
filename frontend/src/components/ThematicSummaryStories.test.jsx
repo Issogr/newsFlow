@@ -1,42 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { createTranslator } from '../i18n';
 import ThematicSummaryStories from './ThematicSummaryStories';
 import ThematicSummaryPanel from './ThematicSummaryPanel';
 
-const translations = {
-  thematicSummariesTitle: 'Topic stories',
-  openPodcastSummary: 'Open podcast briefing',
-  openThematicSummary: ({ topic }) => `Open ${topic} summary`,
-  closeThematicSummary: 'Close summary',
-  closePodcastSummary: 'Close podcast briefing',
-  podcastBriefing: 'Podcast briefing',
-  morningPodcast: 'Morning podcast',
-  eveningPodcast: 'Evening podcast',
-  podcastAudioAvailableNotice: ({ languages }) => `Podcast audio is available in ${languages}.`,
-  podcastAudioLanguageLabel: ({ language }) => `Audio in ${language}`,
-  podcastGeneratedAt: ({ date }) => `Generated ${date}`,
-  thematicSummary: 'Thematic summary',
-  summaryArticleCount: ({ count }) => `${count} articles evaluated`,
-  summarySlotMorning: 'Morning',
-  summarySlotLunch: 'Lunch time',
-  summarySlotEvening: 'Evening',
-  summarySlotRecent: 'Latest briefing',
-  podcastAudioTitle: 'Audio briefing',
-  podcastAudioReady: 'Ready to play',
-  podcastAudioLoadFailed: 'Unable to load audio',
-  podcastAudioSeek: 'Seek podcast audio',
-  playPodcastAudio: 'Play podcast audio',
-  pausePodcastAudio: 'Pause podcast audio',
-  podcastAudioBack: '15 sec back',
-  podcastAudioForward: '30 sec ahead',
-  podcastAudioGenerating: 'Audio generation is in progress. This panel will update when it is ready.',
-  podcastAudioUnavailable: 'Audio is not available for this briefing yet.',
-  podcastAudioFailed: 'Audio generation failed for this briefing.'
-};
-
-function t(key, params = {}) {
-  const entry = translations[key] || key;
-  return typeof entry === 'function' ? entry(params) : entry;
-}
+const t = createTranslator('en');
 
 function createPodcastSummary(overrides = {}) {
   return {

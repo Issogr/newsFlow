@@ -5,7 +5,8 @@ import SettingsCustomSourcesSection from './settings/SettingsCustomSourcesSectio
 import SettingsExclusionsSection from './settings/SettingsExclusionsSection';
 import SettingsPreferencesSection from './settings/SettingsPreferencesSection';
 import useSettingsPanelState from './settings/useSettingsPanelState';
-import useLockBodyScroll from '../hooks/useLockBodyScroll';
+import InlineAlert from './InlineAlert';
+import SlideOverPanelFrame from './SlideOverPanelFrame';
 import { PROJECT_GITHUB_URL } from '../config/projectLinks';
 
 const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, onUserUpdate }) => {
@@ -49,11 +50,8 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     onUserUpdate
   });
 
-  useLockBodyScroll();
-
   return (
-    <div className="fixed inset-0 z-50 flex bg-slate-950/35 backdrop-blur-sm sm:px-4 sm:py-6">
-      <div className="ml-auto flex h-full w-full flex-col overflow-hidden bg-slate-50 shadow-2xl sm:max-w-2xl sm:rounded-[2rem] sm:border sm:border-slate-200">
+    <SlideOverPanelFrame>
         <div className="border-b border-slate-200 bg-white px-5 py-5 sm:px-6">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -107,9 +105,9 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
             />
 
             {error && (
-              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <InlineAlert>
                 {error.message}
-              </div>
+              </InlineAlert>
             )}
 
             <SettingsAccessSection
@@ -152,8 +150,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
             {t('save')}
           </button>
         </div>
-      </div>
-    </div>
+    </SlideOverPanelFrame>
   );
 };
 

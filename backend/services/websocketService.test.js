@@ -266,25 +266,18 @@ describe('websocketService', () => {
     expect(socketTwo.emit).not.toHaveBeenCalled();
   });
 
-  test('broadcasts notifications to all active sockets and tracks failed emits', () => {
-    const healthySocket = createSocket('socket-1', { auth: { token: 'token-1' }, headers: {} });
+  test('tracks failed emits during feed refresh broadcasts', () => {
     const failingSocket = createSocket('socket-2', { auth: { token: 'token-2' }, headers: {} });
     failingSocket.emit.mockImplementation(() => {
       throw new Error('socket emit failed');
     });
 
-    ioMock.connectionHandler(healthySocket);
     ioMock.connectionHandler(failingSocket);
 
-    websocketService.broadcastSystemNotification('Hello sockets', 'warning');
-
-    expect(healthySocket.emit).toHaveBeenCalledWith('system:notification', expect.objectContaining({
-      notificationType: 'warning',
-      message: 'Hello sockets'
-    }));
+    websocketService.broadcastFeedRefresh();
 
     const statistics = websocketService.getStatistics();
-    expect(statistics.activeConnectionsCount).toBe(2);
+    expect(statistics.activeConnectionsCount).toBe(1);
     expect(statistics.failedBroadcasts).toBe(1);
   });
 

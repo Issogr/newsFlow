@@ -14,21 +14,10 @@ const useTopicRefreshSocket = ({
   const subscriptionRef = useRef(subscription);
   const socketRef = useRef(null);
 
-  useEffect(() => {
-    topicRefreshCallbackRef.current = onTopicRefresh;
-  }, [onTopicRefresh]);
-
-  useEffect(() => {
-    summariesRefreshCallbackRef.current = onSummariesRefresh;
-  }, [onSummariesRefresh]);
-
-  useEffect(() => {
-    newsUpdateCallbackRef.current = onNewsUpdate;
-  }, [onNewsUpdate]);
-
-  useEffect(() => {
-    subscriptionRef.current = subscription;
-  }, [subscription]);
+  topicRefreshCallbackRef.current = onTopicRefresh;
+  summariesRefreshCallbackRef.current = onSummariesRefresh;
+  newsUpdateCallbackRef.current = onNewsUpdate;
+  subscriptionRef.current = subscription;
 
   useEffect(() => {
     if (!enabled) {

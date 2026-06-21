@@ -1631,7 +1631,7 @@ function createArticleRepository({
     const normalizedExcludedTopics = [...new Set((Array.isArray(excludedTopics) ? excludedTopics : [])
       .map((topic) => topicNormalizer.normalizeTopic(topic))
       .filter((topic) => topic && topicNormalizer.isCanonicalTopic(topic) && !normalizedTopics.includes(topic)))];
-    const normalizedLimit = Math.max(1, Math.min(Number(limit) || 80, 200));
+    const normalizedLimit = Math.max(1, Math.min(Number(limit) || 80, 300));
 
     if (normalizedTopics.length === 0 || !periodStart || !periodEnd) {
       return [];
@@ -2791,8 +2791,7 @@ function createArticleRepository({
     getTopicStatsByFilters,
     createIngestionRun,
     completeIngestionRun,
-    getLatestIngestionRun,
-    buildSearchQuery
+    getLatestIngestionRun
   };
 }
 

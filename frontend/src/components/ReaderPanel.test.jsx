@@ -62,6 +62,17 @@ function renderReaderPanel(props = {}) {
   );
 }
 
+function createReaderPayload(text = 'Body', overrides = {}) {
+  return {
+    title: 'Reader title',
+    language: 'en',
+    excerpt: 'Excerpt',
+    contentBlocks: [{ type: 'paragraph', text }],
+    minutesToRead: 1,
+    ...overrides
+  };
+}
+
 describe('ReaderPanel', () => {
   const originalShare = navigator.share;
   const originalClipboard = navigator.clipboard;
@@ -89,42 +100,37 @@ describe('ReaderPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
 
-    await resolveDeferred(secondRequest, {
+    await resolveDeferred(secondRequest, createReaderPayload('Latest body', {
       title: 'Latest reader title',
-      language: 'en',
-      excerpt: 'Latest excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Latest body' }],
-      minutesToRead: 1
-    });
+      excerpt: 'Latest excerpt'
+    }));
 
-    expect(await screen.findByText('Latest reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Latest body')).toBeInTheDocument();
+    expect(screen.getByText('Article two')).toBeInTheDocument();
 
-    await resolveDeferred(firstRequest, {
+    await resolveDeferred(firstRequest, createReaderPayload('Stale body', {
       title: 'Stale reader title',
-      language: 'en',
-      excerpt: 'Stale excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Stale body' }],
-      minutesToRead: 1
-    });
+      excerpt: 'Stale excerpt'
+    }));
 
     await waitFor(() => {
-      expect(screen.getByText('Latest reader title')).toBeInTheDocument();
-      expect(screen.queryByText('Stale reader title')).not.toBeInTheDocument();
+      expect(screen.getByText('Latest body')).toBeInTheDocument();
+      expect(screen.queryByText('Stale body')).not.toBeInTheDocument();
     });
   });
 
   test('fetches reader content from the backend on open', async () => {
-    fetchReaderArticle.mockResolvedValue({
+    fetchReaderArticle.mockResolvedValue(createReaderPayload('Cached body', {
       title: 'Backend cached reader title',
-      language: 'en',
       excerpt: 'Cached excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Cached body' }],
       minutesToRead: 2
-    });
+    }));
 
     renderReaderPanel();
 
-    expect(await screen.findByText('Backend cached reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Cached body')).toBeInTheDocument();
+    expect(screen.getByText('Article one')).toBeInTheDocument();
+    expect(screen.queryByText('Backend cached reader title')).not.toBeInTheDocument();
     expect(fetchReaderArticle).toHaveBeenCalledWith('article-1', expect.objectContaining({
       refresh: false
     }));
@@ -132,16 +138,15 @@ describe('ReaderPanel', () => {
   });
 
   test('ignores malformed reader list blocks without crashing', async () => {
-    fetchReaderArticle.mockResolvedValue({
+    fetchReaderArticle.mockResolvedValue(createReaderPayload('Visible body', {
       title: 'Reader title',
-      language: 'en',
       excerpt: 'Excerpt',
       contentBlocks: [
         { type: 'paragraph', text: 'Visible body' },
         { type: 'unordered-list', items: null }
       ],
       minutesToRead: 1
-    });
+    }));
 
     renderReaderPanel();
 
@@ -151,13 +156,11 @@ describe('ReaderPanel', () => {
   test('clears a stale reader error when switching to another article', async () => {
     fetchReaderArticle
       .mockRejectedValueOnce(new Error('Reader failed'))
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce(createReaderPayload('Second body', {
         title: 'Second reader title',
-        language: 'en',
         excerpt: 'Cached excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'Second body' }],
         minutesToRead: 2
-      });
+      }));
 
     renderReaderPanel();
 
@@ -165,54 +168,43 @@ describe('ReaderPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
 
-    expect(await screen.findByText('Second reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Second body')).toBeInTheDocument();
+    expect(screen.getByText('Article two')).toBeInTheDocument();
     expect(screen.queryByText('readerUnavailable')).not.toBeInTheDocument();
   });
 
   test('reuses cached reader content when returning to a source version', async () => {
     fetchReaderArticle
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce(createReaderPayload('First body', {
         title: 'First reader title',
-        language: 'en',
-        excerpt: 'First excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'First body' }],
-        minutesToRead: 1
-      })
-      .mockResolvedValueOnce({
+        excerpt: 'First excerpt'
+      }))
+      .mockResolvedValueOnce(createReaderPayload('Second body', {
         title: 'Second reader title',
-        language: 'en',
-        excerpt: 'Second excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'Second body' }],
-        minutesToRead: 1
-      });
+        excerpt: 'Second excerpt'
+      }));
 
     renderReaderPanel();
 
-    expect(await screen.findByText('First reader title')).toBeInTheDocument();
+    expect(await screen.findByText('First body')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
-    expect(await screen.findByText('Second reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Second body')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Source A' }));
 
-    expect(await screen.findByText('First reader title')).toBeInTheDocument();
+    expect(await screen.findByText('First body')).toBeInTheDocument();
     expect(fetchReaderArticle).toHaveBeenCalledTimes(2);
   });
 
   test('keeps same-source grouped articles selectable as separate versions', async () => {
     fetchReaderArticle
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce(createReaderPayload('First body', {
         title: 'First same-source reader title',
-        language: 'en',
-        excerpt: 'First excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'First body' }],
-        minutesToRead: 1
-      })
-      .mockResolvedValueOnce({
+        excerpt: 'First excerpt'
+      }))
+      .mockResolvedValueOnce(createReaderPayload('Second body', {
         title: 'Second same-source reader title',
-        language: 'en',
-        excerpt: 'Second excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'Second body' }],
-        minutesToRead: 1
-      });
+        excerpt: 'Second excerpt'
+      }));
 
     renderReaderPanel({
       group: {
@@ -235,25 +227,55 @@ describe('ReaderPanel', () => {
       initialArticleId: 'same-source-1'
     });
 
-    expect(await screen.findByText('First same-source reader title')).toBeInTheDocument();
+    expect(await screen.findByText('First body')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Source A #1' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Source A #2' }));
 
-    expect(await screen.findByText('Second same-source reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Second body')).toBeInTheDocument();
     expect(fetchReaderArticle).toHaveBeenNthCalledWith(2, 'same-source-2', expect.objectContaining({
       refresh: false
     }));
   });
 
-  test('disables unsafe original-source links', async () => {
-    fetchReaderArticle.mockResolvedValue({
-      title: 'Unsafe reader title',
-      language: 'en',
-      excerpt: 'Unsafe excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Unsafe body' }],
-      minutesToRead: 1
+  test('keeps many grouped source versions in one horizontal scroll row', async () => {
+    fetchReaderArticle.mockResolvedValue(createReaderPayload());
+    const sixSourceGroup = {
+      ...group,
+      items: Array.from({ length: 6 }, (_, index) => ({
+        id: `similar-article-${index + 1}`,
+        sourceId: `source-${index + 1}`,
+        source: `Source ${index + 1}`,
+        title: `Similar article ${index + 1}`,
+        url: `https://example.com/similar-${index + 1}`,
+        pubDate: `2026-03-07T1${index}:00:00.000Z`,
+        language: 'en'
+      }))
+    };
+
+    renderReaderPanel({
+      group: sixSourceGroup,
+      initialArticleId: 'similar-article-1'
     });
+
+    expect(await screen.findByText('Body')).toBeInTheDocument();
+
+    const sourceVersionRow = screen.getByText('sourceVersions').nextElementSibling;
+    expect(sourceVersionRow).toHaveClass('overflow-x-auto');
+    expect(sourceVersionRow).not.toHaveClass('flex-wrap');
+
+    for (let index = 1; index <= 6; index += 1) {
+      const button = screen.getByRole('button', { name: `Source ${index}` });
+      expect(button).toHaveClass('shrink-0');
+      expect(button).toHaveClass('whitespace-nowrap');
+    }
+  });
+
+  test('disables unsafe original-source links', async () => {
+    fetchReaderArticle.mockResolvedValue(createReaderPayload('Unsafe body', {
+      title: 'Unsafe reader title',
+      excerpt: 'Unsafe excerpt'
+    }));
 
     renderReaderPanel({
       group: {
@@ -265,7 +287,7 @@ describe('ReaderPanel', () => {
         }
     });
 
-    await screen.findByText('Unsafe reader title');
+    await screen.findByText('Unsafe body');
 
     expect(screen.queryByRole('link', { name: 'openOriginalSource' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'shareArticle' })).toBeDisabled();
@@ -273,35 +295,23 @@ describe('ReaderPanel', () => {
 
   test('shares the original article url from reader mode', async () => {
     navigator.share = jest.fn().mockResolvedValue(undefined);
-    fetchReaderArticle.mockResolvedValue({
-      title: 'Reader title',
-      language: 'en',
-      excerpt: 'Excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
-      minutesToRead: 1
-    });
+    fetchReaderArticle.mockResolvedValue(createReaderPayload());
 
     renderReaderPanel();
 
-    await screen.findByText('Reader title');
+    await screen.findByText('Body');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
     });
 
     expect(navigator.share).toHaveBeenCalledWith({
-      title: 'Reader title',
+      title: 'Article one',
       url: 'https://example.com/one'
     });
   });
 
   test('updates reader text size and persists it without reloading parent state', async () => {
-    fetchReaderArticle.mockResolvedValue({
-      title: 'Reader title',
-      language: 'en',
-      excerpt: 'Excerpt',
-      contentBlocks: [{ type: 'paragraph', text: 'Body' }],
-      minutesToRead: 1
-    });
+    fetchReaderArticle.mockResolvedValue(createReaderPayload());
     updateUserSettings.mockResolvedValue({
       settings: {
         ...currentUser.settings,
@@ -311,7 +321,7 @@ describe('ReaderPanel', () => {
 
     renderReaderPanel();
 
-    await screen.findByText('Reader title');
+    await screen.findByText('Body');
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'increaseReaderTextSize' }));
@@ -323,24 +333,15 @@ describe('ReaderPanel', () => {
 
   test('refreshes reader mode and bypasses the cached article payload', async () => {
     fetchReaderArticle
-      .mockResolvedValueOnce({
-        title: 'Reader title',
-        language: 'en',
-        excerpt: 'Excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'Body' }],
-        minutesToRead: 1
-      })
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce(createReaderPayload())
+      .mockResolvedValueOnce(createReaderPayload('Updated body', {
         title: 'Refreshed reader title',
-        language: 'en',
-        excerpt: 'Updated excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'Updated body' }],
-        minutesToRead: 1
-      });
+        excerpt: 'Updated excerpt'
+      }));
 
     renderReaderPanel();
 
-    await screen.findByText('Reader title');
+    await screen.findByText('Body');
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'refreshReader' }));
@@ -349,29 +350,24 @@ describe('ReaderPanel', () => {
     expect(fetchReaderArticle).toHaveBeenNthCalledWith(2, 'article-1', expect.objectContaining({
       refresh: true
     }));
-    expect(await screen.findByText('Refreshed reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Updated body')).toBeInTheDocument();
+    expect(screen.getByText('Article one')).toBeInTheDocument();
   });
 
   test('keeps stale reader content visible when manual refresh fails', async () => {
     fetchReaderArticle
-      .mockResolvedValueOnce({
-        title: 'Reader title',
-        language: 'en',
-        excerpt: 'Excerpt',
-        contentBlocks: [{ type: 'paragraph', text: 'Body' }],
-        minutesToRead: 1
-      })
+      .mockResolvedValueOnce(createReaderPayload())
       .mockRejectedValueOnce(new Error('Refresh failed'));
 
     renderReaderPanel();
 
-    expect(await screen.findByText('Reader title')).toBeInTheDocument();
+    expect(await screen.findByText('Body')).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'refreshReader' }));
     });
 
-    expect(screen.getByText('Reader title')).toBeInTheDocument();
+    expect(screen.getByText('Body')).toBeInTheDocument();
     expect(screen.getByText('readerUnavailable')).toBeInTheDocument();
   });
 

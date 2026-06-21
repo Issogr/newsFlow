@@ -25,8 +25,17 @@ function createGroup(overrides = {}) {
   };
 }
 
-function renderNewsCard({ cardGroup = group, ...props } = {}) {
-  return render(
+function createItem(overrides = {}) {
+  return {
+    id: 'article-1',
+    sourceId: 'source-a',
+    source: 'Source A',
+    ...overrides
+  };
+}
+
+function createNewsCardElement({ cardGroup = group, ...props } = {}) {
+  return (
     <NewsCard
       group={cardGroup}
       locale="en"
@@ -35,6 +44,10 @@ function renderNewsCard({ cardGroup = group, ...props } = {}) {
       {...props}
     />
   );
+}
+
+function renderNewsCard({ cardGroup = group, ...props } = {}) {
+  return render(createNewsCardElement({ cardGroup, ...props }));
 }
 
 describe('NewsCard', () => {
@@ -60,107 +73,58 @@ describe('NewsCard', () => {
   });
 
   test('uses safe static covers and falls back when images are unavailable or disabled', () => {
-    const { rerender } = render(
-      <NewsCard
-        group={{
-          ...group,
-          id: 'safe-image',
-          items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              image: 'https://example.com/image.jpg'
-            }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    const { rerender } = renderNewsCard({
+      cardGroup: createGroup({
+        id: 'safe-image',
+        items: [createItem({ image: 'https://example.com/image.jpg' })]
+      })
+    });
 
     expect(screen.getByRole('img', { name: 'Headline' })).toHaveAttribute('src', 'https://example.com/image.jpg');
 
     rerender(
-      <NewsCard
-        group={{
-          ...group,
+      createNewsCardElement({
+        cardGroup: createGroup({
           id: 'gif-image',
           items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              image: 'https://example.com/animated.gif?width=640'
-            },
-            {
+            createItem({ image: 'https://example.com/animated.gif?width=640' }),
+            createItem({
               id: 'article-2',
               sourceId: 'source-b',
               source: 'Source B',
               image: 'https://example.com/static.jpg'
-            }
+            })
           ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
+        })
+      })
     );
 
     expect(screen.getByRole('img', { name: 'Headline' })).toHaveAttribute('src', 'https://example.com/static.jpg');
 
     rerender(
-      <NewsCard
-        group={{ ...group, id: 'no-image' }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
+      createNewsCardElement({ cardGroup: createGroup({ id: 'no-image' }) })
     );
 
     expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
 
     rerender(
-      <NewsCard
-        group={{
-          ...group,
+      createNewsCardElement({
+        cardGroup: createGroup({
           id: 'unsafe-image',
-          items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              image: 'javascript:alert(1)'
-            }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
+          items: [createItem({ image: 'javascript:alert(1)' })]
+        })
+      })
     );
 
     expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
 
     rerender(
-      <NewsCard
-        group={{
-          ...group,
+      createNewsCardElement({
+        cardGroup: createGroup({
           id: 'broken-image',
-          items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              image: 'https://example.com/broken.jpg'
-            }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
+          items: [createItem({ image: 'https://example.com/broken.jpg' })]
+        })
+      })
     );
 
     fireEvent.error(screen.getByRole('img', { name: 'Headline' }));
@@ -168,24 +132,13 @@ describe('NewsCard', () => {
     expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
 
     rerender(
-      <NewsCard
-        group={{
-          ...group,
+      createNewsCardElement({
+        cardGroup: createGroup({
           id: 'disabled-image',
-          items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              image: 'https://example.com/image.jpg'
-            }
-          ]
-        }}
-        showImages={false}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
+          items: [createItem({ image: 'https://example.com/image.jpg' })]
+        }),
+        showImages: false
+      })
     );
 
     expect(screen.queryByRole('img', { name: 'Headline' })).not.toBeInTheDocument();
@@ -211,32 +164,20 @@ describe('NewsCard', () => {
   });
 
   test('renders source favicons and a social source summary', () => {
-    render(
-      <NewsCard
-        group={{
-          ...group,
-          items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              sourceIconUrl: 'https://example.com/a.ico',
-              image: 'https://example.com/image.jpg'
-            },
-            {
-              id: 'article-2',
-              sourceId: 'source-b',
-              source: 'Source B',
-              sourceIconUrl: 'https://example.com/b.ico',
-              image: 'https://example.com/image-b.jpg'
-            }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({
+      cardGroup: createGroup({
+        items: [
+          createItem({ sourceIconUrl: 'https://example.com/a.ico', image: 'https://example.com/image.jpg' }),
+          createItem({
+            id: 'article-2',
+            sourceId: 'source-b',
+            source: 'Source B',
+            sourceIconUrl: 'https://example.com/b.ico',
+            image: 'https://example.com/image-b.jpg'
+          })
+        ]
+      })
+    });
 
     expect(screen.getByLabelText('Source A')).toBeInTheDocument();
     expect(screen.getByLabelText('Source B')).toBeInTheDocument();
@@ -245,93 +186,42 @@ describe('NewsCard', () => {
   });
 
   test('surfaces merged same-source versions in the source summary', () => {
-    render(
-      <NewsCard
-        group={{
-          ...group,
-          items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              image: 'https://example.com/image.jpg'
-            },
-            {
-              id: 'article-2',
-              sourceId: 'source-a',
-              source: 'Source A',
-              image: 'https://example.com/image-b.jpg'
-            }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    renderNewsCard({
+      cardGroup: createGroup({
+        items: [
+          createItem({ image: 'https://example.com/image.jpg' }),
+          createItem({ id: 'article-2', image: 'https://example.com/image-b.jpg' })
+        ]
+      })
+    });
 
     expect(screen.getByText('Source A +1')).toBeInTheDocument();
   });
 
   test('shows an AI-grouped badge only for matched AI stories', () => {
-    const { rerender } = render(
-      <NewsCard
-        group={{
-          ...group,
-          items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              storyGroupId: 'ai-story-1',
-              aiStoryGroupStatus: 'matched'
-            },
-            {
-              id: 'article-2',
-              sourceId: 'source-b',
-              source: 'Source B',
-              storyGroupId: 'ai-story-1',
-              aiStoryGroupStatus: 'matched'
-            }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
-    );
+    const { rerender } = renderNewsCard({
+      cardGroup: createGroup({
+        items: [
+          createItem({ storyGroupId: 'ai-story-1', aiStoryGroupStatus: 'matched' }),
+          createItem({ id: 'article-2', sourceId: 'source-b', source: 'Source B', storyGroupId: 'ai-story-1', aiStoryGroupStatus: 'matched' })
+        ]
+      })
+    });
 
     expect(screen.getByLabelText('aiGroupedStory')).toBeInTheDocument();
 
     rerender(
-      <NewsCard
-        group={{
-          ...group,
-          items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              storyGroupId: 'ai-story-1',
-              aiStoryGroupStatus: 'matched'
-            }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
+      createNewsCardElement({
+        cardGroup: createGroup({
+          items: [createItem({ storyGroupId: 'ai-story-1', aiStoryGroupStatus: 'matched' })]
+        })
+      })
     );
 
     expect(screen.queryByLabelText('aiGroupedStory')).not.toBeInTheDocument();
 
     rerender(
-      <NewsCard
-        group={group}
-        locale="en"
-        t={t}
-        onOpenReader={jest.fn()}
-      />
+      createNewsCardElement()
     );
 
     expect(screen.queryByLabelText('aiGroupedStory')).not.toBeInTheDocument();
@@ -405,24 +295,10 @@ describe('NewsCard', () => {
   test('opens reader mode on title double click and reader button click', () => {
     const onOpenReader = jest.fn();
 
-    render(
-      <NewsCard
-        group={{
-          ...group,
-          items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              image: 'https://example.com/image.jpg'
-            }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={onOpenReader}
-      />
-    );
+    renderNewsCard({
+      cardGroup: createGroup({ items: [createItem({ image: 'https://example.com/image.jpg' })] }),
+      onOpenReader
+    });
 
     fireEvent.doubleClick(screen.getByText('Headline'));
 
@@ -430,7 +306,7 @@ describe('NewsCard', () => {
 
     onOpenReader.mockClear();
     jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000);
-    fireEvent.click(screen.getByRole('button', { name: 'readerMode' }));
+    fireEvent.click(screen.getByRole('button', { name: 'readHere' }));
 
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
   });
@@ -438,24 +314,10 @@ describe('NewsCard', () => {
   test('opens reader mode on image double tap but not single tap', () => {
     const onOpenReader = jest.fn();
 
-    render(
-      <NewsCard
-        group={{
-          ...group,
-          items: [
-            {
-              id: 'article-1',
-              sourceId: 'source-a',
-              source: 'Source A',
-              image: 'https://example.com/image.jpg'
-            }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onOpenReader={onOpenReader}
-      />
-    );
+    renderNewsCard({
+      cardGroup: createGroup({ items: [createItem({ image: 'https://example.com/image.jpg' })] }),
+      onOpenReader
+    });
 
     const image = screen.getByRole('img', { name: 'Headline' });
 

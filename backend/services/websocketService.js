@@ -367,22 +367,6 @@ function broadcastFeedRefresh(options = {}) {
   logger.info(`Broadcast feed refresh to ${recipients} clients: reason=${payload.reason}`);
 }
 
-function broadcastSystemNotification(message, type = 'info') {
-  if (!io || !message) {
-    return;
-  }
-
-  const payload = {
-    notificationType: type,
-    message,
-    timestamp: new Date().toISOString()
-  };
-
-  activeConnections.forEach((socket) => {
-    emitToSocket(socket, 'system:notification', payload);
-  });
-}
-
 function getStatistics() {
   return {
     ...statistics,
@@ -396,6 +380,5 @@ module.exports = {
   disconnectUserSockets,
   broadcastNewsUpdate,
   broadcastFeedRefresh,
-  broadcastSystemNotification,
   getStatistics
 };

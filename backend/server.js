@@ -12,7 +12,7 @@ const websocketService = require('./services/websocketService');
 const newsService = require('./services/newsAggregator');
 const rssParser = require('./services/rssParser');
 const userService = require('./services/userService');
-const { errorMiddleware, createError } = require('./utils/errorHandler');
+const { errorMiddleware, createError, buildRateLimitMessage } = require('./utils/errorHandler');
 const { parseIntegerEnv } = require('./utils/env');
 const { getAllowedOrigins, isOriginAllowed } = require('./utils/networkConfig');
 const { hasTrustedInternalService } = require('./utils/internalRequestGate');
@@ -81,12 +81,7 @@ const baseRateLimit = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
   skip: (req) => req.path === '/health',
-  message: {
-    error: {
-      message: 'Too many requests. Please try again later.',
-      code: 'RATE_LIMIT_EXCEEDED'
-    }
-  }
+  message: buildRateLimitMessage('Too many requests. Please try again later.')
 });
 
 function requireInternalAppRequest(req, res, next) {

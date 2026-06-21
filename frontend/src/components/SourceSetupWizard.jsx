@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, Newspaper, RefreshCw } from 'lucide-react';
+import InlineAlert from './InlineAlert';
 import SourceIcon from './SourceIcon';
 import useLockBodyScroll from '../hooks/useLockBodyScroll';
 import { updateUserSettings } from '../services/api';
@@ -316,15 +317,15 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
           </div>
 
           {selectedCount === 0 ? (
-            <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <InlineAlert as="p" className="mt-4" tone="warning">
               {t('sourceSetupPickOne')}
-            </p>
+            </InlineAlert>
           ) : null}
 
           {error ? (
-            <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <InlineAlert as="p" className="mt-4">
               {error.message || t('genericError')}
-            </p>
+            </InlineAlert>
           ) : null}
         </div>
 

@@ -1,7 +1,7 @@
-export const SUPPORTED_LOCALES = ['en', 'it'];
+const SUPPORTED_LOCALES = ['en', 'it'];
 export const LOCALE_STORAGE_KEY = 'newsflow-locale';
 
-export const translations = {
+const translations = {
   en: {
     pageTitle: 'News Flow',
     liveActive: 'On',
@@ -35,6 +35,12 @@ export const translations = {
     feedbackSubtitle: 'Share a bug report, a rough edge, or an improvement idea. You can also attach one screenshot or a short video.',
     feedbackSenderHelp: 'Your username will be included with this report.',
     feedbackFieldCategory: 'Category',
+    feedbackCategoryBug: 'Bug',
+    feedbackCategoryBugHelp: 'Something is broken or behaves unexpectedly.',
+    feedbackCategoryFeedback: 'Feedback',
+    feedbackCategoryFeedbackHelp: 'Share a rough edge or general comment.',
+    feedbackCategoryIdea: 'Idea',
+    feedbackCategoryIdeaHelp: 'Suggest an improvement or new feature.',
     feedbackFieldTitle: 'Title',
     feedbackFieldDescription: 'Description',
     feedbackFieldImage: 'Attachment',
@@ -152,7 +158,6 @@ export const translations = {
     adminNoUsers: 'No users found.',
     onlineNow: 'Online now',
     offlineNow: 'Offline',
-    status: 'Status',
     lastLoginAt: 'Last login',
     lastActivityAt: 'Last activity',
     createdAt: 'Created',
@@ -206,7 +211,12 @@ export const translations = {
     persistentErrorHelp: 'If the issue persists, check the service status or contact support.',
     sourceCount: ({ count }) => `${count} sources`,
     aiGroupedStory: 'AI grouped story',
-    openOriginalSource: 'Open article',
+    readHere: 'Read here',
+    readHereShort: 'Read',
+    readHereHelp: 'Open reader view in News Flow',
+    openOriginalSource: 'Open original',
+    openOriginalSourceShort: 'Original',
+    openOriginalSourceHelp: 'Open the publisher article',
     openOriginalSourceUnavailable: 'Original article link is not available for this card.',
     shareArticle: 'Share article',
     readerMode: 'Reader mode',
@@ -298,6 +308,12 @@ export const translations = {
     feedbackSubtitle: 'Puoi inviare una segnalazione, un problema trovato o un suggerimento di miglioramento. Puoi anche allegare uno screenshot o un breve video.',
     feedbackSenderHelp: 'Il tuo username verra incluso in questa segnalazione.',
     feedbackFieldCategory: 'Categoria',
+    feedbackCategoryBug: 'Bug',
+    feedbackCategoryBugHelp: 'Qualcosa non funziona o si comporta in modo inatteso.',
+    feedbackCategoryFeedback: 'Feedback',
+    feedbackCategoryFeedbackHelp: 'Condividi un problema di usabilita o un commento generale.',
+    feedbackCategoryIdea: 'Idea',
+    feedbackCategoryIdeaHelp: 'Suggerisci un miglioramento o una nuova funzionalita.',
     feedbackFieldTitle: 'Titolo',
     feedbackFieldDescription: 'Descrizione',
     feedbackFieldImage: 'Allegato',
@@ -415,7 +431,6 @@ export const translations = {
     adminNoUsers: 'Nessun utente trovato.',
     onlineNow: 'Online ora',
     offlineNow: 'Offline',
-    status: 'Stato',
     lastLoginAt: 'Ultimo accesso',
     lastActivityAt: 'Ultima attivita',
     createdAt: 'Creato',
@@ -469,7 +484,12 @@ export const translations = {
     persistentErrorHelp: 'Se il problema persiste, controlla lo stato del servizio o contatta l\'assistenza.',
     sourceCount: ({ count }) => `${count} fonti`,
     aiGroupedStory: 'Storia raggruppata con AI',
-    openOriginalSource: 'Apri articolo',
+    readHere: 'Leggi qui',
+    readHereShort: 'Leggi',
+    readHereHelp: 'Apri la lettura dentro News Flow',
+    openOriginalSource: 'Apri originale',
+    openOriginalSourceShort: 'Originale',
+    openOriginalSourceHelp: 'Apri l\'articolo dell\'editore',
     shareArticle: 'Condividi articolo',
     readerMode: 'Modalita lettura',
     closeReader: 'Chiudi lettura',
@@ -528,7 +548,7 @@ export const translations = {
   }
 };
 
-export function detectBrowserLocale() {
+function detectBrowserLocale() {
   const preferredLanguages = Array.isArray(navigator.languages) && navigator.languages.length > 0
     ? navigator.languages
     : [navigator.language || 'en'];
@@ -540,11 +560,11 @@ export function detectBrowserLocale() {
   return match?.startsWith('it') ? 'it' : 'en';
 }
 
-export function isSupportedLocale(locale) {
+function isSupportedLocale(locale) {
   return SUPPORTED_LOCALES.includes(locale);
 }
 
-export function readStoredLocale() {
+function readStoredLocale() {
   try {
     const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
     return isSupportedLocale(storedLocale) ? storedLocale : '';

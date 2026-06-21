@@ -58,13 +58,14 @@ describe('database migrations', () => {
     const thematicSummaryColumns = sqlite.prepare('PRAGMA table_info(thematic_summaries)').all().map((column) => column.name);
     const podcastSummaryColumns = sqlite.prepare('PRAGMA table_info(podcast_summaries)').all().map((column) => column.name);
     const podcastSummaryAudioColumns = sqlite.prepare('PRAGMA table_info(podcast_summary_audio)').all().map((column) => column.name);
+    const readThematicSummaryColumns = sqlite.prepare('PRAGMA table_info(user_read_thematic_summaries)').all().map((column) => column.name);
     const articleIndexNames = sqlite.prepare('PRAGMA index_list(articles)').all().map((index) => index.name);
     const userIndexNames = sqlite.prepare('PRAGMA index_list(users)').all().map((index) => index.name);
     const topicIndexNames = sqlite.prepare('PRAGMA index_list(article_topics)').all().map((index) => index.name);
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('37');
+    expect(migrationVersion).toBe('38');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -90,6 +91,7 @@ describe('database migrations', () => {
     expect(passwordSetupTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'purpose', 'expires_at', 'used_at']));
     expect(apiTokenColumns).toEqual(expect.arrayContaining(['user_id', 'token_hash', 'token_prefix', 'expires_at', 'revoked_at', 'last_used_at']));
     expect(readLaterColumns).toEqual(expect.arrayContaining(['user_id', 'article_id', 'saved_at']));
+    expect(readThematicSummaryColumns).toEqual(expect.arrayContaining(['user_id', 'summary_id', 'read_at']));
     expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['topic_key', 'period_start', 'period_end', 'summary_text', 'summary_text_en', 'summary_text_it', 'sources_json', 'failure_category', 'retry_count']));
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
     expect(podcastSummaryColumns).toEqual(expect.arrayContaining(['period_start', 'period_end', 'script_text', 'title_en', 'script_text_en', 'title_it', 'script_text_it', 'audio_blob', 'audio_status', 'audio_voice', 'sources_json', 'failure_category', 'retry_count', 'audio_failure_category', 'audio_retry_count', 'audio_failed_at']));
@@ -149,7 +151,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('37');
+    expect(migratedVersion).toBe('38');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
@@ -268,7 +270,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('37');
+    expect(migratedVersion).toBe('38');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -381,7 +383,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
 
-    expect(migratedVersion).toBe('37');
+    expect(migratedVersion).toBe('38');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -467,7 +469,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('37');
+    expect(migratedVersion).toBe('38');
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
     expect(row).toEqual({
       summaryText: 'English text [1]',
@@ -528,7 +530,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('37');
+    expect(migratedVersion).toBe('38');
     expect(audioRow).toEqual({
       podcastId: 'legacy-podcast',
       locale: 'it',
@@ -568,6 +570,19 @@ describe('database queries and user data', () => {
 
   afterEach(() => {
     cleanupTempNewsDb({ tempDir }, database);
+  });
+
+  test('stores read thematic summary ids per user', () => {
+    const now = new Date().toISOString();
+    database.createUser({ id: 'user-1', username: 'alice', passwordHash: null, createdAt: now, updatedAt: now });
+    database.createUser({ id: 'user-2', username: 'bob', passwordHash: null, createdAt: now, updatedAt: now });
+
+    const readSummaryIds = database.markThematicSummariesRead('user-1', ['summary-1', 'summary-2', 'summary-1', '']);
+
+    expect(readSummaryIds).toHaveLength(2);
+    expect(readSummaryIds).toEqual(expect.arrayContaining(['summary-1', 'summary-2']));
+    expect(database.listReadThematicSummaryIds('user-1')).toEqual(expect.arrayContaining(['summary-1', 'summary-2']));
+    expect(database.listReadThematicSummaryIds('user-2')).toEqual([]);
   });
 
   test('stores articles and applies scope, excluded-source, search, topic, and recency filters', () => {
@@ -1933,6 +1948,62 @@ describe('database queries and user data', () => {
     }));
 
     expect(database.getReaderCache('article-1', 0)).toBeNull();
+  });
+
+  test('loads reader cache entries in batches', () => {
+    const now = new Date().toISOString();
+
+    database.upsertArticles([
+      {
+        id: 'reader-batch-1',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Reader batch one',
+        description: 'Reader description one',
+        content: 'Reader content one',
+        url: 'https://example.com/reader-batch-1',
+        language: 'en',
+        pubDate: now
+      },
+      {
+        id: 'reader-batch-2',
+        sourceId: primarySource.id,
+        source: primarySource.name,
+        title: 'Reader batch two',
+        description: 'Reader description two',
+        content: 'Reader content two',
+        url: 'https://example.com/reader-batch-2',
+        language: 'en',
+        pubDate: now
+      }
+    ]);
+    database.upsertReaderCache('reader-batch-1', {
+      url: 'https://example.com/reader-batch-1',
+      title: 'Reader batch one',
+      contentText: 'Cached reader text one',
+      contentBlocks: [{ type: 'paragraph', text: 'Cached reader text one' }],
+      fetchedAt: now
+    });
+    database.upsertReaderCache('reader-batch-2', {
+      url: 'https://example.com/reader-batch-2',
+      title: 'Reader batch two',
+      contentText: 'Cached reader text two',
+      fetchedAt: now
+    });
+
+    const cacheByArticleId = database.getReaderCaches(['reader-batch-1', 'reader-batch-2', 'missing-reader']);
+
+    expect(cacheByArticleId.get('reader-batch-1')).toEqual(expect.objectContaining({
+      articleId: 'reader-batch-1',
+      contentText: 'Cached reader text one',
+      contentBlocks: [{ type: 'paragraph', text: 'Cached reader text one' }]
+    }));
+    expect(cacheByArticleId.get('reader-batch-2')).toEqual(expect.objectContaining({
+      articleId: 'reader-batch-2',
+      contentText: 'Cached reader text two'
+    }));
+    expect(cacheByArticleId.has('missing-reader')).toBe(false);
+    expect(database.getReaderCaches(['reader-batch-1'], 0).size).toBe(0);
   });
 
   test('builds source and topic stats with canonical source ids and search filters', () => {

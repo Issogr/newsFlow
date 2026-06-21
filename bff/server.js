@@ -28,9 +28,8 @@ const {
   upsertStoredSessionUser
 } = require('./lib/sessionStore');
 const {
-  applySanitizedForwardedHeaders,
+  applyProxyRequestHeaders,
   buildTrustedForwardedHeaders,
-  clearForwardedHeaders,
   copyBackendResponseHeaders,
   extractDeletedAdminUserId,
   getRequestHeader
@@ -75,8 +74,20 @@ function createApp(options = {}) {
   const createdSessionStore = options.sessionStoreBundle || createSessionStore(options);
   const sessionStore = createdSessionStore.store;
   const sessionDb = createdSessionStore.db;
-  const sessionMiddleware = options.sessionMiddleware || buildSessionMiddleware(sessionStore, getBffSessionSecret());
+  const sessionSecret = getBffSessionSecret();
+  const sessionMiddleware = options.sessionMiddleware || buildSessionMiddleware(sessionStore, sessionSecret);
   const configuredAppOrigin = String(options.appBaseUrl || process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim().replace(/\/+$/, '');
+  const configuredExpectedOrigin = (() => {
+    if (!configuredAppOrigin) {
+      return '';
+    }
+
+    try {
+      return new URL(configuredAppOrigin).origin;
+    } catch {
+      return configuredAppOrigin;
+    }
+  })();
   const backendHttp = options.backendHttp || axios.create({
     baseURL: backendBaseUrl,
     timeout: UPSTREAM_TIMEOUT_MS,
@@ -111,25 +122,12 @@ function createApp(options = {}) {
     };
   }
 
-  function stripClientCredentials(proxyReq) {
-    proxyReq.removeHeader('authorization');
-    proxyReq.removeHeader('x-session-token');
-    proxyReq.removeHeader('x-newsflow-app');
-  }
-
   function applyBackendSessionProxyHeaders(proxyReq, req) {
-    stripClientCredentials(proxyReq);
-    clearForwardedHeaders(proxyReq);
-    Object.entries(buildInternalHeaders(req)).forEach(([name, value]) => {
-      proxyReq.setHeader(name, value);
+    applyProxyRequestHeaders(proxyReq, req, {
+      mode: 'private',
+      internalHeaders: buildInternalHeaders(req),
+      backendSessionCookie: getBackendSessionCookieFromRequest(req),
     });
-
-    const backendSessionCookie = getBackendSessionCookieFromRequest(req);
-    if (backendSessionCookie) {
-      proxyReq.setHeader('cookie', backendSessionCookie);
-    } else {
-      proxyReq.removeHeader('cookie');
-    }
   }
 
   function requireBackendSession(req, res, next) {
@@ -149,11 +147,7 @@ function createApp(options = {}) {
 
   function getExpectedRequestOrigin(req) {
     if (configuredAppOrigin) {
-      try {
-        return new URL(configuredAppOrigin).origin;
-      } catch {
-        return configuredAppOrigin;
-      }
+      return configuredExpectedOrigin;
     }
 
     const forwardedProtocol = String(getRequestHeader(req, 'x-forwarded-proto') || '').split(',')[0].trim();
@@ -198,32 +192,25 @@ function createApp(options = {}) {
     });
   }
 
-  function requireSameOriginUnsafeRequest(req, res, next) {
-    if (SAFE_METHODS.has(String(req.method || '').toUpperCase())) {
-      next();
-      return;
-    }
+  function requireSameOriginRequest(options = {}) {
+    return (req, res, next) => {
+      if (options.allowSafeMethods === true && SAFE_METHODS.has(String(req.method || '').toUpperCase())) {
+        next();
+        return;
+      }
 
-    if (hasSameOriginRequestHeaders(req)) {
-      next();
-      return;
-    }
+      if (hasSameOriginRequestHeaders(req, options)) {
+        next();
+        return;
+      }
 
-    sendCrossOriginRejected(res);
+      sendCrossOriginRejected(res);
+    };
   }
 
-  function requireSameOriginSocketRequest(req, res, next) {
-    if (isSameOriginSocketRequest(req)) {
-      next();
-      return;
-    }
-
-    sendCrossOriginRejected(res);
-  }
-
-  function isSameOriginSocketRequest(req) {
-    return hasSameOriginRequestHeaders(req, { allowMissingHeaders: true });
-  }
+  const requireSameOriginUnsafeRequest = requireSameOriginRequest({ allowSafeMethods: true });
+  const isSameOriginSocketRequest = (req) => hasSameOriginRequestHeaders(req, { allowMissingHeaders: true });
+  const requireSameOriginSocketRequest = requireSameOriginRequest({ allowMissingHeaders: true });
 
   async function requestInternalBackend(req, pathName, options = {}) {
     const requestOptions = {
@@ -259,6 +246,39 @@ function createApp(options = {}) {
     res.statusCode = 502;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify(UPSTREAM_ERROR_RESPONSE));
+  }
+
+  function createBackendProxy({ includeBackendSession = false, onProxyResponse, pathRewrite, stripSetCookie = false, target, ws = false }) {
+    const on = {
+      proxyReq: includeBackendSession
+        ? (proxyReq, req) => applyBackendSessionProxyHeaders(proxyReq, req)
+        : (proxyReq, req) => applyProxyRequestHeaders(proxyReq, req),
+      error: handleProxyError,
+    };
+
+    if (stripSetCookie || onProxyResponse) {
+      on.proxyRes = (proxyRes, req, res) => {
+        if (stripSetCookie) {
+          delete proxyRes.headers['set-cookie'];
+        }
+
+        onProxyResponse?.(proxyRes, req, res);
+      };
+    }
+
+    if (ws && includeBackendSession) {
+      on.proxyReqWs = (proxyReq, req) => {
+        applyBackendSessionProxyHeaders(proxyReq, req);
+      };
+    }
+
+    return createProxyMiddleware({
+      target,
+      ...BACKEND_PROXY_DEFAULTS,
+      ...(ws ? { ws: true } : {}),
+      ...(pathRewrite ? { pathRewrite } : {}),
+      on,
+    });
   }
 
   async function handleSessionAuthRequest(req, res, next, pathName) {
@@ -302,60 +322,34 @@ function createApp(options = {}) {
     res.sendFile(path.join(frontendDistDir, 'index.html'));
   }
 
-  const publicApiProxy = createProxyMiddleware({
+  const publicApiProxy = createBackendProxy({
     target: `${backendBaseUrl}/api/public`,
-    ...BACKEND_PROXY_DEFAULTS,
-    on: {
-      proxyReq: (proxyReq, req) => {
-        proxyReq.removeHeader('cookie');
-        applySanitizedForwardedHeaders(proxyReq, req);
-      },
-      proxyRes: (proxyRes) => {
-        delete proxyRes.headers['set-cookie'];
-      },
-      error: handleProxyError,
-    },
+    stripSetCookie: true,
   });
 
-  const appApiProxy = createProxyMiddleware({
+  const appApiProxy = createBackendProxy({
     target: `${backendBaseUrl}/internal-api`,
-    ...BACKEND_PROXY_DEFAULTS,
-    on: {
-      proxyReq: (proxyReq, req) => {
-        applyBackendSessionProxyHeaders(proxyReq, req);
-      },
-      proxyRes: (proxyRes, req, res) => {
-        delete proxyRes.headers['set-cookie'];
+    includeBackendSession: true,
+    stripSetCookie: true,
+    onProxyResponse: (proxyRes, req, res) => {
+      if (proxyRes.statusCode === 401) {
+        clearBffSessionCookie(res);
+        destroySession(req, sessionDb).catch(() => {});
+        return;
+      }
 
-        if (proxyRes.statusCode === 401) {
-          clearBffSessionCookie(res);
-          destroySession(req, sessionDb).catch(() => {});
-          return;
-        }
-
-        const deletedUserId = extractDeletedAdminUserId(req, proxyRes.statusCode || 0);
-        if (deletedUserId) {
-          destroyStoredSessionsByUserId(sessionStore, sessionDb, deletedUserId);
-        }
-      },
-      error: handleProxyError,
+      const deletedUserId = extractDeletedAdminUserId(req, proxyRes.statusCode || 0);
+      if (deletedUserId) {
+        destroyStoredSessionsByUserId(sessionStore, sessionDb, deletedUserId);
+      }
     },
   });
 
-  const socketProxy = createProxyMiddleware({
+  const socketProxy = createBackendProxy({
     target: backendBaseUrl,
-    ...BACKEND_PROXY_DEFAULTS,
+    includeBackendSession: true,
     ws: true,
     pathRewrite: (proxyPath, req) => req.originalUrl || proxyPath,
-    on: {
-      proxyReq: (proxyReq, req) => {
-        applyBackendSessionProxyHeaders(proxyReq, req);
-      },
-      proxyReqWs: (proxyReq, req) => {
-        applyBackendSessionProxyHeaders(proxyReq, req);
-      },
-      error: handleProxyError,
-    },
   });
 
   app.get('/health', (req, res) => {
@@ -504,7 +498,7 @@ function createApp(options = {}) {
   return {
     app,
     sessionDb,
-    sessionSecret: getBffSessionSecret(),
+    sessionSecret,
     sessionStore,
     isSameOriginSocketRequest,
     socketProxy,

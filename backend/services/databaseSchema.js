@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 37;
+  const CURRENT_SCHEMA_VERSION = 38;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getPodcastSummariesSchemaSql() {
@@ -290,6 +290,17 @@ function createDatabaseSchema({ logger }) {
       CREATE INDEX IF NOT EXISTS idx_user_read_later_article
       ON user_read_later_articles (article_id);
 
+      CREATE TABLE IF NOT EXISTS user_read_thematic_summaries (
+        user_id TEXT NOT NULL,
+        summary_id TEXT NOT NULL,
+        read_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, summary_id),
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_user_read_thematic_summaries_user_read
+      ON user_read_thematic_summaries (user_id, read_at DESC);
+
       CREATE TABLE IF NOT EXISTS thematic_summaries (
         id TEXT PRIMARY KEY,
         topic_key TEXT NOT NULL,
@@ -459,6 +470,10 @@ function createDatabaseSchema({ logger }) {
 
     if (!tableExists(database, 'podcast_summary_audio')) {
       return 36;
+    }
+
+    if (!tableExists(database, 'user_read_thematic_summaries')) {
+      return 37;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -988,6 +1003,26 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 37);
       logger.info('Migrated DB schema from version 36 to 37');
+      migrateSchema(database, 37);
+      return;
+    }
+
+    if (currentVersion === 37) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS user_read_thematic_summaries (
+          user_id TEXT NOT NULL,
+          summary_id TEXT NOT NULL,
+          read_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (user_id, summary_id),
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_user_read_thematic_summaries_user_read
+        ON user_read_thematic_summaries (user_id, read_at DESC);
+      `);
+
+      setCurrentSchemaVersion(database, 38);
+      logger.info('Migrated DB schema from version 37 to 38');
       return;
     }
 

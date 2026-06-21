@@ -53,15 +53,12 @@ describe('API auth and user flows', () => {
     ({ tempDir } = setupTempNewsDb('news-api-test-'));
 
     jest.doMock('../services/newsAggregator', () => ({
-      ingestAllNews: jest.fn().mockResolvedValue({ success: true }),
       getNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       getReadLaterFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       saveReadLaterArticles: jest.fn().mockReturnValue({ success: true, readLater: true, articleIds: ['article-1'], savedCount: 1 }),
       removeReadLaterArticles: jest.fn().mockReturnValue({ success: true, readLater: false, articleIds: ['article-1'], removedCount: 1, deletedExpiredArticleCount: 0 }),
       getCachedNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
-      refreshUserSources: jest.fn().mockResolvedValue({ success: true }),
-      startScheduler: jest.fn(),
-      stopScheduler: jest.fn()
+      refreshUserSources: jest.fn().mockResolvedValue({ success: true })
     }));
 
     jest.doMock('../services/rssParser', () => ({
@@ -989,6 +986,30 @@ describe('API auth and user flows', () => {
     expect(newsService.removeReadLaterArticles).toHaveBeenCalledWith(expect.objectContaining({
       userId: registerResponse.body.user.id
     }), ['article-1']);
+  });
+
+  test('persists authenticated thematic summary read state', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'summary-read-user', password: 'secret123' })
+      .expect(201);
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    const markResponse = await request(app)
+      .post('/api/me/thematic-summaries/read')
+      .set('Cookie', sessionCookie)
+      .send({ summaryIds: ['summary-technology', 'podcast-1', 'summary-technology'] })
+      .expect(201);
+
+    expect(markResponse.body.readSummaryIds).toHaveLength(2);
+    expect(markResponse.body.readSummaryIds).toEqual(expect.arrayContaining(['summary-technology', 'podcast-1']));
+
+    const summariesResponse = await request(app)
+      .get('/api/thematic-summaries')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(summariesResponse.body.readSummaryIds).toEqual(expect.arrayContaining(['summary-technology', 'podcast-1']));
   });
 
   test('rejects feedback submission with an invalid category', async () => {

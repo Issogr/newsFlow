@@ -110,6 +110,12 @@ function clearSessionCookie(res) {
   res.clearCookie(SESSION_COOKIE_NAME, cookieOptions);
 }
 
+function sendAuthResult(res, result, status = 200) {
+  setSessionCookie(res, result.token);
+  const { token, ...safeResult } = result;
+  res.status(status).json(safeResult);
+}
+
 const feedbackUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -187,12 +193,12 @@ function getUserContext(req) {
   return buildUserContext(req.user.id, settings);
 }
 
-function getRequestArticleIds(req) {
-  const rawArticleIds = Array.isArray(req.body?.articleIds)
-    ? req.body.articleIds
-    : [req.body?.articleId];
+function getRequestIds(req, pluralKey, singularKey) {
+  const rawIds = Array.isArray(req.body?.[pluralKey])
+    ? req.body[pluralKey]
+    : [req.body?.[singularKey]];
 
-  return rawArticleIds.map((articleId) => String(articleId || '').trim()).filter(Boolean);
+  return rawIds.map((id) => String(id || '').trim()).filter(Boolean);
 }
 
 function requireAuthenticatedPublicApiFeature(req, res, next) {
@@ -298,16 +304,12 @@ function sendAudioResponse(req, res, audio) {
 
 router.post('/auth/register', [authRateLimit, sanitizeBody(['username'])], asyncHandler(async (req, res) => {
   const result = await userService.registerUser(req.body || {});
-  setSessionCookie(res, result.token);
-  const { token, ...safeResult } = result;
-  res.status(201).json(safeResult);
+  sendAuthResult(res, result, 201);
 }));
 
 router.post('/auth/login', [authRateLimit, sanitizeBody(['username'])], asyncHandler(async (req, res) => {
   const result = await userService.loginUser(req.body || {});
-  setSessionCookie(res, result.token);
-  const { token, ...safeResult } = result;
-  res.json(safeResult);
+  sendAuthResult(res, result);
 }));
 
 router.get('/auth/password-setup/validate', [passwordSetupRateLimit, sanitizeQuery('token')], asyncHandler(async (req, res) => {
@@ -317,9 +319,7 @@ router.get('/auth/password-setup/validate', [passwordSetupRateLimit, sanitizeQue
 
 router.post('/auth/password-setup/complete', passwordSetupRateLimit, asyncHandler(async (req, res) => {
   const result = await userService.completePasswordSetup(req.body || {});
-  setSessionCookie(res, result.token);
-  const { token, ...safeResult } = result;
-  res.json(safeResult);
+  sendAuthResult(res, result);
 }));
 
 router.post('/auth/logout', requireAuthenticatedUser, asyncHandler(async (req, res) => {
@@ -471,7 +471,15 @@ router.get('/read-later', [requireAuthenticatedUser, sanitizeQuery('search')], a
 
 router.get('/thematic-summaries', requireAuthenticatedUser, asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'private, no-store, max-age=0');
-  res.json(thematicSummaryService.getLatestSummaries());
+  res.json({
+    ...thematicSummaryService.getLatestSummaries(),
+    readSummaryIds: database.listReadThematicSummaryIds(req.user.id)
+  });
+}));
+
+router.post('/me/thematic-summaries/read', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+  const readSummaryIds = database.markThematicSummariesRead(req.user.id, getRequestIds(req, 'summaryIds', 'summaryId'));
+  res.status(201).json({ success: true, readSummaryIds });
 }));
 
 router.get('/podcast-summary/:summaryId/audio', [
@@ -493,12 +501,12 @@ router.get('/podcast-summary/:summaryId/audio', [
 }));
 
 router.post('/me/read-later', requireAuthenticatedUser, asyncHandler(async (req, res) => {
-  const result = newsService.saveReadLaterArticles(getUserContext(req), getRequestArticleIds(req));
+  const result = newsService.saveReadLaterArticles(getUserContext(req), getRequestIds(req, 'articleIds', 'articleId'));
   res.status(201).json(result);
 }));
 
 router.post('/me/read-later/remove', requireAuthenticatedUser, asyncHandler(async (req, res) => {
-  const result = newsService.removeReadLaterArticles(getUserContext(req), getRequestArticleIds(req));
+  const result = newsService.removeReadLaterArticles(getUserContext(req), getRequestIds(req, 'articleIds', 'articleId'));
   res.json(result);
 }));
 

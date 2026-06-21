@@ -8,8 +8,7 @@ const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
-  sendChatCompletion,
-  setOpenRouterSdkLoader
+  sendJsonChatCompletion
 } = require('./openRouterClient');
 
 const DEFAULT_PODCAST_SCRIPT_MODEL = 'deepseek/deepseek-v4-flash';
@@ -922,7 +921,7 @@ async function generatePodcastScript(window = {}, articles = []) {
   const startedAt = Date.now();
   const openRouter = await createOpenRouterClient(config);
   const tokenBudget = getCompletionTokenBudget(articles.length);
-  const response = await sendChatCompletion(openRouter, {
+  const response = await sendJsonChatCompletion(openRouter, {
     model: config.model,
     messages: [
       {
@@ -935,15 +934,7 @@ async function generatePodcastScript(window = {}, articles = []) {
       }
     ],
     temperature: 0.35,
-    maxTokens: tokenBudget,
-    maxCompletionTokens: tokenBudget,
-    reasoning: {
-      enabled: false,
-      effort: 'none',
-      maxTokens: 0
-    },
-    responseFormat: { type: 'json_object' },
-    stream: false
+    maxTokens: tokenBudget
   }, { timeoutMs: config.timeoutMs });
   const payload = parseJsonContent(extractAssistantContent(response));
   const normalized = normalizeGeneratedPodcast(payload, { locales: enabledLocales });
@@ -1064,8 +1055,6 @@ module.exports = {
   _getTtsConfig: getTtsConfig,
   _getTtsVoice: getTtsVoice,
   _normalizeGeneratedPodcast: normalizeGeneratedPodcast,
-  _parseJsonContent: parseJsonContent,
   _validateGeneratedPodcast: validateGeneratedPodcast,
-  _setAudioSpeechHttpClient: setAudioSpeechHttpClient,
-  _setOpenRouterSdkLoader: setOpenRouterSdkLoader
+  _setAudioSpeechHttpClient: setAudioSpeechHttpClient
 };

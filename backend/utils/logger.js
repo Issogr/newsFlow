@@ -90,7 +90,5 @@ if (!isTestEnvironment) {
 }
 
 logger.setupGlobalErrorHandlers = setupGlobalErrorHandlers;
-logger._formatUnhandledRejection = formatUnhandledRejection;
-logger._isExpectedTimeoutRejection = isExpectedTimeoutRejection;
 
 module.exports = logger;

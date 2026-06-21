@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Bug, CheckCircle2, ImagePlus, Lightbulb, MessageSquare, Paperclip, Send, Trash2, X } from 'lucide-react';
 import { submitFeedback } from '../services/api';
-import useLockBodyScroll from '../hooks/useLockBodyScroll';
+import InlineAlert from './InlineAlert';
+import SlideOverPanelFrame from './SlideOverPanelFrame';
 
 const DEFAULT_MAX_TITLE_LENGTH = 120;
 const DEFAULT_MAX_DESCRIPTION_LENGTH = 2800;
@@ -9,9 +10,9 @@ const DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_VIDEO_ATTACHMENT_BYTES = 12 * 1024 * 1024;
 const FEEDBACK_FORM_ID = 'feedback-form';
 const FEEDBACK_CATEGORIES = [
-  { id: 'bug', icon: Bug, badgeClassName: 'bg-rose-100 text-rose-700', ringClassName: 'border-rose-200 bg-rose-50' },
-  { id: 'feedback', icon: MessageSquare, badgeClassName: 'bg-sky-100 text-sky-700', ringClassName: 'border-sky-200 bg-sky-50' },
-  { id: 'idea', icon: Lightbulb, badgeClassName: 'bg-amber-100 text-amber-700', ringClassName: 'border-amber-200 bg-amber-50' },
+  { id: 'bug', labelKey: 'feedbackCategoryBug', helpKey: 'feedbackCategoryBugHelp', icon: Bug, badgeClassName: 'bg-rose-100 text-rose-700', ringClassName: 'border-rose-200 bg-rose-50' },
+  { id: 'feedback', labelKey: 'feedbackCategoryFeedback', helpKey: 'feedbackCategoryFeedbackHelp', icon: MessageSquare, badgeClassName: 'bg-sky-100 text-sky-700', ringClassName: 'border-sky-200 bg-sky-50' },
+  { id: 'idea', labelKey: 'feedbackCategoryIdea', helpKey: 'feedbackCategoryIdeaHelp', icon: Lightbulb, badgeClassName: 'bg-amber-100 text-amber-700', ringClassName: 'border-amber-200 bg-amber-50' },
 ];
 
 function getFriendlyFeedbackError(error, t) {
@@ -108,8 +109,6 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
     };
   }
 
-  useLockBodyScroll();
-
   useEffect(() => {
     if (!attachment) {
       setAttachmentPreviewUrl('');
@@ -171,8 +170,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-slate-950/40 backdrop-blur-sm sm:px-4 sm:py-6">
-      <div className="ml-auto flex h-full w-full flex-col overflow-hidden bg-slate-50 shadow-2xl sm:max-w-2xl sm:rounded-[2rem] sm:border sm:border-slate-200">
+    <SlideOverPanelFrame overlayClassName="fixed inset-0 z-50 flex bg-slate-950/40 backdrop-blur-sm sm:px-4 sm:py-6">
         <div className="border-b border-slate-200 bg-white px-5 py-5 sm:px-6">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -213,7 +211,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
                   <span className="text-sm font-medium text-slate-700">{t('feedbackFieldCategory')}</span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  {FEEDBACK_CATEGORIES.map(({ id, icon: Icon, badgeClassName, ringClassName }) => {
+                  {FEEDBACK_CATEGORIES.map(({ id, labelKey, helpKey, icon: Icon, badgeClassName, ringClassName }) => {
                     const isActive = category === id;
 
                     return (
@@ -229,8 +227,8 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
                         <span className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${isActive ? 'bg-white text-slate-800' : badgeClassName}`}>
                           <Icon className="h-5 w-5" />
                         </span>
-                        <p className="mt-3 text-sm font-semibold text-slate-900">{t(`feedbackCategory${id.charAt(0).toUpperCase()}${id.slice(1)}`)}</p>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">{t(`feedbackCategory${id.charAt(0).toUpperCase()}${id.slice(1)}Help`)}</p>
+                        <p className="mt-3 text-sm font-semibold text-slate-900">{t(labelKey)}</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">{t(helpKey)}</p>
                       </button>
                     );
                   })}
@@ -291,7 +289,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
                       className="hidden"
                       onChange={(event) => {
                         const nextAttachment = event.target.files?.[0] || null;
-                         const attachmentError = nextAttachment ? getAttachmentValidationError(nextAttachment, t, limits) : '';
+                        const attachmentError = nextAttachment ? getAttachmentValidationError(nextAttachment, t, limits) : '';
 
                         if (attachmentError) {
                           setAttachment(null);
@@ -338,9 +336,9 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
               </div>
 
               {error && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <InlineAlert>
                   {error}
-                </div>
+                </InlineAlert>
               )}
             </form>
           )}
@@ -357,8 +355,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </SlideOverPanelFrame>
   );
 };
 

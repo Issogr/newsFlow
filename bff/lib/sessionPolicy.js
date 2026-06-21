@@ -89,21 +89,25 @@ function getCookieSecureSetting() {
   return 'auto';
 }
 
-function getSessionCookieOptions() {
+function getBaseSessionCookieOptions() {
   return {
     httpOnly: true,
     sameSite: 'strict',
-    secure: getCookieSecureSetting(),
     path: '/',
+  };
+}
+
+function getSessionCookieOptions() {
+  return {
+    ...getBaseSessionCookieOptions(),
+    secure: getCookieSecureSetting(),
     maxAge: SESSION_TTL_MS,
   };
 }
 
 function clearBffSessionCookie(res) {
   res.append('Set-Cookie', cookie.serialize(BFF_SESSION_COOKIE_NAME, '', {
-    httpOnly: true,
-    sameSite: 'strict',
-    path: '/',
+    ...getBaseSessionCookieOptions(),
     maxAge: 0,
   }));
 }

@@ -8,6 +8,13 @@ function mapUserSourceRow(row) {
   };
 }
 
+function normalizeReadThematicSummaryIds(summaryIds = []) {
+  return [...new Set((Array.isArray(summaryIds) ? summaryIds : [])
+    .map((summaryId) => String(summaryId || '').trim())
+    .filter((summaryId) => summaryId.length > 0 && summaryId.length <= 200))]
+    .slice(0, 100);
+}
+
 const USER_SETTINGS_COLUMNS = [
   'default_language',
   'theme_mode',
@@ -272,6 +279,42 @@ function createUserStateRepository({ getDb }) {
     return transaction(userId);
   }
 
+  function listReadThematicSummaryIds(userId) {
+    if (!userId) {
+      return [];
+    }
+
+    return getDb().prepare(`
+      SELECT summary_id AS summaryId
+      FROM user_read_thematic_summaries
+      WHERE user_id = ?
+      ORDER BY datetime(read_at) DESC, summary_id DESC
+      LIMIT 500
+    `).all(userId).map((row) => row.summaryId);
+  }
+
+  function markThematicSummariesRead(userId, summaryIds = []) {
+    const normalizedSummaryIds = normalizeReadThematicSummaryIds(summaryIds);
+    if (!userId || normalizedSummaryIds.length === 0) {
+      return listReadThematicSummaryIds(userId);
+    }
+
+    const database = getDb();
+    const now = new Date().toISOString();
+    const statement = database.prepare(`
+      INSERT INTO user_read_thematic_summaries (user_id, summary_id, read_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id, summary_id) DO UPDATE SET read_at = excluded.read_at
+    `);
+    const transaction = database.transaction((ownerId, ids) => {
+      ids.forEach((summaryId) => statement.run(ownerId, summaryId, now));
+    });
+
+    transaction(userId, normalizedSummaryIds);
+
+    return listReadThematicSummaryIds(userId);
+  }
+
   function importUserState(userId, sources = [], settings = {}) {
     if (!userId) {
       return {
@@ -344,6 +387,8 @@ function createUserStateRepository({ getDb }) {
     deleteArticlesForUserSource,
     deleteUserSource,
     deleteAllUserSources,
+    listReadThematicSummaryIds,
+    markThematicSummariesRead,
     importUserState
   };
 }

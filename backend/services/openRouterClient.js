@@ -121,11 +121,33 @@ async function sendChatCompletion(openRouter, chatRequest, options = {}) {
   return completionPromise;
 }
 
+function buildJsonChatRequest(request = {}) {
+  const maxTokens = request.maxTokens ?? request.maxCompletionTokens;
+
+  return {
+    ...request,
+    maxTokens,
+    maxCompletionTokens: request.maxCompletionTokens ?? maxTokens,
+    reasoning: {
+      enabled: false,
+      effort: 'none',
+      maxTokens: 0,
+      ...(request.reasoning || {})
+    },
+    responseFormat: request.responseFormat || { type: 'json_object' },
+    stream: request.stream ?? false
+  };
+}
+
+async function sendJsonChatCompletion(openRouter, chatRequest, options = {}) {
+  return sendChatCompletion(openRouter, buildJsonChatRequest(chatRequest), options);
+}
+
 module.exports = {
   createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
-  sendChatCompletion,
+  sendJsonChatCompletion,
   setOpenRouterSdkLoader
 };

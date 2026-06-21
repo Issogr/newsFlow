@@ -251,6 +251,7 @@ module.exports = {
   completeIngestionRun: articleRepository.completeIngestionRun,
   getLatestIngestionRun: articleRepository.getLatestIngestionRun,
   getReaderCache: readerCacheRepository.getReaderCache,
+  getReaderCaches: readerCacheRepository.getReaderCaches,
   upsertReaderCache: readerCacheRepository.upsertReaderCache,
   createUser: authRepository.createUser,
   findUserByUsername: authRepository.findUserByUsername,
@@ -289,6 +290,8 @@ module.exports = {
   deleteArticlesForUserSource: userStateRepository.deleteArticlesForUserSource,
   deleteUserSource: userStateRepository.deleteUserSource,
   deleteAllUserSources: userStateRepository.deleteAllUserSources,
+  listReadThematicSummaryIds: userStateRepository.listReadThematicSummaryIds,
+  markThematicSummariesRead: userStateRepository.markThematicSummariesRead,
   importUserState: userStateRepository.importUserState,
   verifyWriteAccess,
   getWriteAccessStatus

@@ -64,10 +64,6 @@ function getPagination(filters = {}) {
   };
 }
 
-function expandConfiguredSources() {
-  return newsSources;
-}
-
 function expandUserSources(userSources = []) {
   return userSources
     .filter((source) => source?.isActive !== false)
@@ -377,17 +373,21 @@ function buildFilterStatsCacheKey({ filters = {}, queryOptions = {}, availableSo
   });
 }
 
+function buildFilterStatsValue({ filters = {}, queryOptions = {}, availableSources = [], readLater = false }) {
+  return {
+    sources: database.getSourceStats(availableSources, queryOptions),
+    sourceCatalog: buildSourceCatalogResponse(availableSources),
+    topics: database.getTopicStatsByFilters({
+      search: filters.search,
+      sourceIds: filters.sourceIds,
+      recentHours: readLater ? undefined : filters.recentHours
+    }, 18, queryOptions)
+  };
+}
+
 function getFilterStats({ filters = {}, queryOptions = {}, availableSources = [], readLater = false, refreshVersion = null }) {
   if (!Number.isFinite(FILTER_STATS_CACHE_TTL_MS) || FILTER_STATS_CACHE_TTL_MS <= 0) {
-    return {
-      sources: database.getSourceStats(availableSources, queryOptions),
-      sourceCatalog: buildSourceCatalogResponse(availableSources),
-      topics: database.getTopicStatsByFilters({
-        search: filters.search,
-        sourceIds: filters.sourceIds,
-        recentHours: readLater ? undefined : filters.recentHours
-      }, 18, queryOptions)
-    };
+    return buildFilterStatsValue({ filters, queryOptions, availableSources, readLater });
   }
 
   const now = Date.now();
@@ -398,15 +398,7 @@ function getFilterStats({ filters = {}, queryOptions = {}, availableSources = []
     return cloneJsonSafe(cached.value);
   }
 
-  const value = {
-    sources: database.getSourceStats(availableSources, queryOptions),
-    sourceCatalog: buildSourceCatalogResponse(availableSources),
-    topics: database.getTopicStatsByFilters({
-      search: filters.search,
-      sourceIds: filters.sourceIds,
-      recentHours: readLater ? undefined : filters.recentHours
-    }, 18, queryOptions)
-  };
+  const value = buildFilterStatsValue({ filters, queryOptions, availableSources, readLater });
   filterStatsCache.set(cacheKey, { cachedAt: now, value: cloneJsonSafe(value) });
   pruneFilterStatsCache(now);
   return value;
@@ -414,13 +406,10 @@ function getFilterStats({ filters = {}, queryOptions = {}, availableSources = []
 
 async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   const {
-    ensureSeedData = async () => {},
     getLastRefreshAt = () => null,
     getManualRefreshMeta = () => ({}),
     isUserRefreshPending = () => false
   } = runtime;
-
-  await ensureSeedData();
 
   const userSources = userContext.userId ? database.listUserSources(userContext.userId) : [];
   const customSourceGroups = buildDomainSourceGroups(userSources);
@@ -503,7 +492,6 @@ async function getReadLaterFeed(filters = {}, userContext = {}) {
 
 module.exports = {
   newsSources,
-  expandConfiguredSources,
   expandUserSources,
   getMaxArticleAgeHours,
   getNewsFeed,

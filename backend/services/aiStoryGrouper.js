@@ -6,7 +6,7 @@ const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
-  sendChatCompletion,
+  sendJsonChatCompletion,
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
 const { truncateText } = require('./aiArticlePayload');
@@ -156,7 +156,7 @@ async function findSimilarStoriesForArticle(target = {}, candidates = [], option
 
   const startedAt = Date.now();
   const openRouter = await createOpenRouterClient(config);
-  const response = await sendChatCompletion(openRouter, {
+  const response = await sendJsonChatCompletion(openRouter, {
     model: config.model,
     messages: [
       {
@@ -169,15 +169,7 @@ async function findSimilarStoriesForArticle(target = {}, candidates = [], option
       }
     ],
     temperature: 0,
-    maxTokens: 900,
-    maxCompletionTokens: 900,
-    reasoning: {
-      enabled: false,
-      effort: 'none',
-      maxTokens: 0
-    },
-    responseFormat: { type: 'json_object' },
-    stream: false
+    maxTokens: 900
   }, { timeoutMs: config.timeoutMs });
   const payload = parseJsonContent(extractAssistantContent(response));
   if (!payload) {
@@ -203,6 +195,5 @@ module.exports = {
   buildStoryGroupId,
   _buildPrompt: buildPrompt,
   _getConfig: getConfig,
-  _parseJsonContent: parseJsonContent,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };

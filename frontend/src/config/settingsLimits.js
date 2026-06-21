@@ -1,4 +1,4 @@
-export const DEFAULT_SETTINGS_LIMITS = Object.freeze({
+const DEFAULT_SETTINGS_LIMITS = Object.freeze({
   articleRetentionHours: { min: 1, max: 24 },
   recentHours: { min: 1, max: 3 }
 });

@@ -1,0 +1,111 @@
+import {
+  Bookmark,
+  Clock3,
+  Rss,
+  Search,
+  Tags,
+} from 'lucide-react';
+import TopNavActionButton from './TopNavActionButton';
+
+const FilterNavActions = ({
+  activeFilters,
+  badgeSizeClassName,
+  buttonSizeClassName,
+  handleBubbleButtonClick,
+  handleBubbleButtonPress,
+  handleEnterSearch,
+  onReadLaterClick,
+  onToggleRecent,
+  openBubble,
+  readLaterActive,
+  readLaterAriaLabel,
+  readLaterBadge = false,
+  readLaterLabel,
+  readLaterTitle,
+  recentHours,
+  search,
+  searchActiveClassName,
+  showRecentOnly,
+  t,
+  timeLabelClassName,
+  timeMinWidthClassName,
+}) => {
+  const sourceCount = activeFilters.sourceIds.length;
+  const topicCount = activeFilters.topics.length;
+  const timeCount = showRecentOnly ? 1 : 0;
+  const searchCount = search ? 1 : 0;
+
+  return (
+    <>
+      <TopNavActionButton
+        icon={Rss}
+        label={t('sources')}
+        onPointerDown={(event) => handleBubbleButtonPress(event, 'sources')}
+        onClick={(event) => handleBubbleButtonClick(event, 'sources')}
+        aria-expanded={openBubble === 'sources'}
+        active={openBubble === 'sources'}
+        activeClassName="text-sky-600"
+        sizeClassName={buttonSizeClassName}
+        badge={sourceCount > 0 ? sourceCount : null}
+        badgeSizeClassName={badgeSizeClassName}
+        badgeClassName="bg-sky-600 text-white"
+      />
+
+      <TopNavActionButton
+        icon={Tags}
+        label={t('topics')}
+        onPointerDown={(event) => handleBubbleButtonPress(event, 'topics')}
+        onClick={(event) => handleBubbleButtonClick(event, 'topics')}
+        aria-expanded={openBubble === 'topics'}
+        active={openBubble === 'topics'}
+        activeClassName="text-emerald-600"
+        sizeClassName={buttonSizeClassName}
+        badge={topicCount > 0 ? topicCount : null}
+        badgeSizeClassName={badgeSizeClassName}
+        badgeClassName="bg-emerald-600 text-white"
+      />
+
+      <TopNavActionButton
+        icon={Clock3}
+        label={t('latestHours', { hours: recentHours })}
+        onClick={onToggleRecent}
+        active={showRecentOnly}
+        activeClassName="text-amber-600"
+        sizeClassName={buttonSizeClassName}
+        minWidthClassName={timeMinWidthClassName}
+        badge={timeCount > 0 ? '' : null}
+        badgeSizeClassName={badgeSizeClassName}
+        badgeClassName="bg-amber-500 text-white"
+        labelClassName={timeLabelClassName}
+      />
+
+      <TopNavActionButton
+        icon={Bookmark}
+        label={readLaterLabel}
+        onClick={onReadLaterClick}
+        active={readLaterActive}
+        activeClassName="text-amber-600"
+        sizeClassName={buttonSizeClassName}
+        badge={readLaterBadge && readLaterActive ? '' : null}
+        badgeSizeClassName={badgeSizeClassName}
+        badgeClassName="bg-amber-500 text-white"
+        aria-label={readLaterAriaLabel}
+        title={readLaterTitle}
+      />
+
+      <TopNavActionButton
+        icon={Search}
+        label={t('searchLabel')}
+        onClick={handleEnterSearch}
+        active={searchCount > 0}
+        activeClassName={searchActiveClassName}
+        sizeClassName={buttonSizeClassName}
+        badge={searchCount > 0 ? '' : null}
+        badgeSizeClassName={badgeSizeClassName}
+        badgeClassName="bg-slate-800 text-white"
+      />
+    </>
+  );
+};
+
+export default FilterNavActions;
