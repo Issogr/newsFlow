@@ -144,12 +144,10 @@ async function sendJsonChatCompletion(openRouter, chatRequest, options = {}) {
 }
 
 module.exports = {
-  buildJsonChatRequest,
   createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
-  sendChatCompletion,
   sendJsonChatCompletion,
   setOpenRouterSdkLoader
 };

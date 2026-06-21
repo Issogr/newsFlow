@@ -13,12 +13,7 @@ backend/
 **/*.sqlite3
 **/*.log
 **/.DS_Store
-backend/data
-bff/data
 frontend/dist
-backend/coverage
-bff/coverage
-frontend/coverage
 bff/*.test.js
 bff/babel.config.cjs
 frontend/src/**/*.test.js

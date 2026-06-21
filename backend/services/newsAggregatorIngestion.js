@@ -727,7 +727,6 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
 }
 
 module.exports = {
-  cleanupRemovedConfiguredSourceData,
   createEmptyRefreshPayload,
   ingestSourceConfigs,
   scheduleAiTopicsForPendingArticles,

@@ -2791,8 +2791,7 @@ function createArticleRepository({
     getTopicStatsByFilters,
     createIngestionRun,
     completeIngestionRun,
-    getLatestIngestionRun,
-    buildSearchQuery
+    getLatestIngestionRun
   };
 }
 

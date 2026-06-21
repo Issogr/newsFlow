@@ -45,8 +45,7 @@ jest.mock('../utils/logger', () => ({
 
 jest.mock('./websocketService', () => ({
   broadcastNewsUpdate: jest.fn(),
-  broadcastFeedRefresh: jest.fn(),
-  broadcastSystemNotification: jest.fn()
+  broadcastFeedRefresh: jest.fn()
 }));
 
 jest.mock('./aiTopicClassifier', () => ({

@@ -53,15 +53,12 @@ describe('API auth and user flows', () => {
     ({ tempDir } = setupTempNewsDb('news-api-test-'));
 
     jest.doMock('../services/newsAggregator', () => ({
-      ingestAllNews: jest.fn().mockResolvedValue({ success: true }),
       getNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       getReadLaterFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       saveReadLaterArticles: jest.fn().mockReturnValue({ success: true, readLater: true, articleIds: ['article-1'], savedCount: 1 }),
       removeReadLaterArticles: jest.fn().mockReturnValue({ success: true, readLater: false, articleIds: ['article-1'], removedCount: 1, deletedExpiredArticleCount: 0 }),
       getCachedNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
-      refreshUserSources: jest.fn().mockResolvedValue({ success: true }),
-      startScheduler: jest.fn(),
-      stopScheduler: jest.fn()
+      refreshUserSources: jest.fn().mockResolvedValue({ success: true })
     }));
 
     jest.doMock('../services/rssParser', () => ({

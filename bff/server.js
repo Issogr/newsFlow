@@ -74,8 +74,20 @@ function createApp(options = {}) {
   const createdSessionStore = options.sessionStoreBundle || createSessionStore(options);
   const sessionStore = createdSessionStore.store;
   const sessionDb = createdSessionStore.db;
-  const sessionMiddleware = options.sessionMiddleware || buildSessionMiddleware(sessionStore, getBffSessionSecret());
+  const sessionSecret = getBffSessionSecret();
+  const sessionMiddleware = options.sessionMiddleware || buildSessionMiddleware(sessionStore, sessionSecret);
   const configuredAppOrigin = String(options.appBaseUrl || process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim().replace(/\/+$/, '');
+  const configuredExpectedOrigin = (() => {
+    if (!configuredAppOrigin) {
+      return '';
+    }
+
+    try {
+      return new URL(configuredAppOrigin).origin;
+    } catch {
+      return configuredAppOrigin;
+    }
+  })();
   const backendHttp = options.backendHttp || axios.create({
     baseURL: backendBaseUrl,
     timeout: UPSTREAM_TIMEOUT_MS,
@@ -135,11 +147,7 @@ function createApp(options = {}) {
 
   function getExpectedRequestOrigin(req) {
     if (configuredAppOrigin) {
-      try {
-        return new URL(configuredAppOrigin).origin;
-      } catch {
-        return configuredAppOrigin;
-      }
+      return configuredExpectedOrigin;
     }
 
     const forwardedProtocol = String(getRequestHeader(req, 'x-forwarded-proto') || '').split(',')[0].trim();
@@ -482,7 +490,7 @@ function createApp(options = {}) {
   return {
     app,
     sessionDb,
-    sessionSecret: getBffSessionSecret(),
+    sessionSecret,
     sessionStore,
     isSameOriginSocketRequest,
     socketProxy,
