@@ -218,7 +218,7 @@ describe('NewsCard', () => {
     expect(screen.getByText('Source A +1')).toBeInTheDocument();
   });
 
-  test('shows an AI-grouped badge only for matched AI stories', () => {
+  test('shows an AI-grouped source border only for matched AI stories', () => {
     const { rerender } = renderNewsCard({
       cardGroup: createGroup({
         items: [
@@ -228,7 +228,9 @@ describe('NewsCard', () => {
       })
     });
 
-    expect(screen.getByLabelText('aiGroupedStory')).toBeInTheDocument();
+    const aiGroupedSourceStack = screen.getByLabelText('aiGroupedStory');
+    expect(aiGroupedSourceStack).toBeInTheDocument();
+    expect(aiGroupedSourceStack.getAttribute('style')).toContain('conic-gradient');
 
     rerender(
       createNewsCardElement({

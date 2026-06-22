@@ -6,7 +6,6 @@ import {
   Clock3,
   ExternalLink,
   Share2,
-  Sparkles,
 } from 'lucide-react';
 import { getLocalizedTopic } from '../i18n';
 import { getSafeExternalUrl } from '../utils/urlSafety';
@@ -279,19 +278,31 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     </div>
   );
 
-  const sourceIconStack = sourceEntries.length > 0 ? (
-    <div className="flex -space-x-2 rounded-full bg-sky-50/90 p-1 shadow-sm ring-1 ring-sky-100" aria-label={t('sources')}>
-      {sourceEntries.slice(0, 2).map((source) => (
-        <span key={source.id} title={source.name} aria-label={source.name}>
-          <SourceIcon
-            source={source}
-            className="h-10 w-10 border-2 border-white bg-white shadow-md"
-            imageClassName="h-5 w-5"
-          />
-        </span>
-      ))}
+  const sourceIconItems = sourceEntries.slice(0, 2).map((source) => (
+    <span key={source.id} title={source.name} aria-label={source.name}>
+      <SourceIcon
+        source={source}
+        className="h-10 w-10 border-2 border-white bg-white shadow-md"
+        imageClassName="h-5 w-5"
+      />
+    </span>
+  ));
+  const sourceIconStack = sourceEntries.length > 0 ? (aiGroupedStory ? (
+    <div
+      className="inline-flex rounded-full p-[1.5px] shadow-sm"
+      style={{ backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)' }}
+      aria-label={t('aiGroupedStory')}
+      title={t('aiGroupedStory')}
+    >
+      <div className="flex -space-x-2 rounded-full bg-sky-50/90 p-1">
+        {sourceIconItems}
+      </div>
     </div>
-  ) : null;
+  ) : (
+    <div className="flex -space-x-2 rounded-full bg-sky-50/90 p-1 shadow-sm ring-1 ring-sky-100" aria-label={t('sources')}>
+      {sourceIconItems}
+    </div>
+  )) : null;
   const sourceSummary = getSourceSummary(group, sourceEntries);
   const publishedAt = getPublishedAt(group, locale);
   const shareControls = (
@@ -329,23 +340,9 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       <div className="flex min-w-0 items-center gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
         {sourceIconStack}
         <div className="min-w-0 flex-1">
-          {sourceSummary || aiGroupedStory ? (
+          {sourceSummary ? (
             <div className="flex min-w-0 items-center gap-2">
-              {sourceSummary ? (
-                <p className="truncate text-sm font-semibold text-slate-950">{sourceSummary}</p>
-              ) : null}
-              {aiGroupedStory ? (
-                <span
-                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full p-[1.5px] shadow-sm"
-                  style={{ backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)' }}
-                  aria-label={t('aiGroupedStory')}
-                  title={t('aiGroupedStory')}
-                >
-                  <span className="inline-flex h-full w-full items-center justify-center rounded-full bg-white text-violet-700">
-                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                  </span>
-                </span>
-              ) : null}
+              <p className="truncate text-sm font-semibold text-slate-950">{sourceSummary}</p>
             </div>
           ) : null}
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
