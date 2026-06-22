@@ -731,6 +731,93 @@ describe('thematic summary generation retries', () => {
     expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'summaries' });
   });
 
+  test('regenerates a completed summary when later articles change the selected source set', async () => {
+    const summaryWindow = {
+      periodStart: '2026-05-20T17:00:00.000Z',
+      periodEnd: '2026-05-21T05:00:00.000Z'
+    };
+    const oldArticle = {
+      id: 'article-old',
+      source: 'BBC',
+      title: 'Earlier AI update',
+      description: 'Earlier article description',
+      url: 'https://example.com/earlier-ai',
+      pubDate: '2026-05-20T18:00:00.000Z'
+    };
+    const newArticle = {
+      id: 'article-new',
+      source: 'Reuters',
+      title: 'Later AI update',
+      description: 'Later article description',
+      url: 'https://example.com/later-ai',
+      pubDate: '2026-05-20T19:00:00.000Z'
+    };
+    const staleTechnologySummary = {
+      topicKey: 'technology',
+      status: 'completed',
+      periodStart: summaryWindow.periodStart,
+      periodEnd: summaryWindow.periodEnd,
+      sources: [{ index: 1, articleId: 'article-old', title: oldArticle.title, source: oldArticle.source }]
+    };
+    const completedSummary = {
+      ...staleTechnologySummary,
+      sources: [
+        { index: 1, articleId: 'article-old', title: oldArticle.title, source: oldArticle.source },
+        { index: 2, articleId: 'article-new', title: newArticle.title, source: newArticle.source }
+      ],
+      articleCount: 2,
+      summaryTextByLocale: { en: 'English text [1]', it: 'Testo italiano [1]' }
+    };
+    const databaseMock = {
+      getThematicSummary: jest.fn((topicKey) => (topicKey === 'technology'
+        ? staleTechnologySummary
+        : { topicKey, status: 'completed', periodStart: summaryWindow.periodStart, periodEnd: summaryWindow.periodEnd, sources: [] })),
+      listLatestThematicSummaries: jest.fn(() => []),
+      getPodcastSummary: jest.fn(() => ({ id: 'podcast-existing', status: 'completed' })),
+      getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Tecnologia') ? [oldArticle, newArticle] : []),
+      getReaderCache: jest.fn(() => null),
+      upsertThematicSummary: jest.fn(() => completedSummary),
+      pruneSummaryHistory: jest.fn(() => ({ thematicSummaries: 1, podcastSummaries: 0 }))
+    };
+    const aiSummaryGeneratorMock = {
+      isAiSummaryGenerationAvailable: jest.fn(() => true),
+      generateSummaryForArticles: jest.fn().mockResolvedValue({
+        summaryText: 'English text [1]',
+        summaryTextByLocale: { en: 'English text [1]', it: 'Testo italiano [1]' },
+        model: 'test-model'
+      }),
+      _getConfig: jest.fn(() => ({ model: 'test-model' }))
+    };
+    const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
+
+    const { service } = loadServiceWithMocks({
+      databaseMock,
+      env: OPENROUTER_TEST_ENV,
+      aiSummaryGeneratorMock,
+      websocketServiceMock
+    });
+    const result = await service.generateDueSummaries({ window: summaryWindow });
+
+    expect(result.items).toEqual(expect.arrayContaining([completedSummary]));
+    expect(aiSummaryGeneratorMock.generateSummaryForArticles).toHaveBeenCalledTimes(1);
+    expect(aiSummaryGeneratorMock.generateSummaryForArticles.mock.calls[0][1].map((article) => article.id)).toEqual(['article-old', 'article-new']);
+    expect(databaseMock.upsertThematicSummary).toHaveBeenCalledWith(expect.objectContaining({
+      topicKey: 'technology',
+      status: 'completed',
+      articleCount: 2,
+      sources: [
+        expect.objectContaining({ articleId: 'article-old' }),
+        expect.objectContaining({ articleId: 'article-new' })
+      ]
+    }));
+    expect(databaseMock.pruneSummaryHistory).toHaveBeenCalledWith({
+      periodEnd: summaryWindow.periodEnd,
+      topicKeys: ['technology'],
+      podcast: false
+    });
+    expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'summaries' });
+  });
+
   test('deduplicates topic summaries and reuses topic article queries for podcasts', async () => {
     const summaryWindow = {
       periodStart: '2026-05-20T17:00:00.000Z',
