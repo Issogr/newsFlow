@@ -281,7 +281,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
 
   const sourceIconStack = sourceEntries.length > 0 ? (
     <div className="flex -space-x-2 rounded-full bg-sky-50/90 p-1 shadow-sm ring-1 ring-sky-100" aria-label={t('sources')}>
-      {sourceEntries.slice(0, 3).map((source) => (
+      {sourceEntries.slice(0, 2).map((source) => (
         <span key={source.id} title={source.name} aria-label={source.name}>
           <SourceIcon
             source={source}
@@ -290,11 +290,6 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
           />
         </span>
       ))}
-      {sourceEntries.length > 3 ? (
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-sky-100 text-xs font-bold text-sky-800 shadow-md">
-          +{sourceEntries.length - 3}
-        </span>
-      ) : null}
     </div>
   ) : null;
   const sourceSummary = getSourceSummary(group, sourceEntries);

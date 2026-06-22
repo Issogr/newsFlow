@@ -185,6 +185,26 @@ describe('NewsCard', () => {
     expect(screen.queryByText('Source B')).not.toBeInTheDocument();
   });
 
+  test('limits combined story source circles and keeps overflow in the summary text', () => {
+    renderNewsCard({
+      cardGroup: createGroup({
+        items: [
+          createItem({ sourceIconUrl: 'https://example.com/a.ico' }),
+          createItem({ id: 'article-2', sourceId: 'source-b', source: 'Source B', sourceIconUrl: 'https://example.com/b.ico' }),
+          createItem({ id: 'article-3', sourceId: 'source-c', source: 'Source C', sourceIconUrl: 'https://example.com/c.ico' }),
+          createItem({ id: 'article-4', sourceId: 'source-d', source: 'Source D', sourceIconUrl: 'https://example.com/d.ico' })
+        ]
+      })
+    });
+
+    expect(screen.getByLabelText('Source A')).toBeInTheDocument();
+    expect(screen.getByLabelText('Source B')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Source C')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Source D')).not.toBeInTheDocument();
+    expect(screen.getByText('Source A +3')).toBeInTheDocument();
+    expect(screen.queryByText('+2')).not.toBeInTheDocument();
+  });
+
   test('surfaces merged same-source versions in the source summary', () => {
     renderNewsCard({
       cardGroup: createGroup({
