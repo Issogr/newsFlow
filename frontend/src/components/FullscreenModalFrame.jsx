@@ -69,5 +69,3 @@ export const FullscreenPanelFrame = ({
     </div>
   </FullscreenModalFrame>
 );
-
-export default FullscreenModalFrame;

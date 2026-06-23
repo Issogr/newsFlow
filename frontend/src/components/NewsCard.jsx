@@ -14,7 +14,7 @@ import genericNewsCover2 from '../assets/generic-news-cover-2.webp';
 import genericNewsCover3 from '../assets/generic-news-cover-3.webp';
 import genericNewsCover4 from '../assets/generic-news-cover-4.webp';
 import useShareArticle from '../hooks/useShareArticle';
-import { getTopicPresentation } from '../topicPresentation';
+import { AI_ACCENT_GRADIENT_STYLE, getTopicPresentation } from '../topicPresentation';
 import ShareStatusBubble from './ShareStatusBubble';
 import SourceIcon from './SourceIcon';
 
@@ -290,7 +290,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   const sourceIconStack = sourceEntries.length > 0 ? (aiGroupedStory ? (
     <div
       className="inline-flex rounded-full p-[1.5px] shadow-sm"
-      style={{ backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)' }}
+      style={AI_ACCENT_GRADIENT_STYLE}
       aria-label={t('aiGroupedStory')}
       title={t('aiGroupedStory')}
     >
@@ -356,7 +356,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
                   <span
                     key={topic}
                     className="inline-flex h-7 w-7 items-center justify-center rounded-full p-[1.5px] shadow-sm"
-                    style={{ backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)' }}
+                    style={AI_ACCENT_GRADIENT_STYLE}
                     aria-label={localizedTopic}
                     title={localizedTopic}
                   >

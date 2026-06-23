@@ -20,7 +20,7 @@ export default function useShareArticle() {
 
   const shareArticle = useCallback(async ({ url, title }) => {
     const result = await shareArticleUrl({ url, title });
-    setShareState(result || 'idle');
+    setShareState(result === 'copied' || result === 'failed' ? result : 'idle');
     return result;
   }, []);
 

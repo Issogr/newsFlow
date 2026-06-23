@@ -454,7 +454,6 @@ module.exports = {
   _buildPrompt: buildPrompt,
   _getConfig: getConfig,
   _getCompletionTokenBudget: getCompletionTokenBudget,
-  _getDeterministicTopicDetails: getDeterministicTopicDetails,
   _extractAssistantContent: extractAssistantContent,
   _normalizeClassifierDetails: normalizeClassifierDetails,
   _parseJsonContent: parseJsonContent,
