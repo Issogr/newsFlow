@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.5.10
+
 ## 3.5.9
 
 - reduced AI provider usage with larger topic batches, high-confidence local topic skips, prompt article caps, and unchanged story-grouping retry skips
