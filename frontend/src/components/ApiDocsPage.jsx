@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import BrandMark from './BrandMark';
+import StaticInfoPageFrame, { StaticInfoSection } from './StaticInfoPageFrame';
 
 function renderTextWithInlineCode(text) {
   const content = String(text || '');
@@ -114,37 +114,24 @@ const ApiDocsPage = ({ locale }) => {
   const content = docsContent[locale] || docsContent.en;
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 sm:bg-slate-100 sm:px-4 sm:py-10">
-      <div className="min-h-screen w-full bg-white px-5 py-8 sm:mx-auto sm:min-h-0 sm:max-w-4xl sm:rounded-[2rem] sm:border sm:border-slate-200 sm:p-8 sm:shadow-xl">
-        <div className="mb-8 flex items-center gap-4">
-          <BrandMark className="h-12 w-12" />
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">{content.eyebrow}</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">{content.title}</h1>
-            <p className="mt-2 max-w-3xl text-sm text-slate-600">{content.intro}</p>
-          </div>
-        </div>
+    <StaticInfoPageFrame content={content}>
+      {content.sections.map((section) => (
+        <StaticInfoSection key={section.title}>
+          <h2 className="text-lg font-semibold text-slate-900">{section.title}</h2>
+          <ul className="mt-3 space-y-2 text-sm text-slate-700">
+            {section.items.map((item) => (
+              <li key={item} className="leading-6">{renderTextWithInlineCode(item)}</li>
+            ))}
+          </ul>
+        </StaticInfoSection>
+      ))}
 
-        <div className="space-y-6">
-          {content.sections.map((section) => (
-            <section key={section.title} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-                <h2 className="text-lg font-semibold text-slate-900">{section.title}</h2>
-                <ul className="mt-3 space-y-2 text-sm text-slate-700">
-                  {section.items.map((item) => (
-                  <li key={item} className="leading-6">{renderTextWithInlineCode(item)}</li>
-                ))}
-              </ul>
-            </section>
-          ))}
-
-          <section className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-            <h2 className="text-lg font-semibold text-slate-900">{content.exampleTitle}</h2>
-            <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950 px-4 py-3 text-sm text-slate-100"><code>{content.exampleRequest}</code></pre>
-            <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950 px-4 py-3 text-sm text-slate-100"><code>{content.exampleAuthRequest}</code></pre>
-          </section>
-        </div>
-      </div>
-    </div>
+      <StaticInfoSection>
+        <h2 className="text-lg font-semibold text-slate-900">{content.exampleTitle}</h2>
+        <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950 px-4 py-3 text-sm text-slate-100"><code>{content.exampleRequest}</code></pre>
+        <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950 px-4 py-3 text-sm text-slate-100"><code>{content.exampleAuthRequest}</code></pre>
+      </StaticInfoSection>
+    </StaticInfoPageFrame>
   );
 };
 

@@ -1,13 +1,12 @@
-import { Settings, X } from 'lucide-react';
-import GitHubIcon from './icons/GitHubIcon';
+import { Settings } from 'lucide-react';
+import ProjectGitHubLink from './ProjectGitHubLink';
 import SettingsAccessSection from './settings/SettingsAccessSection';
 import SettingsCustomSourcesSection from './settings/SettingsCustomSourcesSection';
 import SettingsExclusionsSection from './settings/SettingsExclusionsSection';
 import SettingsPreferencesSection from './settings/SettingsPreferencesSection';
 import useSettingsPanelState from './settings/useSettingsPanelState';
 import InlineAlert from './InlineAlert';
-import SlideOverPanelFrame from './SlideOverPanelFrame';
-import { PROJECT_GITHUB_URL } from '../config/projectLinks';
+import SlideOverPanelFrame, { SlideOverPanelBody, SlideOverPanelFooter, SlideOverPanelHeader } from './SlideOverPanelFrame';
 
 const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, onUserUpdate }) => {
   const publicApiAuthenticatedEnabled = currentUser?.features?.publicApi?.authenticatedEnabled === true;
@@ -52,23 +51,15 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
 
   return (
     <SlideOverPanelFrame>
-        <div className="border-b border-slate-200 bg-white px-5 py-5 sm:px-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                <Settings className="h-4 w-4" />
-                {t('settings')}
-              </p>
-              <h2 className="mt-2 text-xl font-semibold text-slate-900">{currentUser.user.username}</h2>
-            </div>
-            <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label={t('cancel')}>
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+        <SlideOverPanelHeader
+          closeLabel={t('cancel')}
+          eyebrow={t('settings')}
+          icon={Settings}
+          onClose={onClose}
+          title={currentUser.user.username}
+        />
 
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
+        <SlideOverPanelBody>
           <div className="space-y-5">
             <SettingsPreferencesSection
               t={t}
@@ -125,19 +116,11 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
               onRevokeApiToken={handleRevokeApiToken}
             />
           </div>
-        </div>
+        </SlideOverPanelBody>
 
-        <div className="flex items-center justify-between gap-4 border-t border-slate-200 px-5 py-5 sm:px-6">
+        <SlideOverPanelFooter>
           <div className="flex items-center gap-2">
-            <a
-              href={PROJECT_GITHUB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="GitHub"
-              className="inline-flex items-center justify-center rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-            >
-              <GitHubIcon className="h-5 w-5" />
-            </a>
+            <ProjectGitHubLink />
             <button
               type="button"
               onClick={onOpenReleaseNotes}
@@ -149,7 +132,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
           <button type="button" onClick={handleSave} disabled={saving} className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
             {t('save')}
           </button>
-        </div>
+        </SlideOverPanelFooter>
     </SlideOverPanelFrame>
   );
 };

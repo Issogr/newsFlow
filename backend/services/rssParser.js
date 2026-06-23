@@ -149,10 +149,6 @@ function detectFeedLanguage(feed) {
   return scoredLanguages[0]?.score > 0 ? scoredLanguages[0].language : 'it';
 }
 
-function normalizeDate(value, referenceDate = new Date()) {
-  return normalizePublicationDate(value, referenceDate);
-}
-
 function normalizeOptionalDate(value) {
   if (!value) {
     return '';
@@ -472,7 +468,7 @@ async function parseFeed(source, options = {}) {
           title: sanitizeHtml(item.title),
           description: sanitizeHtml(item.description || ''),
           content: sanitizeHtml(item.contentEncoded || item.content || ''),
-          pubDate: normalizeDate(item.pubDate || item.dcdate || item.isoDate),
+          pubDate: normalizePublicationDate(item.pubDate || item.dcdate || item.isoDate),
           source: source.name,
           sourceId: source.id,
           url: item.link || '',
@@ -519,8 +515,6 @@ module.exports = {
     };
   },
   _buildArticleId: buildArticleId,
-  _normalizeArticleUrl: normalizeArticleUrl,
-  _normalizeDate: normalizeDate,
   _getImageUrl: getImageUrl,
   _extractImageFromHtml: extractImageFromHtml,
   _extractImageFromArticleHtml: extractImageFromArticleHtml

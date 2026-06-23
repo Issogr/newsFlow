@@ -45,6 +45,7 @@ const SUPPORTED_LANGUAGES = new Set(['auto', 'it', 'en']);
 const SUPPORTED_THEME_MODES = new Set(['system', 'light', 'dark']);
 const SUPPORTED_READER_PANEL_POSITIONS = new Set(['left', 'center', 'right']);
 const SUPPORTED_READER_TEXT_SIZES = new Set(['small', 'medium', 'large']);
+const SUPPORTED_COMPACT_NEWS_CARD_MODES = new Set(['off', 'mobile', 'desktop', 'everywhere']);
 
 let pendingAnonymousPublicApiRequests = 0;
 let lastAnonymousPublicApiUsageFlushAt = Date.now();
@@ -141,24 +142,25 @@ function sanitizeUsername(username) {
   return String(username || '').trim().slice(0, 40);
 }
 
+function normalizeEnumValue(value, allowedValues, fallback) {
+  const normalized = String(value || fallback).trim().toLowerCase();
+  return allowedValues.has(normalized) ? normalized : fallback;
+}
+
 function normalizeLanguage(language) {
-  const value = String(language || 'auto').trim().toLowerCase();
-  return SUPPORTED_LANGUAGES.has(value) ? value : 'auto';
+  return normalizeEnumValue(language, SUPPORTED_LANGUAGES, 'auto');
 }
 
 function normalizeThemeMode(mode) {
-  const value = String(mode || 'system').trim().toLowerCase();
-  return SUPPORTED_THEME_MODES.has(value) ? value : 'system';
+  return normalizeEnumValue(mode, SUPPORTED_THEME_MODES, 'system');
 }
 
 function normalizeReaderPanelPosition(position) {
-  const value = String(position || 'right').trim().toLowerCase();
-  return SUPPORTED_READER_PANEL_POSITIONS.has(value) ? value : 'right';
+  return normalizeEnumValue(position, SUPPORTED_READER_PANEL_POSITIONS, 'right');
 }
 
 function normalizeReaderTextSize(size) {
-  const value = String(size || 'medium').trim().toLowerCase();
-  return SUPPORTED_READER_TEXT_SIZES.has(value) ? value : 'medium';
+  return normalizeEnumValue(size, SUPPORTED_READER_TEXT_SIZES, 'medium');
 }
 
 function normalizeReleaseNotesVersion(version) {
@@ -314,12 +316,8 @@ function getDefaultSettings(overrides = {}) {
 }
 
 function normalizeCompactNewsCardsMode(value, fallback = 'off') {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (['off', 'mobile', 'desktop', 'everywhere'].includes(normalized)) {
-    return normalized;
-  }
-
-  return ['off', 'mobile', 'desktop', 'everywhere'].includes(fallback) ? fallback : 'off';
+  const normalizedFallback = SUPPORTED_COMPACT_NEWS_CARD_MODES.has(fallback) ? fallback : 'off';
+  return normalizeEnumValue(value, SUPPORTED_COMPACT_NEWS_CARD_MODES, normalizedFallback);
 }
 
 function getUserSettings(userId) {

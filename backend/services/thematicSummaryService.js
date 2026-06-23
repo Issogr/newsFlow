@@ -1127,8 +1127,7 @@ async function generatePodcastForWindow(window, options = {}) {
   };
 
   try {
-    const generateScript = aiPodcastGenerator.generatePodcastScriptForArticles || aiPodcastGenerator.generatePodcastForArticles;
-    const generated = await generateScript(window, enrichedArticles);
+    const generated = await aiPodcastGenerator.generatePodcastScriptForArticles(window, enrichedArticles);
     if (!generated) {
       return { summary: null, generatedNow: false };
     }

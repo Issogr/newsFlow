@@ -109,11 +109,8 @@ describe('thematicSummaryService', () => {
 });
 
 function mockAiPodcastGenerator(overrides = {}) {
-  const podcastScriptGenerator = overrides.generatePodcastScriptForArticles
-    || overrides.generatePodcastForArticles
-    || jest.fn().mockResolvedValue(null);
+  const podcastScriptGenerator = overrides.generatePodcastScriptForArticles || jest.fn().mockResolvedValue(null);
   const mock = {
-    generatePodcastForArticles: podcastScriptGenerator,
     generatePodcastScriptForArticles: podcastScriptGenerator,
     generateAudioForLocale: jest.fn().mockResolvedValue(null),
     isAiPodcastGenerationAvailable: jest.fn(() => true),
@@ -123,9 +120,6 @@ function mockAiPodcastGenerator(overrides = {}) {
     _getEnabledPodcastLocales: jest.fn(() => ['en']),
     ...overrides
   };
-  if (!overrides.generatePodcastScriptForArticles && overrides.generatePodcastForArticles) {
-    mock.generatePodcastScriptForArticles = mock.generatePodcastForArticles;
-  }
 
   jest.doMock('./aiPodcastGenerator', () => mock);
   return mock;
@@ -879,7 +873,7 @@ describe('thematic summary generation retries', () => {
       env: OPENROUTER_TEST_ENV,
       aiSummaryGeneratorMock,
       aiPodcastGeneratorOverrides: {
-        generatePodcastForArticles: jest.fn().mockResolvedValue({
+        generatePodcastScriptForArticles: jest.fn().mockResolvedValue({
           title: 'News podcast',
           scriptText: 'English script',
           titleByLocale: { en: 'News podcast', it: 'Podcast news' },
@@ -898,8 +892,8 @@ describe('thematic summary generation retries', () => {
     const technologySummaryCall = aiSummaryGeneratorMock.generateSummaryForArticles.mock.calls
       .find(([topicConfig]) => topicConfig.key === 'technology');
     expect(technologySummaryCall[1].map((article) => article.id)).toEqual(['tech-1']);
-    expect(aiPodcastGeneratorMock.generatePodcastForArticles).toHaveBeenCalledTimes(1);
-    expect(aiPodcastGeneratorMock.generatePodcastForArticles.mock.calls[0][1].map((article) => article.id)).toEqual(['science-1', 'tech-1']);
+    expect(aiPodcastGeneratorMock.generatePodcastScriptForArticles).toHaveBeenCalledTimes(1);
+    expect(aiPodcastGeneratorMock.generatePodcastScriptForArticles.mock.calls[0][1].map((article) => article.id)).toEqual(['science-1', 'tech-1']);
   });
 
   test('does not retry recently failed summaries on every scheduler tick', async () => {
@@ -1168,7 +1162,7 @@ describe('thematic summary generation retries', () => {
       databaseMock,
       aiSummaryGeneratorMock,
       aiPodcastGeneratorOverrides: {
-        generatePodcastForArticles: jest.fn().mockResolvedValue({
+        generatePodcastScriptForArticles: jest.fn().mockResolvedValue({
           title: 'News podcast',
           scriptText: 'English script',
           titleByLocale: { en: 'News podcast', it: 'Podcast news' },
@@ -1183,8 +1177,8 @@ describe('thematic summary generation retries', () => {
     const result = await service._generatePodcastForWindow(summaryWindow);
 
     expect(result.generatedNow).toBe(true);
-    expect(aiPodcastGeneratorMock.generatePodcastForArticles).toHaveBeenCalledTimes(1);
-    const generatedArticles = aiPodcastGeneratorMock.generatePodcastForArticles.mock.calls[0][1];
+    expect(aiPodcastGeneratorMock.generatePodcastScriptForArticles).toHaveBeenCalledTimes(1);
+    const generatedArticles = aiPodcastGeneratorMock.generatePodcastScriptForArticles.mock.calls[0][1];
     expect(generatedArticles.map((article) => article.id)).toEqual(['article-2', 'article-1']);
     expect(generatedArticles[0].readerText).toContain('Useful cached reader text.');
     expect(databaseMock.upsertPodcastSummary).toHaveBeenCalledWith(expect.objectContaining({
@@ -1229,7 +1223,7 @@ describe('thematic summary generation retries', () => {
 
     await expect(service._generatePodcastForWindow(summaryWindow)).resolves.toEqual({ summary: emptyPodcast, generatedNow: true });
     await expect(service._generatePodcastForWindow(summaryWindow)).resolves.toEqual({ summary: emptyPodcast, generatedNow: false });
-    expect(aiPodcastGeneratorMock.generatePodcastForArticles).not.toHaveBeenCalled();
+    expect(aiPodcastGeneratorMock.generatePodcastScriptForArticles).not.toHaveBeenCalled();
     expect(databaseMock.upsertPodcastSummary).toHaveBeenCalledWith(expect.objectContaining({
       status: 'empty',
       failureCategory: 'empty_window',
@@ -1271,7 +1265,7 @@ describe('thematic summary generation retries', () => {
     const { service, aiPodcastGeneratorMock } = loadServiceWithMocks({
       databaseMock,
       aiPodcastGeneratorOverrides: {
-        generatePodcastForArticles: jest.fn().mockResolvedValue({
+        generatePodcastScriptForArticles: jest.fn().mockResolvedValue({
           title: 'News podcast',
           scriptText: 'English script',
           titleByLocale: { en: 'News podcast', it: 'Podcast news' },
@@ -1287,7 +1281,7 @@ describe('thematic summary generation retries', () => {
     const result = await service._generatePodcastForWindow(summaryWindow);
 
     expect(result).toEqual({ summary: completedPodcast, generatedNow: true });
-    expect(aiPodcastGeneratorMock.generatePodcastForArticles).toHaveBeenCalledWith(summaryWindow, [expect.objectContaining({ id: 'article-1' })]);
+    expect(aiPodcastGeneratorMock.generatePodcastScriptForArticles).toHaveBeenCalledWith(summaryWindow, [expect.objectContaining({ id: 'article-1' })]);
     expect(databaseMock.upsertPodcastSummary).toHaveBeenCalledWith(expect.objectContaining({
       status: 'completed',
       articleCount: 1
@@ -1311,7 +1305,7 @@ describe('thematic summary generation retries', () => {
     await expect(service._generatePodcastForWindow(summaryWindow, {
       referenceDate: new Date('2026-05-21T05:05:00.000Z')
     })).resolves.toEqual({ summary: null, generatedNow: false });
-    expect(aiPodcastGeneratorMock.generatePodcastForArticles).not.toHaveBeenCalled();
+    expect(aiPodcastGeneratorMock.generatePodcastScriptForArticles).not.toHaveBeenCalled();
     expect(databaseMock.upsertPodcastSummary).not.toHaveBeenCalled();
   });
 
@@ -1338,7 +1332,7 @@ describe('thematic summary generation retries', () => {
     await expect(service._generatePodcastForWindow(summaryWindow, {
       referenceDate: new Date('2026-05-21T05:20:00.000Z')
     })).resolves.toEqual({ summary: emptyPodcast, generatedNow: true });
-    expect(aiPodcastGeneratorMock.generatePodcastForArticles).not.toHaveBeenCalled();
+    expect(aiPodcastGeneratorMock.generatePodcastScriptForArticles).not.toHaveBeenCalled();
     expect(databaseMock.upsertPodcastSummary).toHaveBeenCalledWith(expect.objectContaining({ status: 'empty' }));
   });
 
@@ -1376,13 +1370,13 @@ describe('thematic summary generation retries', () => {
       databaseMock,
       aiSummaryGeneratorMock,
       aiPodcastGeneratorOverrides: {
-        generatePodcastForArticles: jest.fn().mockRejectedValue(validationError)
+        generatePodcastScriptForArticles: jest.fn().mockRejectedValue(validationError)
       }
     });
 
     const result = await service._generatePodcastForWindow(summaryWindow, { force: true });
 
-    expect(aiPodcastGeneratorMock.generatePodcastForArticles).toHaveBeenCalledTimes(1);
+    expect(aiPodcastGeneratorMock.generatePodcastScriptForArticles).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ summary: failedPodcast, generatedNow: true });
     expect(databaseMock.upsertPodcastSummary).toHaveBeenCalledWith(expect.objectContaining({
       status: 'failed',
@@ -1454,7 +1448,7 @@ describe('thematic summary generation retries', () => {
     });
 
     expect(result).toEqual({ summary: completedPodcast, generatedNow: true });
-    expect(aiPodcastGeneratorMock.generatePodcastForArticles).not.toHaveBeenCalled();
+    expect(aiPodcastGeneratorMock.generatePodcastScriptForArticles).not.toHaveBeenCalled();
     expect(aiPodcastGeneratorMock.generateAudioForLocale).toHaveBeenCalledWith('English script', 'en');
     expect(databaseMock.upsertPodcastSummary).toHaveBeenCalledWith(expect.objectContaining({
       id: 'podcast-existing',
@@ -1535,7 +1529,7 @@ describe('thematic summary generation retries', () => {
       }
     }));
     expect(result.generatedNow).toBe(false);
-    expect(aiPodcastGeneratorMock.generatePodcastForArticles).not.toHaveBeenCalled();
+    expect(aiPodcastGeneratorMock.generatePodcastScriptForArticles).not.toHaveBeenCalled();
     expect(aiPodcastGeneratorMock.generateAudioForLocale).toHaveBeenCalledWith('English script', 'en');
     expect(databaseMock.upsertPodcastSummary).toHaveBeenNthCalledWith(1, expect.objectContaining({
       audioByLocale: {
@@ -1670,7 +1664,7 @@ describe('thematic summary generation retries', () => {
     const result = await service._generatePodcastForWindow(summaryWindow);
 
     expect(result.generatedNow).toBe(true);
-    expect(aiPodcastGeneratorMock.generatePodcastForArticles).not.toHaveBeenCalled();
+    expect(aiPodcastGeneratorMock.generatePodcastScriptForArticles).not.toHaveBeenCalled();
     expect(aiPodcastGeneratorMock.generateAudioForLocale).toHaveBeenCalledWith('English script', 'en');
     expect(databaseMock.upsertPodcastSummary).toHaveBeenCalledWith(expect.objectContaining({
       audioByLocale: {

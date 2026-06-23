@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { ExternalLink, LogIn, UserPlus } from 'lucide-react';
 import AuthCard, {
-  AUTH_INPUT_CLASS_NAME,
   AUTH_PRIMARY_BUTTON_CLASS_NAME,
+  AuthTextInput,
   MIN_PASSWORD_LENGTH,
   getPasswordApiErrorMessage,
   getPasswordValidationError,
@@ -119,34 +119,28 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <label className="block">
-          <span className="mb-2 block text-sm font-medium text-slate-700">{t('username')}</span>
-          <input
-            value={username}
-            onChange={(event) => {
-              setUsername(event.target.value);
-              setClientError('');
-            }}
-            className={AUTH_INPUT_CLASS_NAME}
-            required
-            minLength={3}
-          />
-        </label>
+        <AuthTextInput
+          label={t('username')}
+          value={username}
+          onChange={(event) => {
+            setUsername(event.target.value);
+            setClientError('');
+          }}
+          required
+          minLength={3}
+        />
 
-        <label className="block">
-          <span className="mb-2 block text-sm font-medium text-slate-700">{t('password')}</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => {
-              setPassword(event.target.value);
-              setClientError('');
-            }}
-            className={AUTH_INPUT_CLASS_NAME}
-            required={mode === 'register'}
-            minLength={mode === 'register' ? MIN_PASSWORD_LENGTH : undefined}
-          />
-        </label>
+        <AuthTextInput
+          label={t('password')}
+          type="password"
+          value={password}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            setClientError('');
+          }}
+          required={mode === 'register'}
+          minLength={mode === 'register' ? MIN_PASSWORD_LENGTH : undefined}
+        />
 
         {mode === 'register' && (
           <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">{t('passwordHelp')}</p>

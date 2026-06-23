@@ -1,4 +1,4 @@
-import BrandMark from './BrandMark';
+import StaticInfoPageFrame, { StaticInfoSection } from './StaticInfoPageFrame';
 
 const policyContent = {
   cookie: {
@@ -207,61 +207,48 @@ const LegalPolicyPage = ({ policy = 'privacy' }) => {
   const content = policyContent[policy] || policyContent.privacy;
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 sm:bg-slate-100 sm:px-4 sm:py-10">
-      <div className="min-h-screen w-full bg-white px-5 py-8 sm:mx-auto sm:min-h-0 sm:max-w-4xl sm:rounded-[2rem] sm:border sm:border-slate-200 sm:p-8 sm:shadow-xl">
-        <div className="mb-8 flex items-center gap-4">
-          <BrandMark className="h-12 w-12" />
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">{content.eyebrow}</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">{content.title}</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{content.intro}</p>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          {content.sections.map((section) => (
-            <section key={section.title} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-              <h2 className="text-lg font-semibold text-slate-900">{section.title}</h2>
-              {section.paragraphs?.map((paragraph) => (
-                <p key={paragraph} className="mt-3 text-sm leading-6 text-slate-700">{paragraph}</p>
-              ))}
-              {section.bullets?.length ? (
-                <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
-                  {section.bullets.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </section>
+    <StaticInfoPageFrame content={content} introClassName="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+      {content.sections.map((section) => (
+        <StaticInfoSection key={section.title}>
+          <h2 className="text-lg font-semibold text-slate-900">{section.title}</h2>
+          {section.paragraphs?.map((paragraph) => (
+            <p key={paragraph} className="mt-3 text-sm leading-6 text-slate-700">{paragraph}</p>
           ))}
-
-          <section className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-5">
-            <h2 className="text-lg font-semibold text-emerald-900">Short Notice</h2>
-            <p className="mt-3 text-sm leading-6 text-emerald-800">
-              This website uses only technical cookies strictly necessary for login, authentication, and secure access to reserved areas. No profiling or marketing cookies are used.
-            </p>
-          </section>
-
-          <section className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-            <h2 className="text-lg font-semibold text-slate-900">Technical Requirements For Developers</h2>
+          {section.bullets?.length ? (
             <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
-              <li>Use only cookies strictly necessary for login and authenticated session management.</li>
-              <li>Do not set analytics, profiling, advertising, or other unnecessary cookies.</li>
-              <li>Use first-party cookies only for authentication and session purposes.</li>
-              <li>Set appropriate security flags on authentication cookies: HttpOnly, Secure when served over HTTPS, and SameSite=Strict or SameSite=Lax according to the login flow.</li>
-              <li>Use a duration appropriate to the authentication purpose.</li>
-              <li>Prefer session cookies unless a limited persistent duration is strictly necessary.</li>
-              <li>Do not store tracking identifiers in authentication cookies.</li>
-              <li>Do not reuse authentication cookies for profiling or analytics.</li>
-              <li>Ensure credentials are protected with secure hashing, not plaintext or reversible encryption.</li>
-              <li>Ensure transport security with HTTPS.</li>
-              <li>Minimize authentication-related logging and avoid storing raw credentials or session secrets in logs.</li>
-              <li>Make sure disabling technical cookies prevents login functionality only, without introducing unrelated tracking behavior.</li>
+              {section.bullets.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
             </ul>
-          </section>
-        </div>
-      </div>
-    </div>
+          ) : null}
+        </StaticInfoSection>
+      ))}
+
+      <StaticInfoSection className="border-emerald-200 bg-emerald-50">
+        <h2 className="text-lg font-semibold text-emerald-900">Short Notice</h2>
+        <p className="mt-3 text-sm leading-6 text-emerald-800">
+          This website uses only technical cookies strictly necessary for login, authentication, and secure access to reserved areas. No profiling or marketing cookies are used.
+        </p>
+      </StaticInfoSection>
+
+      <StaticInfoSection>
+        <h2 className="text-lg font-semibold text-slate-900">Technical Requirements For Developers</h2>
+        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+          <li>Use only cookies strictly necessary for login and authenticated session management.</li>
+          <li>Do not set analytics, profiling, advertising, or other unnecessary cookies.</li>
+          <li>Use first-party cookies only for authentication and session purposes.</li>
+          <li>Set appropriate security flags on authentication cookies: HttpOnly, Secure when served over HTTPS, and SameSite=Strict or SameSite=Lax according to the login flow.</li>
+          <li>Use a duration appropriate to the authentication purpose.</li>
+          <li>Prefer session cookies unless a limited persistent duration is strictly necessary.</li>
+          <li>Do not store tracking identifiers in authentication cookies.</li>
+          <li>Do not reuse authentication cookies for profiling or analytics.</li>
+          <li>Ensure credentials are protected with secure hashing, not plaintext or reversible encryption.</li>
+          <li>Ensure transport security with HTTPS.</li>
+          <li>Minimize authentication-related logging and avoid storing raw credentials or session secrets in logs.</li>
+          <li>Make sure disabling technical cookies prevents login functionality only, without introducing unrelated tracking behavior.</li>
+        </ul>
+      </StaticInfoSection>
+    </StaticInfoPageFrame>
   );
 };
 

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { getLocalizedTopic } from '../i18n';
 import { getSafeExternalUrl } from '../utils/urlSafety';
+import { addTopicEntry } from '../utils/topicEntries';
 import genericNewsCover from '../assets/generic-news-cover.webp';
 import genericNewsCover2 from '../assets/generic-news-cover-2.webp';
 import genericNewsCover3 from '../assets/generic-news-cover-3.webp';
@@ -81,23 +82,7 @@ function getSourceSummary(group, sourceEntries) {
 
 function getTopicEntries(group) {
   const topicMap = new Map();
-  const addTopic = (entry) => {
-    const topic = String(entry?.topic || entry || '').trim();
-    if (!topic) {
-      return;
-    }
-
-    const key = topic.toLowerCase();
-    const current = topicMap.get(key);
-    const nextEntry = {
-      topic,
-      source: String(entry?.source || current?.source || '').trim().toLowerCase()
-    };
-
-    if (!current || nextEntry.source === 'ai') {
-      topicMap.set(key, nextEntry);
-    }
-  };
+  const addTopic = (entry) => addTopicEntry(topicMap, entry);
 
   (group?.topicDetails || []).forEach(addTopic);
   (group?.topics || []).forEach(addTopic);
