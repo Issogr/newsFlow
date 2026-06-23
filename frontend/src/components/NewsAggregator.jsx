@@ -22,7 +22,20 @@ import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '..
 import { getSettingsLimits } from '../config/settingsLimits';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
-import { addTopicEntry } from '../utils/topicEntries';
+import {
+  buildFeedRequestParams,
+  getGroupMergeKeys,
+  getLoadedNewsGroups,
+  getSourceReloadSignature,
+  groupSharesAnyKey,
+  mergeGroups,
+} from '../utils/newsFeedGroups';
+import {
+  getReadThematicSummariesStorageKey,
+  getStoredReadThematicSummaryIds,
+  mergeReadThematicSummaryIds,
+  setStoredReadThematicSummaryIds,
+} from '../utils/thematicSummaryReadState';
 import MobileBottomNav from './MobileBottomNav';
 import DesktopTopNavFilters from './DesktopTopNavFilters';
 import TopNavActionButton from './TopNavActionButton';
@@ -37,7 +50,6 @@ const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 const BACK_TO_TOP_THRESHOLD = 280;
 const TOP_NAV_SHRINK_THRESHOLD = 28;
-const READ_THEMATIC_SUMMARIES_STORAGE_PREFIX = 'newsflow-read-thematic-summaries';
 
 function UserMenuItem({ icon: Icon, label, onClick, className, iconClassName }) {
   return (
@@ -55,29 +67,6 @@ function UserMenuItem({ icon: Icon, label, onClick, className, iconClassName }) 
       </span>
     </button>
   );
-}
-
-function getGroupMergeKeys(group = {}) {
-  const keys = new Set();
-
-  if (group.id) {
-    keys.add(`group:${group.id}`);
-  }
-
-  (group.items || []).forEach((item) => {
-    const ownerKey = item?.ownerUserId || group.ownerUserId || '';
-    if (item?.id) {
-      keys.add(`article:${item.id}`);
-    }
-    if (item?.storyGroupId) {
-      keys.add(`story:${ownerKey}:${item.storyGroupId}`);
-    }
-    if (item?.canonicalUrl) {
-      keys.add(`url:${ownerKey}:${item.canonicalUrl}`);
-    }
-  });
-
-  return keys;
 }
 
 function getCurrentThematicSummarySelection(selectedSummary, summaries = []) {
@@ -114,237 +103,6 @@ function filterThematicSummariesForFeatures(summaries = [], featureState = {}) {
       ? featureState.podcastsEnabled !== false
       : featureState.thematicSummariesEnabled !== false;
   });
-}
-
-function cloneGroup(group) {
-  return {
-    ...group,
-    items: [...(group.items || [])],
-    sources: [...(group.sources || [])],
-    topics: [...(group.topics || [])],
-    topicDetails: [...(group.topicDetails || [])],
-    readLaterArticleIds: [...(group.readLaterArticleIds || [])]
-  };
-}
-
-function getGroupItemKey(item = {}) {
-  return item.id || item.canonicalUrl || item.url || item.title || '';
-}
-
-function mergeUniqueValues(...lists) {
-  return [...new Set(lists.flat().filter(Boolean))];
-}
-
-function getMergedTopicDetails(incomingGroup = {}, mergedItems = []) {
-  const topicMap = new Map();
-
-  mergedItems.forEach((item) => {
-    (item?.topicDetails || []).forEach((entry) => addTopicEntry(topicMap, entry, { preserveEntryFields: true }));
-    (item?.topics || []).forEach((entry) => addTopicEntry(topicMap, entry, { preserveEntryFields: true }));
-  });
-  (incomingGroup.topicDetails || []).forEach((entry) => addTopicEntry(topicMap, entry, { preserveEntryFields: true }));
-  (incomingGroup.topics || []).forEach((entry) => addTopicEntry(topicMap, entry, { preserveEntryFields: true }));
-
-  return [...topicMap.values()];
-}
-
-function mergeGroupItems(primaryItems = [], secondaryItems = []) {
-  const itemMap = new Map();
-
-  [...primaryItems, ...secondaryItems].forEach((item) => {
-    const key = getGroupItemKey(item);
-    if (!key) {
-      return;
-    }
-
-    const existing = itemMap.get(key);
-    itemMap.set(key, existing ? { ...existing, ...item } : item);
-  });
-
-  return [...itemMap.values()].sort((left, right) => {
-    const dateComparison = String(right.pubDate || '').localeCompare(String(left.pubDate || ''));
-    return dateComparison || String(right.id || '').localeCompare(String(left.id || ''));
-  });
-}
-
-function groupSharesAnyKey(group, keySet) {
-  return [...getGroupMergeKeys(group)].some((key) => keySet.has(key));
-}
-
-function filterGroupsMatchingCurrent(currentGroups = [], incomingGroups = []) {
-  const currentKeys = new Set();
-  currentGroups.forEach((group) => {
-    getGroupMergeKeys(group).forEach((key) => currentKeys.add(key));
-  });
-
-  if (currentKeys.size === 0) {
-    return [];
-  }
-
-  return incomingGroups.filter((group) => groupSharesAnyKey(group, currentKeys));
-}
-
-function mergeGroupIntoTarget(targetGroup, incomingGroup) {
-  const nextItems = mergeGroupItems(targetGroup.items, incomingGroup.items);
-  const primaryItem = nextItems[0] || null;
-  const nextTopicDetails = getMergedTopicDetails(incomingGroup, nextItems);
-
-  targetGroup.items = nextItems;
-  targetGroup.sources = mergeUniqueValues(targetGroup.sources || [], incomingGroup.sources || [], nextItems.map((item) => item.source));
-  targetGroup.topics = nextTopicDetails.map((entry) => entry.topic);
-  targetGroup.topicDetails = nextTopicDetails;
-  targetGroup.readLater = Boolean(targetGroup.readLater || incomingGroup.readLater);
-  targetGroup.readLaterArticleIds = mergeUniqueValues(targetGroup.readLaterArticleIds || [], incomingGroup.readLaterArticleIds || []);
-
-  if (primaryItem) {
-    targetGroup.cursorId = primaryItem.id || targetGroup.cursorId;
-    targetGroup.title = primaryItem.title || targetGroup.title || incomingGroup.title;
-    targetGroup.description = primaryItem.description || targetGroup.description || incomingGroup.description;
-    targetGroup.pubDate = primaryItem.pubDate || targetGroup.pubDate;
-    targetGroup.url = primaryItem.url || targetGroup.url;
-    targetGroup.clickbaitLabel = primaryItem.clickbaitLabel || incomingGroup.clickbaitLabel || '';
-    targetGroup.clickbaitScore = primaryItem.clickbaitScore ?? incomingGroup.clickbaitScore ?? null;
-    targetGroup.clickbaitSource = primaryItem.clickbaitSource || incomingGroup.clickbaitSource || '';
-    targetGroup.clickbaitConfidence = primaryItem.clickbaitConfidence ?? incomingGroup.clickbaitConfidence ?? null;
-    targetGroup.clickbaitModel = primaryItem.clickbaitModel || incomingGroup.clickbaitModel || '';
-  }
-}
-
-const mergeGroups = (primaryGroups, secondaryGroups) => {
-  const mergedGroups = [];
-  const groupByKey = new Map();
-
-  const remapGroup = (sourceGroup, targetGroup) => {
-    groupByKey.forEach((mappedGroup, key) => {
-      if (mappedGroup === sourceGroup) {
-        groupByKey.set(key, targetGroup);
-      }
-    });
-  };
-
-  const addGroupKeys = (group) => {
-    getGroupMergeKeys(group).forEach((key) => groupByKey.set(key, group));
-  };
-
-  [...primaryGroups, ...secondaryGroups].forEach((group) => {
-    if (!group) {
-      return;
-    }
-
-    const groupKeys = getGroupMergeKeys(group);
-    const candidates = [...new Set([...groupKeys].map((key) => groupByKey.get(key)).filter(Boolean))];
-    let targetGroup = candidates[0] || null;
-
-    if (!targetGroup) {
-      targetGroup = cloneGroup(group);
-      mergedGroups.push(targetGroup);
-    } else {
-      mergeGroupIntoTarget(targetGroup, group);
-    }
-
-    candidates.slice(1).forEach((candidate) => {
-      mergeGroupIntoTarget(targetGroup, candidate);
-      remapGroup(candidate, targetGroup);
-      const candidateIndex = mergedGroups.indexOf(candidate);
-      if (candidateIndex !== -1) {
-        mergedGroups.splice(candidateIndex, 1);
-      }
-    });
-
-    addGroupKeys(targetGroup);
-  });
-
-  return mergedGroups;
-};
-
-function buildFeedRequestParams({
-  activeFilters,
-  append,
-  cursor,
-  forceRefresh,
-  includeFilters,
-  isReadLaterView,
-  page,
-  pageSize,
-  recentHours,
-  search,
-  showRecentOnly,
-  signal,
-}) {
-  return {
-    page,
-    pageSize,
-    search,
-    sourceIds: activeFilters.sourceIds,
-    topics: activeFilters.topics,
-    recentHours: showRecentOnly ? recentHours : null,
-    beforePubDate: !isReadLaterView && append ? cursor?.beforePubDate : '',
-    beforeId: !isReadLaterView && append ? cursor?.beforeId : '',
-    excludeArticleIds: !isReadLaterView && append ? cursor?.excludeArticleIds : [],
-    refresh: !isReadLaterView && forceRefresh,
-    includeFilters,
-    signal
-  };
-}
-
-function getLoadedNewsGroups(currentGroups, {
-  append,
-  isReadLaterView,
-  mergedItems,
-  responseItems,
-  silent,
-}) {
-  let nextNews = append ? mergeGroups(currentGroups, responseItems) : mergedItems;
-
-  if (!append && silent) {
-    nextNews = mergeGroups(currentGroups, filterGroupsMatchingCurrent(currentGroups, mergedItems));
-  }
-
-  if (!append && silent && currentGroups.length > nextNews.length) {
-    const preservedTail = currentGroups.slice(nextNews.length);
-    nextNews = mergeGroups(nextNews, preservedTail).slice(0, currentGroups.length);
-  }
-
-  if (!isReadLaterView && nextNews.length > MAX_RETAINED_NEWS_GROUPS) {
-    nextNews = nextNews.slice(0, MAX_RETAINED_NEWS_GROUPS);
-  }
-
-  return nextNews;
-}
-
-const getSourceReloadSignature = (excludedSourceIds, excludedSubSourceIds, customSources) => JSON.stringify({
-  excludedSourceIds,
-  excludedSubSourceIds,
-  customSources: (customSources || []).map((source) => [source.id, source.name, source.url, source.language, source.isActive !== false])
-});
-
-function getReadThematicSummariesStorageKey(currentUser) {
-  const userKey = currentUser?.user?.id || currentUser?.user?.username || 'anonymous';
-  return `${READ_THEMATIC_SUMMARIES_STORAGE_PREFIX}:${userKey}`;
-}
-
-function getStoredReadThematicSummaryIds(storageKey) {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(storageKey) || '[]');
-    return Array.isArray(parsed) ? parsed.map((id) => String(id || '').trim()).filter(Boolean) : [];
-  } catch {
-    return [];
-  }
-}
-
-function setStoredReadThematicSummaryIds(storageKey, summaryIds = []) {
-  try {
-    window.localStorage.setItem(storageKey, JSON.stringify([...new Set(summaryIds)]));
-  } catch {
-    // Keep unread indicators in memory when browser storage is unavailable.
-  }
-}
-
-function mergeReadThematicSummaryIds(...summaryIdGroups) {
-  return [...new Set(summaryIdGroups
-    .flatMap((summaryIds) => (Array.isArray(summaryIds) ? summaryIds : []))
-    .map((summaryId) => String(summaryId || '').trim())
-    .filter(Boolean))];
 }
 
 const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogVersion, onOpenReleaseNotes }) => {
@@ -626,6 +384,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         const nextNews = getLoadedNewsGroups(current, {
           append,
           isReadLaterView,
+          maxRetainedGroups: MAX_RETAINED_NEWS_GROUPS,
           mergedItems,
           responseItems: response.items || [],
           silent,

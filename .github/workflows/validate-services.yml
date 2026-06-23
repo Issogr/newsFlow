@@ -16,10 +16,10 @@ jobs:
         service:
           - name: backend
             working_directory: backend
-            test_command: npm test
+            test_command: npm run test:coverage
           - name: bff
             working_directory: bff
-            test_command: npm test
+            test_command: npm run test:coverage
           - name: frontend
             working_directory: frontend
             test_command: npm run test:coverage

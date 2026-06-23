@@ -1,12 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import NewsAggregator from './components/NewsAggregator';
-import AdminDashboard from './components/AdminDashboard';
-import ApiDocsPage from './components/ApiDocsPage';
-import AuthScreen from './components/AuthScreen';
-import LegalPolicyPage from './components/LegalPolicyPage';
-import PasswordSetupScreen from './components/PasswordSetupScreen';
-import ReleaseNotesModal from './components/ReleaseNotesModal';
-import ReleaseUpdateNotice from './components/ReleaseUpdateNotice';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { CURRENT_CHANGELOG_ENTRY, getCurrentChangelog } from './config/changelog';
 import { createTranslator, resolvePreferredLocale } from './i18n';
 import {
@@ -17,6 +9,15 @@ import {
   registerUser,
   updateUserSettings
 } from './services/api';
+
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const ApiDocsPage = lazy(() => import('./components/ApiDocsPage'));
+const AuthScreen = lazy(() => import('./components/AuthScreen'));
+const LegalPolicyPage = lazy(() => import('./components/LegalPolicyPage'));
+const NewsAggregator = lazy(() => import('./components/NewsAggregator'));
+const PasswordSetupScreen = lazy(() => import('./components/PasswordSetupScreen'));
+const ReleaseNotesModal = lazy(() => import('./components/ReleaseNotesModal'));
+const ReleaseUpdateNotice = lazy(() => import('./components/ReleaseUpdateNotice'));
 
 function resolveAppliedTheme(themeMode, mediaQuery) {
   if (themeMode === 'dark') {
@@ -36,6 +37,7 @@ const LEGAL_POLICY_BY_PATH = {
   '/privacy-policy': 'privacy',
   '/cookie-policy': 'cookie'
 };
+const APP_LOADING_FALLBACK = <div className="App min-h-screen bg-slate-100" />;
 
 function shouldLoadSessionForPath(pathname) {
   return !PASSWORD_SETUP_PATHS.has(pathname)
@@ -266,21 +268,31 @@ function App() {
   }
 
   if (isApiDocsRoute) {
-    return <ApiDocsPage locale={locale} />;
+    return (
+      <Suspense fallback={APP_LOADING_FALLBACK}>
+        <ApiDocsPage locale={locale} />
+      </Suspense>
+    );
   }
 
   if (legalPolicy) {
-    return <LegalPolicyPage policy={legalPolicy} />;
+    return (
+      <Suspense fallback={APP_LOADING_FALLBACK}>
+        <LegalPolicyPage policy={legalPolicy} />
+      </Suspense>
+    );
   }
 
   if (isPasswordSetupRoute) {
     return (
       <div className="App">
-        <PasswordSetupScreen
-          t={t}
-          token={setupToken}
-          onComplete={handlePasswordSetupComplete}
-        />
+        <Suspense fallback={null}>
+          <PasswordSetupScreen
+            t={t}
+            token={setupToken}
+            onComplete={handlePasswordSetupComplete}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -288,51 +300,59 @@ function App() {
   if (!authData) {
     return (
       <div className="App">
-        <AuthScreen
-          t={t}
-          busy={authBusy}
-          error={authError}
-          onLogin={handleLogin}
-          onRegister={handleRegister}
-        />
+        <Suspense fallback={null}>
+          <AuthScreen
+            t={t}
+            busy={authBusy}
+            error={authError}
+            onLogin={handleLogin}
+            onRegister={handleRegister}
+          />
+        </Suspense>
       </div>
     );
   }
 
   return (
     <div className="App">
-      {authData?.user?.isAdmin ? (
-        <AdminDashboard
-          t={t}
-          currentUser={authData}
-          onLogout={handleLogout}
-          onUserUpdate={handleUserSettingsUpdate}
-        />
-      ) : (
-        <NewsAggregator
-          currentUser={authData}
-          onLogout={handleLogout}
-          onUserUpdate={setAuthData}
-          currentChangelogVersion={releaseNotes.version}
-          onOpenReleaseNotes={handleOpenReleaseNotes}
-        />
-      )}
+      <Suspense fallback={null}>
+        {authData?.user?.isAdmin ? (
+          <AdminDashboard
+            t={t}
+            currentUser={authData}
+            onLogout={handleLogout}
+            onUserUpdate={handleUserSettingsUpdate}
+          />
+        ) : (
+          <NewsAggregator
+            currentUser={authData}
+            onLogout={handleLogout}
+            onUserUpdate={setAuthData}
+            currentChangelogVersion={releaseNotes.version}
+            onOpenReleaseNotes={handleOpenReleaseNotes}
+          />
+        )}
+      </Suspense>
       {shouldShowReleaseNotice && (
-        <ReleaseUpdateNotice
-          t={t}
-          releaseNotes={releaseNotes}
-          onOpen={handleOpenReleaseNotes}
-          onExpire={acknowledgeCurrentReleaseNotes}
-          onDismiss={acknowledgeCurrentReleaseNotes}
-        />
+        <Suspense fallback={null}>
+          <ReleaseUpdateNotice
+            t={t}
+            releaseNotes={releaseNotes}
+            onOpen={handleOpenReleaseNotes}
+            onExpire={acknowledgeCurrentReleaseNotes}
+            onDismiss={acknowledgeCurrentReleaseNotes}
+          />
+        </Suspense>
       )}
       {shouldShowReleaseNotesModal && (
-        <ReleaseNotesModal
-          t={t}
-          releaseNotes={releaseNotes}
-          saving={releaseNotesState.saving}
-          onDismiss={acknowledgeCurrentReleaseNotes}
-        />
+        <Suspense fallback={null}>
+          <ReleaseNotesModal
+            t={t}
+            releaseNotes={releaseNotes}
+            saving={releaseNotesState.saving}
+            onDismiss={acknowledgeCurrentReleaseNotes}
+          />
+        </Suspense>
       )}
     </div>
   );
