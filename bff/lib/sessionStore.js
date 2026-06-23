@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const Database = require('better-sqlite3');
+const Database = require('./sqliteDatabase');
 const cookie = require('cookie');
 const session = require('express-session');
 const { parseIntegerEnv } = require('./env');

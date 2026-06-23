@@ -14,6 +14,7 @@ module.exports = [
       sourceType: 'commonjs',
       globals: {
         Buffer: 'readonly',
+        Uint8Array: 'readonly',
         URL: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
@@ -46,7 +47,8 @@ module.exports = [
         describe: 'readonly',
         expect: 'readonly',
         jest: 'readonly',
-        test: 'readonly'
+        test: 'readonly',
+        vi: 'readonly'
       }
     }
   }

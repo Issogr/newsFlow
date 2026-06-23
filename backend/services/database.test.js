@@ -1,4 +1,4 @@
-const SqliteDatabase = require('better-sqlite3');
+const SqliteDatabase = require('./sqliteDatabase');
 const configuredSources = require('../config/newsSources');
 const { cleanupTempNewsDb, setupTempNewsDb } = require('../test-utils/tempNewsDb');
 const {

@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const Database = require('better-sqlite3');
+const Database = require('./sqliteDatabase');
 const logger = require('../utils/logger');
 const topicNormalizer = require('./topicNormalizer');
 const createArticleRepository = require('./databaseArticles');

@@ -6,11 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "lint": "eslint .",
-    "test": "node ../scripts/run-jest.js"
+    "test": "node ../scripts/run-vitest.js"
   },
   "dependencies": {
     "axios": "^1.16.1",
-    "better-sqlite3": "^12.10.0",
     "cookie": "^1.1.1",
     "cookie-signature": "^1.2.2",
     "express": "^5.2.1",
@@ -19,44 +18,12 @@
     "http-proxy-middleware": "^4.1.1"
   },
   "devDependencies": {
-    "@babel/plugin-transform-modules-commonjs": "^7.29.7",
-    "babel-jest": "^30.4.1",
+    "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^10.4.0",
-    "jest": "^30.4.2",
-    "supertest": "^7.2.2"
-  },
-  "overrides": {
-    "@istanbuljs/load-nyc-config": {
-      "js-yaml": "4.2.0"
-    }
+    "supertest": "^7.2.2",
+    "vitest": "^4.1.7"
   },
   "engines": {
     "node": "24.16.0"
-  },
-  "jest": {
-    "testEnvironment": "node",
-    "transform": {
-      "^.+\\.m?js$": "babel-jest"
-    },
-    "transformIgnorePatterns": [
-      "/node_modules/(?!(http-proxy-middleware|httpxy|is-plain-obj)/)"
-    ],
-    "collectCoverage": true,
-    "collectCoverageFrom": [
-      "server.js",
-      "lib/**/*.js"
-    ],
-    "coverageReporters": [
-      "text",
-      "lcov"
-    ],
-    "coverageThreshold": {
-      "global": {
-        "branches": 55,
-        "functions": 70,
-        "lines": 70,
-        "statements": 70
-      }
-    }
   }
 }

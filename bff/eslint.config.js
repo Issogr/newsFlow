@@ -14,6 +14,7 @@ module.exports = [
       sourceType: 'commonjs',
       globals: {
         Buffer: 'readonly',
+        Uint8Array: 'readonly',
         __dirname: 'readonly',
         clearInterval: 'readonly',
         module: 'readonly',
@@ -38,7 +39,8 @@ module.exports = [
         beforeEach: 'readonly',
         describe: 'readonly',
         expect: 'readonly',
-        test: 'readonly'
+        test: 'readonly',
+        vi: 'readonly'
       }
     }
   }

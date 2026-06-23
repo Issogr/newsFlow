@@ -17,10 +17,6 @@ ARG TARGETARCH
 
 WORKDIR /app/bff
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates python3 make g++ && \
-    rm -rf /var/lib/apt/lists/*
-
 COPY bff/package*.json ./
 RUN --mount=type=cache,id=newsflow-bff-npm,target=/root/.npm,sharing=locked \
     npm_arch="${TARGETARCH:-$(node -p 'process.arch')}" && \
@@ -38,7 +34,6 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=bff-deps /app/bff/node_modules ./node_modules
-RUN node -e "require('better-sqlite3')"
 COPY bff/package*.json ./
 COPY bff/server.js ./server.js
 COPY bff/lib ./lib
