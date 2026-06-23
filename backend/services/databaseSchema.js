@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 38;
+  const CURRENT_SCHEMA_VERSION = 39;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getPodcastSummariesSchemaSql() {
@@ -118,6 +118,14 @@ function createDatabaseSchema({ logger }) {
         ai_story_group_match_ids TEXT NOT NULL DEFAULT '[]',
         ai_story_group_confidence REAL,
         ai_story_group_reason TEXT,
+        clickbait_label TEXT NOT NULL DEFAULT '',
+        clickbait_score INTEGER,
+        clickbait_source TEXT NOT NULL DEFAULT '',
+        clickbait_confidence REAL,
+        clickbait_model TEXT NOT NULL DEFAULT '',
+        clickbait_reason_code TEXT,
+        ai_clickbait_processed_at TEXT,
+        ai_clickbait_status TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -345,6 +353,9 @@ function createDatabaseSchema({ logger }) {
     if (getColumnNames(database, 'articles').has('story_group_id')) {
       database.exec('CREATE INDEX IF NOT EXISTS idx_articles_story_group_id ON articles (story_group_id)');
     }
+    if (getColumnNames(database, 'articles').has('ai_clickbait_processed_at')) {
+      database.exec('CREATE INDEX IF NOT EXISTS idx_articles_ai_clickbait_processed_at ON articles (ai_clickbait_processed_at)');
+    }
   }
 
   function getCurrentSchemaVersion(database) {
@@ -474,6 +485,10 @@ function createDatabaseSchema({ logger }) {
 
     if (!tableExists(database, 'user_read_thematic_summaries')) {
       return 37;
+    }
+
+    if (!articleColumns.has('clickbait_label') || !articleColumns.has('ai_clickbait_processed_at')) {
+      return 38;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -1023,6 +1038,40 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 38);
       logger.info('Migrated DB schema from version 37 to 38');
+      migrateSchema(database, 38);
+      return;
+    }
+
+    if (currentVersion === 38) {
+      const articleColumns = getColumnNames(database, 'articles');
+      if (!articleColumns.has('clickbait_label')) {
+        database.exec("ALTER TABLE articles ADD COLUMN clickbait_label TEXT NOT NULL DEFAULT ''");
+      }
+      if (!articleColumns.has('clickbait_score')) {
+        database.exec('ALTER TABLE articles ADD COLUMN clickbait_score INTEGER');
+      }
+      if (!articleColumns.has('clickbait_source')) {
+        database.exec("ALTER TABLE articles ADD COLUMN clickbait_source TEXT NOT NULL DEFAULT ''");
+      }
+      if (!articleColumns.has('clickbait_confidence')) {
+        database.exec('ALTER TABLE articles ADD COLUMN clickbait_confidence REAL');
+      }
+      if (!articleColumns.has('clickbait_model')) {
+        database.exec("ALTER TABLE articles ADD COLUMN clickbait_model TEXT NOT NULL DEFAULT ''");
+      }
+      if (!articleColumns.has('clickbait_reason_code')) {
+        database.exec('ALTER TABLE articles ADD COLUMN clickbait_reason_code TEXT');
+      }
+      if (!articleColumns.has('ai_clickbait_processed_at')) {
+        database.exec('ALTER TABLE articles ADD COLUMN ai_clickbait_processed_at TEXT');
+      }
+      if (!articleColumns.has('ai_clickbait_status')) {
+        database.exec('ALTER TABLE articles ADD COLUMN ai_clickbait_status TEXT');
+      }
+      database.exec('CREATE INDEX IF NOT EXISTS idx_articles_ai_clickbait_processed_at ON articles (ai_clickbait_processed_at)');
+
+      setCurrentSchemaVersion(database, 39);
+      logger.info('Migrated DB schema from version 38 to 39');
       return;
     }
 

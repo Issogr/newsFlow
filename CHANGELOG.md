@@ -7,6 +7,7 @@
 - regenerated stale thematic summaries when later articles change the selected source set for the same window
 - saved podcast scripts before TTS audio generation, generated audio in the background, and allowed private browser caching for podcast audio
 - added structured AI request metrics for chat, podcast script, and TTS calls
+- added low/medium/high clickbait labels beside article dates, using local detection for clear cases and the topic model for ambiguous headlines
 
 ## 3.5.8
 

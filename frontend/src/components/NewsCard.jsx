@@ -135,6 +135,27 @@ function getPublishedAt(group, locale) {
   };
 }
 
+const CLICKBAIT_BADGE_CLASS_NAMES = {
+  low: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  medium: 'border-amber-200 bg-amber-50 text-amber-800',
+  high: 'border-rose-200 bg-rose-50 text-rose-700'
+};
+
+function normalizeClickbaitLabel(label = '') {
+  const normalized = String(label || '').trim().toLowerCase();
+  return ['low', 'medium', 'high'].includes(normalized) ? normalized : '';
+}
+
+function getClickbaitLabelText(label, t) {
+  const labels = {
+    low: t('clickbaitLow'),
+    medium: t('clickbaitMedium'),
+    high: t('clickbaitHigh')
+  };
+
+  return labels[label] || '';
+}
+
 const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onToggleReadLater, readLaterUpdating = false }) => {
   const hasItems = Boolean(group?.items?.length);
 
@@ -290,6 +311,20 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   )) : null;
   const sourceSummary = getSourceSummary(group, sourceEntries);
   const publishedAt = getPublishedAt(group, locale);
+  const clickbaitLabel = normalizeClickbaitLabel(group?.clickbaitLabel || group?.items?.[0]?.clickbaitLabel);
+  const clickbaitText = getClickbaitLabelText(clickbaitLabel, t);
+  const clickbaitSource = String(group?.clickbaitSource || group?.items?.[0]?.clickbaitSource || '').toLowerCase();
+  const clickbaitBadge = clickbaitText ? (
+    <span
+      className={clickbaitSource === 'ai' ? 'inline-flex rounded-full p-[1.5px] shadow-sm' : ''}
+      style={clickbaitSource === 'ai' ? AI_ACCENT_GRADIENT_STYLE : undefined}
+      title={clickbaitSource === 'ai' ? t('aiClickbaitLabel') : clickbaitText}
+    >
+      <span className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold shadow-sm ${CLICKBAIT_BADGE_CLASS_NAMES[clickbaitLabel]}`}>
+        {clickbaitText}
+      </span>
+    </span>
+  ) : null;
   const shareControls = (
     <div className="relative flex items-center justify-end gap-2">
       <ShareStatusBubble
@@ -391,15 +426,20 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col px-4 pb-4 pt-3 sm:px-5">
-        {publishedAt ? (
-          <time
-            dateTime={publishedAt.iso}
-            aria-label={t('publishedAt', { date: publishedAt.label })}
-            className="mb-2 inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm"
-          >
-            <Clock3 className="h-3.5 w-3.5 text-sky-600" aria-hidden="true" />
-            {publishedAt.label}
-          </time>
+        {publishedAt || clickbaitBadge ? (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            {publishedAt ? (
+              <time
+                dateTime={publishedAt.iso}
+                aria-label={t('publishedAt', { date: publishedAt.label })}
+                className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm"
+              >
+                <Clock3 className="h-3.5 w-3.5 text-sky-600" aria-hidden="true" />
+                {publishedAt.label}
+              </time>
+            ) : null}
+            {clickbaitBadge}
+          </div>
         ) : null}
         <h2
           className="text-lg font-semibold leading-6 text-slate-900 sm:text-xl"

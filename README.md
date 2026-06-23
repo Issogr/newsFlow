@@ -130,6 +130,7 @@ AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed 
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | unset | Required for AI provider calls. |
 | `AI_TOPIC_DETECTION_ENABLED` | `true` | Adds AI topic metadata during ingestion. |
+| `AI_CLICKBAIT_DETECTION_ENABLED` | `true` | Adds clickbait labels during ingestion. Clear local labels skip provider calls; ambiguous headlines use AI. |
 | `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips provider calls for articles the local classifier can topic with high confidence. |
 | `AI_STORY_GROUPING_ENABLED` | `true` | Groups articles describing the same story after ingestion. |
 | `AI_SUMMARY_GENERATION_ENABLED` | `true` | Generates thematic summaries; hides summary UI when `false`. |
@@ -150,6 +151,7 @@ Model overrides:
 | Variable | Default |
 | --- | --- |
 | `OPENROUTER_TOPIC_MODEL` | `qwen/qwen3.5-9b` |
+| `OPENROUTER_CLICKBAIT_MODEL` | `OPENROUTER_TOPIC_MODEL` |
 | `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` |
 | `OPENROUTER_STORY_GROUPING_MODEL` | `deepseek/deepseek-v4-flash` |
 | `OPENROUTER_PODCAST_SCRIPT_MODEL` | `deepseek/deepseek-v4-flash` |

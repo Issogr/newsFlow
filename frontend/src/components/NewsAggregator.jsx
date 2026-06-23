@@ -202,6 +202,11 @@ function mergeGroupIntoTarget(targetGroup, incomingGroup) {
     targetGroup.description = primaryItem.description || targetGroup.description || incomingGroup.description;
     targetGroup.pubDate = primaryItem.pubDate || targetGroup.pubDate;
     targetGroup.url = primaryItem.url || targetGroup.url;
+    targetGroup.clickbaitLabel = primaryItem.clickbaitLabel || incomingGroup.clickbaitLabel || '';
+    targetGroup.clickbaitScore = primaryItem.clickbaitScore ?? incomingGroup.clickbaitScore ?? null;
+    targetGroup.clickbaitSource = primaryItem.clickbaitSource || incomingGroup.clickbaitSource || '';
+    targetGroup.clickbaitConfidence = primaryItem.clickbaitConfidence ?? incomingGroup.clickbaitConfidence ?? null;
+    targetGroup.clickbaitModel = primaryItem.clickbaitModel || incomingGroup.clickbaitModel || '';
   }
 }
 

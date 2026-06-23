@@ -9,7 +9,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🔄 Made manual refreshes smoother by avoiding immediate reloads of unchanged thematic summaries.',
       '🧠 Regenerated stale thematic summaries when later articles change the selected source set for the same window.',
       '🎙️ Saved podcast scripts before audio generation so new briefings can appear while TTS audio finishes in the background.',
-      '💾 Enabled private browser caching for podcast audio to reduce repeated media downloads.'
+      '💾 Enabled private browser caching for podcast audio to reduce repeated media downloads.',
+      '🏷️ Added low, medium, and high clickbait labels beside article dates.'
     ]
   },
   it: {
@@ -21,7 +22,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🔄 Resi piu fluidi gli aggiornamenti manuali evitando il ricaricamento immediato delle sintesi tematiche non cambiate.',
       '🧠 Rigenerate le sintesi tematiche obsolete quando articoli successivi cambiano le fonti selezionate per la stessa finestra.',
       '🎙️ Salvati gli script dei podcast prima dell\'audio, cosi i nuovi briefing possono comparire mentre il TTS termina in background.',
-      '💾 Abilitata la cache privata del browser per l\'audio dei podcast, riducendo i download multimediali ripetuti.'
+      '💾 Abilitata la cache privata del browser per l\'audio dei podcast, riducendo i download multimediali ripetuti.',
+      '🏷️ Aggiunte etichette clickbait basso, medio e alto accanto alle date degli articoli.'
     ]
   }
 };

@@ -9,6 +9,7 @@ const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
 
 const expectedDisabledAiFeatures = {
   topicDetectionEnabled: false,
+  clickbaitDetectionEnabled: false,
   storyGroupingEnabled: false,
   thematicSummariesEnabled: false,
   podcastsEnabled: false
