@@ -134,9 +134,10 @@ AI features run only in the backend. Feature switches default to `true`, but pro
 
 | Variable | Default | Details |
 | --- | --- | --- |
-| `OPENROUTER_API_KEY` | unset | Server-side OpenRouter API key used for topic detection, story grouping, summaries, podcast scripts, and TTS. |
+| `OPENROUTER_API_KEY` | unset | Server-side OpenRouter API key used for topic detection, clickbait detection, story grouping, summaries, podcast scripts, and TTS. |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL. Trailing slashes are removed. |
 | `AI_TOPIC_DETECTION_ENABLED` | `true` | Enables AI topic classification when the API key is present. Invalid values disable it. |
+| `AI_CLICKBAIT_DETECTION_ENABLED` | `true` | Enables clickbait labels when the API key is present. Invalid values disable it. |
 | `AI_STORY_GROUPING_ENABLED` | `true` | Enables AI-assisted story grouping when the API key is present. Invalid values disable it. |
 | `AI_SUMMARY_GENERATION_ENABLED` | `true` | Enables thematic summaries when the API key is present and controls summary UI visibility. Invalid values disable it. |
 | `AI_PODCAST_GENERATION_ENABLED` | `true` | Enables podcast script and audio generation when the API key is present and controls podcast UI visibility. Invalid values disable it. |
@@ -152,6 +153,17 @@ AI features run only in the backend. Feature switches default to `true`, but pro
 | `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one topic-classification request. Strict integer, clamped to `1000..120000`. |
 | `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips OpenRouter classification for articles with high-confidence local topic matches. Invalid values disable it. |
 | `AI_TOPIC_DEBUG_LOG_ARTICLES` | `false` | Enables verbose topic debug logging only when set to `true`. Invalid values disable it. |
+
+## AI Clickbait Detection
+
+| Variable | Default | Details |
+| --- | --- | --- |
+| `OPENROUTER_CLICKBAIT_MODEL` | `OPENROUTER_TOPIC_MODEL` | Optional model override for ambiguous clickbait labels. When unset, clickbait detection uses the topic model. |
+| `AI_CLICKBAIT_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one clickbait-classification request. Strict integer, clamped to `1000..120000`. |
+| `AI_TOPIC_BATCH_SIZE` | `10` | Also controls articles per clickbait-classification request. |
+| `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Also controls concurrent clickbait-classification requests. |
+| `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Also limits newly inserted articles evaluated for clickbait per refresh. |
+| `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Also skips OpenRouter clickbait classification when local headline signals are high confidence. |
 
 ## AI Story Grouping
 

@@ -46,22 +46,11 @@ function buildTrustedForwardedHeaders(req, options = {}) {
   return headers;
 }
 
-function applySanitizedForwardedHeaders(proxyReq, req) {
-  clearForwardedHeaders(proxyReq);
-  Object.entries(buildTrustedForwardedHeaders(req)).forEach(([name, value]) => {
-    proxyReq.setHeader(name, value);
-  });
-}
-
-function stripClientCredentials(proxyReq) {
-  proxyReq.removeHeader('authorization');
-  proxyReq.removeHeader('x-session-token');
-  proxyReq.removeHeader('x-newsflow-app');
-}
-
 function applyProxyRequestHeaders(proxyReq, req, options = {}) {
   if (options.mode === 'private') {
-    stripClientCredentials(proxyReq);
+    proxyReq.removeHeader('authorization');
+    proxyReq.removeHeader('x-session-token');
+    proxyReq.removeHeader('x-newsflow-app');
     clearForwardedHeaders(proxyReq);
     Object.entries(options.internalHeaders || {}).forEach(([name, value]) => {
       proxyReq.setHeader(name, value);
@@ -76,7 +65,10 @@ function applyProxyRequestHeaders(proxyReq, req, options = {}) {
   }
 
   proxyReq.removeHeader('cookie');
-  applySanitizedForwardedHeaders(proxyReq, req);
+  clearForwardedHeaders(proxyReq);
+  Object.entries(buildTrustedForwardedHeaders(req)).forEach(([name, value]) => {
+    proxyReq.setHeader(name, value);
+  });
 }
 
 function copyBackendResponseHeaders(res, headers = {}) {

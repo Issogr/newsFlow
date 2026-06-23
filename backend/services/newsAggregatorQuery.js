@@ -337,9 +337,8 @@ function fetchGroupedNewsPage(filters = {}, queryOptions = {}, page = 1, pageSiz
     cursor = nextCursor;
   }
 
-  const safePageStart = pageStart < 0 ? groups.length : pageStart;
-  const pageGroups = groups.slice(safePageStart, safePageStart + pageSize);
-  const hasMore = groups.length > safePageStart + pageSize || hasMoreArticles;
+  const pageGroups = groups.slice(pageStart, pageStart + pageSize);
+  const hasMore = groups.length > pageStart + pageSize || hasMoreArticles;
 
   return {
     articles,

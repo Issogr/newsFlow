@@ -4,8 +4,10 @@
 
 - reduced AI provider usage with larger topic batches, high-confidence local topic skips, prompt article caps, and unchanged story-grouping retry skips
 - made thematic summary refreshes less noisy by debouncing post-topic checks and avoiding unchanged summary reloads on manual feed refresh
+- regenerated stale thematic summaries when later articles change the selected source set for the same window
 - saved podcast scripts before TTS audio generation, generated audio in the background, and allowed private browser caching for podcast audio
 - added structured AI request metrics for chat, podcast script, and TTS calls
+- added low/medium/high clickbait labels beside article dates, using local detection for clear cases and the topic model for ambiguous headlines
 
 ## 3.5.8
 

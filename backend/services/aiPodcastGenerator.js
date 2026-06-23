@@ -539,14 +539,6 @@ function splitTextIntoTtsChunks(text = '', maxBytes = DEFAULT_GEMINI_TTS_CHUNK_M
   return chunks;
 }
 
-function getTtsFailureCategory(error = {}) {
-  if (error.code === 'PODCAST_TTS_PROVIDER_ERROR') {
-    return 'provider_unavailable';
-  }
-
-  return 'tts_failed';
-}
-
 function wrapPcmBufferInWav(pcmBuffer, options = {}) {
   const sampleRate = Number(options.sampleRate) || GEMINI_TTS_PCM_SAMPLE_RATE_HZ;
   const channels = Number(options.channels) || GEMINI_TTS_PCM_CHANNELS;
@@ -1028,70 +1020,13 @@ async function generatePodcastScriptForArticles(window = {}, articles = []) {
   return generatePodcastScript(window, articles);
 }
 
-async function generateAudioByLocale(scriptTextByLocale = {}, locales = getEnabledPodcastLocales()) {
-  const audioByLocale = {};
-  const ttsConfig = getTtsConfig();
-  const ttsVoice = getTtsVoice();
-
-  for (const locale of locales) {
-    const scriptText = String(scriptTextByLocale?.[locale] || '').trim();
-    try {
-      const audio = await generateAudioForLocale(scriptText, locale);
-      audioByLocale[locale] = {
-        audio,
-        audioStatus: audio ? 'completed' : 'not_available',
-        audioErrorMessage: '',
-        audioFailureCategory: '',
-        audioModel: audio?.model || ttsConfig.model,
-        audioVoice: audio?.voice || ttsVoice
-      };
-    } catch (error) {
-      logger.warn(`AI podcast audio generation failed: locale=${locale}, model=${ttsConfig.model}, error=${error.message}`);
-      audioByLocale[locale] = {
-        audio: null,
-        audioStatus: 'failed',
-        audioErrorMessage: error.message,
-        audioFailureCategory: getTtsFailureCategory(error),
-        audioModel: ttsConfig.model,
-        audioVoice: ttsVoice
-      };
-    }
-  }
-
-  return audioByLocale;
-}
-
 function isAiPodcastGenerationAvailable() {
   return getScriptConfig().enabled;
 }
 
-async function generatePodcastForArticles(window = {}, articles = []) {
-  const script = await generatePodcastScript(window, articles);
-  if (!script) {
-    return null;
-  }
-
-  const enabledLocales = getEnabledPodcastLocales();
-  const audioByLocale = await generateAudioByLocale(script.scriptTextByLocale, enabledLocales);
-  const primaryLocale = enabledLocales.find((locale) => audioByLocale[locale]?.audioStatus === 'completed') || enabledLocales[0];
-  const primaryAudio = audioByLocale[primaryLocale] || {};
-
-  return {
-    ...script,
-    audioByLocale,
-    audio: primaryAudio.audio || null,
-    audioLocale: primaryLocale,
-    audioStatus: primaryAudio.audioStatus || 'not_available',
-    audioErrorMessage: primaryAudio.audioErrorMessage || '',
-    audioFailureCategory: primaryAudio.audioFailureCategory || ''
-  };
-}
-
 module.exports = {
-  generatePodcastForArticles,
   generatePodcastScriptForArticles,
   generateAudioForLocale,
-  generateAudioByLocale,
   isAiPodcastGenerationAvailable,
   _buildPrompt: buildPrompt,
   _extractAudioPayload: extractAudioPayload,

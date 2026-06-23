@@ -6,16 +6,16 @@ import {
   Clock3,
   ExternalLink,
   Share2,
-  Sparkles,
 } from 'lucide-react';
 import { getLocalizedTopic } from '../i18n';
 import { getSafeExternalUrl } from '../utils/urlSafety';
+import { addTopicEntry } from '../utils/topicEntries';
 import genericNewsCover from '../assets/generic-news-cover.webp';
 import genericNewsCover2 from '../assets/generic-news-cover-2.webp';
 import genericNewsCover3 from '../assets/generic-news-cover-3.webp';
 import genericNewsCover4 from '../assets/generic-news-cover-4.webp';
 import useShareArticle from '../hooks/useShareArticle';
-import { getTopicPresentation } from '../topicPresentation';
+import { AI_ACCENT_GRADIENT_STYLE, getTopicPresentation } from '../topicPresentation';
 import ShareStatusBubble from './ShareStatusBubble';
 import SourceIcon from './SourceIcon';
 
@@ -82,23 +82,7 @@ function getSourceSummary(group, sourceEntries) {
 
 function getTopicEntries(group) {
   const topicMap = new Map();
-  const addTopic = (entry) => {
-    const topic = String(entry?.topic || entry || '').trim();
-    if (!topic) {
-      return;
-    }
-
-    const key = topic.toLowerCase();
-    const current = topicMap.get(key);
-    const nextEntry = {
-      topic,
-      source: String(entry?.source || current?.source || '').trim().toLowerCase()
-    };
-
-    if (!current || nextEntry.source === 'ai') {
-      topicMap.set(key, nextEntry);
-    }
-  };
+  const addTopic = (entry) => addTopicEntry(topicMap, entry);
 
   (group?.topicDetails || []).forEach(addTopic);
   (group?.topics || []).forEach(addTopic);
@@ -149,6 +133,27 @@ function getPublishedAt(group, locale) {
       timeStyle: 'short'
     }).format(date)
   };
+}
+
+const CLICKBAIT_BADGE_CLASS_NAMES = {
+  low: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  medium: 'border-amber-200 bg-amber-50 text-amber-800',
+  high: 'border-rose-200 bg-rose-50 text-rose-700'
+};
+
+function normalizeClickbaitLabel(label = '') {
+  const normalized = String(label || '').trim().toLowerCase();
+  return ['low', 'medium', 'high'].includes(normalized) ? normalized : '';
+}
+
+function getClickbaitLabelText(label, t) {
+  const labels = {
+    low: t('clickbaitLow'),
+    medium: t('clickbaitMedium'),
+    high: t('clickbaitHigh')
+  };
+
+  return labels[label] || '';
 }
 
 const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onToggleReadLater, readLaterUpdating = false }) => {
@@ -279,21 +284,47 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     </div>
   );
 
-  const sourceIconStack = sourceEntries.length > 0 ? (
-    <div className="flex -space-x-2 rounded-full bg-sky-50/90 p-1 shadow-sm ring-1 ring-sky-100" aria-label={t('sources')}>
-      {sourceEntries.slice(0, 2).map((source) => (
-        <span key={source.id} title={source.name} aria-label={source.name}>
-          <SourceIcon
-            source={source}
-            className="h-10 w-10 border-2 border-white bg-white shadow-md"
-            imageClassName="h-5 w-5"
-          />
-        </span>
-      ))}
+  const sourceIconItems = sourceEntries.slice(0, 2).map((source) => (
+    <span key={source.id} title={source.name} aria-label={source.name}>
+      <SourceIcon
+        source={source}
+        className="h-10 w-10 border-2 border-white bg-white shadow-md"
+        imageClassName="h-5 w-5"
+      />
+    </span>
+  ));
+  const sourceIconStack = sourceEntries.length > 0 ? (aiGroupedStory ? (
+    <div
+      className="inline-flex rounded-full p-[1.5px] shadow-sm"
+      style={AI_ACCENT_GRADIENT_STYLE}
+      aria-label={t('aiGroupedStory')}
+      title={t('aiGroupedStory')}
+    >
+      <div className="flex -space-x-2 rounded-full bg-sky-50/90 p-1">
+        {sourceIconItems}
+      </div>
     </div>
-  ) : null;
+  ) : (
+    <div className="flex -space-x-2 rounded-full bg-sky-50/90 p-1 shadow-sm ring-1 ring-sky-100" aria-label={t('sources')}>
+      {sourceIconItems}
+    </div>
+  )) : null;
   const sourceSummary = getSourceSummary(group, sourceEntries);
   const publishedAt = getPublishedAt(group, locale);
+  const clickbaitLabel = normalizeClickbaitLabel(group?.clickbaitLabel || group?.items?.[0]?.clickbaitLabel);
+  const clickbaitText = getClickbaitLabelText(clickbaitLabel, t);
+  const clickbaitSource = String(group?.clickbaitSource || group?.items?.[0]?.clickbaitSource || '').toLowerCase();
+  const clickbaitBadge = clickbaitText ? (
+    <span
+      className={clickbaitSource === 'ai' ? 'inline-flex rounded-full p-[1.5px] shadow-sm' : ''}
+      style={clickbaitSource === 'ai' ? AI_ACCENT_GRADIENT_STYLE : undefined}
+      title={clickbaitSource === 'ai' ? t('aiClickbaitLabel') : clickbaitText}
+    >
+      <span className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold shadow-sm ${CLICKBAIT_BADGE_CLASS_NAMES[clickbaitLabel]}`}>
+        {clickbaitText}
+      </span>
+    </span>
+  ) : null;
   const shareControls = (
     <div className="relative flex items-center justify-end gap-2">
       <ShareStatusBubble
@@ -329,23 +360,9 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       <div className="flex min-w-0 items-center gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
         {sourceIconStack}
         <div className="min-w-0 flex-1">
-          {sourceSummary || aiGroupedStory ? (
+          {sourceSummary ? (
             <div className="flex min-w-0 items-center gap-2">
-              {sourceSummary ? (
-                <p className="truncate text-sm font-semibold text-slate-950">{sourceSummary}</p>
-              ) : null}
-              {aiGroupedStory ? (
-                <span
-                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full p-[1.5px] shadow-sm"
-                  style={{ backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)' }}
-                  aria-label={t('aiGroupedStory')}
-                  title={t('aiGroupedStory')}
-                >
-                  <span className="inline-flex h-full w-full items-center justify-center rounded-full bg-white text-violet-700">
-                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                  </span>
-                </span>
-              ) : null}
+              <p className="truncate text-sm font-semibold text-slate-950">{sourceSummary}</p>
             </div>
           ) : null}
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
@@ -359,7 +376,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
                   <span
                     key={topic}
                     className="inline-flex h-7 w-7 items-center justify-center rounded-full p-[1.5px] shadow-sm"
-                    style={{ backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)' }}
+                    style={AI_ACCENT_GRADIENT_STYLE}
                     aria-label={localizedTopic}
                     title={localizedTopic}
                   >
@@ -409,15 +426,20 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col px-4 pb-4 pt-3 sm:px-5">
-        {publishedAt ? (
-          <time
-            dateTime={publishedAt.iso}
-            aria-label={t('publishedAt', { date: publishedAt.label })}
-            className="mb-2 inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm"
-          >
-            <Clock3 className="h-3.5 w-3.5 text-sky-600" aria-hidden="true" />
-            {publishedAt.label}
-          </time>
+        {publishedAt || clickbaitBadge ? (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            {publishedAt ? (
+              <time
+                dateTime={publishedAt.iso}
+                aria-label={t('publishedAt', { date: publishedAt.label })}
+                className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm"
+              >
+                <Clock3 className="h-3.5 w-3.5 text-sky-600" aria-hidden="true" />
+                {publishedAt.label}
+              </time>
+            ) : null}
+            {clickbaitBadge}
+          </div>
         ) : null}
         <h2
           className="text-lg font-semibold leading-6 text-slate-900 sm:text-xl"

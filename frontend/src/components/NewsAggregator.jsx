@@ -22,6 +22,7 @@ import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '..
 import { getSettingsLimits } from '../config/settingsLimits';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
+import { addTopicEntry } from '../utils/topicEntries';
 import MobileBottomNav from './MobileBottomNav';
 import DesktopTopNavFilters from './DesktopTopNavFilters';
 import TopNavActionButton from './TopNavActionButton';
@@ -134,39 +135,15 @@ function mergeUniqueValues(...lists) {
   return [...new Set(lists.flat().filter(Boolean))];
 }
 
-function addTopicEntry(topicMap, entry) {
-  const topic = String(entry?.topic || entry || '').trim();
-  if (!topic) {
-    return;
-  }
-
-  const key = topic.toLowerCase();
-  const current = topicMap.get(key);
-  const nextEntry = entry && typeof entry === 'object'
-    ? {
-      ...entry,
-      topic,
-      source: String(entry.source || current?.source || '').trim().toLowerCase()
-    }
-    : {
-      topic,
-      source: String(current?.source || '').trim().toLowerCase()
-    };
-
-  if (!current || nextEntry.source === 'ai') {
-    topicMap.set(key, nextEntry);
-  }
-}
-
 function getMergedTopicDetails(incomingGroup = {}, mergedItems = []) {
   const topicMap = new Map();
 
   mergedItems.forEach((item) => {
-    (item?.topicDetails || []).forEach((entry) => addTopicEntry(topicMap, entry));
-    (item?.topics || []).forEach((entry) => addTopicEntry(topicMap, entry));
+    (item?.topicDetails || []).forEach((entry) => addTopicEntry(topicMap, entry, { preserveEntryFields: true }));
+    (item?.topics || []).forEach((entry) => addTopicEntry(topicMap, entry, { preserveEntryFields: true }));
   });
-  (incomingGroup.topicDetails || []).forEach((entry) => addTopicEntry(topicMap, entry));
-  (incomingGroup.topics || []).forEach((entry) => addTopicEntry(topicMap, entry));
+  (incomingGroup.topicDetails || []).forEach((entry) => addTopicEntry(topicMap, entry, { preserveEntryFields: true }));
+  (incomingGroup.topics || []).forEach((entry) => addTopicEntry(topicMap, entry, { preserveEntryFields: true }));
 
   return [...topicMap.values()];
 }
@@ -225,6 +202,11 @@ function mergeGroupIntoTarget(targetGroup, incomingGroup) {
     targetGroup.description = primaryItem.description || targetGroup.description || incomingGroup.description;
     targetGroup.pubDate = primaryItem.pubDate || targetGroup.pubDate;
     targetGroup.url = primaryItem.url || targetGroup.url;
+    targetGroup.clickbaitLabel = primaryItem.clickbaitLabel || incomingGroup.clickbaitLabel || '';
+    targetGroup.clickbaitScore = primaryItem.clickbaitScore ?? incomingGroup.clickbaitScore ?? null;
+    targetGroup.clickbaitSource = primaryItem.clickbaitSource || incomingGroup.clickbaitSource || '';
+    targetGroup.clickbaitConfidence = primaryItem.clickbaitConfidence ?? incomingGroup.clickbaitConfidence ?? null;
+    targetGroup.clickbaitModel = primaryItem.clickbaitModel || incomingGroup.clickbaitModel || '';
   }
 }
 

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Bug, CheckCircle2, ImagePlus, Lightbulb, MessageSquare, Paperclip, Send, Trash2, X } from 'lucide-react';
+import { Bug, CheckCircle2, ImagePlus, Lightbulb, MessageSquare, Paperclip, Send, Trash2 } from 'lucide-react';
 import { submitFeedback } from '../services/api';
 import InlineAlert from './InlineAlert';
-import SlideOverPanelFrame from './SlideOverPanelFrame';
+import SlideOverPanelFrame, { SlideOverPanelBody, SlideOverPanelFooter, SlideOverPanelHeader } from './SlideOverPanelFrame';
 
 const DEFAULT_MAX_TITLE_LENGTH = 120;
 const DEFAULT_MAX_DESCRIPTION_LENGTH = 2800;
@@ -171,23 +171,16 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
 
   return (
     <SlideOverPanelFrame overlayClassName="fixed inset-0 z-50 flex bg-slate-950/40 backdrop-blur-sm sm:px-4 sm:py-6">
-        <div className="border-b border-slate-200 bg-white px-5 py-5 sm:px-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                <MessageSquare className="h-4 w-4" />
-                {t('feedbackMenuItem')}
-              </p>
-              <h2 className="mt-2 text-xl font-semibold text-slate-900">{t('feedbackTitle')}</h2>
-              <p className="mt-2 max-w-xl text-sm text-slate-500">{t('feedbackSubtitle')}</p>
-            </div>
-            <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label={t('cancel')}>
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
+        <SlideOverPanelHeader
+          closeLabel={t('cancel')}
+          eyebrow={t('feedbackMenuItem')}
+          icon={MessageSquare}
+          onClose={onClose}
+          subtitle={t('feedbackSubtitle')}
+          title={t('feedbackTitle')}
+        />
 
-        <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
+        <SlideOverPanelBody>
           {sent ? (
             <div className="rounded-[1.75rem] border border-emerald-200 bg-emerald-50 px-5 py-6 text-emerald-800 shadow-sm">
               <div className="flex items-start gap-4">
@@ -342,9 +335,9 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
               )}
             </form>
           )}
-        </div>
+        </SlideOverPanelBody>
 
-        <div className="flex items-center justify-between gap-4 border-t border-slate-200 px-5 py-5 sm:px-6">
+        <SlideOverPanelFooter>
           <button type="button" onClick={onClose} className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
             {sent ? t('close') : t('cancel')}
           </button>
@@ -354,7 +347,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
               {submitting ? t('feedbackSending') : t('feedbackSubmit')}
             </button>
           )}
-        </div>
+        </SlideOverPanelFooter>
     </SlideOverPanelFrame>
   );
 };

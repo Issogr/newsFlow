@@ -18,21 +18,6 @@ const DEFAULT_SESSION_DB_PATH = path.join(__dirname, '..', 'data', 'sessions.sql
 const SESSION_STORE_CLEAR_INTERVAL_MS = parseIntegerEnv('SESSION_STORE_CLEAR_INTERVAL_MS', 300000, { min: 1000 });
 const SESSION_TOUCH_RENEWAL_WINDOW_MS = parseIntegerEnv('SESSION_TOUCH_RENEWAL_WINDOW_MS', 24 * 60 * 60 * 1000, { min: 1000 });
 
-function cleanupStoredSessionUsers(sessionDb) {
-  if (!sessionDb) {
-    return 0;
-  }
-
-  return sessionDb.prepare(`
-    DELETE FROM session_users
-    WHERE NOT EXISTS (
-      SELECT 1
-      FROM sessions
-      WHERE sessions.sid = session_users.sid
-    )
-  `).run().changes;
-}
-
 function getSessionExpiryTime(sessionData = {}) {
   const expiresAt = Date.parse(sessionData.cookie?.expires || '');
   return Number.isFinite(expiresAt) ? expiresAt : null;
@@ -81,7 +66,14 @@ class ManagedSqliteStore extends session.Store {
 
   clearExpiredSessions() {
     this.db.prepare('DELETE FROM sessions WHERE expire <= ?').run(new Date().toISOString());
-    cleanupStoredSessionUsers(this.db);
+    this.db.prepare(`
+      DELETE FROM session_users
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM sessions
+        WHERE sessions.sid = session_users.sid
+      )
+    `).run();
   }
 
   get(sid, callback = () => {}) {
@@ -191,14 +183,6 @@ function upsertStoredSessionUser(sessionDb, sid, userId) {
   `).run(sid, userId);
 }
 
-function removeStoredSessionUser(sessionDb, sid) {
-  if (!sessionDb || !sid) {
-    return;
-  }
-
-  sessionDb.prepare('DELETE FROM session_users WHERE sid = ?').run(sid);
-}
-
 function destroySession(req, sessionDb = null) {
   if (!req.session) {
     return Promise.resolve();
@@ -208,7 +192,9 @@ function destroySession(req, sessionDb = null) {
 
   return new Promise((resolve) => {
     req.session.destroy(() => {
-      removeStoredSessionUser(sessionDb, sessionId);
+      if (sessionDb && sessionId) {
+        sessionDb.prepare('DELETE FROM session_users WHERE sid = ?').run(sessionId);
+      }
       resolve();
     });
   });

@@ -32,6 +32,10 @@ const TOPIC_BADGE_CLASSES = {
   fallback: 'bg-[#E2E8F0] text-[#334155] ring-1 ring-inset ring-[#B8C4D4] hover:bg-[#D7E0EA]'
 };
 
+export const AI_ACCENT_GRADIENT_STYLE = {
+  backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)'
+};
+
 function normalizeTopic(topic) {
   return String(topic || '').trim().toLowerCase();
 }

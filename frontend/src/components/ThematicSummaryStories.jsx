@@ -1,5 +1,5 @@
 import { Sparkles } from 'lucide-react';
-import { getTopicPresentation } from '../topicPresentation';
+import { AI_ACCENT_GRADIENT_STYLE, getTopicPresentation } from '../topicPresentation';
 import { getLocalizedThematicSummary, getThematicSummaryPresentationKey, isPodcastSummary } from '../utils/thematicSummaryLocale';
 
 function removeHoverClasses(className = '') {
@@ -46,7 +46,7 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
               {unread && (
                 <span
                   className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full p-[1.5px] shadow-sm"
-                  style={{ backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)' }}
+                  style={AI_ACCENT_GRADIENT_STYLE}
                   aria-hidden="true"
                 >
                   <span className="inline-flex h-full w-full items-center justify-center rounded-full bg-white text-violet-700">

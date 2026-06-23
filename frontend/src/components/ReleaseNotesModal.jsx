@@ -1,6 +1,5 @@
 import { Sparkles, X } from 'lucide-react';
-import GitHubIcon from './icons/GitHubIcon';
-import { PROJECT_GITHUB_URL } from '../config/projectLinks';
+import ProjectGitHubLink from './ProjectGitHubLink';
 import useLockBodyScroll from '../hooks/useLockBodyScroll';
 
 const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss }) => {
@@ -45,15 +44,7 @@ const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss }) => {
         </div>
 
         <div className="flex shrink-0 items-center justify-between border-t border-slate-200 px-6 py-5">
-          <a
-            href={PROJECT_GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="GitHub"
-            className="inline-flex items-center justify-center rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-          >
-            <GitHubIcon className="h-5 w-5" />
-          </a>
+          <ProjectGitHubLink />
           <button
             type="button"
             onClick={onDismiss}

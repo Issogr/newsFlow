@@ -235,7 +235,15 @@ function createArticleRepository({
         a.ai_story_group_model AS aiStoryGroupModel,
         a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
         a.ai_story_group_confidence AS aiStoryGroupConfidence,
-        a.ai_story_group_reason AS aiStoryGroupReason
+        a.ai_story_group_reason AS aiStoryGroupReason,
+        a.clickbait_label AS clickbaitLabel,
+        a.clickbait_score AS clickbaitScore,
+        a.clickbait_source AS clickbaitSource,
+        a.clickbait_confidence AS clickbaitConfidence,
+        a.clickbait_model AS clickbaitModel,
+        a.clickbait_reason_code AS clickbaitReasonCode,
+        a.ai_clickbait_processed_at AS aiClickbaitProcessedAt,
+        a.ai_clickbait_status AS aiClickbaitStatus
       FROM articles a
       ${joins.join('\n')}
       ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
@@ -618,9 +626,53 @@ function createArticleRepository({
             SELECT ai_story_group_reason
             FROM articles duplicate
             WHERE duplicate.id = ?
+          )),
+          clickbait_label = COALESCE(NULLIF(clickbait_label, ''), (
+            SELECT clickbait_label
+            FROM articles duplicate
+            WHERE duplicate.id = ?
+          )),
+          clickbait_score = COALESCE(clickbait_score, (
+            SELECT clickbait_score
+            FROM articles duplicate
+            WHERE duplicate.id = ?
+          )),
+          clickbait_source = COALESCE(NULLIF(clickbait_source, ''), (
+            SELECT clickbait_source
+            FROM articles duplicate
+            WHERE duplicate.id = ?
+          )),
+          clickbait_confidence = COALESCE(clickbait_confidence, (
+            SELECT clickbait_confidence
+            FROM articles duplicate
+            WHERE duplicate.id = ?
+          )),
+          clickbait_model = COALESCE(NULLIF(clickbait_model, ''), (
+            SELECT clickbait_model
+            FROM articles duplicate
+            WHERE duplicate.id = ?
+          )),
+          clickbait_reason_code = COALESCE(clickbait_reason_code, (
+            SELECT clickbait_reason_code
+            FROM articles duplicate
+            WHERE duplicate.id = ?
+          )),
+          ai_clickbait_processed_at = COALESCE(ai_clickbait_processed_at, (
+            SELECT ai_clickbait_processed_at
+            FROM articles duplicate
+            WHERE duplicate.id = ?
+          )),
+          ai_clickbait_status = COALESCE(ai_clickbait_status, (
+            SELECT ai_clickbait_status
+            FROM articles duplicate
+            WHERE duplicate.id = ?
           ))
       WHERE id = ?
-    `).run(duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, persistedArticleId);
+    `).run(
+      duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, duplicateId,
+      duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, duplicateId,
+      persistedArticleId
+    );
   }
 
   function getTopicDetailsByArticleIds(articleIds) {
@@ -675,6 +727,9 @@ function createArticleRepository({
 
       const topicDetails = topicDetailsMap.get(row.id) || [];
 
+      const clickbaitScore = Number(row.clickbaitScore);
+      const clickbaitConfidence = Number(row.clickbaitConfidence);
+
       return {
         ...row,
         aiStoryGroupMatchIds: parseJsonArray(row.aiStoryGroupMatchIds),
@@ -685,7 +740,15 @@ function createArticleRepository({
         sourceIconUrl: sourceMetadata.sourceIconUrl || '',
         subSource: sourceMetadata.subSource,
         topics: topicDetails.map((entry) => entry.topic),
-        topicDetails
+        topicDetails,
+        clickbaitLabel: row.clickbaitLabel || '',
+        clickbaitScore: Number.isFinite(clickbaitScore) ? clickbaitScore : null,
+        clickbaitSource: row.clickbaitSource || '',
+        clickbaitConfidence: Number.isFinite(clickbaitConfidence) ? clickbaitConfidence : null,
+        clickbaitModel: row.clickbaitModel || '',
+        clickbaitReasonCode: row.clickbaitReasonCode || null,
+        aiClickbaitProcessedAt: row.aiClickbaitProcessedAt || null,
+        aiClickbaitStatus: row.aiClickbaitStatus || null
       };
     });
   }
@@ -925,6 +988,123 @@ function createArticleRepository({
     }, 0);
   }
 
+  function getArticleIdsPendingAiClickbaitProcessing(articleIds = []) {
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
+    if (normalizedArticleIds.length === 0) {
+      return [];
+    }
+
+    return chunkValues(normalizedArticleIds).flatMap((ids) => {
+      return getDb().prepare(`
+        SELECT id
+        FROM articles
+        WHERE id IN (${ids.map(() => '?').join(', ')})
+          AND (
+            ai_clickbait_processed_at IS NULL
+            OR ai_clickbait_status IN ('failed', 'deferred')
+          )
+      `).all(...ids).map((row) => row.id);
+    });
+  }
+
+  function normalizeClickbaitClassification(entry = {}, defaultModel = '') {
+    const label = String(entry.label || entry.clickbaitLabel || '').trim().toLowerCase();
+    if (!['low', 'medium', 'high'].includes(label)) {
+      return null;
+    }
+
+    const score = Number(entry.score ?? entry.clickbaitScore);
+    const confidence = Number(entry.confidence ?? entry.clickbaitConfidence);
+    const source = String(entry.source || entry.clickbaitSource || '').trim().toLowerCase();
+    return {
+      label,
+      score: Number.isFinite(score) ? Math.max(0, Math.min(100, Math.round(score))) : null,
+      source: ['local', 'ai'].includes(source) ? source : 'ai',
+      confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : null,
+      model: String(entry.model || entry.clickbaitModel || defaultModel || '').trim().slice(0, 160),
+      reasonCode: entry.reasonCode ? String(entry.reasonCode).trim().slice(0, 80) : null
+    };
+  }
+
+  function updateArticleClickbaitClassifications(entries = [], model = '') {
+    const normalizedEntries = Array.isArray(entries)
+      ? entries
+        .map((entry) => ({
+          articleId: entry?.articleId,
+          classification: normalizeClickbaitClassification(entry?.classification || entry, model)
+        }))
+        .filter((entry) => entry.articleId && entry.classification)
+      : [];
+
+    if (normalizedEntries.length === 0) {
+      return 0;
+    }
+
+    const database = getDb();
+    const existingArticleIds = new Set(
+      chunkValues([...new Set(normalizedEntries.map((entry) => entry.articleId))]).flatMap((articleIds) => {
+        return database.prepare(`
+          SELECT id
+          FROM articles
+          WHERE id IN (${articleIds.map(() => '?').join(', ')})
+        `).all(...articleIds).map((row) => row.id);
+      })
+    );
+    const existingEntries = normalizedEntries.filter((entry) => existingArticleIds.has(entry.articleId));
+
+    if (existingEntries.length === 0) {
+      return 0;
+    }
+
+    const processedAt = new Date().toISOString();
+    const updateStmt = database.prepare(`
+      UPDATE articles
+      SET clickbait_label = ?,
+          clickbait_score = ?,
+          clickbait_source = ?,
+          clickbait_confidence = ?,
+          clickbait_model = ?,
+          clickbait_reason_code = ?,
+          ai_clickbait_processed_at = ?,
+          ai_clickbait_status = 'completed'
+      WHERE id = ?
+    `);
+
+    const transaction = database.transaction((items) => {
+      return items.reduce((total, { articleId, classification }) => {
+        return total + updateStmt.run(
+          classification.label,
+          classification.score,
+          classification.source,
+          classification.confidence,
+          classification.model,
+          classification.reasonCode,
+          processedAt,
+          articleId
+        ).changes;
+      }, 0);
+    });
+
+    return transaction(existingEntries);
+  }
+
+  function markArticlesAiClickbaitProcessing(articleIds = [], status = 'completed') {
+    const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
+    if (normalizedArticleIds.length === 0) {
+      return 0;
+    }
+
+    const processedAt = new Date().toISOString();
+    return chunkValues(normalizedArticleIds).reduce((total, ids) => {
+      return total + getDb().prepare(`
+        UPDATE articles
+        SET ai_clickbait_processed_at = ?,
+            ai_clickbait_status = ?
+        WHERE id IN (${ids.map(() => '?').join(', ')})
+      `).run(processedAt, status, ...ids).changes;
+    }, 0);
+  }
+
   function getArticleIdsPendingAiStoryGrouping(articleIds = []) {
     const normalizedArticleIds = uniqueTruthyArticleIds(articleIds);
     if (normalizedArticleIds.length === 0) {
@@ -1120,7 +1300,11 @@ function createArticleRepository({
              story_group_id AS storyGroupId, ai_story_group_processed_at AS aiStoryGroupProcessedAt,
              ai_story_group_status AS aiStoryGroupStatus, ai_story_group_model AS aiStoryGroupModel,
              ai_story_group_match_ids AS aiStoryGroupMatchIds, ai_story_group_confidence AS aiStoryGroupConfidence,
-             ai_story_group_reason AS aiStoryGroupReason
+             ai_story_group_reason AS aiStoryGroupReason,
+             clickbait_label AS clickbaitLabel, clickbait_score AS clickbaitScore,
+             clickbait_source AS clickbaitSource, clickbait_confidence AS clickbaitConfidence,
+             clickbait_model AS clickbaitModel, clickbait_reason_code AS clickbaitReasonCode,
+             ai_clickbait_processed_at AS aiClickbaitProcessedAt, ai_clickbait_status AS aiClickbaitStatus
       FROM articles
       WHERE id = ?
     `).get(normalizedArticleId);
@@ -1142,7 +1326,11 @@ function createArticleRepository({
              story_group_id AS storyGroupId, ai_story_group_processed_at AS aiStoryGroupProcessedAt,
              ai_story_group_status AS aiStoryGroupStatus, ai_story_group_model AS aiStoryGroupModel,
              ai_story_group_match_ids AS aiStoryGroupMatchIds, ai_story_group_confidence AS aiStoryGroupConfidence,
-             ai_story_group_reason AS aiStoryGroupReason
+             ai_story_group_reason AS aiStoryGroupReason,
+             clickbait_label AS clickbaitLabel, clickbait_score AS clickbaitScore,
+             clickbait_source AS clickbaitSource, clickbait_confidence AS clickbaitConfidence,
+             clickbait_model AS clickbaitModel, clickbait_reason_code AS clickbaitReasonCode,
+             ai_clickbait_processed_at AS aiClickbaitProcessedAt, ai_clickbait_status AS aiClickbaitStatus
       FROM articles
       WHERE id != ?
         AND COALESCE(owner_user_id, '') = COALESCE(?, '')
@@ -1407,7 +1595,15 @@ function createArticleRepository({
           a.ai_story_group_model AS aiStoryGroupModel,
           a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
           a.ai_story_group_confidence AS aiStoryGroupConfidence,
-          a.ai_story_group_reason AS aiStoryGroupReason
+          a.ai_story_group_reason AS aiStoryGroupReason,
+          a.clickbait_label AS clickbaitLabel,
+          a.clickbait_score AS clickbaitScore,
+          a.clickbait_source AS clickbaitSource,
+          a.clickbait_confidence AS clickbaitConfidence,
+          a.clickbait_model AS clickbaitModel,
+          a.clickbait_reason_code AS clickbaitReasonCode,
+          a.ai_clickbait_processed_at AS aiClickbaitProcessedAt,
+          a.ai_clickbait_status AS aiClickbaitStatus
         FROM articles a
         WHERE ${where.join(' AND ')}
       `).all(...params);
@@ -1629,6 +1825,14 @@ function createArticleRepository({
         a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
         a.ai_story_group_confidence AS aiStoryGroupConfidence,
         a.ai_story_group_reason AS aiStoryGroupReason,
+        a.clickbait_label AS clickbaitLabel,
+        a.clickbait_score AS clickbaitScore,
+        a.clickbait_source AS clickbaitSource,
+        a.clickbait_confidence AS clickbaitConfidence,
+        a.clickbait_model AS clickbaitModel,
+        a.clickbait_reason_code AS clickbaitReasonCode,
+        a.ai_clickbait_processed_at AS aiClickbaitProcessedAt,
+        a.ai_clickbait_status AS aiClickbaitStatus,
         rl.saved_at AS readLaterSavedAt
       FROM articles a
       ${joins.join('\n')}
@@ -2787,10 +2991,13 @@ function createArticleRepository({
     saveReadLaterArticles,
     removeReadLaterArticles,
     getArticleIdsPendingAiTopicProcessing,
+    getArticleIdsPendingAiClickbaitProcessing,
     getArticleIdsPendingAiStoryGrouping,
     getArticleIdsForAiStoryGroupingRetry,
     getTopicClassificationReport,
     markArticlesAiTopicProcessing,
+    markArticlesAiClickbaitProcessing,
+    updateArticleClickbaitClassifications,
     markArticlesAiStoryGrouping,
     assignArticlesToStoryGroup,
     getArticleIdsForStoryGroups,

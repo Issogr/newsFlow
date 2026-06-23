@@ -88,10 +88,7 @@ async function login(target, { username = 'alice', headers = {} } = {}) {
     .send({ username, password: 'secret123' })
     .expect(200);
 
-  return {
-    response,
-    cookie: getBffSessionCookie(response),
-  };
+  return getBffSessionCookie(response);
 }
 
 function restoreEnvValue(name, value) {
@@ -271,7 +268,7 @@ describe('bff server', () => {
   });
 
   test('creates a persisted BFF session on login and uses it for proxied app requests', async () => {
-    const { cookie: bffSessionCookie } = await login(app);
+    const bffSessionCookie = await login(app);
 
     expect(bffSessionCookie).not.toContain('newsflow_session=');
     expect(bffSessionCookie).not.toContain('backend-session-user-1');
@@ -327,7 +324,7 @@ describe('bff server', () => {
   });
 
   test('keeps the session valid after recreating the BFF app instance', async () => {
-    const { cookie: bffSessionCookie } = await login(app);
+    const bffSessionCookie = await login(app);
     sessionDb.close();
     sessionStore.stopCleanupInterval();
 
@@ -344,7 +341,7 @@ describe('bff server', () => {
   });
 
   test('clears the BFF session on logout', async () => {
-    const { cookie: bffSessionCookie } = await login(app);
+    const bffSessionCookie = await login(app);
 
     const logoutResponse = await request(app)
       .post('/api/auth/logout')
@@ -361,7 +358,7 @@ describe('bff server', () => {
   });
 
   test('clears the local BFF session when backend logout fails', async () => {
-    const { cookie: bffSessionCookie } = await login(app);
+    const bffSessionCookie = await login(app);
     logoutShouldFail = true;
 
     const logoutResponse = await request(app)
@@ -385,7 +382,7 @@ describe('bff server', () => {
       .set('x-session-token', 'backend-session-admin-id')
       .expect(401);
 
-    const { cookie: adminBffSessionCookie } = await login(app, { username: 'admin' });
+    const adminBffSessionCookie = await login(app, { username: 'admin' });
 
     await request(app)
       .delete('/api/admin/users/user-1')
@@ -406,7 +403,7 @@ describe('bff server', () => {
     { name: 'without same-origin headers', headers: {} },
     { name: 'from another origin', headers: { Origin: 'https://evil.example' } },
   ])('rejects unsafe authenticated API proxy requests $name', async ({ headers }) => {
-    const { cookie: adminBffSessionCookie } = await login(app, { username: 'admin' });
+    const adminBffSessionCookie = await login(app, { username: 'admin' });
 
     const response = await request(app)
       .delete('/api/admin/users/user-1')
@@ -443,8 +440,8 @@ describe('bff server', () => {
     '/api/admin/users/user-1',
     '/api/admin/users/user-1/'
   ])('removes persisted BFF sessions for a deleted user after admin delete %s', async (deletePath) => {
-    const { cookie: aliceBffSessionCookie } = await login(app);
-    const { cookie: adminBffSessionCookie } = await login(app, { username: 'admin' });
+    const aliceBffSessionCookie = await login(app);
+    const adminBffSessionCookie = await login(app, { username: 'admin' });
 
     expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(2);
 
@@ -465,7 +462,7 @@ describe('bff server', () => {
   });
 
   test('repairs the session user index for existing valid sessions', async () => {
-    const { cookie: aliceBffSessionCookie } = await login(app);
+    const aliceBffSessionCookie = await login(app);
 
     sessionDb.prepare('DELETE FROM session_users').run();
     expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users').get().count).toBe(0);
@@ -568,7 +565,7 @@ describe('bff server', () => {
   });
 
   test('rebuilds forwarded headers on authenticated app routes from trusted request values', async () => {
-    const { cookie: bffSessionCookie } = await login(app, {
+    const bffSessionCookie = await login(app, {
       headers: {
         'X-Forwarded-For': '203.0.113.99',
         'X-Forwarded-Host': 'evil.example',
@@ -590,7 +587,7 @@ describe('bff server', () => {
   });
 
   test('streams multipart feedback through the authenticated app proxy', async () => {
-    const { cookie: bffSessionCookie } = await login(app);
+    const bffSessionCookie = await login(app);
 
     const response = await request(app)
       .post('/api/me/feedback')
@@ -608,7 +605,7 @@ describe('bff server', () => {
   });
 
   test('proxies socket.io requests without duplicating the socket path', async () => {
-    const { cookie: bffSessionCookie } = await login(app);
+    const bffSessionCookie = await login(app);
 
     const response = await request(app)
       .get('/socket.io/ping')
@@ -620,7 +617,7 @@ describe('bff server', () => {
   });
 
   test('rejects authenticated socket.io requests from another origin', async () => {
-    const { cookie: bffSessionCookie } = await login(app);
+    const bffSessionCookie = await login(app);
     lastBackendHeaders = {};
 
     const response = await request(app)
@@ -663,7 +660,7 @@ describe('bff server', () => {
     await listen(bffServer);
 
     try {
-      const { cookie: bffSessionCookie } = await login(bffServer);
+      const bffSessionCookie = await login(bffServer);
 
       const response = await requestUpgrade(bffServer, {
         cookie: bffSessionCookie,
@@ -693,7 +690,7 @@ describe('bff server', () => {
     await listen(bffServer);
 
     try {
-      const { cookie: bffSessionCookie } = await login(bffServer);
+      const bffSessionCookie = await login(bffServer);
 
       const response = await requestUpgrade(bffServer, {
         cookie: bffSessionCookie,
@@ -712,7 +709,7 @@ describe('bff server', () => {
   });
 
   test('returns structured JSON when the app proxy fails upstream', async () => {
-    const { cookie: bffSessionCookie } = await login(app);
+    const bffSessionCookie = await login(app);
 
     const response = await request(app)
       .get('/api/broken-stream')

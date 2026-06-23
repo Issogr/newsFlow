@@ -19,6 +19,8 @@ const { Readable } = require('stream');
 const axios = require('axios');
 const dns = require('dns').promises;
 const rssParser = require('./rssParser');
+const { normalizeArticleUrl } = require('../utils/articleIdentity');
+const { normalizePublicationDate } = require('../utils/publicationDate');
 
 describe('rssParser article ids', () => {
   beforeEach(() => {
@@ -120,12 +122,12 @@ describe('rssParser article ids', () => {
   });
 
   test('canonical link normalization removes tracking parameters before id generation', () => {
-    expect(rssParser._normalizeArticleUrl('https://example.com/story?utm_source=rss')).toBe('https://example.com/story');
+    expect(normalizeArticleUrl('https://example.com/story?utm_source=rss')).toBe('https://example.com/story');
   });
 
   test('normalizes article links by removing fragments and tracking params while keeping stable query params', () => {
     expect(
-      rssParser._normalizeArticleUrl('https://example.com/story/?b=2&utm_source=rss&a=1#top')
+      normalizeArticleUrl('https://example.com/story/?b=2&utm_source=rss&a=1#top')
     ).toBe('https://example.com/story?a=1&b=2');
   });
 
@@ -165,7 +167,7 @@ describe('rssParser article ids', () => {
 
   test('normalizes future publication dates to the current day', () => {
     expect(
-      rssParser._normalizeDate('2030-04-01T12:45:00.000Z', '2026-03-15T14:30:00.000Z')
+      normalizePublicationDate('2030-04-01T12:45:00.000Z', '2026-03-15T14:30:00.000Z')
     ).toBe('2026-03-15T00:00:00.000Z');
   });
 });

@@ -163,6 +163,38 @@ describe('NewsCard', () => {
     expect(publishedAt).toHaveTextContent(/\d/);
   });
 
+  test('renders a clickbait label beside the published date', () => {
+    const translate = (key, params = {}) => ({
+      publishedAt: `Published: ${params.date}`,
+      clickbaitHigh: 'High clickbait',
+      aiClickbaitLabel: 'AI clickbait label',
+      genericNewsCoverAlt: 'genericNewsCoverAlt',
+      readHereShort: 'readHereShort',
+      readHere: 'readHere',
+      readHereHelp: 'readHereHelp',
+      openOriginalSourceShort: 'openOriginalSourceShort',
+      openOriginalSource: 'openOriginalSource',
+      openOriginalSourceHelp: 'openOriginalSourceHelp',
+      openOriginalSourceUnavailable: 'openOriginalSourceUnavailable',
+      saveReadLater: 'saveReadLater',
+      removeReadLater: 'removeReadLater',
+      shareArticle: 'shareArticle',
+      sources: 'sources'
+    }[key] || key);
+
+    renderNewsCard({
+      t: translate,
+      cardGroup: createGroup({
+        clickbaitLabel: 'high',
+        clickbaitSource: 'ai',
+        items: [createItem({ clickbaitLabel: 'high', clickbaitSource: 'ai' })]
+      })
+    });
+
+    expect(screen.getByText('High clickbait')).toBeInTheDocument();
+    expect(screen.getByTitle('AI clickbait label').getAttribute('style')).toContain('conic-gradient');
+  });
+
   test('renders source favicons and a social source summary', () => {
     renderNewsCard({
       cardGroup: createGroup({
@@ -218,7 +250,7 @@ describe('NewsCard', () => {
     expect(screen.getByText('Source A +1')).toBeInTheDocument();
   });
 
-  test('shows an AI-grouped badge only for matched AI stories', () => {
+  test('shows an AI-grouped source border only for matched AI stories', () => {
     const { rerender } = renderNewsCard({
       cardGroup: createGroup({
         items: [
@@ -228,7 +260,9 @@ describe('NewsCard', () => {
       })
     });
 
-    expect(screen.getByLabelText('aiGroupedStory')).toBeInTheDocument();
+    const aiGroupedSourceStack = screen.getByLabelText('aiGroupedStory');
+    expect(aiGroupedSourceStack).toBeInTheDocument();
+    expect(aiGroupedSourceStack.getAttribute('style')).toContain('conic-gradient');
 
     rerender(
       createNewsCardElement({

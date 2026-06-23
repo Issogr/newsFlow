@@ -28,6 +28,16 @@ export function getPasswordApiErrorMessage(apiMessage, t) {
   return '';
 }
 
+export const AuthTextInput = ({ label, ...inputProps }) => (
+  <label className="block">
+    <span className="mb-2 block text-sm font-medium text-slate-700">{label}</span>
+    <input
+      {...inputProps}
+      className={AUTH_INPUT_CLASS_NAME}
+    />
+  </label>
+);
+
 const AuthCard = ({ children, subtitle }) => {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-10 text-slate-900">

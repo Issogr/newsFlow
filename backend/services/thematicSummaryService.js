@@ -657,6 +657,20 @@ function selectPromptArticles(articles = [], maxArticles = 40) {
   return selected;
 }
 
+function getSummarySourceArticleIds(summary = {}) {
+  return (Array.isArray(summary.sources) ? summary.sources : [])
+    .map((source) => String(source?.articleId || '').trim())
+    .filter(Boolean);
+}
+
+function hasSameArticleSelection(summary = {}, selectedArticles = []) {
+  const currentArticleIds = selectedArticles.map((article) => String(article?.id || '').trim()).filter(Boolean);
+  const storedArticleIds = getSummarySourceArticleIds(summary);
+
+  return storedArticleIds.length === currentArticleIds.length
+    && storedArticleIds.every((articleId, index) => articleId === currentArticleIds[index]);
+}
+
 function getPodcastScriptTextByLocale(summary = {}) {
   const summaryTextByLocale = summary.summaryTextByLocale && typeof summary.summaryTextByLocale === 'object'
     ? summary.summaryTextByLocale
@@ -979,9 +993,6 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
 
 async function generateSummaryForTopic(topicConfig, window, options = {}) {
   const existingSummary = database.getThematicSummary(topicConfig.key, window.periodStart, window.periodEnd);
-  if (existingSummary?.status === 'completed' && options.force !== true) {
-    return { summary: existingSummary, generatedNow: false };
-  }
   if (existingSummary?.status === 'failed' && options.force !== true && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
     logger.debug(`Thematic summary retry skipped during cooldown: topic=${topicConfig.key}, windowEnd=${window.periodEnd}`);
     return { summary: null, generatedNow: false };
@@ -990,6 +1001,18 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
   const articles = options.articleContext?.getArticlesForTopic
     ? options.articleContext.getArticlesForTopic(topicConfig)
     : getArticlesForSummaryTopic(topicConfig, window);
+  const selectedArticles = selectPromptArticles(articles, SUMMARY_PROMPT_MAX_ARTICLES);
+
+  if (existingSummary?.status === 'completed' && options.force !== true) {
+    if (hasSameArticleSelection(existingSummary, selectedArticles)) {
+      return { summary: existingSummary, generatedNow: false };
+    }
+    if (selectedArticles.length === 0) {
+      return { summary: existingSummary, generatedNow: false };
+    }
+
+    logger.info(`Thematic summary stale article set detected: topic=${topicConfig.key}, windowEnd=${window.periodEnd}, previous=${getSummarySourceArticleIds(existingSummary).length}, current=${selectedArticles.length}`);
+  }
 
   if (articles.length === 0) {
     if (shouldWaitForPendingTopicProcessing(window, options)) {
@@ -1010,7 +1033,7 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
     return { summary: null, generatedNow: false };
   }
 
-  const enrichedArticles = selectPromptArticles(withCachedReaderText(articles), SUMMARY_PROMPT_MAX_ARTICLES);
+  const enrichedArticles = withCachedReaderText(selectedArticles);
   const sources = buildSourceList(enrichedArticles);
   const basePayload = {
     id: buildSummaryId(topicConfig.key, window.periodStart, window.periodEnd),
@@ -1104,8 +1127,7 @@ async function generatePodcastForWindow(window, options = {}) {
   };
 
   try {
-    const generateScript = aiPodcastGenerator.generatePodcastScriptForArticles || aiPodcastGenerator.generatePodcastForArticles;
-    const generated = await generateScript(window, enrichedArticles);
+    const generated = await aiPodcastGenerator.generatePodcastScriptForArticles(window, enrichedArticles);
     if (!generated) {
       return { summary: null, generatedNow: false };
     }
@@ -1327,7 +1349,6 @@ module.exports = {
   _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,
   _getSummaryTopics: getSummaryTopics,
   _generatePodcastForWindow: generatePodcastForWindow,
-  _selectPromptArticles: selectPromptArticles,
   _isPromotionalDealArticle: isPromotionalDealArticle,
   _getPrewarmAttemptWindowCount: () => attemptedPrewarmArticleIdsByWindow.size,
   _prunePrewarmAttempts: prunePrewarmAttempts

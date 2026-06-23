@@ -4,6 +4,7 @@ import { fetchNews, fetchReadLaterNews, fetchThematicSummaries, isRequestCancele
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 import { createDeferred, resolveDeferred } from '../test-utils/deferred';
 import { createTestCurrentUser } from '../test-utils/currentUser';
+import { createPodcastSummary } from '../test-utils/thematicSummaries';
 
 vi.mock('../services/api', () => ({
   fetchNews: vi.fn(),
@@ -145,17 +146,6 @@ function createThematicSummary(overrides = {}) {
       it: `Aggiornamento ${topicKey} [1].`
     },
     sources: [],
-    ...overrides
-  };
-}
-
-function createPodcastSummary(overrides = {}) {
-  return {
-    id: 'podcast-1',
-    type: 'podcast',
-    topicKey: 'podcast',
-    titleByLocale: { en: 'News podcast' },
-    summaryTextByLocale: { en: 'Podcast script' },
     ...overrides
   };
 }
