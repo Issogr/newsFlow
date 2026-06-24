@@ -15,6 +15,26 @@ function normalizeReadThematicSummaryIds(summaryIds = []) {
     .slice(0, 100);
 }
 
+function deleteOwnedArticles(database, ownerId, sourceId = '') {
+  const sourceScoped = Boolean(sourceId);
+  const ownerFilter = sourceScoped
+    ? 'owner_user_id = ? AND source_id = ?'
+    : 'owner_user_id = ?';
+  const params = sourceScoped ? [ownerId, sourceId] : [ownerId];
+
+  database.prepare(`
+    DELETE FROM article_search
+    WHERE article_id IN (
+      SELECT id FROM articles WHERE ${ownerFilter}
+    )
+  `).run(...params);
+
+  return database.prepare(`
+    DELETE FROM articles
+    WHERE ${ownerFilter}
+  `).run(...params).changes;
+}
+
 const USER_SETTINGS_COLUMNS = [
   'default_language',
   'theme_mode',
@@ -205,17 +225,7 @@ function createUserStateRepository({ getDb }) {
 
     const database = getDb();
     const transaction = database.transaction((ownerId, customSourceId) => {
-      database.prepare(`
-        DELETE FROM article_search
-        WHERE article_id IN (
-          SELECT id FROM articles WHERE owner_user_id = ? AND source_id = ?
-        )
-      `).run(ownerId, customSourceId);
-
-      return database.prepare(`
-        DELETE FROM articles
-        WHERE owner_user_id = ? AND source_id = ?
-      `).run(ownerId, customSourceId).changes;
+      return deleteOwnedArticles(database, ownerId, customSourceId);
     });
 
     return transaction(userId, sourceId);
@@ -233,17 +243,7 @@ function createUserStateRepository({ getDb }) {
         WHERE user_id = ? AND id = ?
       `).run(ownerId, customSourceId).changes;
 
-      database.prepare(`
-        DELETE FROM article_search
-        WHERE article_id IN (
-          SELECT id FROM articles WHERE owner_user_id = ? AND source_id = ?
-        )
-      `).run(ownerId, customSourceId);
-
-      database.prepare(`
-        DELETE FROM articles
-        WHERE owner_user_id = ? AND source_id = ?
-      `).run(ownerId, customSourceId);
+      deleteOwnedArticles(database, ownerId, customSourceId);
 
       return removed;
     });
@@ -258,17 +258,7 @@ function createUserStateRepository({ getDb }) {
 
     const database = getDb();
     const transaction = database.transaction((ownerId) => {
-      database.prepare(`
-        DELETE FROM article_search
-        WHERE article_id IN (
-          SELECT id FROM articles WHERE owner_user_id = ?
-        )
-      `).run(ownerId);
-
-      database.prepare(`
-        DELETE FROM articles
-        WHERE owner_user_id = ?
-      `).run(ownerId);
+      deleteOwnedArticles(database, ownerId);
 
       return database.prepare(`
         DELETE FROM user_sources
@@ -333,17 +323,7 @@ function createUserStateRepository({ getDb }) {
     const upsertSettingsStmt = database.prepare(USER_SETTINGS_UPSERT_SQL);
 
     const transaction = database.transaction((ownerId, importedSources, nextSettings) => {
-      database.prepare(`
-        DELETE FROM article_search
-        WHERE article_id IN (
-          SELECT id FROM articles WHERE owner_user_id = ?
-        )
-      `).run(ownerId);
-
-      database.prepare(`
-        DELETE FROM articles
-        WHERE owner_user_id = ?
-      `).run(ownerId);
+      deleteOwnedArticles(database, ownerId);
 
       database.prepare(`
         DELETE FROM user_sources

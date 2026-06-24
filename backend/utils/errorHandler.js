@@ -117,32 +117,8 @@ const errorMiddleware = (err, req, res, next) => {
   });
 };
 
-/**
- * Wrapper for route handlers that automatically catches exceptions
- * and passes them to the error-handling middleware
- * @param {Function} fn - Route handler function
- * @returns {Function} - Route handler with automatic exception handling
- */
-const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch((error) => {
-      // If the error is already in API format, pass it through directly
-    if (error.status && error.code) {
-      next(error);
-    } else {
-      // Otherwise create a standard error
-      next(createError(
-        500,
-        error.message || 'An internal error occurred',
-        'SERVER_ERROR',
-        error
-      ));
-    }
-  });
-};
-
 module.exports = {
   createError,
   errorMiddleware,
-  asyncHandler,
   buildRateLimitMessage
 };

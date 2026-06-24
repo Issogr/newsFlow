@@ -11,6 +11,12 @@ const {
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
 const { truncateText } = require('./aiArticlePayload');
+const {
+  chunkItems,
+  isTimeoutError,
+  resolveClassifierEntryId,
+  summarizeResponseShape,
+} = require('./aiClassifierUtils');
 
 const DEFAULT_OPENROUTER_TOPIC_MODEL = 'qwen/qwen3.5-9b';
 const DEFAULT_BATCH_SIZE = 10;
@@ -82,14 +88,6 @@ function getConfig() {
     maxArticlesPerRefresh: parseIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, { min: 1, max: 1000, clamp: true, strict: true }),
     deterministicSkipEnabled: readAiToggleValue('AI_TOPIC_DETERMINISTIC_SKIP_ENABLED') !== 'false'
   };
-}
-
-function chunkItems(items = [], size = DEFAULT_BATCH_SIZE) {
-  const chunks = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
 }
 
 function normalizeText(value = '') {
@@ -285,26 +283,6 @@ function getClassifierEntries(payload) {
   ].find(Array.isArray) || [];
 }
 
-function getClassifierEntryId(entry = {}) {
-  return String(entry.id || entry.articleId || entry.article_id || '').trim();
-}
-
-function getClassifierEntryRef(entry = {}) {
-  const rawRef = entry.ref ?? entry.articleRef ?? entry.article_ref ?? entry.index;
-  return String(rawRef || '').trim();
-}
-
-function resolveClassifierEntryId(entry = {}, allowedIds = new Set(), refToArticleId = null) {
-  const id = getClassifierEntryId(entry);
-  if (id && allowedIds.has(id)) {
-    return id;
-  }
-
-  const ref = getClassifierEntryRef(entry);
-  const mappedId = refToArticleId?.get(ref);
-  return mappedId && allowedIds.has(mappedId) ? mappedId : '';
-}
-
 function getClassifierEntryLabel(entry = {}) {
   return normalizeLabel(entry.label || entry.clickbaitLabel || entry.clickbait || entry.level || entry.category || '');
 }
@@ -361,28 +339,12 @@ function summarizeClassifierResult(payload, allowedIds = new Set(), refToArticle
   return `unsupported_labels entries=${entries.length} validIds=${validIdEntries.length}`;
 }
 
-function isTimeoutError(error) {
-  const name = String(error?.name || '').toLowerCase();
-  const message = String(error?.message || '').toLowerCase();
-  return name.includes('timeout') || message.includes('aborted due to timeout') || message.includes('timeout');
-}
-
 function summarizeAiError(error) {
   if (isTimeoutError(error)) {
     return 'OpenRouter request timed out; keeping clickbait label deferred';
   }
 
   return error?.message || 'OpenRouter request failed; keeping clickbait label deferred';
-}
-
-function summarizeResponseShape(response = {}) {
-  const choice = response.choices?.[0] || {};
-  const message = choice.message || {};
-  const messageKeys = Object.keys(message).sort().join(',') || 'none';
-  const contentType = Array.isArray(message.content) ? 'array' : typeof message.content;
-  const finishReason = choice.finishReason || choice.finish_reason || 'unknown';
-
-  return `finishReason=${finishReason}, messageKeys=${messageKeys}, contentType=${contentType}`;
 }
 
 async function classifyBatch(batch, config, context = {}) {

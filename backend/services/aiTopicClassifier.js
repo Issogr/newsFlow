@@ -12,6 +12,12 @@ const {
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
 const { truncateText } = require('./aiArticlePayload');
+const {
+  chunkItems,
+  isTimeoutError,
+  resolveClassifierEntryId,
+  summarizeResponseShape,
+} = require('./aiClassifierUtils');
 
 const DEFAULT_OPENROUTER_TOPIC_MODEL = 'qwen/qwen3.5-9b';
 const DEFAULT_BATCH_SIZE = 10;
@@ -79,20 +85,6 @@ function getConfig() {
     maxArticlesPerRefresh: parseIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, { min: 1, max: 1000, clamp: true, strict: true }),
     deterministicSkipEnabled: readAiToggleValue('AI_TOPIC_DETERMINISTIC_SKIP_ENABLED') !== 'false'
   };
-}
-
-function chunkItems(items = [], size = DEFAULT_BATCH_SIZE) {
-  const chunks = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
-}
-
-function isTimeoutError(error) {
-  const name = String(error?.name || '').toLowerCase();
-  const message = String(error?.message || '').toLowerCase();
-  return name.includes('timeout') || message.includes('aborted due to timeout') || message.includes('timeout');
 }
 
 function summarizeAiError(error) {
@@ -177,26 +169,6 @@ function getClassifierEntries(payload) {
     payload?.articles,
     payload?.items
   ].find(Array.isArray) || [];
-}
-
-function getClassifierEntryId(entry = {}) {
-  return String(entry.id || entry.articleId || entry.article_id || '').trim();
-}
-
-function getClassifierEntryRef(entry = {}) {
-  const rawRef = entry.ref ?? entry.articleRef ?? entry.article_ref ?? entry.index;
-  return String(rawRef || '').trim();
-}
-
-function resolveClassifierEntryId(entry = {}, allowedIds = new Set(), refToArticleId = null) {
-  const id = getClassifierEntryId(entry);
-  if (id && allowedIds.has(id)) {
-    return id;
-  }
-
-  const ref = getClassifierEntryRef(entry);
-  const mappedId = refToArticleId?.get(ref);
-  return mappedId && allowedIds.has(mappedId) ? mappedId : '';
 }
 
 function getClassifierEntryTopics(entry = {}) {
@@ -321,18 +293,6 @@ function normalizeClassifierDetails(payload, allowedIds = new Set(), articlesByI
   return result;
 }
 
-function summarizeResponseShape(response = {}) {
-  const choice = response.choices?.[0] || {};
-  const message = choice.message || {};
-  const messageKeys = Object.keys(message).sort().join(',') || 'none';
-  const contentType = Array.isArray(message.content) ? 'array' : typeof message.content;
-  const finishReason = choice.finishReason || choice.finish_reason || 'unknown';
-  const reasoningChars = String(message.reasoning || '').length;
-  const refusalChars = String(message.refusal || '').length;
-
-  return `finishReason=${finishReason}, messageKeys=${messageKeys}, contentType=${contentType}, reasoningChars=${reasoningChars}, refusalChars=${refusalChars}`;
-}
-
 async function classifyBatch(batch, config, context = {}) {
   const allowedIds = new Set(batch.map((article) => article.id).filter(Boolean));
   const articlesById = new Map(batch.map((article) => [article.id, article]));
@@ -375,7 +335,7 @@ async function classifyBatch(batch, config, context = {}) {
   const result = normalizeClassifierDetails(payload, allowedIds, articlesById, refToArticleId);
 
   if (result.size === 0) {
-    logger.warn(`AI topic batch produced no valid topics: reason=${summarizeClassifierResult(payload, allowedIds, refToArticleId)}, responseChars=${content.length}, ${summarizeResponseShape(response)}`);
+    logger.warn(`AI topic batch produced no valid topics: reason=${summarizeClassifierResult(payload, allowedIds, refToArticleId)}, responseChars=${content.length}, ${summarizeResponseShape(response, { includeReasoningStats: true })}`);
   }
 
   logBatchClassificationsForDebug(result, articlesById, config);

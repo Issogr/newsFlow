@@ -3,7 +3,7 @@ const { rateLimit } = require('express-rate-limit');
 const multer = require('multer');
 const feedbackService = require('../../services/feedbackService');
 const { requireAuthenticatedUser } = require('../../utils/auth');
-const { asyncHandler, buildRateLimitMessage, createError } = require('../../utils/errorHandler');
+const { buildRateLimitMessage, createError } = require('../../utils/errorHandler');
 const {
   FEEDBACK_CATEGORIES,
   MAX_FEEDBACK_ATTACHMENT_BYTES,
@@ -96,7 +96,7 @@ function handleFeedbackUpload(req, res, next) {
   });
 }
 
-router.post('/me/feedback', [requireAuthenticatedUser, feedbackRateLimit, handleFeedbackUpload], asyncHandler(async (req, res) => {
+router.post('/me/feedback', [requireAuthenticatedUser, feedbackRateLimit, handleFeedbackUpload], async (req, res) => {
   const category = String(req.body?.category || '').trim().toLowerCase();
   const title = String(req.body?.title || '').trim();
   const description = String(req.body?.description || '').trim();
@@ -130,6 +130,6 @@ router.post('/me/feedback', [requireAuthenticatedUser, feedbackRateLimit, handle
   });
 
   res.status(201).json({ success: true });
-}));
+});
 
 module.exports = router;

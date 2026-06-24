@@ -129,6 +129,22 @@ function createLoggerMock() {
   return { info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() };
 }
 
+function createDatabaseMock(overrides = {}) {
+  return {
+    getThematicSummary: jest.fn(() => null),
+    listLatestThematicSummaries: jest.fn(() => []),
+    listLatestPodcastSummaries: jest.fn(() => []),
+    getPodcastSummary: jest.fn(() => null),
+    getArticlesForThematicSummary: jest.fn(() => []),
+    getReaderCache: jest.fn(() => null),
+    hasPendingTopicProcessingForThematicSummary: jest.fn(() => false),
+    upsertThematicSummary: jest.fn((payload) => payload),
+    upsertPodcastSummary: jest.fn((payload) => payload),
+    pruneSummaryHistory: jest.fn(() => ({ thematicSummaries: 0, podcastSummaries: 0 })),
+    ...overrides
+  };
+}
+
 function loadServiceWithMocks({
   databaseMock,
   env = {},
@@ -147,9 +163,7 @@ function loadServiceWithMocks({
     loggerMock: loggerMock || createLoggerMock()
   };
 
-  if (databaseMock) {
-    jest.doMock('./database', () => databaseMock);
-  }
+  jest.doMock('./database', () => createDatabaseMock(databaseMock));
   if (aiSummaryGeneratorMock) {
     jest.doMock('./aiSummaryGenerator', () => aiSummaryGeneratorMock);
   }

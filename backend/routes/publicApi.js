@@ -3,7 +3,7 @@ const express = require('express');
 const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const newsService = require('../services/newsAggregator');
 const userService = require('../services/userService');
-const { asyncHandler, buildRateLimitMessage, createError } = require('../utils/errorHandler');
+const { buildRateLimitMessage, createError } = require('../utils/errorHandler');
 const { sanitizeQuery } = require('../utils/inputValidator');
 const { extractBearerToken, resolveOptionalExternalApiPrincipal } = require('../utils/auth');
 const { parseNewsQuery } = require('../utils/newsQuery');
@@ -116,7 +116,7 @@ router.get('/news', [
   anonymousPublicNewsRateLimit,
   authenticatedPublicNewsRateLimit,
   sanitizeQuery(['search', 'beforePubDate', 'beforeId'])
-], asyncHandler(async (req, res) => {
+], async (req, res) => {
   const filters = parseNewsQuery(req.query);
   const result = await newsService.getCachedNewsFeed(filters, getExternalUserContext(req));
   userService.recordPublicApiRequestUsage({
@@ -131,6 +131,6 @@ router.get('/news', [
       cachedOnly: true
     }
   });
-}));
+});
 
 module.exports = router;

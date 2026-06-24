@@ -2,7 +2,7 @@ const express = require('express');
 const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const userService = require('../../services/userService');
 const { requireAuthenticatedUser } = require('../../utils/auth');
-const { asyncHandler, buildRateLimitMessage } = require('../../utils/errorHandler');
+const { buildRateLimitMessage } = require('../../utils/errorHandler');
 const { sanitizeBody, sanitizeQuery } = require('../../utils/inputValidator');
 const { clearSessionCookie, sendAuthResult } = require('./helpers');
 
@@ -32,30 +32,30 @@ const passwordSetupRateLimit = rateLimit({
   message: buildRateLimitMessage('Too many password setup attempts. Please try again later.'),
 });
 
-router.post('/auth/register', [authRateLimit, sanitizeBody(['username'])], asyncHandler(async (req, res) => {
+router.post('/auth/register', [authRateLimit, sanitizeBody(['username'])], async (req, res) => {
   const result = await userService.registerUser(req.body || {});
   sendAuthResult(res, result, 201);
-}));
+});
 
-router.post('/auth/login', [authRateLimit, sanitizeBody(['username'])], asyncHandler(async (req, res) => {
+router.post('/auth/login', [authRateLimit, sanitizeBody(['username'])], async (req, res) => {
   const result = await userService.loginUser(req.body || {});
   sendAuthResult(res, result);
-}));
+});
 
-router.get('/auth/password-setup/validate', [passwordSetupRateLimit, sanitizeQuery('token')], asyncHandler(async (req, res) => {
+router.get('/auth/password-setup/validate', [passwordSetupRateLimit, sanitizeQuery('token')], async (req, res) => {
   const details = userService.getPasswordSetupTokenDetails(req.query.token);
   res.json(details);
-}));
+});
 
-router.post('/auth/password-setup/complete', passwordSetupRateLimit, asyncHandler(async (req, res) => {
+router.post('/auth/password-setup/complete', passwordSetupRateLimit, async (req, res) => {
   const result = await userService.completePasswordSetup(req.body || {});
   sendAuthResult(res, result);
-}));
+});
 
-router.post('/auth/logout', requireAuthenticatedUser, asyncHandler(async (req, res) => {
+router.post('/auth/logout', requireAuthenticatedUser, async (req, res) => {
   userService.logoutUser(req.user.sessionToken);
   clearSessionCookie(res);
   res.json({ success: true });
-}));
+});
 
 module.exports = router;

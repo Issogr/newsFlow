@@ -3,7 +3,7 @@ const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const database = require('../../services/database');
 const readerService = require('../../services/readerService');
 const { requireAuthenticatedUser } = require('../../utils/auth');
-const { asyncHandler, buildRateLimitMessage, createError } = require('../../utils/errorHandler');
+const { buildRateLimitMessage, createError } = require('../../utils/errorHandler');
 const { validateAndSanitizeParam } = require('../../utils/inputValidator');
 const { getUserContext } = require('./helpers');
 
@@ -24,7 +24,7 @@ router.get('/articles/:articleId/reader', [
   requireAuthenticatedUser,
   readerRateLimit,
   validateAndSanitizeParam('articleId', 'ID articolo non valido')
-], asyncHandler(async (req, res) => {
+], async (req, res) => {
   const { articleId } = req.params;
   const userContext = getUserContext(req);
 
@@ -39,6 +39,6 @@ router.get('/articles/:articleId/reader', [
   });
 
   res.json(readerArticle);
-}));
+});
 
 module.exports = router;
