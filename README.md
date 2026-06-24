@@ -64,7 +64,6 @@ Local data defaults:
 
 - Backend database: `backend/data/news.db`
 - BFF sessions: `bff/data/sessions.sqlite`
-- If Node changes, rerun `npm install` or `npm rebuild` in `backend/` and `bff/` for `better-sqlite3`.
 
 ## Deployment
 

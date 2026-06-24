@@ -378,13 +378,11 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose }) =
                     })}
                   </div>
                 ) : (
-                  <>
-                    <div className="space-y-6 text-[1.05rem] leading-8 tracking-[0.01em] text-stone-800 md:text-lg md:leading-9">
-                      {paragraphs.map((paragraph, index) => (
-                        <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex)}</p>
-                      ))}
-                    </div>
-                  </>
+                  <div className="space-y-6 text-[1.05rem] leading-8 tracking-[0.01em] text-stone-800 md:text-lg md:leading-9">
+                    {paragraphs.map((paragraph, index) => (
+                      <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex)}</p>
+                    ))}
+                  </div>
                 )}
 
               </article>

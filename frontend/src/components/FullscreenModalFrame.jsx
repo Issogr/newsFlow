@@ -40,8 +40,6 @@ export const FullscreenPanelFrame = ({
   children,
   closeLabel,
   containerClassName,
-  headerActions = null,
-  headerClassName = DEFAULT_HEADER_CLASS_NAME,
   headerStart,
   onClose,
   overlayClassName,
@@ -50,10 +48,9 @@ export const FullscreenPanelFrame = ({
   <FullscreenModalFrame closeLabel={closeLabel} onClose={onClose} overlayClassName={overlayClassName}>
     <div className={containerClassName}>
       <section className={panelClassName}>
-        <div className={headerClassName}>
+        <div className={DEFAULT_HEADER_CLASS_NAME}>
           {headerStart}
           <div className="flex items-center gap-2">
-            {headerActions}
             <button
               type="button"
               onClick={onClose}

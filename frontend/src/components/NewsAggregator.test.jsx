@@ -171,7 +171,6 @@ describe('NewsAggregator', () => {
       writable: true,
       configurable: true
     });
-    window.scrollBy = jest.fn();
     window.scrollTo = jest.fn();
     window.localStorage.clear();
     desktopMediaQuery = {
