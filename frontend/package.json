@@ -11,13 +11,11 @@
   },
   "scripts": {
     "start": "vite",
-    "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "node ../scripts/run-vitest.js",
-    "test:coverage": "node ../scripts/run-vitest.js --coverage",
-    "test:watch": "node ../scripts/run-vitest.js --watch"
+    "test:coverage": "node ../scripts/run-vitest.js --coverage"
   },
   "engines": {
     "node": "24.16.0"

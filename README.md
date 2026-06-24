@@ -49,16 +49,8 @@ Run in separate terminals:
 ```bash
 cd backend && npm run dev
 cd bff && npm start
-cd frontend && npm run dev
+cd frontend && npm start
 ```
-
-Or use the root Makefile to start the same three local services with Vite hot reload:
-
-```bash
-make dev
-```
-
-Open `http://localhost:5173` during frontend development. The Vite dev server proxies `/api/*` and `/socket.io` to the BFF on `http://localhost:80`; `http://localhost` is the BFF/static production-style host and does not hot reload frontend source edits.
 
 Useful checks:
 
