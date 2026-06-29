@@ -39,6 +39,7 @@ describe('websocketService', () => {
 
     socketFactory = jest.fn(() => ioMock);
     databaseMock = {
+      listUserSources: jest.fn(() => []),
       touchUserActivity: jest.fn()
     };
     authMock = {
@@ -144,6 +145,38 @@ describe('websocketService', () => {
     expect(socketTwo.emit).toHaveBeenCalledWith('news:update', expect.objectContaining({
       count: 1,
       data: [expect.objectContaining({ id: 'group-2' })]
+    }));
+  });
+
+  test('matches private custom-source updates against domain source filters', () => {
+    const socket = createSocket('socket-1', { auth: { token: 'token-1' }, headers: {} });
+    socket.data.userId = 'user-1';
+    databaseMock.listUserSources.mockReturnValue([
+      {
+        id: 'custom-feed-1',
+        name: 'Daily Example',
+        url: 'https://feeds.example.com/rss.xml',
+        language: 'en',
+        userId: 'user-1',
+        isActive: true
+      }
+    ]);
+
+    ioMock.connectionHandler(socket);
+    socket.handlers['subscribe:filters']({ sourceIds: ['example.com'] });
+
+    websocketService.broadcastNewsUpdate([
+      {
+        id: 'group-1',
+        ownerUserId: 'user-1',
+        topics: ['Economia'],
+        items: [{ sourceId: 'custom-feed-1', source: 'Daily Example' }]
+      }
+    ]);
+
+    expect(socket.emit).toHaveBeenCalledWith('news:update', expect.objectContaining({
+      count: 1,
+      groupIds: ['group-1']
     }));
   });
 

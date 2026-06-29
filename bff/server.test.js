@@ -102,10 +102,10 @@ function getBffSessionCookie(response) {
   return cookie;
 }
 
-async function login(target, { username = 'alice', headers = {} } = {}) {
+async function login(target, { username = 'alice', headers = {}, origin = SAME_ORIGIN } = {}) {
   const response = await request(target)
     .post('/api/auth/login')
-    .set(headers)
+    .set({ Origin: origin, ...headers })
     .send({ username, password: 'secret123' })
     .expect(200);
 
@@ -330,6 +330,8 @@ describe('bff server', () => {
 
     expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
     expect(response.headers['content-security-policy']).toContain("default-src 'self'");
+    expect(response.headers['content-security-policy']).toContain("img-src 'self' data: https: blob:");
+    expect(response.headers['content-security-policy']).toContain("media-src 'self' blob:");
     expect(response.headers['content-security-policy']).toContain("connect-src 'self' ws: wss:");
     expect(response.headers['referrer-policy']).toBe('same-origin');
     expect(response.headers['set-cookie']).toBeUndefined();
@@ -347,9 +349,20 @@ describe('bff server', () => {
     expect(iconResponse.headers['cache-control']).toBe('public, max-age=0, must-revalidate');
   });
 
+  test('compresses browser assets when supported by the client', async () => {
+    const response = await request(app)
+      .get('/assets/app-test.js')
+      .set('Accept-Encoding', 'gzip')
+      .expect(200);
+
+    expect(response.headers.vary).toContain('Accept-Encoding');
+    expect(response.headers['content-encoding']).toBe('gzip');
+  });
+
   test('returns a client error for malformed JSON on auth routes', async () => {
     const response = await request(app)
       .post('/api/auth/login')
+      .set('Origin', SAME_ORIGIN)
       .set('Content-Type', 'application/json')
       .send('{bad json')
       .expect(400);
@@ -357,6 +370,33 @@ describe('bff server', () => {
     expect(response.body.error).toEqual({
       message: 'Request body contains malformed JSON.',
       code: 'INVALID_JSON',
+    });
+  });
+
+  test.each([
+    { routePath: '/api/auth/register', body: { username: 'alice', password: 'secret123' } },
+    { routePath: '/api/auth/login', body: { username: 'alice', password: 'secret123' } },
+    { routePath: '/api/auth/password-setup/complete', body: { token: 'setup-token', password: 'secret123' } },
+  ])('rejects cross-origin session-creating auth requests to $routePath', async ({ routePath, body }) => {
+    const missingOriginResponse = await request(app)
+      .post(routePath)
+      .send(body)
+      .expect(403);
+
+    expect(missingOriginResponse.body.error).toEqual({
+      message: 'Cross-origin request rejected.',
+      code: 'CSRF_ORIGIN_MISMATCH',
+    });
+
+    const hostileOriginResponse = await request(app)
+      .post(routePath)
+      .set('Origin', 'https://evil.example')
+      .send(body)
+      .expect(403);
+
+    expect(hostileOriginResponse.body.error).toEqual({
+      message: 'Cross-origin request rejected.',
+      code: 'CSRF_ORIGIN_MISMATCH',
     });
   });
 
@@ -580,6 +620,7 @@ describe('bff server', () => {
 
         const response = await request(secureProxyApp.app)
           .post('/api/auth/login')
+          .set('Origin', 'https://news.example')
           .set('Host', 'news.example')
           .set('X-Forwarded-Proto', 'https')
           .send({ username: 'alice', password: 'secret123' })
@@ -674,7 +715,9 @@ describe('bff server', () => {
     });
 
     await withListeningBffServer({ backendBaseUrl, frontendDistDir, sessionDbPath }, async (bffServer) => {
-      const bffSessionCookie = await login(bffServer);
+      const bffSessionCookie = await login(bffServer, {
+        origin: `http://127.0.0.1:${bffServer.address().port}`
+      });
 
       const response = await requestUpgrade(bffServer, {
         cookie: bffSessionCookie,

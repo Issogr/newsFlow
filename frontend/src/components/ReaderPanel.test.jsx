@@ -48,8 +48,8 @@ const currentUser = {
   }
 };
 
-function renderReaderPanel(props = {}) {
-  return render(
+function buildReaderPanel(props = {}) {
+  return (
     <ReaderPanel
       group={group}
       initialArticleId="article-1"
@@ -60,6 +60,10 @@ function renderReaderPanel(props = {}) {
       {...props}
     />
   );
+}
+
+function renderReaderPanel(props = {}) {
+  return render(buildReaderPanel(props));
 }
 
 function createReaderPayload(text = 'Body', overrides = {}) {
@@ -192,6 +196,31 @@ describe('ReaderPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Source A' }));
 
     expect(await screen.findByText('First body')).toBeInTheDocument();
+    expect(fetchReaderArticle).toHaveBeenCalledTimes(2);
+  });
+
+  test('preserves the selected source version across refreshed group objects', async () => {
+    fetchReaderArticle
+      .mockResolvedValueOnce(createReaderPayload('First body'))
+      .mockResolvedValueOnce(createReaderPayload('Second body'));
+    const { rerender } = renderReaderPanel();
+
+    expect(await screen.findByText('First body')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
+    expect(await screen.findByText('Second body')).toBeInTheDocument();
+
+    rerender(buildReaderPanel({
+      group: {
+        ...group,
+        items: group.items.map((item) => ({
+          ...item,
+          title: `${item.title} refreshed`
+        }))
+      }
+    }));
+
+    expect(screen.getByText('Second body')).toBeInTheDocument();
+    expect(screen.getByText('Article two refreshed')).toBeInTheDocument();
     expect(fetchReaderArticle).toHaveBeenCalledTimes(2);
   });
 

@@ -75,16 +75,14 @@ function handleFeedbackUpload(req, res, next) {
       }
     }
 
-    if (error instanceof multer.MulterError) {
-      if (error.code === 'LIMIT_FILE_SIZE') {
-        next(createError(413, 'Attachments must be 12 MB or smaller.', 'INVALID_FEEDBACK_IMAGE'));
-        return;
-      }
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      next(createError(413, 'Attachments must be 12 MB or smaller.', 'INVALID_FEEDBACK_IMAGE'));
+      return;
+    }
 
-      if (error.code === 'LIMIT_UNEXPECTED_FILE') {
-        next(createError(400, 'Attach only one image or video.', 'INVALID_FEEDBACK_IMAGE'));
-        return;
-      }
+    if (error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE') {
+      next(createError(400, 'Attach only one image or video.', 'INVALID_FEEDBACK_IMAGE'));
+      return;
     }
 
     if (error.status && error.code) {

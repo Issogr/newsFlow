@@ -1540,7 +1540,7 @@ describe('database queries and user data', () => {
     ]));
   });
 
-  test('moves read-later state and reader cache before deleting duplicate articles', () => {
+  test('moves read-later state, reader cache, and topics before deleting duplicate articles', () => {
     const now = new Date('2026-03-15T14:30:00.000Z').toISOString();
     const duplicateUpdatedAt = new Date('2026-03-15T14:00:00.000Z').toISOString();
     const canonicalUrl = 'https://example.com/shared-story';
@@ -1583,6 +1583,12 @@ describe('database queries and user data', () => {
       contentText: 'Duplicate reader body',
       fetchedAt: duplicateUpdatedAt
     });
+    database.replaceTopicsForArticles([
+      {
+        articleId: 'duplicate-article',
+        topics: [{ topic: 'Technology', source: 'ai', confidence: 0.86, evidence: ['Duplicate topic'], reasonCode: 'duplicate_topic' }]
+      }
+    ]);
 
     database.upsertArticles([
       {
@@ -1604,6 +1610,18 @@ describe('database queries and user data', () => {
       title: 'Duplicate reader title',
       contentText: 'Duplicate reader body'
     }));
+    expect(database.getArticleById('canonical-article', { maxArticleAgeHours: null })).toEqual(expect.objectContaining({
+      topics: ['Tecnologia']
+    }));
+    expect(database.getTopicClassificationReport('canonical-article').storedTopics).toEqual([
+      expect.objectContaining({
+        topic: 'Tecnologia',
+        source: 'ai',
+        confidence: 0.86,
+        evidence: ['Duplicate topic'],
+        reasonCode: 'duplicate_topic'
+      })
+    ]);
   });
 
   test('normalizes future publication dates on insert and during cleanup', () => {

@@ -7,6 +7,8 @@ export default defineConfig({
     setupFiles: ['../scripts/vitest-jest-compat.mjs'],
     coverage: {
       provider: 'v8',
+      include: ['server.js', 'config/**/*.js', 'routes/**/*.js', 'services/**/*.js', 'utils/**/*.js'],
+      exclude: ['**/*.test.js', 'test-utils/**'],
       reporter: ['text', 'lcov'],
       thresholds: {
         branches: 40,

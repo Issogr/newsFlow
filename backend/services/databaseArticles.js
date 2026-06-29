@@ -591,6 +591,24 @@ function createArticleRepository({
     `).run(persistedArticleId, duplicateId);
 
     database.prepare(`
+      INSERT INTO article_topics (article_id, topic, source, confidence, evidence, reason_code, created_at)
+      SELECT ?, topic, source, confidence, evidence, reason_code, created_at
+      FROM article_topics
+      WHERE article_id = ?
+      ON CONFLICT(article_id, topic) DO UPDATE SET
+        source = CASE
+          WHEN article_topics.source = 'legacy' AND excluded.source != 'legacy' THEN excluded.source
+          ELSE article_topics.source
+        END,
+        confidence = COALESCE(article_topics.confidence, excluded.confidence),
+        evidence = CASE
+          WHEN article_topics.evidence = '[]' THEN excluded.evidence
+          ELSE article_topics.evidence
+        END,
+        reason_code = COALESCE(article_topics.reason_code, excluded.reason_code)
+    `).run(persistedArticleId, duplicateId);
+
+    database.prepare(`
       UPDATE articles
       SET story_group_id = COALESCE(NULLIF(story_group_id, ''), (
             SELECT story_group_id

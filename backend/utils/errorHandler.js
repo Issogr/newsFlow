@@ -3,6 +3,7 @@
  */
 
 const logger = require('./logger');
+const { redactUrlForLog } = require('./logRedaction');
 
 function redactSensitiveObject(value) {
   if (!value || typeof value !== 'object') {
@@ -46,10 +47,10 @@ const ERROR_MESSAGES = {
 const createError = (status, message, code, originalError = null) => {
   // Log the original error when available
   if (originalError) {
-    logger.error(`${code || 'ERROR'}: ${message} - Original error: ${originalError.message}`, {
+    logger.error(`${code || 'ERROR'}: ${message} - Original error: ${redactUrlForLog(originalError.message)}`, {
       status,
       stack: originalError.stack,
-      originalMessage: originalError.message
+      originalMessage: redactUrlForLog(originalError.message)
     });
   }
 
@@ -97,13 +98,15 @@ const errorMiddleware = (err, req, res, next) => {
     userAgent: req.get('user-agent')
   };
 
+  const redactedOriginalUrl = redactUrlForLog(req.originalUrl, { redactAllQuery: true });
+
   if (status >= 500) {
-    logger.error(`${status} - ${err.message || 'Unknown error'} - ${req.originalUrl} - ${req.method} - ${req.ip}`, {
+    logger.error(`${status} - ${redactUrlForLog(err.message || 'Unknown error')} - ${redactedOriginalUrl} - ${req.method} - ${req.ip}`, {
       stack: err.stack,
       request: requestContext
     });
   } else if (status >= 400) {
-    logger.warn(`${status} - ${err.message || 'Client error'} - ${req.originalUrl} - ${req.method} - ${req.ip}`, {
+    logger.warn(`${status} - ${redactUrlForLog(err.message || 'Client error')} - ${redactedOriginalUrl} - ${req.method} - ${req.ip}`, {
       request: requestContext
     });
   }

@@ -123,7 +123,9 @@ describe('App', () => {
       name: 'dismisses with the close button',
       useFakeTimers: false,
       dismiss: async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Close update notice' }));
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Close update notice' }));
+        });
       }
     }
   ])('$name and persists the current version', async ({ useFakeTimers, dismiss }) => {
@@ -179,7 +181,9 @@ describe('App', () => {
 
     expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
 
-    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    await act(async () => {
+      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    });
 
     await waitFor(() => {
       expect(screen.getByText('Sign in')).toBeInTheDocument();

@@ -103,6 +103,17 @@ function renderReaderBlock(block, index, readerTextStyles) {
   return <p key={`${block.type}-${index}`} className={readerTextStyles.paragraph}>{block.text}</p>;
 }
 
+function getReaderGroupKey(group) {
+  if (group?.id) {
+    return group.id;
+  }
+
+  return (Array.isArray(group?.items) ? group.items : [])
+    .map((item) => item?.id)
+    .filter(Boolean)
+    .join('|');
+}
+
 const ReaderPanel = ({
   group,
   initialArticleId,
@@ -120,13 +131,33 @@ const ReaderPanel = ({
   const [error, setError] = useState(null);
   const readerTextSizeRequestIdRef = useRef(0);
   const { startLatestRequest, resetLatestRequest } = useLatestRequest();
+  const groupKey = useMemo(() => getReaderGroupKey(group), [group]);
+  const previousGroupKeyRef = useRef(groupKey);
+  const firstGroupArticleId = group?.items?.[0]?.id || null;
+  const groupArticleIds = useMemo(() => {
+    return new Set((Array.isArray(group?.items) ? group.items : []).map((item) => item?.id).filter(Boolean));
+  }, [group?.items]);
 
   useEffect(() => {
-    setSelectedArticleId(initialArticleId || group?.items?.[0]?.id || null);
-    resetShareState();
+    const groupChanged = previousGroupKeyRef.current !== groupKey;
+    const fallbackArticleId = initialArticleId || firstGroupArticleId;
+
+    previousGroupKeyRef.current = groupKey;
+
+    setSelectedArticleId((currentArticleId) => {
+      if (!groupChanged && currentArticleId && groupArticleIds.has(currentArticleId)) {
+        return currentArticleId;
+      }
+
+      return fallbackArticleId;
+    });
     setError(null);
-    resetLatestRequest();
-  }, [group, initialArticleId, resetLatestRequest, resetShareState]);
+
+    if (groupChanged) {
+      resetShareState();
+      resetLatestRequest();
+    }
+  }, [firstGroupArticleId, groupArticleIds, groupKey, initialArticleId, resetLatestRequest, resetShareState]);
 
   useEffect(() => {
     setReaderTextSize(getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));

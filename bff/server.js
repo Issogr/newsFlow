@@ -3,6 +3,7 @@ const path = require('path');
 const { URL } = require('url');
 const express = require('express');
 const axios = require('axios');
+const compression = require('compression');
 const helmet = require('helmet');
 
 const { createProxyMiddleware } = require('http-proxy-middleware');
@@ -106,7 +107,8 @@ function createApp(options = {}) {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'https:'],
+        imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
+        mediaSrc: ["'self'", 'blob:'],
         connectSrc: ["'self'", 'ws:', 'wss:'],
         frameSrc: ["'none'"],
         objectSrc: ["'none'"],
@@ -114,6 +116,7 @@ function createApp(options = {}) {
     },
     referrerPolicy: { policy: 'same-origin' },
   }));
+  app.use(compression({ threshold: 0 }));
 
   function buildInternalHeaders(req) {
     return {
@@ -392,7 +395,7 @@ function createApp(options = {}) {
     ['/api/auth/login', '/auth/login'],
     ['/api/auth/password-setup/complete', '/auth/password-setup/complete']
   ].forEach(([routePath, backendPath]) => {
-    app.post(routePath, jsonParser, (req, res, next) => {
+    app.post(routePath, requireSameOriginUnsafeRequest, jsonParser, (req, res, next) => {
       handleSessionAuthRequest(req, res, next, backendPath);
     });
   });

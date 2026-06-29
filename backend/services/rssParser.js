@@ -7,6 +7,7 @@ const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/article
 const { normalizePublicationDate } = require('../utils/publicationDate');
 const { fetchSafeTextUrl } = require('../utils/urlSafety');
 const { parseIntegerEnv } = require('../utils/env');
+const { redactUrlForLog } = require('../utils/logRedaction');
 
 const MAX_ARTICLES_PER_SOURCE = parseIntegerEnv('MAX_ARTICLES_PER_SOURCE', 25, { min: 1 });
 const RSS_MAX_RETRIES = parseIntegerEnv('RSS_MAX_RETRIES', 4, { min: 1 });
@@ -439,7 +440,7 @@ async function fetchFeedXml(url, options = {}) {
       }
 
       const delay = RSS_RETRY_DELAY * attempt;
-      logger.warn(`Retry ${attempt}/${maxRetries} for ${url} after ${delay}ms`);
+      logger.warn(`Retry ${attempt}/${maxRetries} for ${redactUrlForLog(url, { redactAllQuery: true })} after ${delay}ms`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
@@ -489,7 +490,7 @@ async function parseFeed(source, options = {}) {
 
     return normalizedItems;
   } catch (error) {
-    logger.error(`Failed to parse RSS feed ${source.name} (${url}): ${summarizeErrorMessage(error)}`);
+    logger.error(`Failed to parse RSS feed ${source.name} (${redactUrlForLog(url, { redactAllQuery: true })}): ${redactUrlForLog(summarizeErrorMessage(error), { redactAllQuery: true })}`);
     if (options.throwOnError) {
       throw error;
     }
