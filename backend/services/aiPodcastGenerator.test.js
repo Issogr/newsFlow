@@ -1,5 +1,23 @@
 const aiPodcastGenerator = require('./aiPodcastGenerator');
 
+const PODCAST_ENV_NAMES = [
+  'OPENROUTER_API_KEY',
+  'OPENROUTER_BASE_URL',
+  'OPENROUTER_PODCAST_SCRIPT_MODEL',
+  'OPENROUTER_PODCAST_AUDIO_MODEL',
+  'AI_PODCAST_GENERATION_ENABLED',
+  'AI_PODCAST_LANGUAGES',
+  'AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS',
+  'AI_PODCAST_TTS_TIMEOUT_MS',
+  'AI_PODCAST_TTS_MAX_INPUT_BYTES',
+  'AI_PODCAST_TTS_MIN_AUDIO_BYTES',
+  'AI_PODCAST_TTS_CHUNK_MAX_BYTES',
+  'AI_PODCAST_TTS_MAX_CHUNKS',
+  'AI_PODCAST_TTS_CHUNK_SILENCE_MS',
+  'AI_PODCAST_TTS_FORMAT',
+  'AI_PODCAST_TTS_VOICE'
+];
+
 function createTestWavBuffer(byteLength = 2048) {
   const buffer = Buffer.alloc(Math.max(44, byteLength));
   buffer.write('RIFF', 0);
@@ -29,16 +47,23 @@ function createTestPcmBuffer(byteLength = 2400, sampleValue = 1000) {
 describe('aiPodcastGenerator', () => {
   const originalEnv = process.env;
 
+  function setPodcastTestEnv(overrides = {}) {
+    const nextEnv = { ...originalEnv };
+    PODCAST_ENV_NAMES.forEach((envName) => {
+      delete nextEnv[envName];
+    });
+    process.env = { ...nextEnv, ...overrides };
+  }
+
   afterEach(() => {
     aiPodcastGenerator._setAudioSpeechHttpClient(null);
     process.env = originalEnv;
   });
 
   test('builds a podcast prompt for enabled languages from every provided article', () => {
-    process.env = {
-      ...originalEnv,
+    setPodcastTestEnv({
       AI_PODCAST_LANGUAGES: undefined
-    };
+    });
 
     const prompt = aiPodcastGenerator._buildPrompt({
       periodStart: '2026-05-21T07:00:00.000Z',
@@ -198,11 +223,10 @@ describe('aiPodcastGenerator', () => {
       enabled: false
     }
   ])('uses $name', ({ env, scriptModel, ttsModel, enabled }) => {
-    process.env = {
-      ...originalEnv,
+    setPodcastTestEnv({
       OPENROUTER_API_KEY: 'test-key',
       ...env
-    };
+    });
 
     expect(aiPodcastGenerator._getScriptConfig()).toEqual(expect.objectContaining({
       enabled,
@@ -215,17 +239,15 @@ describe('aiPodcastGenerator', () => {
   });
 
   test('defaults podcast generation to English and filters unsupported configured languages', () => {
-    process.env = {
-      ...originalEnv,
+    setPodcastTestEnv({
       AI_PODCAST_LANGUAGES: undefined
-    };
+    });
 
     expect(aiPodcastGenerator._getEnabledPodcastLocales()).toEqual(['en']);
 
-    process.env = {
-      ...originalEnv,
+    setPodcastTestEnv({
       AI_PODCAST_LANGUAGES: 'it, en, fr, IT'
-    };
+    });
 
     expect(aiPodcastGenerator._getEnabledPodcastLocales()).toEqual(['it', 'en']);
   });
@@ -237,12 +259,11 @@ describe('aiPodcastGenerator', () => {
   });
 
   test('defaults Gemini TTS to the Charon voice', async () => {
-    process.env = {
-      ...originalEnv,
+    setPodcastTestEnv({
       OPENROUTER_API_KEY: 'test-key',
       AI_PODCAST_TTS_FORMAT: 'mp3',
       AI_PODCAST_TTS_VOICE: undefined
-    };
+    });
     const pcmBytes = Buffer.alloc(48000);
     const httpClient = {
       post: jest.fn().mockResolvedValue({
@@ -269,12 +290,11 @@ describe('aiPodcastGenerator', () => {
   });
 
   test('splits Gemini TTS into stitched WAV chunks with short gaps', async () => {
-    process.env = {
-      ...originalEnv,
+    setPodcastTestEnv({
       OPENROUTER_API_KEY: 'test-key',
       AI_PODCAST_TTS_CHUNK_MAX_BYTES: '500',
       AI_PODCAST_TTS_CHUNK_SILENCE_MS: '10'
-    };
+    });
     let callIndex = 0;
     const pcmByteLength = 2400;
     const httpClient = {
@@ -310,11 +330,10 @@ describe('aiPodcastGenerator', () => {
   });
 
   test('allows longer Gemini TTS scripts that need ten stitched chunks', async () => {
-    process.env = {
-      ...originalEnv,
+    setPodcastTestEnv({
       OPENROUTER_API_KEY: 'test-key',
       AI_PODCAST_TTS_CHUNK_MAX_BYTES: '300'
-    };
+    });
     const pcmByteLength = 2400;
     const httpClient = {
       post: jest.fn().mockResolvedValue({
@@ -335,14 +354,13 @@ describe('aiPodcastGenerator', () => {
   });
 
   test('uses the OpenRouter audio speech endpoint for Italian TTS', async () => {
-    process.env = {
-      ...originalEnv,
+    setPodcastTestEnv({
       OPENROUTER_API_KEY: 'test-key',
       OPENROUTER_BASE_URL: 'https://openrouter.ai/api/v1',
       OPENROUTER_PODCAST_AUDIO_MODEL: 'tts-model',
       AI_PODCAST_TTS_FORMAT: 'wav',
       AI_PODCAST_TTS_VOICE: 'Puck'
-    };
+    });
     const audioBytes = createTestWavBuffer();
     const httpClient = {
       post: jest.fn().mockResolvedValue({
@@ -386,10 +404,9 @@ describe('aiPodcastGenerator', () => {
   });
 
   test('surfaces speech endpoint error messages', async () => {
-    process.env = {
-      ...originalEnv,
+    setPodcastTestEnv({
       OPENROUTER_API_KEY: 'test-key'
-    };
+    });
     aiPodcastGenerator._setAudioSpeechHttpClient({
       post: jest.fn().mockResolvedValue({
         status: 400,
@@ -403,10 +420,9 @@ describe('aiPodcastGenerator', () => {
   });
 
   test('includes OpenRouter provider metadata in speech errors', async () => {
-    process.env = {
-      ...originalEnv,
+    setPodcastTestEnv({
       OPENROUTER_API_KEY: 'test-key'
-    };
+    });
     aiPodcastGenerator._setAudioSpeechHttpClient({
       post: jest.fn().mockResolvedValue({
         status: 400,
@@ -425,12 +441,11 @@ describe('aiPodcastGenerator', () => {
   });
 
   test('rejects overlong non-stitchable TTS input before calling the provider', async () => {
-    process.env = {
-      ...originalEnv,
+    setPodcastTestEnv({
       OPENROUTER_API_KEY: 'test-key',
       OPENROUTER_PODCAST_AUDIO_MODEL: 'tts-model',
       AI_PODCAST_TTS_MAX_INPUT_BYTES: '1000'
-    };
+    });
     const httpClient = { post: jest.fn() };
     aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
 
@@ -440,10 +455,9 @@ describe('aiPodcastGenerator', () => {
   });
 
   test('rejects tiny or malformed TTS audio responses', async () => {
-    process.env = {
-      ...originalEnv,
+    setPodcastTestEnv({
       OPENROUTER_API_KEY: 'test-key'
-    };
+    });
     aiPodcastGenerator._setAudioSpeechHttpClient({
       post: jest.fn().mockResolvedValue({
         status: 200,

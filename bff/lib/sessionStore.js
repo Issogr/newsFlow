@@ -200,6 +200,12 @@ function destroySession(req, sessionDb = null) {
   });
 }
 
+function saveExpressSession(sessionData) {
+  return new Promise((resolve, reject) => {
+    sessionData.save((error) => (error ? reject(error) : resolve()));
+  });
+}
+
 function buildSessionMiddleware(store, secret) {
   const cookieOptions = getSessionCookieOptions();
 
@@ -295,9 +301,7 @@ async function persistSessionUserId(req, userId, sessionDb = null) {
 
   if (req.session.userId !== userId) {
     req.session.userId = userId;
-    await new Promise((resolve, reject) => {
-      req.session.save((error) => (error ? reject(error) : resolve()));
-    });
+    await saveExpressSession(req.session);
   }
 
   upsertStoredSessionUser(sessionDb, req.sessionID, userId);
@@ -313,5 +317,6 @@ module.exports = {
   normalizeSessionState,
   persistSessionUserId,
   renewSessionExpiryIfNeeded,
+  saveExpressSession,
   upsertStoredSessionUser
 };

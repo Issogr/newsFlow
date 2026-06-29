@@ -55,7 +55,6 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [loadingSession, setLoadingSession] = useState(() => shouldLoadSessionForPath(window.location.pathname));
   const [releaseNotesState, setReleaseNotesState] = useState({
-    hiddenVersion: '',
     noticeHiddenVersion: '',
     saving: false,
     modalOpen: false
@@ -89,7 +88,6 @@ function App() {
     && !authData?.user?.isAdmin
     && releaseNotes.version
     && needsReleaseNotesAck
-    && releaseNotesState.hiddenVersion !== releaseNotes.version
     && releaseNotesState.noticeHiddenVersion !== releaseNotes.version
     && !releaseNotesState.modalOpen
   );
@@ -168,7 +166,7 @@ function App() {
   }, [themeMode]);
 
   useEffect(() => {
-    setReleaseNotesState({ hiddenVersion: '', noticeHiddenVersion: '', saving: false, modalOpen: false });
+    setReleaseNotesState({ noticeHiddenVersion: '', saving: false, modalOpen: false });
   }, [authData?.user?.id]);
 
   const handleAuthSuccess = useCallback((payload) => {
@@ -229,7 +227,6 @@ function App() {
 
     setReleaseNotesState((current) => ({
       ...current,
-      hiddenVersion: version,
       noticeHiddenVersion: version,
       modalOpen: false,
       saving: needsReleaseNotesAck
@@ -264,7 +261,7 @@ function App() {
   }, [releaseNotes.version]);
 
   if (loadingSession) {
-    return <div className="App min-h-screen bg-slate-100" />;
+    return APP_LOADING_FALLBACK;
   }
 
   if (isApiDocsRoute) {

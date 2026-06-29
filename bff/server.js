@@ -25,6 +25,7 @@ const {
   normalizeSessionState,
   persistSessionUserId,
   renewSessionExpiryIfNeeded,
+  saveExpressSession,
   upsertStoredSessionUser
 } = require('./lib/sessionStore');
 const {
@@ -143,6 +144,11 @@ function createApp(options = {}) {
         code: 'UNAUTHORIZED',
       },
     });
+  }
+
+  function clearLocalSession(req, res) {
+    clearBffSessionCookie(res);
+    return destroySession(req, sessionDb);
   }
 
   function getExpectedRequestOrigin(req) {
@@ -305,9 +311,7 @@ function createApp(options = {}) {
         req.session.backendSessionCookie = encryptBackendSessionCookie(backendSessionCookie);
         req.session.userId = response.data?.user?.id || req.session.userId || '';
         req.session.createdAt = req.session.createdAt || new Date().toISOString();
-        await new Promise((resolve, reject) => {
-          req.session.save((error) => (error ? reject(error) : resolve()));
-        });
+        await saveExpressSession(req.session);
         upsertStoredSessionUser(sessionDb, req.sessionID, req.session.userId);
       }
 
@@ -333,8 +337,7 @@ function createApp(options = {}) {
     stripSetCookie: true,
     onProxyResponse: (proxyRes, req, res) => {
       if (proxyRes.statusCode === 401) {
-        clearBffSessionCookie(res);
-        destroySession(req, sessionDb).catch(() => {});
+        clearLocalSession(req, res).catch(() => {});
         return;
       }
 
@@ -414,8 +417,7 @@ function createApp(options = {}) {
       });
 
       if (response.status === 401) {
-        await destroySession(req, sessionDb);
-        clearBffSessionCookie(res);
+        await clearLocalSession(req, res);
       } else {
         await persistSessionUserId(req, response.data?.user?.id || '', sessionDb);
       }
@@ -442,8 +444,7 @@ function createApp(options = {}) {
     }
 
     try {
-      await destroySession(req, sessionDb);
-      clearBffSessionCookie(res);
+      await clearLocalSession(req, res);
 
       if (backendResponse?.status && backendResponse.status < 500) {
         sendBackendResponse(res, backendResponse);

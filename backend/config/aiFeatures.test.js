@@ -1,9 +1,26 @@
+const AI_FEATURE_ENV_NAMES = [
+  'OPENROUTER_API_KEY',
+  'AI_TOPIC_DETECTION_ENABLED',
+  'AI_CLICKBAIT_DETECTION_ENABLED',
+  'AI_STORY_GROUPING_ENABLED',
+  'AI_SUMMARY_GENERATION_ENABLED',
+  'AI_PODCAST_GENERATION_ENABLED'
+];
+
+function getIsolatedAiFeatureEnv(env) {
+  const nextEnv = { ...env };
+  AI_FEATURE_ENV_NAMES.forEach((envName) => {
+    delete nextEnv[envName];
+  });
+  return nextEnv;
+}
+
 describe('aiFeatures config', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
     jest.resetModules();
-    process.env = { ...originalEnv };
+    process.env = getIsolatedAiFeatureEnv(originalEnv);
   });
 
   afterEach(() => {

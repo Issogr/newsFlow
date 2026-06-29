@@ -310,33 +310,33 @@ async function fetchSourceTask(task, options = {}) {
   return task.targetSources.flatMap((source) => parsedArticles.map((article) => cloneArticleForSource(article, source)));
 }
 
+function getRefreshUserIdsForArticles(articles = [], classifiedIds = []) {
+  const classifiedIdSet = new Set(classifiedIds);
+  const userIds = new Set();
+  let includesGlobalArticles = false;
+
+  articles.forEach((article) => {
+    if (!classifiedIdSet.has(article?.id)) {
+      return;
+    }
+
+    if (article.ownerUserId) {
+      userIds.add(article.ownerUserId);
+      return;
+    }
+
+    includesGlobalArticles = true;
+  });
+
+  return includesGlobalArticles ? [] : [...userIds];
+}
+
 async function processAiTopicsForPendingArticles(articles = [], options = {}) {
   if (!Array.isArray(articles) || articles.length === 0) {
     return;
   }
 
   const articleIds = articles.map((article) => article.id).filter(Boolean);
-
-  const getRefreshUserIds = (classifiedIds = []) => {
-    const classifiedIdSet = new Set(classifiedIds);
-    const userIds = new Set();
-    let includesGlobalArticles = false;
-
-    articles.forEach((article) => {
-      if (!classifiedIdSet.has(article?.id)) {
-        return;
-      }
-
-      if (article.ownerUserId) {
-        userIds.add(article.ownerUserId);
-        return;
-      }
-
-      includesGlobalArticles = true;
-    });
-
-    return includesGlobalArticles ? [] : [...userIds];
-  };
 
   try {
     const classification = await classifyTopicDetailsForArticlesWithStatus(articles);
@@ -359,7 +359,7 @@ async function processAiTopicsForPendingArticles(articles = [], options = {}) {
     if (topicEntries.length > 0) {
       database.replaceTopicsForArticles(topicEntries);
       websocketService.broadcastFeedRefresh({
-        userIds: getRefreshUserIds(classifiedIds),
+        userIds: getRefreshUserIdsForArticles(articles, classifiedIds),
         reason: 'topics'
       });
     }
@@ -393,26 +393,6 @@ async function processAiClickbaitForPendingArticles(articles = []) {
   }
 
   const articleIds = articles.map((article) => article.id).filter(Boolean);
-  const getRefreshUserIds = (classifiedIds = []) => {
-    const classifiedIdSet = new Set(classifiedIds);
-    const userIds = new Set();
-    let includesGlobalArticles = false;
-
-    articles.forEach((article) => {
-      if (!classifiedIdSet.has(article?.id)) {
-        return;
-      }
-
-      if (article.ownerUserId) {
-        userIds.add(article.ownerUserId);
-        return;
-      }
-
-      includesGlobalArticles = true;
-    });
-
-    return includesGlobalArticles ? [] : [...userIds];
-  };
 
   try {
     const classification = await classifyClickbaitForArticlesWithStatus(articles);
@@ -435,7 +415,7 @@ async function processAiClickbaitForPendingArticles(articles = []) {
     if (clickbaitEntries.length > 0) {
       database.updateArticleClickbaitClassifications(clickbaitEntries, classification.model || '');
       websocketService.broadcastFeedRefresh({
-        userIds: getRefreshUserIds(classifiedIds),
+        userIds: getRefreshUserIdsForArticles(articles, classifiedIds),
         reason: 'clickbait'
       });
     }

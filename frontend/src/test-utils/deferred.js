@@ -2,13 +2,11 @@ import { act } from '@testing-library/react';
 
 export function createDeferred() {
   let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => {
+  const promise = new Promise((res) => {
     resolve = res;
-    reject = rej;
   });
 
-  return { promise, resolve, reject };
+  return { promise, resolve };
 }
 
 export async function resolveDeferred(deferred, value) {

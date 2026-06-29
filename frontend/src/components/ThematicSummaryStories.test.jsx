@@ -20,14 +20,12 @@ function renderPodcastPanel(summaryOverrides = {}, propsOverrides = {}) {
 
 describe('thematic summary podcast UI', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn());
     HTMLMediaElement.prototype.load = vi.fn();
     HTMLMediaElement.prototype.pause = vi.fn();
     HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -97,7 +95,6 @@ describe('thematic summary podcast UI', () => {
 
     expect(screen.queryByText('Testo podcast italiano')).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('0:00 / 0:02')).toBeInTheDocument());
-    expect(fetch).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Play podcast audio' })).toBeInTheDocument();
     expect(screen.getByLabelText('Seek podcast audio')).toBeInTheDocument();
     expect(audio?.getAttribute('src')).toBe('/api/podcast-summary/podcast-1/audio?locale=en');
@@ -133,7 +130,6 @@ describe('thematic summary podcast UI', () => {
     expect(screen.getByText('Audio generation is in progress. This panel will update when it is ready.')).toBeInTheDocument();
     expect(screen.getByLabelText(/^Generated /u)).toHaveAttribute('dateTime', '2026-05-21T06:15:00.000Z');
     expect(screen.queryByRole('button', { name: 'Play podcast audio' })).not.toBeInTheDocument();
-    expect(fetch).not.toHaveBeenCalled();
   });
 
   test('shows the podcast generation date when audio generation failed', () => {

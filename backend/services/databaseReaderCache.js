@@ -1,5 +1,11 @@
 const { parseJsonValue } = require('../utils/json');
 
+const READER_CACHE_SELECT = `
+  article_id AS articleId, url, title, site_name AS siteName,
+  byline, language, excerpt, content_text AS contentText,
+  content_blocks AS contentBlocks, minutes_to_read AS minutesToRead, fetched_at AS fetchedAt
+`;
+
 function chunkValues(values = [], size = 500) {
   const chunks = [];
   for (let index = 0; index < values.length; index += size) {
@@ -36,9 +42,7 @@ function createReaderCacheRepository({ getDb }) {
     }
 
     const row = getDb().prepare(`
-      SELECT article_id AS articleId, url, title, site_name AS siteName,
-             byline, language, excerpt, content_text AS contentText,
-             content_blocks AS contentBlocks, minutes_to_read AS minutesToRead, fetched_at AS fetchedAt
+      SELECT ${READER_CACHE_SELECT}
       FROM reader_cache
       WHERE article_id = ?
     `).get(articleId);
@@ -66,9 +70,7 @@ function createReaderCacheRepository({ getDb }) {
 
     chunkValues(normalizedArticleIds).forEach((ids) => {
       const rows = getDb().prepare(`
-        SELECT article_id AS articleId, url, title, site_name AS siteName,
-               byline, language, excerpt, content_text AS contentText,
-               content_blocks AS contentBlocks, minutes_to_read AS minutesToRead, fetched_at AS fetchedAt
+        SELECT ${READER_CACHE_SELECT}
         FROM reader_cache
         WHERE article_id IN (${ids.map(() => '?').join(', ')})
       `).all(...ids);
