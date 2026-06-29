@@ -1,6 +1,5 @@
 const logger = require('../utils/logger');
 const { readAiToggleValue } = require('../config/aiFeatures');
-const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const { parseIntegerEnv } = require('../utils/env');
 const {
   createOpenRouterClient,
@@ -12,9 +11,9 @@ const {
 } = require('./openRouterClient');
 const { truncateText } = require('./aiArticlePayload');
 const {
-  chunkItems,
   isTimeoutError,
   resolveClassifierEntryId,
+  runBatchedClassifier,
   summarizeResponseShape,
 } = require('./aiClassifierUtils');
 
@@ -396,64 +395,22 @@ async function classifyBatch(batch, config, context = {}) {
 
 async function classifyClickbaitForArticlesWithStatus(articles = []) {
   const config = getConfig();
-  if (!Array.isArray(articles) || articles.length === 0) {
-    return {
-      classificationsByArticleId: new Map(),
-      attemptedArticleIds: [],
-      failedArticleIds: [],
-      cappedArticleIds: [],
-      model: config.model
-    };
-  }
-
-  if (!config.enabled) {
-    logger.info(`AI clickbait detection skipped: reason=${config.apiKey ? 'disabled' : 'missing_api_key'}, articles=${articles.length}`);
-    return {
-      classificationsByArticleId: new Map(),
-      attemptedArticleIds: [],
-      failedArticleIds: [],
-      cappedArticleIds: articles.map((article) => article?.id).filter(Boolean),
-      model: config.model
-    };
-  }
-
-  const startedAt = Date.now();
-  const limitedArticles = articles.slice(0, config.maxArticlesPerRefresh);
-  const cappedArticleIds = articles.slice(config.maxArticlesPerRefresh).map((article) => article?.id).filter(Boolean);
-  if (articles.length > limitedArticles.length) {
-    logger.warn(`AI clickbait detection capped at ${limitedArticles.length}/${articles.length} new articles for this refresh`);
-  }
-
-  const { aiArticles, deterministicClassificationsByArticleId } = splitDeterministicAndAiArticles(limitedArticles, config);
-  const batches = chunkItems(aiArticles, config.batchSize);
-  const openRouter = batches.length > 0 ? await createOpenRouterClient(config) : null;
-  logger.info(`AI clickbait detection started: model=${config.model}, articles=${limitedArticles.length}, deterministic=${deterministicClassificationsByArticleId.size}, aiArticles=${aiArticles.length}, batches=${batches.length}`);
-  const batchResults = await mapSettledWithConcurrency(batches, config.batchConcurrency, (batch, batchIndex) => classifyBatch(batch, config, {
-    batchIndex,
-    batchCount: batches.length,
-    openRouter
-  }));
-  const result = new Map(deterministicClassificationsByArticleId);
-  const failedArticleIds = [];
-
-  batchResults.forEach((batchResult, index) => {
-    if (batchResult?.status === 'rejected') {
-      logger.warn(`AI clickbait batch failed: ${summarizeAiError(batchResult.reason)}`);
-      failedArticleIds.push(...batches[index].map((article) => article?.id).filter(Boolean));
-      return;
-    }
-
-    batchResult.value.forEach((classification, articleId) => {
-      result.set(articleId, classification);
-    });
+  const status = await runBatchedClassifier({
+    articles,
+    config,
+    featureName: 'clickbait',
+    splitArticles: splitDeterministicAndAiArticles,
+    deterministicResultKey: 'deterministicClassificationsByArticleId',
+    classifyBatch,
+    summarizeBatchError: summarizeAiError,
+    logger
   });
 
-  logger.info(`AI clickbait detection completed: model=${config.model}, requested=${limitedArticles.length}, deterministic=${deterministicClassificationsByArticleId.size}, aiRequested=${aiArticles.length}, classified=${result.size}, durationMs=${Date.now() - startedAt}`);
   return {
-    classificationsByArticleId: result,
-    attemptedArticleIds: limitedArticles.map((article) => article?.id).filter(Boolean),
-    failedArticleIds,
-    cappedArticleIds,
+    classificationsByArticleId: status.resultByArticleId,
+    attemptedArticleIds: status.attemptedArticleIds,
+    failedArticleIds: status.failedArticleIds,
+    cappedArticleIds: status.cappedArticleIds,
     model: config.model
   };
 }

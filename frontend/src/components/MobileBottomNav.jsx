@@ -130,7 +130,7 @@ const MobileBottomNav = ({
                 : 'pointer-events-none translate-x-8 scale-95 opacity-0 blur-sm'
             }`}
             aria-hidden={!searchMode}
-            inert={searchMode ? undefined : ''}
+            inert={searchMode ? undefined : true}
           >
             <FilterSearchInput
               className="flex flex-1 items-center gap-2"

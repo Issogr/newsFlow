@@ -40,6 +40,27 @@ const SettingsAccessSection = ({
   onCreateApiToken,
   onRevokeApiToken
 }) => {
+  const apiTokenStatusCards = apiToken ? [
+    {
+      key: 'prefix',
+      label: t('apiTokenStatusLabel'),
+      value: apiToken.tokenPrefix,
+      cardClassName: 'border-emerald-200 bg-emerald-50',
+      labelClassName: 'text-emerald-700',
+      valueClassName: 'break-all text-emerald-900'
+    },
+    {
+      key: 'expires',
+      label: t('apiTokenExpiresLabel'),
+      value: new Date(apiToken.expiresAt).toLocaleString()
+    },
+    {
+      key: 'lastUsed',
+      label: t('apiTokenLastUsedLabel'),
+      value: apiToken.lastUsedAt ? new Date(apiToken.lastUsedAt).toLocaleString() : t('apiTokenLastUsedEmpty')
+    }
+  ] : [];
+
   return (
     <SettingsSectionCard
       icon={ShieldCheck}
@@ -89,18 +110,12 @@ const SettingsAccessSection = ({
 
             {apiToken ? (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <div className="min-w-0 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">{t('apiTokenStatusLabel')}</p>
-                  <p className="mt-1 break-all text-sm font-medium text-emerald-900">{apiToken.tokenPrefix}</p>
-                </div>
-                <div className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t('apiTokenExpiresLabel')}</p>
-                  <p className="mt-1 break-words text-sm font-medium text-slate-800">{new Date(apiToken.expiresAt).toLocaleString()}</p>
-                </div>
-                <div className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t('apiTokenLastUsedLabel')}</p>
-                  <p className="mt-1 break-words text-sm font-medium text-slate-800">{apiToken.lastUsedAt ? new Date(apiToken.lastUsedAt).toLocaleString() : t('apiTokenLastUsedEmpty')}</p>
-                </div>
+                {apiTokenStatusCards.map((card) => (
+                  <div key={card.key} className={`min-w-0 rounded-2xl border px-3 py-3 ${card.cardClassName || 'border-slate-200 bg-white'}`}>
+                    <p className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${card.labelClassName || 'text-slate-500'}`}>{card.label}</p>
+                    <p className={`mt-1 text-sm font-medium ${card.valueClassName || 'break-words text-slate-800'}`}>{card.value}</p>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500">

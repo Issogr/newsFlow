@@ -15,6 +15,16 @@ const {
 } = require('./lib/sessionPolicy');
 
 const SAME_ORIGIN = 'http://127.0.0.1';
+const SPOOFED_FORWARDED_HEADERS = {
+  'X-Forwarded-For': '203.0.113.99',
+  'X-Forwarded-Host': 'evil.example',
+  'X-Forwarded-Proto': 'https',
+};
+const HOSTILE_SESSION_HEADERS = {
+  Authorization: 'Bearer hostile',
+  'x-session-token': 'hostile',
+  'x-newsflow-app': 'hostile',
+};
 
 async function listen(server) {
   await new Promise((resolve) => {
@@ -26,6 +36,17 @@ async function close(server) {
   await new Promise((resolve) => {
     server.close(resolve);
   });
+}
+
+async function withListeningBffServer(options, callback) {
+  const bffServer = createServer(options);
+  await listen(bffServer);
+
+  try {
+    return await callback(bffServer);
+  } finally {
+    await close(bffServer);
+  }
 }
 
 function requestUpgrade(server, { cookie = '', headers = {} } = {}) {
@@ -122,6 +143,22 @@ function cleanupCreatedApp(created, tempDir) {
   if (tempDir) {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+}
+
+function countRows(database, tableName, whereClause = '', params = []) {
+  return database.prepare(`SELECT COUNT(*) as count FROM ${tableName}${whereClause}`).get(...params).count;
+}
+
+function expectSensitiveHeadersStripped(headers) {
+  expect(headers.authorization).toBeUndefined();
+  expect(headers['x-session-token']).toBeUndefined();
+  expect(headers['x-newsflow-app']).toBeUndefined();
+}
+
+function expectTrustedForwardedHeaders(headers) {
+  expect(headers['x-forwarded-for']).toContain('203.0.113.99');
+  expect(headers['x-forwarded-host']).not.toBe('evil.example');
+  expect(headers['x-forwarded-proto']).toBe('https');
 }
 
 describe('bff server', () => {
@@ -388,14 +425,10 @@ describe('bff server', () => {
       .delete('/api/admin/users/user-1')
       .set('Cookie', adminBffSessionCookie)
       .set('Origin', SAME_ORIGIN)
-      .set('Authorization', 'Bearer hostile')
-      .set('x-session-token', 'hostile')
-      .set('x-newsflow-app', 'hostile')
+      .set(HOSTILE_SESSION_HEADERS)
       .expect(200);
 
-    expect(lastBackendHeaders.authorization).toBeUndefined();
-    expect(lastBackendHeaders['x-session-token']).toBeUndefined();
-    expect(lastBackendHeaders['x-newsflow-app']).toBeUndefined();
+    expectSensitiveHeadersStripped(lastBackendHeaders);
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-admin-id');
   });
 
@@ -443,7 +476,7 @@ describe('bff server', () => {
     const aliceBffSessionCookie = await login(app);
     const adminBffSessionCookie = await login(app, { username: 'admin' });
 
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(2);
+    expect(countRows(sessionDb, 'sessions')).toBe(2);
 
     await request(app)
       .delete(deletePath)
@@ -451,7 +484,7 @@ describe('bff server', () => {
       .set('Origin', SAME_ORIGIN)
       .expect(200);
 
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(1);
+    expect(countRows(sessionDb, 'sessions')).toBe(1);
 
     await request(app)
       .get('/api/me')
@@ -465,27 +498,27 @@ describe('bff server', () => {
     const aliceBffSessionCookie = await login(app);
 
     sessionDb.prepare('DELETE FROM session_users').run();
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users').get().count).toBe(0);
+    expect(countRows(sessionDb, 'session_users')).toBe(0);
 
     await request(app)
       .get('/api/me')
       .set('Cookie', aliceBffSessionCookie)
       .expect(200);
 
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users WHERE user_id = ?').get('user-1').count).toBe(1);
+    expect(countRows(sessionDb, 'session_users', ' WHERE user_id = ?', ['user-1'])).toBe(1);
   });
 
   test('removes stale session_users rows when expired sessions are cleaned', async () => {
     await login(app);
 
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(1);
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users').get().count).toBe(1);
+    expect(countRows(sessionDb, 'sessions')).toBe(1);
+    expect(countRows(sessionDb, 'session_users')).toBe(1);
 
     sessionDb.prepare('UPDATE sessions SET expire = ?').run(new Date(Date.now() - 1000).toISOString());
     sessionStore.clearExpiredSessions();
 
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(0);
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users').get().count).toBe(0);
+    expect(countRows(sessionDb, 'sessions')).toBe(0);
+    expect(countRows(sessionDb, 'session_users')).toBe(0);
   });
 
   test('proxies public API routes without requiring a BFF session', async () => {
@@ -500,14 +533,10 @@ describe('bff server', () => {
   test('rebuilds forwarded headers on public API routes from trusted request values', async () => {
     await request(app)
       .get('/api/public/ping')
-      .set('X-Forwarded-For', '203.0.113.99')
-      .set('X-Forwarded-Host', 'evil.example')
-      .set('X-Forwarded-Proto', 'https')
+      .set(SPOOFED_FORWARDED_HEADERS)
       .expect(200);
 
-    expect(lastBackendHeaders['x-forwarded-for']).toContain('203.0.113.99');
-    expect(lastBackendHeaders['x-forwarded-host']).not.toBe('evil.example');
-    expect(lastBackendHeaders['x-forwarded-proto']).toBe('https');
+    expectTrustedForwardedHeaders(lastBackendHeaders);
   });
 
   test('does not trust caller forwarded headers unless explicitly configured', async () => {
@@ -566,24 +595,16 @@ describe('bff server', () => {
 
   test('rebuilds forwarded headers on authenticated app routes from trusted request values', async () => {
     const bffSessionCookie = await login(app, {
-      headers: {
-        'X-Forwarded-For': '203.0.113.99',
-        'X-Forwarded-Host': 'evil.example',
-        'X-Forwarded-Proto': 'https',
-      },
+      headers: SPOOFED_FORWARDED_HEADERS,
     });
 
     await request(app)
       .get('/api/me')
       .set('Cookie', bffSessionCookie)
-      .set('X-Forwarded-For', '203.0.113.99')
-      .set('X-Forwarded-Host', 'evil.example')
-      .set('X-Forwarded-Proto', 'https')
+      .set(SPOOFED_FORWARDED_HEADERS)
       .expect(200);
 
-    expect(lastBackendHeaders['x-forwarded-for']).toContain('203.0.113.99');
-    expect(lastBackendHeaders['x-forwarded-host']).not.toBe('evil.example');
-    expect(lastBackendHeaders['x-forwarded-proto']).toBe('https');
+    expectTrustedForwardedHeaders(lastBackendHeaders);
   });
 
   test('streams multipart feedback through the authenticated app proxy', async () => {
@@ -634,62 +655,44 @@ describe('bff server', () => {
   });
 
   test('rejects unauthenticated raw socket upgrades before proxying to the backend', async () => {
-    const bffServer = createServer({ backendBaseUrl, frontendDistDir, sessionDbPath });
-    await listen(bffServer);
-
-    try {
+    await withListeningBffServer({ backendBaseUrl, frontendDistDir, sessionDbPath }, async (bffServer) => {
       const response = await requestUpgrade(bffServer);
 
       expect(response).toEqual(expect.objectContaining({
         statusCode: 401,
         upgraded: false,
       }));
-    } finally {
-      await close(bffServer);
-    }
+    });
   });
 
   test('proxies authenticated raw socket upgrades with sanitized session headers', async () => {
-    const bffServer = createServer({ backendBaseUrl, frontendDistDir, sessionDbPath });
     let backendUpgradeHeaders = null;
     backendServer.once('upgrade', (req, socket) => {
       backendUpgradeHeaders = req.headers;
       socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n');
       socket.destroy();
     });
-    await listen(bffServer);
 
-    try {
+    await withListeningBffServer({ backendBaseUrl, frontendDistDir, sessionDbPath }, async (bffServer) => {
       const bffSessionCookie = await login(bffServer);
 
       const response = await requestUpgrade(bffServer, {
         cookie: bffSessionCookie,
-        headers: {
-          Authorization: 'Bearer hostile',
-          'x-session-token': 'hostile',
-          'x-newsflow-app': 'hostile',
-        },
+        headers: HOSTILE_SESSION_HEADERS,
       });
 
       expect(response).toEqual(expect.objectContaining({
         statusCode: 101,
         upgraded: true,
       }));
-      expect(backendUpgradeHeaders.authorization).toBeUndefined();
-      expect(backendUpgradeHeaders['x-session-token']).toBeUndefined();
-      expect(backendUpgradeHeaders['x-newsflow-app']).toBeUndefined();
+      expectSensitiveHeadersStripped(backendUpgradeHeaders);
       expect(backendUpgradeHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
       expect(backendUpgradeHeaders['x-newsflow-proxy']).toBe('test-proxy-token');
-    } finally {
-      await close(bffServer);
-    }
+    });
   });
 
   test('rejects authenticated raw socket upgrades from another origin', async () => {
-    const bffServer = createServer({ backendBaseUrl, frontendDistDir, sessionDbPath, appBaseUrl: SAME_ORIGIN });
-    await listen(bffServer);
-
-    try {
+    await withListeningBffServer({ backendBaseUrl, frontendDistDir, sessionDbPath, appBaseUrl: SAME_ORIGIN }, async (bffServer) => {
       const bffSessionCookie = await login(bffServer);
 
       const response = await requestUpgrade(bffServer, {
@@ -703,9 +706,7 @@ describe('bff server', () => {
         statusCode: 403,
         upgraded: false,
       }));
-    } finally {
-      await close(bffServer);
-    }
+    });
   });
 
   test('returns structured JSON when the app proxy fails upstream', async () => {

@@ -348,18 +348,16 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
                           </div>
 
                           <div className="mt-4 grid grid-cols-3 gap-2.5 text-sm text-slate-600">
-                            <div className="h-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{t('createdAt')}</p>
-                              <p className="mt-2 font-medium text-slate-800">{formatDateTime(user.createdAt)}</p>
-                            </div>
-                            <div className="h-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{t('lastLoginAt')}</p>
-                              <p className="mt-2 font-medium text-slate-800">{formatDateTime(user.lastLoginAt)}</p>
-                            </div>
-                            <div className="h-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{t('lastActivityAt')}</p>
-                              <p className="mt-2 font-medium text-slate-800">{formatDateTime(user.lastActivityAt)}</p>
-                            </div>
+                            {[
+                              { key: 'createdAt', label: t('createdAt'), value: formatDateTime(user.createdAt) },
+                              { key: 'lastLoginAt', label: t('lastLoginAt'), value: formatDateTime(user.lastLoginAt) },
+                              { key: 'lastActivityAt', label: t('lastActivityAt'), value: formatDateTime(user.lastActivityAt) }
+                            ].map((card) => (
+                              <div key={card.key} className="h-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{card.label}</p>
+                                <p className="mt-2 font-medium text-slate-800">{card.value}</p>
+                              </div>
+                            ))}
                           </div>
 
                           <div className="mt-3 flex flex-wrap gap-2">

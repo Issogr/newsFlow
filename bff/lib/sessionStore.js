@@ -17,6 +17,7 @@ const {
 const DEFAULT_SESSION_DB_PATH = path.join(__dirname, '..', 'data', 'sessions.sqlite');
 const SESSION_STORE_CLEAR_INTERVAL_MS = parseIntegerEnv('SESSION_STORE_CLEAR_INTERVAL_MS', 300000, { min: 1000 });
 const SESSION_TOUCH_RENEWAL_WINDOW_MS = parseIntegerEnv('SESSION_TOUCH_RENEWAL_WINDOW_MS', 24 * 60 * 60 * 1000, { min: 1000 });
+const BACKEND_SESSION_COOKIE_CACHE = Symbol('backendSessionCookieCache');
 
 function getSessionExpiryTime(sessionData = {}) {
   const expiresAt = Date.parse(sessionData.cookie?.expires || '');
@@ -291,7 +292,14 @@ function loadUpgradeSession(req, sessionStore, secret) {
 }
 
 function getBackendSessionCookieFromRequest(req) {
-  return decryptBackendSessionCookie(req.session?.backendSessionCookie || '');
+  const encryptedCookie = req.session?.backendSessionCookie || '';
+  if (req[BACKEND_SESSION_COOKIE_CACHE]?.encryptedCookie === encryptedCookie) {
+    return req[BACKEND_SESSION_COOKIE_CACHE].backendSessionCookie;
+  }
+
+  const backendSessionCookie = decryptBackendSessionCookie(encryptedCookie);
+  req[BACKEND_SESSION_COOKIE_CACHE] = { encryptedCookie, backendSessionCookie };
+  return backendSessionCookie;
 }
 
 async function persistSessionUserId(req, userId, sessionDb = null) {

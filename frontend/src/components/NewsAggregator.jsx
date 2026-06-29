@@ -652,6 +652,25 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     setDebouncedSearch('');
   }, []);
 
+  const toggleRecentOnly = useCallback(() => {
+    setShowRecentOnly((value) => !value);
+  }, []);
+
+  const filterSurfaceProps = {
+    visibleSources: visibleAvailableSources,
+    availableTopics,
+    activeFilters,
+    showRecentOnly,
+    search,
+    recentHours,
+    t,
+    locale,
+    onToggleFilter: toggleFilter,
+    onToggleRecent: toggleRecentOnly,
+    onSearchChange: setSearch,
+    onSearchClear: clearSearch
+  };
+
   return (
     <div className="min-h-screen overflow-x-clip bg-slate-100 text-slate-900">
       <header className={`sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md transition-shadow duration-200 ${topNavCompact ? 'shadow-md' : 'shadow-sm'}`}>
@@ -668,18 +687,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
             <div className="flex shrink-0 items-center gap-3">
               <DesktopTopNavFilters
-                visibleSources={visibleAvailableSources}
-                availableTopics={availableTopics}
-                activeFilters={activeFilters}
-                showRecentOnly={showRecentOnly}
-                search={search}
-                recentHours={recentHours}
-                t={t}
-                locale={locale}
-                onToggleFilter={toggleFilter}
-                onToggleRecent={() => setShowRecentOnly((value) => !value)}
-                onSearchChange={setSearch}
-                onSearchClear={clearSearch}
+                {...filterSurfaceProps}
                 onToggleReadLater={() => setActiveView((current) => current === 'readLater' ? 'news' : 'readLater')}
                 onOpenSurface={() => setUserMenuOpen(false)}
                 readLaterActive={isReadLaterView}
@@ -917,18 +925,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
       {!readerState.isOpen && !displayedThematicSummary && !settingsOpen && !feedbackOpen ? (
         <MobileBottomNav
-          visibleSources={visibleAvailableSources}
-          availableTopics={availableTopics}
-          activeFilters={activeFilters}
-          showRecentOnly={showRecentOnly}
-          search={search}
-          recentHours={recentHours}
-          t={t}
-          locale={locale}
-          onToggleFilter={toggleFilter}
-          onToggleRecent={() => setShowRecentOnly((v) => !v)}
-          onSearchChange={setSearch}
-          onSearchClear={clearSearch}
+          {...filterSurfaceProps}
           activeView={activeView}
           onViewChange={setActiveView}
           visible={showMobileNav}

@@ -177,11 +177,6 @@ async function resolveSafeOutboundTarget(rawUrl) {
   };
 }
 
-async function assertSafeOutboundUrl(rawUrl) {
-  const target = await resolveSafeOutboundTarget(rawUrl);
-  return target.url;
-}
-
 function createPinnedLookup(target) {
   return (hostname, options, callback) => {
     const done = typeof options === 'function' ? options : callback;
@@ -326,6 +321,5 @@ async function fetchSafeTextUrl(rawUrl, requestConfig = {}) {
 }
 
 module.exports = {
-  assertSafeOutboundUrl,
   fetchSafeTextUrl
 };

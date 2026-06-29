@@ -28,6 +28,26 @@ function parseIntegerEnv(name, fallbackValue, options = {}) {
   return value;
 }
 
+function parseBooleanEnv(name, fallbackValue = false, options = {}) {
+  const rawValue = process.env[name];
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    return Boolean(fallbackValue);
+  }
+
+  const normalized = String(rawValue).trim().toLowerCase();
+  if (normalized === 'true') {
+    return true;
+  }
+  if (normalized === 'false') {
+    return false;
+  }
+
+  return Object.hasOwn(options, 'invalidFallback')
+    ? Boolean(options.invalidFallback)
+    : Boolean(fallbackValue);
+}
+
 module.exports = {
+  parseBooleanEnv,
   parseIntegerEnv,
 };

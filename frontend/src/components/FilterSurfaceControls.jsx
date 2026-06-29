@@ -9,7 +9,7 @@ export function FilterBubble({ children, open, className, closedClassName = 'tra
           : `pointer-events-none ${closedClassName} opacity-0`
       }`}
       aria-hidden={!open}
-      inert={open ? undefined : ''}
+      inert={open ? undefined : true}
     >
       <div className="max-h-[var(--filter-bubble-max-height)] overflow-y-auto overscroll-contain p-4" style={{ '--filter-bubble-max-height': maxHeight }}>
         {children}
