@@ -150,6 +150,7 @@ describe('NewsCard', () => {
 
     expect(screen.getByLabelText('Technology')).toBeInTheDocument();
     expect(screen.getByLabelText('Economy')).toBeInTheDocument();
+    expect(screen.getByLabelText('Technology').parentElement).toHaveClass('-space-x-1');
     expect(screen.queryByText('Technology')).not.toBeInTheDocument();
     expect(screen.queryByText('Economy')).not.toBeInTheDocument();
   });

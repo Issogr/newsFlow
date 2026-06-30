@@ -88,6 +88,7 @@ describe('thematic summary podcast UI', () => {
     const buttons = screen.getAllByRole('button');
     expect(buttons).toHaveLength(2);
     expect(buttons[0]).toHaveAccessibleName('Open podcast briefing');
+    expect(buttons[0].getAttribute('style')).toContain('conic-gradient');
 
     fireEvent.click(buttons[0]);
 

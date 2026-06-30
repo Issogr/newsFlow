@@ -1,4 +1,3 @@
-import { Sparkles } from 'lucide-react';
 import { AI_ACCENT_GRADIENT_STYLE, getTopicPresentation } from '../topicPresentation';
 import { getLocalizedThematicSummary, getThematicSummaryPresentationKey, isPodcastSummary } from '../utils/thematicSummaryLocale';
 
@@ -37,23 +36,13 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
               key={isPodcast ? 'podcast-summaries' : summary.id}
               type="button"
               onClick={() => onOpenSummary(summary)}
-              className="group relative inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-white shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+              className={`group inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 ${unread ? 'p-[1.5px]' : 'border-2 border-white'}`}
+              style={unread ? AI_ACCENT_GRADIENT_STYLE : undefined}
               aria-label={ariaLabel}
             >
               <span className={`inline-flex h-full w-full items-center justify-center rounded-full transition-[filter] group-hover:brightness-110 ${circleClassName}`}>
                 <PrimaryIcon className="h-6 w-6" aria-hidden="true" />
               </span>
-              {unread && (
-                <span
-                  className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full p-[1.5px] shadow-sm"
-                  style={AI_ACCENT_GRADIENT_STYLE}
-                  aria-hidden="true"
-                >
-                  <span className="inline-flex h-full w-full items-center justify-center rounded-full bg-white text-violet-700">
-                    <Sparkles className="h-3 w-3" aria-hidden="true" />
-                  </span>
-                </span>
-              )}
             </button>
           );
         })}
