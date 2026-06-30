@@ -18,6 +18,30 @@ function renderPodcastPanel(summaryOverrides = {}, propsOverrides = {}) {
   );
 }
 
+function mockSummarySwipeViewport(matches) {
+  vi.stubGlobal('matchMedia', vi.fn((query) => ({
+    matches,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  })));
+}
+
+function createTopicSummary(topicKey, overrides = {}) {
+  const topicLabel = topicKey.charAt(0).toUpperCase() + topicKey.slice(1);
+
+  return {
+    id: `summary-${topicKey}`,
+    topicKey,
+    topicLabel,
+    summaryTextByLocale: { en: `${topicLabel} summary` },
+    ...overrides
+  };
+}
+
 describe('thematic summary podcast UI', () => {
   beforeEach(() => {
     HTMLMediaElement.prototype.load = vi.fn();
@@ -27,6 +51,7 @@ describe('thematic summary podcast UI', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   test('places the podcast story first and opens the selected item', () => {
@@ -206,5 +231,82 @@ describe('thematic summary podcast UI', () => {
     expect(screen.queryByText(/2026/u)).not.toBeInTheDocument();
     expect(screen.getByText('The first argument covers chip supply and infrastructure.')).toBeInTheDocument();
     expect(screen.getByText('The second argument moves to software policy and regulation.')).toBeInTheDocument();
+  });
+
+  test('switches to the next thematic summary with a mobile left swipe', () => {
+    mockSummarySwipeViewport(true);
+    const onSelectSummary = vi.fn();
+    const technology = createTopicSummary('technology');
+    const politics = createTopicSummary('politics');
+
+    render(
+      <ThematicSummaryPanel
+        summary={technology}
+        summaries={[technology, politics]}
+        locale="en"
+        t={t}
+        onClose={vi.fn()}
+        onSelectSummary={onSelectSummary}
+      />
+    );
+
+    const article = screen.getByRole('article');
+    fireEvent.touchStart(article, { touches: [{ clientX: 240, clientY: 120 }] });
+    fireEvent.touchEnd(article, { changedTouches: [{ clientX: 100, clientY: 128 }] });
+
+    expect(onSelectSummary).toHaveBeenCalledWith(politics);
+  });
+
+  test('moves the summary card while a mobile swipe is in progress', () => {
+    mockSummarySwipeViewport(true);
+    const technology = createTopicSummary('technology');
+    const politics = createTopicSummary('politics');
+
+    render(
+      <ThematicSummaryPanel
+        summary={technology}
+        summaries={[technology, politics]}
+        locale="en"
+        t={t}
+        onClose={vi.fn()}
+        onSelectSummary={vi.fn()}
+      />
+    );
+
+    const article = screen.getByRole('article');
+    const swipeFrame = screen.getByTestId('thematic-summary-swipe-frame');
+
+    fireEvent.touchStart(article, { touches: [{ clientX: 240, clientY: 120 }] });
+    fireEvent.touchMove(article, { touches: [{ clientX: 100, clientY: 128 }] });
+
+    expect(swipeFrame.style.transform).toBe('translate3d(-49px, 0, 0)');
+
+    fireEvent.touchEnd(article, { changedTouches: [{ clientX: 100, clientY: 128 }] });
+
+    expect(swipeFrame.style.transform).toBe('translate3d(0px, 0, 0)');
+  });
+
+  test('does not switch summaries from a desktop viewport swipe', () => {
+    mockSummarySwipeViewport(false);
+    const onSelectSummary = vi.fn();
+    const technology = createTopicSummary('technology');
+    const politics = createTopicSummary('politics');
+
+    render(
+      <ThematicSummaryPanel
+        summary={technology}
+        summaries={[technology, politics]}
+        locale="en"
+        t={t}
+        onClose={vi.fn()}
+        onSelectSummary={onSelectSummary}
+      />
+    );
+
+    const article = screen.getByRole('article');
+    fireEvent.touchStart(article, { touches: [{ clientX: 240, clientY: 120 }] });
+    fireEvent.touchEnd(article, { changedTouches: [{ clientX: 100, clientY: 128 }] });
+
+    expect(onSelectSummary).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,8 @@
 
 ## 3.5.10
 
+- added mobile swipe navigation between AI summary topics inside the summary panel, with card movement feedback while swiping
+
 ## 3.5.9
 
 - reduced AI provider usage with larger topic batches, high-confidence local topic skips, prompt article caps, and unchanged story-grouping retry skips

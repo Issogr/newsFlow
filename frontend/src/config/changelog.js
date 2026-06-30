@@ -4,13 +4,17 @@ export const CURRENT_CHANGELOG_ENTRY = {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
-    items: []
+    items: [
+      '👉 Swipe left or right on mobile AI summaries to move between topics without closing the panel; the card follows your gesture while swiping.'
+    ]
   },
   it: {
     eyebrow: 'Ultimo aggiornamento',
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
-    items: []
+    items: [
+      '👉 Scorri a sinistra o a destra sulle sintesi AI da mobile per passare tra i topic senza chiudere il pannello; la scheda segue il gesto durante lo swipe.'
+    ]
   }
 };
 
