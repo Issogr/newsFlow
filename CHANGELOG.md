@@ -3,7 +3,7 @@
 ## 3.5.10
 
 - added mobile swipe navigation between AI summary topics inside the summary panel, with card movement feedback while swiping
-- replaced AI summary story star badges with the same rainbow ring treatment used for AI sources and topics
+- kept AI summary story rainbow rings visible after opening and moved the new-summary indicator to a small top-right dot
 - stacked news-card topic circles with the same slight overlap used by multiple source circles
 
 ## 3.5.9

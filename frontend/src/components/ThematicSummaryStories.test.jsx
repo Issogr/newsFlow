@@ -89,10 +89,33 @@ describe('thematic summary podcast UI', () => {
     expect(buttons).toHaveLength(2);
     expect(buttons[0]).toHaveAccessibleName('Open podcast briefing');
     expect(buttons[0].getAttribute('style')).toContain('conic-gradient');
+    expect(screen.getAllByTestId('thematic-summary-new-dot')).toHaveLength(2);
 
     fireEvent.click(buttons[0]);
 
     expect(onOpenSummary).toHaveBeenCalledWith(podcast);
+  });
+
+  test('keeps the summary rainbow ring after summaries are read', () => {
+    const podcast = createPodcastSummary({ id: 'podcast-current' });
+    const olderPodcast = createPodcastSummary({ id: 'podcast-older' });
+    const technology = createTopicSummary('technology');
+
+    render(
+      <ThematicSummaryStories
+        summaries={[technology, podcast, olderPodcast]}
+        locale="en"
+        readSummaryIds={[technology.id, podcast.id, olderPodcast.id]}
+        t={t}
+        onOpenSummary={vi.fn()}
+      />
+    );
+
+    const buttons = screen.getAllByRole('button');
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0].getAttribute('style')).toContain('conic-gradient');
+    expect(buttons[1].getAttribute('style')).toContain('conic-gradient');
+    expect(screen.queryAllByTestId('thematic-summary-new-dot')).toHaveLength(0);
   });
 
   test('renders custom podcast audio controls without script text and starts playback', async () => {

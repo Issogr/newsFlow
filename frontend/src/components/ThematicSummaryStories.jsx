@@ -36,13 +36,20 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
               key={isPodcast ? 'podcast-summaries' : summary.id}
               type="button"
               onClick={() => onOpenSummary(summary)}
-              className={`group inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 ${unread ? 'p-[1.5px]' : 'border-2 border-white'}`}
-              style={unread ? AI_ACCENT_GRADIENT_STYLE : undefined}
+              className="group relative inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full p-[1.5px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+              style={AI_ACCENT_GRADIENT_STYLE}
               aria-label={ariaLabel}
             >
               <span className={`inline-flex h-full w-full items-center justify-center rounded-full transition-[filter] group-hover:brightness-110 ${circleClassName}`}>
                 <PrimaryIcon className="h-6 w-6" aria-hidden="true" />
               </span>
+              {unread && (
+                <span
+                  className="absolute right-0 top-0 h-3 w-3 rounded-full border-2 border-white bg-violet-600 shadow-sm"
+                  aria-hidden="true"
+                  data-testid="thematic-summary-new-dot"
+                />
+              )}
             </button>
           );
         })}

@@ -6,7 +6,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     intro: 'A quick summary of the latest update.',
     items: [
       '👉 Swipe left or right on mobile AI summaries to move between topics without closing the panel; the card follows your gesture while swiping.',
-      '🌈 New AI summary stories now use a clean rainbow ring instead of the star badge.',
+      '🌈 AI summary stories keep their rainbow ring after opening, with a small dot showing what is still new.',
       '🏷️ Topic circles on news cards now overlap neatly like multiple source circles.'
     ]
   },
@@ -16,7 +16,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
       '👉 Scorri a sinistra o a destra sulle sintesi AI da mobile per passare tra i topic senza chiudere il pannello; la scheda segue il gesto durante lo swipe.',
-      '🌈 Le nuove storie con sintesi AI usano un anello arcobaleno pulito al posto del badge con la stella.',
+      '🌈 Le storie con sintesi AI mantengono l\'anello arcobaleno anche dopo l\'apertura, con un piccolo punto per indicare quelle ancora nuove.',
       '🏷️ I cerchi dei topic nelle news card ora si sovrappongono in modo ordinato come quelli delle fonti multiple.'
     ]
   }
