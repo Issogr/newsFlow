@@ -40,7 +40,7 @@ function createNewsCardElement({ cardGroup = group, ...props } = {}) {
       group={cardGroup}
       locale="en"
       t={t}
-      onOpenReader={jest.fn()}
+      onOpenReader={vi.fn()}
       {...props}
     />
   );
@@ -59,11 +59,11 @@ describe('NewsCard', () => {
     navigator.share = originalShare;
     navigator.clipboard = originalClipboard;
     window.open = originalWindowOpen;
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   test('opens a safe external url in a new tab', () => {
-    window.open = jest.fn();
+    window.open = vi.fn();
 
     renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
@@ -283,7 +283,7 @@ describe('NewsCard', () => {
   });
 
   test('toggles the read-later action from the card header', () => {
-    const onToggleReadLater = jest.fn();
+    const onToggleReadLater = vi.fn();
 
     renderNewsCard({ onToggleReadLater });
 
@@ -301,7 +301,7 @@ describe('NewsCard', () => {
   });
 
   test('uses the native share action when available', async () => {
-    navigator.share = jest.fn().mockResolvedValue(undefined);
+    navigator.share = vi.fn().mockResolvedValue(undefined);
 
     renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
@@ -318,7 +318,7 @@ describe('NewsCard', () => {
   test('shows a share status bubble when clipboard fallback is used', async () => {
     navigator.share = undefined;
     navigator.clipboard = {
-      writeText: jest.fn().mockResolvedValue(undefined)
+      writeText: vi.fn().mockResolvedValue(undefined)
     };
 
     renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
@@ -334,7 +334,7 @@ describe('NewsCard', () => {
   test('shows a share failure bubble when clipboard fallback is denied', async () => {
     navigator.share = undefined;
     navigator.clipboard = {
-      writeText: jest.fn().mockRejectedValue(new Error('denied'))
+      writeText: vi.fn().mockRejectedValue(new Error('denied'))
     };
 
     renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
@@ -348,7 +348,7 @@ describe('NewsCard', () => {
   });
 
   test('opens reader mode on title double click and reader button click', () => {
-    const onOpenReader = jest.fn();
+    const onOpenReader = vi.fn();
 
     renderNewsCard({
       cardGroup: createGroup({ items: [createItem({ image: 'https://example.com/image.jpg' })] }),
@@ -360,14 +360,14 @@ describe('NewsCard', () => {
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
 
     onOpenReader.mockClear();
-    jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000);
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000);
     fireEvent.click(screen.getByRole('button', { name: 'readHere' }));
 
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
   });
 
   test('opens reader mode on image double tap but not single tap', () => {
-    const onOpenReader = jest.fn();
+    const onOpenReader = vi.fn();
 
     renderNewsCard({
       cardGroup: createGroup({ items: [createItem({ image: 'https://example.com/image.jpg' })] }),

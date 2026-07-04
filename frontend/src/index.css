@@ -48,65 +48,59 @@ body {
   background-color: rgb(15 23 42 / 0.95) !important;
 }
 
-:root[data-theme='dark'] .bg-white\/85,
-:root[data-theme='dark'] .bg-white\/90,
-:root[data-theme='dark'] .bg-white\/80,
-:root[data-theme='dark'] .bg-white\/70 {
+:root[data-theme='dark'] :is(.bg-white\/85, .bg-white\/90, .bg-white\/80, .bg-white\/70) {
   background-color: rgb(15 23 42 / 0.9) !important;
 }
 
-:root[data-theme='dark'] .bg-slate-50,
-:root[data-theme='dark'] .bg-stone-50 {
+:root[data-theme='dark'] :is(.bg-slate-50, .bg-stone-50) {
   background-color: rgb(15 23 42) !important;
 }
 
-:root[data-theme='dark'] .bg-slate-50\/80,
-:root[data-theme='dark'] .bg-slate-50\/70,
-:root[data-theme='dark'] .bg-slate-50\/60 {
+:root[data-theme='dark'] :is(.bg-slate-50\/80, .bg-slate-50\/70, .bg-slate-50\/60) {
   background-color: rgb(15 23 42 / 0.92) !important;
 }
 
-:root[data-theme='dark'] .bg-slate-100,
-:root[data-theme='dark'] .bg-stone-100,
-:root[data-theme='dark'] .bg-gray-100 {
+:root[data-theme='dark'] :is(.bg-slate-100, .bg-stone-100, .bg-gray-100) {
   background-color: rgb(30 41 59) !important;
 }
 
-:root[data-theme='dark'] .bg-slate-200,
-:root[data-theme='dark'] .bg-stone-200,
-:root[data-theme='dark'] .bg-slate-300 {
+:root[data-theme='dark'] :is(.bg-slate-200, .bg-stone-200, .bg-slate-300) {
   background-color: rgb(51 65 85) !important;
 }
 
-:root[data-theme='dark'] .text-slate-950,
-:root[data-theme='dark'] .text-slate-900,
-:root[data-theme='dark'] .text-slate-800,
-:root[data-theme='dark'] .text-stone-900,
-:root[data-theme='dark'] .text-stone-800 {
+:root[data-theme='dark'] :is(
+  .text-slate-950,
+  .text-slate-900,
+  .text-slate-800,
+  .text-stone-900,
+  .text-stone-800
+) {
   color: rgb(248 250 252) !important;
 }
 
-:root[data-theme='dark'] .text-slate-700,
-:root[data-theme='dark'] .text-slate-600,
-:root[data-theme='dark'] .text-stone-700 {
+:root[data-theme='dark'] :is(.text-slate-700, .text-slate-600, .text-stone-700) {
   color: rgb(203 213 225) !important;
 }
 
-:root[data-theme='dark'] .text-slate-500,
-:root[data-theme='dark'] .text-slate-400,
-:root[data-theme='dark'] .text-slate-300,
-:root[data-theme='dark'] .text-stone-500,
-:root[data-theme='dark'] .text-stone-400,
-:root[data-theme='dark'] .text-gray-600 {
+:root[data-theme='dark'] :is(
+  .text-slate-500,
+  .text-slate-400,
+  .text-slate-300,
+  .text-stone-500,
+  .text-stone-400,
+  .text-gray-600
+) {
   color: rgb(148 163 184) !important;
 }
 
-:root[data-theme='dark'] .border-slate-100,
-:root[data-theme='dark'] .border-slate-200,
-:root[data-theme='dark'] .border-slate-300,
-:root[data-theme='dark'] .border-slate-400,
-:root[data-theme='dark'] .border-stone-200,
-:root[data-theme='dark'] .border-stone-300 {
+:root[data-theme='dark'] :is(
+  .border-slate-100,
+  .border-slate-200,
+  .border-slate-300,
+  .border-slate-400,
+  .border-stone-200,
+  .border-stone-300
+) {
   border-color: rgb(51 65 85) !important;
 }
 
@@ -114,8 +108,7 @@ body {
   border-color: rgb(71 85 105) !important;
 }
 
-:root[data-theme='dark'] button.bg-slate-900,
-:root[data-theme='dark'] a.bg-slate-900 {
+:root[data-theme='dark'] :is(button.bg-slate-900, a.bg-slate-900) {
   box-shadow: inset 0 0 0 1px rgb(71 85 105) !important;
 }
 
@@ -123,15 +116,11 @@ body {
   color: rgb(100 116 139) !important;
 }
 
-:root[data-theme='dark'] .bg-sky-50,
-:root[data-theme='dark'] .bg-sky-100,
-:root[data-theme='dark'] .bg-sky-200 {
+:root[data-theme='dark'] :is(.bg-sky-50, .bg-sky-100, .bg-sky-200) {
   background-color: rgb(14 165 233 / 0.18) !important;
 }
 
-:root[data-theme='dark'] .text-sky-600,
-:root[data-theme='dark'] .text-sky-700,
-:root[data-theme='dark'] .text-sky-900 {
+:root[data-theme='dark'] :is(.text-sky-600, .text-sky-700, .text-sky-900) {
   color: rgb(125 211 252) !important;
 }
 
@@ -139,15 +128,11 @@ body {
   border-color: rgb(12 74 110) !important;
 }
 
-:root[data-theme='dark'] .bg-emerald-50,
-:root[data-theme='dark'] .bg-emerald-100,
-:root[data-theme='dark'] .bg-emerald-200 {
+:root[data-theme='dark'] :is(.bg-emerald-50, .bg-emerald-100, .bg-emerald-200) {
   background-color: rgb(16 185 129 / 0.18) !important;
 }
 
-:root[data-theme='dark'] .text-emerald-600,
-:root[data-theme='dark'] .text-emerald-700,
-:root[data-theme='dark'] .text-emerald-800 {
+:root[data-theme='dark'] :is(.text-emerald-600, .text-emerald-700, .text-emerald-800) {
   color: rgb(110 231 183) !important;
 }
 
@@ -155,16 +140,11 @@ body {
   border-color: rgb(6 95 70) !important;
 }
 
-:root[data-theme='dark'] .bg-amber-50,
-:root[data-theme='dark'] .bg-amber-100,
-:root[data-theme='dark'] .bg-amber-200 {
+:root[data-theme='dark'] :is(.bg-amber-50, .bg-amber-100, .bg-amber-200) {
   background-color: rgb(245 158 11 / 0.18) !important;
 }
 
-:root[data-theme='dark'] .text-amber-600,
-:root[data-theme='dark'] .text-amber-700,
-:root[data-theme='dark'] .text-amber-800,
-:root[data-theme='dark'] .text-amber-900 {
+:root[data-theme='dark'] :is(.text-amber-600, .text-amber-700, .text-amber-800, .text-amber-900) {
   color: rgb(253 186 116) !important;
 }
 
@@ -172,30 +152,30 @@ body {
   border-color: rgb(146 64 14) !important;
 }
 
-:root[data-theme='dark'] .bg-red-50,
-:root[data-theme='dark'] .bg-rose-50,
-:root[data-theme='dark'] .bg-rose-100,
-:root[data-theme='dark'] .bg-rose-200 {
+:root[data-theme='dark'] :is(.bg-red-50, .bg-rose-50, .bg-rose-100, .bg-rose-200) {
   background-color: rgb(244 63 94 / 0.16) !important;
 }
 
-:root[data-theme='dark'] .text-red-500,
-:root[data-theme='dark'] .text-red-600,
-:root[data-theme='dark'] .text-red-700,
-:root[data-theme='dark'] .text-rose-600,
-:root[data-theme='dark'] .text-rose-700 {
+:root[data-theme='dark'] :is(
+  .text-red-500,
+  .text-red-600,
+  .text-red-700,
+  .text-rose-600,
+  .text-rose-700
+) {
   color: rgb(253 164 175) !important;
 }
 
-:root[data-theme='dark'] .border-red-200,
-:root[data-theme='dark'] .border-rose-200 {
+:root[data-theme='dark'] :is(.border-red-200, .border-rose-200) {
   border-color: rgb(136 19 55) !important;
 }
 
-:root[data-theme='dark'] .hover\:bg-gray-100:hover,
-:root[data-theme='dark'] .hover\:bg-slate-50:hover,
-:root[data-theme='dark'] .hover\:bg-slate-100:hover,
-:root[data-theme='dark'] .hover\:bg-stone-100:hover {
+:root[data-theme='dark'] :is(
+  .hover\:bg-gray-100:hover,
+  .hover\:bg-slate-50:hover,
+  .hover\:bg-slate-100:hover,
+  .hover\:bg-stone-100:hover
+) {
   background-color: rgb(51 65 85) !important;
 }
 
@@ -211,8 +191,7 @@ body {
   background-color: rgb(12 74 110 / 0.5) !important;
 }
 
-:root[data-theme='dark'] .hover\:text-slate-900:hover,
-:root[data-theme='dark'] .hover\:text-stone-800:hover {
+:root[data-theme='dark'] :is(.hover\:text-slate-900:hover, .hover\:text-stone-800:hover) {
   color: rgb(248 250 252) !important;
 }
 

@@ -24,11 +24,11 @@ const baseCurrentUser = createTestCurrentUser({ user: { id: 'user-1', username: 
 
 describe('useSettingsPanelState', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test('keeps unsaved settings local through a source add and parent rerender', async () => {
-    const onUserUpdate = jest.fn();
+    const onUserUpdate = vi.fn();
     const source = {
       id: 'source-1',
       name: 'Example Feed',
@@ -41,7 +41,7 @@ describe('useSettingsPanelState', () => {
     const { result, rerender } = renderHook(({ currentUser }) => useSettingsPanelState({
       currentUser,
       availableSources: [],
-      onClose: jest.fn(),
+      onClose: vi.fn(),
       onUserUpdate
     }), { initialProps: { currentUser: baseCurrentUser } });
 
@@ -51,7 +51,7 @@ describe('useSettingsPanelState', () => {
     });
 
     await act(async () => {
-      await result.current.handleAddSource({ preventDefault: jest.fn() });
+      await result.current.handleAddSource({ preventDefault: vi.fn() });
     });
 
     expect(result.current.settings.defaultLanguage).toBe('it');
@@ -68,7 +68,7 @@ describe('useSettingsPanelState', () => {
   });
 
   test('keeps unsaved settings after parent rerenders from token changes', async () => {
-    const onUserUpdate = jest.fn();
+    const onUserUpdate = vi.fn();
     createApiToken.mockResolvedValue({
       token: 'raw-token',
       tokenInfo: { tokenPrefix: 'raw-token', expiresAt: '2026-01-01T00:00:00.000Z' }
@@ -77,7 +77,7 @@ describe('useSettingsPanelState', () => {
     const { result, rerender } = renderHook(({ currentUser }) => useSettingsPanelState({
       currentUser,
       availableSources: [],
-      onClose: jest.fn(),
+      onClose: vi.fn(),
       onUserUpdate
     }), { initialProps: { currentUser: baseCurrentUser } });
 
@@ -97,8 +97,8 @@ describe('useSettingsPanelState', () => {
   });
 
   test('does not overwrite same-user settings updates for untouched fields', async () => {
-    const onClose = jest.fn();
-    const onUserUpdate = jest.fn();
+    const onClose = vi.fn();
+    const onUserUpdate = vi.fn();
     const initialUser = {
       ...baseCurrentUser,
       settings: {
@@ -150,8 +150,8 @@ describe('useSettingsPanelState', () => {
     const { result } = renderHook(() => useSettingsPanelState({
       currentUser: baseCurrentUser,
       availableSources: [],
-      onClose: jest.fn(),
-      onUserUpdate: jest.fn()
+      onClose: vi.fn(),
+      onUserUpdate: vi.fn()
     }));
 
     act(() => {
@@ -159,7 +159,7 @@ describe('useSettingsPanelState', () => {
     });
 
     await act(async () => {
-      await result.current.handleAddSource({ preventDefault: jest.fn() });
+      await result.current.handleAddSource({ preventDefault: vi.fn() });
     });
 
     expect(result.current.sourceError).toBe(requestError);
@@ -167,7 +167,7 @@ describe('useSettingsPanelState', () => {
   });
 
   test('keeps unsaved settings local when updating a source', async () => {
-    const onUserUpdate = jest.fn();
+    const onUserUpdate = vi.fn();
     const currentUser = {
       ...baseCurrentUser,
       customSources: [{
@@ -189,7 +189,7 @@ describe('useSettingsPanelState', () => {
     const { result } = renderHook(() => useSettingsPanelState({
       currentUser,
       availableSources: [],
-      onClose: jest.fn(),
+      onClose: vi.fn(),
       onUserUpdate
     }));
 
@@ -216,7 +216,7 @@ describe('useSettingsPanelState', () => {
   });
 
   test('cleans deleted source from the local draft without leaking other draft settings', async () => {
-    const onUserUpdate = jest.fn();
+    const onUserUpdate = vi.fn();
     const currentUser = {
       ...baseCurrentUser,
       settings: {
@@ -236,7 +236,7 @@ describe('useSettingsPanelState', () => {
     const { result } = renderHook(() => useSettingsPanelState({
       currentUser,
       availableSources: [],
-      onClose: jest.fn(),
+      onClose: vi.fn(),
       onUserUpdate
     }));
 
@@ -258,8 +258,8 @@ describe('useSettingsPanelState', () => {
   });
 
   test('saves only changed settings to avoid stale full-snapshot overwrites', async () => {
-    const onClose = jest.fn();
-    const onUserUpdate = jest.fn();
+    const onClose = vi.fn();
+    const onUserUpdate = vi.fn();
     updateUserSettings.mockResolvedValue({
       settings: {
         ...baseCurrentUser.settings,

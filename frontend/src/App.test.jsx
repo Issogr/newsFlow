@@ -38,17 +38,17 @@ vi.mock('./components/AdminDashboard', () => ({
 
 describe('App', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     vi.useRealTimers();
     window.localStorage.clear();
     document.body.style.overflow = '';
     document.documentElement.dataset.theme = '';
     document.documentElement.style.colorScheme = '';
     window.history.replaceState({}, '', '/');
-    window.matchMedia = jest.fn().mockImplementation(() => ({
+    window.matchMedia = vi.fn().mockImplementation(() => ({
       matches: false,
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn()
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
     }));
   });
 

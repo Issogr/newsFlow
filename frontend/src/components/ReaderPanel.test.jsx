@@ -56,7 +56,7 @@ function buildReaderPanel(props = {}) {
       readerPosition="right"
       t={t}
       currentUser={currentUser}
-      onClose={jest.fn()}
+      onClose={vi.fn()}
       {...props}
     />
   );
@@ -82,7 +82,7 @@ describe('ReaderPanel', () => {
   const originalClipboard = navigator.clipboard;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     document.body.style.overflow = '';
   });
 
@@ -323,7 +323,7 @@ describe('ReaderPanel', () => {
   });
 
   test('shares the original article url from reader mode', async () => {
-    navigator.share = jest.fn().mockResolvedValue(undefined);
+    navigator.share = vi.fn().mockResolvedValue(undefined);
     fetchReaderArticle.mockResolvedValue(createReaderPayload());
 
     renderReaderPanel();

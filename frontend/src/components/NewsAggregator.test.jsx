@@ -71,8 +71,8 @@ async function renderNewsAggregator(overrides = {}) {
     view = render(
       <NewsAggregator
         currentUser={overrides.currentUser || currentUser}
-        onLogout={overrides.onLogout || jest.fn()}
-        onUserUpdate={overrides.onUserUpdate || jest.fn()}
+        onLogout={overrides.onLogout || vi.fn()}
+        onUserUpdate={overrides.onUserUpdate || vi.fn()}
       />
     );
     await Promise.resolve();
@@ -130,6 +130,11 @@ function createFeedResponse(items = [], overrides = {}) {
   };
 }
 
+function createSingleGroupFeedResponse(id, title, options = {}) {
+  const { pubDate, ...overrides } = options;
+  return createFeedResponse([createGroup(id, title, pubDate)], overrides);
+}
+
 function createThematicSummary(overrides = {}) {
   const topicKey = overrides.topicKey || 'technology';
   const topicLabel = overrides.topicLabel || `${topicKey.charAt(0).toUpperCase()}${topicKey.slice(1)}`;
@@ -164,21 +169,21 @@ describe('NewsAggregator', () => {
   let desktopMediaQuery;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useFakeTimers();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
     Object.defineProperty(window, 'scrollY', {
       value: 0,
       writable: true,
       configurable: true
     });
-    window.scrollTo = jest.fn();
+    window.scrollTo = vi.fn();
     window.localStorage.clear();
     desktopMediaQuery = {
       matches: true,
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn()
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
     };
-    window.matchMedia = jest.fn().mockImplementation(() => desktopMediaQuery);
+    window.matchMedia = vi.fn().mockImplementation(() => desktopMediaQuery);
     fetchThematicSummaries.mockResolvedValue({ items: [] });
     markThematicSummariesRead.mockResolvedValue({ readSummaryIds: [] });
     useTopicRefreshSocket.mockImplementation(() => {});
@@ -186,15 +191,15 @@ describe('NewsAggregator', () => {
 
   afterEach(() => {
     act(() => {
-      jest.runOnlyPendingTimers();
+      vi.runOnlyPendingTimers();
     });
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test('ignores main-feed refresh socket events while viewing read later', async () => {
     const socketHandlers = captureSocketHandlers();
-    fetchNews.mockResolvedValue(createFeedResponse([createGroup('news', 'News headline')]));
-    fetchReadLaterNews.mockResolvedValue(createFeedResponse([createGroup('saved', 'Saved headline')]));
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('news', 'News headline'));
+    fetchReadLaterNews.mockResolvedValue(createSingleGroupFeedResponse('saved', 'Saved headline'));
 
     await renderNewsAggregator();
     fireEvent.click(screen.getAllByRole('button', { name: 'Read later' })[0]);
@@ -255,7 +260,7 @@ describe('NewsAggregator', () => {
         return secondRequest.promise;
       }
 
-      return Promise.resolve(createFeedResponse([createGroup('new-group', 'New headline')]));
+      return Promise.resolve(createSingleGroupFeedResponse('new-group', 'New headline'));
     });
 
     await renderNewsAggregator();
@@ -264,14 +269,14 @@ describe('NewsAggregator', () => {
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'economy' } });
 
     await act(async () => {
-      jest.advanceTimersByTime(350);
+      vi.advanceTimersByTime(350);
     });
 
-    await resolveDeferred(secondRequest, createFeedResponse([createGroup('new-group', 'New headline')]));
+    await resolveDeferred(secondRequest, createSingleGroupFeedResponse('new-group', 'New headline'));
 
     expect(await screen.findByText('New headline')).toBeInTheDocument();
 
-    await resolveDeferred(firstRequest, createFeedResponse([createGroup('old-group', 'Old headline')]));
+    await resolveDeferred(firstRequest, createSingleGroupFeedResponse('old-group', 'Old headline'));
 
     await waitFor(() => {
       expect(screen.getByText('New headline')).toBeInTheDocument();
@@ -281,7 +286,7 @@ describe('NewsAggregator', () => {
   });
 
   test('renders thematic summary stories and opens the summary panel', async () => {
-    fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Top headline'));
     fetchThematicSummaries.mockResolvedValue({
       items: [
         createThematicSummary({
@@ -325,7 +330,7 @@ describe('NewsAggregator', () => {
   });
 
   test('uses server read summary ids to hide already-read thematic summary badges', async () => {
-    fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Top headline'));
     fetchThematicSummaries.mockResolvedValue({
       readSummaryIds: ['summary-technology'],
       items: [
@@ -343,7 +348,7 @@ describe('NewsAggregator', () => {
   });
 
   test('does not fetch thematic summaries when summary and podcast features are disabled', async () => {
-    fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Top headline'));
 
     await renderNewsAggregator({
       currentUser: {
@@ -362,7 +367,7 @@ describe('NewsAggregator', () => {
   });
 
   test('hides podcast stories when the podcast feature is disabled', async () => {
-    fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Top headline'));
     fetchThematicSummaries.mockResolvedValue({
       items: [
         createPodcastSummary(),
@@ -391,7 +396,7 @@ describe('NewsAggregator', () => {
 
   test('refreshes thematic stories when summary socket refresh arrives', async () => {
     const socketHandlers = captureSocketHandlers();
-    fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Top headline'));
     fetchThematicSummaries
       .mockResolvedValueOnce({ items: [] })
       .mockResolvedValueOnce({
@@ -418,7 +423,7 @@ describe('NewsAggregator', () => {
 
   test('updates the open summary panel when refreshed summary data arrives', async () => {
     const socketHandlers = captureSocketHandlers();
-    fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Top headline'));
     fetchThematicSummaries
       .mockResolvedValueOnce({
         items: [
@@ -457,7 +462,7 @@ describe('NewsAggregator', () => {
 
   test('closes an open summary panel when refreshed summaries no longer include it', async () => {
     const socketHandlers = captureSocketHandlers();
-    fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Top headline'));
     fetchThematicSummaries
       .mockResolvedValueOnce({
         items: [
@@ -500,7 +505,7 @@ describe('NewsAggregator', () => {
     const firstSummariesRequest = createDeferred();
     const secondSummariesRequest = createDeferred();
 
-    fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Top headline')]));
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Top headline'));
     fetchThematicSummaries
       .mockImplementationOnce(() => firstSummariesRequest.promise)
       .mockImplementationOnce(() => secondSummariesRequest.promise);
@@ -546,7 +551,7 @@ describe('NewsAggregator', () => {
   });
 
   test('shows one-time source setup and excludes unselected sources and sub-feeds', async () => {
-    const onUserUpdate = jest.fn();
+    const onUserUpdate = vi.fn();
     let socketOptions;
     const setupUser = {
       ...currentUser,
@@ -626,7 +631,7 @@ describe('NewsAggregator', () => {
   });
 
   test('forces a source refresh without reloading unchanged thematic summaries from the refresh button', async () => {
-    fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Current headline')]));
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Current headline'));
 
     await renderNewsAggregator();
 
@@ -644,7 +649,7 @@ describe('NewsAggregator', () => {
   test('keeps manual refresh clickable while the server cooldown is active', async () => {
     const allowedAt = new Date(Date.now() + (5 * 60 * 1000)).toISOString();
 
-    fetchNews.mockResolvedValue(createFeedResponse([createGroup('group-1', 'Current headline')], {
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Current headline', {
       meta: {
         manualRefreshAllowedAt: allowedAt,
         manualRefreshAllowed: false,
@@ -666,8 +671,8 @@ describe('NewsAggregator', () => {
   test('reloads cached feed silently when AI topic updates complete', async () => {
     const socketHandlers = captureSocketHandlers();
     fetchNews
-      .mockResolvedValueOnce(createFeedResponse([createGroup('group-1', 'Fallback topic headline')]))
-      .mockResolvedValue(createFeedResponse([createGroup('group-1', 'AI topic headline')]));
+      .mockResolvedValueOnce(createSingleGroupFeedResponse('group-1', 'Fallback topic headline'))
+      .mockResolvedValue(createSingleGroupFeedResponse('group-1', 'AI topic headline'));
 
     await renderNewsAggregator();
     await waitFor(() => {
@@ -712,7 +717,7 @@ describe('NewsAggregator', () => {
     expect(fetchNews).toHaveBeenCalledTimes(1);
     expect(initialRequestAborted).toBe(false);
 
-    await resolveDeferred(initialRequest, createFeedResponse([createGroup('group-1', 'Initial headline')]));
+    await resolveDeferred(initialRequest, createSingleGroupFeedResponse('group-1', 'Initial headline'));
 
     expect(await screen.findByText('Initial headline')).toBeInTheDocument();
     expect(screen.queryByText('Unexpected silent headline')).not.toBeInTheDocument();
@@ -768,8 +773,8 @@ describe('NewsAggregator', () => {
   test('adds brand-new cards when a manual refresh completion reload arrives', async () => {
     const socketHandlers = captureSocketHandlers();
     fetchNews
-      .mockResolvedValueOnce(createFeedResponse([createGroup('group-current', 'Current headline')]))
-      .mockResolvedValueOnce(createFeedResponse([createGroup('group-current', 'Current headline')], { meta: { pendingUserRefresh: true } }))
+      .mockResolvedValueOnce(createSingleGroupFeedResponse('group-current', 'Current headline'))
+      .mockResolvedValueOnce(createSingleGroupFeedResponse('group-current', 'Current headline', { meta: { pendingUserRefresh: true } }))
       .mockResolvedValueOnce(createFeedResponse([
           createGroup('group-new', 'Fresh manual refresh headline', '2026-03-14T11:00:00.000Z'),
           createGroup('group-current', 'Current headline')
@@ -798,7 +803,7 @@ describe('NewsAggregator', () => {
   test('keeps pending new article notice after silent topic reloads', async () => {
     const socketHandlers = captureSocketHandlers();
     fetchNews
-      .mockResolvedValueOnce(createFeedResponse([createGroup('group-current', 'Current headline')], { meta: { hasMore: true, totalGroups: 2 } }))
+      .mockResolvedValueOnce(createSingleGroupFeedResponse('group-current', 'Current headline', { meta: { hasMore: true, totalGroups: 2 } }))
       .mockResolvedValueOnce(createFeedResponse([
           createGroup('group-new', 'New automatic headline', '2026-03-14T11:00:00.000Z'),
           createGroup('group-current', 'Current headline with AI topics')
@@ -830,7 +835,7 @@ describe('NewsAggregator', () => {
     let manualRequestAborted = false;
 
     fetchNews
-      .mockResolvedValueOnce(createFeedResponse([createGroup('group-1', 'Current headline')]))
+      .mockResolvedValueOnce(createSingleGroupFeedResponse('group-1', 'Current headline'))
       .mockImplementationOnce(({ signal }) => {
         signal.addEventListener('abort', () => {
           manualRequestAborted = true;
@@ -856,7 +861,7 @@ describe('NewsAggregator', () => {
     expect(manualRequestAborted).toBe(false);
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
 
-    await resolveDeferred(manualRefreshRequest, createFeedResponse([createGroup('group-1', 'Manual refresh headline')]));
+    await resolveDeferred(manualRefreshRequest, createSingleGroupFeedResponse('group-1', 'Manual refresh headline'));
 
     expect(await screen.findByText('Manual refresh headline')).toBeInTheDocument();
     await waitFor(() => {
@@ -1229,7 +1234,7 @@ describe('NewsAggregator', () => {
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'economy' } });
 
     await act(async () => {
-      jest.advanceTimersByTime(350);
+      vi.advanceTimersByTime(350);
     });
 
     await resolveDeferred(reloadRequest, createFeedResponse([{ id: 'group-reloaded', title: 'Reloaded headline', items: [{ id: 'article-2', pubDate: '2026-03-14T11:00:00.000Z' }] }], {

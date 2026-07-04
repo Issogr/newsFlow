@@ -6,12 +6,12 @@ describe('AuthScreen', () => {
   const t = createTranslator('en');
 
   test('validates registration passwords before submitting valid credentials', async () => {
-    const onRegister = jest.fn();
+    const onRegister = vi.fn();
 
     render(
       <AuthScreen
         t={t}
-        onLogin={jest.fn()}
+        onLogin={vi.fn()}
         onRegister={onRegister}
         busy={false}
         error={null}
@@ -46,8 +46,8 @@ describe('AuthScreen', () => {
     render(
       <AuthScreen
         t={t}
-        onLogin={jest.fn()}
-        onRegister={jest.fn()}
+        onLogin={vi.fn()}
+        onRegister={vi.fn()}
         busy={false}
         error={null}
       />

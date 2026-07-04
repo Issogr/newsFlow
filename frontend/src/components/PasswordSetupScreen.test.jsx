@@ -12,11 +12,11 @@ describe('PasswordSetupScreen', () => {
   const t = createTranslator('en');
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test('validates the token and completes password setup', async () => {
-    const onComplete = jest.fn();
+    const onComplete = vi.fn();
 
     validatePasswordSetupToken.mockResolvedValue({
       username: 'alice',
@@ -52,7 +52,7 @@ describe('PasswordSetupScreen', () => {
       expiresAt: '2026-03-27T12:00:00.000Z'
     });
 
-    render(<PasswordSetupScreen t={t} token="setup-token" onComplete={jest.fn()} />);
+    render(<PasswordSetupScreen t={t} token="setup-token" onComplete={vi.fn()} />);
 
     expect(await screen.findByText('Account: alice')).toBeInTheDocument();
 

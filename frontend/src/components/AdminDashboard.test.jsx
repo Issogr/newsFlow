@@ -68,24 +68,24 @@ describe('AdminDashboard', () => {
   }
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    window.confirm = jest.fn(() => true);
+    vi.clearAllMocks();
+    window.confirm = vi.fn(() => true);
   });
 
   test('does not start overlapping user reloads while polling', async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     let resolveUsers;
     fetchAdminUsers.mockImplementation(() => new Promise((resolve) => {
       resolveUsers = resolve;
     }));
 
     try {
-      render(<AdminDashboard t={t} currentUser={currentUser} onLogout={jest.fn()} onUserUpdate={jest.fn()} />);
+      render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} onUserUpdate={vi.fn()} />);
 
       expect(fetchAdminUsers).toHaveBeenCalledTimes(1);
 
       act(() => {
-        jest.advanceTimersByTime(30000);
+        vi.advanceTimersByTime(30000);
       });
 
       expect(fetchAdminUsers).toHaveBeenCalledTimes(1);
@@ -95,12 +95,12 @@ describe('AdminDashboard', () => {
       });
 
       act(() => {
-        jest.advanceTimersByTime(30000);
+        vi.advanceTimersByTime(30000);
       });
 
       expect(fetchAdminUsers).toHaveBeenCalledTimes(2);
     } finally {
-      jest.useRealTimers();
+      vi.useRealTimers();
     }
   });
 
@@ -119,7 +119,7 @@ describe('AdminDashboard', () => {
       anonymousPublicApiRequests: 9
     }));
 
-    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={jest.fn()} onUserUpdate={jest.fn()} />);
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} onUserUpdate={vi.fn()} />);
 
     expect(await screen.findByText('Admin dashboard')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Switch to dark theme' })).toBeInTheDocument();
@@ -150,7 +150,7 @@ describe('AdminDashboard', () => {
     });
     deleteAdminUser.mockResolvedValue({ success: true });
 
-    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={jest.fn()} onUserUpdate={jest.fn()} />);
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} onUserUpdate={vi.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: '🔑 Reset' }));
 
@@ -176,7 +176,7 @@ describe('AdminDashboard', () => {
       .mockRejectedValueOnce(new Error('Reload failed'));
     deleteAdminUser.mockResolvedValue({ success: true });
 
-    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={jest.fn()} onUserUpdate={jest.fn()} />);
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} onUserUpdate={vi.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
 
@@ -203,7 +203,7 @@ describe('AdminDashboard', () => {
         <AdminDashboard
           t={t}
           currentUser={userState}
-          onLogout={jest.fn()}
+          onLogout={vi.fn()}
           onUserUpdate={(settings) => {
             setUserState((current) => ({
               ...current,
