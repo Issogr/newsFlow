@@ -161,8 +161,21 @@ function expectTrustedForwardedHeaders(headers) {
   expect(headers['x-forwarded-proto']).toBe('https');
 }
 
+function expectCsrfRejected(response) {
+  expect(response.body.error).toEqual({
+    message: 'Cross-origin request rejected.',
+    code: 'CSRF_ORIGIN_MISMATCH',
+  });
+}
+
 describe('bff server', () => {
   const originalNodeEnv = process.env.NODE_ENV;
+  const originalEnvValues = {
+    BFF_SESSION_SECRET: process.env.BFF_SESSION_SECRET,
+    INTERNAL_PROXY_TOKEN: process.env.INTERNAL_PROXY_TOKEN,
+    INTERNAL_SERVICE_NAME: process.env.INTERNAL_SERVICE_NAME,
+    TRUST_PROXY: process.env.TRUST_PROXY,
+  };
   let backendServer;
   let backendBaseUrl;
   let frontendDistDir;
@@ -293,10 +306,9 @@ describe('bff server', () => {
     await close(backendServer);
     cleanupCreatedApp({ sessionStore, sessionDb }, sessionDir);
     fs.rmSync(frontendDistDir, { recursive: true, force: true });
-    delete process.env.BFF_SESSION_SECRET;
-    delete process.env.INTERNAL_PROXY_TOKEN;
-    delete process.env.INTERNAL_SERVICE_NAME;
-    delete process.env.TRUST_PROXY;
+    Object.entries(originalEnvValues).forEach(([name, value]) => {
+      restoreEnvValue(name, value);
+    });
     if (originalNodeEnv === undefined) {
       delete process.env.NODE_ENV;
     } else {
@@ -383,10 +395,7 @@ describe('bff server', () => {
       .send(body)
       .expect(403);
 
-    expect(missingOriginResponse.body.error).toEqual({
-      message: 'Cross-origin request rejected.',
-      code: 'CSRF_ORIGIN_MISMATCH',
-    });
+    expectCsrfRejected(missingOriginResponse);
 
     const hostileOriginResponse = await request(app)
       .post(routePath)
@@ -394,10 +403,7 @@ describe('bff server', () => {
       .send(body)
       .expect(403);
 
-    expect(hostileOriginResponse.body.error).toEqual({
-      message: 'Cross-origin request rejected.',
-      code: 'CSRF_ORIGIN_MISMATCH',
-    });
+    expectCsrfRejected(hostileOriginResponse);
   });
 
   test('keeps the session valid after recreating the BFF app instance', async () => {
@@ -484,10 +490,7 @@ describe('bff server', () => {
       .set(headers)
       .expect(403);
 
-    expect(response.body.error).toEqual({
-      message: 'Cross-origin request rejected.',
-      code: 'CSRF_ORIGIN_MISMATCH',
-    });
+    expectCsrfRejected(response);
   });
 
   test('does not let static files shadow protected API routes', async () => {
@@ -688,10 +691,7 @@ describe('bff server', () => {
       .set('Origin', 'https://evil.example')
       .expect(403);
 
-    expect(response.body.error).toEqual({
-      message: 'Cross-origin request rejected.',
-      code: 'CSRF_ORIGIN_MISMATCH',
-    });
+    expectCsrfRejected(response);
     expect(lastBackendHeaders.cookie).toBeUndefined();
   });
 

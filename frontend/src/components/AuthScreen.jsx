@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ExternalLink, LogIn, UserPlus } from 'lucide-react';
+import { LogIn, UserPlus } from 'lucide-react';
 import AuthCard, {
   AUTH_PRIMARY_BUTTON_CLASS_NAME,
   AuthTextInput,
@@ -7,6 +7,7 @@ import AuthCard, {
   getPasswordApiErrorMessage,
   getPasswordValidationError,
 } from './AuthCard';
+import ExternalPillLink from './ExternalPillLink';
 import InlineAlert from './InlineAlert';
 
 const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
@@ -167,20 +168,8 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-500">
           <p>{t('technicalCookieNotice')}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <a
-              href="/privacy-policy"
-              className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-            >
-              <span>{t('privacyPolicyLink')}</span>
-              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-            </a>
-            <a
-              href="/cookie-policy"
-              className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-            >
-              <span>{t('cookiePolicyLink')}</span>
-              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-            </a>
+            <ExternalPillLink href="/privacy-policy">{t('privacyPolicyLink')}</ExternalPillLink>
+            <ExternalPillLink href="/cookie-policy">{t('cookiePolicyLink')}</ExternalPillLink>
           </div>
         </div>
       </form>

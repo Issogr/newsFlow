@@ -842,7 +842,6 @@ module.exports = {
   createEmptyRefreshPayload,
   ingestSourceConfigs,
   scheduleAiTopicsForPendingArticles,
-  scheduleAiClickbaitForPendingArticles,
   scheduleAiStoryGroupingForPendingArticles,
   _filterArticlesWithinRetention: filterArticlesWithinRetention,
   _resetRuntimeStateForTests: resetRuntimeStateForTests,

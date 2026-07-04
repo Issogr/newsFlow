@@ -47,11 +47,12 @@ function buildTrustedForwardedHeaders(req, options = {}) {
 }
 
 function applyProxyRequestHeaders(proxyReq, req, options = {}) {
+  clearForwardedHeaders(proxyReq);
+
   if (options.mode === 'private') {
     proxyReq.removeHeader('authorization');
     proxyReq.removeHeader('x-session-token');
     proxyReq.removeHeader('x-newsflow-app');
-    clearForwardedHeaders(proxyReq);
     Object.entries(options.internalHeaders || {}).forEach(([name, value]) => {
       proxyReq.setHeader(name, value);
     });
@@ -65,7 +66,6 @@ function applyProxyRequestHeaders(proxyReq, req, options = {}) {
   }
 
   proxyReq.removeHeader('cookie');
-  clearForwardedHeaders(proxyReq);
   Object.entries(buildTrustedForwardedHeaders(req)).forEach(([name, value]) => {
     proxyReq.setHeader(name, value);
   });

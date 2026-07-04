@@ -16,7 +16,7 @@ function createArticleRepository({
 }) {
   const TITLE_DEDUPE_WINDOW_MS = 3 * 60 * 60 * 1000;
 
-  function getSourceFilterClauses(sourceIds = [], options = {}) {
+  function getSourceFilterClauses(sourceIds = [], options = {}, alias = 'a') {
     const aliasedIds = new Set();
     const aliasedNames = new Set();
 
@@ -30,12 +30,12 @@ function createArticleRepository({
     const params = [];
 
     if (aliasedIds.size > 0) {
-      clauses.push(`a.source_id IN (${[...aliasedIds].map(() => '?').join(', ')})`);
+      clauses.push(`${alias}.source_id IN (${[...aliasedIds].map(() => '?').join(', ')})`);
       params.push(...aliasedIds);
     }
 
     if (aliasedNames.size > 0) {
-      clauses.push(`a.source_name IN (${[...aliasedNames].map(() => '?').join(', ')})`);
+      clauses.push(`${alias}.source_name IN (${[...aliasedNames].map(() => '?').join(', ')})`);
       params.push(...aliasedNames);
     }
 
@@ -45,12 +45,12 @@ function createArticleRepository({
     };
   }
 
-  function getSourceExclusionClause(sourceIds = [], options = {}) {
+  function getSourceExclusionClause(sourceIds = [], options = {}, alias = 'a') {
     if (!Array.isArray(sourceIds) || sourceIds.length === 0) {
       return null;
     }
 
-    const sourceFilter = getSourceFilterClauses(sourceIds, options);
+    const sourceFilter = getSourceFilterClauses(sourceIds, options, alias);
     if (!sourceFilter.clause) {
       return null;
     }
@@ -61,15 +61,33 @@ function createArticleRepository({
     };
   }
 
-  function getSubSourceExclusionClause(subSourceIds = []) {
+  function getSubSourceExclusionClause(subSourceIds = [], alias = 'a') {
     if (!Array.isArray(subSourceIds) || subSourceIds.length === 0) {
       return null;
     }
 
     return {
-      clause: `a.source_id NOT IN (${subSourceIds.map(() => '?').join(', ')})`,
+      clause: `${alias}.source_id NOT IN (${subSourceIds.map(() => '?').join(', ')})`,
       params: subSourceIds
     };
+  }
+
+  function filterEntriesForExistingArticles(entries = [], database = getDb()) {
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return [];
+    }
+
+    const existingArticleIds = new Set(
+      chunkValues([...new Set(entries.map((entry) => entry.articleId))]).flatMap((articleIds) => {
+        return database.prepare(`
+          SELECT id
+          FROM articles
+          WHERE id IN (${articleIds.map(() => '?').join(', ')})
+        `).all(...articleIds).map((row) => row.id);
+      })
+    );
+
+    return entries.filter((entry) => existingArticleIds.has(entry.articleId));
   }
 
   function buildScopeFilter(options = {}, alias = 'a') {
@@ -1059,16 +1077,7 @@ function createArticleRepository({
     }
 
     const database = getDb();
-    const existingArticleIds = new Set(
-      chunkValues([...new Set(normalizedEntries.map((entry) => entry.articleId))]).flatMap((articleIds) => {
-        return database.prepare(`
-          SELECT id
-          FROM articles
-          WHERE id IN (${articleIds.map(() => '?').join(', ')})
-        `).all(...articleIds).map((row) => row.id);
-      })
-    );
-    const existingEntries = normalizedEntries.filter((entry) => existingArticleIds.has(entry.articleId));
+    const existingEntries = filterEntriesForExistingArticles(normalizedEntries, database);
 
     if (existingEntries.length === 0) {
       return 0;
@@ -1410,16 +1419,7 @@ function createArticleRepository({
     }
 
     const database = getDb();
-    const existingArticleIds = new Set(
-      chunkValues([...new Set(normalizedEntries.map((entry) => entry.articleId))]).flatMap((articleIds) => {
-        return database.prepare(`
-          SELECT id
-          FROM articles
-          WHERE id IN (${articleIds.map(() => '?').join(', ')})
-        `).all(...articleIds).map((row) => row.id);
-      })
-    );
-    const existingEntries = normalizedEntries.filter((entry) => existingArticleIds.has(entry.articleId));
+    const existingEntries = filterEntriesForExistingArticles(normalizedEntries, database);
 
     if (existingEntries.length === 0) {
       return 0;
@@ -1465,16 +1465,7 @@ function createArticleRepository({
     }
 
     const database = getDb();
-    const existingArticleIds = new Set(
-      chunkValues([...new Set(normalizedEntries.map((entry) => entry.articleId))]).flatMap((articleIds) => {
-        return database.prepare(`
-          SELECT id
-          FROM articles
-          WHERE id IN (${articleIds.map(() => '?').join(', ')})
-        `).all(...articleIds).map((row) => row.id);
-      })
-    );
-    const existingEntries = normalizedEntries.filter((entry) => existingArticleIds.has(entry.articleId));
+    const existingEntries = filterEntriesForExistingArticles(normalizedEntries, database);
 
     if (existingEntries.length === 0) {
       return 0;
@@ -2635,8 +2626,8 @@ function createArticleRepository({
     const scopeFilter = buildScopeFilter(options, 'articles');
     const retentionFilter = buildRetentionFilter(options, 'articles');
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('articles');
-    const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
-    const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
+    const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options, 'articles');
+    const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || [], 'articles');
     const where = [scopeFilter.clause];
     const params = [...scopeFilter.params];
     where.push(publishedBeforeNowFilter.clause);
@@ -2648,12 +2639,12 @@ function createArticleRepository({
     }
 
     if (excludedSourceFilter) {
-      where.push(excludedSourceFilter.clause.replaceAll('a.', 'articles.'));
+      where.push(excludedSourceFilter.clause);
       params.push(...excludedSourceFilter.params);
     }
 
     if (excludedSubSourceFilter) {
-      where.push(excludedSubSourceFilter.clause.replaceAll('a.', 'articles.'));
+      where.push(excludedSubSourceFilter.clause);
       params.push(...excludedSubSourceFilter.params);
     }
 
@@ -2804,8 +2795,8 @@ function createArticleRepository({
     const scopeFilter = buildScopeFilter(options, 'articles');
     const retentionFilter = buildRetentionFilter(options, 'articles');
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('articles');
-    const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
-    const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
+    const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options, 'articles');
+    const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || [], 'articles');
     const where = [scopeFilter.clause];
     const params = [...scopeFilter.params];
     where.push(publishedBeforeNowFilter.clause);
@@ -2817,12 +2808,12 @@ function createArticleRepository({
     }
 
     if (excludedSourceFilter) {
-      where.push(excludedSourceFilter.clause.replaceAll('a.', 'articles.'));
+      where.push(excludedSourceFilter.clause);
       params.push(...excludedSourceFilter.params);
     }
 
     if (excludedSubSourceFilter) {
-      where.push(excludedSubSourceFilter.clause.replaceAll('a.', 'articles.'));
+      where.push(excludedSubSourceFilter.clause);
       params.push(...excludedSubSourceFilter.params);
     }
 

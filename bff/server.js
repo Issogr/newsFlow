@@ -181,15 +181,9 @@ function createApp(options = {}) {
     const origin = getRequestHeader(req, 'origin');
     const referer = getRequestHeader(req, 'referer');
 
-    if (!origin && !referer && options.allowMissingHeaders === true) {
-      return true;
-    }
-
-    if (headerMatchesExpectedOrigin(origin, expectedOrigin) || (!origin && headerMatchesExpectedOrigin(referer, expectedOrigin))) {
-      return true;
-    }
-
-    return false;
+    return (!origin && !referer && options.allowMissingHeaders === true)
+      || headerMatchesExpectedOrigin(origin, expectedOrigin)
+      || (!origin && headerMatchesExpectedOrigin(referer, expectedOrigin));
   }
 
   function sendCrossOriginRejected(res) {

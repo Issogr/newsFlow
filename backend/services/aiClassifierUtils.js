@@ -126,7 +126,6 @@ async function runBatchedClassifier({
 }
 
 module.exports = {
-  chunkItems,
   isTimeoutError,
   resolveClassifierEntryId,
   runBatchedClassifier,

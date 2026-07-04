@@ -1,17 +1,6 @@
-import { Download, ExternalLink, KeyRound, ShieldCheck, Upload } from 'lucide-react';
+import { Download, KeyRound, ShieldCheck, Upload } from 'lucide-react';
+import ExternalPillLink from '../ExternalPillLink';
 import SettingsSectionCard from './SettingsSectionCard';
-
-const ExternalPillLink = ({ href, children, className = 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100' }) => (
-  <a
-    href={href}
-    target="_blank"
-    rel="noopener noreferrer"
-    className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${className}`}
-  >
-    <span>{children}</span>
-    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-  </a>
-);
 
 const SettingsActionButton = ({ icon: Icon, iconClassName, children, ...buttonProps }) => (
   <button
@@ -78,7 +67,7 @@ const SettingsAccessSection = ({
               </p>
               <p className="max-w-2xl text-sm text-slate-600">{t('apiTokenHelp')}</p>
               <div className="flex flex-wrap gap-2">
-                <ExternalPillLink href="/api/docs" className="border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100">
+                <ExternalPillLink href="/api/docs" target="_blank" className="border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100">
                   {t('apiTokenDocsLink')}
                 </ExternalPillLink>
                 <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600">
@@ -143,8 +132,8 @@ const SettingsAccessSection = ({
             </p>
             <p className="max-w-2xl text-sm text-slate-600">{t('legalDocsHelp')}</p>
             <div className="flex flex-wrap gap-2">
-              <ExternalPillLink href="/privacy-policy">{t('privacyPolicyLink')}</ExternalPillLink>
-              <ExternalPillLink href="/cookie-policy">{t('cookiePolicyLink')}</ExternalPillLink>
+              <ExternalPillLink href="/privacy-policy" target="_blank">{t('privacyPolicyLink')}</ExternalPillLink>
+              <ExternalPillLink href="/cookie-policy" target="_blank">{t('cookiePolicyLink')}</ExternalPillLink>
             </div>
           </div>
         </div>

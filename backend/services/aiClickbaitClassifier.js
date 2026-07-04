@@ -425,9 +425,6 @@ module.exports = {
   _buildPrompt: buildPrompt,
   _getCompletionTokenBudget: getCompletionTokenBudget,
   _getConfig: getConfig,
-  _getDeterministicClickbaitClassification: getDeterministicClickbaitClassification,
-  _normalizeClassifierResults: normalizeClassifierResults,
-  _normalizeLabel: normalizeLabel,
   _parseJsonContent: parseJsonContent,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };
