@@ -257,7 +257,7 @@ function dedupeGroupsById(groups = []) {
 }
 
 function getUserCustomSourceGroups(userId, cache) {
-  if (!userId || typeof database.listUserSources !== 'function') {
+  if (!userId) {
     return new Map();
   }
 

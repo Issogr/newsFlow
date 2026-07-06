@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const Database = require('./sqliteDatabase');
+const { DatabaseSync } = require('node:sqlite');
 const cookie = require('cookie');
 const session = require('express-session');
 const { parseIntegerEnv } = require('./env');
@@ -135,9 +135,21 @@ function createSessionStore(options = {}) {
   const sessionDbPath = options.sessionDbPath || process.env.BFF_SESSION_DB_PATH || DEFAULT_SESSION_DB_PATH;
   fs.mkdirSync(path.dirname(sessionDbPath), { recursive: true });
 
-  const db = new Database(sessionDbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
+  const db = new DatabaseSync(sessionDbPath);
+  const closeDatabase = db.close.bind(db);
+  let closed = false;
+
+  db.close = () => {
+    if (closed) {
+      return undefined;
+    }
+
+    closed = true;
+    return closeDatabase();
+  };
+
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA synchronous = NORMAL');
   db.exec(`
     CREATE TABLE IF NOT EXISTS session_users (
       sid TEXT PRIMARY KEY,
@@ -152,8 +164,8 @@ function createSessionStore(options = {}) {
   return { store, db };
 }
 
-function destroyStoredSessionsByUserId(sessionStore, sessionDb, userId) {
-  if (!sessionStore || !sessionDb || !userId) {
+function destroyStoredSessionsByUserId(sessionDb, userId) {
+  if (!sessionDb || !userId) {
     return 0;
   }
 
@@ -163,10 +175,7 @@ function destroyStoredSessionsByUserId(sessionStore, sessionDb, userId) {
     WHERE user_id = ?
   `).all(userId).map((row) => row.sid);
 
-  matchingSessionIds.forEach((sid) => {
-    sessionStore.destroy(sid, () => {});
-  });
-
+  sessionDb.prepare('DELETE FROM sessions WHERE sid IN (SELECT sid FROM session_users WHERE user_id = ?)').run(userId);
   sessionDb.prepare('DELETE FROM session_users WHERE user_id = ?').run(userId);
 
   return matchingSessionIds.length;

@@ -130,7 +130,7 @@ function createLoggerMock() {
 }
 
 function createDatabaseMock(overrides = {}) {
-  return {
+  const databaseMock = {
     getThematicSummary: jest.fn(() => null),
     listLatestThematicSummaries: jest.fn(() => []),
     listLatestPodcastSummaries: jest.fn(() => []),
@@ -143,6 +143,12 @@ function createDatabaseMock(overrides = {}) {
     pruneSummaryHistory: jest.fn(() => ({ thematicSummaries: 0, podcastSummaries: 0 })),
     ...overrides
   };
+
+  databaseMock.getReaderCaches ||= jest.fn((articleIds = [], userId = null) => new Map(
+    articleIds.map((articleId) => [articleId, databaseMock.getReaderCache(articleId, userId)])
+  ));
+
+  return databaseMock;
 }
 
 function loadServiceWithMocks({

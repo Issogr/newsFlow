@@ -42,12 +42,15 @@ function requirePublicApiModeEnabled(req, res, next) {
 
 const anonymousPublicNewsRateLimitMessage = buildRateLimitMessage('Too many anonymous public API requests. Please try again later.');
 const authenticatedPublicNewsRateLimitMessage = buildRateLimitMessage('Too many authenticated public API requests. Please try again later.');
-
-const anonymousPublicNewsRateLimit = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
+const publicNewsRateLimitDefaults = {
   standardHeaders: true,
   legacyHeaders: false,
+};
+
+const anonymousPublicNewsRateLimit = rateLimit({
+  ...publicNewsRateLimitDefaults,
+  windowMs: 60 * 1000,
+  max: 30,
   skip: (req) => Boolean(req.externalApi?.authenticated),
   keyGenerator: (req) => {
     return `anon:${ipKeyGenerator(req.ip)}`;
@@ -56,10 +59,9 @@ const anonymousPublicNewsRateLimit = rateLimit({
 });
 
 const authenticatedPublicNewsRateLimit = rateLimit({
+  ...publicNewsRateLimitDefaults,
   windowMs: 15 * 60 * 1000,
   max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
   skip: (req) => !req.externalApi?.authenticated,
   keyGenerator: (req) => {
     const apiTokenId = req.externalApi?.tokenInfo?.id || '';
@@ -79,29 +81,26 @@ function getExternalUserContext(req) {
 }
 
 const preAuthPublicNewsRateLimit = rateLimit({
+  ...publicNewsRateLimitDefaults,
   windowMs: 15 * 60 * 1000,
   max: 1000,
-  standardHeaders: true,
-  legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
   message: buildRateLimitMessage('Too many public API requests. Please try again later.')
 });
 
 const bearerPublicNewsIpRateLimit = rateLimit({
+  ...publicNewsRateLimitDefaults,
   windowMs: 15 * 60 * 1000,
   max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
   skip: (req) => !getBearerTokenCandidate(req),
   keyGenerator: (req) => `bearer-ip:${ipKeyGenerator(req.ip)}`,
   message: buildRateLimitMessage('Too many public API token attempts. Please try again later.')
 });
 
 const bearerPublicNewsTokenRateLimit = rateLimit({
+  ...publicNewsRateLimitDefaults,
   windowMs: 15 * 60 * 1000,
   max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
   skip: (req) => !getBearerTokenCandidate(req),
   keyGenerator: (req) => `bearer-token:${ipKeyGenerator(req.ip)}:${hashRateLimitToken(getBearerTokenCandidate(req))}`,
   message: buildRateLimitMessage('Too many public API token attempts. Please try again later.')

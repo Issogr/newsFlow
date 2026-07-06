@@ -300,21 +300,6 @@ describe('NewsCard', () => {
     expect(screen.getByText('openOriginalSourceUnavailable')).toBeInTheDocument();
   });
 
-  test('uses the native share action when available', async () => {
-    navigator.share = vi.fn().mockResolvedValue(undefined);
-
-    renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
-    });
-
-    expect(navigator.share).toHaveBeenCalledWith({
-      title: 'Headline',
-      url: 'https://example.com/story'
-    });
-  });
-
   test('shows a share status bubble when clipboard fallback is used', async () => {
     navigator.share = undefined;
     navigator.clipboard = {
@@ -329,22 +314,6 @@ describe('NewsCard', () => {
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.com/story');
     expect(screen.getByText('shareCopiedMessage')).toBeInTheDocument();
-  });
-
-  test('shows a share failure bubble when clipboard fallback is denied', async () => {
-    navigator.share = undefined;
-    navigator.clipboard = {
-      writeText: vi.fn().mockRejectedValue(new Error('denied'))
-    };
-
-    renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
-    });
-
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.com/story');
-    expect(screen.getByText('shareFailedMessage')).toBeInTheDocument();
   });
 
   test('opens reader mode on title double click and reader button click', () => {

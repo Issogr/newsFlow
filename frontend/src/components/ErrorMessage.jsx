@@ -1,4 +1,5 @@
 import { AlertCircle, RefreshCw } from 'lucide-react';
+import { getApiErrorPayload, getApiErrorStatus, isApiNetworkError, isApiTimeoutError } from '../utils/apiError';
 
 const ErrorMessage = ({
   error,
@@ -12,18 +13,19 @@ const ErrorMessage = ({
       return t('unknownError');
     }
 
-    if (error.newsFlowClientCode === 'timeout' || error.code === 'ECONNABORTED') {
+    if (isApiTimeoutError(error)) {
       return t('requestTimeoutError');
     }
 
-    if (error.newsFlowClientCode === 'network' || error.message === 'Network Error') {
+    if (isApiNetworkError(error)) {
       return t('networkError');
     }
 
-    const apiMessage = error.response?.data?.error?.message;
+    const { message: apiMessage } = getApiErrorPayload(error);
+    const status = getApiErrorStatus(error);
 
     if (error.response) {
-      switch (error.response.status) {
+      switch (status) {
         case 400:
           return apiMessage || t('error400');
         case 401:
@@ -40,7 +42,7 @@ const ErrorMessage = ({
           return apiMessage || t('error500');
         default:
           return apiMessage || t('unknownStatusError', {
-            status: error.response.status,
+            status,
             statusText: error.response.statusText
           });
       }

@@ -5,7 +5,7 @@ const path = require('path');
 const express = require('express');
 const cookieSignature = require('cookie-signature');
 const request = require('supertest');
-const { createApp, createServer, _getTrustProxySetting } = require('./server');
+const { createApp, createServer } = require('./server');
 const {
   encryptBackendSessionCookie,
   getBffSessionSecret,
@@ -503,13 +503,6 @@ describe('bff server', () => {
 
     expect(response.body.error).toEqual(expect.objectContaining({ code: 'UNAUTHORIZED' }));
     expect(response.text).not.toContain('static api shadow');
-  });
-
-  test('parses trust proxy settings without trusting every forwarded header for boolean true', () => {
-    expect(_getTrustProxySetting('true')).toBe(1);
-    expect(_getTrustProxySetting('2')).toBe(2);
-    expect(_getTrustProxySetting('loopback, linklocal')).toEqual(['loopback', 'linklocal']);
-    expect(_getTrustProxySetting('false')).toBe(false);
   });
 
   test.each([

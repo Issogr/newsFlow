@@ -656,7 +656,7 @@ function scheduleAiStoryGroupingForPendingArticles(normalizedArticles = [], opti
 
   const articleIds = normalizedArticles.map((article) => article.id).filter(Boolean);
   const retryAnchorArticleIds = Array.isArray(options.retryAnchorArticleIds) ? options.retryAnchorArticleIds : articleIds;
-  const retryArticleIds = AI_STORY_GROUPING_RETRY_LIMIT > 0 && typeof database.getArticleIdsForAiStoryGroupingRetry === 'function'
+  const retryArticleIds = AI_STORY_GROUPING_RETRY_LIMIT > 0
     ? database.getArticleIdsForAiStoryGroupingRetry(retryAnchorArticleIds, {
         windowHours: AI_STORY_GROUPING_WINDOW_HOURS,
         limit: AI_STORY_GROUPING_RETRY_LIMIT

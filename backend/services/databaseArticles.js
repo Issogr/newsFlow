@@ -1373,42 +1373,6 @@ function createArticleRepository({
     };
   }
 
-  function mergeTopicsForArticle(articleId, topics = []) {
-    if (!articleId || !Array.isArray(topics) || topics.length === 0) {
-      return [];
-    }
-
-    const database = getDb();
-    const articleExists = database.prepare('SELECT 1 FROM articles WHERE id = ?').get(articleId);
-    if (!articleExists) {
-      return [];
-    }
-
-    const selectStmt = database.prepare('SELECT topic FROM article_topics WHERE article_id = ? ORDER BY topic ASC');
-    const insertStmt = database.prepare(`
-      INSERT INTO article_topics (article_id, topic, source, confidence, evidence, reason_code)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(article_id, topic) DO UPDATE SET
-        source = excluded.source,
-        confidence = excluded.confidence,
-        evidence = excluded.evidence,
-        reason_code = excluded.reason_code
-    `);
-
-    const transaction = database.transaction((articleIdentifier, topicList) => {
-      normalizeTopicEntries(topicList).forEach((entry) => {
-          insertStmt.run(articleIdentifier, entry.topic, entry.source, entry.confidence, entry.evidence, entry.reasonCode);
-        });
-
-      return selectStmt
-        .all(articleIdentifier)
-        .map((row) => row.topic)
-        .filter((topic) => topicNormalizer.isCanonicalTopic(topic));
-    });
-
-    return transaction(articleId, topics);
-  }
-
   function mergeTopicsForArticles(entries = []) {
     const normalizedEntries = Array.isArray(entries)
       ? entries.filter((entry) => entry?.articleId && Array.isArray(entry.topics) && entry.topics.length > 0)
@@ -2569,10 +2533,6 @@ function createArticleRepository({
     return rows.map(mapPodcastSummaryRow).filter(Boolean);
   }
 
-  function getLatestPodcastSummary() {
-    return listLatestPodcastSummaries(1)[0] || null;
-  }
-
   function getPodcastSummaryAudio(podcastId, locale = '') {
     const normalizedPodcastId = String(podcastId || '').trim();
     const requestedLocale = String(locale || '').trim();
@@ -2982,7 +2942,6 @@ function createArticleRepository({
   return {
     getArticles,
     getArticleById,
-    getArticlesByIds,
     getReadLaterArticles,
     getArticlesForThematicSummary,
     hasPendingTopicProcessingForThematicSummary,
@@ -2993,7 +2952,6 @@ function createArticleRepository({
     upsertPodcastSummary,
     getPodcastSummary,
     listLatestPodcastSummaries,
-    getLatestPodcastSummary,
     getPodcastSummaryAudio,
     getReadLaterArticleIdSet,
     isReadLaterArticle,
@@ -3011,7 +2969,6 @@ function createArticleRepository({
     assignArticlesToStoryGroup,
     getArticleIdsForStoryGroups,
     getAiStoryGroupingCandidateSet,
-    mergeTopicsForArticle,
     mergeTopicsForArticles,
     replaceTopicsForArticles,
     upsertArticles,

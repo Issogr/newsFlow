@@ -24,7 +24,6 @@ jest.mock('./database', () => ({
   getAiStoryGroupingCandidateSet: jest.fn(() => ({ target: null, candidates: [] })),
   mergeTopicsForArticles: jest.fn(() => 0),
   replaceTopicsForArticles: jest.fn(() => 0),
-  getArticlesByIds: jest.fn(() => []),
   getReadLaterArticleIdSet: jest.fn(() => new Set()),
   getReadLaterArticles: jest.fn(() => []),
   saveReadLaterArticles: jest.fn(() => ({ savedArticleIds: [], savedCount: 0 })),

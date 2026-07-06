@@ -9,6 +9,7 @@ import AuthCard, {
 } from './AuthCard';
 import ExternalPillLink from './ExternalPillLink';
 import InlineAlert from './InlineAlert';
+import { getApiErrorPayload, getApiErrorStatus, hasApiResponse, isApiTimeoutError } from '../utils/apiError';
 
 const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
   const [mode, setMode] = useState('login');
@@ -25,15 +26,14 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }) => {
       return '';
     }
 
-    const apiCode = error.response?.data?.error?.code;
-    const apiMessage = error.response?.data?.error?.message;
-    const status = error.response?.status;
+    const { code: apiCode, message: apiMessage } = getApiErrorPayload(error);
+    const status = getApiErrorStatus(error);
 
-    if (error.code === 'ECONNABORTED') {
+    if (isApiTimeoutError(error)) {
       return t('authErrorTimeout');
     }
 
-    if (!error.response) {
+    if (!hasApiResponse(error)) {
       return t('authErrorNetwork');
     }
 
