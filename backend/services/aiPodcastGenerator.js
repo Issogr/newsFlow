@@ -1016,16 +1016,12 @@ async function generateAudioForLocale(scriptText = '', locale = 'en') {
   };
 }
 
-async function generatePodcastScriptForArticles(window = {}, articles = []) {
-  return generatePodcastScript(window, articles);
-}
-
 function isAiPodcastGenerationAvailable() {
   return getScriptConfig().enabled;
 }
 
 module.exports = {
-  generatePodcastScriptForArticles,
+  generatePodcastScriptForArticles: generatePodcastScript,
   generateAudioForLocale,
   isAiPodcastGenerationAvailable,
   _buildPrompt: buildPrompt,

@@ -83,7 +83,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
   const attachmentLabel = attachment
-    ? `${attachment.name} (${Math.max(1, Math.round(attachment.size / 1024))} KB)`
+    ? `${attachment.name} (${formatAttachmentSize(attachment.size)})`
     : '';
   const attachmentType = String(attachment?.type || '');
   const isVideoAttachment = attachmentType.startsWith('video/');

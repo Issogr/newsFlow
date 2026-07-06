@@ -236,14 +236,14 @@ const ReaderPanel = ({
     : (readerPosition === 'center' ? 'lg:justify-center' : 'lg:justify-end');
   const readerTextStyles = READER_TEXT_SIZE_STYLES[readerTextSize] || READER_TEXT_SIZE_STYLES[DEFAULT_READER_TEXT_SIZE];
   const readerTextSizeIndex = Math.max(READER_TEXT_SIZE_ORDER.indexOf(readerTextSize), 0);
-  const handleShare = useCallback(async () => {
+  const handleShare = async () => {
     await shareArticle({
       url: safeOriginalUrl,
       title: selectedArticle?.title || ''
     });
-  }, [safeOriginalUrl, selectedArticle?.title, shareArticle]);
+  };
 
-  const updateReaderTextSize = useCallback(async (nextValue) => {
+  const updateReaderTextSize = async (nextValue) => {
     const normalizedNextValue = normalizeReaderTextSize(nextValue);
     if (normalizedNextValue === readerTextSize) {
       return;
@@ -271,25 +271,25 @@ const ReaderPanel = ({
         setReaderTextSize(previousValue);
       }
     }
-  }, [currentUser?.settings, readerTextSize]);
+  };
 
-  const decreaseReaderTextSize = useCallback(() => {
+  const decreaseReaderTextSize = () => {
     const nextIndex = Math.max(readerTextSizeIndex - 1, 0);
     updateReaderTextSize(READER_TEXT_SIZE_ORDER[nextIndex]);
-  }, [readerTextSizeIndex, updateReaderTextSize]);
+  };
 
-  const increaseReaderTextSize = useCallback(() => {
+  const increaseReaderTextSize = () => {
     const nextIndex = Math.min(readerTextSizeIndex + 1, READER_TEXT_SIZE_ORDER.length - 1);
     updateReaderTextSize(READER_TEXT_SIZE_ORDER[nextIndex]);
-  }, [readerTextSizeIndex, updateReaderTextSize]);
+  };
 
-  const refreshReader = useCallback(() => {
+  const refreshReader = () => {
     if (!selectedArticleId || loading) {
       return;
     }
 
     loadReader(selectedArticleId, { forceRefresh: true });
-  }, [loadReader, loading, selectedArticleId]);
+  };
 
   const headerStart = (
     <div className="flex items-center gap-2">

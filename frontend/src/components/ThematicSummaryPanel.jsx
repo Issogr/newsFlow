@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ExternalLink, Newspaper, Sparkles } from 'lucide-react';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { getTopicPresentation } from '../topicPresentation';
@@ -339,7 +339,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
     opacity: 1 - (swipeFeedbackStrength * 0.08),
     transform: `translate3d(${swipeFeedbackOffset}px, 0, 0)`
   };
-  const selectAdjacentSummary = useCallback((direction) => {
+  const selectAdjacentSummary = (direction) => {
     if (!canSwipeSummaries) {
       return;
     }
@@ -348,8 +348,8 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
     if (nextSummary?.id) {
       onSelectSummary(nextSummary);
     }
-  }, [canSwipeSummaries, onSelectSummary, swipeSummaries, swipeSummaryIndex]);
-  const handleTouchStart = useCallback((event) => {
+  };
+  const handleTouchStart = (event) => {
     touchStartRef.current = null;
     setSwipeFeedbackOffset(0);
 
@@ -363,8 +363,8 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
 
     const touch = event.touches[0];
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
-  }, [canSwipeSummaries]);
-  const handleTouchMove = useCallback((event) => {
+  };
+  const handleTouchMove = (event) => {
     const touchStart = touchStartRef.current;
     if (!touchStart || event.touches.length !== 1) {
       return;
@@ -386,8 +386,8 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
     const direction = deltaX < 0 ? 1 : -1;
     const hasAdjacentSummary = Boolean(swipeSummaries[swipeSummaryIndex + direction]?.id);
     setSwipeFeedbackOffset(getSwipeFeedbackOffset(deltaX, hasAdjacentSummary));
-  }, [swipeSummaries, swipeSummaryIndex]);
-  const handleTouchEnd = useCallback((event) => {
+  };
+  const handleTouchEnd = (event) => {
     const touchStart = touchStartRef.current;
     touchStartRef.current = null;
     setSwipeFeedbackOffset(0);
@@ -405,11 +405,11 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
     }
 
     selectAdjacentSummary(deltaX < 0 ? 1 : -1);
-  }, [selectAdjacentSummary]);
-  const handleTouchCancel = useCallback(() => {
+  };
+  const handleTouchCancel = () => {
     touchStartRef.current = null;
     setSwipeFeedbackOffset(0);
-  }, []);
+  };
   const headerStart = (
     <div className="flex min-w-0 items-center gap-3">
       <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${primaryPresentation.iconBadgeClassName}`}>

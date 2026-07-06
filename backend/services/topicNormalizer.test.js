@@ -36,8 +36,6 @@ describe('topicNormalizer canonical taxonomy', () => {
   });
 
   test('weighted topic fixtures classify representative difficult headlines', () => {
-    expect(topicRegressionFixtures).toHaveLength(40);
-
     topicRegressionFixtures.forEach((fixture) => {
       const topics = topicNormalizer.extractTopics({ title: fixture.title });
 

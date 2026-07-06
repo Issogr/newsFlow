@@ -208,8 +208,7 @@ module.exports = {
   findSimilarStoriesForArticle,
   isAiStoryGroupingAvailable,
   buildStoryGroupId,
-  _getCandidateSignature: getCandidateSignature,
-  _buildPrompt: buildPrompt,
+  getCandidateSignature,
   _getConfig: getConfig,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };

@@ -422,9 +422,6 @@ function isAiClickbaitDetectionAvailable() {
 module.exports = {
   classifyClickbaitForArticlesWithStatus,
   isAiClickbaitDetectionAvailable,
-  _buildPrompt: buildPrompt,
-  _getCompletionTokenBudget: getCompletionTokenBudget,
   _getConfig: getConfig,
-  _parseJsonContent: parseJsonContent,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };

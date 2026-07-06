@@ -74,7 +74,7 @@ jest.mock('./aiClickbaitClassifier', () => ({
 
 jest.mock('./aiStoryGrouper', () => ({
   buildStoryGroupId: jest.fn((articleIds = []) => `ai-story-${articleIds.filter(Boolean).sort().join('-')}`),
-  _getCandidateSignature: jest.fn((target = {}, candidates = []) => candidates.map((candidate) => candidate.id).filter(Boolean).sort()),
+  getCandidateSignature: jest.fn((target = {}, candidates = []) => candidates.map((candidate) => candidate.id).filter(Boolean).sort()),
   findSimilarStoriesForArticle: jest.fn(async () => ({ matches: [], model: 'test-story-model' })),
   isAiStoryGroupingAvailable: jest.fn(() => false)
 }));

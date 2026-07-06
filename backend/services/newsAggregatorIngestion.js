@@ -21,7 +21,7 @@ const {
 } = require('./newsAggregatorGrouping');
 const {
   buildStoryGroupId,
-  _getCandidateSignature: getStoryGroupingCandidateSignature,
+  getCandidateSignature: getStoryGroupingCandidateSignature,
   findSimilarStoriesForArticle,
   isAiStoryGroupingAvailable
 } = require('./aiStoryGrouper');

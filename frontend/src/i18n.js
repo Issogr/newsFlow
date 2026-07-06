@@ -64,6 +64,7 @@ const topicTranslations = {
   tech: { en: 'Technology', it: 'Tecnologia' },
   scienza: { en: 'Science', it: 'Scienza' },
   science: { en: 'Science', it: 'Scienza' },
+  crime: { en: 'Crime', it: 'Cronaca' },
   cronaca: { en: 'Crime & incidents', it: 'Cronaca' },
   esteri: { en: 'World', it: 'Esteri' },
   world: { en: 'World', it: 'Esteri' },
@@ -81,10 +82,11 @@ const topicTranslations = {
   clima: { en: 'Climate', it: 'Clima' },
   climate: { en: 'Climate', it: 'Clima' },
   sicurezza: { en: 'Security', it: 'Sicurezza' },
-  security: { en: 'Security', it: 'Sicurezza' }
+  security: { en: 'Security', it: 'Sicurezza' },
+  podcast: { en: 'News podcast', it: 'Podcast news' }
 };
 
-export function getLocalizedTopic(topic, locale = 'en') {
+export function getLocalizedTopic(topic, locale = 'en', fallback = topic) {
   const normalized = String(topic || '').trim().toLowerCase();
   const translation = topicTranslations[normalized];
 
@@ -92,5 +94,5 @@ export function getLocalizedTopic(topic, locale = 'en') {
     return translation[locale] || translation.en;
   }
 
-  return topic;
+  return fallback;
 }
