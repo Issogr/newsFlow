@@ -20,6 +20,15 @@ const authRateLimit = rateLimit({
   message: buildRateLimitMessage('Too many authentication attempts. Please try again later.'),
 });
 
+const registrationIpRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
+  message: buildRateLimitMessage('Too many registration attempts. Please try again later.'),
+});
+
 const passwordSetupRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -32,7 +41,7 @@ const passwordSetupRateLimit = rateLimit({
   message: buildRateLimitMessage('Too many password setup attempts. Please try again later.'),
 });
 
-router.post('/auth/register', [authRateLimit, sanitizeBody(['username'])], async (req, res) => {
+router.post('/auth/register', [registrationIpRateLimit, authRateLimit, sanitizeBody(['username'])], async (req, res) => {
   const result = await userService.registerUser(req.body || {});
   sendAuthResult(res, result, 201);
 });

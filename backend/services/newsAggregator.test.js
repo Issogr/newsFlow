@@ -1025,6 +1025,29 @@ describe('newsAggregator service flows', () => {
     expect(database.getAiStoryGroupingCandidateSet).toHaveBeenCalledWith('inserted-1', expect.any(Object));
   });
 
+  test('private-only topic processing does not schedule global summaries', async () => {
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['private-1']);
+    aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockResolvedValue({
+      topicsByArticleId: new Map([
+        ['private-1', [{ topic: 'Tecnologia', source: 'ai', confidence: 0.9 }]]
+      ]),
+      attemptedArticleIds: ['private-1'],
+      failedArticleIds: [],
+      cappedArticleIds: []
+    });
+
+    scheduleAiTopicsForPendingArticles([
+      { id: 'private-1', ownerUserId: 'user-1', title: 'Private AI story' }
+    ]);
+    await flushBackgroundAiProcessing();
+    await flushBackgroundAiProcessing();
+
+    expect(database.replaceTopicsForArticles).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ articleId: 'private-1' })
+    ]));
+    expect(thematicSummaryService.generateDueSummaries).not.toHaveBeenCalled();
+  });
+
   test('marks AI-capped articles as deferred so they do not remain pending forever', async () => {
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['inserted-1', 'inserted-2']);
     aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockResolvedValue({

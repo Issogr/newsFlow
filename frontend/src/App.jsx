@@ -32,24 +32,34 @@ function resolveAppliedTheme(themeMode, mediaQuery) {
 }
 
 const PASSWORD_SETUP_PATHS = new Set(['/password/setup', '/admin/setup']);
-const API_DOCS_PATHS = new Set(['/api/docs', '/api/docs/']);
+const API_DOCS_PATHS = new Set(['/api/docs']);
 const LEGAL_POLICY_BY_PATH = {
   '/privacy-policy': 'privacy',
   '/cookie-policy': 'cookie'
 };
 const APP_LOADING_FALLBACK = <div className="App min-h-screen bg-slate-100" />;
 
+function normalizeRoutePath(pathname = '/') {
+  const path = String(pathname || '/');
+  return path.length > 1 ? path.replace(/\/+$/u, '') || '/' : path;
+}
+
+function getCurrentLocationState() {
+  return {
+    pathname: normalizeRoutePath(window.location.pathname),
+    search: window.location.search
+  };
+}
+
 function shouldLoadSessionForPath(pathname) {
-  return !PASSWORD_SETUP_PATHS.has(pathname)
-    && !API_DOCS_PATHS.has(pathname)
-    && !LEGAL_POLICY_BY_PATH[pathname];
+  const normalizedPathname = normalizeRoutePath(pathname);
+  return !PASSWORD_SETUP_PATHS.has(normalizedPathname)
+    && !API_DOCS_PATHS.has(normalizedPathname)
+    && !LEGAL_POLICY_BY_PATH[normalizedPathname];
 }
 
 function App() {
-  const [locationState, setLocationState] = useState(() => ({
-    pathname: window.location.pathname,
-    search: window.location.search
-  }));
+  const [locationState, setLocationState] = useState(getCurrentLocationState);
   const [authData, setAuthData] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
@@ -92,26 +102,11 @@ function App() {
     && !releaseNotesState.modalOpen
   );
 
-  const loadSession = useCallback(async () => {
-    if (!shouldLoadSessionForPath(locationState.pathname)) {
-      setLoadingSession(false);
-      return;
-    }
-
-    try {
-      const me = await fetchCurrentUser();
-      setAuthData(me);
-    } catch {
-      setAuthData(null);
-      setAuthError(null);
-    } finally {
-      setLoadingSession(false);
-    }
-  }, [locationState.pathname]);
-
   useEffect(() => {
     const syncLocationState = () => {
-      setLocationState({ pathname: window.location.pathname, search: window.location.search });
+      const nextLocationState = getCurrentLocationState();
+      setLoadingSession(shouldLoadSessionForPath(nextLocationState.pathname));
+      setLocationState(nextLocationState);
     };
 
     window.addEventListener('popstate', syncLocationState);
@@ -119,8 +114,39 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let ignore = false;
+
+    async function loadSession() {
+      if (!shouldLoadSessionForPath(locationState.pathname)) {
+        setLoadingSession(false);
+        return;
+      }
+
+      setLoadingSession(true);
+
+      try {
+        const me = await fetchCurrentUser();
+        if (!ignore) {
+          setAuthData(me);
+        }
+      } catch {
+        if (!ignore) {
+          setAuthData(null);
+          setAuthError(null);
+        }
+      } finally {
+        if (!ignore) {
+          setLoadingSession(false);
+        }
+      }
+    }
+
     loadSession();
-  }, [loadSession]);
+
+    return () => {
+      ignore = true;
+    };
+  }, [locationState.pathname]);
 
   useEffect(() => {
     const handleAuthExpired = () => {

@@ -11,6 +11,7 @@ const PODCAST_ENV_NAMES = [
   'AI_PODCAST_TTS_TIMEOUT_MS',
   'AI_PODCAST_TTS_MAX_INPUT_BYTES',
   'AI_PODCAST_TTS_MIN_AUDIO_BYTES',
+  'AI_PODCAST_TTS_MAX_AUDIO_BYTES',
   'AI_PODCAST_TTS_CHUNK_MAX_BYTES',
   'AI_PODCAST_TTS_MAX_CHUNKS',
   'AI_PODCAST_TTS_CHUNK_SILENCE_MS',
@@ -385,6 +386,8 @@ describe('aiPodcastGenerator', () => {
       expect.objectContaining({
         responseType: 'arraybuffer',
         timeout: 120000,
+        maxContentLength: 24 * 1024 * 1024,
+        maxBodyLength: 24 * 1024 * 1024,
         headers: expect.objectContaining({
           Authorization: 'Bearer test-key',
           'Content-Type': 'application/json',
@@ -468,5 +471,24 @@ describe('aiPodcastGenerator', () => {
 
     await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it'))
       .rejects.toThrow('audio is too small');
+  });
+
+  test('rejects oversized TTS audio responses before storage', async () => {
+    setPodcastTestEnv({
+      OPENROUTER_API_KEY: 'test-key',
+      OPENROUTER_PODCAST_AUDIO_MODEL: 'tts-model',
+      AI_PODCAST_TTS_FORMAT: 'wav',
+      AI_PODCAST_TTS_MAX_AUDIO_BYTES: '1500'
+    });
+    aiPodcastGenerator._setAudioSpeechHttpClient({
+      post: jest.fn().mockResolvedValue({
+        status: 200,
+        headers: { 'content-type': 'audio/wav' },
+        data: createTestWavBuffer(2048)
+      })
+    });
+
+    await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it'))
+      .rejects.toThrow('audio is too large');
   });
 });

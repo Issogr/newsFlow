@@ -1,3 +1,5 @@
+const MIN_PRODUCTION_SECRET_LENGTH = 32;
+
 function parseIntegerEnv(name, fallbackValue, options = {}) {
   const parsed = parseInt(process.env[name] || String(fallbackValue), 10);
   const fallback = Number(fallbackValue);
@@ -24,6 +26,9 @@ function readConfiguredSecret(name, developmentFallback) {
   if (configured) {
     if (isProduction && configured === developmentFallback) {
       throw new Error(`${name} must not use the development default in production.`);
+    }
+    if (isProduction && configured.length < MIN_PRODUCTION_SECRET_LENGTH) {
+      throw new Error(`${name} must be at least ${MIN_PRODUCTION_SECRET_LENGTH} characters in production.`);
     }
 
     return configured;

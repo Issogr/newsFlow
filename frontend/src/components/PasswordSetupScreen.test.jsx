@@ -62,4 +62,16 @@ describe('PasswordSetupScreen', () => {
     expect(completePasswordSetup).not.toHaveBeenCalled();
     expect(await screen.findByText('Password must be at least 8 characters long')).toBeInTheDocument();
   });
+
+  test.each([
+    [{ newsFlowClientCode: 'network' }, 'Unable to reach the server. Check your internet connection.'],
+    [{ newsFlowClientCode: 'timeout' }, 'The request timed out. Please try again in a few seconds.']
+  ])('shows transient validation failures without blaming the setup link', async (requestError, message) => {
+    validatePasswordSetupToken.mockRejectedValue(requestError);
+
+    render(<PasswordSetupScreen t={t} token="setup-token" onComplete={vi.fn()} />);
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByText('This password setup link is invalid or expired.')).not.toBeInTheDocument();
+  });
 });

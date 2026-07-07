@@ -107,6 +107,24 @@ async function normalizeBackendResponse(response) {
   };
 }
 
+function regenerateSession(req, sessionDb) {
+  const previousSessionId = req.sessionID;
+
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      if (previousSessionId) {
+        sessionDb.prepare('DELETE FROM session_users WHERE sid = ?').run(previousSessionId);
+      }
+      resolve();
+    });
+  });
+}
+
 function createApp(options = {}) {
   const backendBaseUrl = String(options.backendBaseUrl || process.env.BACKEND_BASE_URL || 'http://backend:5000').trim().replace(/\/+$/, '');
   const frontendDistDir = options.frontendDistDir || process.env.FRONTEND_DIST_DIR || DEFAULT_FRONTEND_DIST_DIR;
@@ -339,6 +357,7 @@ function createApp(options = {}) {
           return;
         }
 
+        await regenerateSession(req, sessionDb);
         req.session.version = SESSION_SCHEMA_VERSION;
         req.session.backendSessionCookie = encryptBackendSessionCookie(backendSessionCookie);
         req.session.userId = response.data?.user?.id || req.session.userId || '';

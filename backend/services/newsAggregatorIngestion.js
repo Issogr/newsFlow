@@ -371,7 +371,7 @@ async function processAiTopicsForPendingArticles(articles = [], options = {}) {
     );
     database.markArticlesAiTopicProcessing([...failedArticleIds], 'failed');
     database.markArticlesAiTopicProcessing([...cappedArticleIds], 'deferred');
-    scheduleThematicSummariesAfterTopicProcessing(attemptedArticleIds);
+    scheduleThematicSummariesAfterTopicProcessing(articles, attemptedArticleIds);
   } catch (error) {
     logger.warn(`Background AI topic processing failed: ${error.message}`);
     database.markArticlesAiTopicProcessing(articleIds, 'failed');
@@ -434,8 +434,17 @@ async function processAiClickbaitForPendingArticles(articles = []) {
   }
 }
 
-function scheduleThematicSummariesAfterTopicProcessing(classifiedArticleIds = []) {
+function scheduleThematicSummariesAfterTopicProcessing(articles = [], classifiedArticleIds = []) {
   if (!Array.isArray(classifiedArticleIds) || classifiedArticleIds.length === 0) {
+    return;
+  }
+
+  const articleById = new Map((Array.isArray(articles) ? articles : []).map((article) => [article.id, article]));
+  const hasGlobalArticle = classifiedArticleIds.some((articleId) => {
+    const article = articleById.get(articleId);
+    return article && !article.ownerUserId;
+  });
+  if (!hasGlobalArticle) {
     return;
   }
 

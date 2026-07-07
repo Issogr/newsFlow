@@ -1,12 +1,13 @@
 import { useState } from 'react';
+import { getSafeExternalUrl } from '../utils/urlSafety';
 
 const getSourceInitial = (name = '') => String(name || '?').trim().charAt(0).toUpperCase() || '?';
 
 const SourceIcon = ({ source, className = 'h-7 w-7', imageClassName = 'h-4 w-4' }) => {
-  const [failed, setFailed] = useState(false);
-  const iconUrl = source?.iconUrl || '';
+  const [failedIconUrl, setFailedIconUrl] = useState('');
+  const iconUrl = getSafeExternalUrl(source?.iconUrl);
 
-  if (!iconUrl || failed) {
+  if (!iconUrl || failedIconUrl === iconUrl) {
     return (
       <span className={`inline-flex shrink-0 items-center justify-center rounded-full bg-slate-100 text-[0.68rem] font-semibold text-slate-600 ${className}`}>
         {getSourceInitial(source?.name)}
@@ -21,7 +22,7 @@ const SourceIcon = ({ source, className = 'h-7 w-7', imageClassName = 'h-4 w-4' 
         alt=""
         className={`object-contain ${imageClassName}`}
         loading="lazy"
-        onError={() => setFailed(true)}
+        onError={() => setFailedIconUrl(iconUrl)}
       />
     </span>
   );

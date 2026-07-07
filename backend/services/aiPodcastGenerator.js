@@ -21,6 +21,7 @@ const DEFAULT_PROMPT_TEXT_BUDGET_CHARS = 42000;
 const DEFAULT_GEMINI_TTS_MAX_INPUT_BYTES = 3800;
 const DEFAULT_TTS_MAX_INPUT_BYTES = 6000;
 const DEFAULT_TTS_MIN_AUDIO_BYTES = 1024;
+const DEFAULT_TTS_MAX_AUDIO_BYTES = 24 * 1024 * 1024;
 const DEFAULT_GEMINI_TTS_CHUNK_MAX_BYTES = 700;
 const DEFAULT_TTS_MAX_CHUNKS = 12;
 const DEFAULT_TTS_CHUNK_SILENCE_MS = 60;
@@ -124,6 +125,10 @@ function getTtsMaxInputBytes(model = '') {
 
 function getTtsMinAudioBytes() {
   return parseIntegerEnv('AI_PODCAST_TTS_MIN_AUDIO_BYTES', DEFAULT_TTS_MIN_AUDIO_BYTES, { min: 44, max: 100000 });
+}
+
+function getTtsMaxAudioBytes() {
+  return parseIntegerEnv('AI_PODCAST_TTS_MAX_AUDIO_BYTES', DEFAULT_TTS_MAX_AUDIO_BYTES, { min: 1024, max: 100 * 1024 * 1024 });
 }
 
 function getTtsChunkMaxBytes(model = '') {
@@ -416,10 +421,18 @@ function assertTtsInputWithinLimit(text = '', model = '') {
 function assertValidAudioBuffer(audioBuffer, mimeType = '') {
   const normalizedMimeType = String(mimeType || '').split(';')[0].trim().toLowerCase();
   const minAudioBytes = getTtsMinAudioBytes();
+  const maxAudioBytes = getTtsMaxAudioBytes();
   if (!Buffer.isBuffer(audioBuffer) || audioBuffer.length < minAudioBytes) {
     throw createTtsError(
       `AI podcast TTS response audio is too small (${audioBuffer?.length || 0} bytes)`,
       'PODCAST_TTS_AUDIO_INVALID'
+    );
+  }
+
+  if (audioBuffer.length > maxAudioBytes) {
+    throw createTtsError(
+      `AI podcast TTS response audio is too large (${audioBuffer.length} bytes > ${maxAudioBytes} bytes)`,
+      'PODCAST_TTS_AUDIO_TOO_LARGE'
     );
   }
 
@@ -829,6 +842,8 @@ async function requestAudioBuffer(text = '', options = {}) {
       headers: getOpenRouterHeaders(config),
       responseType: 'arraybuffer',
       timeout: config.timeoutMs,
+      maxContentLength: getTtsMaxAudioBytes(),
+      maxBodyLength: getTtsMaxAudioBytes(),
       validateStatus: () => true
     }
   );

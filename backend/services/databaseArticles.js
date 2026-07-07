@@ -832,6 +832,25 @@ function createArticleRepository({
       });
   }
 
+  function articleFieldsChanged(row, values) {
+    if (!row) {
+      return true;
+    }
+
+    return row.sourceId !== values.sourceId
+      || row.sourceName !== values.sourceName
+      || (row.ownerUserId || null) !== (values.ownerUserId || null)
+      || row.title !== values.title
+      || row.description !== values.description
+      || row.content !== values.content
+      || row.url !== values.url
+      || row.canonicalUrl !== values.canonicalUrl
+      || (row.image || null) !== (values.image || null)
+      || (row.author || null) !== (values.author || null)
+      || row.language !== values.language
+      || row.pubDate !== values.pubDate;
+  }
+
   function upsertArticles(articles = []) {
     if (!Array.isArray(articles) || articles.length === 0) {
       return {
@@ -883,15 +902,21 @@ function createArticleRepository({
       VALUES (?, ?, ?, ?)
     `);
     const deleteArticleStmt = database.prepare('DELETE FROM articles WHERE id = ?');
-    const existingSearchableFields = new Map(
+    const articleFieldSelectSql = `
+      SELECT id, source_id AS sourceId, source_name AS sourceName, owner_user_id AS ownerUserId,
+             title, description, content, url, canonical_url AS canonicalUrl, image, author,
+             language, published_at AS pubDate
+      FROM articles
+    `;
+    const existingArticleFields = new Map(
       chunkValues(articles.map((article) => article.id).filter(Boolean)).flatMap((articleIds) => {
         return database.prepare(`
-        SELECT id, title, description, content
-        FROM articles
+          ${articleFieldSelectSql}
           WHERE id IN (${articleIds.map(() => '?').join(', ')})
         `).all(...articleIds).map((row) => [row.id, row]);
       })
     );
+    const selectArticleFieldsStmt = database.prepare(`${articleFieldSelectSql} WHERE id = ?`);
     const existingIdSet = new Set(
       chunkValues(articles.map((article) => article.id).filter(Boolean)).flatMap((articleIds) => {
         return database.prepare(`
@@ -939,41 +964,60 @@ function createArticleRepository({
         });
         duplicateLookup.forgetIds(duplicateIds);
 
-        upsertStmt.run(
-          persistedArticleId,
-          storedSourceId,
-          storedSourceName,
-          article.ownerUserId || null,
-          article.title,
-          article.description || '',
-          article.content || '',
-          article.url || '',
+        const values = {
+          sourceId: storedSourceId,
+          sourceName: storedSourceName,
+          ownerUserId: article.ownerUserId || null,
+          title: article.title,
+          description: article.description || '',
+          content: article.content || '',
+          url: article.url || '',
           canonicalUrl,
-          article.image || null,
-          article.author || null,
-          article.language || 'it',
-          normalizedPubDate,
-          article.createdAt || now,
-          now
-        );
+          image: article.image || null,
+          author: article.author || null,
+          language: article.language || 'it',
+          pubDate: normalizedPubDate
+        };
+        const previousArticleFields = existingArticleFields.get(persistedArticleId) || (exists ? selectArticleFieldsStmt.get(persistedArticleId) : null);
+        const shouldWriteArticle = !exists || articleFieldsChanged(previousArticleFields, values);
 
-        const previousSearchableFields = existingSearchableFields.get(persistedArticleId);
-        const searchableFieldsChanged = !previousSearchableFields
-          || previousSearchableFields.title !== article.title
-          || previousSearchableFields.description !== (article.description || '')
-          || previousSearchableFields.content !== (article.content || '');
+        if (shouldWriteArticle) {
+          upsertStmt.run(
+            persistedArticleId,
+            values.sourceId,
+            values.sourceName,
+            values.ownerUserId,
+            values.title,
+            values.description,
+            values.content,
+            values.url,
+            values.canonicalUrl,
+            values.image,
+            values.author,
+            values.language,
+            values.pubDate,
+            article.createdAt || now,
+            now
+          );
+        }
+
+        const searchableFieldsChanged = shouldWriteArticle && (!previousArticleFields
+          || previousArticleFields.title !== values.title
+          || previousArticleFields.description !== values.description
+          || previousArticleFields.content !== values.content);
 
         if (searchableFieldsChanged) {
           deleteSearchStmt.run(persistedArticleId);
           insertSearchStmt.run(persistedArticleId, article.title, article.description || '', article.content || '');
         }
 
-        if (exists) {
+        if (exists && shouldWriteArticle) {
           updatedIds.push(persistedArticleId);
-        } else {
+        } else if (!exists) {
           insertedIds.push(persistedArticleId);
           existingIdSet.add(persistedArticleId);
         }
+        existingArticleFields.set(persistedArticleId, { id: persistedArticleId, ...values });
         duplicateLookup.rememberArticle(article);
       });
 

@@ -211,13 +211,45 @@ describe('App', () => {
     expect(fetchCurrentUser).not.toHaveBeenCalled();
   });
 
-  test('renders the privacy policy page without loading a session', async () => {
+  test.each([
+    ['/privacy-policy/', 'Privacy Policy'],
+    ['/cookie-policy/', 'Cookie Policy']
+  ])('renders legal policy route %s without loading a session', async (path, title) => {
+    window.history.replaceState({}, '', path);
+
+    render(<App />);
+
+    expect(await screen.findByText(title)).toBeInTheDocument();
+    expect(fetchCurrentUser).not.toHaveBeenCalled();
+  });
+
+  test('loads the session when navigating from a public route to the app route', async () => {
+    let resolveSession;
+    fetchCurrentUser.mockImplementation(() => new Promise((resolve) => {
+      resolveSession = resolve;
+    }));
     window.history.replaceState({}, '', '/privacy-policy');
 
     render(<App />);
 
     expect(await screen.findByText('Privacy Policy')).toBeInTheDocument();
     expect(fetchCurrentUser).not.toHaveBeenCalled();
+
+    await act(async () => {
+      window.history.pushState({}, '', '/');
+      window.dispatchEvent(new Event('popstate'));
+    });
+
+    await waitFor(() => {
+      expect(fetchCurrentUser).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByText('Sign in')).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveSession(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION } }));
+    });
+
+    expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
   });
 
   test('renders the API docs page on the moved docs route without loading a session', async () => {

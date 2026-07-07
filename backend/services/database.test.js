@@ -829,6 +829,30 @@ describe('database queries and user data', () => {
     }));
   });
 
+  test('does not rewrite unchanged existing articles', () => {
+    const pubDate = new Date().toISOString();
+    const article = {
+      id: 'unchanged-article',
+      sourceId: primarySource.id,
+      source: primarySource.name,
+      title: 'Unchanged story',
+      description: 'Same description',
+      content: 'Same body',
+      url: 'https://example.com/unchanged',
+      language: 'en',
+      pubDate
+    };
+
+    const firstResult = database.upsertArticles([article]);
+    const firstUpdatedAt = database.getDb().prepare('SELECT updated_at AS updatedAt FROM articles WHERE id = ?').get(article.id).updatedAt;
+    const secondResult = database.upsertArticles([{ ...article }]);
+    const secondUpdatedAt = database.getDb().prepare('SELECT updated_at AS updatedAt FROM articles WHERE id = ?').get(article.id).updatedAt;
+
+    expect(firstResult).toMatchObject({ insertedCount: 1, updatedCount: 0 });
+    expect(secondResult).toMatchObject({ insertedCount: 0, updatedCount: 0, updatedIds: [] });
+    expect(secondUpdatedAt).toBe(firstUpdatedAt);
+  });
+
   test('updates an existing grouped-source article when a sibling subfeed repeats the canonical URL', () => {
     expect(groupedSource).toBeTruthy();
     expect(alternateGroupedSource).toBeTruthy();

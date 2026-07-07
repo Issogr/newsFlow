@@ -128,7 +128,7 @@ try {
 
   const adminBootstrap = userService.ensureAdminBootstrap();
   if (adminBootstrap.required) {
-    logger.warn(`Admin account "${adminBootstrap.user.username}" is not configured. Complete setup before expiry ${adminBootstrap.expiresAt}: ${adminBootstrap.setupLink}`);
+    logger.warn(`Admin account "${adminBootstrap.user.username}" is not configured. Complete setup before expiry ${adminBootstrap.expiresAt}.`);
   }
 } catch (error) {
   logger.error(`Startup check failed: ${error.message}`);

@@ -9,6 +9,7 @@ const { createApp, createServer } = require('./server');
 const {
   encryptBackendSessionCookie,
   getBffSessionSecret,
+  getInternalProxyToken,
   getSessionCookieOptions,
   isValidSessionPayload,
   unsignSessionId
@@ -423,6 +424,30 @@ describe('bff server', () => {
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
   });
 
+  test('rotates the BFF session id after successful login', async () => {
+    const attackerKnownCookie = await login(app, { username: 'admin' });
+
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .set('Cookie', attackerKnownCookie)
+      .set('Origin', SAME_ORIGIN)
+      .send({ username: 'alice', password: 'secret123' })
+      .expect(200);
+    const rotatedCookie = getBffSessionCookie(loginResponse);
+
+    expect(rotatedCookie).not.toBe(attackerKnownCookie);
+    await request(app)
+      .get('/api/me')
+      .set('Cookie', attackerKnownCookie)
+      .expect(401);
+
+    const meResponse = await request(app)
+      .get('/api/me')
+      .set('Cookie', rotatedCookie)
+      .expect(200);
+    expect(meResponse.body).toEqual({ user: { id: 'user-1', username: 'alice' } });
+  });
+
   test('clears the BFF session on logout', async () => {
     const bffSessionCookie = await login(app);
 
@@ -578,7 +603,12 @@ describe('bff server', () => {
   test('does not trust caller forwarded headers unless explicitly configured', async () => {
     const directSession = createSessionDbPath();
 
-    await withEnv({ TRUST_PROXY: undefined, NODE_ENV: 'production' }, async () => {
+    await withEnv({
+      TRUST_PROXY: undefined,
+      NODE_ENV: 'production',
+      BFF_SESSION_SECRET: 'test-bff-secret-for-production-123',
+      INTERNAL_PROXY_TOKEN: 'test-internal-proxy-token-for-production-123'
+    }, async () => {
       let directApp;
 
       try {
@@ -603,7 +633,9 @@ describe('bff server', () => {
     await withEnv({
       APP_BASE_URL: 'https://news.example',
       TRUST_PROXY: undefined,
-      NODE_ENV: 'production'
+      NODE_ENV: 'production',
+      BFF_SESSION_SECRET: 'test-bff-secret-for-production-123',
+      INTERNAL_PROXY_TOKEN: 'test-internal-proxy-token-for-production-123'
     }, async () => {
       let secureProxyApp;
 
@@ -787,6 +819,14 @@ describe('session policy helpers', () => {
     process.env.BFF_SESSION_SECRET = 'development-only-change-me';
 
     expect(() => getBffSessionSecret()).toThrow('BFF_SESSION_SECRET must not use the development default in production.');
+
+    process.env.BFF_SESSION_SECRET = 'short';
+
+    expect(() => getBffSessionSecret()).toThrow('BFF_SESSION_SECRET must be at least 32 characters in production.');
+
+    process.env.INTERNAL_PROXY_TOKEN = 'short';
+
+    expect(() => getInternalProxyToken()).toThrow('INTERNAL_PROXY_TOKEN must be at least 32 characters in production.');
   });
 
   test('reads signed session cookies with the configured secret', () => {
@@ -819,6 +859,9 @@ describe('session policy helpers', () => {
     expect(getSessionCookieOptions().secure).toBe(false);
 
     process.env.COOKIE_SECURE = 'yes';
-    expect(getSessionCookieOptions().secure).toBe(false);
+    expect(getSessionCookieOptions().secure).toBe(true);
+
+    process.env.NODE_ENV = 'production';
+    expect(() => getSessionCookieOptions()).toThrow('COOKIE_SECURE must be one of: auto, true, false.');
   });
 });

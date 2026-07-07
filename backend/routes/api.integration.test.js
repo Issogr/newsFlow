@@ -163,6 +163,22 @@ describe('API auth and user flows', () => {
     expect(getSessionCookie(loginResponse)).toContain('newsflow_session=');
   });
 
+  test('rate limits registration bursts by IP even with unique usernames', async () => {
+    for (let index = 0; index < 20; index += 1) {
+      await request(app)
+        .post('/api/auth/register')
+        .send({ username: `burst-user-${index}`, password: 'secret123' })
+        .expect(201);
+    }
+
+    const response = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'burst-user-blocked', password: 'secret123' })
+      .expect(429);
+
+    expect(response.body.error).toEqual(expect.objectContaining({ code: 'RATE_LIMIT_EXCEEDED' }));
+  });
+
   test('bootstraps the admin account and allows creating password setup links', async () => {
     const bootstrap = userService.ensureAdminBootstrap();
 

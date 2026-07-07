@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ExternalLink, Newspaper, Sparkles } from 'lucide-react';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { getTopicPresentation } from '../topicPresentation';
@@ -319,6 +319,8 @@ function renderParagraphWithSources(paragraph, paragraphIndex, sourceByIndex) {
 
 const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onSelectSummary }) => {
   const touchStartRef = useRef(null);
+  const swipeFeedbackFrameRef = useRef(0);
+  const swipeFeedbackOffsetRef = useRef(0);
   const [swipeFeedbackOffset, setSwipeFeedbackOffset] = useState(0);
   const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [locale, summary]);
   const sourceByIndex = useMemo(() => new Map((summary?.sources || []).map((source) => [Number(source.index), source])), [summary?.sources]);
@@ -349,9 +351,44 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
       onSelectSummary(nextSummary);
     }
   };
+  const resetSwipeFeedbackOffset = () => {
+    swipeFeedbackOffsetRef.current = 0;
+    if (swipeFeedbackFrameRef.current && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+      window.cancelAnimationFrame(swipeFeedbackFrameRef.current);
+      swipeFeedbackFrameRef.current = 0;
+    }
+    setSwipeFeedbackOffset(0);
+  };
+  const scheduleSwipeFeedbackOffset = (nextOffset) => {
+    if (swipeFeedbackOffsetRef.current === nextOffset) {
+      return;
+    }
+
+    swipeFeedbackOffsetRef.current = nextOffset;
+    if (swipeFeedbackFrameRef.current) {
+      return;
+    }
+
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+      setSwipeFeedbackOffset(nextOffset);
+      return;
+    }
+
+    swipeFeedbackFrameRef.current = window.requestAnimationFrame(() => {
+      swipeFeedbackFrameRef.current = 0;
+      setSwipeFeedbackOffset(swipeFeedbackOffsetRef.current);
+    });
+  };
+  useEffect(() => {
+    return () => {
+      if (swipeFeedbackFrameRef.current && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(swipeFeedbackFrameRef.current);
+      }
+    };
+  }, []);
   const handleTouchStart = (event) => {
     touchStartRef.current = null;
-    setSwipeFeedbackOffset(0);
+    resetSwipeFeedbackOffset();
 
     if (!canSwipeSummaries || !isMobileSummarySwipeViewport() || event.touches.length !== 1) {
       return;
@@ -375,22 +412,22 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
     const deltaY = touch.clientY - touchStart.y;
 
     if (Math.abs(deltaX) < 8) {
-      setSwipeFeedbackOffset(0);
+      scheduleSwipeFeedbackOffset(0);
       return;
     }
     if (Math.abs(deltaX) < Math.abs(deltaY) * SUMMARY_SWIPE_AXIS_RATIO) {
-      setSwipeFeedbackOffset(0);
+      scheduleSwipeFeedbackOffset(0);
       return;
     }
 
     const direction = deltaX < 0 ? 1 : -1;
     const hasAdjacentSummary = Boolean(swipeSummaries[swipeSummaryIndex + direction]?.id);
-    setSwipeFeedbackOffset(getSwipeFeedbackOffset(deltaX, hasAdjacentSummary));
+    scheduleSwipeFeedbackOffset(getSwipeFeedbackOffset(deltaX, hasAdjacentSummary));
   };
   const handleTouchEnd = (event) => {
     const touchStart = touchStartRef.current;
     touchStartRef.current = null;
-    setSwipeFeedbackOffset(0);
+    resetSwipeFeedbackOffset();
 
     if (!touchStart || event.changedTouches.length !== 1) {
       return;
@@ -408,7 +445,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   };
   const handleTouchCancel = () => {
     touchStartRef.current = null;
-    setSwipeFeedbackOffset(0);
+    resetSwipeFeedbackOffset();
   };
   const headerStart = (
     <div className="flex min-w-0 items-center gap-3">

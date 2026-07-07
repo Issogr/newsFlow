@@ -4,6 +4,7 @@ import BrandMark from './BrandMark';
 import InlineAlert from './InlineAlert';
 import useLatestRequest from '../hooks/useLatestRequest';
 import { createAdminPasswordSetupLink, deleteAdminUser, fetchAdminUsers, isRequestCanceled, updateUserSettings } from '../services/api';
+import { getFriendlyApiErrorMessage } from '../utils/apiError';
 
 const REFRESH_INTERVAL_MS = 30000;
 
@@ -78,7 +79,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
       }
 
       if (isMountedRef.current && request.isLatest()) {
-        setError(requestError.message || t('genericError'));
+        setError(getFriendlyApiErrorMessage(requestError, t));
       }
     } finally {
       usersRequestInFlightRef.current = false;
@@ -173,7 +174,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
       await loadUsers();
     } catch (requestError) {
       if (isMountedRef.current) {
-        setError(requestError.message || t('genericError'));
+        setError(getFriendlyApiErrorMessage(requestError, t));
       }
     } finally {
       if (isMountedRef.current) {
@@ -224,7 +225,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
       loadUsers({ showRefreshingIndicator: true });
     } catch (requestError) {
       if (isMountedRef.current) {
-        setError(requestError.message || t('genericError'));
+        setError(getFriendlyApiErrorMessage(requestError, t));
       }
     } finally {
       if (isMountedRef.current) {
@@ -244,7 +245,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
       }
     } catch (requestError) {
       if (isMountedRef.current) {
-        setError(requestError.message || t('genericError'));
+        setError(getFriendlyApiErrorMessage(requestError, t));
       }
     } finally {
       if (isMountedRef.current) {

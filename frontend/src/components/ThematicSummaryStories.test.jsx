@@ -281,7 +281,7 @@ describe('thematic summary podcast UI', () => {
     expect(onSelectSummary).toHaveBeenCalledWith(politics);
   });
 
-  test('moves the summary card while a mobile swipe is in progress', () => {
+  test('moves the summary card while a mobile swipe is in progress', async () => {
     mockSummarySwipeViewport(true);
     const technology = createTopicSummary('technology');
     const politics = createTopicSummary('politics');
@@ -303,7 +303,9 @@ describe('thematic summary podcast UI', () => {
     fireEvent.touchStart(article, { touches: [{ clientX: 240, clientY: 120 }] });
     fireEvent.touchMove(article, { touches: [{ clientX: 100, clientY: 128 }] });
 
-    expect(swipeFrame.style.transform).toBe('translate3d(-49px, 0, 0)');
+    await waitFor(() => {
+      expect(swipeFrame.style.transform).toBe('translate3d(-49px, 0, 0)');
+    });
 
     fireEvent.touchEnd(article, { changedTouches: [{ clientX: 100, clientY: 128 }] });
 
