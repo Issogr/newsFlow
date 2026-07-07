@@ -48,18 +48,22 @@ const currentUser = {
   }
 };
 
-function renderReaderPanel(props = {}) {
-  return render(
+function buildReaderPanel(props = {}) {
+  return (
     <ReaderPanel
       group={group}
       initialArticleId="article-1"
       readerPosition="right"
       t={t}
       currentUser={currentUser}
-      onClose={jest.fn()}
+      onClose={vi.fn()}
       {...props}
     />
   );
+}
+
+function renderReaderPanel(props = {}) {
+  return render(buildReaderPanel(props));
 }
 
 function createReaderPayload(text = 'Body', overrides = {}) {
@@ -78,7 +82,7 @@ describe('ReaderPanel', () => {
   const originalClipboard = navigator.clipboard;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     document.body.style.overflow = '';
   });
 
@@ -195,6 +199,31 @@ describe('ReaderPanel', () => {
     expect(fetchReaderArticle).toHaveBeenCalledTimes(2);
   });
 
+  test('preserves the selected source version across refreshed group objects', async () => {
+    fetchReaderArticle
+      .mockResolvedValueOnce(createReaderPayload('First body'))
+      .mockResolvedValueOnce(createReaderPayload('Second body'));
+    const { rerender } = renderReaderPanel();
+
+    expect(await screen.findByText('First body')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
+    expect(await screen.findByText('Second body')).toBeInTheDocument();
+
+    rerender(buildReaderPanel({
+      group: {
+        ...group,
+        items: group.items.map((item) => ({
+          ...item,
+          title: `${item.title} refreshed`
+        }))
+      }
+    }));
+
+    expect(screen.getByText('Second body')).toBeInTheDocument();
+    expect(screen.getByText('Article two refreshed')).toBeInTheDocument();
+    expect(fetchReaderArticle).toHaveBeenCalledTimes(2);
+  });
+
   test('keeps same-source grouped articles selectable as separate versions', async () => {
     fetchReaderArticle
       .mockResolvedValueOnce(createReaderPayload('First body', {
@@ -294,7 +323,7 @@ describe('ReaderPanel', () => {
   });
 
   test('shares the original article url from reader mode', async () => {
-    navigator.share = jest.fn().mockResolvedValue(undefined);
+    navigator.share = vi.fn().mockResolvedValue(undefined);
     fetchReaderArticle.mockResolvedValue(createReaderPayload());
 
     renderReaderPanel();

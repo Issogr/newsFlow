@@ -38,17 +38,17 @@ vi.mock('./components/AdminDashboard', () => ({
 
 describe('App', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     vi.useRealTimers();
     window.localStorage.clear();
     document.body.style.overflow = '';
     document.documentElement.dataset.theme = '';
     document.documentElement.style.colorScheme = '';
     window.history.replaceState({}, '', '/');
-    window.matchMedia = jest.fn().mockImplementation(() => ({
+    window.matchMedia = vi.fn().mockImplementation(() => ({
       matches: false,
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn()
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
     }));
   });
 
@@ -123,7 +123,9 @@ describe('App', () => {
       name: 'dismisses with the close button',
       useFakeTimers: false,
       dismiss: async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Close update notice' }));
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Close update notice' }));
+        });
       }
     }
   ])('$name and persists the current version', async ({ useFakeTimers, dismiss }) => {
@@ -179,7 +181,9 @@ describe('App', () => {
 
     expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
 
-    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    await act(async () => {
+      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    });
 
     await waitFor(() => {
       expect(screen.getByText('Sign in')).toBeInTheDocument();
@@ -207,13 +211,45 @@ describe('App', () => {
     expect(fetchCurrentUser).not.toHaveBeenCalled();
   });
 
-  test('renders the privacy policy page without loading a session', async () => {
+  test.each([
+    ['/privacy-policy/', 'Privacy Policy'],
+    ['/cookie-policy/', 'Cookie Policy']
+  ])('renders legal policy route %s without loading a session', async (path, title) => {
+    window.history.replaceState({}, '', path);
+
+    render(<App />);
+
+    expect(await screen.findByText(title)).toBeInTheDocument();
+    expect(fetchCurrentUser).not.toHaveBeenCalled();
+  });
+
+  test('loads the session when navigating from a public route to the app route', async () => {
+    let resolveSession;
+    fetchCurrentUser.mockImplementation(() => new Promise((resolve) => {
+      resolveSession = resolve;
+    }));
     window.history.replaceState({}, '', '/privacy-policy');
 
     render(<App />);
 
     expect(await screen.findByText('Privacy Policy')).toBeInTheDocument();
     expect(fetchCurrentUser).not.toHaveBeenCalled();
+
+    await act(async () => {
+      window.history.pushState({}, '', '/');
+      window.dispatchEvent(new Event('popstate'));
+    });
+
+    await waitFor(() => {
+      expect(fetchCurrentUser).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByText('Sign in')).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveSession(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION } }));
+    });
+
+    expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
   });
 
   test('renders the API docs page on the moved docs route without loading a session', async () => {

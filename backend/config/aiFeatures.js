@@ -1,17 +1,11 @@
-const VALID_AI_TOGGLE_VALUES = new Set(['true', 'false']);
+const { parseBooleanEnv } = require('../utils/env');
 
 function hasOpenRouterApiKey() {
   return Boolean(String(process.env.OPENROUTER_API_KEY || '').trim());
 }
 
 function readAiToggleValue(envName, fallback = 'true') {
-  const rawValue = process.env[envName];
-  if (rawValue === undefined || rawValue === null || rawValue === '') {
-    return fallback;
-  }
-
-  const normalized = String(rawValue).trim().toLowerCase();
-  return VALID_AI_TOGGLE_VALUES.has(normalized) ? normalized : 'false';
+  return parseBooleanEnv(envName, fallback !== 'false', { invalidFallback: false }) ? 'true' : 'false';
 }
 
 function isOpenRouterFeatureEnabled(envName) {

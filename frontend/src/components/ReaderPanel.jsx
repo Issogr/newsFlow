@@ -103,6 +103,17 @@ function renderReaderBlock(block, index, readerTextStyles) {
   return <p key={`${block.type}-${index}`} className={readerTextStyles.paragraph}>{block.text}</p>;
 }
 
+function getReaderGroupKey(group) {
+  if (group?.id) {
+    return group.id;
+  }
+
+  return (Array.isArray(group?.items) ? group.items : [])
+    .map((item) => item?.id)
+    .filter(Boolean)
+    .join('|');
+}
+
 const ReaderPanel = ({
   group,
   initialArticleId,
@@ -120,13 +131,33 @@ const ReaderPanel = ({
   const [error, setError] = useState(null);
   const readerTextSizeRequestIdRef = useRef(0);
   const { startLatestRequest, resetLatestRequest } = useLatestRequest();
+  const groupKey = useMemo(() => getReaderGroupKey(group), [group]);
+  const previousGroupKeyRef = useRef(groupKey);
+  const firstGroupArticleId = group?.items?.[0]?.id || null;
+  const groupArticleIds = useMemo(() => {
+    return new Set((Array.isArray(group?.items) ? group.items : []).map((item) => item?.id).filter(Boolean));
+  }, [group?.items]);
 
   useEffect(() => {
-    setSelectedArticleId(initialArticleId || group?.items?.[0]?.id || null);
-    resetShareState();
+    const groupChanged = previousGroupKeyRef.current !== groupKey;
+    const fallbackArticleId = initialArticleId || firstGroupArticleId;
+
+    previousGroupKeyRef.current = groupKey;
+
+    setSelectedArticleId((currentArticleId) => {
+      if (!groupChanged && currentArticleId && groupArticleIds.has(currentArticleId)) {
+        return currentArticleId;
+      }
+
+      return fallbackArticleId;
+    });
     setError(null);
-    resetLatestRequest();
-  }, [group, initialArticleId, resetLatestRequest, resetShareState]);
+
+    if (groupChanged) {
+      resetShareState();
+      resetLatestRequest();
+    }
+  }, [firstGroupArticleId, groupArticleIds, groupKey, initialArticleId, resetLatestRequest, resetShareState]);
 
   useEffect(() => {
     setReaderTextSize(getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
@@ -205,14 +236,14 @@ const ReaderPanel = ({
     : (readerPosition === 'center' ? 'lg:justify-center' : 'lg:justify-end');
   const readerTextStyles = READER_TEXT_SIZE_STYLES[readerTextSize] || READER_TEXT_SIZE_STYLES[DEFAULT_READER_TEXT_SIZE];
   const readerTextSizeIndex = Math.max(READER_TEXT_SIZE_ORDER.indexOf(readerTextSize), 0);
-  const handleShare = useCallback(async () => {
+  const handleShare = async () => {
     await shareArticle({
       url: safeOriginalUrl,
       title: selectedArticle?.title || ''
     });
-  }, [safeOriginalUrl, selectedArticle?.title, shareArticle]);
+  };
 
-  const updateReaderTextSize = useCallback(async (nextValue) => {
+  const updateReaderTextSize = async (nextValue) => {
     const normalizedNextValue = normalizeReaderTextSize(nextValue);
     if (normalizedNextValue === readerTextSize) {
       return;
@@ -240,25 +271,25 @@ const ReaderPanel = ({
         setReaderTextSize(previousValue);
       }
     }
-  }, [currentUser?.settings, readerTextSize]);
+  };
 
-  const decreaseReaderTextSize = useCallback(() => {
+  const decreaseReaderTextSize = () => {
     const nextIndex = Math.max(readerTextSizeIndex - 1, 0);
     updateReaderTextSize(READER_TEXT_SIZE_ORDER[nextIndex]);
-  }, [readerTextSizeIndex, updateReaderTextSize]);
+  };
 
-  const increaseReaderTextSize = useCallback(() => {
+  const increaseReaderTextSize = () => {
     const nextIndex = Math.min(readerTextSizeIndex + 1, READER_TEXT_SIZE_ORDER.length - 1);
     updateReaderTextSize(READER_TEXT_SIZE_ORDER[nextIndex]);
-  }, [readerTextSizeIndex, updateReaderTextSize]);
+  };
 
-  const refreshReader = useCallback(() => {
+  const refreshReader = () => {
     if (!selectedArticleId || loading) {
       return;
     }
 
     loadReader(selectedArticleId, { forceRefresh: true });
-  }, [loadReader, loading, selectedArticleId]);
+  };
 
   const headerStart = (
     <div className="flex items-center gap-2">

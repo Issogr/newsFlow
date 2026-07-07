@@ -1,7 +1,7 @@
 import BrandMark from './BrandMark';
 
 export const MIN_PASSWORD_LENGTH = 8;
-export const AUTH_INPUT_CLASS_NAME = 'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition-colors focus:border-slate-400';
+const AUTH_INPUT_CLASS_NAME = 'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition-colors focus:border-slate-400';
 export const AUTH_PRIMARY_BUTTON_CLASS_NAME = 'inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 export function getPasswordValidationError(password, t) {

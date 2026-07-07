@@ -10,7 +10,7 @@ jest.mock('axios', () => ({
 
 const dns = require('dns').promises;
 const axios = require('axios');
-const { assertSafeOutboundUrl, fetchSafeTextUrl } = require('./urlSafety');
+const { fetchSafeTextUrl } = require('./urlSafety');
 
 describe('urlSafety', () => {
   beforeEach(() => {
@@ -19,34 +19,38 @@ describe('urlSafety', () => {
 
   test('allows public http and https URLs', async () => {
     dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    axios.get.mockResolvedValue({ status: 200, data: 'ok', headers: {} });
 
-    await expect(assertSafeOutboundUrl('https://example.com/feed')).resolves.toBe('https://example.com/feed');
+    await expect(fetchSafeTextUrl('https://example.com/feed')).resolves.toMatchObject({
+      finalUrl: 'https://example.com/feed',
+      data: 'ok'
+    });
   });
 
   test('rejects localhost and private-network URLs', async () => {
-    await expect(assertSafeOutboundUrl('http://127.0.0.1/feed')).rejects.toMatchObject({
+    await expect(fetchSafeTextUrl('http://127.0.0.1/feed')).rejects.toMatchObject({
       status: 403,
       code: 'FORBIDDEN_URL'
     });
 
-    await expect(assertSafeOutboundUrl('http://localhost/feed')).rejects.toMatchObject({
+    await expect(fetchSafeTextUrl('http://localhost/feed')).rejects.toMatchObject({
       status: 403,
       code: 'FORBIDDEN_URL'
     });
   });
 
   test('rejects special-use IPv4 and IPv4-mapped IPv6 URLs', async () => {
-    await expect(assertSafeOutboundUrl('http://0.0.0.0/feed')).rejects.toMatchObject({
+    await expect(fetchSafeTextUrl('http://0.0.0.0/feed')).rejects.toMatchObject({
       status: 403,
       code: 'FORBIDDEN_URL'
     });
 
-    await expect(assertSafeOutboundUrl('http://100.64.0.1/feed')).rejects.toMatchObject({
+    await expect(fetchSafeTextUrl('http://100.64.0.1/feed')).rejects.toMatchObject({
       status: 403,
       code: 'FORBIDDEN_URL'
     });
 
-    await expect(assertSafeOutboundUrl('http://[::ffff:127.0.0.1]/feed')).rejects.toMatchObject({
+    await expect(fetchSafeTextUrl('http://[::ffff:127.0.0.1]/feed')).rejects.toMatchObject({
       status: 403,
       code: 'FORBIDDEN_URL'
     });
@@ -55,7 +59,7 @@ describe('urlSafety', () => {
   test('rejects public hostnames that resolve to private IPs', async () => {
     dns.lookup.mockResolvedValue([{ address: '10.0.0.25', family: 4 }]);
 
-    await expect(assertSafeOutboundUrl('https://feeds.example.com/rss')).rejects.toMatchObject({
+    await expect(fetchSafeTextUrl('https://feeds.example.com/rss')).rejects.toMatchObject({
       status: 403,
       code: 'FORBIDDEN_URL'
     });
@@ -64,14 +68,14 @@ describe('urlSafety', () => {
   test('rejects public hostnames that resolve to IPv4-mapped private IPv6 addresses', async () => {
     dns.lookup.mockResolvedValue([{ address: '::ffff:7f00:1', family: 6 }]);
 
-    await expect(assertSafeOutboundUrl('https://feeds.example.com/rss')).rejects.toMatchObject({
+    await expect(fetchSafeTextUrl('https://feeds.example.com/rss')).rejects.toMatchObject({
       status: 403,
       code: 'FORBIDDEN_URL'
     });
   });
 
   test('rejects non-http outbound schemes', async () => {
-    await expect(assertSafeOutboundUrl('javascript:alert(1)')).rejects.toMatchObject({
+    await expect(fetchSafeTextUrl('javascript:alert(1)')).rejects.toMatchObject({
       status: 400,
       code: 'INVALID_URL'
     });

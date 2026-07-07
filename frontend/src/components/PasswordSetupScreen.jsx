@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { KeyRound, ShieldCheck } from 'lucide-react';
 import { completePasswordSetup, validatePasswordSetupToken } from '../services/api';
+import { getApiErrorPayload, getFriendlyApiErrorMessage } from '../utils/apiError';
 import AuthCard, {
   AUTH_PRIMARY_BUTTON_CLASS_NAME,
   AuthTextInput,
@@ -11,7 +12,7 @@ import AuthCard, {
 import InlineAlert from './InlineAlert';
 
 function getSetupErrorMessage(error, t) {
-  const apiMessage = error?.response?.data?.error?.message;
+  const { message: apiMessage } = getApiErrorPayload(error);
 
   const passwordErrorMessage = getPasswordApiErrorMessage(apiMessage, t);
   if (passwordErrorMessage) {
@@ -22,7 +23,7 @@ function getSetupErrorMessage(error, t) {
     return apiMessage;
   }
 
-  return t('invalidSetupLink');
+  return getFriendlyApiErrorMessage(error, t, 'invalidSetupLink');
 }
 
 const PasswordSetupScreen = ({ t, token, onComplete }) => {

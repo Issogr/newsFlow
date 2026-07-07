@@ -14,7 +14,6 @@ frontend/coverage/
 frontend/.eslintcache
 frontend/.vite/
 
-.nyc_output/
 coverage/
 
 **/.DS_Store
@@ -32,3 +31,4 @@ pnpm-debug.log*
 
 patches/
 AGENTS.md
+.opencode/opencode.json

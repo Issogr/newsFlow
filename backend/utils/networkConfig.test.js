@@ -23,6 +23,13 @@ describe('networkConfig utils', () => {
     expect(getAllowedOrigins()).toEqual(['https://a.example', 'https://b.example']);
   });
 
+  test('production defaults do not allow the whole local network implicitly', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.ALLOWED_ORIGINS;
+
+    expect(getAllowedOrigins()).not.toContain('@local-network');
+  });
+
   test.each([
     ['same-origin request', undefined, ['https://a.example'], true],
     ['global wildcard', 'https://any.example', ['*'], true],

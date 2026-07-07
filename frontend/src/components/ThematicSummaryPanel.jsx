@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ExternalLink, Newspaper, Sparkles } from 'lucide-react';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { getTopicPresentation } from '../topicPresentation';
@@ -7,6 +7,10 @@ import { FullscreenPanelFrame } from './FullscreenModalFrame';
 import PodcastAudioPlayer from './PodcastAudioPlayer';
 
 const SUMMARY_SLOTS = new Set(['morning', 'lunch', 'evening']);
+const MOBILE_SUMMARY_SWIPE_QUERY = '(max-width: 767px)';
+const SUMMARY_SWIPE_MIN_DISTANCE = 60;
+const SUMMARY_SWIPE_AXIS_RATIO = 1.35;
+const SUMMARY_SWIPE_FEEDBACK_MAX_OFFSET = 72;
 const PODCAST_LANGUAGE_LABELS = {
   en: { en: 'English', it: 'inglese' },
   it: { en: 'Italian', it: 'italiano' }
@@ -164,6 +168,47 @@ function getPodcastSummariesForPanel(summary = {}, summaries = []) {
   });
 }
 
+function getSwipeSummariesForPanel(summary = {}, summaries = []) {
+  const summaryById = new Map();
+
+  (Array.isArray(summaries) ? summaries : []).forEach((availableSummary) => {
+    if (availableSummary?.id && !summaryById.has(availableSummary.id)) {
+      summaryById.set(availableSummary.id, availableSummary);
+    }
+  });
+
+  if (summary?.id && !summaryById.has(summary.id)) {
+    summaryById.set(summary.id, summary);
+  }
+
+  const orderedSummaries = [...summaryById.values()];
+  const podcastSummary = orderedSummaries.find(isPodcastSummary);
+  const topicSummaries = orderedSummaries.filter((availableSummary) => !isPodcastSummary(availableSummary));
+
+  return podcastSummary ? [podcastSummary, ...topicSummaries] : topicSummaries;
+}
+
+function getSwipeSummaryIndex(summary = {}, swipeSummaries = []) {
+  if (isPodcastSummary(summary)) {
+    return swipeSummaries.findIndex(isPodcastSummary);
+  }
+
+  return swipeSummaries.findIndex((availableSummary) => availableSummary?.id === summary?.id);
+}
+
+function isMobileSummarySwipeViewport() {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia(MOBILE_SUMMARY_SWIPE_QUERY).matches;
+}
+
+function getSwipeFeedbackOffset(deltaX, hasAdjacentSummary) {
+  const resistance = hasAdjacentSummary ? 0.35 : 0.14;
+  const offset = deltaX * resistance;
+
+  return Math.max(-SUMMARY_SWIPE_FEEDBACK_MAX_OFFSET, Math.min(SUMMARY_SWIPE_FEEDBACK_MAX_OFFSET, offset));
+}
+
 function getPodcastAudioStatusText(summary = {}, t) {
   if (summary.status === 'failed') {
     return t('podcastAudioFailed');
@@ -272,17 +317,136 @@ function renderParagraphWithSources(paragraph, paragraphIndex, sourceByIndex) {
   return parts;
 }
 
-const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose }) => {
+const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onSelectSummary }) => {
+  const touchStartRef = useRef(null);
+  const swipeFeedbackFrameRef = useRef(0);
+  const swipeFeedbackOffsetRef = useRef(0);
+  const [swipeFeedbackOffset, setSwipeFeedbackOffset] = useState(0);
   const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [locale, summary]);
   const sourceByIndex = useMemo(() => new Map((summary?.sources || []).map((source) => [Number(source.index), source])), [summary?.sources]);
   const isPodcast = isPodcastSummary(summary);
   const podcastSummaries = useMemo(() => getPodcastSummariesForPanel(summary, summaries), [summaries, summary]);
+  const swipeSummaries = useMemo(() => getSwipeSummariesForPanel(summary, summaries), [summaries, summary]);
+  const swipeSummaryIndex = useMemo(() => getSwipeSummaryIndex(summary, swipeSummaries), [summary, swipeSummaries]);
   const paragraphs = useMemo(() => {
     return isPodcast ? [] : splitSummaryParagraphs(localizedSummary.displaySummaryText, { maxParagraphChars: 520 });
   }, [isPodcast, localizedSummary.displaySummaryText]);
   const primaryPresentation = getTopicPresentation(getThematicSummaryPresentationKey(summary));
   const PrimaryIcon = primaryPresentation.Icon;
   const closeLabel = isPodcast ? t('closePodcastSummary') : t('closeThematicSummary');
+  const canSwipeSummaries = swipeSummaries.length > 1 && swipeSummaryIndex >= 0 && typeof onSelectSummary === 'function';
+  const swipeFeedbackStrength = Math.min(Math.abs(swipeFeedbackOffset) / SUMMARY_SWIPE_FEEDBACK_MAX_OFFSET, 1);
+  const swipeFeedbackActive = swipeFeedbackOffset !== 0;
+  const swipeFeedbackStyle = {
+    opacity: 1 - (swipeFeedbackStrength * 0.08),
+    transform: `translate3d(${swipeFeedbackOffset}px, 0, 0)`
+  };
+  const selectAdjacentSummary = (direction) => {
+    if (!canSwipeSummaries) {
+      return;
+    }
+
+    const nextSummary = swipeSummaries[swipeSummaryIndex + direction];
+    if (nextSummary?.id) {
+      onSelectSummary(nextSummary);
+    }
+  };
+  const resetSwipeFeedbackOffset = () => {
+    swipeFeedbackOffsetRef.current = 0;
+    if (swipeFeedbackFrameRef.current && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+      window.cancelAnimationFrame(swipeFeedbackFrameRef.current);
+      swipeFeedbackFrameRef.current = 0;
+    }
+    setSwipeFeedbackOffset(0);
+  };
+  const scheduleSwipeFeedbackOffset = (nextOffset) => {
+    if (swipeFeedbackOffsetRef.current === nextOffset) {
+      return;
+    }
+
+    swipeFeedbackOffsetRef.current = nextOffset;
+    if (swipeFeedbackFrameRef.current) {
+      return;
+    }
+
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+      setSwipeFeedbackOffset(nextOffset);
+      return;
+    }
+
+    swipeFeedbackFrameRef.current = window.requestAnimationFrame(() => {
+      swipeFeedbackFrameRef.current = 0;
+      setSwipeFeedbackOffset(swipeFeedbackOffsetRef.current);
+    });
+  };
+  useEffect(() => {
+    return () => {
+      if (swipeFeedbackFrameRef.current && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(swipeFeedbackFrameRef.current);
+      }
+    };
+  }, []);
+  const handleTouchStart = (event) => {
+    touchStartRef.current = null;
+    resetSwipeFeedbackOffset();
+
+    if (!canSwipeSummaries || !isMobileSummarySwipeViewport() || event.touches.length !== 1) {
+      return;
+    }
+
+    if (typeof event.target?.closest === 'function' && event.target.closest('a, button, input, textarea, select, audio, [role="button"], [role="slider"]')) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+  const handleTouchMove = (event) => {
+    const touchStart = touchStartRef.current;
+    if (!touchStart || event.touches.length !== 1) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - touchStart.x;
+    const deltaY = touch.clientY - touchStart.y;
+
+    if (Math.abs(deltaX) < 8) {
+      scheduleSwipeFeedbackOffset(0);
+      return;
+    }
+    if (Math.abs(deltaX) < Math.abs(deltaY) * SUMMARY_SWIPE_AXIS_RATIO) {
+      scheduleSwipeFeedbackOffset(0);
+      return;
+    }
+
+    const direction = deltaX < 0 ? 1 : -1;
+    const hasAdjacentSummary = Boolean(swipeSummaries[swipeSummaryIndex + direction]?.id);
+    scheduleSwipeFeedbackOffset(getSwipeFeedbackOffset(deltaX, hasAdjacentSummary));
+  };
+  const handleTouchEnd = (event) => {
+    const touchStart = touchStartRef.current;
+    touchStartRef.current = null;
+    resetSwipeFeedbackOffset();
+
+    if (!touchStart || event.changedTouches.length !== 1) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - touchStart.x;
+    const deltaY = touch.clientY - touchStart.y;
+
+    if (Math.abs(deltaX) < SUMMARY_SWIPE_MIN_DISTANCE || Math.abs(deltaX) < Math.abs(deltaY) * SUMMARY_SWIPE_AXIS_RATIO) {
+      return;
+    }
+
+    selectAdjacentSummary(deltaX < 0 ? 1 : -1);
+  };
+  const handleTouchCancel = () => {
+    touchStartRef.current = null;
+    resetSwipeFeedbackOffset();
+  };
   const headerStart = (
     <div className="flex min-w-0 items-center gap-3">
       <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${primaryPresentation.iconBadgeClassName}`}>
@@ -308,8 +472,18 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose }) =
       overlayClassName="fixed inset-0 z-50 overflow-hidden overscroll-none bg-slate-950/35 backdrop-blur-sm"
       panelClassName="flex h-full w-full flex-col overflow-hidden bg-slate-50 shadow-2xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(64rem,calc(100vw-2rem))] lg:rounded-[2rem] lg:border lg:border-slate-200/80"
     >
-          <div className="flex-1 overflow-y-auto overscroll-contain bg-slate-50 px-4 py-6 md:px-5 md:py-8 lg:px-6">
-            <div className="mx-auto max-w-[54rem] space-y-5">
+          <div
+            className="flex-1 touch-pan-y overflow-y-auto overscroll-contain bg-slate-50 px-4 py-6 md:px-5 md:py-8 lg:px-6"
+            onTouchCancel={handleTouchCancel}
+            onTouchEnd={handleTouchEnd}
+            onTouchMove={handleTouchMove}
+            onTouchStart={handleTouchStart}
+          >
+            <div
+              className={`mx-auto max-w-[54rem] space-y-5 transition-[opacity,transform] ease-out will-change-transform ${swipeFeedbackActive ? 'duration-75' : 'duration-200'}`}
+              data-testid="thematic-summary-swipe-frame"
+              style={swipeFeedbackStyle}
+            >
               {!isPodcast && (
                 <div className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">
                   <span className="inline-flex items-center justify-center gap-2">
@@ -378,13 +552,11 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose }) =
                     })}
                   </div>
                 ) : (
-                  <>
-                    <div className="space-y-6 text-[1.05rem] leading-8 tracking-[0.01em] text-stone-800 md:text-lg md:leading-9">
-                      {paragraphs.map((paragraph, index) => (
-                        <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex)}</p>
-                      ))}
-                    </div>
-                  </>
+                  <div className="space-y-6 text-[1.05rem] leading-8 tracking-[0.01em] text-stone-800 md:text-lg md:leading-9">
+                    {paragraphs.map((paragraph, index) => (
+                      <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex)}</p>
+                    ))}
+                  </div>
                 )}
 
               </article>

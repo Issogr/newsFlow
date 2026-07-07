@@ -1,16 +1,16 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.5.9',
+  version: '3.5.10',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '⚡ Reduced AI provider usage with smarter local topic skips, larger topic batches, and smaller balanced summary/podcast prompts.',
-      '🔄 Made manual refreshes smoother by avoiding immediate reloads of unchanged thematic summaries.',
-      '🧠 Regenerated stale thematic summaries when later articles change the selected source set for the same window.',
-      '🎙️ Saved podcast scripts before audio generation so new briefings can appear while TTS audio finishes in the background.',
-      '💾 Enabled private browser caching for podcast audio to reduce repeated media downloads.',
-      '🏷️ Added low, medium, and high clickbait labels beside article dates.'
+      '👉 Swipe left or right on mobile AI summaries to move between topics without closing the panel; the card follows your gesture while swiping.',
+      '🌈 AI summary stories keep their rainbow ring after opening, with a small dot showing what is still new.',
+      '🏷️ Topic circles on news cards now overlap neatly like multiple source circles.',
+      '🔐 Password setup now shows clearer messages when the connection fails or takes too long, instead of blaming the link.',
+      '🧭 Privacy, cookie, and docs pages open more reliably, and returning to the app checks your session again.',
+      '📰 Custom feed icons are safer and can recover when a source updates its icon.'
     ]
   },
   it: {
@@ -18,12 +18,12 @@ export const CURRENT_CHANGELOG_ENTRY = {
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '⚡ Ridotto l\'uso del provider AI con skip locali dei topic, batch piu grandi e prompt di sintesi/podcast piu piccoli e bilanciati.',
-      '🔄 Resi piu fluidi gli aggiornamenti manuali evitando il ricaricamento immediato delle sintesi tematiche non cambiate.',
-      '🧠 Rigenerate le sintesi tematiche obsolete quando articoli successivi cambiano le fonti selezionate per la stessa finestra.',
-      '🎙️ Salvati gli script dei podcast prima dell\'audio, cosi i nuovi briefing possono comparire mentre il TTS termina in background.',
-      '💾 Abilitata la cache privata del browser per l\'audio dei podcast, riducendo i download multimediali ripetuti.',
-      '🏷️ Aggiunte etichette clickbait basso, medio e alto accanto alle date degli articoli.'
+      '👉 Scorri a sinistra o a destra sulle sintesi AI da mobile per passare tra i topic senza chiudere il pannello; la scheda segue il gesto durante lo swipe.',
+      '🌈 Le storie con sintesi AI mantengono l\'anello arcobaleno anche dopo l\'apertura, con un piccolo punto per indicare quelle ancora nuove.',
+      '🏷️ I cerchi dei topic nelle news card ora si sovrappongono in modo ordinato come quelli delle fonti multiple.',
+      '🔐 Il setup della password ora mostra messaggi piu chiari quando la connessione fallisce o impiega troppo tempo, senza dare subito la colpa al link.',
+      '🧭 Le pagine privacy, cookie e documentazione si aprono in modo piu affidabile, e tornando all\'app la sessione viene ricontrollata.',
+      '📰 Le icone dei feed personalizzati sono piu sicure e possono riprendersi quando una fonte aggiorna la propria icona.'
     ]
   }
 };

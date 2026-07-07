@@ -1,13 +1,9 @@
 # syntax=docker/dockerfile:1.7
 
 # Build stage
-FROM --platform=$BUILDPLATFORM node:24.16.0-bookworm-slim AS build
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS build
 
 ARG TARGETARCH
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates python3 make g++ && \
-    rm -rf /var/lib/apt/lists/*
 
 # Imposta la directory di lavoro
 WORKDIR /app
@@ -22,7 +18,7 @@ RUN --mount=type=cache,id=newsflow-backend-npm,target=/root/.npm,sharing=locked 
     npm_config_platform=linux npm_config_arch="$npm_arch" npm_config_libc=glibc npm ci --omit=dev --no-audit --no-fund
 
 # Production stage
-FROM node:24.16.0-bookworm-slim
+FROM node:24-bookworm-slim
 
 # Crea un utente non-root
 RUN apt-get update && \
@@ -36,7 +32,6 @@ WORKDIR /usr/src/app
 
 # Copia i node_modules dalla fase di build
 COPY --from=build /app/node_modules ./node_modules
-RUN node -e "require('better-sqlite3')"
 
 # Copia il codice
 COPY . .

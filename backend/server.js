@@ -16,6 +16,7 @@ const { errorMiddleware, createError, buildRateLimitMessage } = require('./utils
 const { parseIntegerEnv } = require('./utils/env');
 const { getAllowedOrigins, isOriginAllowed } = require('./utils/networkConfig');
 const { hasTrustedInternalService } = require('./utils/internalRequestGate');
+const { redactUrlForLog } = require('./utils/logRedaction');
 const { flushApiTokenUsage, startApiTokenUsageFlushTimer, stopApiTokenUsageFlushTimer } = require('./utils/auth');
 
 const app = express();
@@ -24,10 +25,6 @@ const SERVER_TIMEOUT = parseIntegerEnv('SERVER_TIMEOUT', 60000, { min: 1000 });
 const allowedOrigins = getAllowedOrigins();
 const jsonParser = express.json({ limit: '1mb' });
 const urlencodedParser = express.urlencoded({ extended: true, limit: '1mb' });
-
-function redactSensitiveValues(value) {
-  return String(value || '').replace(/([?&]token=)[^&\s]+/gi, '$1[REDACTED]');
-}
 
 logger.setupGlobalErrorHandlers();
 
@@ -70,7 +67,7 @@ app.use(cors({
 }));
 
 app.use(morgan('combined', {
-  stream: { write: (message) => logger.info(redactSensitiveValues(message.trim())) },
+  stream: { write: (message) => logger.info(redactUrlForLog(message.trim())) },
   skip: (req) => req.url === '/health'
 }));
 
@@ -131,7 +128,7 @@ try {
 
   const adminBootstrap = userService.ensureAdminBootstrap();
   if (adminBootstrap.required) {
-    logger.warn(`Admin account "${adminBootstrap.user.username}" is not configured. Complete setup before expiry ${adminBootstrap.expiresAt}: ${adminBootstrap.setupLink}`);
+    logger.warn(`Admin account "${adminBootstrap.user.username}" is not configured. Complete setup before expiry ${adminBootstrap.expiresAt}.`);
   }
 } catch (error) {
   logger.error(`Startup check failed: ${error.message}`);

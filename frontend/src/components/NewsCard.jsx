@@ -365,40 +365,42 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
               <p className="truncate text-sm font-semibold text-slate-950">{sourceSummary}</p>
             </div>
           ) : null}
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
-            {topicEntries.map(({ topic, source }) => {
-              const { Icon, iconBadgeClassName } = getTopicPresentation(topic);
-              const localizedTopic = getLocalizedTopic(topic, locale);
-              const isAiTopic = source === 'ai';
+          {topicEntries.length > 0 ? (
+            <div className="mt-1 flex w-fit -space-x-1 rounded-full bg-slate-50/80 p-0.5 text-xs font-medium text-slate-600">
+              {topicEntries.map(({ topic, source }) => {
+                const { Icon, iconBadgeClassName } = getTopicPresentation(topic);
+                const localizedTopic = getLocalizedTopic(topic, locale);
+                const isAiTopic = source === 'ai';
 
-              if (isAiTopic) {
+                if (isAiTopic) {
+                  return (
+                    <span
+                      key={topic}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full p-[1.5px] shadow-sm ring-2 ring-white"
+                      style={AI_ACCENT_GRADIENT_STYLE}
+                      aria-label={localizedTopic}
+                      title={localizedTopic}
+                    >
+                      <span className={`inline-flex h-full w-full items-center justify-center rounded-full ${iconBadgeClassName}`}>
+                        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                      </span>
+                    </span>
+                  );
+                }
+
                 return (
                   <span
                     key={topic}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-full p-[1.5px] shadow-sm"
-                    style={AI_ACCENT_GRADIENT_STYLE}
+                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full shadow-sm ring-2 ring-white ${iconBadgeClassName}`}
                     aria-label={localizedTopic}
                     title={localizedTopic}
                   >
-                    <span className={`inline-flex h-full w-full items-center justify-center rounded-full ${iconBadgeClassName}`}>
-                      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                    </span>
+                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                   </span>
                 );
-              }
-
-              return (
-                <span
-                  key={topic}
-                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full shadow-sm ${iconBadgeClassName}`}
-                  aria-label={localizedTopic}
-                  title={localizedTopic}
-                >
-                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                </span>
-              );
-            })}
-          </div>
+              })}
+            </div>
+          ) : null}
         </div>
         {shareControls}
       </div>

@@ -21,7 +21,7 @@ const {
 } = require('./newsAggregatorGrouping');
 const {
   buildStoryGroupId,
-  _getCandidateSignature: getStoryGroupingCandidateSignature,
+  getCandidateSignature: getStoryGroupingCandidateSignature,
   findSimilarStoriesForArticle,
   isAiStoryGroupingAvailable
 } = require('./aiStoryGrouper');
@@ -310,33 +310,33 @@ async function fetchSourceTask(task, options = {}) {
   return task.targetSources.flatMap((source) => parsedArticles.map((article) => cloneArticleForSource(article, source)));
 }
 
+function getRefreshUserIdsForArticles(articles = [], classifiedIds = []) {
+  const classifiedIdSet = new Set(classifiedIds);
+  const userIds = new Set();
+  let includesGlobalArticles = false;
+
+  articles.forEach((article) => {
+    if (!classifiedIdSet.has(article?.id)) {
+      return;
+    }
+
+    if (article.ownerUserId) {
+      userIds.add(article.ownerUserId);
+      return;
+    }
+
+    includesGlobalArticles = true;
+  });
+
+  return includesGlobalArticles ? [] : [...userIds];
+}
+
 async function processAiTopicsForPendingArticles(articles = [], options = {}) {
   if (!Array.isArray(articles) || articles.length === 0) {
     return;
   }
 
   const articleIds = articles.map((article) => article.id).filter(Boolean);
-
-  const getRefreshUserIds = (classifiedIds = []) => {
-    const classifiedIdSet = new Set(classifiedIds);
-    const userIds = new Set();
-    let includesGlobalArticles = false;
-
-    articles.forEach((article) => {
-      if (!classifiedIdSet.has(article?.id)) {
-        return;
-      }
-
-      if (article.ownerUserId) {
-        userIds.add(article.ownerUserId);
-        return;
-      }
-
-      includesGlobalArticles = true;
-    });
-
-    return includesGlobalArticles ? [] : [...userIds];
-  };
 
   try {
     const classification = await classifyTopicDetailsForArticlesWithStatus(articles);
@@ -359,7 +359,7 @@ async function processAiTopicsForPendingArticles(articles = [], options = {}) {
     if (topicEntries.length > 0) {
       database.replaceTopicsForArticles(topicEntries);
       websocketService.broadcastFeedRefresh({
-        userIds: getRefreshUserIds(classifiedIds),
+        userIds: getRefreshUserIdsForArticles(articles, classifiedIds),
         reason: 'topics'
       });
     }
@@ -371,7 +371,7 @@ async function processAiTopicsForPendingArticles(articles = [], options = {}) {
     );
     database.markArticlesAiTopicProcessing([...failedArticleIds], 'failed');
     database.markArticlesAiTopicProcessing([...cappedArticleIds], 'deferred');
-    scheduleThematicSummariesAfterTopicProcessing(attemptedArticleIds);
+    scheduleThematicSummariesAfterTopicProcessing(articles, attemptedArticleIds);
   } catch (error) {
     logger.warn(`Background AI topic processing failed: ${error.message}`);
     database.markArticlesAiTopicProcessing(articleIds, 'failed');
@@ -393,26 +393,6 @@ async function processAiClickbaitForPendingArticles(articles = []) {
   }
 
   const articleIds = articles.map((article) => article.id).filter(Boolean);
-  const getRefreshUserIds = (classifiedIds = []) => {
-    const classifiedIdSet = new Set(classifiedIds);
-    const userIds = new Set();
-    let includesGlobalArticles = false;
-
-    articles.forEach((article) => {
-      if (!classifiedIdSet.has(article?.id)) {
-        return;
-      }
-
-      if (article.ownerUserId) {
-        userIds.add(article.ownerUserId);
-        return;
-      }
-
-      includesGlobalArticles = true;
-    });
-
-    return includesGlobalArticles ? [] : [...userIds];
-  };
 
   try {
     const classification = await classifyClickbaitForArticlesWithStatus(articles);
@@ -435,7 +415,7 @@ async function processAiClickbaitForPendingArticles(articles = []) {
     if (clickbaitEntries.length > 0) {
       database.updateArticleClickbaitClassifications(clickbaitEntries, classification.model || '');
       websocketService.broadcastFeedRefresh({
-        userIds: getRefreshUserIds(classifiedIds),
+        userIds: getRefreshUserIdsForArticles(articles, classifiedIds),
         reason: 'clickbait'
       });
     }
@@ -454,8 +434,17 @@ async function processAiClickbaitForPendingArticles(articles = []) {
   }
 }
 
-function scheduleThematicSummariesAfterTopicProcessing(classifiedArticleIds = []) {
+function scheduleThematicSummariesAfterTopicProcessing(articles = [], classifiedArticleIds = []) {
   if (!Array.isArray(classifiedArticleIds) || classifiedArticleIds.length === 0) {
+    return;
+  }
+
+  const articleById = new Map((Array.isArray(articles) ? articles : []).map((article) => [article.id, article]));
+  const hasGlobalArticle = classifiedArticleIds.some((articleId) => {
+    const article = articleById.get(articleId);
+    return article && !article.ownerUserId;
+  });
+  if (!hasGlobalArticle) {
     return;
   }
 
@@ -676,7 +665,7 @@ function scheduleAiStoryGroupingForPendingArticles(normalizedArticles = [], opti
 
   const articleIds = normalizedArticles.map((article) => article.id).filter(Boolean);
   const retryAnchorArticleIds = Array.isArray(options.retryAnchorArticleIds) ? options.retryAnchorArticleIds : articleIds;
-  const retryArticleIds = AI_STORY_GROUPING_RETRY_LIMIT > 0 && typeof database.getArticleIdsForAiStoryGroupingRetry === 'function'
+  const retryArticleIds = AI_STORY_GROUPING_RETRY_LIMIT > 0
     ? database.getArticleIdsForAiStoryGroupingRetry(retryAnchorArticleIds, {
         windowHours: AI_STORY_GROUPING_WINDOW_HOURS,
         limit: AI_STORY_GROUPING_RETRY_LIMIT
@@ -862,7 +851,6 @@ module.exports = {
   createEmptyRefreshPayload,
   ingestSourceConfigs,
   scheduleAiTopicsForPendingArticles,
-  scheduleAiClickbaitForPendingArticles,
   scheduleAiStoryGroupingForPendingArticles,
   _filterArticlesWithinRetention: filterArticlesWithinRetention,
   _resetRuntimeStateForTests: resetRuntimeStateForTests,

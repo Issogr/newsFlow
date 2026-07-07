@@ -320,16 +320,9 @@ function createAuthRepository({ getDb }) {
     `).run(tokenHash).changes;
   }
 
-  function deleteSessionsByUserId(userId, exceptTokenHash = null) {
+  function deleteSessionsByUserId(userId) {
     if (!userId) {
       return 0;
-    }
-
-    if (exceptTokenHash) {
-      return getDb().prepare(`
-        DELETE FROM user_sessions
-        WHERE user_id = ? AND token_hash != ?
-      `).run(userId, exceptTokenHash).changes;
     }
 
     return getDb().prepare(`
@@ -396,10 +389,7 @@ function createAuthRepository({ getDb }) {
       params.push(userId);
     }
 
-    if (Array.isArray(purpose) && purpose.length > 0) {
-      conditions.push(`purpose IN (${purpose.map(() => '?').join(', ')})`);
-      params.push(...purpose);
-    } else if (purpose) {
+    if (purpose) {
       conditions.push('purpose = ?');
       params.push(purpose);
     }

@@ -16,7 +16,7 @@ function createArticleRepository({
 }) {
   const TITLE_DEDUPE_WINDOW_MS = 3 * 60 * 60 * 1000;
 
-  function getSourceFilterClauses(sourceIds = [], options = {}) {
+  function getSourceFilterClauses(sourceIds = [], options = {}, alias = 'a') {
     const aliasedIds = new Set();
     const aliasedNames = new Set();
 
@@ -30,12 +30,12 @@ function createArticleRepository({
     const params = [];
 
     if (aliasedIds.size > 0) {
-      clauses.push(`a.source_id IN (${[...aliasedIds].map(() => '?').join(', ')})`);
+      clauses.push(`${alias}.source_id IN (${[...aliasedIds].map(() => '?').join(', ')})`);
       params.push(...aliasedIds);
     }
 
     if (aliasedNames.size > 0) {
-      clauses.push(`a.source_name IN (${[...aliasedNames].map(() => '?').join(', ')})`);
+      clauses.push(`${alias}.source_name IN (${[...aliasedNames].map(() => '?').join(', ')})`);
       params.push(...aliasedNames);
     }
 
@@ -45,12 +45,12 @@ function createArticleRepository({
     };
   }
 
-  function getSourceExclusionClause(sourceIds = [], options = {}) {
+  function getSourceExclusionClause(sourceIds = [], options = {}, alias = 'a') {
     if (!Array.isArray(sourceIds) || sourceIds.length === 0) {
       return null;
     }
 
-    const sourceFilter = getSourceFilterClauses(sourceIds, options);
+    const sourceFilter = getSourceFilterClauses(sourceIds, options, alias);
     if (!sourceFilter.clause) {
       return null;
     }
@@ -61,15 +61,33 @@ function createArticleRepository({
     };
   }
 
-  function getSubSourceExclusionClause(subSourceIds = []) {
+  function getSubSourceExclusionClause(subSourceIds = [], alias = 'a') {
     if (!Array.isArray(subSourceIds) || subSourceIds.length === 0) {
       return null;
     }
 
     return {
-      clause: `a.source_id NOT IN (${subSourceIds.map(() => '?').join(', ')})`,
+      clause: `${alias}.source_id NOT IN (${subSourceIds.map(() => '?').join(', ')})`,
       params: subSourceIds
     };
+  }
+
+  function filterEntriesForExistingArticles(entries = [], database = getDb()) {
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return [];
+    }
+
+    const existingArticleIds = new Set(
+      chunkValues([...new Set(entries.map((entry) => entry.articleId))]).flatMap((articleIds) => {
+        return database.prepare(`
+          SELECT id
+          FROM articles
+          WHERE id IN (${articleIds.map(() => '?').join(', ')})
+        `).all(...articleIds).map((row) => row.id);
+      })
+    );
+
+    return entries.filter((entry) => existingArticleIds.has(entry.articleId));
   }
 
   function buildScopeFilter(options = {}, alias = 'a') {
@@ -591,6 +609,24 @@ function createArticleRepository({
     `).run(persistedArticleId, duplicateId);
 
     database.prepare(`
+      INSERT INTO article_topics (article_id, topic, source, confidence, evidence, reason_code, created_at)
+      SELECT ?, topic, source, confidence, evidence, reason_code, created_at
+      FROM article_topics
+      WHERE article_id = ?
+      ON CONFLICT(article_id, topic) DO UPDATE SET
+        source = CASE
+          WHEN article_topics.source = 'legacy' AND excluded.source != 'legacy' THEN excluded.source
+          ELSE article_topics.source
+        END,
+        confidence = COALESCE(article_topics.confidence, excluded.confidence),
+        evidence = CASE
+          WHEN article_topics.evidence = '[]' THEN excluded.evidence
+          ELSE article_topics.evidence
+        END,
+        reason_code = COALESCE(article_topics.reason_code, excluded.reason_code)
+    `).run(persistedArticleId, duplicateId);
+
+    database.prepare(`
       UPDATE articles
       SET story_group_id = COALESCE(NULLIF(story_group_id, ''), (
             SELECT story_group_id
@@ -796,6 +832,25 @@ function createArticleRepository({
       });
   }
 
+  function articleFieldsChanged(row, values) {
+    if (!row) {
+      return true;
+    }
+
+    return row.sourceId !== values.sourceId
+      || row.sourceName !== values.sourceName
+      || (row.ownerUserId || null) !== (values.ownerUserId || null)
+      || row.title !== values.title
+      || row.description !== values.description
+      || row.content !== values.content
+      || row.url !== values.url
+      || row.canonicalUrl !== values.canonicalUrl
+      || (row.image || null) !== (values.image || null)
+      || (row.author || null) !== (values.author || null)
+      || row.language !== values.language
+      || row.pubDate !== values.pubDate;
+  }
+
   function upsertArticles(articles = []) {
     if (!Array.isArray(articles) || articles.length === 0) {
       return {
@@ -847,15 +902,21 @@ function createArticleRepository({
       VALUES (?, ?, ?, ?)
     `);
     const deleteArticleStmt = database.prepare('DELETE FROM articles WHERE id = ?');
-    const existingSearchableFields = new Map(
+    const articleFieldSelectSql = `
+      SELECT id, source_id AS sourceId, source_name AS sourceName, owner_user_id AS ownerUserId,
+             title, description, content, url, canonical_url AS canonicalUrl, image, author,
+             language, published_at AS pubDate
+      FROM articles
+    `;
+    const existingArticleFields = new Map(
       chunkValues(articles.map((article) => article.id).filter(Boolean)).flatMap((articleIds) => {
         return database.prepare(`
-        SELECT id, title, description, content
-        FROM articles
+          ${articleFieldSelectSql}
           WHERE id IN (${articleIds.map(() => '?').join(', ')})
         `).all(...articleIds).map((row) => [row.id, row]);
       })
     );
+    const selectArticleFieldsStmt = database.prepare(`${articleFieldSelectSql} WHERE id = ?`);
     const existingIdSet = new Set(
       chunkValues(articles.map((article) => article.id).filter(Boolean)).flatMap((articleIds) => {
         return database.prepare(`
@@ -903,41 +964,60 @@ function createArticleRepository({
         });
         duplicateLookup.forgetIds(duplicateIds);
 
-        upsertStmt.run(
-          persistedArticleId,
-          storedSourceId,
-          storedSourceName,
-          article.ownerUserId || null,
-          article.title,
-          article.description || '',
-          article.content || '',
-          article.url || '',
+        const values = {
+          sourceId: storedSourceId,
+          sourceName: storedSourceName,
+          ownerUserId: article.ownerUserId || null,
+          title: article.title,
+          description: article.description || '',
+          content: article.content || '',
+          url: article.url || '',
           canonicalUrl,
-          article.image || null,
-          article.author || null,
-          article.language || 'it',
-          normalizedPubDate,
-          article.createdAt || now,
-          now
-        );
+          image: article.image || null,
+          author: article.author || null,
+          language: article.language || 'it',
+          pubDate: normalizedPubDate
+        };
+        const previousArticleFields = existingArticleFields.get(persistedArticleId) || (exists ? selectArticleFieldsStmt.get(persistedArticleId) : null);
+        const shouldWriteArticle = !exists || articleFieldsChanged(previousArticleFields, values);
 
-        const previousSearchableFields = existingSearchableFields.get(persistedArticleId);
-        const searchableFieldsChanged = !previousSearchableFields
-          || previousSearchableFields.title !== article.title
-          || previousSearchableFields.description !== (article.description || '')
-          || previousSearchableFields.content !== (article.content || '');
+        if (shouldWriteArticle) {
+          upsertStmt.run(
+            persistedArticleId,
+            values.sourceId,
+            values.sourceName,
+            values.ownerUserId,
+            values.title,
+            values.description,
+            values.content,
+            values.url,
+            values.canonicalUrl,
+            values.image,
+            values.author,
+            values.language,
+            values.pubDate,
+            article.createdAt || now,
+            now
+          );
+        }
+
+        const searchableFieldsChanged = shouldWriteArticle && (!previousArticleFields
+          || previousArticleFields.title !== values.title
+          || previousArticleFields.description !== values.description
+          || previousArticleFields.content !== values.content);
 
         if (searchableFieldsChanged) {
           deleteSearchStmt.run(persistedArticleId);
           insertSearchStmt.run(persistedArticleId, article.title, article.description || '', article.content || '');
         }
 
-        if (exists) {
+        if (exists && shouldWriteArticle) {
           updatedIds.push(persistedArticleId);
-        } else {
+        } else if (!exists) {
           insertedIds.push(persistedArticleId);
           existingIdSet.add(persistedArticleId);
         }
+        existingArticleFields.set(persistedArticleId, { id: persistedArticleId, ...values });
         duplicateLookup.rememberArticle(article);
       });
 
@@ -1041,16 +1121,7 @@ function createArticleRepository({
     }
 
     const database = getDb();
-    const existingArticleIds = new Set(
-      chunkValues([...new Set(normalizedEntries.map((entry) => entry.articleId))]).flatMap((articleIds) => {
-        return database.prepare(`
-          SELECT id
-          FROM articles
-          WHERE id IN (${articleIds.map(() => '?').join(', ')})
-        `).all(...articleIds).map((row) => row.id);
-      })
-    );
-    const existingEntries = normalizedEntries.filter((entry) => existingArticleIds.has(entry.articleId));
+    const existingEntries = filterEntriesForExistingArticles(normalizedEntries, database);
 
     if (existingEntries.length === 0) {
       return 0;
@@ -1346,42 +1417,6 @@ function createArticleRepository({
     };
   }
 
-  function mergeTopicsForArticle(articleId, topics = []) {
-    if (!articleId || !Array.isArray(topics) || topics.length === 0) {
-      return [];
-    }
-
-    const database = getDb();
-    const articleExists = database.prepare('SELECT 1 FROM articles WHERE id = ?').get(articleId);
-    if (!articleExists) {
-      return [];
-    }
-
-    const selectStmt = database.prepare('SELECT topic FROM article_topics WHERE article_id = ? ORDER BY topic ASC');
-    const insertStmt = database.prepare(`
-      INSERT INTO article_topics (article_id, topic, source, confidence, evidence, reason_code)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(article_id, topic) DO UPDATE SET
-        source = excluded.source,
-        confidence = excluded.confidence,
-        evidence = excluded.evidence,
-        reason_code = excluded.reason_code
-    `);
-
-    const transaction = database.transaction((articleIdentifier, topicList) => {
-      normalizeTopicEntries(topicList).forEach((entry) => {
-          insertStmt.run(articleIdentifier, entry.topic, entry.source, entry.confidence, entry.evidence, entry.reasonCode);
-        });
-
-      return selectStmt
-        .all(articleIdentifier)
-        .map((row) => row.topic)
-        .filter((topic) => topicNormalizer.isCanonicalTopic(topic));
-    });
-
-    return transaction(articleId, topics);
-  }
-
   function mergeTopicsForArticles(entries = []) {
     const normalizedEntries = Array.isArray(entries)
       ? entries.filter((entry) => entry?.articleId && Array.isArray(entry.topics) && entry.topics.length > 0)
@@ -1392,16 +1427,7 @@ function createArticleRepository({
     }
 
     const database = getDb();
-    const existingArticleIds = new Set(
-      chunkValues([...new Set(normalizedEntries.map((entry) => entry.articleId))]).flatMap((articleIds) => {
-        return database.prepare(`
-          SELECT id
-          FROM articles
-          WHERE id IN (${articleIds.map(() => '?').join(', ')})
-        `).all(...articleIds).map((row) => row.id);
-      })
-    );
-    const existingEntries = normalizedEntries.filter((entry) => existingArticleIds.has(entry.articleId));
+    const existingEntries = filterEntriesForExistingArticles(normalizedEntries, database);
 
     if (existingEntries.length === 0) {
       return 0;
@@ -1447,16 +1473,7 @@ function createArticleRepository({
     }
 
     const database = getDb();
-    const existingArticleIds = new Set(
-      chunkValues([...new Set(normalizedEntries.map((entry) => entry.articleId))]).flatMap((articleIds) => {
-        return database.prepare(`
-          SELECT id
-          FROM articles
-          WHERE id IN (${articleIds.map(() => '?').join(', ')})
-        `).all(...articleIds).map((row) => row.id);
-      })
-    );
-    const existingEntries = normalizedEntries.filter((entry) => existingArticleIds.has(entry.articleId));
+    const existingEntries = filterEntriesForExistingArticles(normalizedEntries, database);
 
     if (existingEntries.length === 0) {
       return 0;
@@ -2560,10 +2577,6 @@ function createArticleRepository({
     return rows.map(mapPodcastSummaryRow).filter(Boolean);
   }
 
-  function getLatestPodcastSummary() {
-    return listLatestPodcastSummaries(1)[0] || null;
-  }
-
   function getPodcastSummaryAudio(podcastId, locale = '') {
     const normalizedPodcastId = String(podcastId || '').trim();
     const requestedLocale = String(locale || '').trim();
@@ -2617,8 +2630,8 @@ function createArticleRepository({
     const scopeFilter = buildScopeFilter(options, 'articles');
     const retentionFilter = buildRetentionFilter(options, 'articles');
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('articles');
-    const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
-    const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
+    const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options, 'articles');
+    const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || [], 'articles');
     const where = [scopeFilter.clause];
     const params = [...scopeFilter.params];
     where.push(publishedBeforeNowFilter.clause);
@@ -2630,12 +2643,12 @@ function createArticleRepository({
     }
 
     if (excludedSourceFilter) {
-      where.push(excludedSourceFilter.clause.replaceAll('a.', 'articles.'));
+      where.push(excludedSourceFilter.clause);
       params.push(...excludedSourceFilter.params);
     }
 
     if (excludedSubSourceFilter) {
-      where.push(excludedSubSourceFilter.clause.replaceAll('a.', 'articles.'));
+      where.push(excludedSubSourceFilter.clause);
       params.push(...excludedSubSourceFilter.params);
     }
 
@@ -2786,8 +2799,8 @@ function createArticleRepository({
     const scopeFilter = buildScopeFilter(options, 'articles');
     const retentionFilter = buildRetentionFilter(options, 'articles');
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('articles');
-    const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
-    const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
+    const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options, 'articles');
+    const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || [], 'articles');
     const where = [scopeFilter.clause];
     const params = [...scopeFilter.params];
     where.push(publishedBeforeNowFilter.clause);
@@ -2799,12 +2812,12 @@ function createArticleRepository({
     }
 
     if (excludedSourceFilter) {
-      where.push(excludedSourceFilter.clause.replaceAll('a.', 'articles.'));
+      where.push(excludedSourceFilter.clause);
       params.push(...excludedSourceFilter.params);
     }
 
     if (excludedSubSourceFilter) {
-      where.push(excludedSubSourceFilter.clause.replaceAll('a.', 'articles.'));
+      where.push(excludedSubSourceFilter.clause);
       params.push(...excludedSubSourceFilter.params);
     }
 
@@ -2973,7 +2986,6 @@ function createArticleRepository({
   return {
     getArticles,
     getArticleById,
-    getArticlesByIds,
     getReadLaterArticles,
     getArticlesForThematicSummary,
     hasPendingTopicProcessingForThematicSummary,
@@ -2984,7 +2996,6 @@ function createArticleRepository({
     upsertPodcastSummary,
     getPodcastSummary,
     listLatestPodcastSummaries,
-    getLatestPodcastSummary,
     getPodcastSummaryAudio,
     getReadLaterArticleIdSet,
     isReadLaterArticle,
@@ -3002,7 +3013,6 @@ function createArticleRepository({
     assignArticlesToStoryGroup,
     getArticleIdsForStoryGroups,
     getAiStoryGroupingCandidateSet,
-    mergeTopicsForArticle,
     mergeTopicsForArticles,
     replaceTopicsForArticles,
     upsertArticles,

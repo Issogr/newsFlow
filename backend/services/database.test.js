@@ -1,4 +1,4 @@
-const SqliteDatabase = require('better-sqlite3');
+const SqliteDatabase = require('./sqliteDatabase');
 const configuredSources = require('../config/newsSources');
 const { cleanupTempNewsDb, setupTempNewsDb } = require('../test-utils/tempNewsDb');
 const {
@@ -652,10 +652,12 @@ describe('database queries and user data', () => {
       }
     ]);
 
-    database.mergeTopicsForArticle('global-1', ['Economy', 'Markets']);
-    database.mergeTopicsForArticle('global-2', ['Science']);
-    database.mergeTopicsForArticle('private-1', ['Economia']);
-    database.mergeTopicsForArticle('old-1', ['Economy']);
+    database.mergeTopicsForArticles([
+      { articleId: 'global-1', topics: ['Economy', 'Markets'] },
+      { articleId: 'global-2', topics: ['Science'] },
+      { articleId: 'private-1', topics: ['Economia'] },
+      { articleId: 'old-1', topics: ['Economy'] }
+    ]);
 
     const visibleForUser = database.getArticles({}, { userId: 'user-1', maxArticleAgeHours: 24 });
     expect(visibleForUser.map((article) => article.id)).toEqual(['private-1', 'global-2', 'global-1']);
@@ -825,6 +827,30 @@ describe('database queries and user data', () => {
       canonicalUrl: 'https://example.com/story',
       url: 'https://example.com/story?utm_source=homepage'
     }));
+  });
+
+  test('does not rewrite unchanged existing articles', () => {
+    const pubDate = new Date().toISOString();
+    const article = {
+      id: 'unchanged-article',
+      sourceId: primarySource.id,
+      source: primarySource.name,
+      title: 'Unchanged story',
+      description: 'Same description',
+      content: 'Same body',
+      url: 'https://example.com/unchanged',
+      language: 'en',
+      pubDate
+    };
+
+    const firstResult = database.upsertArticles([article]);
+    const firstUpdatedAt = database.getDb().prepare('SELECT updated_at AS updatedAt FROM articles WHERE id = ?').get(article.id).updatedAt;
+    const secondResult = database.upsertArticles([{ ...article }]);
+    const secondUpdatedAt = database.getDb().prepare('SELECT updated_at AS updatedAt FROM articles WHERE id = ?').get(article.id).updatedAt;
+
+    expect(firstResult).toMatchObject({ insertedCount: 1, updatedCount: 0 });
+    expect(secondResult).toMatchObject({ insertedCount: 0, updatedCount: 0, updatedIds: [] });
+    expect(secondUpdatedAt).toBe(firstUpdatedAt);
   });
 
   test('updates an existing grouped-source article when a sibling subfeed repeats the canonical URL', () => {
@@ -1022,7 +1048,9 @@ describe('database queries and user data', () => {
       { articleId: 'missing-topic-article', topics: ['Economia'] },
       { articleId: 'existing-topic-article', topics: ['Technology'] }
     ])).not.toThrow();
-    expect(database.mergeTopicsForArticle('missing-topic-article', ['Economia'])).toEqual([]);
+    expect(database.mergeTopicsForArticles([
+      { articleId: 'missing-topic-article', topics: ['Economia'] }
+    ])).toBe(0);
 
     const articles = database.getArticles({}, { maxArticleAgeHours: 9999 });
     expect(articles).toHaveLength(1);
@@ -1223,7 +1251,7 @@ describe('database queries and user data', () => {
         })
       })
     }));
-    expect(database.getLatestPodcastSummary()).toEqual(expect.objectContaining({ id: 'podcast-summary-test' }));
+    expect(database.listLatestPodcastSummaries(1)).toEqual([expect.objectContaining({ id: 'podcast-summary-test' })]);
     expect(database.getPodcastSummaryAudio('podcast-summary-test')).toEqual(expect.objectContaining({
       data: Buffer.from('english-audio-data'),
       mimeType: 'audio/mpeg'
@@ -1352,7 +1380,9 @@ describe('database queries and user data', () => {
         pubDate: now
       }
     ]);
-    database.mergeTopicsForArticle('ai-topic-article', ['Economy']);
+    database.mergeTopicsForArticles([
+      { articleId: 'ai-topic-article', topics: ['Economy'] }
+    ]);
 
     expect(database.getArticleIdsPendingAiTopicProcessing(['ai-topic-article'])).toEqual(['ai-topic-article']);
     expect(database.replaceTopicsForArticles([
@@ -1534,13 +1564,16 @@ describe('database queries and user data', () => {
     ])).toBe(2);
     expect(database.getArticleIdsForStoryGroups(['ai-story-test'])).toEqual(expect.arrayContaining(['story-target', 'story-candidate']));
     expect(database.getArticleIdsPendingAiStoryGrouping(['story-target', 'story-candidate'])).toEqual([]);
-    expect(database.getArticlesByIds(['story-target', 'story-candidate'], { maxArticleAgeHours: null })).toEqual(expect.arrayContaining([
+    expect([
+      database.getArticleById('story-target', { maxArticleAgeHours: null }),
+      database.getArticleById('story-candidate', { maxArticleAgeHours: null })
+    ]).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'story-target', storyGroupId: 'ai-story-test', aiStoryGroupStatus: 'matched', aiStoryGroupModel: 'test-model', aiStoryGroupMatchIds: ['story-candidate'], aiStoryGroupConfidence: 0.91, aiStoryGroupReason: 'same summit' }),
       expect.objectContaining({ id: 'story-candidate', storyGroupId: 'ai-story-test', aiStoryGroupStatus: 'matched', aiStoryGroupModel: 'test-model', aiStoryGroupMatchIds: ['story-candidate'], aiStoryGroupConfidence: 0.91, aiStoryGroupReason: 'same summit' })
     ]));
   });
 
-  test('moves read-later state and reader cache before deleting duplicate articles', () => {
+  test('moves read-later state, reader cache, and topics before deleting duplicate articles', () => {
     const now = new Date('2026-03-15T14:30:00.000Z').toISOString();
     const duplicateUpdatedAt = new Date('2026-03-15T14:00:00.000Z').toISOString();
     const canonicalUrl = 'https://example.com/shared-story';
@@ -1583,6 +1616,12 @@ describe('database queries and user data', () => {
       contentText: 'Duplicate reader body',
       fetchedAt: duplicateUpdatedAt
     });
+    database.replaceTopicsForArticles([
+      {
+        articleId: 'duplicate-article',
+        topics: [{ topic: 'Technology', source: 'ai', confidence: 0.86, evidence: ['Duplicate topic'], reasonCode: 'duplicate_topic' }]
+      }
+    ]);
 
     database.upsertArticles([
       {
@@ -1604,6 +1643,18 @@ describe('database queries and user data', () => {
       title: 'Duplicate reader title',
       contentText: 'Duplicate reader body'
     }));
+    expect(database.getArticleById('canonical-article', { maxArticleAgeHours: null })).toEqual(expect.objectContaining({
+      topics: ['Tecnologia']
+    }));
+    expect(database.getTopicClassificationReport('canonical-article').storedTopics).toEqual([
+      expect.objectContaining({
+        topic: 'Tecnologia',
+        source: 'ai',
+        confidence: 0.86,
+        evidence: ['Duplicate topic'],
+        reasonCode: 'duplicate_topic'
+      })
+    ]);
   });
 
   test('normalizes future publication dates on insert and during cleanup', () => {
@@ -2077,8 +2128,10 @@ describe('database queries and user data', () => {
       }
     ]);
 
-    database.mergeTopicsForArticle('global-1', ['Economy', 'Markets']);
-    database.mergeTopicsForArticle('global-2', ['Science']);
+    database.mergeTopicsForArticles([
+      { articleId: 'global-1', topics: ['Economy', 'Markets'] },
+      { articleId: 'global-2', topics: ['Science'] }
+    ]);
 
     const sourceStats = database.getSourceStats([
       { id: groupedSourceFamilyId, name: groupedSourceFamilyName, language: 'it' },

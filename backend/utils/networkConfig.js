@@ -1,4 +1,4 @@
-const DEFAULT_PROD_ORIGINS = ['http://localhost', 'http://localhost:80', 'http://127.0.0.1', 'http://127.0.0.1:80', 'http://frontend', '@local-network'];
+const DEFAULT_PROD_ORIGINS = ['http://localhost', 'http://localhost:80', 'http://127.0.0.1', 'http://127.0.0.1:80', 'http://frontend'];
 
 function isPrivateIpv4Hostname(hostname) {
   const ipv4Pattern = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;

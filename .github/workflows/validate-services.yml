@@ -8,21 +8,12 @@ permissions:
 
 jobs:
   validate:
-    name: Validate ${{ matrix.service.name }}
+    name: Validate ${{ matrix.service }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - name: backend
-            working_directory: backend
-            test_command: npm test
-          - name: bff
-            working_directory: bff
-            test_command: npm test
-          - name: frontend
-            working_directory: frontend
-            test_command: npm run test:coverage
+        service: [backend, bff, frontend]
 
     steps:
       - name: Checkout repository
@@ -33,25 +24,25 @@ jobs:
         with:
           node-version: '24.16.0'
           cache: npm
-          cache-dependency-path: ${{ matrix.service.working_directory }}/package-lock.json
+          cache-dependency-path: ${{ matrix.service }}/package-lock.json
 
       - name: Install dependencies
-        working-directory: ${{ matrix.service.working_directory }}
+        working-directory: ${{ matrix.service }}
         run: npm ci
 
       - name: Lint
-        working-directory: ${{ matrix.service.working_directory }}
+        working-directory: ${{ matrix.service }}
         run: npm run lint
 
       - name: Build frontend
-        if: matrix.service.name == 'frontend'
-        working-directory: ${{ matrix.service.working_directory }}
+        if: matrix.service == 'frontend'
+        working-directory: ${{ matrix.service }}
         run: npm run build
 
       - name: Test
-        working-directory: ${{ matrix.service.working_directory }}
-        run: ${{ matrix.service.test_command }}
+        working-directory: ${{ matrix.service }}
+        run: npm run test:coverage
 
       - name: Audit production dependencies
-        working-directory: ${{ matrix.service.working_directory }}
+        working-directory: ${{ matrix.service }}
         run: npm audit --omit=dev

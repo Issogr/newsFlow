@@ -3,6 +3,7 @@
  */
 
 const logger = require('./logger');
+const { redactUrlForLog } = require('./logRedaction');
 
 function redactSensitiveObject(value) {
   if (!value || typeof value !== 'object') {
@@ -46,10 +47,10 @@ const ERROR_MESSAGES = {
 const createError = (status, message, code, originalError = null) => {
   // Log the original error when available
   if (originalError) {
-    logger.error(`${code || 'ERROR'}: ${message} - Original error: ${originalError.message}`, {
+    logger.error(`${code || 'ERROR'}: ${message} - Original error: ${redactUrlForLog(originalError.message)}`, {
       status,
       stack: originalError.stack,
-      originalMessage: originalError.message
+      originalMessage: redactUrlForLog(originalError.message)
     });
   }
 
@@ -97,13 +98,15 @@ const errorMiddleware = (err, req, res, next) => {
     userAgent: req.get('user-agent')
   };
 
+  const redactedOriginalUrl = redactUrlForLog(req.originalUrl, { redactAllQuery: true });
+
   if (status >= 500) {
-    logger.error(`${status} - ${err.message || 'Unknown error'} - ${req.originalUrl} - ${req.method} - ${req.ip}`, {
+    logger.error(`${status} - ${redactUrlForLog(err.message || 'Unknown error')} - ${redactedOriginalUrl} - ${req.method} - ${req.ip}`, {
       stack: err.stack,
       request: requestContext
     });
   } else if (status >= 400) {
-    logger.warn(`${status} - ${err.message || 'Client error'} - ${req.originalUrl} - ${req.method} - ${req.ip}`, {
+    logger.warn(`${status} - ${redactUrlForLog(err.message || 'Client error')} - ${redactedOriginalUrl} - ${req.method} - ${req.ip}`, {
       request: requestContext
     });
   }
@@ -117,32 +120,8 @@ const errorMiddleware = (err, req, res, next) => {
   });
 };
 
-/**
- * Wrapper for route handlers that automatically catches exceptions
- * and passes them to the error-handling middleware
- * @param {Function} fn - Route handler function
- * @returns {Function} - Route handler with automatic exception handling
- */
-const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch((error) => {
-      // If the error is already in API format, pass it through directly
-    if (error.status && error.code) {
-      next(error);
-    } else {
-      // Otherwise create a standard error
-      next(createError(
-        500,
-        error.message || 'An internal error occurred',
-        'SERVER_ERROR',
-        error
-      ));
-    }
-  });
-};
-
 module.exports = {
   createError,
   errorMiddleware,
-  asyncHandler,
   buildRateLimitMessage
 };

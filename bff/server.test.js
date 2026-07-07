@@ -5,16 +5,27 @@ const path = require('path');
 const express = require('express');
 const cookieSignature = require('cookie-signature');
 const request = require('supertest');
-const { createApp, createServer, _getTrustProxySetting } = require('./server');
+const { createApp, createServer } = require('./server');
 const {
   encryptBackendSessionCookie,
   getBffSessionSecret,
+  getInternalProxyToken,
   getSessionCookieOptions,
   isValidSessionPayload,
   unsignSessionId
 } = require('./lib/sessionPolicy');
 
 const SAME_ORIGIN = 'http://127.0.0.1';
+const SPOOFED_FORWARDED_HEADERS = {
+  'X-Forwarded-For': '203.0.113.99',
+  'X-Forwarded-Host': 'evil.example',
+  'X-Forwarded-Proto': 'https',
+};
+const HOSTILE_SESSION_HEADERS = {
+  Authorization: 'Bearer hostile',
+  'x-session-token': 'hostile',
+  'x-newsflow-app': 'hostile',
+};
 
 async function listen(server) {
   await new Promise((resolve) => {
@@ -26,6 +37,17 @@ async function close(server) {
   await new Promise((resolve) => {
     server.close(resolve);
   });
+}
+
+async function withListeningBffServer(options, callback) {
+  const bffServer = createServer(options);
+  await listen(bffServer);
+
+  try {
+    return await callback(bffServer);
+  } finally {
+    await close(bffServer);
+  }
 }
 
 function requestUpgrade(server, { cookie = '', headers = {} } = {}) {
@@ -81,10 +103,10 @@ function getBffSessionCookie(response) {
   return cookie;
 }
 
-async function login(target, { username = 'alice', headers = {} } = {}) {
+async function login(target, { username = 'alice', headers = {}, origin = SAME_ORIGIN } = {}) {
   const response = await request(target)
     .post('/api/auth/login')
-    .set(headers)
+    .set({ Origin: origin, ...headers })
     .send({ username, password: 'secret123' })
     .expect(200);
 
@@ -124,8 +146,37 @@ function cleanupCreatedApp(created, tempDir) {
   }
 }
 
+function countRows(database, tableName, whereClause = '', params = []) {
+  return database.prepare(`SELECT COUNT(*) as count FROM ${tableName}${whereClause}`).get(...params).count;
+}
+
+function expectSensitiveHeadersStripped(headers) {
+  expect(headers.authorization).toBeUndefined();
+  expect(headers['x-session-token']).toBeUndefined();
+  expect(headers['x-newsflow-app']).toBeUndefined();
+}
+
+function expectTrustedForwardedHeaders(headers) {
+  expect(headers['x-forwarded-for']).toContain('203.0.113.99');
+  expect(headers['x-forwarded-host']).not.toBe('evil.example');
+  expect(headers['x-forwarded-proto']).toBe('https');
+}
+
+function expectCsrfRejected(response) {
+  expect(response.body.error).toEqual({
+    message: 'Cross-origin request rejected.',
+    code: 'CSRF_ORIGIN_MISMATCH',
+  });
+}
+
 describe('bff server', () => {
   const originalNodeEnv = process.env.NODE_ENV;
+  const originalEnvValues = {
+    BFF_SESSION_SECRET: process.env.BFF_SESSION_SECRET,
+    INTERNAL_PROXY_TOKEN: process.env.INTERNAL_PROXY_TOKEN,
+    INTERNAL_SERVICE_NAME: process.env.INTERNAL_SERVICE_NAME,
+    TRUST_PROXY: process.env.TRUST_PROXY,
+  };
   let backendServer;
   let backendBaseUrl;
   let frontendDistDir;
@@ -256,10 +307,9 @@ describe('bff server', () => {
     await close(backendServer);
     cleanupCreatedApp({ sessionStore, sessionDb }, sessionDir);
     fs.rmSync(frontendDistDir, { recursive: true, force: true });
-    delete process.env.BFF_SESSION_SECRET;
-    delete process.env.INTERNAL_PROXY_TOKEN;
-    delete process.env.INTERNAL_SERVICE_NAME;
-    delete process.env.TRUST_PROXY;
+    Object.entries(originalEnvValues).forEach(([name, value]) => {
+      restoreEnvValue(name, value);
+    });
     if (originalNodeEnv === undefined) {
       delete process.env.NODE_ENV;
     } else {
@@ -293,6 +343,8 @@ describe('bff server', () => {
 
     expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
     expect(response.headers['content-security-policy']).toContain("default-src 'self'");
+    expect(response.headers['content-security-policy']).toContain("img-src 'self' data: https: blob:");
+    expect(response.headers['content-security-policy']).toContain("media-src 'self' blob:");
     expect(response.headers['content-security-policy']).toContain("connect-src 'self' ws: wss:");
     expect(response.headers['referrer-policy']).toBe('same-origin');
     expect(response.headers['set-cookie']).toBeUndefined();
@@ -310,9 +362,20 @@ describe('bff server', () => {
     expect(iconResponse.headers['cache-control']).toBe('public, max-age=0, must-revalidate');
   });
 
+  test('compresses browser assets when supported by the client', async () => {
+    const response = await request(app)
+      .get('/assets/app-test.js')
+      .set('Accept-Encoding', 'gzip')
+      .expect(200);
+
+    expect(response.headers.vary).toContain('Accept-Encoding');
+    expect(response.headers['content-encoding']).toBe('gzip');
+  });
+
   test('returns a client error for malformed JSON on auth routes', async () => {
     const response = await request(app)
       .post('/api/auth/login')
+      .set('Origin', SAME_ORIGIN)
       .set('Content-Type', 'application/json')
       .send('{bad json')
       .expect(400);
@@ -321,6 +384,27 @@ describe('bff server', () => {
       message: 'Request body contains malformed JSON.',
       code: 'INVALID_JSON',
     });
+  });
+
+  test.each([
+    { routePath: '/api/auth/register', body: { username: 'alice', password: 'secret123' } },
+    { routePath: '/api/auth/login', body: { username: 'alice', password: 'secret123' } },
+    { routePath: '/api/auth/password-setup/complete', body: { token: 'setup-token', password: 'secret123' } },
+  ])('rejects cross-origin session-creating auth requests to $routePath', async ({ routePath, body }) => {
+    const missingOriginResponse = await request(app)
+      .post(routePath)
+      .send(body)
+      .expect(403);
+
+    expectCsrfRejected(missingOriginResponse);
+
+    const hostileOriginResponse = await request(app)
+      .post(routePath)
+      .set('Origin', 'https://evil.example')
+      .send(body)
+      .expect(403);
+
+    expectCsrfRejected(hostileOriginResponse);
   });
 
   test('keeps the session valid after recreating the BFF app instance', async () => {
@@ -338,6 +422,30 @@ describe('bff server', () => {
     restarted.sessionDb.close();
     expect(meResponse.body).toEqual({ user: { id: 'user-1', username: 'alice' } });
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
+  });
+
+  test('rotates the BFF session id after successful login', async () => {
+    const attackerKnownCookie = await login(app, { username: 'admin' });
+
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .set('Cookie', attackerKnownCookie)
+      .set('Origin', SAME_ORIGIN)
+      .send({ username: 'alice', password: 'secret123' })
+      .expect(200);
+    const rotatedCookie = getBffSessionCookie(loginResponse);
+
+    expect(rotatedCookie).not.toBe(attackerKnownCookie);
+    await request(app)
+      .get('/api/me')
+      .set('Cookie', attackerKnownCookie)
+      .expect(401);
+
+    const meResponse = await request(app)
+      .get('/api/me')
+      .set('Cookie', rotatedCookie)
+      .expect(200);
+    expect(meResponse.body).toEqual({ user: { id: 'user-1', username: 'alice' } });
   });
 
   test('clears the BFF session on logout', async () => {
@@ -388,14 +496,10 @@ describe('bff server', () => {
       .delete('/api/admin/users/user-1')
       .set('Cookie', adminBffSessionCookie)
       .set('Origin', SAME_ORIGIN)
-      .set('Authorization', 'Bearer hostile')
-      .set('x-session-token', 'hostile')
-      .set('x-newsflow-app', 'hostile')
+      .set(HOSTILE_SESSION_HEADERS)
       .expect(200);
 
-    expect(lastBackendHeaders.authorization).toBeUndefined();
-    expect(lastBackendHeaders['x-session-token']).toBeUndefined();
-    expect(lastBackendHeaders['x-newsflow-app']).toBeUndefined();
+    expectSensitiveHeadersStripped(lastBackendHeaders);
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-admin-id');
   });
 
@@ -411,10 +515,7 @@ describe('bff server', () => {
       .set(headers)
       .expect(403);
 
-    expect(response.body.error).toEqual({
-      message: 'Cross-origin request rejected.',
-      code: 'CSRF_ORIGIN_MISMATCH',
-    });
+    expectCsrfRejected(response);
   });
 
   test('does not let static files shadow protected API routes', async () => {
@@ -429,13 +530,6 @@ describe('bff server', () => {
     expect(response.text).not.toContain('static api shadow');
   });
 
-  test('parses trust proxy settings without trusting every forwarded header for boolean true', () => {
-    expect(_getTrustProxySetting('true')).toBe(1);
-    expect(_getTrustProxySetting('2')).toBe(2);
-    expect(_getTrustProxySetting('loopback, linklocal')).toEqual(['loopback', 'linklocal']);
-    expect(_getTrustProxySetting('false')).toBe(false);
-  });
-
   test.each([
     '/api/admin/users/user-1',
     '/api/admin/users/user-1/'
@@ -443,7 +537,7 @@ describe('bff server', () => {
     const aliceBffSessionCookie = await login(app);
     const adminBffSessionCookie = await login(app, { username: 'admin' });
 
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(2);
+    expect(countRows(sessionDb, 'sessions')).toBe(2);
 
     await request(app)
       .delete(deletePath)
@@ -451,7 +545,7 @@ describe('bff server', () => {
       .set('Origin', SAME_ORIGIN)
       .expect(200);
 
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(1);
+    expect(countRows(sessionDb, 'sessions')).toBe(1);
 
     await request(app)
       .get('/api/me')
@@ -465,27 +559,27 @@ describe('bff server', () => {
     const aliceBffSessionCookie = await login(app);
 
     sessionDb.prepare('DELETE FROM session_users').run();
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users').get().count).toBe(0);
+    expect(countRows(sessionDb, 'session_users')).toBe(0);
 
     await request(app)
       .get('/api/me')
       .set('Cookie', aliceBffSessionCookie)
       .expect(200);
 
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users WHERE user_id = ?').get('user-1').count).toBe(1);
+    expect(countRows(sessionDb, 'session_users', ' WHERE user_id = ?', ['user-1'])).toBe(1);
   });
 
   test('removes stale session_users rows when expired sessions are cleaned', async () => {
     await login(app);
 
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(1);
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users').get().count).toBe(1);
+    expect(countRows(sessionDb, 'sessions')).toBe(1);
+    expect(countRows(sessionDb, 'session_users')).toBe(1);
 
     sessionDb.prepare('UPDATE sessions SET expire = ?').run(new Date(Date.now() - 1000).toISOString());
     sessionStore.clearExpiredSessions();
 
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM sessions').get().count).toBe(0);
-    expect(sessionDb.prepare('SELECT COUNT(*) as count FROM session_users').get().count).toBe(0);
+    expect(countRows(sessionDb, 'sessions')).toBe(0);
+    expect(countRows(sessionDb, 'session_users')).toBe(0);
   });
 
   test('proxies public API routes without requiring a BFF session', async () => {
@@ -500,20 +594,21 @@ describe('bff server', () => {
   test('rebuilds forwarded headers on public API routes from trusted request values', async () => {
     await request(app)
       .get('/api/public/ping')
-      .set('X-Forwarded-For', '203.0.113.99')
-      .set('X-Forwarded-Host', 'evil.example')
-      .set('X-Forwarded-Proto', 'https')
+      .set(SPOOFED_FORWARDED_HEADERS)
       .expect(200);
 
-    expect(lastBackendHeaders['x-forwarded-for']).toContain('203.0.113.99');
-    expect(lastBackendHeaders['x-forwarded-host']).not.toBe('evil.example');
-    expect(lastBackendHeaders['x-forwarded-proto']).toBe('https');
+    expectTrustedForwardedHeaders(lastBackendHeaders);
   });
 
   test('does not trust caller forwarded headers unless explicitly configured', async () => {
     const directSession = createSessionDbPath();
 
-    await withEnv({ TRUST_PROXY: undefined, NODE_ENV: 'production' }, async () => {
+    await withEnv({
+      TRUST_PROXY: undefined,
+      NODE_ENV: 'production',
+      BFF_SESSION_SECRET: 'test-bff-secret-for-production-123',
+      INTERNAL_PROXY_TOKEN: 'test-internal-proxy-token-for-production-123'
+    }, async () => {
       let directApp;
 
       try {
@@ -538,7 +633,9 @@ describe('bff server', () => {
     await withEnv({
       APP_BASE_URL: 'https://news.example',
       TRUST_PROXY: undefined,
-      NODE_ENV: 'production'
+      NODE_ENV: 'production',
+      BFF_SESSION_SECRET: 'test-bff-secret-for-production-123',
+      INTERNAL_PROXY_TOKEN: 'test-internal-proxy-token-for-production-123'
     }, async () => {
       let secureProxyApp;
 
@@ -551,6 +648,7 @@ describe('bff server', () => {
 
         const response = await request(secureProxyApp.app)
           .post('/api/auth/login')
+          .set('Origin', 'https://news.example')
           .set('Host', 'news.example')
           .set('X-Forwarded-Proto', 'https')
           .send({ username: 'alice', password: 'secret123' })
@@ -566,24 +664,16 @@ describe('bff server', () => {
 
   test('rebuilds forwarded headers on authenticated app routes from trusted request values', async () => {
     const bffSessionCookie = await login(app, {
-      headers: {
-        'X-Forwarded-For': '203.0.113.99',
-        'X-Forwarded-Host': 'evil.example',
-        'X-Forwarded-Proto': 'https',
-      },
+      headers: SPOOFED_FORWARDED_HEADERS,
     });
 
     await request(app)
       .get('/api/me')
       .set('Cookie', bffSessionCookie)
-      .set('X-Forwarded-For', '203.0.113.99')
-      .set('X-Forwarded-Host', 'evil.example')
-      .set('X-Forwarded-Proto', 'https')
+      .set(SPOOFED_FORWARDED_HEADERS)
       .expect(200);
 
-    expect(lastBackendHeaders['x-forwarded-for']).toContain('203.0.113.99');
-    expect(lastBackendHeaders['x-forwarded-host']).not.toBe('evil.example');
-    expect(lastBackendHeaders['x-forwarded-proto']).toBe('https');
+    expectTrustedForwardedHeaders(lastBackendHeaders);
   });
 
   test('streams multipart feedback through the authenticated app proxy', async () => {
@@ -626,70 +716,51 @@ describe('bff server', () => {
       .set('Origin', 'https://evil.example')
       .expect(403);
 
-    expect(response.body.error).toEqual({
-      message: 'Cross-origin request rejected.',
-      code: 'CSRF_ORIGIN_MISMATCH',
-    });
+    expectCsrfRejected(response);
     expect(lastBackendHeaders.cookie).toBeUndefined();
   });
 
   test('rejects unauthenticated raw socket upgrades before proxying to the backend', async () => {
-    const bffServer = createServer({ backendBaseUrl, frontendDistDir, sessionDbPath });
-    await listen(bffServer);
-
-    try {
+    await withListeningBffServer({ backendBaseUrl, frontendDistDir, sessionDbPath }, async (bffServer) => {
       const response = await requestUpgrade(bffServer);
 
       expect(response).toEqual(expect.objectContaining({
         statusCode: 401,
         upgraded: false,
       }));
-    } finally {
-      await close(bffServer);
-    }
+    });
   });
 
   test('proxies authenticated raw socket upgrades with sanitized session headers', async () => {
-    const bffServer = createServer({ backendBaseUrl, frontendDistDir, sessionDbPath });
     let backendUpgradeHeaders = null;
     backendServer.once('upgrade', (req, socket) => {
       backendUpgradeHeaders = req.headers;
       socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n');
       socket.destroy();
     });
-    await listen(bffServer);
 
-    try {
-      const bffSessionCookie = await login(bffServer);
+    await withListeningBffServer({ backendBaseUrl, frontendDistDir, sessionDbPath }, async (bffServer) => {
+      const bffSessionCookie = await login(bffServer, {
+        origin: `http://127.0.0.1:${bffServer.address().port}`
+      });
 
       const response = await requestUpgrade(bffServer, {
         cookie: bffSessionCookie,
-        headers: {
-          Authorization: 'Bearer hostile',
-          'x-session-token': 'hostile',
-          'x-newsflow-app': 'hostile',
-        },
+        headers: HOSTILE_SESSION_HEADERS,
       });
 
       expect(response).toEqual(expect.objectContaining({
         statusCode: 101,
         upgraded: true,
       }));
-      expect(backendUpgradeHeaders.authorization).toBeUndefined();
-      expect(backendUpgradeHeaders['x-session-token']).toBeUndefined();
-      expect(backendUpgradeHeaders['x-newsflow-app']).toBeUndefined();
+      expectSensitiveHeadersStripped(backendUpgradeHeaders);
       expect(backendUpgradeHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
       expect(backendUpgradeHeaders['x-newsflow-proxy']).toBe('test-proxy-token');
-    } finally {
-      await close(bffServer);
-    }
+    });
   });
 
   test('rejects authenticated raw socket upgrades from another origin', async () => {
-    const bffServer = createServer({ backendBaseUrl, frontendDistDir, sessionDbPath, appBaseUrl: SAME_ORIGIN });
-    await listen(bffServer);
-
-    try {
+    await withListeningBffServer({ backendBaseUrl, frontendDistDir, sessionDbPath, appBaseUrl: SAME_ORIGIN }, async (bffServer) => {
       const bffSessionCookie = await login(bffServer);
 
       const response = await requestUpgrade(bffServer, {
@@ -703,9 +774,7 @@ describe('bff server', () => {
         statusCode: 403,
         upgraded: false,
       }));
-    } finally {
-      await close(bffServer);
-    }
+    });
   });
 
   test('returns structured JSON when the app proxy fails upstream', async () => {
@@ -750,6 +819,14 @@ describe('session policy helpers', () => {
     process.env.BFF_SESSION_SECRET = 'development-only-change-me';
 
     expect(() => getBffSessionSecret()).toThrow('BFF_SESSION_SECRET must not use the development default in production.');
+
+    process.env.BFF_SESSION_SECRET = 'short';
+
+    expect(() => getBffSessionSecret()).toThrow('BFF_SESSION_SECRET must be at least 32 characters in production.');
+
+    process.env.INTERNAL_PROXY_TOKEN = 'short';
+
+    expect(() => getInternalProxyToken()).toThrow('INTERNAL_PROXY_TOKEN must be at least 32 characters in production.');
   });
 
   test('reads signed session cookies with the configured secret', () => {
@@ -782,6 +859,9 @@ describe('session policy helpers', () => {
     expect(getSessionCookieOptions().secure).toBe(false);
 
     process.env.COOKIE_SECURE = 'yes';
-    expect(getSessionCookieOptions().secure).toBe(false);
+    expect(getSessionCookieOptions().secure).toBe(true);
+
+    process.env.NODE_ENV = 'production';
+    expect(() => getSessionCookieOptions()).toThrow('COOKIE_SECURE must be one of: auto, true, false.');
   });
 });

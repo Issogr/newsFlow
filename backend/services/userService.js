@@ -80,7 +80,7 @@ function flushAuthenticatedPublicApiUsage({ force = false } = {}) {
       database.incrementUserPublicApiUsage(userId, usage.usedAt, usage.count);
     });
 
-    const db = typeof database.getDb === 'function' ? database.getDb() : null;
+    const db = database.getDb();
     if (db && typeof db.transaction === 'function') {
       db.transaction(flushEntries)();
     } else {

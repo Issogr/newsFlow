@@ -15,6 +15,26 @@ function normalizeReadThematicSummaryIds(summaryIds = []) {
     .slice(0, 100);
 }
 
+function deleteOwnedArticles(database, ownerId, sourceId = '') {
+  const sourceScoped = Boolean(sourceId);
+  const ownerFilter = sourceScoped
+    ? 'owner_user_id = ? AND source_id = ?'
+    : 'owner_user_id = ?';
+  const params = sourceScoped ? [ownerId, sourceId] : [ownerId];
+
+  database.prepare(`
+    DELETE FROM article_search
+    WHERE article_id IN (
+      SELECT id FROM articles WHERE ${ownerFilter}
+    )
+  `).run(...params);
+
+  return database.prepare(`
+    DELETE FROM articles
+    WHERE ${ownerFilter}
+  `).run(...params).changes;
+}
+
 const USER_SETTINGS_COLUMNS = [
   'default_language',
   'theme_mode',
@@ -41,6 +61,12 @@ const USER_SETTINGS_UPSERT_SQL = `
     ${USER_SETTINGS_COLUMNS.map((column) => `${column} = excluded.${column}`).join(',\n    ')}
 `;
 
+const USER_SOURCE_INSERT_SQL = `
+  INSERT INTO user_sources (
+    id, user_id, name, url, language, icon_url, is_active, created_at, updated_at, validated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`;
+
 function getUserSettingsValues(userId, settings = {}, updatedAt = new Date().toISOString()) {
   return [
     userId,
@@ -58,6 +84,21 @@ function getUserSettingsValues(userId, settings = {}, updatedAt = new Date().toI
     JSON.stringify(settings.excludedSourceIds || []),
     JSON.stringify(settings.excludedSubSourceIds || []),
     updatedAt
+  ];
+}
+
+function getUserSourceValues(source = {}, userId = source.userId) {
+  return [
+    source.id,
+    userId,
+    source.name,
+    source.url,
+    source.language || 'it',
+    source.iconUrl || '',
+    source.isActive ? 1 : 0,
+    source.createdAt,
+    source.updatedAt,
+    source.validatedAt || null
   ];
 }
 
@@ -136,22 +177,7 @@ function createUserStateRepository({ getDb }) {
   }
 
   function createUserSource(source = {}) {
-    getDb().prepare(`
-      INSERT INTO user_sources (
-        id, user_id, name, url, language, icon_url, is_active, created_at, updated_at, validated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      source.id,
-      source.userId,
-      source.name,
-      source.url,
-      source.language || 'it',
-      source.iconUrl || '',
-      source.isActive ? 1 : 0,
-      source.createdAt,
-      source.updatedAt,
-      source.validatedAt || null
-    );
+    getDb().prepare(USER_SOURCE_INSERT_SQL).run(...getUserSourceValues(source));
   }
 
   function findUserSourceById(userId, sourceId) {
@@ -205,17 +231,7 @@ function createUserStateRepository({ getDb }) {
 
     const database = getDb();
     const transaction = database.transaction((ownerId, customSourceId) => {
-      database.prepare(`
-        DELETE FROM article_search
-        WHERE article_id IN (
-          SELECT id FROM articles WHERE owner_user_id = ? AND source_id = ?
-        )
-      `).run(ownerId, customSourceId);
-
-      return database.prepare(`
-        DELETE FROM articles
-        WHERE owner_user_id = ? AND source_id = ?
-      `).run(ownerId, customSourceId).changes;
+      return deleteOwnedArticles(database, ownerId, customSourceId);
     });
 
     return transaction(userId, sourceId);
@@ -233,17 +249,7 @@ function createUserStateRepository({ getDb }) {
         WHERE user_id = ? AND id = ?
       `).run(ownerId, customSourceId).changes;
 
-      database.prepare(`
-        DELETE FROM article_search
-        WHERE article_id IN (
-          SELECT id FROM articles WHERE owner_user_id = ? AND source_id = ?
-        )
-      `).run(ownerId, customSourceId);
-
-      database.prepare(`
-        DELETE FROM articles
-        WHERE owner_user_id = ? AND source_id = ?
-      `).run(ownerId, customSourceId);
+      deleteOwnedArticles(database, ownerId, customSourceId);
 
       return removed;
     });
@@ -258,17 +264,7 @@ function createUserStateRepository({ getDb }) {
 
     const database = getDb();
     const transaction = database.transaction((ownerId) => {
-      database.prepare(`
-        DELETE FROM article_search
-        WHERE article_id IN (
-          SELECT id FROM articles WHERE owner_user_id = ?
-        )
-      `).run(ownerId);
-
-      database.prepare(`
-        DELETE FROM articles
-        WHERE owner_user_id = ?
-      `).run(ownerId);
+      deleteOwnedArticles(database, ownerId);
 
       return database.prepare(`
         DELETE FROM user_sources
@@ -325,25 +321,11 @@ function createUserStateRepository({ getDb }) {
 
     const database = getDb();
     const now = new Date().toISOString();
-    const insertSourceStmt = database.prepare(`
-      INSERT INTO user_sources (
-        id, user_id, name, url, language, icon_url, is_active, created_at, updated_at, validated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    const insertSourceStmt = database.prepare(USER_SOURCE_INSERT_SQL);
     const upsertSettingsStmt = database.prepare(USER_SETTINGS_UPSERT_SQL);
 
     const transaction = database.transaction((ownerId, importedSources, nextSettings) => {
-      database.prepare(`
-        DELETE FROM article_search
-        WHERE article_id IN (
-          SELECT id FROM articles WHERE owner_user_id = ?
-        )
-      `).run(ownerId);
-
-      database.prepare(`
-        DELETE FROM articles
-        WHERE owner_user_id = ?
-      `).run(ownerId);
+      deleteOwnedArticles(database, ownerId);
 
       database.prepare(`
         DELETE FROM user_sources
@@ -351,18 +333,7 @@ function createUserStateRepository({ getDb }) {
       `).run(ownerId);
 
       importedSources.forEach((source) => {
-        insertSourceStmt.run(
-          source.id,
-          ownerId,
-          source.name,
-          source.url,
-          source.language || 'it',
-          source.iconUrl || '',
-          source.isActive ? 1 : 0,
-          source.createdAt,
-          source.updatedAt,
-          source.validatedAt || null
-        );
+        insertSourceStmt.run(...getUserSourceValues(source, ownerId));
       });
 
       upsertSettingsStmt.run(...getUserSettingsValues(ownerId, nextSettings, nextSettings.updatedAt || now));

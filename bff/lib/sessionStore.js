@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const Database = require('better-sqlite3');
+const { DatabaseSync } = require('node:sqlite');
 const cookie = require('cookie');
 const session = require('express-session');
 const { parseIntegerEnv } = require('./env');
@@ -17,6 +17,7 @@ const {
 const DEFAULT_SESSION_DB_PATH = path.join(__dirname, '..', 'data', 'sessions.sqlite');
 const SESSION_STORE_CLEAR_INTERVAL_MS = parseIntegerEnv('SESSION_STORE_CLEAR_INTERVAL_MS', 300000, { min: 1000 });
 const SESSION_TOUCH_RENEWAL_WINDOW_MS = parseIntegerEnv('SESSION_TOUCH_RENEWAL_WINDOW_MS', 24 * 60 * 60 * 1000, { min: 1000 });
+const BACKEND_SESSION_COOKIE_CACHE = Symbol('backendSessionCookieCache');
 
 function getSessionExpiryTime(sessionData = {}) {
   const expiresAt = Date.parse(sessionData.cookie?.expires || '');
@@ -134,9 +135,21 @@ function createSessionStore(options = {}) {
   const sessionDbPath = options.sessionDbPath || process.env.BFF_SESSION_DB_PATH || DEFAULT_SESSION_DB_PATH;
   fs.mkdirSync(path.dirname(sessionDbPath), { recursive: true });
 
-  const db = new Database(sessionDbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
+  const db = new DatabaseSync(sessionDbPath);
+  const closeDatabase = db.close.bind(db);
+  let closed = false;
+
+  db.close = () => {
+    if (closed) {
+      return undefined;
+    }
+
+    closed = true;
+    return closeDatabase();
+  };
+
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA synchronous = NORMAL');
   db.exec(`
     CREATE TABLE IF NOT EXISTS session_users (
       sid TEXT PRIMARY KEY,
@@ -151,8 +164,8 @@ function createSessionStore(options = {}) {
   return { store, db };
 }
 
-function destroyStoredSessionsByUserId(sessionStore, sessionDb, userId) {
-  if (!sessionStore || !sessionDb || !userId) {
+function destroyStoredSessionsByUserId(sessionDb, userId) {
+  if (!sessionDb || !userId) {
     return 0;
   }
 
@@ -162,10 +175,7 @@ function destroyStoredSessionsByUserId(sessionStore, sessionDb, userId) {
     WHERE user_id = ?
   `).all(userId).map((row) => row.sid);
 
-  matchingSessionIds.forEach((sid) => {
-    sessionStore.destroy(sid, () => {});
-  });
-
+  sessionDb.prepare('DELETE FROM sessions WHERE sid IN (SELECT sid FROM session_users WHERE user_id = ?)').run(userId);
   sessionDb.prepare('DELETE FROM session_users WHERE user_id = ?').run(userId);
 
   return matchingSessionIds.length;
@@ -197,6 +207,12 @@ function destroySession(req, sessionDb = null) {
       }
       resolve();
     });
+  });
+}
+
+function saveExpressSession(sessionData) {
+  return new Promise((resolve, reject) => {
+    sessionData.save((error) => (error ? reject(error) : resolve()));
   });
 }
 
@@ -285,7 +301,14 @@ function loadUpgradeSession(req, sessionStore, secret) {
 }
 
 function getBackendSessionCookieFromRequest(req) {
-  return decryptBackendSessionCookie(req.session?.backendSessionCookie || '');
+  const encryptedCookie = req.session?.backendSessionCookie || '';
+  if (req[BACKEND_SESSION_COOKIE_CACHE]?.encryptedCookie === encryptedCookie) {
+    return req[BACKEND_SESSION_COOKIE_CACHE].backendSessionCookie;
+  }
+
+  const backendSessionCookie = decryptBackendSessionCookie(encryptedCookie);
+  req[BACKEND_SESSION_COOKIE_CACHE] = { encryptedCookie, backendSessionCookie };
+  return backendSessionCookie;
 }
 
 async function persistSessionUserId(req, userId, sessionDb = null) {
@@ -295,9 +318,7 @@ async function persistSessionUserId(req, userId, sessionDb = null) {
 
   if (req.session.userId !== userId) {
     req.session.userId = userId;
-    await new Promise((resolve, reject) => {
-      req.session.save((error) => (error ? reject(error) : resolve()));
-    });
+    await saveExpressSession(req.session);
   }
 
   upsertStoredSessionUser(sessionDb, req.sessionID, userId);
@@ -313,5 +334,6 @@ module.exports = {
   normalizeSessionState,
   persistSessionUserId,
   renewSessionExpiryIfNeeded,
+  saveExpressSession,
   upsertStoredSessionUser
 };

@@ -2,6 +2,7 @@ const logger = require('../utils/logger');
 const { getAllowedOrigins, isOriginAllowed } = require('../utils/networkConfig');
 const { hasTrustedInternalService } = require('../utils/internalRequestGate');
 const { parseIntegerEnv } = require('../utils/env');
+const { buildDomainSourceGroups } = require('../utils/sourceCatalog');
 const database = require('./database');
 const { resolveAuthenticatedSession } = require('../utils/auth');
 
@@ -255,6 +256,59 @@ function dedupeGroupsById(groups = []) {
   return [...uniqueGroups.values()];
 }
 
+function getUserCustomSourceGroups(userId, cache) {
+  if (!userId) {
+    return new Map();
+  }
+
+  if (!cache.has(userId)) {
+    cache.set(userId, buildDomainSourceGroups(database.listUserSources(userId)));
+  }
+
+  return cache.get(userId);
+}
+
+function addSourceAliasIds(sourceIds, rawSourceIds, item = {}, customSourceGroups = new Map()) {
+  const sourceId = item.sourceId || '';
+  const rawSourceId = item.rawSourceId || sourceId;
+  const sourceName = item.source || '';
+  const rawSourceName = item.rawSource || sourceName;
+
+  if (sourceId) {
+    sourceIds.add(sourceId);
+  }
+  if (rawSourceId) {
+    rawSourceIds.add(rawSourceId);
+  }
+
+  customSourceGroups.forEach((group) => {
+    const matchesGroup = group.id === sourceId
+      || group.memberIds.has(sourceId)
+      || group.memberIds.has(rawSourceId)
+      || group.memberNames.has(sourceName)
+      || group.memberNames.has(rawSourceName);
+
+    if (!matchesGroup) {
+      return;
+    }
+
+    sourceIds.add(group.id);
+    group.memberIds.forEach((memberId) => sourceIds.add(memberId));
+  });
+}
+
+function buildGroupSourceSets(group = {}, customSourceGroupCache = new Map()) {
+  const sourceIdSet = new Set();
+  const rawSourceIdSet = new Set();
+  const customSourceGroups = getUserCustomSourceGroups(group.ownerUserId, customSourceGroupCache);
+
+  (Array.isArray(group.items) ? group.items : []).forEach((item) => {
+    addSourceAliasIds(sourceIdSet, rawSourceIdSet, item, customSourceGroups);
+  });
+
+  return { sourceIdSet, rawSourceIdSet };
+}
+
 function getBucketCandidateGroups(bucketUserId, globalGroups, privateGroupsByUserId, cache) {
   if (cache.has(bucketUserId)) {
     return cache.get(bucketUserId);
@@ -274,13 +328,13 @@ function broadcastNewsUpdate(newsGroups = []) {
   }
 
   let recipients = 0;
+  const customSourceGroupCache = new Map();
   const preparedGroups = newsGroups.map((group) => ({
     ...group,
     searchableText: buildSearchableText(group),
     topicSet: new Set(Array.isArray(group.topics) ? group.topics : []),
     pubDateMs: Date.parse(group.pubDate || group.items?.[0]?.pubDate || ''),
-    sourceIdSet: new Set(Array.isArray(group.items) ? group.items.map((item) => item.sourceId).filter(Boolean) : []),
-    rawSourceIdSet: new Set(Array.isArray(group.items) ? group.items.map((item) => item.rawSourceId || item.sourceId).filter(Boolean) : [])
+    ...buildGroupSourceSets(group, customSourceGroupCache)
   }));
   const globalGroups = preparedGroups.filter((group) => !group.ownerUserId);
   const privateGroupsByUserId = new Map();

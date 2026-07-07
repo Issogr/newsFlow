@@ -2,6 +2,7 @@ import { Pencil, Plus, Rss, Trash2 } from 'lucide-react';
 import InlineAlert from '../InlineAlert';
 import SettingsSectionCard from './SettingsSectionCard';
 import SourceIcon from '../SourceIcon';
+import { getFriendlyApiErrorMessage } from '../../utils/apiError';
 
 const SettingsCustomSourcesSection = ({
   t,
@@ -48,7 +49,7 @@ const SettingsCustomSourcesSection = ({
         <p className="mt-3 text-sm text-slate-500">{t('sourceAutoDetectedOnSave')}</p>
         {sourceError ? (
           <InlineAlert as="p" className="mt-3">
-            {sourceError.message}
+            {getFriendlyApiErrorMessage(sourceError, t)}
           </InlineAlert>
         ) : null}
       </div>

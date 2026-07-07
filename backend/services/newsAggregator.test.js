@@ -24,7 +24,6 @@ jest.mock('./database', () => ({
   getAiStoryGroupingCandidateSet: jest.fn(() => ({ target: null, candidates: [] })),
   mergeTopicsForArticles: jest.fn(() => 0),
   replaceTopicsForArticles: jest.fn(() => 0),
-  getArticlesByIds: jest.fn(() => []),
   getReadLaterArticleIdSet: jest.fn(() => new Set()),
   getReadLaterArticles: jest.fn(() => []),
   saveReadLaterArticles: jest.fn(() => ({ savedArticleIds: [], savedCount: 0 })),
@@ -74,7 +73,7 @@ jest.mock('./aiClickbaitClassifier', () => ({
 
 jest.mock('./aiStoryGrouper', () => ({
   buildStoryGroupId: jest.fn((articleIds = []) => `ai-story-${articleIds.filter(Boolean).sort().join('-')}`),
-  _getCandidateSignature: jest.fn((target = {}, candidates = []) => candidates.map((candidate) => candidate.id).filter(Boolean).sort()),
+  getCandidateSignature: jest.fn((target = {}, candidates = []) => candidates.map((candidate) => candidate.id).filter(Boolean).sort()),
   findSimilarStoriesForArticle: jest.fn(async () => ({ matches: [], model: 'test-story-model' })),
   isAiStoryGroupingAvailable: jest.fn(() => false)
 }));
@@ -1024,6 +1023,29 @@ describe('newsAggregator service flows', () => {
     ]));
     expect(thematicSummaryService.generateDueSummaries).toHaveBeenCalledWith({ broadcast: true });
     expect(database.getAiStoryGroupingCandidateSet).toHaveBeenCalledWith('inserted-1', expect.any(Object));
+  });
+
+  test('private-only topic processing does not schedule global summaries', async () => {
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['private-1']);
+    aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockResolvedValue({
+      topicsByArticleId: new Map([
+        ['private-1', [{ topic: 'Tecnologia', source: 'ai', confidence: 0.9 }]]
+      ]),
+      attemptedArticleIds: ['private-1'],
+      failedArticleIds: [],
+      cappedArticleIds: []
+    });
+
+    scheduleAiTopicsForPendingArticles([
+      { id: 'private-1', ownerUserId: 'user-1', title: 'Private AI story' }
+    ]);
+    await flushBackgroundAiProcessing();
+    await flushBackgroundAiProcessing();
+
+    expect(database.replaceTopicsForArticles).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ articleId: 'private-1' })
+    ]));
+    expect(thematicSummaryService.generateDueSummaries).not.toHaveBeenCalled();
   });
 
   test('marks AI-capped articles as deferred so they do not remain pending forever', async () => {

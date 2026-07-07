@@ -2,7 +2,7 @@ const http = require('http');
 const path = require('path');
 const { URL } = require('url');
 const express = require('express');
-const axios = require('axios');
+const compression = require('compression');
 const helmet = require('helmet');
 
 const { createProxyMiddleware } = require('http-proxy-middleware');
@@ -25,6 +25,7 @@ const {
   normalizeSessionState,
   persistSessionUserId,
   renewSessionExpiryIfNeeded,
+  saveExpressSession,
   upsertStoredSessionUser
 } = require('./lib/sessionStore');
 const {
@@ -50,6 +51,8 @@ const UPSTREAM_ERROR_RESPONSE = {
   },
 };
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const runtimeFetch = globalThis.fetch;
+const RuntimeAbortSignal = globalThis.AbortSignal;
 
 function getTrustProxySetting(value = process.env.TRUST_PROXY) {
   const normalized = String(value || '').trim();
@@ -67,15 +70,70 @@ function getTrustProxySetting(value = process.env.TRUST_PROXY) {
   return entries.length > 1 ? entries : normalized;
 }
 
+function appendQueryParams(url, params = {}) {
+  Object.entries(params || {}).forEach(([name, value]) => {
+    const values = Array.isArray(value) ? value : [value];
+    values.forEach((entry) => {
+      if (entry !== undefined && entry !== null) {
+        url.searchParams.append(name, String(entry));
+      }
+    });
+  });
+}
+
+async function normalizeBackendResponse(response) {
+  const text = await response.text();
+  const contentType = response.headers.get('content-type') || '';
+  const headers = Object.fromEntries(response.headers.entries());
+  const setCookies = typeof response.headers.getSetCookie === 'function' ? response.headers.getSetCookie() : [];
+  let data = text;
+
+  if (setCookies.length > 0) {
+    headers['set-cookie'] = setCookies;
+  }
+
+  if (text && contentType.includes('application/json')) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+  }
+
+  return {
+    status: response.status,
+    headers,
+    data,
+  };
+}
+
+function regenerateSession(req, sessionDb) {
+  const previousSessionId = req.sessionID;
+
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      if (previousSessionId) {
+        sessionDb.prepare('DELETE FROM session_users WHERE sid = ?').run(previousSessionId);
+      }
+      resolve();
+    });
+  });
+}
+
 function createApp(options = {}) {
   const backendBaseUrl = String(options.backendBaseUrl || process.env.BACKEND_BASE_URL || 'http://backend:5000').trim().replace(/\/+$/, '');
   const frontendDistDir = options.frontendDistDir || process.env.FRONTEND_DIST_DIR || DEFAULT_FRONTEND_DIST_DIR;
-  const internalProxyToken = options.internalProxyToken || getInternalProxyToken();
-  const createdSessionStore = options.sessionStoreBundle || createSessionStore(options);
+  const internalProxyToken = getInternalProxyToken();
+  const createdSessionStore = createSessionStore(options);
   const sessionStore = createdSessionStore.store;
   const sessionDb = createdSessionStore.db;
   const sessionSecret = getBffSessionSecret();
-  const sessionMiddleware = options.sessionMiddleware || buildSessionMiddleware(sessionStore, sessionSecret);
+  const sessionMiddleware = buildSessionMiddleware(sessionStore, sessionSecret);
   const configuredAppOrigin = String(options.appBaseUrl || process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim().replace(/\/+$/, '');
   const configuredExpectedOrigin = (() => {
     if (!configuredAppOrigin) {
@@ -88,12 +146,6 @@ function createApp(options = {}) {
       return configuredAppOrigin;
     }
   })();
-  const backendHttp = options.backendHttp || axios.create({
-    baseURL: backendBaseUrl,
-    timeout: UPSTREAM_TIMEOUT_MS,
-    validateStatus: () => true,
-    maxRedirects: 0,
-  });
   const app = express();
   const jsonParser = express.json({ limit: '1mb' });
 
@@ -105,7 +157,8 @@ function createApp(options = {}) {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'https:'],
+        imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
+        mediaSrc: ["'self'", 'blob:'],
         connectSrc: ["'self'", 'ws:', 'wss:'],
         frameSrc: ["'none'"],
         objectSrc: ["'none'"],
@@ -113,6 +166,7 @@ function createApp(options = {}) {
     },
     referrerPolicy: { policy: 'same-origin' },
   }));
+  app.use(compression({ threshold: 0 }));
 
   function buildInternalHeaders(req) {
     return {
@@ -145,6 +199,11 @@ function createApp(options = {}) {
     });
   }
 
+  function clearLocalSession(req, res) {
+    clearBffSessionCookie(res);
+    return destroySession(req, sessionDb);
+  }
+
   function getExpectedRequestOrigin(req) {
     if (configuredAppOrigin) {
       return configuredExpectedOrigin;
@@ -172,15 +231,9 @@ function createApp(options = {}) {
     const origin = getRequestHeader(req, 'origin');
     const referer = getRequestHeader(req, 'referer');
 
-    if (!origin && !referer && options.allowMissingHeaders === true) {
-      return true;
-    }
-
-    if (headerMatchesExpectedOrigin(origin, expectedOrigin) || (!origin && headerMatchesExpectedOrigin(referer, expectedOrigin))) {
-      return true;
-    }
-
-    return false;
+    return (!origin && !referer && options.allowMissingHeaders === true)
+      || headerMatchesExpectedOrigin(origin, expectedOrigin)
+      || (!origin && headerMatchesExpectedOrigin(referer, expectedOrigin));
   }
 
   function sendCrossOriginRejected(res) {
@@ -213,23 +266,26 @@ function createApp(options = {}) {
   const requireSameOriginSocketRequest = requireSameOriginRequest({ allowMissingHeaders: true });
 
   async function requestInternalBackend(req, pathName, options = {}) {
+    const url = new URL(`/internal-api${pathName}`, `${backendBaseUrl}/`);
+    appendQueryParams(url, options.params);
+
+    const headers = {
+      ...buildInternalHeaders(req),
+      ...(options.backendSessionCookie ? { Cookie: options.backendSessionCookie } : {}),
+    };
     const requestOptions = {
-      url: `/internal-api${pathName}`,
       method: req.method,
-      headers: {
-        ...buildInternalHeaders(req),
-        ...(options.backendSessionCookie ? { Cookie: options.backendSessionCookie } : {}),
-      },
+      headers,
+      redirect: 'manual',
+      signal: RuntimeAbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     };
 
     if (Object.prototype.hasOwnProperty.call(options, 'data')) {
-      requestOptions.data = options.data;
-    }
-    if (Object.prototype.hasOwnProperty.call(options, 'params')) {
-      requestOptions.params = options.params;
+      requestOptions.headers['content-type'] = 'application/json';
+      requestOptions.body = JSON.stringify(options.data);
     }
 
-    return backendHttp.request(requestOptions);
+    return normalizeBackendResponse(await runtimeFetch(url, requestOptions));
   }
 
   function sendBackendResponse(res, response) {
@@ -301,13 +357,12 @@ function createApp(options = {}) {
           return;
         }
 
+        await regenerateSession(req, sessionDb);
         req.session.version = SESSION_SCHEMA_VERSION;
         req.session.backendSessionCookie = encryptBackendSessionCookie(backendSessionCookie);
         req.session.userId = response.data?.user?.id || req.session.userId || '';
         req.session.createdAt = req.session.createdAt || new Date().toISOString();
-        await new Promise((resolve, reject) => {
-          req.session.save((error) => (error ? reject(error) : resolve()));
-        });
+        await saveExpressSession(req.session);
         upsertStoredSessionUser(sessionDb, req.sessionID, req.session.userId);
       }
 
@@ -333,14 +388,13 @@ function createApp(options = {}) {
     stripSetCookie: true,
     onProxyResponse: (proxyRes, req, res) => {
       if (proxyRes.statusCode === 401) {
-        clearBffSessionCookie(res);
-        destroySession(req, sessionDb).catch(() => {});
+        clearLocalSession(req, res).catch(() => {});
         return;
       }
 
       const deletedUserId = extractDeletedAdminUserId(req, proxyRes.statusCode || 0);
       if (deletedUserId) {
-        destroyStoredSessionsByUserId(sessionStore, sessionDb, deletedUserId);
+        destroyStoredSessionsByUserId(sessionDb, deletedUserId);
       }
     },
   });
@@ -389,7 +443,7 @@ function createApp(options = {}) {
     ['/api/auth/login', '/auth/login'],
     ['/api/auth/password-setup/complete', '/auth/password-setup/complete']
   ].forEach(([routePath, backendPath]) => {
-    app.post(routePath, jsonParser, (req, res, next) => {
+    app.post(routePath, requireSameOriginUnsafeRequest, jsonParser, (req, res, next) => {
       handleSessionAuthRequest(req, res, next, backendPath);
     });
   });
@@ -414,8 +468,7 @@ function createApp(options = {}) {
       });
 
       if (response.status === 401) {
-        await destroySession(req, sessionDb);
-        clearBffSessionCookie(res);
+        await clearLocalSession(req, res);
       } else {
         await persistSessionUserId(req, response.data?.user?.id || '', sessionDb);
       }
@@ -442,8 +495,7 @@ function createApp(options = {}) {
     }
 
     try {
-      await destroySession(req, sessionDb);
-      clearBffSessionCookie(res);
+      await clearLocalSession(req, res);
 
       if (backendResponse?.status && backendResponse.status < 500) {
         sendBackendResponse(res, backendResponse);
@@ -559,6 +611,5 @@ if (require.main === module) {
 
 module.exports = {
   createApp,
-  createServer,
-  _getTrustProxySetting: getTrustProxySetting
+  createServer
 };

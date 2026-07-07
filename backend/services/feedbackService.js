@@ -1,5 +1,5 @@
 const { createError } = require('../utils/errorHandler');
-const { FEEDBACK_CATEGORIES, getFeedbackAttachmentType } = require('../utils/feedback');
+const { getFeedbackAttachmentType } = require('../utils/feedback');
 
 const TELEGRAM_API_BASE = String(process.env.TELEGRAM_API_BASE_URL || 'https://api.telegram.org').trim().replace(/\/+$/, '');
 const runtimeFetch = globalThis.fetch;
@@ -143,10 +143,6 @@ async function sendAttachment(config, user, attachment) {
 
 async function sendFeedback({ user, category, title, description, attachment = null }) {
   const config = getTelegramConfig();
-
-  if (!FEEDBACK_CATEGORIES.has(category)) {
-    throw createError(400, 'Please choose a valid feedback category.', 'INVALID_FEEDBACK_PAYLOAD');
-  }
 
   try {
     const attachmentType = getFeedbackAttachmentType(attachment);

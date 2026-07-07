@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Bug, CheckCircle2, ImagePlus, Lightbulb, MessageSquare, Paperclip, Send, Trash2 } from 'lucide-react';
 import { submitFeedback } from '../services/api';
+import { getApiErrorPayload, hasApiResponse, isApiTimeoutError } from '../utils/apiError';
 import InlineAlert from './InlineAlert';
 import SlideOverPanelFrame, { SlideOverPanelBody, SlideOverPanelFooter, SlideOverPanelHeader } from './SlideOverPanelFrame';
 
@@ -16,17 +17,17 @@ const FEEDBACK_CATEGORIES = [
 ];
 
 function getFriendlyFeedbackError(error, t) {
-  const apiMessage = error?.response?.data?.error?.message;
+  const { message: apiMessage } = getApiErrorPayload(error);
 
   if (apiMessage) {
     return apiMessage;
   }
 
-  if (error?.code === 'ECONNABORTED') {
+  if (isApiTimeoutError(error)) {
     return t('feedbackErrorTimeout');
   }
 
-  if (!error?.response) {
+  if (!hasApiResponse(error)) {
     return t('feedbackErrorNetwork');
   }
 
@@ -83,7 +84,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
   const attachmentLabel = attachment
-    ? `${attachment.name} (${Math.max(1, Math.round(attachment.size / 1024))} KB)`
+    ? `${attachment.name} (${formatAttachmentSize(attachment.size)})`
     : '';
   const attachmentType = String(attachment?.type || '');
   const isVideoAttachment = attachmentType.startsWith('video/');

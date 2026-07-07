@@ -242,9 +242,7 @@ function getPodcastWindowSlot(summary = {}) {
 
 function getLatestPodcastSummariesBySlot(limit = PODCAST_HISTORY_RETAIN_COUNT) {
   const requestedLimit = Math.max(PODCAST_HISTORY_RETAIN_COUNT * 3, 6);
-  const summaries = typeof database.listLatestPodcastSummaries === 'function'
-    ? database.listLatestPodcastSummaries(requestedLimit)
-    : [database.getLatestPodcastSummary()].filter(Boolean);
+  const summaries = database.listLatestPodcastSummaries(requestedLimit);
   const bySlot = new Map();
 
   summaries.forEach((summary) => {
@@ -382,7 +380,7 @@ function isFailedSummaryRetryDue(summary = {}, referenceDate = new Date()) {
 }
 
 function shouldWaitForPendingTopicProcessing(window = {}, options = {}) {
-  if (options.force === true || typeof database.hasPendingTopicProcessingForThematicSummary !== 'function') {
+  if (options.force === true) {
     return false;
   }
   if (!database.hasPendingTopicProcessingForThematicSummary(window)) {
@@ -539,11 +537,7 @@ function getReaderCacheMap(articleIds = []) {
     return new Map();
   }
 
-  if (typeof database.getReaderCaches === 'function') {
-    return database.getReaderCaches(normalizedArticleIds, null);
-  }
-
-  return new Map(normalizedArticleIds.map((articleId) => [articleId, database.getReaderCache(articleId, null)]));
+  return database.getReaderCaches(normalizedArticleIds, null);
 }
 
 function getCachedReaderText(articleId, cacheByArticleId = null) {
@@ -712,10 +706,6 @@ function broadcastSummariesRefresh(options = {}) {
 }
 
 function pruneGeneratedSummaryHistory(options = {}) {
-  if (typeof database.pruneSummaryHistory !== 'function') {
-    return;
-  }
-
   const result = database.pruneSummaryHistory(options);
   if ((result?.thematicSummaries || 0) > 0 || (result?.podcastSummaries || 0) > 0) {
     logger.info(`Pruned old AI summary history: thematic=${result.thematicSummaries || 0}, podcasts=${result.podcastSummaries || 0}, periodEnd=${options.periodEnd}`);

@@ -41,4 +41,5 @@ afterEach(() => {
   cleanup();
 });
 
+// Testing Library checks the Jest global to coordinate async queries with fake timers.
 globalThis.jest = vi;

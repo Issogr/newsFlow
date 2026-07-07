@@ -7,6 +7,7 @@ import SettingsPreferencesSection from './settings/SettingsPreferencesSection';
 import useSettingsPanelState from './settings/useSettingsPanelState';
 import InlineAlert from './InlineAlert';
 import SlideOverPanelFrame, { SlideOverPanelBody, SlideOverPanelFooter, SlideOverPanelHeader } from './SlideOverPanelFrame';
+import { getFriendlyApiErrorMessage } from '../utils/apiError';
 
 const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, onUserUpdate }) => {
   const publicApiAuthenticatedEnabled = currentUser?.features?.publicApi?.authenticatedEnabled === true;
@@ -97,7 +98,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
 
             {error && (
               <InlineAlert>
-                {error.message}
+                {getFriendlyApiErrorMessage(error, t)}
               </InlineAlert>
             )}
 

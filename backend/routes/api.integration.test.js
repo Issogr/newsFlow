@@ -1,5 +1,6 @@
 const request = require('supertest');
 const { getCanonicalSourceId } = require('../utils/sourceCatalog');
+const { MAX_FEEDBACK_IMAGE_BYTES } = require('../utils/feedback');
 const { cleanupTempNewsDb, setupTempNewsDb } = require('../test-utils/tempNewsDb');
 
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
@@ -160,6 +161,22 @@ describe('API auth and user flows', () => {
 
     expect(loginResponse.body.token).toBeUndefined();
     expect(getSessionCookie(loginResponse)).toContain('newsflow_session=');
+  });
+
+  test('rate limits registration bursts by IP even with unique usernames', async () => {
+    for (let index = 0; index < 20; index += 1) {
+      await request(app)
+        .post('/api/auth/register')
+        .send({ username: `burst-user-${index}`, password: 'secret123' })
+        .expect(201);
+    }
+
+    const response = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'burst-user-blocked', password: 'secret123' })
+      .expect(429);
+
+    expect(response.body.error).toEqual(expect.objectContaining({ code: 'RATE_LIMIT_EXCEEDED' }));
   });
 
   test('bootstraps the admin account and allows creating password setup links', async () => {
@@ -1030,6 +1047,75 @@ describe('API auth and user flows', () => {
     expect(response.body.error).toMatchObject({
       code: 'INVALID_FEEDBACK_PAYLOAD',
       message: 'Please choose a valid feedback category.'
+    });
+    expect(feedbackService.sendFeedback).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    {
+      name: 'unsupported attachment type',
+      attachment: {
+        buffer: Buffer.from('not an image'),
+        filename: 'notes.txt',
+        contentType: 'text/plain'
+      },
+      expectedStatus: 400,
+      expectedMessage: 'Please attach an image or a small video.'
+    },
+    {
+      name: 'oversized image attachment',
+      attachment: {
+        buffer: Buffer.alloc(MAX_FEEDBACK_IMAGE_BYTES + 1),
+        filename: 'large-image.png',
+        contentType: 'image/png'
+      },
+      expectedStatus: 413,
+      expectedMessage: 'Images must be 5 MB or smaller.'
+    }
+  ])('rejects feedback submission with $name', async ({ attachment, expectedStatus, expectedMessage }) => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: `feedback-upload-${expectedStatus}`, password: 'secret123' })
+      .expect(201);
+
+    const response = await request(app)
+      .post('/api/me/feedback')
+      .set('Cookie', getSessionCookie(registerResponse))
+      .field('category', 'bug')
+      .field('title', 'Attachment issue')
+      .field('description', 'This attachment should not be accepted.')
+      .attach('attachment', attachment.buffer, {
+        filename: attachment.filename,
+        contentType: attachment.contentType
+      })
+      .expect(expectedStatus);
+
+    expect(response.body.error).toMatchObject({
+      code: 'INVALID_FEEDBACK_IMAGE',
+      message: expectedMessage
+    });
+    expect(feedbackService.sendFeedback).not.toHaveBeenCalled();
+  });
+
+  test('rejects feedback submission with multiple attachments', async () => {
+    const registerResponse = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'feedback-multiple-attachments', password: 'secret123' })
+      .expect(201);
+
+    const response = await request(app)
+      .post('/api/me/feedback')
+      .set('Cookie', getSessionCookie(registerResponse))
+      .field('category', 'bug')
+      .field('title', 'Too many attachments')
+      .field('description', 'Only one attachment should be accepted.')
+      .attach('attachment', Buffer.from('image-one'), { filename: 'one.png', contentType: 'image/png' })
+      .attach('attachment', Buffer.from('image-two'), { filename: 'two.png', contentType: 'image/png' })
+      .expect(400);
+
+    expect(response.body.error).toMatchObject({
+      code: 'INVALID_FEEDBACK_IMAGE',
+      message: 'Attach only one image or video.'
     });
     expect(feedbackService.sendFeedback).not.toHaveBeenCalled();
   });

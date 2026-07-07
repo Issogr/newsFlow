@@ -1,12 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import NewsAggregator from './components/NewsAggregator';
-import AdminDashboard from './components/AdminDashboard';
-import ApiDocsPage from './components/ApiDocsPage';
-import AuthScreen from './components/AuthScreen';
-import LegalPolicyPage from './components/LegalPolicyPage';
-import PasswordSetupScreen from './components/PasswordSetupScreen';
-import ReleaseNotesModal from './components/ReleaseNotesModal';
-import ReleaseUpdateNotice from './components/ReleaseUpdateNotice';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { CURRENT_CHANGELOG_ENTRY, getCurrentChangelog } from './config/changelog';
 import { createTranslator, resolvePreferredLocale } from './i18n';
 import {
@@ -17,6 +9,15 @@ import {
   registerUser,
   updateUserSettings
 } from './services/api';
+
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const ApiDocsPage = lazy(() => import('./components/ApiDocsPage'));
+const AuthScreen = lazy(() => import('./components/AuthScreen'));
+const LegalPolicyPage = lazy(() => import('./components/LegalPolicyPage'));
+const NewsAggregator = lazy(() => import('./components/NewsAggregator'));
+const PasswordSetupScreen = lazy(() => import('./components/PasswordSetupScreen'));
+const ReleaseNotesModal = lazy(() => import('./components/ReleaseNotesModal'));
+const ReleaseUpdateNotice = lazy(() => import('./components/ReleaseUpdateNotice'));
 
 function resolveAppliedTheme(themeMode, mediaQuery) {
   if (themeMode === 'dark') {
@@ -31,29 +32,39 @@ function resolveAppliedTheme(themeMode, mediaQuery) {
 }
 
 const PASSWORD_SETUP_PATHS = new Set(['/password/setup', '/admin/setup']);
-const API_DOCS_PATHS = new Set(['/api/docs', '/api/docs/']);
+const API_DOCS_PATHS = new Set(['/api/docs']);
 const LEGAL_POLICY_BY_PATH = {
   '/privacy-policy': 'privacy',
   '/cookie-policy': 'cookie'
 };
+const APP_LOADING_FALLBACK = <div className="App min-h-screen bg-slate-100" />;
+
+function normalizeRoutePath(pathname = '/') {
+  const path = String(pathname || '/');
+  return path.length > 1 ? path.replace(/\/+$/u, '') || '/' : path;
+}
+
+function getCurrentLocationState() {
+  return {
+    pathname: normalizeRoutePath(window.location.pathname),
+    search: window.location.search
+  };
+}
 
 function shouldLoadSessionForPath(pathname) {
-  return !PASSWORD_SETUP_PATHS.has(pathname)
-    && !API_DOCS_PATHS.has(pathname)
-    && !LEGAL_POLICY_BY_PATH[pathname];
+  const normalizedPathname = normalizeRoutePath(pathname);
+  return !PASSWORD_SETUP_PATHS.has(normalizedPathname)
+    && !API_DOCS_PATHS.has(normalizedPathname)
+    && !LEGAL_POLICY_BY_PATH[normalizedPathname];
 }
 
 function App() {
-  const [locationState, setLocationState] = useState(() => ({
-    pathname: window.location.pathname,
-    search: window.location.search
-  }));
+  const [locationState, setLocationState] = useState(getCurrentLocationState);
   const [authData, setAuthData] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [loadingSession, setLoadingSession] = useState(() => shouldLoadSessionForPath(window.location.pathname));
   const [releaseNotesState, setReleaseNotesState] = useState({
-    hiddenVersion: '',
     noticeHiddenVersion: '',
     saving: false,
     modalOpen: false
@@ -87,31 +98,15 @@ function App() {
     && !authData?.user?.isAdmin
     && releaseNotes.version
     && needsReleaseNotesAck
-    && releaseNotesState.hiddenVersion !== releaseNotes.version
     && releaseNotesState.noticeHiddenVersion !== releaseNotes.version
     && !releaseNotesState.modalOpen
   );
 
-  const loadSession = useCallback(async () => {
-    if (!shouldLoadSessionForPath(locationState.pathname)) {
-      setLoadingSession(false);
-      return;
-    }
-
-    try {
-      const me = await fetchCurrentUser();
-      setAuthData(me);
-    } catch {
-      setAuthData(null);
-      setAuthError(null);
-    } finally {
-      setLoadingSession(false);
-    }
-  }, [locationState.pathname]);
-
   useEffect(() => {
     const syncLocationState = () => {
-      setLocationState({ pathname: window.location.pathname, search: window.location.search });
+      const nextLocationState = getCurrentLocationState();
+      setLoadingSession(shouldLoadSessionForPath(nextLocationState.pathname));
+      setLocationState(nextLocationState);
     };
 
     window.addEventListener('popstate', syncLocationState);
@@ -119,8 +114,39 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let ignore = false;
+
+    async function loadSession() {
+      if (!shouldLoadSessionForPath(locationState.pathname)) {
+        setLoadingSession(false);
+        return;
+      }
+
+      setLoadingSession(true);
+
+      try {
+        const me = await fetchCurrentUser();
+        if (!ignore) {
+          setAuthData(me);
+        }
+      } catch {
+        if (!ignore) {
+          setAuthData(null);
+          setAuthError(null);
+        }
+      } finally {
+        if (!ignore) {
+          setLoadingSession(false);
+        }
+      }
+    }
+
     loadSession();
-  }, [loadSession]);
+
+    return () => {
+      ignore = true;
+    };
+  }, [locationState.pathname]);
 
   useEffect(() => {
     const handleAuthExpired = () => {
@@ -166,7 +192,7 @@ function App() {
   }, [themeMode]);
 
   useEffect(() => {
-    setReleaseNotesState({ hiddenVersion: '', noticeHiddenVersion: '', saving: false, modalOpen: false });
+    setReleaseNotesState({ noticeHiddenVersion: '', saving: false, modalOpen: false });
   }, [authData?.user?.id]);
 
   const handleAuthSuccess = useCallback((payload) => {
@@ -227,7 +253,6 @@ function App() {
 
     setReleaseNotesState((current) => ({
       ...current,
-      hiddenVersion: version,
       noticeHiddenVersion: version,
       modalOpen: false,
       saving: needsReleaseNotesAck
@@ -262,25 +287,35 @@ function App() {
   }, [releaseNotes.version]);
 
   if (loadingSession) {
-    return <div className="App min-h-screen bg-slate-100" />;
+    return APP_LOADING_FALLBACK;
   }
 
   if (isApiDocsRoute) {
-    return <ApiDocsPage locale={locale} />;
+    return (
+      <Suspense fallback={APP_LOADING_FALLBACK}>
+        <ApiDocsPage locale={locale} />
+      </Suspense>
+    );
   }
 
   if (legalPolicy) {
-    return <LegalPolicyPage policy={legalPolicy} />;
+    return (
+      <Suspense fallback={APP_LOADING_FALLBACK}>
+        <LegalPolicyPage policy={legalPolicy} />
+      </Suspense>
+    );
   }
 
   if (isPasswordSetupRoute) {
     return (
       <div className="App">
-        <PasswordSetupScreen
-          t={t}
-          token={setupToken}
-          onComplete={handlePasswordSetupComplete}
-        />
+        <Suspense fallback={null}>
+          <PasswordSetupScreen
+            t={t}
+            token={setupToken}
+            onComplete={handlePasswordSetupComplete}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -288,51 +323,59 @@ function App() {
   if (!authData) {
     return (
       <div className="App">
-        <AuthScreen
-          t={t}
-          busy={authBusy}
-          error={authError}
-          onLogin={handleLogin}
-          onRegister={handleRegister}
-        />
+        <Suspense fallback={null}>
+          <AuthScreen
+            t={t}
+            busy={authBusy}
+            error={authError}
+            onLogin={handleLogin}
+            onRegister={handleRegister}
+          />
+        </Suspense>
       </div>
     );
   }
 
   return (
     <div className="App">
-      {authData?.user?.isAdmin ? (
-        <AdminDashboard
-          t={t}
-          currentUser={authData}
-          onLogout={handleLogout}
-          onUserUpdate={handleUserSettingsUpdate}
-        />
-      ) : (
-        <NewsAggregator
-          currentUser={authData}
-          onLogout={handleLogout}
-          onUserUpdate={setAuthData}
-          currentChangelogVersion={releaseNotes.version}
-          onOpenReleaseNotes={handleOpenReleaseNotes}
-        />
-      )}
+      <Suspense fallback={null}>
+        {authData?.user?.isAdmin ? (
+          <AdminDashboard
+            t={t}
+            currentUser={authData}
+            onLogout={handleLogout}
+            onUserUpdate={handleUserSettingsUpdate}
+          />
+        ) : (
+          <NewsAggregator
+            currentUser={authData}
+            onLogout={handleLogout}
+            onUserUpdate={setAuthData}
+            currentChangelogVersion={releaseNotes.version}
+            onOpenReleaseNotes={handleOpenReleaseNotes}
+          />
+        )}
+      </Suspense>
       {shouldShowReleaseNotice && (
-        <ReleaseUpdateNotice
-          t={t}
-          releaseNotes={releaseNotes}
-          onOpen={handleOpenReleaseNotes}
-          onExpire={acknowledgeCurrentReleaseNotes}
-          onDismiss={acknowledgeCurrentReleaseNotes}
-        />
+        <Suspense fallback={null}>
+          <ReleaseUpdateNotice
+            t={t}
+            releaseNotes={releaseNotes}
+            onOpen={handleOpenReleaseNotes}
+            onExpire={acknowledgeCurrentReleaseNotes}
+            onDismiss={acknowledgeCurrentReleaseNotes}
+          />
+        </Suspense>
       )}
       {shouldShowReleaseNotesModal && (
-        <ReleaseNotesModal
-          t={t}
-          releaseNotes={releaseNotes}
-          saving={releaseNotesState.saving}
-          onDismiss={acknowledgeCurrentReleaseNotes}
-        />
+        <Suspense fallback={null}>
+          <ReleaseNotesModal
+            t={t}
+            releaseNotes={releaseNotes}
+            saving={releaseNotesState.saving}
+            onDismiss={acknowledgeCurrentReleaseNotes}
+          />
+        </Suspense>
       )}
     </div>
   );

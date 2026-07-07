@@ -12,11 +12,11 @@ describe('PasswordSetupScreen', () => {
   const t = createTranslator('en');
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test('validates the token and completes password setup', async () => {
-    const onComplete = jest.fn();
+    const onComplete = vi.fn();
 
     validatePasswordSetupToken.mockResolvedValue({
       username: 'alice',
@@ -52,7 +52,7 @@ describe('PasswordSetupScreen', () => {
       expiresAt: '2026-03-27T12:00:00.000Z'
     });
 
-    render(<PasswordSetupScreen t={t} token="setup-token" onComplete={jest.fn()} />);
+    render(<PasswordSetupScreen t={t} token="setup-token" onComplete={vi.fn()} />);
 
     expect(await screen.findByText('Account: alice')).toBeInTheDocument();
 
@@ -61,5 +61,17 @@ describe('PasswordSetupScreen', () => {
 
     expect(completePasswordSetup).not.toHaveBeenCalled();
     expect(await screen.findByText('Password must be at least 8 characters long')).toBeInTheDocument();
+  });
+
+  test.each([
+    [{ newsFlowClientCode: 'network' }, 'Unable to reach the server. Check your internet connection.'],
+    [{ newsFlowClientCode: 'timeout' }, 'The request timed out. Please try again in a few seconds.']
+  ])('shows transient validation failures without blaming the setup link', async (requestError, message) => {
+    validatePasswordSetupToken.mockRejectedValue(requestError);
+
+    render(<PasswordSetupScreen t={t} token="setup-token" onComplete={vi.fn()} />);
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByText('This password setup link is invalid or expired.')).not.toBeInTheDocument();
   });
 });

@@ -15,8 +15,9 @@ const useLatestRequest = () => {
   }, []);
 
   const resetLatestRequest = useCallback(() => {
+    const nextRequestId = requestRef.current.id + 1;
     cancelLatestRequest();
-    requestRef.current = createInitialRequestState();
+    requestRef.current = { id: nextRequestId, controller: null };
   }, [cancelLatestRequest]);
 
   const startLatestRequest = useCallback(() => {

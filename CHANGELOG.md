@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.5.10
+
+- added mobile swipe navigation between AI summary topics inside the summary panel, with card movement feedback while swiping
+- kept AI summary story rainbow rings visible after opening and moved the new-summary indicator to a small top-right dot
+- stacked news-card topic circles with the same slight overlap used by multiple source circles
+
 ## 3.5.9
 
 - reduced AI provider usage with larger topic batches, high-confidence local topic skips, prompt article caps, and unchanged story-grouping retry skips

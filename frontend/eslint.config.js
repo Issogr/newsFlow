@@ -66,7 +66,6 @@ module.exports = [
         describe: 'readonly',
         expect: 'readonly',
         it: 'readonly',
-        jest: 'readonly',
         test: 'readonly',
         vi: 'readonly',
       },
