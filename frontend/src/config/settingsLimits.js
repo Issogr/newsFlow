@@ -1,5 +1,4 @@
 const DEFAULT_SETTINGS_LIMITS = Object.freeze({
-  articleRetentionHours: { min: 1, max: 24 },
   recentHours: { min: 1, max: 3 }
 });
 
@@ -11,10 +10,6 @@ export function getSettingsLimits(currentUser) {
   const serverLimits = currentUser?.limits || {};
 
   return {
-    articleRetentionHours: {
-      min: DEFAULT_SETTINGS_LIMITS.articleRetentionHours.min,
-      max: resolveMaxValue(serverLimits.articleRetentionHoursMax, DEFAULT_SETTINGS_LIMITS.articleRetentionHours)
-    },
     recentHours: {
       min: DEFAULT_SETTINGS_LIMITS.recentHours.min,
       max: resolveMaxValue(serverLimits.recentHoursMax, DEFAULT_SETTINGS_LIMITS.recentHours)

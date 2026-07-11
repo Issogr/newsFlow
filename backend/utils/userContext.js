@@ -2,7 +2,6 @@ function buildUserContext(userId, settings = {}) {
   if (!userId) {
     return {
       userId: null,
-      articleRetentionHours: null,
       excludedSourceIds: [],
       excludedSubSourceIds: [],
     };
@@ -10,7 +9,6 @@ function buildUserContext(userId, settings = {}) {
 
   return {
     userId,
-    articleRetentionHours: settings.articleRetentionHours,
     excludedSourceIds: Array.isArray(settings.excludedSourceIds) ? settings.excludedSourceIds : [],
     excludedSubSourceIds: Array.isArray(settings.excludedSubSourceIds) ? settings.excludedSubSourceIds : [],
     settings,

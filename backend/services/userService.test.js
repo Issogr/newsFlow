@@ -57,7 +57,6 @@ describe('userService imports', () => {
       settings: expect.objectContaining({
         defaultLanguage: 'it',
         themeMode: 'dark',
-        articleRetentionHours: 12,
         recentHours: 2,
         showNewsImages: false,
         compactNewsCards: true,
@@ -76,10 +75,10 @@ describe('userService imports', () => {
         })
       ]
     });
+    expect(result.settings).not.toHaveProperty('articleRetentionHours');
     expect(database.getUserSettings(userId)).toMatchObject({
       defaultLanguage: 'it',
       themeMode: 'dark',
-      articleRetentionHours: 12,
       recentHours: 2,
       showNewsImages: false,
       readerPanelPosition: 'left',
@@ -87,6 +86,7 @@ describe('userService imports', () => {
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: []
     });
+    expect(database.getUserSettings(userId)).not.toHaveProperty('articleRetentionHours');
   });
 
   test('exported settings preserve showNewsImages across import', async () => {
@@ -112,6 +112,7 @@ describe('userService imports', () => {
       recentHours: 2,
       readerTextSize: 'small'
     });
+    expect(exportedSettings.settings).not.toHaveProperty('articleRetentionHours');
 
     const importedState = await userService.importUserSettings(targetAuthPayload.user.id, exportedSettings);
 

@@ -1,7 +1,6 @@
 const DEFAULT_SETTINGS = {
   defaultLanguage: 'en',
   themeMode: 'system',
-  articleRetentionHours: 24,
   recentHours: 3,
   showNewsImages: true,
   readerPanelPosition: 'right',
@@ -12,7 +11,6 @@ const DEFAULT_SETTINGS = {
 };
 
 const DEFAULT_LIMITS = {
-  articleRetentionHoursMax: 24,
   recentHoursMax: 3,
   apiTokenTtlDays: 30
 };

@@ -98,7 +98,6 @@ const en = {
   themeModeLight: 'Light',
   themeModeDark: 'Dark',
   useBrowserLanguage: 'Use browser language',
-  articleRetention: 'Article retention (hours)',
   quickFilterHours: 'Quick filter hours',
   showNewsImagesSetting: 'Show card images',
   readerPanelPositionSetting: 'Reader panel position',

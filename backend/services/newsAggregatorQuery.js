@@ -115,10 +115,7 @@ function getAvailableSources(userContext = {}, userSources = null) {
 }
 
 function getMaxArticleAgeHours(userContext = {}, articleRetentionHours = ARTICLE_RETENTION_HOURS) {
-  return Math.min(
-    articleRetentionHours,
-    Number.isFinite(userContext.articleRetentionHours) ? userContext.articleRetentionHours : articleRetentionHours
-  );
+  return articleRetentionHours;
 }
 
 function getQueryOptions(userContext = {}) {

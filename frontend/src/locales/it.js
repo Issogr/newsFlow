@@ -99,7 +99,6 @@ const it = {
   themeModeLight: 'Chiaro',
   themeModeDark: 'Scuro',
   useBrowserLanguage: 'Usa lingua browser',
-  articleRetention: 'Retention articoli (ore)',
   quickFilterHours: 'Ore filtro rapido',
   showNewsImagesSetting: 'Mostra immagini card',
   readerPanelPositionSetting: 'Posizione pannello lettura',

@@ -1,6 +1,7 @@
 const express = require('express');
 const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const database = require('../../services/database');
+const { getMaxArticleAgeHours } = require('../../services/newsAggregatorQuery');
 const readerService = require('../../services/readerService');
 const { requireAuthenticatedUser } = require('../../utils/auth');
 const { buildRateLimitMessage, createError } = require('../../utils/errorHandler');
@@ -35,7 +36,7 @@ router.get('/articles/:articleId/reader', [
   const readerArticle = await readerService.getReaderArticle(articleId, {
     forceRefresh: req.query.refresh === 'true',
     userId: req.user.id,
-    maxArticleAgeHours: database.isReadLaterArticle(req.user.id, articleId) ? null : userContext.articleRetentionHours
+    maxArticleAgeHours: database.isReadLaterArticle(req.user.id, articleId) ? null : getMaxArticleAgeHours(userContext)
   });
 
   res.json(readerArticle);

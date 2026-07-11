@@ -1,4 +1,4 @@
-import { Clock3, Globe2, Image as ImageIcon, MonitorSmartphone, PanelRightOpen, Radio, TimerReset, Type } from 'lucide-react';
+import { Clock3, Globe2, Image as ImageIcon, MonitorSmartphone, PanelRightOpen, Radio, Type } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORDER } from '../../config/readerTextSize';
 
@@ -11,7 +11,6 @@ const SettingsPreferencesSection = ({
   onSettingChange,
   onNumericSettingChange
 }) => {
-  const articleRetentionRange = `${settingsLimits.articleRetentionHours.min}-${settingsLimits.articleRetentionHours.max}h`;
   const recentHoursRange = `${settingsLimits.recentHours.min}-${settingsLimits.recentHours.max}h`;
   const showNewsImagesEnabled = settings.showNewsImages !== false;
 
@@ -32,24 +31,6 @@ const SettingsPreferencesSection = ({
             <option value="it">IT</option>
             <option value="en">EN</option>
           </select>
-        </label>
-
-        <label className="block">
-          <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
-            <TimerReset className="h-4 w-4 text-amber-600" />
-            {t('articleRetention')}
-          </span>
-          <input
-            type="number"
-            min={settingsLimits.articleRetentionHours.min}
-            max={settingsLimits.articleRetentionHours.max}
-            value={settings.articleRetentionHours}
-            onChange={(event) => onNumericSettingChange('articleRetentionHours', event.target.value, settingsLimits.articleRetentionHours)}
-            className={fieldClassName}
-          />
-          <span className="mt-2 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
-            {articleRetentionRange}
-          </span>
         </label>
 
         <label className="block">

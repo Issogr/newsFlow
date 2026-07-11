@@ -4,13 +4,17 @@ export const CURRENT_CHANGELOG_ENTRY = {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
-    items: []
+    items: [
+      'Article retention now follows the app-wide server setting only, so the settings panel no longer offers a per-user retention field.'
+    ]
   },
   it: {
     eyebrow: 'Ultimo aggiornamento',
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
-    items: []
+    items: [
+      'La retention degli articoli ora segue solo l\'impostazione server globale, quindi nelle impostazioni non c\'e piu un campo per utente.'
+    ]
   }
 };
 

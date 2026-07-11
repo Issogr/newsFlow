@@ -28,7 +28,6 @@ const {
   API_TOKEN_TTL_DAYS
 } = require('../utils/auth');
 
-const GLOBAL_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
 const MAX_RECENT_HOURS = 3;
 const MIN_PASSWORD_LENGTH = 8;
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().slice(0, 40) || 'admin';
@@ -301,7 +300,6 @@ function getDefaultSettings(overrides = {}) {
   return {
     defaultLanguage: 'auto',
     themeMode: 'system',
-    articleRetentionHours: GLOBAL_RETENTION_HOURS,
     recentHours: MAX_RECENT_HOURS,
     showNewsImages: true,
     compactNewsCards: false,
@@ -356,7 +354,6 @@ function getUserFeatures() {
 
 function getUserLimits() {
   return {
-    articleRetentionHoursMax: GLOBAL_RETENTION_HOURS,
     recentHoursMax: MAX_RECENT_HOURS,
     feedbackTitleMaxLength: MAX_FEEDBACK_TITLE_LENGTH,
     feedbackDescriptionMaxLength: MAX_FEEDBACK_DESCRIPTION_LENGTH,
@@ -385,10 +382,6 @@ function getUserApiToken(userId) {
 }
 
 function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overrides = {}) {
-  const articleRetentionHours = Math.min(
-    GLOBAL_RETENTION_HOURS,
-    Math.max(1, normalizeInt(payload.articleRetentionHours, currentSettings.articleRetentionHours))
-  );
   const recentHours = Math.min(
     MAX_RECENT_HOURS,
     Math.max(1, normalizeInt(payload.recentHours, currentSettings.recentHours))
@@ -401,7 +394,6 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     ),
     defaultLanguage: normalizeLanguage(payload.defaultLanguage || currentSettings.defaultLanguage),
     themeMode: normalizeThemeMode(payload.themeMode || currentSettings.themeMode),
-    articleRetentionHours,
     recentHours,
     showNewsImages: typeof payload.showNewsImages === 'boolean'
       ? payload.showNewsImages
@@ -720,7 +712,6 @@ function exportUserSettings(userId) {
     settings: {
       defaultLanguage: settings.defaultLanguage,
       themeMode: settings.themeMode || 'system',
-      articleRetentionHours: settings.articleRetentionHours,
       recentHours: settings.recentHours,
       showNewsImages: settings.showNewsImages !== false,
       compactNewsCards: settings.compactNewsCards === true,

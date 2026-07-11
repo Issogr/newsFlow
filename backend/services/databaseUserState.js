@@ -38,7 +38,6 @@ function deleteOwnedArticles(database, ownerId, sourceId = '') {
 const USER_SETTINGS_COLUMNS = [
   'default_language',
   'theme_mode',
-  'article_retention_hours',
   'recent_hours',
   'show_news_images',
   'compact_news_cards',
@@ -72,7 +71,6 @@ function getUserSettingsValues(userId, settings = {}, updatedAt = new Date().toI
     userId,
     settings.defaultLanguage || 'auto',
     settings.themeMode || 'system',
-    settings.articleRetentionHours ?? 24,
     settings.recentHours ?? 3,
     settings.showNewsImages === false ? 0 : 1,
     settings.compactNewsCardsMode && settings.compactNewsCardsMode !== 'off' ? 1 : 0,
@@ -110,9 +108,8 @@ function createUserStateRepository({ getDb }) {
 
     const row = getDb().prepare(`
       SELECT user_id AS userId, default_language AS defaultLanguage,
-              theme_mode AS themeMode,
-              article_retention_hours AS articleRetentionHours,
-              recent_hours AS recentHours,
+               theme_mode AS themeMode,
+               recent_hours AS recentHours,
               show_news_images AS showNewsImages,
              compact_news_cards AS compactNewsCards,
              compact_news_cards_mode AS compactNewsCardsMode,

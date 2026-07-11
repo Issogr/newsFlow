@@ -2,6 +2,8 @@
 
 ## 3.5.11
 
+- removed the per-user article retention field from settings; retention now follows the app-wide server configuration only
+
 ## 3.5.10
 
 - added mobile swipe navigation between AI summary topics inside the summary panel, with card movement feedback while swiping

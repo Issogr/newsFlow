@@ -122,7 +122,6 @@ describe('API auth and user flows', () => {
     expect(registerResponse.body).toMatchObject({
       settings: {
         defaultLanguage: 'auto',
-        articleRetentionHours: 24,
         recentHours: 3,
         showNewsImages: true,
         compactNewsCards: false,
@@ -134,7 +133,6 @@ describe('API auth and user flows', () => {
         excludedSubSourceIds: []
       },
       limits: {
-        articleRetentionHoursMax: 24,
         recentHoursMax: 3,
         feedbackTitleMaxLength: 120,
         feedbackDescriptionMaxLength: 2800,
@@ -144,6 +142,7 @@ describe('API auth and user flows', () => {
       },
       customSources: []
     });
+    expect(registerResponse.body.settings).not.toHaveProperty('articleRetentionHours');
     expect(registerResponse.body.features).toEqual({
       ai: expectedDisabledAiFeatures,
       publicApi: {
@@ -383,7 +382,7 @@ describe('API auth and user flows', () => {
       .send({
         defaultLanguage: 'en',
         themeMode: 'dark',
-        articleRetentionHours: 999,
+        articleRetentionHours: 12,
         recentHours: 999,
         showNewsImages: false,
         compactNewsCardsMode: 'desktop',
@@ -400,7 +399,6 @@ describe('API auth and user flows', () => {
       settings: {
         defaultLanguage: 'en',
         themeMode: 'dark',
-        articleRetentionHours: 24,
         recentHours: 3,
         showNewsImages: false,
         compactNewsCards: true,
@@ -412,6 +410,7 @@ describe('API auth and user flows', () => {
         excludedSubSourceIds: ['ansa_mondo']
       }
     });
+    expect(updateResponse.body.settings).not.toHaveProperty('articleRetentionHours');
     expect(updateResponse.body.settings).toMatchObject({
       userId: expect.any(String),
       updatedAt: expect.any(String)
@@ -424,7 +423,6 @@ describe('API auth and user flows', () => {
 
     expect(currentUserResponse.body.settings).toEqual(updateResponse.body.settings);
     expect(currentUserResponse.body.limits).toEqual({
-      articleRetentionHoursMax: 24,
       recentHoursMax: 3,
       feedbackTitleMaxLength: 120,
       feedbackDescriptionMaxLength: 2800,
@@ -1170,7 +1168,6 @@ describe('API auth and user flows', () => {
       success: true,
         settings: expect.objectContaining({
           defaultLanguage: 'en',
-          articleRetentionHours: 12,
           recentHours: 2,
           showNewsImages: false,
           compactNewsCards: true,
@@ -1188,6 +1185,7 @@ describe('API auth and user flows', () => {
         })
       ]
     });
+    expect(importResponse.body.settings).not.toHaveProperty('articleRetentionHours');
     expect(newsService.refreshUserSources).toHaveBeenLastCalledWith(expect.any(String), { broadcast: true });
   });
 
