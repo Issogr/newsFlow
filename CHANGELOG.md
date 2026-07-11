@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.5.11
+
 ## 3.5.10
 
 - added mobile swipe navigation between AI summary topics inside the summary panel, with card movement feedback while swiping
