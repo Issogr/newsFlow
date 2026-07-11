@@ -85,6 +85,10 @@ function openDesktopSearch() {
   fireEvent.click(screen.getAllByRole('button', { name: 'Search' })[0]);
 }
 
+function getDesktopRefreshButton() {
+  return screen.getAllByRole('button', { name: 'Refresh' })[0];
+}
+
 function createGroups(prefix, start, count) {
   return Array.from({ length: count }, (_, index) => {
     const number = start + index;
@@ -627,7 +631,7 @@ describe('NewsAggregator', () => {
     });
 
     expect(fetchNews).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+    expect(getDesktopRefreshButton()).toBeEnabled();
   });
 
   test('forces a source refresh without reloading unchanged thematic summaries from the refresh button', async () => {
@@ -637,7 +641,7 @@ describe('NewsAggregator', () => {
 
     expect(await screen.findByText('Current headline')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(getDesktopRefreshButton());
 
     await waitFor(() => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
@@ -659,7 +663,7 @@ describe('NewsAggregator', () => {
 
     await renderNewsAggregator();
 
-    const refreshButton = await screen.findByRole('button', { name: 'Refresh' });
+    const refreshButton = getDesktopRefreshButton();
 
     expect(refreshButton).toBeEnabled();
     fireEvent.click(refreshButton);
@@ -783,7 +787,7 @@ describe('NewsAggregator', () => {
     await renderNewsAggregator();
     expect(await screen.findByText('Current headline')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(getDesktopRefreshButton());
     await waitFor(() => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
     });
@@ -846,11 +850,11 @@ describe('NewsAggregator', () => {
     await renderNewsAggregator();
     expect(await screen.findByText('Current headline')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(getDesktopRefreshButton());
     await waitFor(() => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
     });
-    expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
+    expect(getDesktopRefreshButton()).toBeDisabled();
 
     await act(async () => {
       socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
@@ -859,13 +863,13 @@ describe('NewsAggregator', () => {
 
     expect(fetchNews).toHaveBeenCalledTimes(2);
     expect(manualRequestAborted).toBe(false);
-    expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
+    expect(getDesktopRefreshButton()).toBeDisabled();
 
     await resolveDeferred(manualRefreshRequest, createSingleGroupFeedResponse('group-1', 'Manual refresh headline'));
 
     expect(await screen.findByText('Manual refresh headline')).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+      expect(getDesktopRefreshButton()).toBeEnabled();
     });
   });
 

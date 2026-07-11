@@ -1,5 +1,6 @@
 import {
   Bookmark,
+  RefreshCw,
   Rss,
   Search,
   Tags,
@@ -13,6 +14,7 @@ const FilterNavActions = ({
   handleBubbleButtonClick,
   handleBubbleButtonPress,
   handleEnterSearch,
+  onRefresh,
   onReadLaterClick,
   openBubble,
   readLaterActive,
@@ -20,6 +22,11 @@ const FilterNavActions = ({
   readLaterBadge = false,
   readLaterLabel,
   readLaterTitle,
+  refreshActive = false,
+  refreshAriaLabel,
+  refreshDisabled = false,
+  refreshLabel,
+  refreshTitle,
   search,
   searchActiveClassName,
   t,
@@ -57,6 +64,20 @@ const FilterNavActions = ({
         badgeSizeClassName={badgeSizeClassName}
         badgeClassName="bg-emerald-600 text-white"
       />
+
+      {onRefresh ? (
+        <TopNavActionButton
+          icon={RefreshCw}
+          label={refreshLabel}
+          onClick={onRefresh}
+          disabled={refreshDisabled}
+          activeClassName="text-sky-600"
+          sizeClassName={buttonSizeClassName}
+          iconClassName={refreshActive ? 'animate-spin' : ''}
+          aria-label={refreshAriaLabel}
+          title={refreshTitle}
+        />
+      ) : null}
 
       <TopNavActionButton
         icon={Bookmark}

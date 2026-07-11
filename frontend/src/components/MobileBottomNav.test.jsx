@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import MobileBottomNav from './MobileBottomNav';
 
 const t = (key, params = {}) => {
@@ -7,6 +7,8 @@ const t = (key, params = {}) => {
     topics: 'Topics',
     searchPlaceholder: 'Search...',
     searchLabel: 'Search',
+    refresh: 'Refresh',
+    readLaterShort: 'Saved',
     cancel: 'Cancel',
     noNewsText: 'No news found.',
   };
@@ -28,6 +30,7 @@ function renderNav(overrides = {}) {
     search: '',
     t,
     locale: 'en',
+    onRefresh: vi.fn(),
     onToggleFilter: vi.fn(),
     onSearchChange: vi.fn(),
     onSearchClear: vi.fn(),
@@ -84,12 +87,14 @@ describe('MobileBottomNav', () => {
 
   it('handles filter and search interactions from the nav', () => {
     const onToggleFilter = vi.fn();
+    const onRefresh = vi.fn();
     const onSearchChange = vi.fn();
     const onSearchClear = vi.fn();
 
     renderNav({
       activeFilters: { sourceIds: ['s1'], topics: ['tech'] },
       search: 'query',
+      onRefresh,
       onToggleFilter,
       onSearchChange,
       onSearchClear,
@@ -97,6 +102,12 @@ describe('MobileBottomNav', () => {
 
     expect(getNavButton('Sources')).toHaveTextContent('1');
     expect(getNavButton('Topics')).toHaveTextContent('1');
+    const navButtons = within(screen.getByRole('navigation')).getAllByRole('button');
+    const refreshButton = within(screen.getByRole('navigation')).getByRole('button', { name: 'Refresh' });
+    expect(navButtons.indexOf(refreshButton)).toBe(2);
+
+    fireEvent.click(refreshButton);
+    expect(onRefresh).toHaveBeenCalled();
 
     fireEvent.click(getNavButton('Sources'));
     fireEvent.click(screen.getByText('BBC'));

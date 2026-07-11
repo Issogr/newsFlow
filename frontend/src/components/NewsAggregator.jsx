@@ -197,6 +197,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const refreshTitle = manualRefreshPending
     ? t('refreshPendingTitle')
     : t('refresh');
+  const refreshDisabled = isFeedRefreshActive || (!isReadLaterView && manualRefreshPending);
   const socketSubscription = useMemo(() => ({
     search: debouncedSearch,
     sourceIds: activeFilters.sourceIds,
@@ -678,15 +679,15 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 compact={topNavCompact}
               />
 
-              <div className="relative">
+              <div className="relative hidden md:block">
                 <TopNavActionButton
                   icon={RefreshCw}
                   label={t('refresh')}
                   onClick={handleManualRefresh}
-                  disabled={isFeedRefreshActive || (!isReadLaterView && manualRefreshPending)}
+                  disabled={refreshDisabled}
                   aria-label={refreshTitle}
                   title={refreshTitle}
-                  iconClassName={isFeedRefreshActive || (!isReadLaterView && manualRefreshPending) ? 'animate-spin' : ''}
+                  iconClassName={refreshDisabled ? 'animate-spin' : ''}
                 />
               </div>
 
@@ -911,7 +912,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         <MobileBottomNav
           {...filterSurfaceProps}
           activeView={activeView}
+          onRefresh={handleManualRefresh}
           onViewChange={setActiveView}
+          refreshActive={refreshDisabled}
+          refreshDisabled={refreshDisabled}
+          refreshTitle={refreshTitle}
           visible={showMobileNav}
         />
       ) : null}

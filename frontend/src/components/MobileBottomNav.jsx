@@ -18,11 +18,15 @@ const MobileBottomNav = ({
   search,
   t,
   locale,
+  onRefresh,
   onToggleFilter,
   onSearchChange,
   onSearchClear,
   activeView = 'news',
   onViewChange,
+  refreshActive = false,
+  refreshDisabled = false,
+  refreshTitle,
   visible = true,
 }) => {
   const [keyboardOffset, setKeyboardOffset] = useState(0);
@@ -70,6 +74,7 @@ const MobileBottomNav = ({
       className={`fixed bottom-0 left-0 right-0 z-50 md:hidden transition-transform duration-300 ease-out ${
         visible ? 'translate-y-0' : 'translate-y-full'
       }`}
+      role="navigation"
     >
       {/* Bubbles + Nav wrapped together for outside-click detection */}
       <div
@@ -93,7 +98,7 @@ const MobileBottomNav = ({
         <div className="overflow-hidden rounded-full border border-slate-200 bg-white/95 shadow-md backdrop-blur-md">
           <div className="relative h-[3.95rem] overflow-hidden">
           <div
-            className={`absolute inset-0 grid grid-cols-4 transition-all duration-300 ease-out ${
+            className={`absolute inset-0 grid ${onRefresh ? 'grid-cols-5' : 'grid-cols-4'} transition-all duration-300 ease-out ${
               searchMode
                 ? 'pointer-events-none -translate-x-8 scale-95 opacity-0 blur-sm'
                 : 'translate-x-0 scale-100 opacity-100 blur-0'
@@ -106,11 +111,17 @@ const MobileBottomNav = ({
               handleBubbleButtonClick={handleBubbleButtonClick}
               handleBubbleButtonPress={handleBubbleButtonPress}
               handleEnterSearch={handleEnterSearch}
+              onRefresh={onRefresh}
               onReadLaterClick={() => onViewChange?.(readLaterActive ? 'news' : 'readLater')}
               openBubble={openBubble}
               readLaterActive={readLaterActive}
               readLaterBadge
               readLaterLabel={t('readLaterShort')}
+              refreshActive={refreshActive}
+              refreshAriaLabel={refreshTitle}
+              refreshDisabled={refreshDisabled}
+              refreshLabel={t('refresh')}
+              refreshTitle={refreshTitle}
               search={search}
               searchActiveClassName="text-slate-900"
               t={t}
