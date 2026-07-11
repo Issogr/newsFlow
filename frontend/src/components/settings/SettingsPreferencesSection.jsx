@@ -1,4 +1,4 @@
-import { Clock3, Globe2, Image as ImageIcon, MonitorSmartphone, PanelRightOpen, Radio, Type } from 'lucide-react';
+import { Globe2, Image as ImageIcon, MonitorSmartphone, PanelRightOpen, Radio, Type } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORDER } from '../../config/readerTextSize';
 
@@ -7,11 +7,8 @@ const fieldClassName = 'w-full rounded-2xl border border-slate-200 bg-slate-50 p
 const SettingsPreferencesSection = ({
   t,
   settings,
-  settingsLimits,
-  onSettingChange,
-  onNumericSettingChange
+  onSettingChange
 }) => {
-  const recentHoursRange = `${settingsLimits.recentHours.min}-${settingsLimits.recentHours.max}h`;
   const showNewsImagesEnabled = settings.showNewsImages !== false;
 
   return (
@@ -47,24 +44,6 @@ const SettingsPreferencesSection = ({
             <option value="light">{t('themeModeLight')}</option>
             <option value="dark">{t('themeModeDark')}</option>
           </select>
-        </label>
-
-        <label className="block">
-          <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
-            <Clock3 className="h-4 w-4 text-teal-600" />
-            {t('quickFilterHours')}
-          </span>
-          <input
-            type="number"
-            min={settingsLimits.recentHours.min}
-            max={settingsLimits.recentHours.max}
-            value={settings.recentHours}
-            onChange={(event) => onNumericSettingChange('recentHours', event.target.value, settingsLimits.recentHours)}
-            className={fieldClassName}
-          />
-          <span className="mt-2 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
-            {recentHoursRange}
-          </span>
         </label>
 
         <label className="block">

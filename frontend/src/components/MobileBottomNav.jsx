@@ -15,13 +15,10 @@ const MobileBottomNav = ({
   visibleSources,
   availableTopics,
   activeFilters,
-  showRecentOnly,
   search,
-  recentHours,
   t,
   locale,
   onToggleFilter,
-  onToggleRecent,
   onSearchChange,
   onSearchClear,
   activeView = 'news',
@@ -96,7 +93,7 @@ const MobileBottomNav = ({
         <div className="overflow-hidden rounded-full border border-slate-200 bg-white/95 shadow-md backdrop-blur-md">
           <div className="relative h-[3.95rem] overflow-hidden">
           <div
-            className={`absolute inset-0 grid grid-cols-5 transition-all duration-300 ease-out ${
+            className={`absolute inset-0 grid grid-cols-4 transition-all duration-300 ease-out ${
               searchMode
                 ? 'pointer-events-none -translate-x-8 scale-95 opacity-0 blur-sm'
                 : 'translate-x-0 scale-100 opacity-100 blur-0'
@@ -110,15 +107,12 @@ const MobileBottomNav = ({
               handleBubbleButtonPress={handleBubbleButtonPress}
               handleEnterSearch={handleEnterSearch}
               onReadLaterClick={() => onViewChange?.(readLaterActive ? 'news' : 'readLater')}
-              onToggleRecent={onToggleRecent}
               openBubble={openBubble}
               readLaterActive={readLaterActive}
               readLaterBadge
               readLaterLabel={t('readLaterShort')}
-              recentHours={recentHours}
               search={search}
               searchActiveClassName="text-slate-900"
-              showRecentOnly={showRecentOnly}
               t={t}
             />
           </div>

@@ -57,7 +57,6 @@ describe('userService imports', () => {
       settings: expect.objectContaining({
         defaultLanguage: 'it',
         themeMode: 'dark',
-        recentHours: 2,
         showNewsImages: false,
         compactNewsCards: true,
         compactNewsCardsMode: 'everywhere',
@@ -76,10 +75,10 @@ describe('userService imports', () => {
       ]
     });
     expect(result.settings).not.toHaveProperty('articleRetentionHours');
+    expect(result.settings).not.toHaveProperty('recentHours');
     expect(database.getUserSettings(userId)).toMatchObject({
       defaultLanguage: 'it',
       themeMode: 'dark',
-      recentHours: 2,
       showNewsImages: false,
       readerPanelPosition: 'left',
       readerTextSize: 'large',
@@ -87,6 +86,7 @@ describe('userService imports', () => {
       excludedSourceIds: []
     });
     expect(database.getUserSettings(userId)).not.toHaveProperty('articleRetentionHours');
+    expect(database.getUserSettings(userId)).not.toHaveProperty('recentHours');
   });
 
   test('exported settings preserve showNewsImages across import', async () => {
@@ -98,7 +98,6 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      recentHours: 2,
       readerTextSize: 'small'
     });
 
@@ -109,17 +108,16 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      recentHours: 2,
       readerTextSize: 'small'
     });
     expect(exportedSettings.settings).not.toHaveProperty('articleRetentionHours');
+    expect(exportedSettings.settings).not.toHaveProperty('recentHours');
 
     const importedState = await userService.importUserSettings(targetAuthPayload.user.id, exportedSettings);
 
     expect(importedState.settings).toMatchObject({
       themeMode: 'dark',
       showNewsImages: false,
-      recentHours: 2,
       readerTextSize: 'small'
     });
     expect(database.getUserSettings(targetAuthPayload.user.id)).toMatchObject({
@@ -127,7 +125,7 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      recentHours: 2
+      readerTextSize: 'small'
     });
   });
 

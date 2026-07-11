@@ -19,7 +19,6 @@ import SourceSetupWizard from './SourceSetupWizard';
 import useLatestRequest from '../hooks/useLatestRequest';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
-import { getSettingsLimits } from '../config/settingsLimits';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
 import {
@@ -111,7 +110,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const showNewsImages = currentUser?.settings?.showNewsImages !== false;
   const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
   const t = useMemo(() => createTranslator(locale), [locale]);
-  const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
   const scrollFrameRef = useRef(null);
   const { startLatestRequest: startListRequest } = useLatestRequest();
   const { startLatestRequest: startPaginationRequest, cancelLatestRequest: cancelPaginationRequest } = useLatestRequest();
@@ -128,7 +126,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeFilters, setActiveFilters] = useState(EMPTY_FILTERS);
-  const [showRecentOnly, setShowRecentOnly] = useState(false);
   const [activeView, setActiveView] = useState('news');
   const [readerState, setReaderState] = useState({ isOpen: false, group: null, articleId: null });
   const [thematicSummaries, setThematicSummaries] = useState([]);
@@ -148,10 +145,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const visibleNewsCountRef = useRef(0);
   const preservedNewsCountRef = useRef(0);
   const activeListLoadingRequestIdRef = useRef(null);
-  const recentHours = Math.max(
-    settingsLimits.recentHours.min,
-    Math.min(Number(currentUser?.settings?.recentHours) || settingsLimits.recentHours.max, settingsLimits.recentHours.max)
-  );
   const excludedSourceIds = useMemo(() => currentUser?.settings?.excludedSourceIds || [], [currentUser?.settings?.excludedSourceIds]);
   const excludedSubSourceIds = useMemo(() => currentUser?.settings?.excludedSubSourceIds || [], [currentUser?.settings?.excludedSubSourceIds]);
   const sourceReloadSignature = useMemo(() => {
@@ -208,10 +201,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     search: debouncedSearch,
     sourceIds: activeFilters.sourceIds,
     topics: activeFilters.topics,
-    recentHours: showRecentOnly ? recentHours : null,
     excludedSourceIds,
     excludedSubSourceIds
-  }), [activeFilters.sourceIds, activeFilters.topics, debouncedSearch, excludedSourceIds, excludedSubSourceIds, recentHours, showRecentOnly]);
+  }), [activeFilters.sourceIds, activeFilters.topics, debouncedSearch, excludedSourceIds, excludedSubSourceIds]);
 
   useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
@@ -330,9 +322,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           sourceIds: activeFilters.sourceIds,
           topics: activeFilters.topics,
         },
-        recentHours,
         search: debouncedSearch,
-        showRecentOnly,
         signal: request.signal,
       };
       const response = await (isReadLaterView ? fetchReadLaterNews : fetchNews)(buildFeedRequestParams({
@@ -421,7 +411,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         setBusyState(false);
       }
     }
-  }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, isReadLaterView, recentHours, showRecentOnly, startListRequest, startPaginationRequest]);
+  }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, isReadLaterView, startListRequest, startPaginationRequest]);
 
   const handleTopicRefresh = useCallback((payload = {}) => {
     if (needsSourceSetup) {
@@ -652,21 +642,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     setDebouncedSearch('');
   }, []);
 
-  const toggleRecentOnly = useCallback(() => {
-    setShowRecentOnly((value) => !value);
-  }, []);
-
   const filterSurfaceProps = {
     visibleSources: visibleAvailableSources,
     availableTopics,
     activeFilters,
-    showRecentOnly,
     search,
-    recentHours,
     t,
     locale,
     onToggleFilter: toggleFilter,
-    onToggleRecent: toggleRecentOnly,
     onSearchChange: setSearch,
     onSearchClear: clearSearch
   };

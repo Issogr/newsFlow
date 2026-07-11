@@ -1,7 +1,6 @@
 const DEFAULT_SETTINGS = {
   defaultLanguage: 'en',
   themeMode: 'system',
-  recentHours: 3,
   showNewsImages: true,
   readerPanelPosition: 'right',
   readerTextSize: 'medium',
@@ -11,7 +10,6 @@ const DEFAULT_SETTINGS = {
 };
 
 const DEFAULT_LIMITS = {
-  recentHoursMax: 3,
   apiTokenTtlDays: 30
 };
 

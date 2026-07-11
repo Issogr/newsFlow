@@ -3,6 +3,7 @@
 ## 3.5.11
 
 - removed the per-user article retention field from settings; retention now follows the app-wide server configuration only
+- removed the latest-hours quick filter and its settings field because the feed is already ordered by age and paginated
 
 ## 3.5.10
 

@@ -14,13 +14,10 @@ const DesktopTopNavFilters = ({
   visibleSources,
   availableTopics,
   activeFilters,
-  showRecentOnly,
   search,
-  recentHours,
   t,
   locale,
   onToggleFilter,
-  onToggleRecent,
   onSearchChange,
   onSearchClear,
   onToggleReadLater,
@@ -90,18 +87,13 @@ const DesktopTopNavFilters = ({
             handleBubbleButtonPress={handleBubbleButtonPress}
             handleEnterSearch={handleEnterSearch}
             onReadLaterClick={onToggleReadLater}
-            onToggleRecent={onToggleRecent}
             openBubble={openBubble}
             readLaterActive={readLaterActive}
             readLaterAriaLabel={t('readLater')}
             readLaterLabel={t('readLater')}
             readLaterTitle={t('readLater')}
-            recentHours={recentHours}
             search={search}
-            showRecentOnly={showRecentOnly}
             t={t}
-            timeLabelClassName="whitespace-nowrap"
-            timeMinWidthClassName="min-w-16"
           />
         </div>
       )}

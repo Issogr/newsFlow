@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 40;
+  const CURRENT_SCHEMA_VERSION = 41;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getPodcastSummariesSchemaSql() {
@@ -236,7 +236,6 @@ function createDatabaseSchema({ logger }) {
         user_id TEXT PRIMARY KEY,
         default_language TEXT NOT NULL DEFAULT 'auto',
         theme_mode TEXT NOT NULL DEFAULT 'system',
-        recent_hours INTEGER NOT NULL DEFAULT 3,
         show_news_images INTEGER NOT NULL DEFAULT 1,
         compact_news_cards INTEGER NOT NULL DEFAULT 0,
         compact_news_cards_mode TEXT NOT NULL DEFAULT 'off',
@@ -492,6 +491,10 @@ function createDatabaseSchema({ logger }) {
 
     if (tableExists(database, 'user_settings') && userSettingsColumns.has('article_retention_hours')) {
       return 39;
+    }
+
+    if (tableExists(database, 'user_settings') && userSettingsColumns.has('recent_hours')) {
+      return 40;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -1087,6 +1090,18 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 40);
       logger.info('Migrated DB schema from version 39 to 40');
+      migrateSchema(database, 40);
+      return;
+    }
+
+    if (currentVersion === 40) {
+      const settingsColumns = getColumnNames(database, 'user_settings');
+      if (settingsColumns.has('recent_hours')) {
+        database.exec('ALTER TABLE user_settings DROP COLUMN recent_hours');
+      }
+
+      setCurrentSchemaVersion(database, 41);
+      logger.info('Migrated DB schema from version 40 to 41');
       return;
     }
 

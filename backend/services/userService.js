@@ -28,7 +28,6 @@ const {
   API_TOKEN_TTL_DAYS
 } = require('../utils/auth');
 
-const MAX_RECENT_HOURS = 3;
 const MIN_PASSWORD_LENGTH = 8;
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().slice(0, 40) || 'admin';
 const PASSWORD_SETUP_TTL_MINUTES = parseIntegerEnv('PASSWORD_SETUP_TTL_MINUTES', 60, { min: 1 });
@@ -166,11 +165,6 @@ function normalizeReleaseNotesVersion(version) {
   return String(version || '').trim().slice(0, 40);
 }
 
-function normalizeInt(value, fallback) {
-  const normalized = Number(value);
-  return Number.isFinite(normalized) ? Math.floor(normalized) : fallback;
-}
-
 function normalizePositiveInt(value, fallback) {
   const normalized = Number(value);
   return Number.isFinite(normalized) && normalized > 0 ? Math.floor(normalized) : fallback;
@@ -300,7 +294,6 @@ function getDefaultSettings(overrides = {}) {
   return {
     defaultLanguage: 'auto',
     themeMode: 'system',
-    recentHours: MAX_RECENT_HOURS,
     showNewsImages: true,
     compactNewsCards: false,
     compactNewsCardsMode: 'off',
@@ -354,7 +347,6 @@ function getUserFeatures() {
 
 function getUserLimits() {
   return {
-    recentHoursMax: MAX_RECENT_HOURS,
     feedbackTitleMaxLength: MAX_FEEDBACK_TITLE_LENGTH,
     feedbackDescriptionMaxLength: MAX_FEEDBACK_DESCRIPTION_LENGTH,
     feedbackImageMaxBytes: MAX_FEEDBACK_IMAGE_BYTES,
@@ -382,11 +374,6 @@ function getUserApiToken(userId) {
 }
 
 function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overrides = {}) {
-  const recentHours = Math.min(
-    MAX_RECENT_HOURS,
-    Math.max(1, normalizeInt(payload.recentHours, currentSettings.recentHours))
-  );
-
   return {
     compactNewsCardsMode: normalizeCompactNewsCardsMode(
       payload.compactNewsCardsMode,
@@ -394,7 +381,6 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     ),
     defaultLanguage: normalizeLanguage(payload.defaultLanguage || currentSettings.defaultLanguage),
     themeMode: normalizeThemeMode(payload.themeMode || currentSettings.themeMode),
-    recentHours,
     showNewsImages: typeof payload.showNewsImages === 'boolean'
       ? payload.showNewsImages
       : currentSettings.showNewsImages !== false,
@@ -712,7 +698,6 @@ function exportUserSettings(userId) {
     settings: {
       defaultLanguage: settings.defaultLanguage,
       themeMode: settings.themeMode || 'system',
-      recentHours: settings.recentHours,
       showNewsImages: settings.showNewsImages !== false,
       compactNewsCards: settings.compactNewsCards === true,
       compactNewsCardsMode: normalizeCompactNewsCardsMode(settings.compactNewsCardsMode, settings.compactNewsCards === true ? 'everywhere' : 'off'),

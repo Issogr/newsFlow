@@ -65,7 +65,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('40');
+    expect(migrationVersion).toBe('41');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -83,6 +83,7 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
     expect(settingsColumns).not.toContain('article_retention_hours');
+    expect(settingsColumns).not.toContain('recent_hours');
     expect(settingsColumns).not.toContain('default_source_ids');
     expect(userColumns).not.toContain('role');
     expect(userColumns).toContain('last_login_at');
@@ -153,11 +154,12 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('40');
+    expect(migratedVersion).toBe('41');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
     expect(settingsColumns).not.toContain('article_retention_hours');
+    expect(settingsColumns).not.toContain('recent_hours');
     expect(settingsColumns).not.toContain('default_source_ids');
     expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason', 'clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
@@ -273,7 +275,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('40');
+    expect(migratedVersion).toBe('41');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason', 'clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -284,6 +286,7 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
     expect(settingsColumns).not.toContain('article_retention_hours');
+    expect(settingsColumns).not.toContain('recent_hours');
     expect(settingsColumns).not.toContain('default_source_ids');
     expect(userColumns).not.toContain('role');
     expect(userColumns).toContain('last_login_at');
@@ -311,7 +314,6 @@ describe('database migrations', () => {
     });
     database.upsertUserSettings('user-1', {
       defaultLanguage: 'en',
-      recentHours: 3,
       readerPanelPosition: 'right',
       readerTextSize: 'medium',
       sourceSetupCompleted: true,
@@ -386,7 +388,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
 
-    expect(migratedVersion).toBe('40');
+    expect(migratedVersion).toBe('41');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -472,7 +474,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('40');
+    expect(migratedVersion).toBe('41');
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
     expect(row).toEqual({
       summaryText: 'English text [1]',
@@ -533,7 +535,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('40');
+    expect(migratedVersion).toBe('41');
     expect(audioRow).toEqual({
       podcastId: 'legacy-podcast',
       locale: 'it',
@@ -1790,7 +1792,6 @@ describe('database queries and user data', () => {
 
     const settings = database.upsertUserSettings('user-1', {
       defaultLanguage: 'en',
-      recentHours: 2,
       compactNewsCards: true,
       compactNewsCardsMode: 'everywhere',
       readerPanelPosition: 'left',
@@ -1803,7 +1804,6 @@ describe('database queries and user data', () => {
     expect(settings).toMatchObject({
       userId: 'user-1',
       defaultLanguage: 'en',
-      recentHours: 2,
       compactNewsCards: true,
       compactNewsCardsMode: 'everywhere',
       readerPanelPosition: 'left',
@@ -1941,17 +1941,15 @@ describe('database queries and user data', () => {
       INSERT INTO user_settings (
         user_id,
         default_language,
-        recent_hours,
         reader_panel_position,
         last_seen_release_notes_version,
         excluded_source_ids,
         excluded_sub_source_ids,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       'user-1',
       'en',
-      2,
       'right',
       '3.2.3',
       '{bad json',
@@ -2219,7 +2217,6 @@ describe('database queries and user data', () => {
 
     database.upsertUserSettings('user-1', {
       defaultLanguage: 'en',
-      recentHours: 3,
       readerPanelPosition: 'center',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: ['retired-source', primarySourceFamilyId, 'custom-1'],
@@ -2310,7 +2307,6 @@ describe('database queries and user data', () => {
 
     database.upsertUserSettings('user-1', {
       defaultLanguage: 'en',
-      recentHours: 2,
       readerPanelPosition: 'left',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: [primarySourceFamilyId],
@@ -2343,7 +2339,6 @@ describe('database queries and user data', () => {
         }
       ], {
         defaultLanguage: 'it',
-        recentHours: 3,
         readerPanelPosition: 'center',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: ['bbc'],
@@ -2361,7 +2356,6 @@ describe('database queries and user data', () => {
     ]);
     expect(database.getUserSettings('user-1')).toMatchObject({
       defaultLanguage: 'en',
-      recentHours: 2,
       readerPanelPosition: 'left',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: [primarySourceFamilyId]

@@ -5,7 +5,6 @@ const t = (key, params = {}) => {
   const map = {
     sources: 'Sources',
     topics: 'Topics',
-    latestHours: ({ hours }) => `Last ${hours} hours`,
     searchPlaceholder: 'Search...',
     searchLabel: 'Search',
     cancel: 'Cancel',
@@ -26,13 +25,10 @@ function renderNav(overrides = {}) {
       { topic: 'sport', count: 2 },
     ],
     activeFilters: { sourceIds: [], topics: [] },
-    showRecentOnly: false,
     search: '',
-    recentHours: 3,
     t,
     locale: 'en',
     onToggleFilter: vi.fn(),
-    onToggleRecent: vi.fn(),
     onSearchChange: vi.fn(),
     onSearchClear: vi.fn(),
     visible: true,
@@ -86,17 +82,14 @@ describe('MobileBottomNav', () => {
     expect(sourcesButton).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('handles filter, time, and search interactions from the nav', () => {
-    const onToggleRecent = vi.fn();
+  it('handles filter and search interactions from the nav', () => {
     const onToggleFilter = vi.fn();
     const onSearchChange = vi.fn();
     const onSearchClear = vi.fn();
 
     renderNav({
       activeFilters: { sourceIds: ['s1'], topics: ['tech'] },
-      showRecentOnly: true,
       search: 'query',
-      onToggleRecent,
       onToggleFilter,
       onSearchChange,
       onSearchClear,
@@ -104,9 +97,6 @@ describe('MobileBottomNav', () => {
 
     expect(getNavButton('Sources')).toHaveTextContent('1');
     expect(getNavButton('Topics')).toHaveTextContent('1');
-
-    fireEvent.click(getNavButton('Last 3 hours'));
-    expect(onToggleRecent).toHaveBeenCalled();
 
     fireEvent.click(getNavButton('Sources'));
     fireEvent.click(screen.getByText('BBC'));

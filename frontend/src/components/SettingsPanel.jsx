@@ -29,7 +29,6 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     setSourceForm,
     setEditingSourceForm,
     setSetting,
-    updateNumericSetting,
     toggleExcludedSource,
     toggleExcludedSubFeed,
     handleSave,
@@ -65,9 +64,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
             <SettingsPreferencesSection
               t={t}
               settings={settings}
-              settingsLimits={settingsLimits}
               onSettingChange={setSetting}
-              onNumericSettingChange={updateNumericSetting}
             />
 
             <SettingsCustomSourcesSection

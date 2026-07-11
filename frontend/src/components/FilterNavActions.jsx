@@ -1,6 +1,5 @@
 import {
   Bookmark,
-  Clock3,
   Rss,
   Search,
   Tags,
@@ -15,24 +14,18 @@ const FilterNavActions = ({
   handleBubbleButtonPress,
   handleEnterSearch,
   onReadLaterClick,
-  onToggleRecent,
   openBubble,
   readLaterActive,
   readLaterAriaLabel,
   readLaterBadge = false,
   readLaterLabel,
   readLaterTitle,
-  recentHours,
   search,
   searchActiveClassName,
-  showRecentOnly,
   t,
-  timeLabelClassName,
-  timeMinWidthClassName,
 }) => {
   const sourceCount = activeFilters.sourceIds.length;
   const topicCount = activeFilters.topics.length;
-  const timeCount = showRecentOnly ? 1 : 0;
   const searchCount = search ? 1 : 0;
 
   return (
@@ -63,20 +56,6 @@ const FilterNavActions = ({
         badge={topicCount > 0 ? topicCount : null}
         badgeSizeClassName={badgeSizeClassName}
         badgeClassName="bg-emerald-600 text-white"
-      />
-
-      <TopNavActionButton
-        icon={Clock3}
-        label={t('latestHours', { hours: recentHours })}
-        onClick={onToggleRecent}
-        active={showRecentOnly}
-        activeClassName="text-amber-600"
-        sizeClassName={buttonSizeClassName}
-        minWidthClassName={timeMinWidthClassName}
-        badge={timeCount > 0 ? '' : null}
-        badgeSizeClassName={badgeSizeClassName}
-        badgeClassName="bg-amber-500 text-white"
-        labelClassName={timeLabelClassName}
       />
 
       <TopNavActionButton

@@ -9,7 +9,7 @@ import {
   updateUserSource,
   updateUserSettings
 } from '../../services/api';
-import { clampSettingValue, getSettingsLimits } from '../../config/settingsLimits';
+import { getSettingsLimits } from '../../config/settingsLimits';
 import { getStoredReaderTextSizePreference, setStoredReaderTextSizePreference } from '../../utils/readerTextSizePreference';
 
 const createInitialSourceForm = () => ({ url: '' });
@@ -156,10 +156,6 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
       [key]: value
     }));
   }, []);
-
-  const updateNumericSetting = useCallback((key, value, limits) => {
-    setSetting(key, clampSettingValue(value, limits));
-  }, [setSetting]);
 
   const toggleExcludedSource = useCallback((sourceId) => {
     dirtySettingKeysRef.current.add('excludedSourceIds');
@@ -357,7 +353,6 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     setSourceForm,
     setEditingSourceForm,
     setSetting,
-    updateNumericSetting,
     toggleExcludedSource,
     toggleExcludedSubFeed,
     handleSave,
