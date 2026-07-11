@@ -1,10 +1,6 @@
-import {
-  Bookmark,
-} from 'lucide-react';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import useFilterSurfaceState from '../hooks/useFilterSurfaceState';
 import { FilterSearchInput } from './FilterSurfaceControls';
-import TopNavActionButton from './TopNavActionButton';
 import FilterBubbles from './FilterBubbles';
 import FilterNavActions from './FilterNavActions';
 
@@ -59,15 +55,6 @@ const DesktopTopNavFilters = ({
 
       {searchMode ? (
         <div className="flex items-center gap-1.5 transition-all duration-200 ease-out">
-          <TopNavActionButton
-            icon={Bookmark}
-            label={t('readLater')}
-            onClick={onToggleReadLater}
-            active={readLaterActive}
-            activeClassName="text-amber-600"
-            aria-label={t('readLater')}
-            title={t('readLater')}
-          />
           <FilterSearchInput
             className="flex w-[min(32vw,25rem)] items-center gap-2"
             cancelIconClassName="h-[1.125rem] w-[1.125rem]"
