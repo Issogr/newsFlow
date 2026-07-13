@@ -13,7 +13,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🔎 The search field and filter/account popups now match the frosted floating navigation, with smooth search resizing across desktop and mobile layouts.',
       '⚙️ Settings now use a flatter, more readable layout with clearer sections, fewer nested containers, and styling aligned with the news experience.',
       '📖 Reader mode and AI summaries now use opaque reading surfaces, narrower prose, flatter controls, and fewer nested cards.',
-      '💬 Feedback now uses the same opaque panel, flatter sections, clearer category choices, and simpler attachment handling.'
+      '💬 Feedback now uses the same opaque panel, flatter sections, clearer category choices, and simpler attachment handling.',
+      '◼️ Source and topic badges, save/share actions, and filter choices now use the same rounded-square control style.'
     ]
   },
   it: {
@@ -29,7 +30,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🔎 Il campo di ricerca e i popup di filtri e account ora riprendono lo stile satinato della navigazione fluttuante, con un ridimensionamento fluido della ricerca su desktop e mobile.',
       '⚙️ Le impostazioni ora usano un layout piu piatto e leggibile, con sezioni piu chiare, meno contenitori annidati e uno stile coerente con le notizie.',
       '📖 La modalita lettore e i riepiloghi AI ora usano superfici opache, righe di testo piu strette, controlli piu piatti e meno schede annidate.',
-      '💬 Il feedback ora usa lo stesso pannello opaco, sezioni piu piatte, categorie piu chiare e una gestione degli allegati piu semplice.'
+      '💬 Il feedback ora usa lo stesso pannello opaco, sezioni piu piatte, categorie piu chiare e una gestione degli allegati piu semplice.',
+      '◼️ Badge di fonti e topic, azioni salva/condividi e filtri ora usano lo stesso stile a quadrato arrotondato.'
     ]
   }
 };

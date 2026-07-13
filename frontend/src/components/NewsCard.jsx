@@ -295,17 +295,17 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   ));
   const sourceIconStack = sourceEntries.length > 0 ? (aiGroupedStory ? (
     <div
-      className="inline-flex rounded-full p-0.5 shadow-sm"
+      className="inline-flex rounded-[1rem] p-0.5 shadow-sm"
       style={AI_ACCENT_GRADIENT_STYLE}
       aria-label={t('aiGroupedStory')}
       title={t('aiGroupedStory')}
     >
-      <div className="flex -space-x-2 rounded-full bg-white p-1">
+      <div className="flex -space-x-2 rounded-[calc(1rem-2px)] bg-white p-1">
         {sourceIconItems}
       </div>
     </div>
   ) : (
-    <div className="flex -space-x-2 rounded-full bg-white p-1 shadow-sm ring-1 ring-sky-200" aria-label={t('sources')}>
+    <div className="flex -space-x-2 rounded-[1rem] bg-white p-1 shadow-sm ring-1 ring-sky-200" aria-label={t('sources')}>
       {sourceIconItems}
     </div>
   )) : null;
@@ -326,7 +326,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     </span>
   ) : null;
   const topicBadges = topicEntries.length > 0 ? (
-    <div className="flex w-fit -space-x-1 rounded-full bg-white/85 p-1.5 text-xs font-medium text-slate-600 shadow-lg ring-1 ring-white/70 backdrop-blur-md">
+    <div className="flex w-fit -space-x-1 text-xs font-medium text-slate-600">
       {topicEntries.map(({ topic, source }) => {
         const { Icon, iconBadgeClassName } = getTopicPresentation(topic);
         const localizedTopic = getLocalizedTopic(topic, locale);
@@ -336,12 +336,12 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
           return (
             <span
               key={topic}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full p-[1.5px] shadow-sm ring-2 ring-white"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-xl p-[1.5px] shadow-sm ring-2 ring-slate-900/10"
               style={AI_ACCENT_GRADIENT_STYLE}
               aria-label={localizedTopic}
               title={localizedTopic}
             >
-              <span className={`inline-flex h-full w-full items-center justify-center rounded-full ${iconBadgeClassName}`}>
+              <span className={`inline-flex h-full w-full items-center justify-center rounded-[calc(0.75rem-1.5px)] ${iconBadgeClassName}`}>
                 <Icon className="h-4 w-4" aria-hidden="true" />
               </span>
             </span>
@@ -351,7 +351,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         return (
           <span
             key={topic}
-            className={`inline-flex h-8 w-8 items-center justify-center rounded-full shadow-sm ring-2 ring-white ${iconBadgeClassName}`}
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-xl shadow-sm ring-2 ring-slate-900/10 ${iconBadgeClassName}`}
             aria-label={localizedTopic}
             title={localizedTopic}
           >
@@ -372,7 +372,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         type="button"
         onClick={() => onToggleReadLater?.(group)}
         disabled={readLaterUpdating}
-        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 active:translate-y-0 disabled:cursor-wait disabled:opacity-70 ${group.readLater ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100'}`}
+        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 active:translate-y-0 disabled:cursor-wait disabled:opacity-70 ${group.readLater ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100'}`}
         aria-label={group.readLater ? t('removeReadLater') : t('saveReadLater')}
         aria-pressed={Boolean(group.readLater)}
         title={group.readLater ? t('removeReadLater') : t('saveReadLater')}
@@ -383,7 +383,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         type="button"
         onClick={handleShare}
         disabled={!safeOriginalUrl}
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sky-800 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-sky-100 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 active:translate-y-0 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 text-sky-800 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-sky-100 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 active:translate-y-0 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
         aria-label={t('shareArticle')}
       >
         <Share2 className="h-4 w-4" />

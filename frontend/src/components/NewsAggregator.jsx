@@ -55,27 +55,27 @@ function NewsCardSkeleton({ showImage }) {
   return (
     <article className="relative flex h-full min-h-[20rem] flex-col overflow-hidden rounded-none border-y border-slate-200 bg-white shadow-[0_12px_34px_-20px_rgba(15,23,42,0.35)] sm:rounded-[1.75rem] sm:border" aria-hidden="true">
       <div className="flex items-center gap-3 px-4 pb-3 pt-5 sm:px-5">
-        <div className="h-12 w-12 shrink-0 rounded-full bg-sky-100" />
+        <div className="h-12 w-12 shrink-0 rounded-xl bg-sky-100" />
         <div className="flex-1 space-y-2">
           <div className="h-3.5 w-2/5 rounded-full bg-slate-200" />
           <div className="h-3 w-3/5 rounded-full bg-slate-100" />
         </div>
         <div className="flex gap-2">
-          <div className="h-9 w-9 rounded-full bg-amber-100" />
-          <div className="h-9 w-9 rounded-full bg-sky-100" />
+          <div className="h-9 w-9 rounded-xl bg-amber-100" />
+          <div className="h-9 w-9 rounded-xl bg-sky-100" />
         </div>
       </div>
       {showImage ? (
         <div className="relative aspect-video w-full border-y border-slate-100 bg-slate-200">
-          <div className="absolute bottom-3 left-3 flex -space-x-1 rounded-full bg-white/85 p-1.5 shadow-lg">
-            <div className="h-8 w-8 rounded-full bg-sky-100 ring-2 ring-white" />
-            <div className="h-8 w-8 rounded-full bg-violet-100 ring-2 ring-white" />
+          <div className="absolute bottom-3 left-3 flex -space-x-1">
+            <div className="h-8 w-8 rounded-xl bg-sky-100 ring-2 ring-slate-900/10" />
+            <div className="h-8 w-8 rounded-xl bg-violet-100 ring-2 ring-slate-900/10" />
           </div>
         </div>
       ) : (
         <div className="flex -space-x-1 px-4 pt-3 sm:px-5">
-          <div className="h-8 w-8 rounded-full bg-sky-100 ring-2 ring-white" />
-          <div className="h-8 w-8 rounded-full bg-violet-100 ring-2 ring-white" />
+          <div className="h-8 w-8 rounded-xl bg-sky-100 ring-2 ring-slate-900/10" />
+          <div className="h-8 w-8 rounded-xl bg-violet-100 ring-2 ring-slate-900/10" />
         </div>
       )}
       <div className="flex-1 space-y-2.5 px-4 pb-4 pt-3 sm:px-5">
@@ -753,7 +753,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   <TopNavActionButton
                     icon={User}
                     iconNode={userInitials ? (
-                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-200 text-xs font-bold leading-none text-sky-800" aria-hidden="true">
+                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-200 text-xs font-bold leading-none text-sky-800" aria-hidden="true">
                         {userInitials}
                       </span>
                     ) : (
@@ -771,7 +771,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                     }}
                     active={userMenuOpen}
                     className="z-20"
-                    sizeClassName="h-12 w-12 min-w-12 shrink-0 rounded-full px-0"
+                    sizeClassName="h-12 w-12 min-w-12 shrink-0 rounded-[1rem] px-0"
                     aria-expanded={userMenuOpen}
                     aria-haspopup="menu"
                     aria-label={t('userMenu')}

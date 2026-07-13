@@ -16,7 +16,7 @@ export function SourceFilterList({ sources, activeSourceIds, emptyLabel, onToggl
             key={source.id}
             type="button"
             onClick={() => onToggleSource(source.id)}
-            className={`inline-flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-3 text-sm font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-xl border py-1 pl-1 pr-3 text-sm font-medium transition-colors ${
               isActive
                 ? 'border-sky-600 bg-sky-600 text-white shadow-sm'
                 : 'border-sky-200 bg-white text-sky-900 hover:border-sky-300 hover:bg-sky-50'
@@ -51,13 +51,13 @@ export function TopicFilterList({ topics, activeTopics, emptyLabel, locale, onTo
             key={topic.topic}
             type="button"
             onClick={() => onToggleTopic(topic.topic)}
-            className={`inline-flex items-center gap-1.5 rounded-full border pl-1 pr-3 py-1 text-sm font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-xl border pl-1 pr-3 py-1 text-sm font-medium transition-colors ${
               isActive
                 ? 'border-slate-900 bg-white text-slate-950 shadow-sm'
                 : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50'
             }`}
           >
-            <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors ${iconBadgeClassName}`}>
+            <span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${iconBadgeClassName}`}>
               <Icon className="h-3 w-3" aria-hidden="true" />
             </span>
             <span>{getLocalizedTopic(topic.topic, locale)}</span>

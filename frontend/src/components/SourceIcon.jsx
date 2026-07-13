@@ -9,14 +9,14 @@ const SourceIcon = ({ source, className = 'h-7 w-7', imageClassName = 'h-4 w-4' 
 
   if (!iconUrl || failedIconUrl === iconUrl) {
     return (
-      <span className={`inline-flex shrink-0 items-center justify-center rounded-full bg-slate-100 text-[0.68rem] font-semibold text-slate-600 ${className}`}>
+      <span className={`inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-100 text-[0.68rem] font-semibold text-slate-600 ${className}`}>
         {getSourceInitial(source?.name)}
       </span>
     );
   }
 
   return (
-    <span className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white ${className}`}>
+    <span className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`}>
       <img
         src={iconUrl}
         alt=""

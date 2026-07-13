@@ -11,6 +11,7 @@
 - redesigned settings as a flatter, more readable page with clearer sections, fewer nested containers, and styling aligned with the news experience
 - refreshed reader mode and AI summary views with opaque reading surfaces, narrower prose, flatter controls, and fewer nested cards
 - refreshed feedback with the same opaque panel, flatter sections, clearer category choices, and simpler attachment handling
+- aligned source/topic badges, save/share actions, and filter choices around the rounded-square control style
 
 ## 3.5.10
 
