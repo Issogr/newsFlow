@@ -69,7 +69,7 @@ function getAttachmentValidationError(nextAttachment, t, limits) {
   return t('feedbackErrorAttachmentType');
 }
 
-const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
+const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }) => {
   const limits = {
     feedbackTitleMaxLength: feedbackLimits?.feedbackTitleMaxLength || DEFAULT_MAX_TITLE_LENGTH,
     feedbackDescriptionMaxLength: feedbackLimits?.feedbackDescriptionMaxLength || DEFAULT_MAX_DESCRIPTION_LENGTH,
@@ -172,7 +172,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
   };
 
   return (
-    <SlideOverPanelFrame>
+    <SlideOverPanelFrame ariaLabelledBy="feedback-panel-title" onClose={onClose} restoreFocusRef={restoreFocusRef}>
         <SlideOverPanelHeader
           closeLabel={t('cancel')}
           eyebrow={t('feedbackMenuItem')}
@@ -180,6 +180,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
           onClose={onClose}
           subtitle={t('feedbackSubtitle')}
           title={t('feedbackTitle')}
+          titleId="feedback-panel-title"
         />
 
         <SlideOverPanelBody>

@@ -24,10 +24,19 @@ vi.mock('./services/api', () => ({
 }));
 
 vi.mock('./components/NewsAggregator', () => ({
-  default: ({ onOpenReleaseNotes }) => (
+  default: ({ currentUser, onOpenReleaseNotes, onUserUpdate }) => (
     <div>
       <div>Authenticated app</div>
       <button type="button" onClick={onOpenReleaseNotes}>Open release notes</button>
+      <button
+        type="button"
+        onClick={() => onUserUpdate({
+          ...currentUser,
+          settings: { ...currentUser.settings, sourceSetupCompleted: true }
+        })}
+      >
+        Complete source setup
+      </button>
     </div>
   )
 }));
@@ -99,6 +108,7 @@ describe('App', () => {
     fireEvent.click(screen.getByText('Update released'));
 
     expect(await screen.findByText('What is new')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'What is new' })).toHaveAttribute('aria-modal', 'true');
     expect(document.body.style.overflow).toBe('hidden');
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
@@ -161,6 +171,19 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open release notes' }));
 
     expect(await screen.findByText('What is new')).toBeInTheDocument();
+  });
+
+  test('defers release prompts until mandatory source setup is complete', async () => {
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { sourceSetupCompleted: false } }));
+
+    render(<App />);
+
+    expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
+    expect(screen.queryByText('Update released')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Complete source setup' }));
+
+    expect(await screen.findByText('Update released')).toBeInTheDocument();
   });
 
   test('falls back to the authentication screen when loading the session fails', async () => {

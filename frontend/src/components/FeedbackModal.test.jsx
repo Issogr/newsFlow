@@ -18,6 +18,7 @@ describe('FeedbackModal', () => {
     expect(screen.getByText('Bug')).toBeInTheDocument();
     expect(screen.getByText('Feedback')).toBeInTheDocument();
     expect(screen.getByText('Idea')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Send feedback or report a bug' })).toHaveAttribute('aria-modal', 'true');
     expect(screen.queryByText('feedbackCategoryBug')).not.toBeInTheDocument();
     expect(screen.queryByText('feedbackCategoryFeedback')).not.toBeInTheDocument();
     expect(screen.queryByText('feedbackCategoryIdea')).not.toBeInTheDocument();

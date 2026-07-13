@@ -290,6 +290,9 @@ const ReaderPanel = ({
 
   const headerStart = (
     <div className="flex items-center gap-1.5 sm:gap-2">
+      <h2 id="reader-panel-title" className="sr-only focus:outline-none" data-modal-title tabIndex={-1}>
+        {t('readerMode')}: {selectedArticle?.title || t('readerMode')}
+      </h2>
       <div className="relative inline-flex items-center">
         <ShareStatusBubble
           shareState={shareState}
@@ -354,6 +357,7 @@ const ReaderPanel = ({
       closeLabel={t('closeReader')}
       containerClassName={`relative flex h-full w-full ${desktopPositionClassName}`}
       headerStart={headerStart}
+      labelledBy="reader-panel-title"
       onClose={onClose}
       panelClassName="flex h-full w-full flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(72rem,calc(100vw-2rem))] lg:rounded-[1.6rem] lg:border lg:border-slate-200"
     >
@@ -386,7 +390,7 @@ const ReaderPanel = ({
             </div>
           )}
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-white px-4 py-6 sm:px-5 md:py-8 lg:px-6">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-white pb-[calc(1.5rem+env(safe-area-inset-bottom))] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-6 sm:pl-[calc(1.25rem+env(safe-area-inset-left))] sm:pr-[calc(1.25rem+env(safe-area-inset-right))] md:pb-[calc(2rem+env(safe-area-inset-bottom))] md:pt-8 lg:pl-[calc(1.5rem+env(safe-area-inset-left))] lg:pr-[calc(1.5rem+env(safe-area-inset-right))]">
             {selectedArticle && (
               <div className="mx-auto max-w-[72ch] space-y-6">
                 <div className="border-b border-slate-200 pb-6 md:pb-7">

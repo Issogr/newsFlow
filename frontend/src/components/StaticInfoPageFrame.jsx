@@ -7,8 +7,8 @@ export const StaticInfoSection = ({ children, className = 'border-slate-200 bg-s
 );
 
 const StaticInfoPageFrame = ({ children, content, introClassName = 'mt-2 max-w-3xl text-sm text-slate-600' }) => (
-  <div className="min-h-screen bg-white text-slate-900 sm:bg-slate-100 sm:px-4 sm:py-10">
-    <div className="min-h-screen w-full bg-white px-5 py-8 sm:mx-auto sm:min-h-0 sm:max-w-4xl sm:rounded-[2rem] sm:border sm:border-slate-200 sm:p-8 sm:shadow-xl">
+  <div className="min-h-screen bg-white text-slate-900 sm:bg-slate-100 sm:px-4 sm:pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:pt-[max(2.5rem,env(safe-area-inset-top))]">
+    <div className="min-h-screen w-full bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))] sm:mx-auto sm:min-h-0 sm:max-w-4xl sm:rounded-[2rem] sm:border sm:border-slate-200 sm:p-8 sm:shadow-xl">
       <div className="mb-8 flex items-center gap-4">
         <BrandMark className="h-12 w-12" />
         <div>

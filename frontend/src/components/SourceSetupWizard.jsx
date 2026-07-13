@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, Newspaper, RefreshCw } from 'lucide-react';
 import InlineAlert from './InlineAlert';
 import SourceIcon from './SourceIcon';
-import useLockBodyScroll from '../hooks/useLockBodyScroll';
+import ModalDialog from './ModalDialog';
 import { updateUserSettings } from '../services/api';
 
 const hasSelectableSubSources = (source) => Array.isArray(source.subSources) && source.subSources.length > 1;
@@ -84,8 +84,6 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
   const [expandedSourceIds, setExpandedSourceIds] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-
-  useLockBodyScroll();
 
   useEffect(() => {
     setSelectedIds((current) => {
@@ -181,19 +179,21 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex bg-slate-950/45 backdrop-blur-sm sm:items-center sm:justify-center sm:px-4 sm:py-6">
-      <div className="flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-h-full sm:max-w-2xl sm:rounded-[2rem] sm:border sm:border-slate-200">
-        <div className="border-b border-slate-200 bg-slate-50 px-5 py-5 sm:px-6">
+    <ModalDialog
+      ariaLabelledBy="source-setup-title"
+      className="fixed inset-0 z-[70] flex h-[100dvh] w-full bg-slate-950/45 backdrop-blur-sm sm:items-center sm:justify-center sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pl-[calc(1rem+env(safe-area-inset-left))] sm:pr-[calc(1rem+env(safe-area-inset-right))] sm:pt-[calc(1.5rem+env(safe-area-inset-top))]"
+      dismissOnEscape={false}
+    >
+      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] sm:h-full sm:max-w-2xl sm:rounded-[1.6rem] sm:border sm:border-slate-200" data-modal-content>
+        <div className="border-b border-slate-200 bg-white pb-5 pl-[calc(1.25rem+env(safe-area-inset-left))] pr-[calc(1.25rem+env(safe-area-inset-right))] pt-[calc(1.25rem+env(safe-area-inset-top))] sm:px-6 sm:py-5">
           <div className="flex items-start gap-4">
-            <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
-              <Newspaper className="h-6 w-6" aria-hidden="true" />
-            </span>
+            <Newspaper className="mt-1 h-6 w-6 shrink-0 text-sky-600" aria-hidden="true" />
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{t('sourceSetupEyebrow')}</p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{t('sourceSetupTitle')}</h2>
+              <h2 id="source-setup-title" className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 focus:outline-none" data-modal-title tabIndex={-1}>{t('sourceSetupTitle')}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">{t('sourceSetupSubtitle')}</p>
               {isExistingSourceReview ? (
-                <p className="mt-3 rounded-2xl border border-amber-300 bg-amber-100 px-4 py-3 text-sm font-medium leading-6 text-amber-950 shadow-sm">
+                <p className="mt-3 rounded-2xl border border-amber-300 bg-amber-100 px-4 py-3 text-sm font-medium leading-6 text-amber-950">
                   {t('sourceSetupExistingUserNote')}
                 </p>
               ) : null}
@@ -201,9 +201,9 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+        <div className="min-h-0 flex-1 overflow-y-auto py-5 pl-[calc(1.25rem+env(safe-area-inset-left))] pr-[calc(1.25rem+env(safe-area-inset-right))] sm:px-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+            <span className="text-sm font-semibold tabular-nums text-slate-500">
               {t('sourceSetupSelectedCount', { count: selectedCount })}
             </span>
             <div className="flex items-center gap-2">
@@ -234,13 +234,13 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                 return (
                   <div
                     key={source.id}
-                    className={`relative rounded-3xl border p-3 shadow-sm transition-all ${
+                    className={`relative rounded-[1.25rem] border p-3 transition-colors ${
                       sourceFullySelected || sourcePartiallySelected
-                        ? 'border-sky-200 bg-sky-50/80 shadow-sky-100'
-                        : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
+                        ? 'border-sky-200 bg-sky-50'
+                        : 'border-slate-200 bg-slate-50 hover:border-slate-300'
                     }`}
                   >
-                    <span className={`absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-full border text-white shadow-sm ${sourceFullySelected || sourcePartiallySelected ? 'border-sky-600 bg-sky-600' : 'border-slate-200 bg-white text-transparent'}`} aria-hidden="true">
+                    <span className={`absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-full border text-white ${sourceFullySelected || sourcePartiallySelected ? 'border-sky-600 bg-sky-600' : 'border-slate-200 bg-white text-transparent'}`} aria-hidden="true">
                       <Check className="h-4 w-4" />
                     </span>
                     <div className="flex items-start gap-3 pr-8">
@@ -251,7 +251,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                         aria-expanded={expanded}
                         aria-label={expanded ? t('sourceSetupCollapseSource', { name: source.name }) : t('sourceSetupExpandSource', { name: source.name })}
                       >
-                        <SourceIcon source={source} className="h-10 w-10 rounded-2xl shadow-sm" imageClassName="h-5 w-5" />
+                        <SourceIcon source={source} className="h-10 w-10 rounded-2xl" imageClassName="h-5 w-5" />
                         <span className="min-w-0">
                           <span className="block text-sm font-semibold text-slate-900">{source.name}</span>
                           <span className="mt-1 block text-xs text-slate-500">{t('sourceSetupSubSourceSelectedCount', { selected: selectedSubSourceCount, count: sourceSelectionIds.length })}</span>
@@ -267,7 +267,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                       {sourceFullySelected ? t('sourceSetupClearSource') : t('sourceSetupSelectSource')}
                     </button>
                     {expanded ? (
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-200 pt-3">
                         {source.subSources.map((subSource) => {
                           const selected = selectedIdSet.has(subSource.id);
 
@@ -276,7 +276,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                               key={subSource.id}
                               type="button"
                               onClick={() => toggleSelection(subSource.id)}
-                              className={`inline-flex max-w-full items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors ${selected ? 'border-sky-300 bg-white text-sky-950 shadow-sm' : 'border-slate-200 bg-white/70 text-slate-600 hover:bg-white'}`}
+                              className={`inline-flex max-w-full items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors ${selected ? 'border-sky-300 bg-white text-sky-950' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'}`}
                             >
                               <SourceIcon source={{ ...source, iconUrl: subSource.iconUrl || source.iconUrl }} className="h-6 w-6" imageClassName="h-4 w-4" />
                               <span className="block truncate text-xs font-semibold">{subSource.label || subSource.name}</span>
@@ -298,14 +298,14 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                   key={source.id}
                   type="button"
                   onClick={() => toggleSelection(source.id)}
-                  className={`relative flex min-h-[5.5rem] w-full items-start gap-3 rounded-3xl border p-4 text-left shadow-sm transition-all ${selected ? 'border-sky-200 bg-sky-50/80 text-sky-950 shadow-sky-100' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:shadow-md'}`}
+                  className={`relative flex min-h-[5.5rem] w-full items-start gap-3 rounded-[1.25rem] border p-4 text-left transition-colors ${selected ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'}`}
                 >
-                  <SourceIcon source={source} className="h-10 w-10 rounded-2xl shadow-sm" imageClassName="h-5 w-5" />
+                  <SourceIcon source={source} className="h-10 w-10 rounded-2xl" imageClassName="h-5 w-5" />
                   <span className="min-w-0 pr-7">
                     <span className="block truncate text-sm font-semibold text-slate-900">{source.name}</span>
                     <span className="mt-1 block text-xs font-medium text-slate-500">{selected ? t('sourceSetupSelected') : t('sourceSetupNotSelected')}</span>
                   </span>
-                  <span className={`absolute right-3 top-3 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border shadow-sm ${selected ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-200 bg-white text-transparent'}`}>
+                  <span className={`absolute right-3 top-3 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-200 bg-white text-transparent'}`}>
                     <Check className="h-4 w-4" aria-hidden="true" />
                   </span>
                 </button>
@@ -329,7 +329,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
           ) : null}
         </div>
 
-        <div className="border-t border-slate-200 px-5 py-5 sm:px-6">
+        <div className="border-t border-slate-200 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pl-[calc(1.25rem+env(safe-area-inset-left))] pr-[calc(1.25rem+env(safe-area-inset-right))] pt-5 sm:px-6 sm:py-5">
           <button
             type="button"
             onClick={handleSave}
@@ -341,7 +341,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
           </button>
         </div>
       </div>
-    </div>
+    </ModalDialog>
   );
 };
 

@@ -195,6 +195,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [readLaterUpdatingGroupIds, setReadLaterUpdatingGroupIds] = useState([]);
   const lastScrollY = useRef(0);
   const userMenuRef = useRef(null);
+  const userMenuButtonRef = useRef(null);
   const visibleNewsCountRef = useRef(0);
   const preservedNewsCountRef = useRef(0);
   const activeListLoadingRequestIdRef = useRef(null);
@@ -714,7 +715,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
   return (
     <div className="min-h-screen overflow-x-clip bg-slate-100 text-slate-900">
-      <header className={`sticky top-0 z-50 transition-[padding] duration-300 ${topNavCompact ? 'px-4 pt-2' : ''}`}>
+      <header className={`sticky top-[env(safe-area-inset-top)] z-50 transition-[padding] duration-300 ${topNavCompact ? 'px-4 pt-2' : ''}`}>
         <div className={`border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl transition-all duration-300 ${topNavCompact ? 'rounded-[1.6rem] border border-slate-200/80 bg-white/90 shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] 2xl:mx-auto 2xl:max-w-7xl' : ''}`}>
           <div className={`mx-auto flex max-w-7xl flex-col px-4 transition-all duration-300 lg:px-6 ${topNavCompact ? 'gap-2 py-2.5' : 'gap-4 py-5'}`}>
             <div className="flex items-center justify-between gap-3">
@@ -722,7 +723,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                 <div className="flex items-center gap-3">
                   <BrandMark className={`transition-all duration-300 ${topNavCompact ? 'h-9 w-9' : 'h-11 w-11'}`} />
                   <div className="min-w-0">
-                    <h1 className={`truncate font-semibold tracking-tight transition-all duration-300 ${topNavCompact ? 'text-xl' : 'text-2xl'}`}>{t('pageTitle')}</h1>
+                    <h1 className={`truncate font-semibold tracking-tight transition-all duration-300 focus:outline-none ${topNavCompact ? 'text-xl' : 'text-2xl'}`} data-focus-fallback tabIndex={-1}>{t('pageTitle')}</h1>
                   </div>
                 </div>
               </div>
@@ -770,6 +771,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                       });
                     }}
                     active={userMenuOpen}
+                    buttonRef={userMenuButtonRef}
                     className="z-20"
                     sizeClassName="h-12 w-12 min-w-12 shrink-0 rounded-[1rem] px-0"
                     aria-expanded={userMenuOpen}
@@ -936,6 +938,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           onClose={() => setSettingsOpen(false)}
           onOpenReleaseNotes={onOpenReleaseNotes}
           onUserUpdate={onUserUpdate}
+          restoreFocusRef={userMenuButtonRef}
         />
       )}
 
@@ -944,6 +947,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           t={t}
           feedbackLimits={currentUser?.limits}
           onClose={() => setFeedbackOpen(false)}
+          restoreFocusRef={userMenuButtonRef}
         />
       )}
 
@@ -959,7 +963,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       <button
         type="button"
         onClick={scrollToTop}
-        className={`fixed bottom-6 left-6 z-40 hidden h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/90 text-slate-700 shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] backdrop-blur-xl transition-all duration-200 hover:bg-white hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 md:inline-flex ${
+        className={`fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-[calc(1.5rem+env(safe-area-inset-left))] z-40 hidden h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/90 text-slate-700 shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] backdrop-blur-xl transition-all duration-200 hover:bg-white hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 md:inline-flex ${
           showBackToTop
             ? 'translate-y-0 opacity-100'
             : 'pointer-events-none translate-y-3 opacity-0'
@@ -972,7 +976,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         <ArrowUp className="h-5 w-5" aria-hidden="true" />
       </button>
 
-      {!readerState.isOpen && !displayedThematicSummary && !settingsOpen && !feedbackOpen ? (
+      {!readerState.isOpen && !displayedThematicSummary && !settingsOpen && !feedbackOpen && !needsSourceSetup ? (
         <MobileBottomNav
           {...filterSurfaceProps}
           activeView={activeView}

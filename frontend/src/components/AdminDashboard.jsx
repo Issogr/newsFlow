@@ -259,7 +259,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
   return (
     <div className="min-h-screen bg-white text-slate-900">
       <div className="flex min-h-screen w-full flex-col bg-white">
-        <header className="border-b border-slate-200 px-5 py-4 sm:px-8">
+        <header className="border-b border-slate-200 px-5 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:px-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <BrandMark className="h-11 w-11" />
@@ -301,13 +301,13 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
           </div>
         </header>
 
-        <main className="flex-1 px-5 py-5 sm:px-8 sm:py-6">
-          <section className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+        <main className="flex-1 px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-5 sm:px-8 sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pt-6">
+          <section className="grid grid-cols-2 gap-px border-y border-slate-200 bg-slate-200 lg:grid-cols-4">
             {summaryCards.map((card) => {
               const Icon = card.icon;
 
               return (
-                <div key={card.key} className="rounded-[1.2rem] border border-slate-200 bg-slate-50 px-3.5 py-3">
+                <div key={card.key} className="bg-white px-3.5 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">{card.label}</p>
@@ -336,8 +336,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {managedUsers.map((user) => (
-                    <article key={user.id} className="flex h-full flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-xl">
-                      <div className={`h-1 w-full ${user.isOnline ? 'bg-emerald-400/80' : 'bg-slate-300'}`} aria-hidden="true" />
+                    <article key={user.id} className="flex h-full flex-col overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white">
                       <div className="flex min-w-0 flex-1 flex-col p-5">
                         <div className="min-w-0">
                           <div className="flex min-w-0 items-center gap-3">
@@ -348,24 +347,24 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
                             <p className="truncate text-lg font-semibold text-slate-900">{user.username}</p>
                           </div>
 
-                          <div className="mt-4 grid grid-cols-3 gap-2.5 text-sm text-slate-600">
+                          <div className="mt-4 grid grid-cols-3 divide-x divide-slate-200 border-y border-slate-200 py-3 text-sm text-slate-600">
                             {[
                               { key: 'createdAt', label: t('createdAt'), value: formatDateTime(user.createdAt) },
                               { key: 'lastLoginAt', label: t('lastLoginAt'), value: formatDateTime(user.lastLoginAt) },
                               { key: 'lastActivityAt', label: t('lastActivityAt'), value: formatDateTime(user.lastActivityAt) }
                             ].map((card) => (
-                              <div key={card.key} className="h-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                              <div key={card.key} className="min-w-0 px-3 first:pl-0 last:pr-0">
                                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{card.label}</p>
                                 <p className="mt-2 font-medium text-slate-800">{card.value}</p>
                               </div>
                             ))}
                           </div>
 
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <span className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
+                          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-slate-600">
+                            <span>
                               {t('adminPublicApiRequestsValue', { count: user.publicApiRequestCount || 0 })}
                             </span>
-                            <span className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
+                            <span>
                               {t('adminPublicApiLastUsedValue', {
                                 time: user.publicApiLastUsedAt ? formatDateTime(user.publicApiLastUsedAt) : t('adminPublicApiNeverUsed')
                               })}
@@ -374,7 +373,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
                         </div>
                       </div>
 
-                      <div className="mt-auto border-t border-slate-100 bg-slate-50/70 px-5 py-4">
+                      <div className="mt-auto border-t border-slate-200 px-5 py-4">
                         <div className="grid grid-cols-2 gap-2.5">
                           <button
                             type="button"

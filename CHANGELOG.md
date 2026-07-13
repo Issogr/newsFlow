@@ -12,6 +12,8 @@
 - refreshed reader mode and AI summary views with opaque reading surfaces, narrower prose, flatter controls, and fewer nested cards
 - refreshed feedback with the same opaque panel, flatter sections, clearer category choices, and simpler attachment handling
 - aligned action buttons, metadata badges, source/topic controls, and filter choices around the rounded-square style while retaining circles for status and progress indicators
+- added accessible modal focus containment, restoration, Escape/backdrop policies, and mobile safe-area spacing across settings, feedback, reader, summaries, release notes, and source setup
+- improved dark-mode contrast and flattened Source Setup and Admin data layouts to match the refreshed interface
 
 ## 3.5.10
 

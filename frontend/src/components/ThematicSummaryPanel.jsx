@@ -454,7 +454,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
       </span>
       <div className="min-w-0">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">{isPodcast ? t('podcastBriefing') : t('thematicSummary')}</p>
-        <h2 className="truncate text-base font-semibold text-stone-900">{localizedSummary.displayTopicLabel}</h2>
+        <h2 id="thematic-summary-panel-title" className="truncate text-base font-semibold text-stone-900 focus:outline-none" data-modal-title tabIndex={-1}>{localizedSummary.displayTopicLabel}</h2>
       </div>
     </div>
   );
@@ -468,12 +468,13 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
       closeLabel={closeLabel}
       containerClassName="relative flex h-[100dvh] w-full justify-center overflow-hidden overscroll-none"
       headerStart={headerStart}
+      labelledBy="thematic-summary-panel-title"
       onClose={onClose}
-      overlayClassName="fixed inset-0 z-50 overflow-hidden overscroll-none bg-slate-950/35 backdrop-blur-sm"
+      overlayClassName="fixed inset-0 z-50 h-[100dvh] w-full overflow-hidden overscroll-none bg-slate-950/35 backdrop-blur-sm"
       panelClassName="flex h-full w-full flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(64rem,calc(100vw-2rem))] lg:rounded-[1.6rem] lg:border lg:border-slate-200"
     >
           <div
-            className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain bg-white px-4 py-6 sm:px-5 md:py-8 lg:px-6"
+            className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain bg-white pb-[calc(1.5rem+env(safe-area-inset-bottom))] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-6 sm:pl-[calc(1.25rem+env(safe-area-inset-left))] sm:pr-[calc(1.25rem+env(safe-area-inset-right))] md:pb-[calc(2rem+env(safe-area-inset-bottom))] md:pt-8 lg:pl-[calc(1.5rem+env(safe-area-inset-left))] lg:pr-[calc(1.5rem+env(safe-area-inset-right))]"
             onTouchCancel={handleTouchCancel}
             onTouchEnd={handleTouchEnd}
             onTouchMove={handleTouchMove}

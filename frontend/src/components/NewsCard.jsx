@@ -171,6 +171,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   const fallbackGroupIdRef = useRef(group?.id);
   const lastTouchGestureRef = useRef({ area: '', timestamp: 0 });
   const lastReaderOpenAtRef = useRef(0);
+  const readerTriggerRef = useRef(null);
 
   useEffect(() => {
     if (fallbackGroupIdRef.current === group?.id) {
@@ -203,6 +204,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     }
 
     lastReaderOpenAtRef.current = now;
+    readerTriggerRef.current?.focus({ preventScroll: true });
     onOpenReader(group, group.items[0]?.id);
   };
 
@@ -247,6 +249,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     <div className="mt-auto border-t border-slate-100 bg-slate-50/60 px-4 py-3.5 sm:px-5">
       <div className="grid grid-cols-2 gap-3">
         <button
+          ref={readerTriggerRef}
           type="button"
           onClick={openReader}
           className={readerActionButtonClassName}

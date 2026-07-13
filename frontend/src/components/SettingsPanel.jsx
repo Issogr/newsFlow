@@ -9,7 +9,7 @@ import InlineAlert from './InlineAlert';
 import SlideOverPanelFrame, { SlideOverPanelBody, SlideOverPanelFooter, SlideOverPanelHeader } from './SlideOverPanelFrame';
 import { getFriendlyApiErrorMessage } from '../utils/apiError';
 
-const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, onUserUpdate }) => {
+const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, onUserUpdate, restoreFocusRef }) => {
   const publicApiAuthenticatedEnabled = currentUser?.features?.publicApi?.authenticatedEnabled === true;
   const {
     saving,
@@ -50,13 +50,14 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
   });
 
   return (
-    <SlideOverPanelFrame>
+    <SlideOverPanelFrame ariaLabelledBy="settings-panel-title" onClose={onClose} restoreFocusRef={restoreFocusRef}>
       <SlideOverPanelHeader
         closeLabel={t('cancel')}
         eyebrow={currentUser.user.username}
         icon={Settings}
         onClose={onClose}
         title={t('settings')}
+        titleId="settings-panel-title"
       />
 
       <SlideOverPanelBody>

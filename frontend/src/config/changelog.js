@@ -14,7 +14,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '⚙️ Settings now use a flatter, more readable layout with clearer sections, fewer nested containers, and styling aligned with the news experience.',
       '📖 Reader mode and AI summaries now use opaque reading surfaces, narrower prose, flatter controls, and fewer nested cards.',
       '💬 Feedback now uses the same opaque panel, flatter sections, clearer category choices, and simpler attachment handling.',
-      '◼️ Action buttons, metadata badges, source/topic controls, and filter choices now share the rounded-square style, while status and progress indicators remain circular.'
+      '◼️ Action buttons, metadata badges, source/topic controls, and filter choices now share the rounded-square style, while status and progress indicators remain circular.',
+      '♿ Settings, feedback, reader, summaries, release notes, and source setup now keep keyboard focus contained and restored, support consistent dismissal, and respect mobile safe areas.',
+      '🌙 Dark-mode contrast is clearer, while Source Setup and Admin use flatter data layouts consistent with the refreshed interface.'
     ]
   },
   it: {
@@ -31,7 +33,9 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '⚙️ Le impostazioni ora usano un layout piu piatto e leggibile, con sezioni piu chiare, meno contenitori annidati e uno stile coerente con le notizie.',
       '📖 La modalita lettore e i riepiloghi AI ora usano superfici opache, righe di testo piu strette, controlli piu piatti e meno schede annidate.',
       '💬 Il feedback ora usa lo stesso pannello opaco, sezioni piu piatte, categorie piu chiare e una gestione degli allegati piu semplice.',
-      '◼️ Pulsanti, badge informativi, controlli di fonti/topic e filtri ora condividono lo stile a quadrato arrotondato, mentre stato e avanzamento restano circolari.'
+      '◼️ Pulsanti, badge informativi, controlli di fonti/topic e filtri ora condividono lo stile a quadrato arrotondato, mentre stato e avanzamento restano circolari.',
+      '♿ Impostazioni, feedback, lettore, riepiloghi, note di rilascio e scelta fonti ora contengono e ripristinano il focus, gestiscono la chiusura in modo coerente e rispettano le aree sicure mobile.',
+      '🌙 Il contrasto in modalita scura e piu chiaro, mentre Scelta fonti e Admin usano layout piu piatti e coerenti con l\'interfaccia aggiornata.'
     ]
   }
 };

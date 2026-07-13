@@ -10,6 +10,7 @@ const TopNavActionButton = ({
   iconClassName = '',
   iconNode = null,
   className = '',
+  buttonRef,
   disabled = false,
   type = 'button',
   ...buttonProps
@@ -23,6 +24,7 @@ const TopNavActionButton = ({
 
   return (
     <button
+      ref={buttonRef}
       type={type}
       disabled={disabled}
       className={`relative flex ${sizeClassName} ${hasLabel ? 'flex-col gap-0.5' : ''} items-center justify-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 ${stateClassName} ${className}`}
