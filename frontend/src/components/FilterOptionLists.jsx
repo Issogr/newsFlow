@@ -25,7 +25,7 @@ export function SourceFilterList({ sources, activeSourceIds, emptyLabel, onToggl
             <SourceIcon source={source} />
             <span>{source.name}</span>
             {source.count > 0 && (
-              <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-sky-700'}`}>
+              <span className={`rounded-md px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-white/80 text-sky-700'}`}>
                 {source.count}
               </span>
             )}
@@ -61,7 +61,7 @@ export function TopicFilterList({ topics, activeTopics, emptyLabel, locale, onTo
               <Icon className="h-3 w-3" aria-hidden="true" />
             </span>
             <span>{getLocalizedTopic(topic.topic, locale)}</span>
-            <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-600'}`}>
+            <span className={`rounded-md px-2 py-0.5 text-xs ${isActive ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-600'}`}>
               {topic.count}
             </span>
           </button>

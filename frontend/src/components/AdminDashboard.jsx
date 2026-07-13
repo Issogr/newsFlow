@@ -362,10 +362,10 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
                           </div>
 
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
+                            <span className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
                               {t('adminPublicApiRequestsValue', { count: user.publicApiRequestCount || 0 })}
                             </span>
-                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
+                            <span className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
                               {t('adminPublicApiLastUsedValue', {
                                 time: user.publicApiLastUsedAt ? formatDateTime(user.publicApiLastUsedAt) : t('adminPublicApiNeverUsed')
                               })}

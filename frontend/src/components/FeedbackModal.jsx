@@ -218,7 +218,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits }) => {
                         aria-pressed={isActive}
                         className={`rounded-[1.25rem] border px-4 py-4 text-left transition-colors ${isActive ? ringClassName : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}
                       >
-                        <span className={`inline-flex h-9 w-9 items-center justify-center rounded-full ${badgeClassName}`}>
+                        <span className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${badgeClassName}`}>
                           <Icon className="h-5 w-5" aria-hidden="true" />
                         </span>
                         <p className="mt-3 text-sm font-semibold text-slate-900">{t(labelKey)}</p>

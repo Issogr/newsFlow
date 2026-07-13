@@ -22,8 +22,8 @@ import {
 } from '../config/readerTextSize';
 import { getStoredReaderTextSizePreference, setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
 
-const sourceChipClassName = 'inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-900';
-const readTimeChipClassName = 'inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600';
+const sourceChipClassName = 'inline-flex items-center gap-2 rounded-lg bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-900';
+const readTimeChipClassName = 'inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600';
 
 function getArticleSourceLabel(article) {
   if (!article) {
@@ -372,7 +372,7 @@ const ReaderPanel = ({
                       type="button"
                       onClick={() => setSelectedArticleId(item.id)}
                       aria-pressed={isActive}
-                      className={`shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                      className={`shrink-0 whitespace-nowrap rounded-xl border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                         isActive
                           ? 'border-slate-900 bg-slate-900 text-white'
                           : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'

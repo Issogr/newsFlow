@@ -35,7 +35,7 @@ const SettingsExclusionsSection = ({
                 key={source.id}
                 type="button"
                 onClick={() => onToggleSource(source.id)}
-                className={`inline-flex items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-sm transition-colors ${isSelected ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                className={`inline-flex items-center gap-1.5 rounded-xl py-1 pl-1 pr-3 text-sm transition-colors ${isSelected ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
               >
                 <SourceIcon source={source} className="h-7 w-7" />
                 <span>{source.name}</span>
@@ -82,7 +82,7 @@ const SettingsExclusionsSection = ({
                           type="button"
                           disabled={isParentExcluded}
                           onClick={() => onToggleSubFeed(subSource.id)}
-                          className={`inline-flex items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-sm transition-colors ${isSelected ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'} disabled:cursor-not-allowed disabled:opacity-50`}
+                          className={`inline-flex items-center gap-1.5 rounded-xl py-1 pl-1 pr-3 text-sm transition-colors ${isSelected ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'} disabled:cursor-not-allowed disabled:opacity-50`}
                         >
                           <SourceIcon source={{ ...source, iconUrl: subSource.iconUrl || source.iconUrl }} className="h-7 w-7" />
                           <span>{subSource.label}</span>

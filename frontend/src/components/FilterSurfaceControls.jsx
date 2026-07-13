@@ -49,7 +49,7 @@ export function FilterSearchInput({
           <button
             type="button"
             onClick={onSearchClear}
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200/70 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-200/70 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
             aria-label={t('clearSearch')}
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />

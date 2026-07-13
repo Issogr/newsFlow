@@ -31,7 +31,7 @@ const TopNavActionButton = ({
       <span className={`relative flex items-center justify-center ${iconNode ? '' : 'h-5 w-5'}`}>
         {iconNode || <Icon className={`h-5 w-5 ${iconClassName}`} aria-hidden="true" />}
         {badge !== null && badge !== undefined && (
-          <span className={`absolute -right-1.5 -top-1 flex ${badgeSizeClassName} items-center justify-center rounded-full text-[8px] font-bold ${badgeClassName}`}>
+          <span className={`absolute -right-1.5 -top-1 flex ${badgeSizeClassName} items-center justify-center ${badge === '' ? 'rounded-full' : 'rounded-md'} text-[8px] font-bold ${badgeClassName}`}>
             {badge}
           </span>
         )}

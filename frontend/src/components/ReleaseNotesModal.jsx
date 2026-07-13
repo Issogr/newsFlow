@@ -22,7 +22,7 @@ const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss }) => {
             type="button"
             onClick={onDismiss}
             disabled={saving}
-            className="shrink-0 rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="shrink-0 rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             aria-label={t('releaseNotesDismiss')}
           >
             <X className="h-5 w-5" />
@@ -30,7 +30,7 @@ const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss }) => {
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
-          <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+          <span className="inline-flex rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
             {t('changelogVersionLabel', { version: releaseNotes.version })}
           </span>
 
