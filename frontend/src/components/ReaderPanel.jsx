@@ -289,7 +289,7 @@ const ReaderPanel = ({
   };
 
   const headerStart = (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5 sm:gap-2">
       <div className="relative inline-flex items-center">
         <ShareStatusBubble
           shareState={shareState}
@@ -300,26 +300,26 @@ const ReaderPanel = ({
           type="button"
           onClick={handleShare}
           disabled={!safeOriginalUrl}
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] border border-slate-200 bg-slate-50 text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
           aria-label={t('shareArticle')}
         >
           <Share2 className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="flex h-11 items-center gap-1 rounded-full border border-stone-300 bg-white px-1.5 shadow-sm">
+      <div className="flex h-11 items-center gap-1 rounded-[1rem] border border-slate-200 bg-slate-50 px-1.5">
         <button
           type="button"
           onClick={decreaseReaderTextSize}
           disabled={readerTextSizeIndex === 0}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-medium text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-lg font-medium text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={t('decreaseReaderTextSize')}
           title={t('decreaseReaderTextSize')}
         >
           -
         </button>
         <span
-          className="min-w-[2.5rem] text-center text-sm font-semibold tracking-[0.08em] text-stone-500"
+          className="min-w-[2.5rem] text-center text-sm font-semibold tracking-[0.08em] text-slate-500"
           aria-hidden="true"
         >
           aA
@@ -328,7 +328,7 @@ const ReaderPanel = ({
           type="button"
           onClick={increaseReaderTextSize}
           disabled={readerTextSizeIndex === READER_TEXT_SIZE_ORDER.length - 1}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-medium text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-lg font-medium text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={t('increaseReaderTextSize')}
           title={t('increaseReaderTextSize')}
         >
@@ -340,7 +340,7 @@ const ReaderPanel = ({
         type="button"
         onClick={refreshReader}
         disabled={!selectedArticleId || loading}
-        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] border border-slate-200 bg-slate-50 text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
         aria-label={t('refreshReader')}
         title={t('refreshReader')}
       >
@@ -355,11 +355,11 @@ const ReaderPanel = ({
       containerClassName={`relative flex h-full w-full ${desktopPositionClassName}`}
       headerStart={headerStart}
       onClose={onClose}
-      panelClassName="flex h-full w-full flex-col bg-slate-50 shadow-2xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(72rem,calc(100vw-2rem))] lg:overflow-hidden lg:rounded-[2rem] lg:border lg:border-slate-200/80"
+      panelClassName="flex h-full w-full flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(72rem,calc(100vw-2rem))] lg:rounded-[1.6rem] lg:border lg:border-slate-200"
     >
           {sourceVersionItems.length > 1 && (
-            <div className="border-b border-stone-200/80 bg-white/70 px-5 py-4 backdrop-blur-sm md:px-6">
-              <p className="mb-3 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
+            <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 sm:px-5 md:px-6">
+              <p className="mb-3 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                 <Newspaper className="h-4 w-4" />
                 {t('sourceVersions')}
               </p>
@@ -374,8 +374,8 @@ const ReaderPanel = ({
                       aria-pressed={isActive}
                       className={`shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                         isActive
-                          ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
-                          : 'border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100'
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                       }`}
                     >
                       {label}
@@ -386,15 +386,15 @@ const ReaderPanel = ({
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto bg-slate-50 px-4 py-6 md:px-5 md:py-8 lg:px-6">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-white px-4 py-6 sm:px-5 md:py-8 lg:px-6">
             {selectedArticle && (
-              <div className="mx-auto max-w-[58rem] space-y-5">
-                <div className="rounded-[2rem] border border-stone-200/80 bg-white/85 px-6 py-6 shadow-sm backdrop-blur-sm md:px-8 md:py-7">
+              <div className="mx-auto max-w-[72ch] space-y-6">
+                <div className="border-b border-slate-200 pb-6 md:pb-7">
                   <h2 className="text-2xl font-semibold leading-tight tracking-tight text-stone-900 md:text-[2rem] md:leading-[1.15]">
                     {selectedArticle?.title || t('readerMode')}
                   </h2>
 
-                  <div className="mt-5 flex flex-wrap items-center gap-2 sm:gap-3">
+                  <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3">
                     <span className={sourceChipClassName}>
                       <Newspaper className="h-3.5 w-3.5" />
                       <span className="truncate">{getArticleSourceLabel(selectedArticle)}</span>
@@ -409,7 +409,7 @@ const ReaderPanel = ({
                 </div>
 
                 {loading && !selectedReader ? (
-                  <div className="rounded-[2rem] border border-stone-200/80 bg-white/90 px-6 py-12 text-center shadow-sm backdrop-blur-sm">
+                  <div className="py-12 text-center">
                     <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-stone-200 border-t-slate-900" />
                     <p className="mt-4 inline-flex items-center gap-2 text-sm text-stone-500">
                       <BookOpenText className="h-4 w-4" />
@@ -417,23 +417,23 @@ const ReaderPanel = ({
                     </p>
                   </div>
                 ) : error && !selectedReader ? (
-                  <div className="rounded-[2rem] border border-red-200 bg-red-50/95 px-6 py-8 text-center text-red-700 shadow-sm">
+                  <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-8 text-center text-red-700">
                     <p className="inline-flex items-center gap-2 font-medium">
                       <AlertCircle className="h-4 w-4" />
                       {t('readerUnavailable')}
                     </p>
                   </div>
                 ) : selectedReader ? (
-                  <article className="rounded-[2rem] border border-stone-200/80 bg-white/95 px-6 py-8 shadow-[0_24px_70px_rgba(15,23,42,0.08)] md:px-10 md:py-10">
+                  <article className="pb-8">
                     {error && (
-                      <div className="mb-8 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-800 shadow-sm">
+                      <div className="mb-8 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                         <AlertTriangle className="h-4 w-4 shrink-0" />
                         {t('readerUnavailable')}
                       </div>
                     )}
 
                     {selectedReader.fallback && (
-                      <div className="mb-8 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-800 shadow-sm">
+                      <div className="mb-8 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                         <AlertTriangle className="h-4 w-4 shrink-0" />
                         {t('readerFallback')}
                       </div>
@@ -443,7 +443,7 @@ const ReaderPanel = ({
                       <p className="mb-8 text-sm font-medium uppercase tracking-[0.16em] text-stone-400">{selectedReader.byline}</p>
                     )}
 
-                    <div className="space-y-7 tracking-[0.01em]">
+                    <div className="space-y-7">
                       {(selectedReader.contentBlocks || []).map((block, index) => renderReaderBlock(block, index, readerTextStyles))}
                     </div>
                   </article>

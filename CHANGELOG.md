@@ -9,6 +9,7 @@
 - integrated mobile back-to-top with the bottom navigation so the navbar uses a liquid-style expansion from the separate button while scrolling up
 - restyled the search field and filter/account popups to match the frosted floating navigation, with responsive search sizing across desktop and mobile
 - redesigned settings as a flatter, more readable page with clearer sections, fewer nested containers, and styling aligned with the news experience
+- refreshed reader mode and AI summary views with opaque reading surfaces, narrower prose, flatter controls, and fewer nested cards
 
 ## 3.5.10
 

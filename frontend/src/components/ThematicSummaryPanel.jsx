@@ -272,7 +272,7 @@ function renderSourceChip(source, key) {
   const safeIconUrl = getSafeExternalUrl(source?.sourceIconUrl);
   const sourceName = source?.source || source?.title || '';
   const chip = (
-    <span className="mx-1 inline-flex max-w-[12rem] translate-y-1 items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold leading-none text-sky-900 shadow-sm align-baseline md:max-w-[16rem]">
+    <span className="mx-0.5 inline-flex max-w-[12rem] items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 align-middle text-xs font-semibold leading-5 text-sky-900 md:max-w-[16rem]">
       {safeIconUrl ? (
         <img src={safeIconUrl} alt="" loading="lazy" className="h-4 w-4 rounded-full object-contain" />
       ) : (
@@ -470,23 +470,23 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
       headerStart={headerStart}
       onClose={onClose}
       overlayClassName="fixed inset-0 z-50 overflow-hidden overscroll-none bg-slate-950/35 backdrop-blur-sm"
-      panelClassName="flex h-full w-full flex-col overflow-hidden bg-slate-50 shadow-2xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(64rem,calc(100vw-2rem))] lg:rounded-[2rem] lg:border lg:border-slate-200/80"
+      panelClassName="flex h-full w-full flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(64rem,calc(100vw-2rem))] lg:rounded-[1.6rem] lg:border lg:border-slate-200"
     >
           <div
-            className="flex-1 touch-pan-y overflow-y-auto overscroll-contain bg-slate-50 px-4 py-6 md:px-5 md:py-8 lg:px-6"
+            className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain bg-white px-4 py-6 sm:px-5 md:py-8 lg:px-6"
             onTouchCancel={handleTouchCancel}
             onTouchEnd={handleTouchEnd}
             onTouchMove={handleTouchMove}
             onTouchStart={handleTouchStart}
           >
             <div
-              className={`mx-auto max-w-[54rem] space-y-5 transition-[opacity,transform] ease-out will-change-transform ${swipeFeedbackActive ? 'duration-75' : 'duration-200'}`}
+              className={`mx-auto max-w-[72ch] space-y-5 transition-[opacity,transform] ease-out will-change-transform ${swipeFeedbackActive ? 'duration-75' : 'duration-200'}`}
               data-testid="thematic-summary-swipe-frame"
               style={swipeFeedbackStyle}
             >
               {!isPodcast && (
-                <div className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">
-                  <span className="inline-flex items-center justify-center gap-2">
+                <div className="border-b border-slate-200 pb-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  <span className="inline-flex items-center gap-2">
                     <Sparkles className="h-3.5 w-3.5" />
                     {getSummarySlotLabel(summary, t)}
                     {Number(summary.articleCount) > 0 && (
@@ -499,7 +499,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                 </div>
               )}
 
-              <article className="rounded-[2rem] border border-stone-200/80 bg-white/95 px-6 py-8 shadow-[0_24px_70px_rgba(15,23,42,0.08)] md:px-10 md:py-10">
+              <article className="pb-8">
                 {isPodcast ? (
                   <div className="space-y-5">
                     {podcastSummaries.map((podcastSummary) => {
@@ -512,9 +512,9 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                       const generatedAtLabel = formatPodcastGeneratedAt(podcastSummary.generatedAt, locale);
 
                       return (
-                        <section key={podcastSummary.id} className="space-y-4 border-b border-slate-200/80 pb-5 last:border-b-0 last:pb-0">
+                        <section key={podcastSummary.id} className="space-y-4 border-b border-slate-200 pb-5 last:border-b-0 last:pb-0">
                           {showAvailabilityNotice && (
-                            <div className="rounded-3xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-900" aria-live="polite">
+                            <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-900" aria-live="polite">
                               {t('podcastAudioAvailableNotice', { languages: availableLanguageList })}
                             </div>
                           )}
@@ -543,7 +543,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                           {selectedAudio.audioStatus === 'completed' && selectedAudio.audioUrl ? (
                             <PodcastAudioPlayer src={selectedAudio.audioUrl} t={t} />
                           ) : (
-                            <div className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900" aria-live="polite">
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900" aria-live="polite">
                               {getPodcastAudioStatusText(selectedAudio, t)}
                             </div>
                           )}
@@ -552,7 +552,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                     })}
                   </div>
                 ) : (
-                  <div className="space-y-6 text-[1.05rem] leading-8 tracking-[0.01em] text-stone-800 md:text-lg md:leading-9">
+                  <div className="space-y-5 text-[1.05rem] leading-7 text-stone-800 md:text-lg md:leading-8">
                     {paragraphs.map((paragraph, index) => (
                       <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex)}</p>
                     ))}

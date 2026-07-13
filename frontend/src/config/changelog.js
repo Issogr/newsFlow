@@ -11,7 +11,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '✨ Card-shaped loading placeholders, matching floating navigation across desktop and mobile, and reduced-motion-aware feed animations make navigation feel smoother.',
       '⬆️ On mobile, the bottom navbar now uses a liquid-style expansion from a separate back-to-top button while scrolling up and reclaims the space at the top.',
       '🔎 The search field and filter/account popups now match the frosted floating navigation, with smooth search resizing across desktop and mobile layouts.',
-      '⚙️ Settings now use a flatter, more readable layout with clearer sections, fewer nested containers, and styling aligned with the news experience.'
+      '⚙️ Settings now use a flatter, more readable layout with clearer sections, fewer nested containers, and styling aligned with the news experience.',
+      '📖 Reader mode and AI summaries now use opaque reading surfaces, narrower prose, flatter controls, and fewer nested cards.'
     ]
   },
   it: {
@@ -25,7 +26,8 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '✨ Placeholder di caricamento a forma di scheda, barre di navigazione fluttuanti coordinate su desktop e mobile e animazioni compatibili con movimento ridotto rendono la navigazione piu fluida.',
       '⬆️ Su mobile, la barra inferiore ora si espande con un effetto liquido dal pulsante separato per tornare in cima e ne recupera lo spazio quando si raggiunge la parte alta.',
       '🔎 Il campo di ricerca e i popup di filtri e account ora riprendono lo stile satinato della navigazione fluttuante, con un ridimensionamento fluido della ricerca su desktop e mobile.',
-      '⚙️ Le impostazioni ora usano un layout piu piatto e leggibile, con sezioni piu chiare, meno contenitori annidati e uno stile coerente con le notizie.'
+      '⚙️ Le impostazioni ora usano un layout piu piatto e leggibile, con sezioni piu chiare, meno contenitori annidati e uno stile coerente con le notizie.',
+      '📖 La modalita lettore e i riepiloghi AI ora usano superfici opache, righe di testo piu strette, controlli piu piatti e meno schede annidate.'
     ]
   }
 };
