@@ -373,8 +373,6 @@ module.exports = {
   _buildPrompt: buildPrompt,
   _getConfig: getConfig,
   _getCompletionTokenBudget: getCompletionTokenBudget,
-  _extractAssistantContent: extractAssistantContent,
   _normalizeClassifierDetails: normalizeClassifierDetails,
-  _parseJsonContent: parseJsonContent,
   _setOpenRouterSdkLoader: setOpenRouterSdkLoader
 };

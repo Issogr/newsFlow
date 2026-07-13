@@ -3,16 +3,12 @@ const TopNavActionButton = ({
   label,
   active = false,
   activeClassName = 'text-slate-900',
-  inactiveClassName = 'text-slate-500 hover:text-slate-700',
-  disabledClassName = 'cursor-not-allowed text-slate-300',
-  minWidthClassName = 'min-w-14',
-  sizeClassName = `h-12 ${minWidthClassName} rounded-2xl px-2`,
+  sizeClassName = 'h-12 min-w-14 rounded-2xl px-2',
   badge = null,
   badgeClassName = 'bg-slate-800 text-white',
   badgeSizeClassName = 'h-3.5 min-w-3.5 px-1',
   iconClassName = '',
   iconNode = null,
-  labelClassName = '',
   className = '',
   disabled = false,
   type = 'button',
@@ -20,10 +16,10 @@ const TopNavActionButton = ({
 }) => {
   const hasLabel = label !== null && label !== undefined && label !== '';
   const stateClassName = disabled
-    ? disabledClassName
+    ? 'cursor-not-allowed text-slate-300'
     : active
       ? activeClassName
-      : inactiveClassName;
+      : 'text-slate-500 hover:text-slate-700';
 
   return (
     <button
@@ -41,7 +37,7 @@ const TopNavActionButton = ({
         )}
       </span>
       {hasLabel ? (
-        <span className={`h-3.5 text-center text-[10px] font-medium leading-none ${labelClassName}`}>{label}</span>
+        <span className="h-3.5 text-center text-[10px] font-medium leading-none">{label}</span>
       ) : null}
     </button>
   );

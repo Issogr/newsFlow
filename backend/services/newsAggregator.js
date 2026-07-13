@@ -4,7 +4,6 @@ const { createError } = require('../utils/errorHandler');
 const {
   newsSources,
   expandUserSources,
-  getMaxArticleAgeHours,
   getNewsFeed: buildNewsFeed,
   getReadLaterFeed: buildReadLaterFeed,
   _resetFilterStatsCache: resetFilterStatsCache
@@ -356,8 +355,9 @@ function removeReadLaterArticles(userContext = {}, articleIds = []) {
     throw createError(400, 'Choose at least one article to remove.', 'INVALID_READ_LATER_PAYLOAD');
   }
 
-  const maxArticleAgeHours = getMaxArticleAgeHours(userContext, ARTICLE_RETENTION_HOURS);
-  const result = database.removeReadLaterArticles(userId, normalizedArticleIds, { maxArticleAgeHours });
+  const result = database.removeReadLaterArticles(userId, normalizedArticleIds, {
+    maxArticleAgeHours: ARTICLE_RETENTION_HOURS
+  });
   resetFilterStatsCache();
 
   return {

@@ -122,6 +122,13 @@ function createArticleRepository({
     };
   }
 
+  function appendFilters(where, params, ...filters) {
+    filters.filter(Boolean).forEach((filter) => {
+      where.push(filter.clause);
+      params.push(...filter.params);
+    });
+  }
+
   function buildFilterState(filters = {}) {
     return {
       search: typeof filters.search === 'string' ? filters.search.trim() : '',
@@ -172,25 +179,15 @@ function createArticleRepository({
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
     const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
 
-    where.push(scopeFilter.clause);
-    params.push(...scopeFilter.params);
-    where.push(publishedBeforeNowFilter.clause);
-    params.push(...publishedBeforeNowFilter.params);
-
-    if (retentionFilter) {
-      where.push(retentionFilter.clause);
-      params.push(...retentionFilter.params);
-    }
-
-    if (excludedSourceFilter) {
-      where.push(excludedSourceFilter.clause);
-      params.push(...excludedSourceFilter.params);
-    }
-
-    if (excludedSubSourceFilter) {
-      where.push(excludedSubSourceFilter.clause);
-      params.push(...excludedSubSourceFilter.params);
-    }
+    appendFilters(
+      where,
+      params,
+      scopeFilter,
+      publishedBeforeNowFilter,
+      retentionFilter,
+      excludedSourceFilter,
+      excludedSubSourceFilter
+    );
 
     if (searchQuery) {
       joins.push('JOIN article_search ON article_search.article_id = a.id');
@@ -1571,25 +1568,15 @@ function createArticleRepository({
       const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
       const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || []);
 
-      where.push(scopeFilter.clause);
-      params.push(...scopeFilter.params);
-      where.push(publishedBeforeNowFilter.clause);
-      params.push(...publishedBeforeNowFilter.params);
-
-      if (retentionFilter) {
-        where.push(retentionFilter.clause);
-        params.push(...retentionFilter.params);
-      }
-
-      if (excludedSourceFilter) {
-        where.push(excludedSourceFilter.clause);
-        params.push(...excludedSourceFilter.params);
-      }
-
-      if (excludedSubSourceFilter) {
-        where.push(excludedSubSourceFilter.clause);
-        params.push(...excludedSubSourceFilter.params);
-      }
+      appendFilters(
+        where,
+        params,
+        scopeFilter,
+        publishedBeforeNowFilter,
+        retentionFilter,
+        excludedSourceFilter,
+        excludedSubSourceFilter
+      );
 
       return getDb().prepare(`
         SELECT
@@ -2632,25 +2619,17 @@ function createArticleRepository({
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('articles');
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options, 'articles');
     const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || [], 'articles');
-    const where = [scopeFilter.clause];
-    const params = [...scopeFilter.params];
-    where.push(publishedBeforeNowFilter.clause);
-    params.push(...publishedBeforeNowFilter.params);
-
-    if (retentionFilter) {
-      where.push(retentionFilter.clause);
-      params.push(...retentionFilter.params);
-    }
-
-    if (excludedSourceFilter) {
-      where.push(excludedSourceFilter.clause);
-      params.push(...excludedSourceFilter.params);
-    }
-
-    if (excludedSubSourceFilter) {
-      where.push(excludedSubSourceFilter.clause);
-      params.push(...excludedSubSourceFilter.params);
-    }
+    const where = [];
+    const params = [];
+    appendFilters(
+      where,
+      params,
+      scopeFilter,
+      publishedBeforeNowFilter,
+      retentionFilter,
+      excludedSourceFilter,
+      excludedSubSourceFilter
+    );
 
     return getDb().prepare(`
       SELECT COUNT(*) AS count
@@ -2801,25 +2780,17 @@ function createArticleRepository({
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('articles');
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options, 'articles');
     const excludedSubSourceFilter = getSubSourceExclusionClause(options.excludedSubSourceIds || [], 'articles');
-    const where = [scopeFilter.clause];
-    const params = [...scopeFilter.params];
-    where.push(publishedBeforeNowFilter.clause);
-    params.push(...publishedBeforeNowFilter.params);
-
-    if (retentionFilter) {
-      where.push(retentionFilter.clause);
-      params.push(...retentionFilter.params);
-    }
-
-    if (excludedSourceFilter) {
-      where.push(excludedSourceFilter.clause);
-      params.push(...excludedSourceFilter.params);
-    }
-
-    if (excludedSubSourceFilter) {
-      where.push(excludedSubSourceFilter.clause);
-      params.push(...excludedSubSourceFilter.params);
-    }
+    const where = [];
+    const params = [];
+    appendFilters(
+      where,
+      params,
+      scopeFilter,
+      publishedBeforeNowFilter,
+      retentionFilter,
+      excludedSourceFilter,
+      excludedSubSourceFilter
+    );
 
     const rows = getDb().prepare(`
       SELECT source_id AS id, source_name AS name, COUNT(*) AS count
@@ -2883,25 +2854,15 @@ function createArticleRepository({
     where.push(`article_topics.topic IN (${canonicalTopics.map(() => '?').join(', ')})`);
     params.push(...canonicalTopics);
 
-    where.push(scopeFilter.clause);
-    params.push(...scopeFilter.params);
-    where.push(publishedBeforeNowFilter.clause);
-    params.push(...publishedBeforeNowFilter.params);
-
-    if (retentionFilter) {
-      where.push(retentionFilter.clause);
-      params.push(...retentionFilter.params);
-    }
-
-    if (excludedSourceFilter) {
-      where.push(excludedSourceFilter.clause);
-      params.push(...excludedSourceFilter.params);
-    }
-
-    if (excludedSubSourceFilter) {
-      where.push(excludedSubSourceFilter.clause);
-      params.push(...excludedSubSourceFilter.params);
-    }
+    appendFilters(
+      where,
+      params,
+      scopeFilter,
+      publishedBeforeNowFilter,
+      retentionFilter,
+      excludedSourceFilter,
+      excludedSubSourceFilter
+    );
 
     if (searchQuery) {
       joins.push('JOIN article_search ON article_search.article_id = a.id');

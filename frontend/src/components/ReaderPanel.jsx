@@ -262,9 +262,6 @@ const ReaderPanel = ({
 
     try {
       await updateUserSettings({ readerTextSize: persistedValue });
-      if (readerTextSizeRequestIdRef.current !== requestId) {
-        return;
-      }
     } catch {
       if (readerTextSizeRequestIdRef.current === requestId) {
         setStoredReaderTextSizePreference(previousValue);

@@ -362,7 +362,6 @@ function App() {
             t={t}
             releaseNotes={releaseNotes}
             onOpen={handleOpenReleaseNotes}
-            onExpire={acknowledgeCurrentReleaseNotes}
             onDismiss={acknowledgeCurrentReleaseNotes}
           />
         </Suspense>

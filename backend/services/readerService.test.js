@@ -25,6 +25,20 @@ const logger = require('../utils/logger');
 const { fetchSafeTextUrl } = require('../utils/urlSafety');
 const readerService = require('./readerService');
 
+function mockReadableArticle(title = 'Readable headline') {
+  Readability.mockImplementation(() => ({
+    parse: () => ({
+      title,
+      siteName: 'Readable Site',
+      byline: 'Readable Byline',
+      lang: 'en',
+      excerpt: 'Readable excerpt',
+      textContent: 'First paragraph. Second paragraph.',
+      content: `<h1>${title}</h1><p>First paragraph.</p><p>Second paragraph.</p>`
+    })
+  }));
+}
+
 describe('readerService', () => {
   const article = {
     id: 'article-1',
@@ -76,17 +90,7 @@ describe('readerService', () => {
     fetchSafeTextUrl.mockResolvedValue({
       data: '<html><body><article><h1>Readable headline</h1><p>First paragraph.</p><p>Second paragraph.</p></article></body></html>'
     });
-    Readability.mockImplementation(() => ({
-      parse: () => ({
-        title: 'Readable headline',
-        siteName: 'Readable Site',
-        byline: 'Readable Byline',
-        lang: 'en',
-        excerpt: 'Readable excerpt',
-        textContent: 'First paragraph. Second paragraph.',
-        content: '<h1>Readable headline</h1><p>First paragraph.</p><p>Second paragraph.</p>'
-      })
-    }));
+    mockReadableArticle();
 
     const payload = await readerService.getReaderArticle(article.id, { forceRefresh: true, userId: 'user-1' });
 
@@ -155,17 +159,7 @@ describe('readerService', () => {
       resolveFetch = resolve;
     });
     fetchSafeTextUrl.mockReturnValue(fetchPromise);
-    Readability.mockImplementation(() => ({
-      parse: () => ({
-        title: 'Readable headline',
-        siteName: 'Readable Site',
-        byline: 'Readable Byline',
-        lang: 'en',
-        excerpt: 'Readable excerpt',
-        textContent: 'First paragraph. Second paragraph.',
-        content: '<h1>Readable headline</h1><p>First paragraph.</p><p>Second paragraph.</p>'
-      })
-    }));
+    mockReadableArticle();
 
     const firstRequest = readerService.getReaderArticle(article.id, { userId: 'user-1' });
     const secondRequest = readerService.getReaderArticle(article.id, { userId: 'user-1' });
@@ -187,17 +181,7 @@ describe('readerService', () => {
       resolveFetch = resolve;
     });
     fetchSafeTextUrl.mockReturnValue(fetchPromise);
-    Readability.mockImplementation(() => ({
-      parse: () => ({
-        title: 'Forced readable headline',
-        siteName: 'Readable Site',
-        byline: 'Readable Byline',
-        lang: 'en',
-        excerpt: 'Readable excerpt',
-        textContent: 'First paragraph. Second paragraph.',
-        content: '<h1>Forced readable headline</h1><p>First paragraph.</p><p>Second paragraph.</p>'
-      })
-    }));
+    mockReadableArticle('Forced readable headline');
 
     const firstRequest = readerService.getReaderArticle(article.id, { forceRefresh: true, userId: 'user-1' });
     const secondRequest = readerService.getReaderArticle(article.id, { forceRefresh: true, userId: 'user-1' });
@@ -224,17 +208,7 @@ describe('readerService', () => {
       id: articleId,
       url: `https://example.com/${articleId}`
     }));
-    Readability.mockImplementation(() => ({
-      parse: () => ({
-        title: 'Readable headline',
-        siteName: 'Readable Site',
-        byline: 'Readable Byline',
-        lang: 'en',
-        excerpt: 'Readable excerpt',
-        textContent: 'First paragraph. Second paragraph.',
-        content: '<h1>Readable headline</h1><p>First paragraph.</p><p>Second paragraph.</p>'
-      })
-    }));
+    mockReadableArticle();
 
     const pendingRequests = Array.from({ length: 20 }, (_, index) => {
       return readerService.getReaderArticle(`article-${index}`, { userId: 'user-1' });

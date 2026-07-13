@@ -12,7 +12,6 @@ const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/article
 
 const DEFAULT_SUMMARY_TIME_ZONE = 'Europe/Rome';
 const SUMMARY_GENERATION_HOURS = [8, 20];
-const PODCAST_GENERATION_HOURS = [8, 20];
 const PODCAST_HISTORY_RETAIN_COUNT = parseIntegerEnv('AI_PODCAST_HISTORY_RETAIN_COUNT', 2, { min: 1, max: 10 });
 const SUMMARY_CHECK_INTERVAL_MS = parseIntegerEnv('THEMATIC_SUMMARY_CHECK_INTERVAL_MS', 60 * 1000, { min: 1000 });
 const SUMMARY_MAX_ARTICLES_PER_TOPIC = parseIntegerEnv('AI_SUMMARY_MAX_ARTICLES_PER_TOPIC', 120, { min: 1, max: 300 });
@@ -225,10 +224,6 @@ function getNextDueWindow(referenceDate = new Date(), generationHours = SUMMARY_
     periodStart: periodStart.toISOString(),
     periodEnd: periodEnd.toISOString()
   };
-}
-
-function getLatestDuePodcastWindow(referenceDate = new Date()) {
-  return getLatestDueWindow(referenceDate, PODCAST_GENERATION_HOURS);
 }
 
 function getPodcastWindowSlot(summary = {}) {
@@ -1179,7 +1174,7 @@ async function generateDueSummaries(options = {}) {
   generationPromise = (async () => {
     const referenceDate = options.referenceDate || new Date();
     const summaryWindow = options.summaryWindow || options.window || getLatestDueWindow(referenceDate);
-    const podcastWindow = options.podcastWindow || options.window || getLatestDuePodcastWindow(referenceDate);
+    const podcastWindow = options.podcastWindow || options.window || getLatestDueWindow(referenceDate);
     const summaryArticleContext = options.summaryArticleContext || options.articleContext || createSummaryArticleContext(summaryWindow);
     const podcastArticleContext = options.podcastArticleContext
       || (summaryWindow.periodStart === podcastWindow.periodStart && summaryWindow.periodEnd === podcastWindow.periodEnd
@@ -1334,12 +1329,10 @@ module.exports = {
   startScheduler,
   stopScheduler,
   _getLatestDueWindow: getLatestDueWindow,
-  _getLatestDuePodcastWindow: getLatestDuePodcastWindow,
   _getNextDueWindow: getNextDueWindow,
   _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,
   _getSummaryTopics: getSummaryTopics,
   _generatePodcastForWindow: generatePodcastForWindow,
-  _isPromotionalDealArticle: isPromotionalDealArticle,
   _getPrewarmAttemptWindowCount: () => attemptedPrewarmArticleIdsByWindow.size,
   _prunePrewarmAttempts: prunePrewarmAttempts
 };

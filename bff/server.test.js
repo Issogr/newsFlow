@@ -170,7 +170,6 @@ function expectCsrfRejected(response) {
 }
 
 describe('bff server', () => {
-  const originalNodeEnv = process.env.NODE_ENV;
   const originalEnvValues = {
     BFF_SESSION_SECRET: process.env.BFF_SESSION_SECRET,
     INTERNAL_PROXY_TOKEN: process.env.INTERNAL_PROXY_TOKEN,
@@ -290,9 +289,7 @@ describe('bff server', () => {
     });
 
     backendServer = http.createServer(backendApp);
-    await new Promise((resolve) => {
-      backendServer.listen(0, resolve);
-    });
+    await listen(backendServer);
 
     const { port } = backendServer.address();
     backendBaseUrl = `http://127.0.0.1:${port}`;
@@ -310,11 +307,6 @@ describe('bff server', () => {
     Object.entries(originalEnvValues).forEach(([name, value]) => {
       restoreEnvValue(name, value);
     });
-    if (originalNodeEnv === undefined) {
-      delete process.env.NODE_ENV;
-    } else {
-      process.env.NODE_ENV = originalNodeEnv;
-    }
   });
 
   test('creates a persisted BFF session on login and uses it for proxied app requests', async () => {
@@ -448,26 +440,12 @@ describe('bff server', () => {
     expect(meResponse.body).toEqual({ user: { id: 'user-1', username: 'alice' } });
   });
 
-  test('clears the BFF session on logout', async () => {
+  test.each([
+    { name: 'clears the BFF session on logout', backendFailure: false },
+    { name: 'clears the local BFF session when backend logout fails', backendFailure: true }
+  ])('$name', async ({ backendFailure }) => {
     const bffSessionCookie = await login(app);
-
-    const logoutResponse = await request(app)
-      .post('/api/auth/logout')
-      .set('Cookie', bffSessionCookie)
-      .set('Origin', SAME_ORIGIN)
-      .expect(200);
-
-    expect(getBffSessionCookie(logoutResponse)).toContain('Max-Age=0');
-
-    await request(app)
-      .get('/api/me')
-      .set('Cookie', bffSessionCookie)
-      .expect(401);
-  });
-
-  test('clears the local BFF session when backend logout fails', async () => {
-    const bffSessionCookie = await login(app);
-    logoutShouldFail = true;
+    logoutShouldFail = backendFailure;
 
     const logoutResponse = await request(app)
       .post('/api/auth/logout')
@@ -839,7 +817,7 @@ describe('session policy helpers', () => {
 
     expect(isValidSessionPayload({ version: 1, backendSessionCookie: encryptedCookie })).toBe(true);
     expect(isValidSessionPayload({ version: 1, backendSessionCookie: 'newsflow_session=abc' })).toBe(false);
-    expect(isValidSessionPayload({ version: 2, backendSessionCookie: 'newsflow_session=abc' })).toBe(false);
+    expect(isValidSessionPayload({ version: 2, backendSessionCookie: encryptedCookie })).toBe(false);
     expect(isValidSessionPayload({ version: 1, backendSessionCookie: '' })).toBe(false);
   });
 

@@ -7,6 +7,7 @@ jest.mock('../utils/logger', () => ({
 
 const logger = require('../utils/logger');
 const aiTopicClassifier = require('./aiTopicClassifier');
+const { extractAssistantContent, parseJsonContent } = require('./openRouterClient');
 
 describe('aiTopicClassifier', () => {
   const originalEnv = process.env;
@@ -255,18 +256,18 @@ describe('aiTopicClassifier', () => {
 
     expect(result.get('article-1').map((entry) => entry.topic)).toEqual(['Tecnologia']);
     expect(result.get('article-2').map((entry) => entry.topic)).toEqual(['Esteri']);
-    expect(aiTopicClassifier._extractAssistantContent({
+    expect(extractAssistantContent({
       choices: [
         { message: { content: [{ type: 'text', text: '{"topicsById":[]}' }] } }
       ]
     })).toBe('{"topicsById":[]}');
 
-    expect(aiTopicClassifier._extractAssistantContent({
+    expect(extractAssistantContent({
       output_text: '{"topicsById":[]}'
     })).toBe('{"topicsById":[]}');
 
-    expect(aiTopicClassifier._parseJsonContent('{"topicsById":[')).toBeNull();
-    expect(aiTopicClassifier._parseJsonContent('```json\n{"topicsById":[{"id":"article-1"}]')).toBeNull();
+    expect(parseJsonContent('{"topicsById":[')).toBeNull();
+    expect(parseJsonContent('```json\n{"topicsById":[{"id":"article-1"}]')).toBeNull();
   });
 
   test('uses a larger completion budget for structured JSON output', () => {

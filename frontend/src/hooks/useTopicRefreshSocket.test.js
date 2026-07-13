@@ -30,7 +30,6 @@ describe('useTopicRefreshSocket', () => {
       search: 'economy',
       sourceIds: ['ansa'],
       topics: ['Economy'],
-      recentHours: 3,
       excludedSourceIds: ['bbc'],
       excludedSubSourceIds: ['bbc_world']
     };

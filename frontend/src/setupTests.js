@@ -1,6 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
-import { afterEach, vi } from 'vitest';
+import { vi } from 'vitest';
 
 function createTestStorage() {
   const values = new Map();
@@ -36,10 +35,6 @@ function ensureUsableLocalStorage() {
 }
 
 ensureUsableLocalStorage();
-
-afterEach(() => {
-  cleanup();
-});
 
 // Testing Library checks the Jest global to coordinate async queries with fake timers.
 globalThis.jest = vi;

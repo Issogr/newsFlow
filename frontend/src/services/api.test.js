@@ -86,7 +86,6 @@ describe('api service', () => {
       search: '  economy  ',
       sourceIds: ['ansa', 'bbc'],
       topics: ['Economy'],
-      recentHours: 0,
       beforePubDate: '2026-05-21T10:00:00.000Z',
       beforeId: 'article-10',
       excludeArticleIds: ['article-2', 'article-3'],
@@ -131,7 +130,7 @@ describe('api service', () => {
     mockApi.get.mockResolvedValue({ data: { items: [] } });
     mockApi.post.mockResolvedValue({ data: { success: true } });
 
-    await fetchReadLaterNews({ page: 2, sourceIds: ['source-a'], topics: ['Tecnologia'], recentHours: 2 });
+    await fetchReadLaterNews({ page: 2, sourceIds: ['source-a'], topics: ['Tecnologia'] });
     await saveReadLaterArticles(['article-1']);
     await removeReadLaterArticles(['article-1']);
 
@@ -141,7 +140,6 @@ describe('api service', () => {
         pageSize: 12,
         sources: 'source-a',
         topics: 'Tecnologia',
-        recentHours: 2,
         includeFilters: 'true'
       },
       signal: undefined

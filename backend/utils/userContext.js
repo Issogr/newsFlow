@@ -11,7 +11,6 @@ function buildUserContext(userId, settings = {}) {
     userId,
     excludedSourceIds: Array.isArray(settings.excludedSourceIds) ? settings.excludedSourceIds : [],
     excludedSubSourceIds: Array.isArray(settings.excludedSubSourceIds) ? settings.excludedSubSourceIds : [],
-    settings,
   };
 }
 

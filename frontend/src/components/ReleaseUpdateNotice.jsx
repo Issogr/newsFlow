@@ -4,7 +4,7 @@ import { Sparkles, X } from 'lucide-react';
 const DEFAULT_DURATION_MS = 30000;
 const ENTRY_DELAY_MS = 16;
 
-const ReleaseUpdateNotice = ({ t, releaseNotes, durationMs = DEFAULT_DURATION_MS, onOpen, onExpire, onDismiss }) => {
+const ReleaseUpdateNotice = ({ t, releaseNotes, durationMs = DEFAULT_DURATION_MS, onOpen, onDismiss }) => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -13,14 +13,14 @@ const ReleaseUpdateNotice = ({ t, releaseNotes, durationMs = DEFAULT_DURATION_MS
       setIsVisible(true);
     }, ENTRY_DELAY_MS);
     const timeoutId = window.setTimeout(() => {
-      onExpire();
+      onDismiss();
     }, durationMs);
 
     return () => {
       window.clearTimeout(frameTimeoutId);
       window.clearTimeout(timeoutId);
     };
-  }, [durationMs, onExpire, releaseNotes.version]);
+  }, [durationMs, onDismiss, releaseNotes.version]);
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4 sm:top-5">

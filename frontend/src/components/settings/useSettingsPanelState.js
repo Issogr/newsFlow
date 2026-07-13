@@ -9,7 +9,6 @@ import {
   updateUserSource,
   updateUserSettings
 } from '../../services/api';
-import { getSettingsLimits } from '../../config/settingsLimits';
 import { getStoredReaderTextSizePreference, setStoredReaderTextSizePreference } from '../../utils/readerTextSizePreference';
 
 const createInitialSourceForm = () => ({ url: '' });
@@ -28,11 +27,10 @@ const areSettingValuesEqual = (left, right) => {
   return left === right;
 };
 
-const createSettingsPatch = (nextSettings, currentUser, dirtyKeys = null) => {
+const createSettingsPatch = (nextSettings, currentUser, dirtyKeys) => {
   const initialSettings = getInitialSettings(currentUser);
-  const candidateKeys = Array.isArray(dirtyKeys) ? dirtyKeys : Object.keys(nextSettings);
 
-  return candidateKeys.reduce((patch, key) => {
+  return dirtyKeys.reduce((patch, key) => {
     if (!areSettingValuesEqual(nextSettings[key], initialSettings[key])) {
       patch[key] = nextSettings[key];
     }
@@ -55,7 +53,9 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   const importInputRef = useRef(null);
   const userIdentityRef = useRef(getCurrentUserIdentity(currentUser));
   const dirtySettingKeysRef = useRef(new Set());
-  const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
+  const settingsLimits = {
+    apiTokenTtlDays: Number.isFinite(currentUser?.limits?.apiTokenTtlDays) ? currentUser.limits.apiTokenTtlDays : 30
+  };
 
   const excludedSourceCatalog = useMemo(() => {
     const customSourceIds = new Set(customSources.map((source) => source.id));

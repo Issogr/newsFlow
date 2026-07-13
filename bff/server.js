@@ -107,9 +107,7 @@ async function normalizeBackendResponse(response) {
   };
 }
 
-function regenerateSession(req, sessionDb) {
-  const previousSessionId = req.sessionID;
-
+function regenerateSession(req) {
   return new Promise((resolve, reject) => {
     req.session.regenerate((error) => {
       if (error) {
@@ -117,9 +115,6 @@ function regenerateSession(req, sessionDb) {
         return;
       }
 
-      if (previousSessionId) {
-        sessionDb.prepare('DELETE FROM session_users WHERE sid = ?').run(previousSessionId);
-      }
       resolve();
     });
   });
@@ -201,7 +196,7 @@ function createApp(options = {}) {
 
   function clearLocalSession(req, res) {
     clearBffSessionCookie(res);
-    return destroySession(req, sessionDb);
+    return destroySession(req);
   }
 
   function getExpectedRequestOrigin(req) {
@@ -357,11 +352,10 @@ function createApp(options = {}) {
           return;
         }
 
-        await regenerateSession(req, sessionDb);
+        await regenerateSession(req);
         req.session.version = SESSION_SCHEMA_VERSION;
         req.session.backendSessionCookie = encryptBackendSessionCookie(backendSessionCookie);
-        req.session.userId = response.data?.user?.id || req.session.userId || '';
-        req.session.createdAt = req.session.createdAt || new Date().toISOString();
+        req.session.userId = response.data?.user?.id || '';
         await saveExpressSession(req.session);
         upsertStoredSessionUser(sessionDb, req.sessionID, req.session.userId);
       }
@@ -428,14 +422,7 @@ function createApp(options = {}) {
 
     sessionMiddleware(req, res, next);
   });
-  app.use((req, res, next) => {
-    if (!req.session) {
-      next();
-      return;
-    }
-
-    normalizeSessionState(req, res, next, sessionDb);
-  });
+  app.use(normalizeSessionState);
   app.use(renewSessionExpiryIfNeeded);
 
   [
@@ -490,9 +477,7 @@ function createApp(options = {}) {
           backendSessionCookie,
         });
       }
-    } catch {
-      backendResponse = null;
-    }
+    } catch {}
 
     try {
       await clearLocalSession(req, res);

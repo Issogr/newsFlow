@@ -66,7 +66,6 @@ const MobileBottomNav = ({
     return () => {
       window.visualViewport.removeEventListener('resize', updateKeyboardOffset);
       window.visualViewport.removeEventListener('scroll', updateKeyboardOffset);
-      setKeyboardOffset(0);
     };
   }, [searchMode]);
 

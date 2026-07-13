@@ -1,21 +1,8 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { createTranslator } from '../i18n';
 import MobileBottomNav from './MobileBottomNav';
 
-const t = (key, params = {}) => {
-  const map = {
-    sources: 'Sources',
-    topics: 'Topics',
-    searchPlaceholder: 'Search...',
-    searchLabel: 'Search',
-    refresh: 'Refresh',
-    readLaterShort: 'Saved',
-    backToTop: 'Back to top',
-    cancel: 'Cancel',
-    noNewsText: 'No news found.',
-  };
-  const value = map[key];
-  return typeof value === 'function' ? value(params) : value;
-};
+const t = createTranslator('en');
 
 function renderNav(overrides = {}) {
   const defaults = {
@@ -116,7 +103,7 @@ describe('MobileBottomNav', () => {
     expect(onToggleFilter).toHaveBeenCalledWith('sourceIds', 's1');
 
     fireEvent.click(getNavButton('Search'));
-    const input = screen.getByPlaceholderText('Search...');
+    const input = screen.getByRole('searchbox', { name: 'Search' });
     fireEvent.change(input, { target: { value: 'news' } });
     expect(onSearchChange).toHaveBeenCalledWith('news');
 

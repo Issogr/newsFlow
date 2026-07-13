@@ -114,14 +114,10 @@ function getAvailableSources(userContext = {}, userSources = null) {
   return [...availableSources.values()];
 }
 
-function getMaxArticleAgeHours(userContext = {}, articleRetentionHours = ARTICLE_RETENTION_HOURS) {
-  return articleRetentionHours;
-}
-
 function getQueryOptions(userContext = {}) {
   return {
     userId: userContext.userId || null,
-    maxArticleAgeHours: getMaxArticleAgeHours(userContext),
+    maxArticleAgeHours: ARTICLE_RETENTION_HOURS,
     excludedSourceIds: Array.isArray(userContext.excludedSourceIds) ? userContext.excludedSourceIds : [],
     excludedSubSourceIds: Array.isArray(userContext.excludedSubSourceIds) ? userContext.excludedSubSourceIds : []
   };
@@ -487,9 +483,9 @@ async function getReadLaterFeed(filters = {}, userContext = {}) {
 }
 
 module.exports = {
+  ARTICLE_RETENTION_HOURS,
   newsSources,
   expandUserSources,
-  getMaxArticleAgeHours,
   getNewsFeed,
   getReadLaterFeed,
   _resetFilterStatsCache: resetFilterStatsCache
