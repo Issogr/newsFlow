@@ -11,7 +11,7 @@
 - redesigned settings as a flatter, more readable page with clearer sections, fewer nested containers, and styling aligned with the news experience
 - refreshed reader mode and AI summary views with opaque reading surfaces, narrower prose, flatter controls, and fewer nested cards
 - refreshed feedback with the same opaque panel, flatter sections, clearer category choices, and simpler attachment handling
-- aligned action buttons, metadata badges, source/topic controls, and filter choices around the rounded-square style while retaining circles for status and progress indicators
+- kept rounded-square action buttons while restoring circular topic icons and standard pill shapes for badges, filters, and chips
 - added accessible modal focus containment, restoration, Escape/backdrop policies, and mobile safe-area spacing across settings, feedback, reader, summaries, release notes, and source setup
 - improved dark-mode contrast and flattened Source Setup and Admin data layouts to match the refreshed interface
 

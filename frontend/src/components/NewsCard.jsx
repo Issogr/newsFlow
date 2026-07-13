@@ -319,11 +319,11 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   const clickbaitSource = String(group?.clickbaitSource || group?.items?.[0]?.clickbaitSource || '').toLowerCase();
   const clickbaitBadge = clickbaitText ? (
     <span
-      className={clickbaitSource === 'ai' ? 'inline-flex rounded-xl p-[1.5px] shadow-sm' : ''}
+      className={clickbaitSource === 'ai' ? 'inline-flex rounded-full p-[1.5px] shadow-sm' : ''}
       style={clickbaitSource === 'ai' ? AI_ACCENT_GRADIENT_STYLE : undefined}
       title={clickbaitSource === 'ai' ? t('aiClickbaitLabel') : clickbaitText}
     >
-      <span className={`inline-flex w-fit items-center rounded-[calc(0.75rem-1.5px)] border px-3 py-1 text-xs font-semibold shadow-sm ${CLICKBAIT_BADGE_CLASS_NAMES[clickbaitLabel]}`}>
+      <span className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold shadow-sm ${CLICKBAIT_BADGE_CLASS_NAMES[clickbaitLabel]}`}>
         {clickbaitText}
       </span>
     </span>
@@ -339,12 +339,12 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
           return (
             <span
               key={topic}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-xl p-[1.5px] shadow-sm ring-2 ring-slate-900/10"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full p-[1.5px] shadow-sm ring-2 ring-slate-900/10"
               style={AI_ACCENT_GRADIENT_STYLE}
               aria-label={localizedTopic}
               title={localizedTopic}
             >
-              <span className={`inline-flex h-full w-full items-center justify-center rounded-[calc(0.75rem-1.5px)] ${iconBadgeClassName}`}>
+              <span className={`inline-flex h-full w-full items-center justify-center rounded-full ${iconBadgeClassName}`}>
                 <Icon className="h-4 w-4" aria-hidden="true" />
               </span>
             </span>
@@ -354,7 +354,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         return (
           <span
             key={topic}
-            className={`inline-flex h-8 w-8 items-center justify-center rounded-xl shadow-sm ring-2 ring-slate-900/10 ${iconBadgeClassName}`}
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-full shadow-sm ring-2 ring-slate-900/10 ${iconBadgeClassName}`}
             aria-label={localizedTopic}
             title={localizedTopic}
           >

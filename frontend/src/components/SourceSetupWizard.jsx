@@ -207,10 +207,10 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
               {t('sourceSetupSelectedCount', { count: selectedCount })}
             </span>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={handleSelectAll} disabled={allSelected || saving} className="rounded-xl px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={handleSelectAll} disabled={allSelected || saving} className="rounded-full px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
                 {t('sourceSetupSelectAll')}
               </button>
-              <button type="button" onClick={handleClear} disabled={selectedCount === 0 || saving} className="rounded-xl px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={handleClear} disabled={selectedCount === 0 || saving} className="rounded-full px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
                 {t('sourceSetupClear')}
               </button>
             </div>
@@ -262,7 +262,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                     <button
                       type="button"
                       onClick={() => setSourceSelection(source, !sourceFullySelected)}
-                      className={`mt-3 inline-flex rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${sourceFullySelected ? 'bg-white text-slate-600 hover:bg-slate-100' : 'bg-sky-100 text-sky-800 hover:bg-sky-200'}`}
+                      className={`mt-3 inline-flex rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${sourceFullySelected ? 'bg-white text-slate-600 hover:bg-slate-100' : 'bg-sky-100 text-sky-800 hover:bg-sky-200'}`}
                     >
                       {sourceFullySelected ? t('sourceSetupClearSource') : t('sourceSetupSelectSource')}
                     </button>
@@ -276,7 +276,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                               key={subSource.id}
                               type="button"
                               onClick={() => toggleSelection(subSource.id)}
-                              className={`inline-flex max-w-full items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors ${selected ? 'border-sky-300 bg-white text-sky-950' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'}`}
+                              className={`inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-2 text-left transition-colors ${selected ? 'border-sky-300 bg-white text-sky-950' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'}`}
                             >
                               <SourceIcon source={{ ...source, iconUrl: subSource.iconUrl || source.iconUrl }} className="h-6 w-6" imageClassName="h-4 w-4" />
                               <span className="block truncate text-xs font-semibold">{subSource.label || subSource.name}</span>

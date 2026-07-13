@@ -69,7 +69,7 @@ const SettingsAccessSection = ({
                 <ExternalPillLink href="/api/docs" target="_blank" className="border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100">
                   {t('apiTokenDocsLink')}
                 </ExternalPillLink>
-                <span className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
+                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
                   {t('apiTokenExpiryHelp', { days: settingsLimits.apiTokenTtlDays || 30 })}
                 </span>
               </div>

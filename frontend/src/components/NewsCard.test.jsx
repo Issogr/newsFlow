@@ -146,12 +146,20 @@ describe('NewsCard', () => {
   });
 
   test('renders icon-only topic pills on standard cards', () => {
-    const topicGroup = createGroup({ topics: ['Tecnologia', 'Economia'] });
+    const topicGroup = createGroup({
+      topicDetails: [
+        { topic: 'Tecnologia', source: 'ai' },
+        { topic: 'Economia', source: 'canonical' }
+      ]
+    });
     const { rerender } = renderNewsCard({ cardGroup: topicGroup });
 
-    expect(screen.getByLabelText('Technology')).toBeInTheDocument();
-    expect(screen.getByLabelText('Economy')).toBeInTheDocument();
-    expect(screen.getByLabelText('Technology').parentElement).toHaveClass('-space-x-1');
+    const technologyTopic = screen.getByLabelText('Technology');
+    expect(technologyTopic).toHaveClass('rounded-full');
+    expect(technologyTopic.firstElementChild).toHaveClass('rounded-full');
+    expect(technologyTopic.getAttribute('style')).toContain('conic-gradient');
+    expect(screen.getByLabelText('Economy')).toHaveClass('rounded-full');
+    expect(technologyTopic.parentElement).toHaveClass('-space-x-1');
     expect(screen.queryByText('Technology')).not.toBeInTheDocument();
     expect(screen.queryByText('Economy')).not.toBeInTheDocument();
 

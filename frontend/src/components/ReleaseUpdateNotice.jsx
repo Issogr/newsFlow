@@ -36,7 +36,7 @@ const ReleaseUpdateNotice = ({ t, releaseNotes, durationMs = DEFAULT_DURATION_MS
             <div className="min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <p className="truncate text-sm font-semibold text-slate-900">{t('releaseNoticeTitle')}</p>
-                <span className="inline-flex shrink-0 items-center rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                <span className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
                   v{releaseNotes.version}
                 </span>
               </div>

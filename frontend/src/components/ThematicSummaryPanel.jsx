@@ -272,9 +272,9 @@ function renderSourceChip(source, key) {
   const safeIconUrl = getSafeExternalUrl(source?.sourceIconUrl);
   const sourceName = source?.source || source?.title || '';
   const chip = (
-    <span className="mx-0.5 inline-flex max-w-[12rem] items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-0.5 align-middle text-xs font-semibold leading-5 text-sky-900 md:max-w-[16rem]">
+    <span className="mx-0.5 inline-flex max-w-[12rem] items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 align-middle text-xs font-semibold leading-5 text-sky-900 md:max-w-[16rem]">
       {safeIconUrl ? (
-        <img src={safeIconUrl} alt="" loading="lazy" className="h-4 w-4 rounded object-contain" />
+        <img src={safeIconUrl} alt="" loading="lazy" className="h-4 w-4 rounded-full object-contain" />
       ) : (
         <Newspaper className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       )}
@@ -449,7 +449,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   };
   const headerStart = (
     <div className="flex min-w-0 items-center gap-3">
-      <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] ${primaryPresentation.iconBadgeClassName}`}>
+      <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${primaryPresentation.iconBadgeClassName}`}>
         <PrimaryIcon className="h-5 w-5" aria-hidden="true" />
       </span>
       <div className="min-w-0">

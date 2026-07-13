@@ -13,7 +13,7 @@ const ExternalPillLink = ({
     href={href}
     target={target}
     rel={target === '_blank' ? (rel || 'noopener noreferrer') : rel}
-    className={`inline-flex w-fit items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${className}`}
+    className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${className}`}
   >
     <span>{children}</span>
     <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />

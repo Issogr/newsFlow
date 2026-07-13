@@ -113,6 +113,8 @@ describe('thematic summary podcast UI', () => {
 
     const buttons = screen.getAllByRole('button');
     expect(buttons).toHaveLength(2);
+    expect(buttons[0]).toHaveClass('rounded-full');
+    expect(buttons[0].firstElementChild).toHaveClass('rounded-full');
     expect(buttons[0].getAttribute('style')).toContain('conic-gradient');
     expect(buttons[1].getAttribute('style')).toContain('conic-gradient');
     expect(screen.queryAllByTestId('thematic-summary-new-dot')).toHaveLength(0);

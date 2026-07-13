@@ -109,7 +109,7 @@ const SettingsCustomSourcesSection = ({
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium text-slate-800">{source.name}</p>
                           {source.language ? (
-                            <span className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                               {source.language}
                             </span>
                           ) : null}

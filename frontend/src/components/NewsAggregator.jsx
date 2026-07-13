@@ -68,14 +68,14 @@ function NewsCardSkeleton({ showImage }) {
       {showImage ? (
         <div className="relative aspect-video w-full border-y border-slate-100 bg-slate-200">
           <div className="absolute bottom-3 left-3 flex -space-x-1">
-            <div className="h-8 w-8 rounded-xl bg-sky-100 ring-2 ring-slate-900/10" />
-            <div className="h-8 w-8 rounded-xl bg-violet-100 ring-2 ring-slate-900/10" />
+            <div className="h-8 w-8 rounded-full bg-sky-100 ring-2 ring-slate-900/10" />
+            <div className="h-8 w-8 rounded-full bg-violet-100 ring-2 ring-slate-900/10" />
           </div>
         </div>
       ) : (
         <div className="flex -space-x-1 px-4 pt-3 sm:px-5">
-          <div className="h-8 w-8 rounded-xl bg-sky-100 ring-2 ring-slate-900/10" />
-          <div className="h-8 w-8 rounded-xl bg-violet-100 ring-2 ring-slate-900/10" />
+          <div className="h-8 w-8 rounded-full bg-sky-100 ring-2 ring-slate-900/10" />
+          <div className="h-8 w-8 rounded-full bg-violet-100 ring-2 ring-slate-900/10" />
         </div>
       )}
       <div className="flex-1 space-y-2.5 px-4 pb-4 pt-3 sm:px-5">
@@ -856,7 +856,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   aria-live="polite"
                   onClick={handlePendingNewsRefresh}
                   disabled={isFeedRefreshActive}
-                  className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <RefreshCw className="h-4 w-4" aria-hidden="true" />
                   {t('newArticlesAvailable', { count: pendingNewsCount })}
