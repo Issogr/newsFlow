@@ -7,7 +7,7 @@
 - redesigned news cards as vibrant social-feed posts with compact source headers, 16:9 imagery, image-overlay topics, compact header actions, and edge-to-edge mobile cards
 - added card-shaped loading placeholders, matching floating navigation surfaces across desktop and mobile, and reduced-motion-aware feed animations
 - integrated mobile back-to-top with the bottom navigation so the navbar uses a liquid-style expansion from the separate button while scrolling up
-- restyled the search field to match the floating navigation and resize smoothly across desktop and mobile widths
+- restyled the search field and filter/account popups to match the frosted floating navigation, with responsive search sizing across desktop and mobile
 
 ## 3.5.10
 
