@@ -18,12 +18,12 @@ const SettingsExclusionsSection = ({
       icon={FilterX}
       title={t('excludedSources')}
       description={t('excludedSourcesHelp')}
-      iconToneClassName="bg-rose-100 text-rose-700"
+      iconToneClassName="text-rose-600"
     >
       <div>
         <div className="mb-3 flex items-center justify-between gap-3">
           <p className="text-sm font-medium text-slate-800">{t('excludedSources')}</p>
-          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
+          <span className="text-sm font-semibold tabular-nums text-slate-500">
             {excludedSourcesCount}
           </span>
         </div>
@@ -54,20 +54,20 @@ const SettingsExclusionsSection = ({
               <p className="mt-1 text-sm text-slate-500">{t('excludedSubFeedsHelp')}</p>
             </div>
           </div>
-          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
+          <span className="text-sm font-semibold tabular-nums text-slate-500">
             {excludedSubFeedsCount}
           </span>
         </div>
 
         {excludedSubFeedCatalog.length === 0 ? (
-          <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">{t('noExcludedSubFeeds')}</div>
+          <p className="py-2 text-sm text-slate-500">{t('noExcludedSubFeeds')}</p>
         ) : (
-          <div className="space-y-3">
+          <div className="divide-y divide-slate-200">
             {excludedSubFeedCatalog.map((source) => {
               const isParentExcluded = (settings.excludedSourceIds || []).includes(source.id);
 
               return (
-                <div key={source.id} className="rounded-2xl bg-slate-50 px-4 py-3">
+                <div key={source.id} className="py-4 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-2">
                     <SourceIcon source={source} className="h-7 w-7" />
                     <p className="text-sm font-medium text-slate-800">{source.name}</p>
@@ -82,7 +82,7 @@ const SettingsExclusionsSection = ({
                           type="button"
                           disabled={isParentExcluded}
                           onClick={() => onToggleSubFeed(subSource.id)}
-                          className={`inline-flex items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-sm transition-colors ${isSelected ? 'bg-amber-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-200'} disabled:cursor-not-allowed disabled:opacity-50`}
+                          className={`inline-flex items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-sm transition-colors ${isSelected ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'} disabled:cursor-not-allowed disabled:opacity-50`}
                         >
                           <SourceIcon source={{ ...source, iconUrl: subSource.iconUrl || source.iconUrl }} className="h-7 w-7" />
                           <span>{subSource.label}</span>

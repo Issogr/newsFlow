@@ -50,87 +50,87 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
   });
 
   return (
-    <SlideOverPanelFrame>
-        <SlideOverPanelHeader
-          closeLabel={t('cancel')}
-          eyebrow={t('settings')}
-          icon={Settings}
-          onClose={onClose}
-          title={currentUser.user.username}
-        />
+    <SlideOverPanelFrame panelClassName="ml-auto flex h-full w-full flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] sm:max-w-2xl sm:rounded-[1.6rem] sm:border sm:border-slate-200">
+      <SlideOverPanelHeader
+        closeLabel={t('cancel')}
+        eyebrow={currentUser.user.username}
+        icon={Settings}
+        onClose={onClose}
+        title={t('settings')}
+      />
 
-        <SlideOverPanelBody>
-          <div className="space-y-5">
-            <SettingsPreferencesSection
-              t={t}
-              settings={settings}
-              onSettingChange={setSetting}
-            />
+      <SlideOverPanelBody>
+        <div>
+          <SettingsPreferencesSection
+            t={t}
+            settings={settings}
+            onSettingChange={setSetting}
+          />
 
-            <SettingsCustomSourcesSection
-              t={t}
-              saving={saving}
-              sourceError={sourceError}
-              customSources={customSources}
-              sourceForm={sourceForm}
-              editingSourceId={editingSourceId}
-              editingSourceForm={editingSourceForm}
-              onSourceFormChange={setSourceForm}
-              onEditingSourceFormChange={setEditingSourceForm}
-              onAddSource={handleAddSource}
-              onStartEditSource={startEditSource}
-              onCancelEditSource={cancelEditSource}
-              onUpdateSource={handleUpdateSource}
-              onDeleteSource={handleDeleteSource}
-            />
+          <SettingsCustomSourcesSection
+            t={t}
+            saving={saving}
+            sourceError={sourceError}
+            customSources={customSources}
+            sourceForm={sourceForm}
+            editingSourceId={editingSourceId}
+            editingSourceForm={editingSourceForm}
+            onSourceFormChange={setSourceForm}
+            onEditingSourceFormChange={setEditingSourceForm}
+            onAddSource={handleAddSource}
+            onStartEditSource={startEditSource}
+            onCancelEditSource={cancelEditSource}
+            onUpdateSource={handleUpdateSource}
+            onDeleteSource={handleDeleteSource}
+          />
 
-            <SettingsExclusionsSection
-              t={t}
-              settings={settings}
-              excludedSourceCatalog={excludedSourceCatalog}
-              excludedSubFeedCatalog={excludedSubFeedCatalog}
-              onToggleSource={toggleExcludedSource}
-              onToggleSubFeed={toggleExcludedSubFeed}
-            />
+          <SettingsExclusionsSection
+            t={t}
+            settings={settings}
+            excludedSourceCatalog={excludedSourceCatalog}
+            excludedSubFeedCatalog={excludedSubFeedCatalog}
+            onToggleSource={toggleExcludedSource}
+            onToggleSubFeed={toggleExcludedSubFeed}
+          />
 
-            {error && (
-              <InlineAlert>
-                {getFriendlyApiErrorMessage(error, t)}
-              </InlineAlert>
-            )}
+          {error && (
+            <InlineAlert className="my-6">
+              {getFriendlyApiErrorMessage(error, t)}
+            </InlineAlert>
+          )}
 
-            <SettingsAccessSection
-              t={t}
-              saving={saving}
-              importInputRef={importInputRef}
-              showApiTokenControls={publicApiAuthenticatedEnabled}
-              apiToken={apiToken}
-              newApiToken={newApiToken}
-              settingsLimits={settingsLimits}
-              onExport={handleExport}
-              onImportClick={handleImportClick}
-              onImport={handleImport}
-              onCreateApiToken={handleCreateApiToken}
-              onRevokeApiToken={handleRevokeApiToken}
-            />
-          </div>
-        </SlideOverPanelBody>
+          <SettingsAccessSection
+            t={t}
+            saving={saving}
+            importInputRef={importInputRef}
+            showApiTokenControls={publicApiAuthenticatedEnabled}
+            apiToken={apiToken}
+            newApiToken={newApiToken}
+            settingsLimits={settingsLimits}
+            onExport={handleExport}
+            onImportClick={handleImportClick}
+            onImport={handleImport}
+            onCreateApiToken={handleCreateApiToken}
+            onRevokeApiToken={handleRevokeApiToken}
+          />
+        </div>
+      </SlideOverPanelBody>
 
-        <SlideOverPanelFooter>
-          <div className="flex items-center gap-2">
-            <ProjectGitHubLink />
-            <button
-              type="button"
-              onClick={onOpenReleaseNotes}
-              className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
-            >
-              {t('changelogVersionLabel', { version: currentChangelogVersion })}
-            </button>
-          </div>
-          <button type="button" onClick={handleSave} disabled={saving} className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
-            {t('save')}
+      <SlideOverPanelFooter>
+        <div className="flex items-center gap-2">
+          <ProjectGitHubLink />
+          <button
+            type="button"
+            onClick={onOpenReleaseNotes}
+            className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
+          >
+            {t('changelogVersionLabel', { version: currentChangelogVersion })}
           </button>
-        </SlideOverPanelFooter>
+        </div>
+        <button type="button" onClick={handleSave} disabled={saving} className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
+          {t('save')}
+        </button>
+      </SlideOverPanelFooter>
     </SlideOverPanelFrame>
   );
 };

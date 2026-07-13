@@ -2,7 +2,7 @@ import { Globe2, Image as ImageIcon, MonitorSmartphone, PanelRightOpen, Radio, T
 import SettingsSectionCard from './SettingsSectionCard';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORDER } from '../../config/readerTextSize';
 
-const fieldClassName = 'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3';
+const fieldClassName = 'w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition-[border-color,background-color,box-shadow] focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100';
 
 const SettingsPreferencesSection = ({
   t,
@@ -12,10 +12,10 @@ const SettingsPreferencesSection = ({
   const showNewsImagesEnabled = settings.showNewsImages !== false;
 
   return (
-    <SettingsSectionCard icon={Radio} title={t('preferences')} iconToneClassName="bg-sky-100 text-sky-700">
-      <div className="grid gap-5 md:grid-cols-2">
+    <SettingsSectionCard icon={Radio} title={t('preferences')} iconToneClassName="text-sky-600">
+      <div className="grid gap-x-5 gap-y-6 md:grid-cols-2">
         <label className="block">
-          <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
+          <span className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
             <Globe2 className="h-4 w-4 text-sky-600" />
             {t('defaultLanguageSetting')}
           </span>
@@ -31,7 +31,7 @@ const SettingsPreferencesSection = ({
         </label>
 
         <label className="block">
-          <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
+          <span className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
             <MonitorSmartphone className="h-4 w-4 text-violet-600" />
             {t('themeModeSetting')}
           </span>
@@ -47,7 +47,7 @@ const SettingsPreferencesSection = ({
         </label>
 
         <label className="block">
-          <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
+          <span className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
             <PanelRightOpen className="h-4 w-4 text-indigo-600" />
             {t('readerPanelPositionSetting')}
           </span>
@@ -63,7 +63,7 @@ const SettingsPreferencesSection = ({
         </label>
 
         <label className="block">
-          <span className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
+          <span className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
             <Type className="h-4 w-4 text-rose-600" />
             {t('readerTextSizeSetting')}
           </span>
@@ -78,7 +78,7 @@ const SettingsPreferencesSection = ({
           </select>
         </label>
 
-        <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-5 md:col-span-2">
           <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-700">
             <ImageIcon className="h-4 w-4 shrink-0 text-violet-600" />
             <span>{t('showNewsImagesSetting')}</span>

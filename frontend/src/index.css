@@ -51,7 +51,7 @@ body {
   background-color: rgb(15 23 42) !important;
 }
 
-:root[data-theme='dark'] :is(.bg-slate-50\/70, .bg-slate-50\/60) {
+:root[data-theme='dark'] :is(.bg-slate-50\/80, .bg-slate-50\/70, .bg-slate-50\/60) {
   background-color: rgb(15 23 42 / 0.92) !important;
 }
 
