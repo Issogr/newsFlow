@@ -50,6 +50,18 @@ const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 const BACK_TO_TOP_THRESHOLD = 280;
 const TOP_NAV_SHRINK_THRESHOLD = 28;
 
+function getUserInitials(username = '') {
+  const initials = String(username)
+    .trim()
+    .split(/[\s._@-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('');
+
+  return initials.toUpperCase();
+}
+
 function UserMenuItem({ icon: Icon, label, onClick, className, iconClassName }) {
   return (
     <button
@@ -198,6 +210,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     ? t('refreshPendingTitle')
     : t('refresh');
   const refreshDisabled = isFeedRefreshActive || (!isReadLaterView && manualRefreshPending);
+  const userInitials = getUserInitials(currentUser?.user?.username);
   const socketSubscription = useMemo(() => ({
     search: debouncedSearch,
     sourceIds: activeFilters.sourceIds,
@@ -694,7 +707,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
               <div className="relative" ref={userMenuRef}>
                 <TopNavActionButton
                   icon={User}
-                  label={t('userMenu')}
+                  iconNode={userInitials ? (
+                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-200 text-xs font-bold leading-none text-sky-800" aria-hidden="true">
+                      {userInitials}
+                    </span>
+                  ) : (
+                    <User className="h-7 w-7" aria-hidden="true" />
+                  )}
+                  label={null}
                   onClick={() => {
                     setUserMenuOpen((current) => {
                       const nextOpen = !current;
@@ -706,6 +726,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                   }}
                   active={userMenuOpen}
                   className="z-20"
+                  sizeClassName="h-12 w-12 min-w-12 shrink-0 rounded-full px-0"
                   aria-expanded={userMenuOpen}
                   aria-haspopup="menu"
                   aria-label={t('userMenu')}
@@ -713,18 +734,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
                 {userMenuOpen && (
                   <div className={`absolute right-0 ${topNavCompact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]'} z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur transition-all duration-200`} role="menu">
-                    <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-4">
-                      <div className="flex items-start gap-3">
-                        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-sm">
-                          <User className="h-5 w-5" aria-hidden="true" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{t('userMenu')}</p>
-                          <p className="mt-1 truncate text-sm font-semibold text-slate-900">{currentUser?.user?.username}</p>
-                        </div>
-                      </div>
-                    </div>
-
                     <div className="space-y-3 p-3">
                       <div className="space-y-2 pt-1">
                         <UserMenuItem

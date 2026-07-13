@@ -11,12 +11,14 @@ const TopNavActionButton = ({
   badgeClassName = 'bg-slate-800 text-white',
   badgeSizeClassName = 'h-3.5 min-w-3.5 px-1',
   iconClassName = '',
+  iconNode = null,
   labelClassName = '',
   className = '',
   disabled = false,
   type = 'button',
   ...buttonProps
 }) => {
+  const hasLabel = label !== null && label !== undefined && label !== '';
   const stateClassName = disabled
     ? disabledClassName
     : active
@@ -27,18 +29,20 @@ const TopNavActionButton = ({
     <button
       type={type}
       disabled={disabled}
-      className={`relative flex ${sizeClassName} flex-col items-center justify-center gap-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 ${stateClassName} ${className}`}
+      className={`relative flex ${sizeClassName} ${hasLabel ? 'flex-col gap-0.5' : ''} items-center justify-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 ${stateClassName} ${className}`}
       {...buttonProps}
     >
-      <span className="relative flex h-5 w-5 items-center justify-center">
-        <Icon className={`h-5 w-5 ${iconClassName}`} aria-hidden="true" />
+      <span className={`relative flex items-center justify-center ${iconNode ? '' : 'h-5 w-5'}`}>
+        {iconNode || <Icon className={`h-5 w-5 ${iconClassName}`} aria-hidden="true" />}
         {badge !== null && badge !== undefined && (
           <span className={`absolute -right-1.5 -top-1 flex ${badgeSizeClassName} items-center justify-center rounded-full text-[8px] font-bold ${badgeClassName}`}>
             {badge}
           </span>
         )}
       </span>
-      <span className={`h-3.5 text-center text-[10px] font-medium leading-none ${labelClassName}`}>{label}</span>
+      {hasLabel ? (
+        <span className={`h-3.5 text-center text-[10px] font-medium leading-none ${labelClassName}`}>{label}</span>
+      ) : null}
     </button>
   );
 };

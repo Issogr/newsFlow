@@ -200,6 +200,27 @@ describe('NewsAggregator', () => {
     vi.useRealTimers();
   });
 
+  test('shows account initials and falls back to the user icon without a username', async () => {
+    fetchNews.mockResolvedValue(createFeedResponse([], { meta: { totalGroups: 0 } }));
+
+    const namedView = await renderNewsAggregator({
+      currentUser: createTestCurrentUser({ user: { username: 'simone.rossi' } })
+    });
+
+    expect(screen.getByText('SR')).toBeInTheDocument();
+    expect(screen.queryByText('User')).not.toBeInTheDocument();
+
+    namedView.unmount();
+    fetchNews.mockClear();
+
+    const unnamedView = await renderNewsAggregator({
+      currentUser: createTestCurrentUser({ user: { username: '' } })
+    });
+
+    expect(screen.queryByText('?')).not.toBeInTheDocument();
+    expect(unnamedView.container.querySelector('button[aria-label="User"] .lucide-user')).toBeInTheDocument();
+  });
+
   test('ignores main-feed refresh socket events while viewing read later', async () => {
     const socketHandlers = captureSocketHandlers();
     fetchNews.mockResolvedValue(createSingleGroupFeedResponse('news', 'News headline'));
