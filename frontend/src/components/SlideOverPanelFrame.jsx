@@ -27,8 +27,8 @@ export const SlideOverPanelHeader = ({ closeLabel, eyebrow, icon: Icon, onClose,
         <h2 className="mt-2 text-xl font-semibold text-slate-900">{title}</h2>
         {subtitle ? <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">{subtitle}</p> : null}
       </div>
-      <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label={closeLabel}>
-        <X className="h-5 w-5" />
+      <button type="button" onClick={onClose} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] border border-slate-200 bg-slate-50 text-slate-700 transition-colors hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300" aria-label={closeLabel}>
+        <X className="h-5 w-5" aria-hidden="true" />
       </button>
     </div>
   </div>
