@@ -166,8 +166,7 @@ const MobileBottomNav = ({
                   inert={searchMode ? undefined : true}
                 >
                   <FilterSearchInput
-                    className="flex flex-1 items-center gap-2"
-                    labelClassName="h-full"
+                    className="flex h-full min-w-0 flex-1 items-center gap-2"
                     inputTabIndex={searchMode ? 0 : -1}
                     cancelIconClassName="h-4.5 w-4.5"
                     onCancel={handleExitSearch}

@@ -56,7 +56,7 @@ const DesktopTopNavFilters = ({
       {searchMode ? (
         <div className="flex items-center gap-1.5 transition-all duration-200 ease-out">
           <FilterSearchInput
-            className="flex w-[min(32vw,25rem)] items-center gap-2"
+            className="flex h-12 w-[clamp(14rem,36vw,30rem)] items-center gap-2"
             cancelIconClassName="h-[1.125rem] w-[1.125rem]"
             onCancel={handleExitSearch}
             onSearchChange={onSearchChange}
