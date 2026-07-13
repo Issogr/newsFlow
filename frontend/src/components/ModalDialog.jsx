@@ -64,7 +64,7 @@ const ModalDialog = ({
       aria-modal="true"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
-      className={`m-0 max-h-none max-w-none border-0 p-0 ${className}`}
+      className={`m-0 h-[100dvh] w-full max-h-none max-w-none border-0 p-0 ${className}`}
       tabIndex={-1}
       onCancel={(event) => {
         event.preventDefault();
