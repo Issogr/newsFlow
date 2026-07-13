@@ -221,6 +221,19 @@ describe('NewsAggregator', () => {
     expect(unnamedView.container.querySelector('button[aria-label="User"] .lucide-user')).toBeInTheDocument();
   });
 
+  test('shows card-shaped placeholders while the initial feed loads', async () => {
+    const request = createDeferred();
+    fetchNews.mockReturnValue(request.promise);
+
+    await renderNewsAggregator();
+
+    const loadingStatus = screen.getByRole('status', { name: 'Loading...' });
+    expect(loadingStatus.querySelectorAll('article')).toHaveLength(6);
+
+    await resolveDeferred(request, createFeedResponse([], { meta: { totalGroups: 0 } }));
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Loading...' })).not.toBeInTheDocument());
+  });
+
   test('ignores main-feed refresh socket events while viewing read later', async () => {
     const socketHandlers = captureSocketHandlers();
     fetchNews.mockResolvedValue(createSingleGroupFeedResponse('news', 'News headline'));

@@ -146,13 +146,19 @@ describe('NewsCard', () => {
   });
 
   test('renders icon-only topic pills on standard cards', () => {
-    renderNewsCard({ cardGroup: createGroup({ topics: ['Tecnologia', 'Economia'] }) });
+    const topicGroup = createGroup({ topics: ['Tecnologia', 'Economia'] });
+    const { rerender } = renderNewsCard({ cardGroup: topicGroup });
 
     expect(screen.getByLabelText('Technology')).toBeInTheDocument();
     expect(screen.getByLabelText('Economy')).toBeInTheDocument();
     expect(screen.getByLabelText('Technology').parentElement).toHaveClass('-space-x-1');
     expect(screen.queryByText('Technology')).not.toBeInTheDocument();
     expect(screen.queryByText('Economy')).not.toBeInTheDocument();
+
+    rerender(createNewsCardElement({ cardGroup: topicGroup, showImages: false }));
+
+    expect(screen.getByLabelText('Technology')).toBeInTheDocument();
+    expect(screen.getByLabelText('Economy')).toBeInTheDocument();
   });
 
   test('renders the published date and time pill', () => {

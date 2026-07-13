@@ -4,6 +4,9 @@
 
 - removed the per-user article retention field from settings; retention now follows the app-wide server configuration only
 - removed the latest-hours quick filter and its settings field because the feed is already ordered by age and paginated
+- redesigned news cards as vibrant social-feed posts with compact source headers, 16:9 imagery, image-overlay topics, compact header actions, and edge-to-edge mobile cards
+- added card-shaped loading placeholders, matching floating navigation surfaces across desktop and mobile, and reduced-motion-aware feed animations
+- integrated mobile back-to-top with the bottom navigation so the navbar uses a liquid-style expansion from the separate button while scrolling up
 
 ## 3.5.10
 

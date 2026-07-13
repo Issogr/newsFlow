@@ -9,6 +9,7 @@ const t = (key, params = {}) => {
     searchLabel: 'Search',
     refresh: 'Refresh',
     readLaterShort: 'Saved',
+    backToTop: 'Back to top',
     cancel: 'Cancel',
     noNewsText: 'No news found.',
   };
@@ -34,6 +35,7 @@ function renderNav(overrides = {}) {
     onToggleFilter: vi.fn(),
     onSearchChange: vi.fn(),
     onSearchClear: vi.fn(),
+    onBackToTop: vi.fn(),
     visible: true,
   };
   return render(<MobileBottomNav {...defaults} {...overrides} />);
@@ -121,5 +123,20 @@ describe('MobileBottomNav', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onSearchClear).toHaveBeenCalled();
     expect(getNavButton('Sources')).toBeInTheDocument();
+  });
+
+  it('keeps back to top available while the navbar is collapsed', () => {
+    const onBackToTop = vi.fn();
+
+    renderNav({ visible: false, backToTopVisible: true, onBackToTop });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to top' }));
+
+    expect(onBackToTop).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Back to top' })).toHaveClass('w-[3.95rem]');
+    expect(screen.getByRole('navigation').querySelector('.mobile-nav-liquid')).toHaveClass(
+      'mobile-nav-liquid-with-button',
+      'mobile-nav-liquid-hidden'
+    );
   });
 });
