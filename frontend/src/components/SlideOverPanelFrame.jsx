@@ -2,14 +2,14 @@ import { X } from 'lucide-react';
 import useLockBodyScroll from '../hooks/useLockBodyScroll';
 
 const DEFAULT_OVERLAY_CLASS_NAME = 'fixed inset-0 z-50 flex bg-slate-950/35 backdrop-blur-sm sm:px-4 sm:py-6';
-const DEFAULT_PANEL_CLASS_NAME = 'ml-auto flex h-full w-full flex-col overflow-hidden bg-slate-50 shadow-2xl sm:max-w-2xl sm:rounded-[2rem] sm:border sm:border-slate-200';
+const DEFAULT_PANEL_CLASS_NAME = 'ml-auto flex h-full w-full flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] sm:max-w-2xl sm:rounded-[1.6rem] sm:border sm:border-slate-200';
 
-const SlideOverPanelFrame = ({ children, overlayClassName = DEFAULT_OVERLAY_CLASS_NAME, panelClassName = DEFAULT_PANEL_CLASS_NAME }) => {
+const SlideOverPanelFrame = ({ children, overlayClassName = DEFAULT_OVERLAY_CLASS_NAME }) => {
   useLockBodyScroll();
 
   return (
     <div className={overlayClassName}>
-      <div className={panelClassName}>
+      <div className={DEFAULT_PANEL_CLASS_NAME}>
         {children}
       </div>
     </div>
@@ -25,7 +25,7 @@ export const SlideOverPanelHeader = ({ closeLabel, eyebrow, icon: Icon, onClose,
           {eyebrow}
         </p>
         <h2 className="mt-2 text-xl font-semibold text-slate-900">{title}</h2>
-        {subtitle ? <p className="mt-2 max-w-xl text-sm text-slate-500">{subtitle}</p> : null}
+        {subtitle ? <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">{subtitle}</p> : null}
       </div>
       <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label={closeLabel}>
         <X className="h-5 w-5" />

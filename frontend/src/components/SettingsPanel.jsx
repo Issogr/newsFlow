@@ -50,7 +50,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
   });
 
   return (
-    <SlideOverPanelFrame panelClassName="ml-auto flex h-full w-full flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] sm:max-w-2xl sm:rounded-[1.6rem] sm:border sm:border-slate-200">
+    <SlideOverPanelFrame>
       <SlideOverPanelHeader
         closeLabel={t('cancel')}
         eyebrow={currentUser.user.username}
