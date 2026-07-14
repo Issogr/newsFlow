@@ -40,6 +40,7 @@ describe('userService imports', () => {
         compactNewsCardsMode: 'everywhere',
         readerPanelPosition: 'left',
         readerTextSize: 'large',
+        readerTextWidth: 'widest',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: ['bbc'],
         excludedSubSourceIds: []
@@ -62,6 +63,7 @@ describe('userService imports', () => {
         compactNewsCardsMode: 'everywhere',
         readerPanelPosition: 'left',
         readerTextSize: 'large',
+        readerTextWidth: 'widest',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: []
       }),
@@ -82,6 +84,7 @@ describe('userService imports', () => {
       showNewsImages: false,
       readerPanelPosition: 'left',
       readerTextSize: 'large',
+      readerTextWidth: 'widest',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: []
     });
@@ -98,7 +101,8 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      readerTextSize: 'small'
+      readerTextSize: 'small',
+      readerTextWidth: 'wide'
     });
 
     const exportedSettings = userService.exportUserSettings(sourceAuthPayload.user.id);
@@ -108,8 +112,10 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      readerTextSize: 'small'
+      readerTextSize: 'small',
+      readerTextWidth: 'wide'
     });
+    expect(exportedSettings.version).toBe(10);
     expect(exportedSettings.settings).not.toHaveProperty('articleRetentionHours');
     expect(exportedSettings.settings).not.toHaveProperty('recentHours');
 
@@ -118,15 +124,25 @@ describe('userService imports', () => {
     expect(importedState.settings).toMatchObject({
       themeMode: 'dark',
       showNewsImages: false,
-      readerTextSize: 'small'
+      readerTextSize: 'small',
+      readerTextWidth: 'wide'
     });
     expect(database.getUserSettings(targetAuthPayload.user.id)).toMatchObject({
       themeMode: 'dark',
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      readerTextSize: 'small'
+      readerTextSize: 'small',
+      readerTextWidth: 'wide'
     });
+  });
+
+  test('normalizes unsupported reader text widths to the default', async () => {
+    const authPayload = await userService.registerUser({ username: 'width-user', password: 'secret123' });
+
+    const settings = userService.updateUserSettings(authPayload.user.id, { readerTextWidth: 'oversized' });
+
+    expect(settings.readerTextWidth).toBe('default');
   });
 
   test('requires a password during registration', async () => {

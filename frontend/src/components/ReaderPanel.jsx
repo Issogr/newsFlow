@@ -13,6 +13,7 @@ import useShareArticle from '../hooks/useShareArticle';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { FullscreenPanelFrame } from './FullscreenModalFrame';
 import ReaderTextSizeControls from './ReaderTextSizeControls';
+import ReaderTextWidthControls from './ReaderTextWidthControls';
 import ShareStatusBubble from './ShareStatusBubble';
 import TextContentSkeleton from './TextContentSkeleton';
 import {
@@ -20,6 +21,8 @@ import {
   READER_TEXT_SIZE_STYLES
 } from '../config/readerTextSize';
 import { getStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
+import { DEFAULT_READER_TEXT_WIDTH, READER_TEXT_WIDTH_CLASS_NAMES } from '../config/readerTextWidth';
+import { getStoredReaderTextWidthPreference } from '../utils/readerTextWidthPreference';
 
 const sourceChipClassName = 'inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-900';
 const readTimeChipClassName = 'inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600';
@@ -127,6 +130,7 @@ const ReaderPanel = ({
   const [loading, setLoading] = useState(false);
   const { shareState, shareArticle, resetShareState } = useShareArticle();
   const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
+  const [readerTextWidth, setReaderTextWidth] = useState(() => getStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth));
   const [error, setError] = useState(null);
   const { startLatestRequest, resetLatestRequest } = useLatestRequest();
   const groupKey = useMemo(() => getReaderGroupKey(group), [group]);
@@ -160,6 +164,10 @@ const ReaderPanel = ({
   useEffect(() => {
     setReaderTextSize(getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   }, [currentUser?.settings?.readerTextSize]);
+
+  useEffect(() => {
+    setReaderTextWidth(getStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth));
+  }, [currentUser?.settings?.readerTextWidth]);
 
   const selectedArticle = useMemo(() => {
     return group?.items?.find((item) => item.id === selectedArticleId) || group?.items?.[0] || null;
@@ -233,6 +241,7 @@ const ReaderPanel = ({
     ? 'lg:justify-start'
     : (readerPosition === 'center' ? 'lg:justify-center' : 'lg:justify-end');
   const readerTextStyles = READER_TEXT_SIZE_STYLES[readerTextSize] || READER_TEXT_SIZE_STYLES[DEFAULT_READER_TEXT_SIZE];
+  const readerTextWidthClassName = READER_TEXT_WIDTH_CLASS_NAMES[readerTextWidth] || READER_TEXT_WIDTH_CLASS_NAMES[DEFAULT_READER_TEXT_WIDTH];
   const handleShare = async () => {
     await shareArticle({
       url: safeOriginalUrl,
@@ -258,7 +267,12 @@ const ReaderPanel = ({
     <FullscreenPanelFrame
       closeLabel={t('closeReader')}
       containerClassName={`relative flex h-full w-full ${desktopPositionClassName}`}
-      headerActions={<ReaderTextSizeControls currentUser={currentUser} onChange={setReaderTextSize} t={t} value={readerTextSize} />}
+      headerActions={(
+        <>
+          <ReaderTextWidthControls currentUser={currentUser} onChange={setReaderTextWidth} t={t} value={readerTextWidth} />
+          <ReaderTextSizeControls currentUser={currentUser} onChange={setReaderTextSize} t={t} value={readerTextSize} />
+        </>
+      )}
       headerStart={headerStart}
       labelledBy="reader-panel-title"
       onClose={onClose}
@@ -266,7 +280,7 @@ const ReaderPanel = ({
     >
           <div className="min-h-0 flex-1 overflow-y-auto bg-white pb-[calc(1.5rem+env(safe-area-inset-bottom))] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-6 sm:pl-[calc(1.25rem+env(safe-area-inset-left))] sm:pr-[calc(1.25rem+env(safe-area-inset-right))] md:pb-[calc(2rem+env(safe-area-inset-bottom))] md:pt-8 lg:pl-[calc(1.5rem+env(safe-area-inset-left))] lg:pr-[calc(1.5rem+env(safe-area-inset-right))]">
             {selectedArticle && (
-              <div className="mx-auto max-w-[64ch] space-y-6">
+              <div className={`mx-auto space-y-6 ${readerTextWidthClassName}`}>
                 <div className="border-b border-slate-200 pb-6 md:pb-7">
                   <h2 className="text-pretty text-2xl font-semibold leading-tight tracking-tight text-stone-900 md:text-[2rem] md:leading-[1.15]">
                     {selectedArticle?.title || t('readerMode')}

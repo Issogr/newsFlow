@@ -221,6 +221,16 @@ describe('NewsAggregator', () => {
     expect(unnamedView.container.querySelector('button[aria-label="User"] .lucide-user')).toBeInTheDocument();
   });
 
+  test('syncs the account reader text width to local preferences', async () => {
+    fetchNews.mockResolvedValue(createFeedResponse([], { meta: { totalGroups: 0 } }));
+
+    await renderNewsAggregator({
+      currentUser: createTestCurrentUser({ settings: { readerTextWidth: 'widest' } })
+    });
+
+    expect(window.localStorage.getItem('news-flow-reader-text-width')).toBe('widest');
+  });
+
   test('shows card-shaped placeholders while the initial feed loads', async () => {
     const request = createDeferred();
     fetchNews.mockReturnValue(request.promise);

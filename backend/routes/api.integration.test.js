@@ -127,6 +127,7 @@ describe('API auth and user flows', () => {
         compactNewsCardsMode: 'off',
         readerPanelPosition: 'right',
         readerTextSize: 'medium',
+        readerTextWidth: 'default',
         lastSeenReleaseNotesVersion: '',
         excludedSourceIds: [],
         excludedSubSourceIds: []
@@ -387,6 +388,7 @@ describe('API auth and user flows', () => {
         compactNewsCardsMode: 'desktop',
         readerPanelPosition: 'left',
         readerTextSize: 'large',
+        readerTextWidth: 'widest',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: [ansaSourceId],
         excludedSubSourceIds: ['ansa_mondo']
@@ -403,6 +405,7 @@ describe('API auth and user flows', () => {
         compactNewsCardsMode: 'desktop',
         readerPanelPosition: 'left',
         readerTextSize: 'large',
+        readerTextWidth: 'widest',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: [ansaSourceId],
         excludedSubSourceIds: ['ansa_mondo']
@@ -1147,6 +1150,7 @@ describe('API auth and user flows', () => {
           compactNewsCardsMode: 'desktop',
           readerPanelPosition: 'center',
           readerTextSize: 'small',
+          readerTextWidth: 'wide',
           lastSeenReleaseNotesVersion: '3.2.3',
           excludedSourceIds: [ansaSourceId],
           excludedSubSourceIds: []
@@ -1171,6 +1175,7 @@ describe('API auth and user flows', () => {
           compactNewsCardsMode: 'desktop',
           readerPanelPosition: 'center',
           readerTextSize: 'small',
+          readerTextWidth: 'wide',
           lastSeenReleaseNotesVersion: '3.2.3',
           excludedSourceIds: expect.arrayContaining([ansaSourceId])
         }),

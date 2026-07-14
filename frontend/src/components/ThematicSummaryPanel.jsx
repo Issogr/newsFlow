@@ -5,9 +5,12 @@ import { getTopicPresentation } from '../topicPresentation';
 import { getLocalizedThematicSummary, getThematicSummaryPresentationKey, isPodcastSummary } from '../utils/thematicSummaryLocale';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_STYLES } from '../config/readerTextSize';
 import { getStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
+import { DEFAULT_READER_TEXT_WIDTH, READER_TEXT_WIDTH_CLASS_NAMES } from '../config/readerTextWidth';
+import { getStoredReaderTextWidthPreference } from '../utils/readerTextWidthPreference';
 import { FullscreenPanelFrame } from './FullscreenModalFrame';
 import PodcastAudioPlayer from './PodcastAudioPlayer';
 import ReaderTextSizeControls from './ReaderTextSizeControls';
+import ReaderTextWidthControls from './ReaderTextWidthControls';
 import TextContentSkeleton from './TextContentSkeleton';
 
 const SUMMARY_SLOTS = new Set(['morning', 'lunch', 'evening']);
@@ -332,6 +335,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   const swipeFeedbackOffsetRef = useRef(0);
   const [swipeFeedbackOffset, setSwipeFeedbackOffset] = useState(0);
   const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
+  const [readerTextWidth, setReaderTextWidth] = useState(() => getStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth));
   const [readySummaryId, setReadySummaryId] = useState('');
   const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [locale, summary]);
   const sourceByIndex = useMemo(() => new Map((summary?.sources || []).map((source) => [Number(source.index), source])), [summary?.sources]);
@@ -346,6 +350,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   const primaryPresentation = getTopicPresentation(getThematicSummaryPresentationKey(summary));
   const PrimaryIcon = primaryPresentation.Icon;
   const readerTextStyles = READER_TEXT_SIZE_STYLES[readerTextSize] || READER_TEXT_SIZE_STYLES[DEFAULT_READER_TEXT_SIZE];
+  const readerTextWidthClassName = READER_TEXT_WIDTH_CLASS_NAMES[readerTextWidth] || READER_TEXT_WIDTH_CLASS_NAMES[DEFAULT_READER_TEXT_WIDTH];
   const closeLabel = isPodcast ? t('closePodcastSummary') : t('closeThematicSummary');
   const canSwipeSummaries = swipeSummaries.length > 1 && swipeSummaryIndex >= 0 && typeof onSelectSummary === 'function';
   const swipeFeedbackStrength = Math.min(Math.abs(swipeFeedbackOffset) / SUMMARY_SWIPE_FEEDBACK_MAX_OFFSET, 1);
@@ -410,6 +415,9 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   useEffect(() => {
     setReaderTextSize(getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   }, [currentUser?.settings?.readerTextSize]);
+  useEffect(() => {
+    setReaderTextWidth(getStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth));
+  }, [currentUser?.settings?.readerTextWidth]);
   const handleTouchStart = (event) => {
     touchStartRef.current = null;
     resetSwipeFeedbackOffset();
@@ -472,15 +480,9 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
     resetSwipeFeedbackOffset();
   };
   const headerStart = (
-    <div className="flex min-w-0 items-center gap-3">
-      <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${primaryPresentation.iconBadgeClassName}`}>
-        <PrimaryIcon className="h-5 w-5" aria-hidden="true" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">{isPodcast ? t('podcastBriefing') : t('thematicSummary')}</p>
-        <h2 id="thematic-summary-panel-title" className="line-clamp-2 text-pretty text-base font-semibold leading-tight text-stone-900 focus:outline-none" data-modal-title tabIndex={-1}>{localizedSummary.displayTopicLabel}</h2>
-      </div>
-    </div>
+    <h2 id="thematic-summary-panel-title" className="sr-only focus:outline-none" data-modal-title tabIndex={-1}>
+      {isPodcast ? t('podcastBriefing') : t('thematicSummary')}: {localizedSummary.displayTopicLabel}
+    </h2>
   );
 
   if (!summary) {
@@ -491,7 +493,12 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
     <FullscreenPanelFrame
       closeLabel={closeLabel}
       containerClassName="relative flex h-[100dvh] w-full justify-center overflow-hidden overscroll-none"
-      headerActions={!isPodcast ? <ReaderTextSizeControls currentUser={currentUser} onChange={setReaderTextSize} t={t} value={readerTextSize} /> : null}
+      headerActions={!isPodcast ? (
+        <>
+          <ReaderTextWidthControls currentUser={currentUser} onChange={setReaderTextWidth} t={t} value={readerTextWidth} />
+          <ReaderTextSizeControls currentUser={currentUser} onChange={setReaderTextSize} t={t} value={readerTextSize} />
+        </>
+      ) : null}
       headerStart={headerStart}
       labelledBy="thematic-summary-panel-title"
       onClose={onClose}
@@ -506,24 +513,37 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
             onTouchStart={handleTouchStart}
           >
             <div
-              className={`mx-auto max-w-[64ch] space-y-5 transition-[opacity,transform] ease-out will-change-transform ${swipeFeedbackActive ? 'duration-75' : 'duration-200'}`}
+              className={`mx-auto space-y-5 transition-[opacity,transform] ease-out will-change-transform ${readerTextWidthClassName} ${swipeFeedbackActive ? 'duration-75' : 'duration-200'}`}
               data-testid="thematic-summary-swipe-frame"
               style={swipeFeedbackStyle}
             >
-              {!isPodcast && (
-                <div className="border-b border-slate-200 pb-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                  <span className="inline-flex items-center gap-2">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {getSummarySlotLabel(summary, t)}
-                    {Number(summary.articleCount) > 0 && (
-                      <>
-                        <span aria-hidden="true">·</span>
-                        <span>{t('summaryArticleCount', { count: Number(summary.articleCount) })}</span>
-                      </>
-                    )}
+              <div className="border-b border-slate-200 pb-6 md:pb-7">
+                <div className="flex items-start gap-3">
+                  <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${primaryPresentation.iconBadgeClassName}`}>
+                    <PrimaryIcon className="h-5 w-5" aria-hidden="true" />
                   </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">{isPodcast ? t('podcastBriefing') : t('thematicSummary')}</p>
+                    <h2 className="mt-1 text-pretty text-2xl font-semibold leading-tight tracking-tight text-stone-900 md:text-[2rem] md:leading-[1.15]">
+                      {localizedSummary.displayTopicLabel}
+                    </h2>
+                  </div>
                 </div>
-              )}
+                {!isPodcast && (
+                  <div className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                    <span className="inline-flex items-center gap-2">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      {getSummarySlotLabel(summary, t)}
+                      {Number(summary.articleCount) > 0 && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span>{t('summaryArticleCount', { count: Number(summary.articleCount) })}</span>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                )}
+              </div>
 
               <article className="pb-8">
                 {showSummaryOpeningSkeleton ? (

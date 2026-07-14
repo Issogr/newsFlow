@@ -65,7 +65,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('41');
+    expect(migrationVersion).toBe('42');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -78,6 +78,7 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('compact_news_cards');
     expect(settingsColumns).toContain('compact_news_cards_mode');
     expect(settingsColumns).toContain('reader_text_size');
+    expect(settingsColumns).toContain('reader_text_width');
     expect(settingsColumns).toContain('reader_panel_position');
     expect(settingsColumns).toContain('last_seen_release_notes_version');
     expect(settingsColumns).toContain('source_setup_completed');
@@ -102,6 +103,34 @@ describe('database migrations', () => {
     expect(articleIndexNames).toContain('idx_articles_owner_published_id');
     expect(userIndexNames).toContain('idx_users_username_lower');
     expect(topicIndexNames).toContain('idx_article_topics_topic_article');
+  });
+
+  test('migrates reader text width from schema version 41', () => {
+    const sqlite = new SqliteDatabase(dbPath);
+    sqlite.exec(`
+      CREATE TABLE app_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      CREATE TABLE user_settings (
+        user_id TEXT PRIMARY KEY,
+        reader_text_size TEXT NOT NULL DEFAULT 'medium'
+      );
+      INSERT INTO app_meta (key, value) VALUES ('migration_version', '41');
+      INSERT INTO user_settings (user_id) VALUES ('user-1');
+    `);
+    sqlite.close();
+
+    database = require('./database');
+    database.getDb();
+
+    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migrationVersion = migratedDb.prepare("SELECT value FROM app_meta WHERE key = 'migration_version'").get()?.value;
+    const width = migratedDb.prepare('SELECT reader_text_width AS readerTextWidth FROM user_settings WHERE user_id = ?').get('user-1')?.readerTextWidth;
+    migratedDb.close();
+
+    expect(migrationVersion).toBe('42');
+    expect(width).toBe('default');
   });
 
   test('migrates an unversioned legacy database instead of marking it current', () => {
@@ -154,7 +183,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('41');
+    expect(migratedVersion).toBe('42');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
@@ -275,13 +304,14 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('41');
+    expect(migratedVersion).toBe('42');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason', 'clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
     expect(settingsColumns).toContain('compact_news_cards');
     expect(settingsColumns).toContain('compact_news_cards_mode');
     expect(settingsColumns).toContain('reader_text_size');
+    expect(settingsColumns).toContain('reader_text_width');
     expect(settingsColumns).toContain('theme_mode');
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
@@ -388,7 +418,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
 
-    expect(migratedVersion).toBe('41');
+    expect(migratedVersion).toBe('42');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -474,7 +504,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('41');
+    expect(migratedVersion).toBe('42');
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
     expect(row).toEqual({
       summaryText: 'English text [1]',
@@ -535,7 +565,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('41');
+    expect(migratedVersion).toBe('42');
     expect(audioRow).toEqual({
       podcastId: 'legacy-podcast',
       locale: 'it',
@@ -1818,6 +1848,7 @@ describe('database queries and user data', () => {
       compactNewsCardsMode: 'everywhere',
       readerPanelPosition: 'left',
       readerTextSize: 'large',
+      readerTextWidth: 'widest',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
@@ -1830,6 +1861,7 @@ describe('database queries and user data', () => {
       compactNewsCardsMode: 'everywhere',
       readerPanelPosition: 'left',
       readerTextSize: 'large',
+      readerTextWidth: 'widest',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: [primarySourceFamilyId],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
@@ -1982,6 +2014,7 @@ describe('database queries and user data', () => {
     expect(database.getUserSettings('user-1')).toEqual(expect.objectContaining({
       userId: 'user-1',
       defaultLanguage: 'en',
+      readerTextWidth: 'default',
       excludedSourceIds: [],
       excludedSubSourceIds: []
     }));

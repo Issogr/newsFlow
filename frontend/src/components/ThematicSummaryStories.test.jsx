@@ -53,6 +53,7 @@ describe('thematic summary podcast UI', () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     window.localStorage.removeItem('news-flow-reader-text-size');
+    window.localStorage.removeItem('news-flow-reader-text-width');
   });
 
   test('places the podcast story first and opens the selected item', () => {
@@ -312,10 +313,18 @@ describe('thematic summary podcast UI', () => {
     const paragraph = screen.getByText(/Chip demand increased sharply/u);
     const sourceLink = screen.getByRole('link', { name: 'Open source article: Example News' });
     const decreaseTextSizeButton = screen.getByRole('button', { name: 'Decrease reader text size' });
+    const increaseTextWidthButton = screen.getByRole('button', { name: 'Increase reader text width' });
+    const summaryFrame = paragraph.closest('article').parentElement;
 
-    expect(paragraph.closest('article').parentElement).toHaveClass('max-w-[64ch]');
+    expect(summaryFrame).toHaveClass('max-w-[64ch]');
     expect(paragraph.parentElement).toHaveClass('text-[1.18rem]', 'leading-[1.65]');
-    expect(screen.getByRole('group', { name: 'Text size' })).toBeInTheDocument();
+    const textWidthControls = screen.getByRole('group', { name: 'Text width' });
+    const textSizeControls = screen.getByRole('group', { name: 'Text size' });
+    expect(textWidthControls.parentElement).toHaveClass('ml-auto', 'gap-1.5');
+    expect(textWidthControls).toHaveClass('hidden', 'sm:flex');
+    expect(textWidthControls.nextElementSibling).toBe(textSizeControls);
+    const summaryHeadings = screen.getAllByRole('heading', { name: 'Technology' });
+    expect(summaryHeadings.some((heading) => !heading.classList.contains('sr-only'))).toBe(true);
     expect(sourceLink).toHaveAttribute('href', 'https://example.com/story');
     expect(sourceLink).toHaveAttribute('target', '_blank');
     expect(sourceLink).toHaveClass('h-5', 'w-5', 'rounded-full');
@@ -328,6 +337,13 @@ describe('thematic summary podcast UI', () => {
 
     expect(paragraph.parentElement).toHaveClass('text-[1.08rem]', 'leading-[1.65]');
     expect(window.localStorage.getItem('news-flow-reader-text-size')).toBe('medium');
+
+    fireEvent.click(increaseTextWidthButton);
+    fireEvent.click(increaseTextWidthButton);
+
+    expect(summaryFrame).toHaveClass('max-w-[80ch]');
+    expect(window.localStorage.getItem('news-flow-reader-text-width')).toBe('widest');
+    expect(textWidthControls).toHaveTextContent('80ch');
   });
 
   test('switches to the next thematic summary with a mobile left swipe', () => {

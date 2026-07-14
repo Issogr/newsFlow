@@ -10,13 +10,15 @@ import {
   updateUserSettings
 } from '../../services/api';
 import { getStoredReaderTextSizePreference, setStoredReaderTextSizePreference } from '../../utils/readerTextSizePreference';
+import { getStoredReaderTextWidthPreference, setStoredReaderTextWidthPreference } from '../../utils/readerTextWidthPreference';
 
 const createInitialSourceForm = () => ({ url: '' });
 const createInitialEditingSourceForm = () => ({ name: '', url: '', language: 'it' });
 const getCurrentUserIdentity = (currentUser) => currentUser?.user?.id || currentUser?.user?.username || currentUser?.id || '';
 const getInitialSettings = (currentUser) => ({
   ...currentUser.settings,
-  readerTextSize: getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize)
+  readerTextSize: getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize),
+  readerTextWidth: getStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth)
 });
 
 const areSettingValuesEqual = (left, right) => {
@@ -260,6 +262,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onUserUpdate }) 
       ? result.nextSettings
       : getInitialSettings(currentUserRef.current);
     setStoredReaderTextSizePreference(nextSettings.readerTextSize);
+    setStoredReaderTextWidthPreference(nextSettings.readerTextWidth);
     syncPersistedUserState(nextSettings, result.nextCustomSources);
     return true;
   }, [customSources, editingSourceForm, editingSourceId, hasEditingSourceChanges, hasSourceFormChanges, runSavingAction, settings, sourceForm, syncCustomSourcesState, syncPersistedUserState]);
@@ -323,6 +326,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, onUserUpdate }) 
       await runSavingAction(async () => {
         const response = await importUserSettings(payload);
         setStoredReaderTextSizePreference(response.settings.readerTextSize);
+        setStoredReaderTextWidthPreference(response.settings.readerTextWidth);
         syncPersistedUserState(response.settings, response.customSources);
       });
     } catch (requestError) {

@@ -21,6 +21,7 @@ import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
+import { setStoredReaderTextWidthPreference } from '../utils/readerTextWidthPreference';
 import {
   buildFeedRequestParams,
   getGroupMergeKeys,
@@ -283,6 +284,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   useEffect(() => {
     setStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize || 'medium');
   }, [currentUser?.settings?.readerTextSize]);
+
+  useEffect(() => {
+    setStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth || 'default');
+  }, [currentUser?.settings?.readerTextWidth]);
 
   useEffect(() => {
     const handleScroll = () => {

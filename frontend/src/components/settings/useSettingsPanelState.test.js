@@ -35,6 +35,7 @@ const renderSettingsHook = (overrides = {}) => {
 describe('useSettingsPanelState', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
   });
 
   test('keeps a changed setting local until save', async () => {
@@ -58,6 +59,23 @@ describe('useSettingsPanelState', () => {
     expect(result.current.settings).toEqual(nextSettings);
     expect(result.current.hasUnsavedChanges).toBe(false);
     expect(onUserUpdate).toHaveBeenCalledWith(expect.objectContaining({ settings: nextSettings }));
+  });
+
+  test('persists reader text width locally after save', async () => {
+    const nextSettings = { ...baseCurrentUser.settings, readerTextWidth: 'wide' };
+    updateUserSettings.mockResolvedValue({ settings: nextSettings });
+    const { result } = renderSettingsHook();
+
+    act(() => {
+      result.current.setSetting('readerTextWidth', 'wide');
+    });
+
+    await act(async () => {
+      await result.current.handleSave();
+    });
+
+    expect(updateUserSettings).toHaveBeenCalledWith({ readerTextWidth: 'wide' });
+    expect(window.localStorage.getItem('news-flow-reader-text-width')).toBe('wide');
   });
 
   test('keeps the draft when saving fails', async () => {

@@ -1,6 +1,7 @@
-import { Globe2, Image as ImageIcon, MonitorSmartphone, PanelRightOpen, Radio, Type } from 'lucide-react';
+import { Globe2, Image as ImageIcon, MonitorSmartphone, MoveHorizontal, PanelRightOpen, Radio, Type } from 'lucide-react';
 import SettingsSectionCard from './SettingsSectionCard';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORDER } from '../../config/readerTextSize';
+import { DEFAULT_READER_TEXT_WIDTH, READER_TEXT_WIDTH_LABELS, READER_TEXT_WIDTH_ORDER } from '../../config/readerTextWidth';
 
 const fieldClassName = 'w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition-[border-color,background-color,box-shadow] focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100';
 
@@ -80,6 +81,22 @@ const SettingsPreferencesSection = ({
             >
               {READER_TEXT_SIZE_ORDER.map((size) => (
                 <option key={size} value={size}>{t(READER_TEXT_SIZE_LABELS[size])}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+              <MoveHorizontal className="h-4 w-4 text-cyan-600" />
+              {t('readerTextWidthSetting')}
+            </span>
+            <select
+              value={settings.readerTextWidth || DEFAULT_READER_TEXT_WIDTH}
+              onChange={(event) => onSettingChange('readerTextWidth', event.target.value)}
+              className={fieldClassName}
+            >
+              {READER_TEXT_WIDTH_ORDER.map((width) => (
+                <option key={width} value={width}>{t(READER_TEXT_WIDTH_LABELS[width])}</option>
               ))}
             </select>
           </label>

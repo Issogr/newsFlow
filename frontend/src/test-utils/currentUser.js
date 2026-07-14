@@ -4,6 +4,7 @@ const DEFAULT_SETTINGS = {
   showNewsImages: true,
   readerPanelPosition: 'right',
   readerTextSize: 'medium',
+  readerTextWidth: 'default',
   lastSeenReleaseNotesVersion: '',
   excludedSourceIds: [],
   excludedSubSourceIds: []
