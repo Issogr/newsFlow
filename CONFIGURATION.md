@@ -232,6 +232,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 | `TELEGRAM_BOT_TOKEN` | unset | Bot token used to forward feedback submissions. Required with `TELEGRAM_CHAT_ID` for feedback delivery. |
 | `TELEGRAM_CHAT_ID` | unset | Target Telegram chat/channel/supergroup id. Required with `TELEGRAM_BOT_TOKEN` for feedback delivery. |
 | `TELEGRAM_MESSAGE_THREAD_ID` | unset | Optional Telegram forum topic id. Must be numeric when set. |
+| `FEEDBACK_DELIVERY_TIMEOUT_MS` | `25000` | Total deadline for attachment and text delivery to Telegram. Minimum `1000`, maximum `120000`; keep it below `BFF_UPSTREAM_TIMEOUT_MS`. |
 
 Feedback attachments are limited by code, not env: images up to 5 MB, videos up to 12 MB, one attachment per submission.
 

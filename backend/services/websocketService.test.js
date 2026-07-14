@@ -39,11 +39,16 @@ describe('websocketService', () => {
 
     socketFactory = jest.fn(() => ioMock);
     databaseMock = {
+      findSessionByTokenHash: jest.fn(() => null),
       listUserSources: jest.fn(() => []),
       touchUserActivity: jest.fn()
     };
     authMock = {
       resolveAuthenticatedSession: jest.fn(() => ({
+        session: {
+          tokenHash: 'session-hash-1',
+          expiresAt: new Date(Date.now() + 60000).toISOString()
+        },
         user: {
           id: 'user-1',
           username: 'alice'
@@ -82,7 +87,11 @@ describe('websocketService', () => {
       authToken: 'session-token',
       touchActivitySeconds: 60
     }));
-    expect(socket.data).toMatchObject({ userId: 'user-1', username: 'alice' });
+    expect(socket.data).toMatchObject({
+      userId: 'user-1',
+      username: 'alice',
+      sessionTokenHash: 'session-hash-1'
+    });
     expect(next).toHaveBeenCalledWith();
   });
 
@@ -329,5 +338,37 @@ describe('websocketService', () => {
     expect(socketOne.disconnect).toHaveBeenCalledWith(true);
     expect(socketTwo.disconnect).not.toHaveBeenCalled();
     expect(websocketService.getStatistics().activeConnectionsCount).toBe(1);
+  });
+
+  test('disconnects only sockets authenticated by a revoked session', () => {
+    const socketOne = createSocket('socket-1');
+    socketOne.data = { userId: 'user-1', sessionTokenHash: 'session-hash-1' };
+    const socketTwo = createSocket('socket-2');
+    socketTwo.data = { userId: 'user-1', sessionTokenHash: 'session-hash-2' };
+    ioMock.connectionHandler(socketOne);
+    ioMock.connectionHandler(socketTwo);
+
+    expect(websocketService.disconnectSessionSockets('session-hash-1')).toBe(1);
+    expect(socketOne.disconnect).toHaveBeenCalledWith(true);
+    expect(socketTwo.disconnect).not.toHaveBeenCalled();
+  });
+
+  test('disconnects a socket when its persisted session expires', () => {
+    jest.useFakeTimers();
+    const socket = createSocket('socket-1');
+    socket.data = {
+      userId: 'user-1',
+      sessionTokenHash: 'expired-session',
+      sessionExpiresAt: new Date(Date.now() + 1000).toISOString()
+    };
+    databaseMock.findSessionByTokenHash.mockReturnValue(null);
+
+    try {
+      ioMock.connectionHandler(socket);
+      jest.advanceTimersByTime(1000);
+      expect(socket.disconnect).toHaveBeenCalledWith(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

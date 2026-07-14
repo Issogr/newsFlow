@@ -104,6 +104,22 @@ function createArticleRepository({
     };
   }
 
+  function buildReadLaterFilter(options = {}, alias = 'a') {
+    if (!options.readLaterUserId) {
+      return null;
+    }
+
+    return {
+      clause: `EXISTS (
+        SELECT 1
+        FROM user_read_later_articles read_later
+        WHERE read_later.user_id = ?
+          AND read_later.article_id = ${alias}.id
+      )`,
+      params: [options.readLaterUserId]
+    };
+  }
+
   function buildRetentionFilter(options = {}, alias = 'a') {
     if (!options.maxArticleAgeHours || !Number.isFinite(options.maxArticleAgeHours) || options.maxArticleAgeHours <= 0) {
       return null;
@@ -1209,33 +1225,50 @@ function createArticleRepository({
         WHERE id IN (${ids.map(() => '?').join(', ')})
       `).all(...ids);
     });
-    const retryIds = new Set();
-
-    anchors.forEach((anchor) => {
-      if (retryIds.size >= limit) {
-        return;
-      }
-
+    const retryAnchors = anchors.flatMap((anchor) => {
       const anchorTimestamp = Date.parse(anchor.pubDate || '');
       if (!Number.isFinite(anchorTimestamp)) {
-        return;
+        return [];
       }
 
-      const periodStart = new Date(anchorTimestamp - (windowHours * 60 * 60 * 1000)).toISOString();
-      const periodEnd = new Date(anchorTimestamp + (windowHours * 60 * 60 * 1000)).toISOString();
+      return [{
+        id: anchor.id,
+        ownerUserId: anchor.ownerUserId || '',
+        periodStart: new Date(anchorTimestamp - (windowHours * 60 * 60 * 1000)).toISOString(),
+        periodEnd: new Date(anchorTimestamp + (windowHours * 60 * 60 * 1000)).toISOString()
+      }];
+    });
+    const retryIds = new Set();
+
+    for (const anchorChunk of chunkValues(retryAnchors)) {
+      if (retryIds.size >= limit) {
+        break;
+      }
+
+      const anchorValues = anchorChunk.map(() => '(?, ?, ?, ?)').join(', ');
+      const anchorParams = anchorChunk.flatMap((anchor) => [
+        anchor.id,
+        anchor.ownerUserId,
+        anchor.periodStart,
+        anchor.periodEnd
+      ]);
       const rows = database.prepare(`
-        SELECT id
-        FROM articles
-        WHERE id != ?
-          AND COALESCE(owner_user_id, '') = COALESCE(?, '')
-          AND published_at BETWEEN ? AND ?
-          AND ai_story_group_status IN (${retryStatuses.map(() => '?').join(', ')})
-        ORDER BY published_at DESC, id DESC
+        WITH anchors(id, owner_user_id, period_start, period_end) AS (
+          VALUES ${anchorValues}
+        )
+        SELECT DISTINCT candidate.id, candidate.published_at AS pub_date
+        FROM articles candidate
+        JOIN anchors
+          ON candidate.id != anchors.id
+          AND COALESCE(candidate.owner_user_id, '') = anchors.owner_user_id
+          AND candidate.published_at BETWEEN anchors.period_start AND anchors.period_end
+        WHERE candidate.ai_story_group_status IN (${retryStatuses.map(() => '?').join(', ')})
+        ORDER BY pub_date DESC, candidate.id DESC
         LIMIT ?
-      `).all(anchor.id, anchor.ownerUserId || '', periodStart, periodEnd, ...retryStatuses, limit - retryIds.size);
+      `).all(...anchorParams, ...retryStatuses, limit - retryIds.size);
 
       rows.forEach((row) => retryIds.add(row.id));
-    });
+    }
 
     return [...retryIds];
   }
@@ -2776,6 +2809,7 @@ function createArticleRepository({
 
   function getSourceStats(configuredSources = [], options = {}) {
     const scopeFilter = buildScopeFilter(options, 'articles');
+    const readLaterFilter = buildReadLaterFilter(options, 'articles');
     const retentionFilter = buildRetentionFilter(options, 'articles');
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('articles');
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options, 'articles');
@@ -2786,6 +2820,7 @@ function createArticleRepository({
       where,
       params,
       scopeFilter,
+      readLaterFilter,
       publishedBeforeNowFilter,
       retentionFilter,
       excludedSourceFilter,
@@ -2845,6 +2880,7 @@ function createArticleRepository({
     const where = [];
     const searchQuery = buildSearchQuery(state.search);
     const scopeFilter = buildScopeFilter(options, 'a');
+    const readLaterFilter = buildReadLaterFilter(options, 'a');
     const retentionFilter = buildRetentionFilter(options, 'a');
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
@@ -2858,6 +2894,7 @@ function createArticleRepository({
       where,
       params,
       scopeFilter,
+      readLaterFilter,
       publishedBeforeNowFilter,
       retentionFilter,
       excludedSourceFilter,

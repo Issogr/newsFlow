@@ -1577,6 +1577,28 @@ describe('database queries and user data', () => {
     ]));
   });
 
+  test('batches AI story retry lookups across many anchors', () => {
+    const publishedAt = new Date().toISOString();
+    const anchors = Array.from({ length: 401 }, (_, index) => ({
+      id: `story-anchor-${index}`,
+      sourceId: primarySource.id,
+      source: primarySource.name,
+      title: `Story anchor ${index}`,
+      description: '',
+      content: '',
+      url: `https://example.com/story-anchor-${index}`,
+      language: 'en',
+      pubDate: publishedAt
+    }));
+    database.upsertArticles(anchors);
+    const prepareSpy = jest.spyOn(database.getDb(), 'prepare');
+
+    expect(database.getArticleIdsForAiStoryGroupingRetry(anchors.map((article) => article.id))).toEqual([]);
+    expect(prepareSpy.mock.calls.filter(([sql]) => String(sql).includes('WITH anchors'))).toHaveLength(3);
+
+    prepareSpy.mockRestore();
+  });
+
   test('moves read-later state, reader cache, and topics before deleting duplicate articles', () => {
     const now = new Date('2026-03-15T14:30:00.000Z').toISOString();
     const duplicateUpdatedAt = new Date('2026-03-15T14:00:00.000Z').toISOString();
@@ -2071,6 +2093,7 @@ describe('database queries and user data', () => {
   test('builds source and topic stats with canonical source ids and search filters', () => {
     const now = Date.now();
     const recentIso = new Date(now - (30 * 60 * 1000)).toISOString();
+    database.createUser({ id: 'user-1', username: 'alice', passwordHash: null, createdAt: recentIso, updatedAt: recentIso });
 
     database.upsertArticles([
       {
@@ -2101,6 +2124,7 @@ describe('database queries and user data', () => {
       { articleId: 'global-1', topics: ['Economy', 'Markets'] },
       { articleId: 'global-2', topics: ['Science'] }
     ]);
+    database.saveReadLaterArticles('user-1', ['global-1']);
 
     const sourceStats = database.getSourceStats([
       { id: groupedSourceFamilyId, name: groupedSourceFamilyName, language: 'it' },
@@ -2133,6 +2157,16 @@ describe('database queries and user data', () => {
 
     const excludedTopics = database.getTopicStatsByFilters({}, 10, { excludedSourceIds: [groupedSourceFamilyId] });
     expect(excludedTopics).toEqual([{ topic: 'Scienza', count: 1 }]);
+
+    const readLaterOptions = { userId: 'user-1', readLaterUserId: 'user-1' };
+    expect(database.getSourceStats([
+      { id: groupedSourceFamilyId, name: groupedSourceFamilyName, language: 'it' },
+      { id: secondarySourceFamilyId, name: secondarySourceFamilyName, language: 'en' }
+    ], readLaterOptions)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: groupedSourceFamilyId, count: 1 }),
+      expect.objectContaining({ id: secondarySourceFamilyId, count: 0 })
+    ]));
+    expect(database.getTopicStatsByFilters({}, 10, readLaterOptions)).toEqual([{ topic: 'Economia', count: 1 }]);
   });
 
   test('groups custom user feeds by registrable domain for filtering and display', () => {

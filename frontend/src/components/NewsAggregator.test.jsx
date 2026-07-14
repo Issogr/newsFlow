@@ -655,6 +655,41 @@ describe('NewsAggregator', () => {
     }));
   });
 
+  test('clears an active source filter when the source is removed', async () => {
+    const source = { id: 'custom-source', name: 'Custom Feed', url: 'https://example.com/rss', language: 'en' };
+    const userWithSource = createTestCurrentUser({ customSources: [source] });
+    const onUserUpdate = vi.fn();
+    const onLogout = vi.fn();
+    const sourceResponse = createSingleGroupFeedResponse('group-1', 'Custom headline', {
+      filters: { sources: [{ ...source, count: 1 }], sourceCatalog: [], topics: [] }
+    });
+    fetchNews.mockResolvedValue(sourceResponse);
+    const view = await renderNewsAggregator({ currentUser: userWithSource, onUserUpdate, onLogout });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sources' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: /Custom Feed/ }));
+    await waitFor(() => {
+      expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ sourceIds: ['custom-source'] }));
+    });
+
+    const activeFilterCallCount = fetchNews.mock.calls.length;
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-2', 'Remaining headline'));
+    await act(async () => {
+      view.rerender(
+        <NewsAggregator
+          currentUser={createTestCurrentUser({ customSources: [] })}
+          onLogout={onLogout}
+          onUserUpdate={onUserUpdate}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(fetchNews.mock.calls.slice(activeFilterCallCount).some(([params]) => params.sourceIds.length === 0)).toBe(true);
+    });
+  });
+
   test('loads cached news on open without forcing a source refresh', async () => {
     fetchNews.mockResolvedValue(createFeedResponse([], { meta: { totalGroups: 0 } }));
 

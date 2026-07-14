@@ -41,7 +41,6 @@ const UPSTREAM_TIMEOUT_MS = parseIntegerEnv('BFF_UPSTREAM_TIMEOUT_MS', 30000, { 
 const BACKEND_PROXY_DEFAULTS = {
   changeOrigin: true,
   xfwd: false,
-  timeout: UPSTREAM_TIMEOUT_MS,
   proxyTimeout: UPSTREAM_TIMEOUT_MS,
 };
 const UPSTREAM_ERROR_RESPONSE = {

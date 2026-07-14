@@ -5,6 +5,7 @@ const path = require('path');
 const express = require('express');
 const cookieSignature = require('cookie-signature');
 const request = require('supertest');
+process.env.BFF_UPSTREAM_TIMEOUT_MS = '1000';
 const { createApp, createServer } = require('./server');
 const {
   encryptBackendSessionCookie,
@@ -247,6 +248,10 @@ describe('bff server', () => {
       req.socket.destroy();
     });
 
+    backendApp.get('/internal-api/delayed', (req, res) => {
+      setTimeout(() => res.json({ ok: true }), 1500);
+    });
+
     backendApp.delete('/internal-api/admin/users/:userId', (req, res) => {
       lastBackendHeaders = req.headers;
       const actingUser = backendSessions.get(String(req.headers.cookie || ''));
@@ -414,6 +419,30 @@ describe('bff server', () => {
     restarted.sessionDb.close();
     expect(meResponse.body).toEqual({ user: { id: 'user-1', username: 'alice' } });
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
+  });
+
+  test('renews and persists a session near expiry', async () => {
+    const bffSessionCookie = await login(app);
+    const rawCookieValue = decodeURIComponent(bffSessionCookie.split(';')[0].split('=').slice(1).join('='));
+    const sessionId = unsignSessionId(rawCookieValue, getBffSessionSecret());
+    const nearExpiry = new Date(Date.now() + 5000).toISOString();
+    const storedSession = JSON.parse(sessionDb.prepare('SELECT sess FROM sessions WHERE sid = ?').get(sessionId).sess);
+    storedSession.cookie.expires = nearExpiry;
+    storedSession.cookie.originalMaxAge = 5000;
+    sessionDb.prepare('UPDATE sessions SET sess = ?, expire = ? WHERE sid = ?')
+      .run(JSON.stringify(storedSession), nearExpiry, sessionId);
+
+    const response = await request(app)
+      .get('/api/me')
+      .set('Cookie', bffSessionCookie)
+      .expect(200);
+
+    const renewedRow = sessionDb.prepare('SELECT sess, expire FROM sessions WHERE sid = ?').get(sessionId);
+    expect(response.headers['set-cookie']).toEqual(expect.arrayContaining([
+      expect.stringContaining('newsflow_bff_session=')
+    ]));
+    expect(Date.parse(renewedRow.expire)).toBeGreaterThan(Date.now() + (20 * 24 * 60 * 60 * 1000));
+    expect(JSON.parse(renewedRow.sess).renewedAt).toBeTruthy();
   });
 
   test('rotates the BFF session id after successful login', async () => {
@@ -766,6 +795,22 @@ describe('bff server', () => {
     expect(response.body.error).toEqual({
       message: 'Unable to reach the application backend.',
       code: 'BFF_UPSTREAM_ERROR',
+    });
+  });
+
+  test('returns structured JSON when the upstream response times out', async () => {
+    const bffSessionCookie = await login(app);
+
+    const response = await request(app)
+      .get('/api/delayed')
+      .set('Cookie', bffSessionCookie)
+      .expect(502);
+
+    expect(response.body).toEqual({
+      error: {
+        message: 'Unable to reach the application backend.',
+        code: 'BFF_UPSTREAM_ERROR',
+      },
     });
   });
 

@@ -6,6 +6,7 @@ describe('feedbackService', () => {
     jest.resetModules();
     process.env = {
       ...originalEnv,
+      FEEDBACK_DELIVERY_TIMEOUT_MS: '1000',
       TELEGRAM_BOT_TOKEN: 'test-bot-token',
       TELEGRAM_CHAT_ID: '-1001234567890',
       TELEGRAM_MESSAGE_THREAD_ID: '2',
@@ -64,5 +65,23 @@ describe('feedbackService', () => {
       expect(fetchMock.mock.calls[index][1].body.get('chat_id')).toBe('-1001234567890');
       expect(fetchMock.mock.calls[index][1].body.get('message_thread_id')).toBe('2');
     });
+  });
+
+  test('uses an abort deadline for Telegram delivery failures', async () => {
+    const fetchMock = jest.fn((url, options) => {
+      expect(options.signal).toBeInstanceOf(globalThis.AbortSignal);
+      return Promise.reject(new globalThis.DOMException('Timed out', 'TimeoutError'));
+    });
+    globalThis.fetch = fetchMock;
+    const { sendFeedback } = require('./feedbackService');
+
+    await expect(sendFeedback({
+      user: { id: 'user-1', username: 'alice' },
+      category: 'bug',
+      title: 'Slow delivery',
+      description: 'Telegram did not respond.'
+    })).rejects.toMatchObject({ code: 'FEEDBACK_DELIVERY_FAILED' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

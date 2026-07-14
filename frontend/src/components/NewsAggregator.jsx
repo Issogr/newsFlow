@@ -333,6 +333,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [excludedSourceIds]);
 
   useEffect(() => {
+    const validSourceIds = new Set(availableSources.map((source) => source.id));
+    setActiveFilters((current) => {
+      const nextSourceIds = current.sourceIds.filter((sourceId) => validSourceIds.has(sourceId));
+      return nextSourceIds.length === current.sourceIds.length
+        ? current
+        : { ...current, sourceIds: nextSourceIds };
+    });
+  }, [availableSources]);
+
+  useEffect(() => {
     const timeoutId = setTimeout(() => {
       setDebouncedSearch(search.trim());
     }, SEARCH_DEBOUNCE_MS);

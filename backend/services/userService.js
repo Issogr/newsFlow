@@ -497,7 +497,10 @@ async function loginUser(payload = {}) {
 }
 
 function logoutUser(sessionToken) {
-  return database.deleteSessionByTokenHash(hashSessionToken(sessionToken));
+  const sessionTokenHash = hashSessionToken(sessionToken);
+  const deleted = database.deleteSessionByTokenHash(sessionTokenHash);
+  websocketService.disconnectSessionSockets(sessionTokenHash);
+  return deleted;
 }
 
 function getCurrentUser(userId) {
@@ -792,6 +795,8 @@ async function completePasswordSetup(payload = {}) {
 
     return database.findUserById(tokenRecord.userId);
   })();
+
+  websocketService.disconnectUserSockets(user.id);
 
   return buildAuthResponse(user, sessionToken);
 }

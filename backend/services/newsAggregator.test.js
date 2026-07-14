@@ -35,7 +35,8 @@ jest.mock('./database', () => ({
   getUserSettings: jest.fn(() => ({ excludedSourceIds: [], excludedSubSourceIds: [] })),
   listUsers: jest.fn(() => []),
   listUserSources: jest.fn(() => []),
-  listAllActiveUserSources: jest.fn(() => [])
+  listAllActiveUserSources: jest.fn(() => []),
+  findUserSourceById: jest.fn(() => null)
 }));
 
 jest.mock('../utils/logger', () => ({
@@ -151,6 +152,12 @@ describe('newsAggregator service flows', () => {
     database.listUsers.mockReturnValue([{ id: 'user-1', lastActivityAt: new Date().toISOString() }]);
     database.listUserSources.mockReturnValue([]);
     database.listAllActiveUserSources.mockReturnValue([]);
+    database.findUserSourceById.mockImplementation((userId, sourceId) => {
+      return [
+        ...database.listUserSources(userId),
+        ...database.listAllActiveUserSources()
+      ].find((source) => source.userId === userId && source.id === sourceId) || null;
+    });
     database.upsertArticles.mockReturnValue({ insertedIds: [], insertedCount: 0, updatedCount: 0 });
     aiTopicClassifier.isAiTopicDetectionAvailable.mockReturnValue(true);
     aiClickbaitClassifier.isAiClickbaitDetectionAvailable.mockReturnValue(false);
@@ -402,6 +409,10 @@ describe('newsAggregator service flows', () => {
       language: 'en',
       ownerUserId: 'user-b'
     };
+    database.findUserSourceById.mockImplementation((userId, sourceId) => {
+      const source = [sourceA, sourceB].find((candidate) => candidate.ownerUserId === userId && candidate.id === sourceId);
+      return source ? { ...source, userId: source.ownerUserId, isActive: true } : null;
+    });
 
     const firstRefresh = ingestSourceConfigs([sourceA], { bypassSourceFreshness: true });
     const secondRefresh = ingestSourceConfigs([sourceB], { bypassSourceFreshness: true });
@@ -784,14 +795,23 @@ describe('newsAggregator service flows', () => {
   });
 
   test('ingestAllNews stores topics and broadcasts global and private groups separately', async () => {
+    const privateArticleId = 'custom-1:https://example.com/p';
     database.listAllActiveUserSources.mockReturnValue([
       { id: 'custom-1', name: 'My Feed', url: 'https://example.com/custom.xml', language: 'en', userId: 'user-1', isActive: true }
     ]);
-    rssParser.parseFeed
-      .mockResolvedValueOnce([{ id: 'global-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Global economy update', pubDate: recentIso({ hoursAgo: 2 }), url: 'https://example.com/g', rawTopics: ['Economy'] }])
-      .mockResolvedValueOnce([{ id: 'private-1', sourceId: 'custom-1', source: 'My Feed', title: 'Private portfolio update', pubDate: recentIso({ hoursAgo: 1, minutesAgo: 30 }), url: 'https://example.com/p', rawTopics: ['Markets'], ownerUserId: 'user-1' }]);
-    database.upsertArticles.mockReturnValue({ insertedIds: ['global-1', 'private-1'], insertedCount: 2, updatedCount: 0 });
-    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['global-1', 'private-1']);
+    let globalReturned = false;
+    rssParser.parseFeed.mockImplementation(async (source) => {
+      if (source.id === 'custom-1') {
+        return [{ id: 'private-1', sourceId: 'custom-1', source: 'My Feed', title: 'Private portfolio update', pubDate: recentIso({ hoursAgo: 1, minutesAgo: 30 }), url: 'https://example.com/p', rawTopics: ['Markets'] }];
+      }
+      if (!globalReturned) {
+        globalReturned = true;
+        return [{ id: 'global-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Global economy update', pubDate: recentIso({ hoursAgo: 2 }), url: 'https://example.com/g', rawTopics: ['Economy'] }];
+      }
+      return [];
+    });
+    database.upsertArticles.mockReturnValue({ insertedIds: ['global-1', privateArticleId], insertedCount: 2, updatedCount: 0 });
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['global-1', privateArticleId]);
 
     const result = await newsAggregator.ingestAllNews({ broadcast: true });
 
@@ -802,7 +822,7 @@ describe('newsAggregator service flows', () => {
     ]));
     expect(database.mergeTopicsForArticles).toHaveBeenCalledWith(expect.arrayContaining([
       expect.objectContaining({ articleId: 'global-1', topics: expect.any(Array) }),
-      expect.objectContaining({ articleId: 'private-1', topics: expect.any(Array) })
+      expect.objectContaining({ articleId: privateArticleId, topics: expect.any(Array) })
     ]));
     expect(websocketService.broadcastNewsUpdate).toHaveBeenCalledTimes(2);
     expect(websocketService.broadcastNewsUpdate.mock.calls[0][0][0]).toMatchObject({ id: expect.stringContaining('group-'), ownerUserId: null });
@@ -1312,6 +1332,75 @@ describe('newsAggregator service flows', () => {
         ownerUserId: 'user-2'
       })
     ]));
+  });
+
+  test('reuses fresh custom source results for a later owner', async () => {
+    const sharedUrl = 'https://example.com/sequential-shared.xml';
+    const sourceA = { id: 'custom-a', name: 'Feed A', url: sharedUrl, language: 'en', ownerUserId: 'user-1' };
+    const sourceB = { id: 'custom-b', name: 'Feed B', url: sharedUrl, language: 'en', ownerUserId: 'user-2' };
+    database.findUserSourceById.mockImplementation((userId, sourceId) => {
+      const source = [sourceA, sourceB].find((candidate) => candidate.ownerUserId === userId && candidate.id === sourceId);
+      return source ? { ...source, userId: source.ownerUserId, isActive: true } : null;
+    });
+    rssParser.parseFeed.mockResolvedValue([{
+      id: 'representative-id',
+      sourceId: sourceA.id,
+      source: sourceA.name,
+      title: 'Sequential shared story',
+      description: 'Shared story description',
+      pubDate: recentIso({ hoursAgo: 1 }),
+      url: 'https://example.com/sequential-story',
+      canonicalUrl: 'https://example.com/sequential-story',
+      language: 'en'
+    }]);
+    database.upsertArticles.mockImplementation((articles) => ({
+      insertedIds: articles.map((article) => article.id),
+      insertedCount: articles.length,
+      updatedCount: 0
+    }));
+
+    await ingestSourceConfigs([sourceA], { broadcast: false, sourceFetchFreshnessMs: 300000 });
+    await ingestSourceConfigs([sourceB], { broadcast: false, sourceFetchFreshnessMs: 300000 });
+
+    expect(rssParser.parseFeed).toHaveBeenCalledTimes(1);
+    expect(database.upsertArticles).toHaveBeenLastCalledWith([
+      expect.objectContaining({ sourceId: sourceB.id, ownerUserId: 'user-2' })
+    ]);
+  });
+
+  test.each(['deleted', 'updated'])('discards custom source results when the source is %s during refresh', async (change) => {
+    const source = {
+      id: `custom-${change}`,
+      name: 'Mutable Feed',
+      url: `https://example.com/${change}.xml`,
+      language: 'en',
+      ownerUserId: 'user-1',
+      updatedAt: '2026-03-01T10:00:00.000Z'
+    };
+    let currentSource = { ...source, userId: source.ownerUserId, isActive: true };
+    const deferred = createDeferred();
+    database.findUserSourceById.mockImplementation(() => currentSource);
+    rssParser.parseFeed.mockReturnValue(deferred.promise);
+
+    const ingestion = ingestSourceConfigs([source], { broadcast: false, bypassSourceFreshness: true });
+    currentSource = change === 'deleted'
+      ? null
+      : { ...currentSource, url: 'https://example.com/replacement.xml', updatedAt: '2026-03-01T11:00:00.000Z' };
+    deferred.resolve([{
+      id: 'stale-article',
+      sourceId: source.id,
+      source: source.name,
+      title: 'Stale custom story',
+      description: '',
+      pubDate: recentIso({ hoursAgo: 1 }),
+      url: 'https://example.com/stale-story',
+      canonicalUrl: 'https://example.com/stale-story',
+      language: 'en'
+    }]);
+
+    await ingestion;
+
+    expect(database.upsertArticles).toHaveBeenCalledWith([]);
   });
 
   test('skips upstream source fetches inside the freshness window', async () => {

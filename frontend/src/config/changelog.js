@@ -16,7 +16,11 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '💬 Feedback now uses the same opaque panel, flatter sections, clearer category choices, and simpler attachment handling.',
       '◉ Topic icons are circular again, badges, filters, and chips use the standard pill shape, and action buttons keep their rounded-square style.',
       '♿ Settings, feedback, reader, summaries, release notes, and source setup now keep keyboard focus contained and restored, support consistent dismissal, and respect mobile safe areas.',
-      '🌙 Dark-mode contrast is clearer, while Source Setup and Admin use flatter data layouts consistent with the refreshed interface.'
+      '🌙 Dark-mode contrast is clearer, while Source Setup and Admin use flatter data layouts consistent with the refreshed interface.',
+      '📡 Shared custom RSS feeds now reach every owner, while deleted or changed sources can no longer reappear after an older refresh finishes.',
+      '🔐 Logout, password reset, and session expiry now close existing live-update connections, and active browser sessions renew reliably.',
+      '🔖 Read-later source and topic counts now include saved articles only, and deleted custom-source filters clear automatically.',
+      '📨 Feedback delivery now stops cleanly before the browser request times out instead of leaving an uncertain submission running.'
     ]
   },
   it: {
@@ -35,7 +39,11 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '💬 Il feedback ora usa lo stesso pannello opaco, sezioni piu piatte, categorie piu chiare e una gestione degli allegati piu semplice.',
       '◉ Le icone dei topic sono di nuovo circolari, badge, filtri e chip usano la forma pillola standard e i pulsanti azione restano a quadrato arrotondato.',
       '♿ Impostazioni, feedback, lettore, riepiloghi, note di rilascio e scelta fonti ora contengono e ripristinano il focus, gestiscono la chiusura in modo coerente e rispettano le aree sicure mobile.',
-      '🌙 Il contrasto in modalita scura e piu chiaro, mentre Scelta fonti e Admin usano layout piu piatti e coerenti con l\'interfaccia aggiornata.'
+      '🌙 Il contrasto in modalita scura e piu chiaro, mentre Scelta fonti e Admin usano layout piu piatti e coerenti con l\'interfaccia aggiornata.',
+      '📡 I feed RSS personalizzati condivisi ora raggiungono ogni proprietario, mentre le fonti eliminate o modificate non possono piu riapparire al termine di un vecchio aggiornamento.',
+      '🔐 Logout, reimpostazione password e scadenza sessione ora chiudono le connessioni degli aggiornamenti live, e le sessioni browser attive si rinnovano correttamente.',
+      '🔖 I conteggi di fonti e topic in Leggi dopo ora includono solo gli articoli salvati, e i filtri delle fonti personalizzate eliminate vengono rimossi automaticamente.',
+      '📨 L\'invio dei feedback ora si interrompe correttamente prima del timeout del browser, senza lasciare una richiesta dall\'esito incerto ancora in esecuzione.'
     ]
   }
 };

@@ -14,6 +14,11 @@
 - kept rounded-square action buttons while restoring circular topic icons and standard pill shapes for badges, filters, and chips
 - added accessible modal focus containment, restoration, Escape/backdrop policies, and mobile safe-area spacing across settings, feedback, reader, summaries, release notes, and source setup
 - improved dark-mode contrast and flattened Source Setup and Admin data layouts to match the refreshed interface
+- batched AI story-grouping retry lookups so large ingestions no longer block the backend with one SQLite query per article
+- fixed shared custom RSS freshness fan-out and discarded in-flight results after a source is deleted or changed
+- revoked live WebSocket access on logout, password reset, and session expiry, and fixed persisted BFF session renewal
+- bounded Telegram feedback delivery below the BFF timeout and kept timeout failures as structured API responses
+- scoped read-later filter counts to saved articles and cleared active source filters when their custom source disappears
 
 ## 3.5.10
 

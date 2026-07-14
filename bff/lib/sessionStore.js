@@ -226,6 +226,7 @@ function renewSessionExpiryIfNeeded(req, res, next) {
   }
 
   req.session.cookie.maxAge = SESSION_TTL_MS;
+  req.session.renewedAt = new Date().toISOString();
   next();
 }
 

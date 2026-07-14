@@ -73,7 +73,8 @@ function expandUserSources(userSources = []) {
       url: source.url,
       type: 'rss',
       language: source.language || 'it',
-      ownerUserId: source.userId
+      ownerUserId: source.userId,
+      updatedAt: source.updatedAt || null
     }));
 }
 
@@ -451,6 +452,7 @@ async function getReadLaterFeed(filters = {}, userContext = {}) {
   const customSourceGroups = buildDomainSourceGroups(userSources);
   const queryOptions = {
     userId,
+    readLaterUserId: userId,
     customSourceGroups,
     sourceMetadataCache: new Map()
   };
