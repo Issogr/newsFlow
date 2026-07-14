@@ -157,6 +157,27 @@ describe('userService imports', () => {
     });
   });
 
+  test('removes a deleted custom source from persisted exclusions', async () => {
+    const authPayload = await userService.registerUser({ username: 'source-owner', password: 'secret123' });
+    const sourceId = 'custom-source-1';
+    const now = new Date().toISOString();
+    database.createUserSource({
+      id: sourceId,
+      userId: authPayload.user.id,
+      name: 'Custom feed',
+      url: 'https://example.com/feed.xml',
+      language: 'en',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now
+    });
+    userService.updateUserSettings(authPayload.user.id, { excludedSourceIds: [sourceId] });
+
+    userService.removeUserSource(authPayload.user.id, sourceId);
+
+    expect(database.getUserSettings(authPayload.user.id).excludedSourceIds).toEqual([]);
+  });
+
   test('requires a minimum password length during registration', async () => {
     await expect(userService.registerUser({ username: 'carol', password: 'short' })).rejects.toMatchObject({
       status: 400,

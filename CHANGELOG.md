@@ -9,6 +9,7 @@
 - integrated mobile back-to-top with the bottom navigation so the navbar uses a liquid-style expansion from the separate button while scrolling up
 - restyled the search field and filter/account popups to match the frosted floating navigation, with responsive search sizing across desktop and mobile
 - redesigned settings as a flatter, more readable page with clearer sections, fewer nested containers, and styling aligned with the news experience
+- simplified settings with explicit saving and an unsaved-change reminder, positive source visibility controls, on-demand source details, concise labels, and collapsed advanced API/data actions
 - refreshed reader mode and AI summary views with opaque reading surfaces, narrower prose, flatter controls, and fewer nested cards
 - refreshed feedback with the same opaque panel, flatter sections, clearer category choices, and simpler attachment handling
 - kept rounded-square action buttons while restoring circular topic icons and standard pill shapes for badges, filters, and chips

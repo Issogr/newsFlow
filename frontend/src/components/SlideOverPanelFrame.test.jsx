@@ -14,3 +14,13 @@ test('fills the viewport, right-aligns the panel, and keeps its body scrollable'
   expect(dialog.querySelector('[data-modal-content]')).toHaveClass('ml-auto', 'h-[100dvh]', 'sm:h-full');
   expect(screen.getByText('Scrollable content')).toHaveClass('min-h-0', 'overflow-y-auto');
 });
+
+test('can disable its header close action while work is pending', () => {
+  render(
+    <SlideOverPanelFrame ariaLabelledBy="panel-title" dismissOnEscape={false} onClose={vi.fn()}>
+      <SlideOverPanelHeader closeDisabled closeLabel="Close" onClose={vi.fn()} title="Panel" titleId="panel-title" />
+    </SlideOverPanelFrame>
+  );
+
+  expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
+});

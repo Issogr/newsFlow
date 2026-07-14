@@ -684,10 +684,19 @@ async function previewUserSource(payload = {}) {
 }
 
 function removeUserSource(userId, sourceId) {
-  const removed = database.deleteUserSource(userId, sourceId);
-  if (!removed) {
-    throw createError(404, 'Source not found', 'RESOURCE_NOT_FOUND');
-  }
+  database.getDb().transaction(() => {
+    const settings = getUserSettings(userId);
+    const removed = database.deleteUserSource(userId, sourceId);
+    if (!removed) {
+      throw createError(404, 'Source not found', 'RESOURCE_NOT_FOUND');
+    }
+
+    if (settings.excludedSourceIds.includes(sourceId)) {
+      updateUserSettings(userId, {
+        excludedSourceIds: settings.excludedSourceIds.filter((id) => id !== sourceId)
+      });
+    }
+  })();
 }
 
 function exportUserSettings(userId) {

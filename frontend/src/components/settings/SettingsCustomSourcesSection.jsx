@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Pencil, Plus, Rss, Trash2 } from 'lucide-react';
 import InlineAlert from '../InlineAlert';
 import SettingsSectionCard from './SettingsSectionCard';
@@ -5,6 +6,13 @@ import SourceIcon from '../SourceIcon';
 import { getFriendlyApiErrorMessage } from '../../utils/apiError';
 
 const fieldClassName = 'w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition-[border-color,background-color,box-shadow] placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100';
+const sourceLanguages = [
+  ['it', 'languageItalian'],
+  ['en', 'languageEnglish'],
+  ['fr', 'languageFrench'],
+  ['es', 'languageSpanish'],
+  ['de', 'languageGerman']
+];
 
 const SettingsCustomSourcesSection = ({
   t,
@@ -22,33 +30,72 @@ const SettingsCustomSourcesSection = ({
   onUpdateSource,
   onDeleteSource
 }) => {
+  const addSourceDetailsRef = useRef(null);
+  const closeAddSourceForm = () => {
+    if (addSourceDetailsRef.current) {
+      addSourceDetailsRef.current.open = false;
+      addSourceDetailsRef.current.querySelector('summary')?.focus();
+    }
+  };
+  const cancelAddSourceForm = () => {
+    onSourceFormChange({ url: '' });
+    closeAddSourceForm();
+  };
+  const handleAddSource = async (event) => {
+    if (await onAddSource(event)) {
+      closeAddSourceForm();
+    }
+  };
+
   return (
     <SettingsSectionCard
       icon={Rss}
       title={t('customSources')}
-      description={t('addSourceHelp')}
       badge={t('sourceCount', { count: customSources.length })}
       iconToneClassName="text-emerald-600"
     >
       <div>
-        <form onSubmit={onAddSource} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-          <input
-            type="url"
-            inputMode="url"
-            autoCapitalize="none"
-            autoCorrect="off"
-            placeholder={t('rssUrl')}
-            value={sourceForm.url}
-            onChange={(event) => onSourceFormChange({ url: event.target.value })}
-            className={fieldClassName}
-            required
-          />
-          <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-[1.25rem] bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
+        <details ref={addSourceDetailsRef} className="group">
+          <summary
+            aria-disabled={saving}
+            onClick={(event) => {
+              if (saving) {
+                event.preventDefault();
+              }
+            }}
+            className="inline-flex cursor-pointer list-none items-center justify-center gap-2 rounded-[1.25rem] bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 [&::-webkit-details-marker]:hidden"
+          >
             <Plus className="h-4 w-4" />
-            {saving ? t('saveSourceDetecting') : t('addSource')}
-          </button>
-        </form>
-        <p className="mt-3 text-sm text-slate-500">{t('sourceAutoDetectedOnSave')}</p>
+            {t('addSource')}
+          </summary>
+
+          <form onSubmit={handleAddSource} className="mt-4 space-y-3">
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-slate-700">{t('rssUrl')}</span>
+              <input
+                type="url"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                placeholder="https://example.com/feed.xml"
+                value={sourceForm.url}
+                onChange={(event) => onSourceFormChange({ url: event.target.value })}
+                disabled={saving}
+                className={fieldClassName}
+                required
+              />
+            </label>
+            <p className="text-sm text-slate-500">{t('addSourceHelp')}</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
+                {saving ? t('saveSourceDetecting') : t('saveSource')}
+              </button>
+              <button type="button" onClick={cancelAddSourceForm} disabled={saving} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60">
+                {t('cancel')}
+              </button>
+            </div>
+          </form>
+        </details>
         {sourceError ? (
           <InlineAlert as="p" className="mt-3">
             {getFriendlyApiErrorMessage(sourceError, t)}
@@ -68,35 +115,45 @@ const SettingsCustomSourcesSection = ({
                 {isEditing ? (
                   <div className="space-y-3">
                     <div className="grid gap-3 md:grid-cols-2">
-                      <input
-                        value={editingSourceForm.name}
-                        onChange={(event) => onEditingSourceFormChange((current) => ({ ...current, name: event.target.value }))}
-                        className={fieldClassName}
-                        placeholder={t('sourceName')}
-                      />
-                      <select
-                        value={editingSourceForm.language}
-                        onChange={(event) => onEditingSourceFormChange((current) => ({ ...current, language: event.target.value }))}
-                        className={fieldClassName}
-                      >
-                        <option value="it">IT</option>
-                        <option value="en">EN</option>
-                        <option value="fr">FR</option>
-                        <option value="es">ES</option>
-                        <option value="de">DE</option>
-                      </select>
+                      <label className="block">
+                        <span className="mb-2 block text-sm font-medium text-slate-700">{t('sourceName')}</span>
+                        <input
+                          value={editingSourceForm.name}
+                          onChange={(event) => onEditingSourceFormChange((current) => ({ ...current, name: event.target.value }))}
+                          disabled={saving}
+                          className={fieldClassName}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-2 block text-sm font-medium text-slate-700">{t('language')}</span>
+                        <select
+                          value={editingSourceForm.language}
+                          onChange={(event) => onEditingSourceFormChange((current) => ({ ...current, language: event.target.value }))}
+                          disabled={saving}
+                          className={fieldClassName}
+                        >
+                          {sourceLanguages.map(([value, labelKey]) => (
+                            <option key={value} value={value}>{t(labelKey)}</option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
-                    <input
-                      value={editingSourceForm.url}
-                      onChange={(event) => onEditingSourceFormChange((current) => ({ ...current, url: event.target.value }))}
-                      className={fieldClassName}
-                      placeholder={t('rssUrl')}
-                    />
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-medium text-slate-700">{t('rssUrl')}</span>
+                      <input
+                        type="url"
+                        inputMode="url"
+                        value={editingSourceForm.url}
+                        onChange={(event) => onEditingSourceFormChange((current) => ({ ...current, url: event.target.value }))}
+                        disabled={saving}
+                        className={fieldClassName}
+                      />
+                    </label>
                     <div className="flex flex-wrap items-center gap-3">
                       <button type="button" onClick={() => onUpdateSource(source.id)} disabled={saving} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
                         {saving ? t('saveSourceDetecting') : t('saveSource')}
                       </button>
-                      <button type="button" onClick={onCancelEditSource} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                      <button type="button" onClick={onCancelEditSource} disabled={saving} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60">
                         {t('cancel')}
                       </button>
                     </div>
@@ -109,8 +166,8 @@ const SettingsCustomSourcesSection = ({
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium text-slate-800">{source.name}</p>
                           {source.language ? (
-                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                              {source.language}
+                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-500">
+                              {t(sourceLanguages.find(([value]) => value === source.language)?.[1] || source.language)}
                             </span>
                           ) : null}
                         </div>
@@ -121,7 +178,8 @@ const SettingsCustomSourcesSection = ({
                       <button
                         type="button"
                         onClick={() => onStartEditSource(source)}
-                        className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-700 hover:bg-slate-100"
+                        disabled={saving}
+                        className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-700 hover:bg-slate-100 disabled:opacity-60"
                         aria-label={t('editSource')}
                         title={t('editSource')}
                       >
@@ -130,7 +188,8 @@ const SettingsCustomSourcesSection = ({
                       <button
                         type="button"
                         onClick={() => onDeleteSource(source.id)}
-                        className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-red-50 p-2 text-red-700 hover:bg-red-100"
+                        disabled={saving}
+                        className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-red-50 p-2 text-red-700 hover:bg-red-100 disabled:opacity-60"
                         aria-label={t('remove')}
                         title={t('remove')}
                       >
