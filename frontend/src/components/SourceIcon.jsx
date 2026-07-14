@@ -3,7 +3,7 @@ import { getSafeExternalUrl } from '../utils/urlSafety';
 
 const getSourceInitial = (name = '') => String(name || '?').trim().charAt(0).toUpperCase() || '?';
 
-const SourceIcon = ({ source, className = 'h-7 w-7', imageClassName = 'h-4 w-4' }) => {
+const SourceIcon = ({ source, className = 'h-7 w-7' }) => {
   const [failedIconUrl, setFailedIconUrl] = useState('');
   const iconUrl = getSafeExternalUrl(source?.iconUrl);
 
@@ -20,7 +20,7 @@ const SourceIcon = ({ source, className = 'h-7 w-7', imageClassName = 'h-4 w-4' 
       <img
         src={iconUrl}
         alt=""
-        className={`object-contain ${imageClassName}`}
+        className="h-full w-full object-contain"
         loading="lazy"
         onError={() => setFailedIconUrl(iconUrl)}
       />

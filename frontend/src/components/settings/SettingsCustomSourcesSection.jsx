@@ -161,7 +161,7 @@ const SettingsCustomSourcesSection = ({
                 ) : (
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 flex-1 items-start gap-3">
-                      <SourceIcon source={source} className="mt-0.5 h-8 w-8" imageClassName="h-5 w-5" />
+                      <SourceIcon source={source} className="mt-0.5 h-8 w-8" />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium text-slate-800">{source.name}</p>

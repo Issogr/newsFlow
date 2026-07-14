@@ -61,7 +61,7 @@ const SettingsExclusionsSection = ({
                   aria-pressed={isShown}
                   className={`flex min-w-0 flex-1 items-center gap-3 rounded-[1.25rem] border px-3 py-2.5 text-left transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ${isShown ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
                 >
-                  <SourceIcon source={source} className="h-8 w-8" imageClassName="h-5 w-5" />
+                  <SourceIcon source={source} className="h-8 w-8" />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{source.name}</span>
                   <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${isShown ? 'bg-sky-600 text-white' : 'bg-slate-200 text-transparent'}`} aria-hidden="true">
                     <Check className="h-3.5 w-3.5" />
@@ -103,7 +103,7 @@ const SettingsExclusionsSection = ({
                         aria-pressed={isSubSourceShown}
                         className={`inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-2 text-sm transition-colors disabled:opacity-60 ${isSubSourceShown ? 'border-sky-200 bg-white text-sky-950' : 'border-slate-200 bg-slate-100 text-slate-500'}`}
                       >
-                        <SourceIcon source={{ ...source, iconUrl: subSource.iconUrl || source.iconUrl }} className="h-6 w-6" imageClassName="h-4 w-4" />
+                        <SourceIcon source={{ ...source, iconUrl: subSource.iconUrl || source.iconUrl }} className="h-6 w-6" />
                         <span className="truncate">{subSourceName}</span>
                         <Check className={`h-3.5 w-3.5 shrink-0 ${isSubSourceShown ? 'text-sky-600' : 'text-transparent'}`} aria-hidden="true" />
                       </button>

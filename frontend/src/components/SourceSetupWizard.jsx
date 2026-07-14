@@ -251,7 +251,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                         aria-expanded={expanded}
                         aria-label={expanded ? t('sourceSetupCollapseSource', { name: source.name }) : t('sourceSetupExpandSource', { name: source.name })}
                       >
-                        <SourceIcon source={source} className="h-10 w-10 rounded-2xl" imageClassName="h-5 w-5" />
+                        <SourceIcon source={source} className="h-10 w-10 rounded-2xl" />
                         <span className="min-w-0">
                           <span className="block text-sm font-semibold text-slate-900">{source.name}</span>
                           <span className="mt-1 block text-xs text-slate-500">{t('sourceSetupSubSourceSelectedCount', { selected: selectedSubSourceCount, count: sourceSelectionIds.length })}</span>
@@ -278,7 +278,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                               onClick={() => toggleSelection(subSource.id)}
                               className={`inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-2 text-left transition-colors ${selected ? 'border-sky-300 bg-white text-sky-950' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'}`}
                             >
-                              <SourceIcon source={{ ...source, iconUrl: subSource.iconUrl || source.iconUrl }} className="h-6 w-6" imageClassName="h-4 w-4" />
+                              <SourceIcon source={{ ...source, iconUrl: subSource.iconUrl || source.iconUrl }} className="h-6 w-6" />
                               <span className="block truncate text-xs font-semibold">{subSource.label || subSource.name}</span>
                               <span className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${selected ? 'bg-sky-600 text-white' : 'bg-slate-200 text-transparent'}`}>
                                 <Check className="h-3 w-3" aria-hidden="true" />
@@ -300,7 +300,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                   onClick={() => toggleSelection(source.id)}
                   className={`relative flex min-h-[5.5rem] w-full items-start gap-3 rounded-[1.25rem] border p-4 text-left transition-colors ${selected ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'}`}
                 >
-                  <SourceIcon source={source} className="h-10 w-10 rounded-2xl" imageClassName="h-5 w-5" />
+                  <SourceIcon source={source} className="h-10 w-10 rounded-2xl" />
                   <span className="min-w-0 pr-7">
                     <span className="block truncate text-sm font-semibold text-slate-900">{source.name}</span>
                     <span className="mt-1 block text-xs font-medium text-slate-500">{selected ? t('sourceSetupSelected') : t('sourceSetupNotSelected')}</span>

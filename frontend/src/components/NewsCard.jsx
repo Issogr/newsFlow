@@ -292,7 +292,6 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       <SourceIcon
         source={source}
         className="h-10 w-10 border-2 border-white bg-white shadow-md"
-        imageClassName="h-5 w-5"
       />
     </span>
   ));
