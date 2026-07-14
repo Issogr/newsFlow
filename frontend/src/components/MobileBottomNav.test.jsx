@@ -19,6 +19,7 @@ function renderNav(overrides = {}) {
     t,
     locale: 'en',
     onRefresh: vi.fn(),
+    onClearFilter: vi.fn(),
     onToggleFilter: vi.fn(),
     onSearchChange: vi.fn(),
     onSearchClear: vi.fn(),
@@ -75,6 +76,7 @@ describe('MobileBottomNav', () => {
   });
 
   it('handles filter and search interactions from the nav', () => {
+    const onClearFilter = vi.fn();
     const onToggleFilter = vi.fn();
     const onRefresh = vi.fn();
     const onSearchChange = vi.fn();
@@ -83,6 +85,7 @@ describe('MobileBottomNav', () => {
     renderNav({
       activeFilters: { sourceIds: ['s1'], topics: ['tech'] },
       search: 'query',
+      onClearFilter,
       onRefresh,
       onToggleFilter,
       onSearchChange,
@@ -99,8 +102,21 @@ describe('MobileBottomNav', () => {
     expect(onRefresh).toHaveBeenCalled();
 
     fireEvent.click(getNavButton('Sources'));
-    fireEvent.click(screen.getByText('BBC'));
+    expect(screen.getByRole('heading', { name: 'Filter by source' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Selected: 1')).toHaveTextContent('1');
+    const selectedSource = screen.getByRole('button', { name: /BBC/ });
+    expect(selectedSource).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(selectedSource);
     expect(onToggleFilter).toHaveBeenCalledWith('sourceIds', 's1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear selected sources' }));
+    expect(onClearFilter).toHaveBeenCalledWith('sourceIds');
+
+    fireEvent.click(getNavButton('Topics'));
+    expect(screen.getByRole('heading', { name: 'Filter by topic' })).toBeInTheDocument();
+    const selectedTopic = screen.getByRole('button', { name: /Technology/ });
+    expect(selectedTopic).toHaveAttribute('aria-pressed', 'true');
+    expect(selectedTopic).toHaveClass('bg-emerald-600');
 
     fireEvent.click(getNavButton('Search'));
     const input = screen.getByRole('searchbox', { name: 'Search' });

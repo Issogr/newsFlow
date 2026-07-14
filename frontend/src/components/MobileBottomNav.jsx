@@ -20,6 +20,7 @@ const MobileBottomNav = ({
   t,
   locale,
   onRefresh,
+  onClearFilter,
   onToggleFilter,
   onSearchChange,
   onSearchClear,
@@ -92,8 +93,10 @@ const MobileBottomNav = ({
           emptyLabel={t('noNewsText')}
           locale={locale}
           maxHeight={BUBBLE_MAX_HEIGHT}
+          onClearFilter={onClearFilter}
           onToggleFilter={onToggleFilter}
           openBubble={openBubble}
+          t={t}
           visibleSources={visibleSources}
         />
 

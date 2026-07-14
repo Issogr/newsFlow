@@ -7,6 +7,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     items: [
       '🧹 Article retention now follows the app-wide server setting; the redundant per-user retention and latest-hours controls were removed.',
       '📱 News cards, loading states, search, popups, and floating navigation now share a colorful responsive design, including an edge-to-edge mobile feed, reduced-motion animations, and liquid back-to-top control.',
+      '🔎 Source and topic filters now show clear headings, compact count-and-clear controls, and stronger selected states.',
       '📰 News cards now use consistently sized source icons, distinguish primary and secondary actions more clearly, and use quieter hover effects.',
       '⚙️ Settings now uses a flatter layout, while Reader and AI summaries add narrower prose, shared text sizing, compact citations and source controls, and fewer fixed distractions.',
       '💬 Feedback now uses compact contextual categories, category-specific prompts, inline validation, simpler attachments, and a clearer sending state.',
@@ -25,6 +26,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
     items: [
       '🧹 La retention degli articoli ora segue l\'impostazione server globale; i controlli ridondanti per retention utente e ultime ore sono stati rimossi.',
       '📱 Schede, caricamento, ricerca, popup e navigazione fluttuante ora condividono un design vivace e responsive, con feed mobile da bordo a bordo, animazioni a movimento ridotto e ritorno in cima con effetto liquido.',
+      '🔎 I filtri per fonte e topic ora mostrano titoli chiari, controlli compatti per conteggio e azzeramento, e stati selezionati piu evidenti.',
       '📰 Le schede ora usano icone delle fonti di dimensioni uniformi, distinguono meglio le azioni primarie e secondarie e usano effetti hover piu discreti.',
       '⚙️ Le impostazioni ora usano un layout piu piatto; Lettore e riepiloghi AI aggiungono testo piu stretto, dimensioni condivise, citazioni e fonti compatte e meno distrazioni fisse.',
       '💬 Il feedback ora usa categorie compatte e contestuali, indicazioni specifiche, validazione inline, allegati piu semplici e uno stato di invio piu chiaro.',

@@ -13,6 +13,7 @@ const DesktopTopNavFilters = ({
   search,
   t,
   locale,
+  onClearFilter,
   onToggleFilter,
   onSearchChange,
   onSearchClear,
@@ -48,8 +49,10 @@ const DesktopTopNavFilters = ({
         emptyLabel={t('noNewsText')}
         locale={locale}
         maxHeight={TOP_BUBBLE_MAX_HEIGHT}
+        onClearFilter={onClearFilter}
         onToggleFilter={onToggleFilter}
         openBubble={openBubble}
+        t={t}
         visibleSources={visibleSources}
       />
 

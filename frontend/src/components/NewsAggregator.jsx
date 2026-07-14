@@ -632,6 +632,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     });
   }, []);
 
+  const clearFilter = useCallback((type) => {
+    setActiveFilters((current) => ({ ...current, [type]: [] }));
+  }, []);
+
   const openReader = useCallback((group, articleId) => {
     setReaderState({ isOpen: true, group, articleId });
   }, []);
@@ -718,6 +722,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     search,
     t,
     locale,
+    onClearFilter: clearFilter,
     onToggleFilter: toggleFilter,
     onSearchChange: setSearch,
     onSearchClear: clearSearch

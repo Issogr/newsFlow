@@ -8,6 +8,7 @@
 - added card-shaped loading placeholders, matching floating navigation surfaces across desktop and mobile, and reduced-motion-aware feed animations
 - integrated mobile back-to-top with the bottom navigation so the navbar uses a liquid-style expansion from the separate button while scrolling up
 - restyled the search field and filter/account popups to match the frosted floating navigation, with responsive search sizing across desktop and mobile
+- clarified source and topic filters with explicit headings, compact count-and-clear controls, and stronger selected states
 - redesigned settings as a flatter, more readable page with clearer sections, fewer nested containers, and styling aligned with the news experience
 - simplified settings with explicit saving and an unsaved-change reminder, positive source visibility controls, on-demand source details, concise labels, and collapsed advanced API/data actions
 - refreshed reader mode and AI summaries with a focused 64-character reading measure, tighter prose rhythm, shared text sizing, compact source controls and citations, and fewer fixed distractions
