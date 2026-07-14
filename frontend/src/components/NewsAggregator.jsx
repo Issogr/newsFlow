@@ -788,6 +788,12 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                     active={userMenuOpen}
                     buttonRef={userMenuButtonRef}
                     className="z-20"
+                    style={{
+                      filter: userMenuOpen
+                        ? 'drop-shadow(0 0 8px rgb(14 165 233 / 0.65))'
+                        : 'drop-shadow(0 0 0 rgb(14 165 233 / 0))',
+                      transition: 'filter 220ms ease-out'
+                    }}
                     sizeClassName="h-12 w-12 min-w-12 shrink-0 rounded-[1rem] px-0"
                     aria-expanded={userMenuOpen}
                     aria-haspopup="menu"
