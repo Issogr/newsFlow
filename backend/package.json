@@ -1,6 +1,6 @@
 {
   "name": "newsflow-backend",
-  "version": "3.5.11",
+  "version": "3.5.12",
   "description": "Backend for news aggregator app with real-time updates",
   "main": "server.js",
   "scripts": {

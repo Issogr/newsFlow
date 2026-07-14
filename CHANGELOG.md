@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.5.12
+
 ## 3.5.11
 
 - removed the per-user article retention field from settings; retention now follows the app-wide server configuration only
