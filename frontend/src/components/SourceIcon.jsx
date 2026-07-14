@@ -6,7 +6,7 @@ const getSourceInitial = (name = '') => String(name || '?').trim().charAt(0).toU
 const SourceIcon = ({ source, className = 'h-7 w-7' }) => {
   const [failedIconUrl, setFailedIconUrl] = useState('');
   const iconUrl = getSafeExternalUrl(source?.iconUrl);
-  const containerClassName = `inline-flex box-border shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 ring-1 ring-inset ring-slate-200 ${className}`;
+  const containerClassName = `inline-flex box-border shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200 ${className}`;
 
   if (!iconUrl || failedIconUrl === iconUrl) {
     return (

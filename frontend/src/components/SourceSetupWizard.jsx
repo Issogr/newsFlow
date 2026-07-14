@@ -251,7 +251,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                         aria-expanded={expanded}
                         aria-label={expanded ? t('sourceSetupCollapseSource', { name: source.name }) : t('sourceSetupExpandSource', { name: source.name })}
                       >
-                        <SourceIcon source={source} className="h-10 w-10 rounded-2xl" />
+                        <SourceIcon source={source} className="h-10 w-10" />
                         <span className="min-w-0">
                           <span className="block text-sm font-semibold text-slate-900">{source.name}</span>
                           <span className="mt-1 block text-xs text-slate-500">{t('sourceSetupSubSourceSelectedCount', { selected: selectedSubSourceCount, count: sourceSelectionIds.length })}</span>
@@ -300,7 +300,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
                   onClick={() => toggleSelection(source.id)}
                   className={`relative flex min-h-[5.5rem] w-full items-start gap-3 rounded-[1.25rem] border p-4 text-left transition-colors ${selected ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'}`}
                 >
-                  <SourceIcon source={source} className="h-10 w-10 rounded-2xl" />
+                  <SourceIcon source={source} className="h-10 w-10" />
                   <span className="min-w-0 pr-7">
                     <span className="block truncate text-sm font-semibold text-slate-900">{source.name}</span>
                     <span className="mt-1 block text-xs font-medium text-slate-500">{selected ? t('sourceSetupSelected') : t('sourceSetupNotSelected')}</span>

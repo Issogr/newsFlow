@@ -12,8 +12,8 @@ describe('SourceIcon', () => {
     const imageContainer = container.querySelector('img').parentElement;
     const fallbackContainer = screen.getByText('F');
 
-    expect(imageContainer).toHaveClass('box-border', 'h-10', 'w-10', 'overflow-hidden', 'bg-slate-100', 'ring-1', 'ring-inset');
-    expect(fallbackContainer).toHaveClass('box-border', 'h-10', 'w-10', 'overflow-hidden', 'bg-slate-100', 'ring-1', 'ring-inset');
+    expect(imageContainer).toHaveClass('box-border', 'h-10', 'w-10', 'overflow-hidden', 'rounded-full', 'bg-slate-100', 'ring-1', 'ring-inset');
+    expect(fallbackContainer).toHaveClass('box-border', 'h-10', 'w-10', 'overflow-hidden', 'rounded-full', 'bg-slate-100', 'ring-1', 'ring-inset');
     expect(imageContainer).not.toHaveClass('border');
     expect(imageContainer).not.toHaveClass('border-2');
     expect(fallbackContainer).not.toHaveClass('border');

@@ -297,17 +297,17 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   ));
   const sourceIconStack = sourceEntries.length > 0 ? (aiGroupedStory ? (
     <div
-      className="inline-flex rounded-[1rem] p-0.5 shadow-sm"
+      className="inline-flex rounded-full p-0.5 shadow-sm"
       style={AI_ACCENT_GRADIENT_STYLE}
       aria-label={t('aiGroupedStory')}
       title={t('aiGroupedStory')}
     >
-      <div className="flex -space-x-2 rounded-[calc(1rem-2px)] bg-white p-1">
+      <div className="flex -space-x-2 rounded-full bg-white p-1">
         {sourceIconItems}
       </div>
     </div>
   ) : (
-    <div className="flex -space-x-2 rounded-[1rem] bg-white p-1 shadow-sm ring-1 ring-sky-200" aria-label={t('sources')}>
+    <div className="flex -space-x-2 rounded-full bg-white p-1 shadow-sm ring-1 ring-sky-200" aria-label={t('sources')}>
       {sourceIconItems}
     </div>
   )) : null;
