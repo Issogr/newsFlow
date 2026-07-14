@@ -130,7 +130,7 @@ const articleRepository = createArticleRepository({
 });
 
 const authRepository = createAuthRepository({ getDb });
-const readerCacheRepository = createReaderCacheRepository({ getDb });
+const readerCacheRepository = createReaderCacheRepository({ getDb, chunkValues });
 const userStateRepository = createUserStateRepository({ getDb });
 const dbSchema = createDatabaseSchema({
   logger

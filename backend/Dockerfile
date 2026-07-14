@@ -51,7 +51,7 @@ ENV PORT=5000
 USER nodeuser
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD wget -qO- http://localhost:5000/health || exit 1
 
 # Comando di avvio

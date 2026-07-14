@@ -1,6 +1,6 @@
 import {
   Bookmark,
-  Clock3,
+  RefreshCw,
   Rss,
   Search,
   Tags,
@@ -14,25 +14,25 @@ const FilterNavActions = ({
   handleBubbleButtonClick,
   handleBubbleButtonPress,
   handleEnterSearch,
+  onRefresh,
   onReadLaterClick,
-  onToggleRecent,
   openBubble,
   readLaterActive,
   readLaterAriaLabel,
   readLaterBadge = false,
   readLaterLabel,
   readLaterTitle,
-  recentHours,
+  refreshActive = false,
+  refreshAriaLabel,
+  refreshDisabled = false,
+  refreshLabel,
+  refreshTitle,
   search,
   searchActiveClassName,
-  showRecentOnly,
   t,
-  timeLabelClassName,
-  timeMinWidthClassName,
 }) => {
   const sourceCount = activeFilters.sourceIds.length;
   const topicCount = activeFilters.topics.length;
-  const timeCount = showRecentOnly ? 1 : 0;
   const searchCount = search ? 1 : 0;
 
   return (
@@ -65,19 +65,19 @@ const FilterNavActions = ({
         badgeClassName="bg-emerald-600 text-white"
       />
 
-      <TopNavActionButton
-        icon={Clock3}
-        label={t('latestHours', { hours: recentHours })}
-        onClick={onToggleRecent}
-        active={showRecentOnly}
-        activeClassName="text-amber-600"
-        sizeClassName={buttonSizeClassName}
-        minWidthClassName={timeMinWidthClassName}
-        badge={timeCount > 0 ? '' : null}
-        badgeSizeClassName={badgeSizeClassName}
-        badgeClassName="bg-amber-500 text-white"
-        labelClassName={timeLabelClassName}
-      />
+      {onRefresh ? (
+        <TopNavActionButton
+          icon={RefreshCw}
+          label={refreshLabel}
+          onClick={onRefresh}
+          disabled={refreshDisabled}
+          activeClassName="text-sky-600"
+          sizeClassName={buttonSizeClassName}
+          iconClassName={refreshActive ? 'animate-spin' : ''}
+          aria-label={refreshAriaLabel}
+          title={refreshTitle}
+        />
+      ) : null}
 
       <TopNavActionButton
         icon={Bookmark}

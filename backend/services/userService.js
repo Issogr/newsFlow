@@ -28,8 +28,6 @@ const {
   API_TOKEN_TTL_DAYS
 } = require('../utils/auth');
 
-const GLOBAL_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
-const MAX_RECENT_HOURS = 3;
 const MIN_PASSWORD_LENGTH = 8;
 const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().slice(0, 40) || 'admin';
 const PASSWORD_SETUP_TTL_MINUTES = parseIntegerEnv('PASSWORD_SETUP_TTL_MINUTES', 60, { min: 1 });
@@ -167,11 +165,6 @@ function normalizeReleaseNotesVersion(version) {
   return String(version || '').trim().slice(0, 40);
 }
 
-function normalizeInt(value, fallback) {
-  const normalized = Number(value);
-  return Number.isFinite(normalized) ? Math.floor(normalized) : fallback;
-}
-
 function normalizePositiveInt(value, fallback) {
   const normalized = Number(value);
   return Number.isFinite(normalized) && normalized > 0 ? Math.floor(normalized) : fallback;
@@ -301,8 +294,6 @@ function getDefaultSettings(overrides = {}) {
   return {
     defaultLanguage: 'auto',
     themeMode: 'system',
-    articleRetentionHours: GLOBAL_RETENTION_HOURS,
-    recentHours: MAX_RECENT_HOURS,
     showNewsImages: true,
     compactNewsCards: false,
     compactNewsCardsMode: 'off',
@@ -356,8 +347,6 @@ function getUserFeatures() {
 
 function getUserLimits() {
   return {
-    articleRetentionHoursMax: GLOBAL_RETENTION_HOURS,
-    recentHoursMax: MAX_RECENT_HOURS,
     feedbackTitleMaxLength: MAX_FEEDBACK_TITLE_LENGTH,
     feedbackDescriptionMaxLength: MAX_FEEDBACK_DESCRIPTION_LENGTH,
     feedbackImageMaxBytes: MAX_FEEDBACK_IMAGE_BYTES,
@@ -385,15 +374,6 @@ function getUserApiToken(userId) {
 }
 
 function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overrides = {}) {
-  const articleRetentionHours = Math.min(
-    GLOBAL_RETENTION_HOURS,
-    Math.max(1, normalizeInt(payload.articleRetentionHours, currentSettings.articleRetentionHours))
-  );
-  const recentHours = Math.min(
-    MAX_RECENT_HOURS,
-    Math.max(1, normalizeInt(payload.recentHours, currentSettings.recentHours))
-  );
-
   return {
     compactNewsCardsMode: normalizeCompactNewsCardsMode(
       payload.compactNewsCardsMode,
@@ -401,8 +381,6 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     ),
     defaultLanguage: normalizeLanguage(payload.defaultLanguage || currentSettings.defaultLanguage),
     themeMode: normalizeThemeMode(payload.themeMode || currentSettings.themeMode),
-    articleRetentionHours,
-    recentHours,
     showNewsImages: typeof payload.showNewsImages === 'boolean'
       ? payload.showNewsImages
       : currentSettings.showNewsImages !== false,
@@ -519,7 +497,10 @@ async function loginUser(payload = {}) {
 }
 
 function logoutUser(sessionToken) {
-  return database.deleteSessionByTokenHash(hashSessionToken(sessionToken));
+  const sessionTokenHash = hashSessionToken(sessionToken);
+  const deleted = database.deleteSessionByTokenHash(sessionTokenHash);
+  websocketService.disconnectSessionSockets(sessionTokenHash);
+  return deleted;
 }
 
 function getCurrentUser(userId) {
@@ -703,10 +684,19 @@ async function previewUserSource(payload = {}) {
 }
 
 function removeUserSource(userId, sourceId) {
-  const removed = database.deleteUserSource(userId, sourceId);
-  if (!removed) {
-    throw createError(404, 'Source not found', 'RESOURCE_NOT_FOUND');
-  }
+  database.getDb().transaction(() => {
+    const settings = getUserSettings(userId);
+    const removed = database.deleteUserSource(userId, sourceId);
+    if (!removed) {
+      throw createError(404, 'Source not found', 'RESOURCE_NOT_FOUND');
+    }
+
+    if (settings.excludedSourceIds.includes(sourceId)) {
+      updateUserSettings(userId, {
+        excludedSourceIds: settings.excludedSourceIds.filter((id) => id !== sourceId)
+      });
+    }
+  })();
 }
 
 function exportUserSettings(userId) {
@@ -720,8 +710,6 @@ function exportUserSettings(userId) {
     settings: {
       defaultLanguage: settings.defaultLanguage,
       themeMode: settings.themeMode || 'system',
-      articleRetentionHours: settings.articleRetentionHours,
-      recentHours: settings.recentHours,
       showNewsImages: settings.showNewsImages !== false,
       compactNewsCards: settings.compactNewsCards === true,
       compactNewsCardsMode: normalizeCompactNewsCardsMode(settings.compactNewsCardsMode, settings.compactNewsCards === true ? 'everywhere' : 'off'),
@@ -816,6 +804,8 @@ async function completePasswordSetup(payload = {}) {
 
     return database.findUserById(tokenRecord.userId);
   })();
+
+  websocketService.disconnectUserSockets(user.id);
 
   return buildAuthResponse(user, sessionToken);
 }

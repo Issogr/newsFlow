@@ -35,7 +35,10 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
             <button
               key={isPodcast ? 'podcast-summaries' : summary.id}
               type="button"
-              onClick={() => onOpenSummary(summary)}
+              onClick={(event) => {
+                event.currentTarget.focus({ preventScroll: true });
+                onOpenSummary(summary);
+              }}
               className="group relative inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full p-[1.5px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
               style={AI_ACCENT_GRADIENT_STYLE}
               aria-label={ariaLabel}

@@ -123,17 +123,14 @@ Public API docs are available at `/api/docs`.
 
 ### AI
 
-AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed jobs. Feature toggles accept only `true` or `false`; invalid values disable the feature.
+AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed jobs. Defaults below are for Docker Compose; see [CONFIGURATION.md](CONFIGURATION.md) for raw backend defaults and tuning.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | unset | Required for AI provider calls. |
 | `AI_TOPIC_DETECTION_ENABLED` | `true` | Adds AI topic metadata during ingestion. |
-| `AI_CLICKBAIT_DETECTION_ENABLED` | `true` | Adds clickbait labels during ingestion. Clear local labels skip provider calls; ambiguous headlines use AI. |
+| `AI_CLICKBAIT_DETECTION_ENABLED`, `AI_STORY_GROUPING_ENABLED`, `AI_SUMMARY_GENERATION_ENABLED`, `AI_PODCAST_GENERATION_ENABLED` | `false` | Enable individual optional AI jobs. |
 | `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips provider calls for articles the local classifier can topic with high confidence. |
-| `AI_STORY_GROUPING_ENABLED` | `true` | Groups articles describing the same story after ingestion. |
-| `AI_SUMMARY_GENERATION_ENABLED` | `true` | Generates thematic summaries; hides summary UI when `false`. |
-| `AI_PODCAST_GENERATION_ENABLED` | `true` | Set to `false` to disable podcast scripts, audio, and UI. |
 | `AI_SUMMARY_PROMPT_MAX_ARTICLES` | `60` | Max selected articles included in one thematic-summary prompt after dedupe/source balancing. |
 | `AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS` | `5000` | Debounces summary checks triggered by topic-classification completion. |
 | `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarms reader text before summary windows when summaries are enabled. |

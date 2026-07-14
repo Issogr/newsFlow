@@ -40,7 +40,7 @@ export const AuthTextInput = ({ label, ...inputProps }) => (
 
 const AuthCard = ({ children, subtitle }) => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-10 text-slate-900">
+    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-[max(2.5rem,env(safe-area-inset-top))] text-slate-900">
       <div className="w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl">
         <div className="mb-6 flex items-center gap-3">
           <BrandMark className="h-12 w-12" />

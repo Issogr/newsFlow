@@ -173,9 +173,7 @@ export function buildFeedRequestParams({
   isReadLaterView,
   page,
   pageSize,
-  recentHours,
   search,
-  showRecentOnly,
   signal,
 }) {
   return {
@@ -184,7 +182,6 @@ export function buildFeedRequestParams({
     search,
     sourceIds: activeFilters.sourceIds,
     topics: activeFilters.topics,
-    recentHours: showRecentOnly ? recentHours : null,
     beforePubDate: !isReadLaterView && append ? cursor?.beforePubDate : '',
     beforeId: !isReadLaterView && append ? cursor?.beforeId : '',
     excludeArticleIds: !isReadLaterView && append ? cursor?.excludeArticleIds : [],

@@ -57,8 +57,6 @@ describe('userService imports', () => {
       settings: expect.objectContaining({
         defaultLanguage: 'it',
         themeMode: 'dark',
-        articleRetentionHours: 12,
-        recentHours: 2,
         showNewsImages: false,
         compactNewsCards: true,
         compactNewsCardsMode: 'everywhere',
@@ -76,17 +74,19 @@ describe('userService imports', () => {
         })
       ]
     });
+    expect(result.settings).not.toHaveProperty('articleRetentionHours');
+    expect(result.settings).not.toHaveProperty('recentHours');
     expect(database.getUserSettings(userId)).toMatchObject({
       defaultLanguage: 'it',
       themeMode: 'dark',
-      articleRetentionHours: 12,
-      recentHours: 2,
       showNewsImages: false,
       readerPanelPosition: 'left',
       readerTextSize: 'large',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: []
     });
+    expect(database.getUserSettings(userId)).not.toHaveProperty('articleRetentionHours');
+    expect(database.getUserSettings(userId)).not.toHaveProperty('recentHours');
   });
 
   test('exported settings preserve showNewsImages across import', async () => {
@@ -98,7 +98,6 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      recentHours: 2,
       readerTextSize: 'small'
     });
 
@@ -109,16 +108,16 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      recentHours: 2,
       readerTextSize: 'small'
     });
+    expect(exportedSettings.settings).not.toHaveProperty('articleRetentionHours');
+    expect(exportedSettings.settings).not.toHaveProperty('recentHours');
 
     const importedState = await userService.importUserSettings(targetAuthPayload.user.id, exportedSettings);
 
     expect(importedState.settings).toMatchObject({
       themeMode: 'dark',
       showNewsImages: false,
-      recentHours: 2,
       readerTextSize: 'small'
     });
     expect(database.getUserSettings(targetAuthPayload.user.id)).toMatchObject({
@@ -126,7 +125,7 @@ describe('userService imports', () => {
       showNewsImages: false,
       compactNewsCards: true,
       compactNewsCardsMode: 'desktop',
-      recentHours: 2
+      readerTextSize: 'small'
     });
   });
 
@@ -156,6 +155,27 @@ describe('userService imports', () => {
       sourceSetupCompleted: true,
       excludedSourceIds: [authPayload.sourceCatalog[0].id]
     });
+  });
+
+  test('removes a deleted custom source from persisted exclusions', async () => {
+    const authPayload = await userService.registerUser({ username: 'source-owner', password: 'secret123' });
+    const sourceId = 'custom-source-1';
+    const now = new Date().toISOString();
+    database.createUserSource({
+      id: sourceId,
+      userId: authPayload.user.id,
+      name: 'Custom feed',
+      url: 'https://example.com/feed.xml',
+      language: 'en',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now
+    });
+    userService.updateUserSettings(authPayload.user.id, { excludedSourceIds: [sourceId] });
+
+    userService.removeUserSource(authPayload.user.id, sourceId);
+
+    expect(database.getUserSettings(authPayload.user.id).excludedSourceIds).toEqual([]);
   });
 
   test('requires a minimum password length during registration', async () => {

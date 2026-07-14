@@ -19,7 +19,6 @@ import SourceSetupWizard from './SourceSetupWizard';
 import useLatestRequest from '../hooks/useLatestRequest';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
-import { getSettingsLimits } from '../config/settingsLimits';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
 import {
@@ -50,6 +49,58 @@ const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 const BACK_TO_TOP_THRESHOLD = 280;
 const TOP_NAV_SHRINK_THRESHOLD = 28;
+const SKELETON_CARD_COUNT = 6;
+
+function NewsCardSkeleton({ showImage }) {
+  return (
+    <article className="relative flex h-full min-h-[20rem] flex-col overflow-hidden rounded-none border-y border-slate-200 bg-white shadow-[0_12px_34px_-20px_rgba(15,23,42,0.35)] sm:rounded-[1.75rem] sm:border" aria-hidden="true">
+      <div className="flex items-center gap-3 px-4 pb-3 pt-5 sm:px-5">
+        <div className="h-12 w-12 shrink-0 rounded-xl bg-sky-100" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3.5 w-2/5 rounded-full bg-slate-200" />
+          <div className="h-3 w-3/5 rounded-full bg-slate-100" />
+        </div>
+        <div className="flex gap-2">
+          <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white" />
+          <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white" />
+        </div>
+      </div>
+      {showImage ? (
+        <div className="relative aspect-video w-full border-y border-slate-100 bg-slate-200">
+          <div className="absolute bottom-3 left-3 flex -space-x-1">
+            <div className="h-8 w-8 rounded-full bg-sky-100 ring-2 ring-slate-900/10" />
+            <div className="h-8 w-8 rounded-full bg-violet-100 ring-2 ring-slate-900/10" />
+          </div>
+        </div>
+      ) : (
+        <div className="flex -space-x-1 px-4 pt-3 sm:px-5">
+          <div className="h-8 w-8 rounded-full bg-sky-100 ring-2 ring-slate-900/10" />
+          <div className="h-8 w-8 rounded-full bg-violet-100 ring-2 ring-slate-900/10" />
+        </div>
+      )}
+      <div className="flex-1 space-y-2.5 px-4 pb-4 pt-3 sm:px-5">
+        <div className="h-4 w-full rounded-full bg-slate-200" />
+        <div className="h-4 w-4/5 rounded-full bg-slate-200" />
+      </div>
+      <div className="grid grid-cols-2 gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-3.5 sm:px-5">
+        <div className="h-10 rounded-xl bg-violet-200" />
+        <div className="h-10 rounded-xl border border-slate-200 bg-white" />
+      </div>
+    </article>
+  );
+}
+
+function getUserInitials(username = '') {
+  const initials = String(username)
+    .trim()
+    .split(/[\s._@-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('');
+
+  return initials.toUpperCase();
+}
 
 function UserMenuItem({ icon: Icon, label, onClick, className, iconClassName }) {
   return (
@@ -111,7 +162,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const showNewsImages = currentUser?.settings?.showNewsImages !== false;
   const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
   const t = useMemo(() => createTranslator(locale), [locale]);
-  const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
   const scrollFrameRef = useRef(null);
   const { startLatestRequest: startListRequest } = useLatestRequest();
   const { startLatestRequest: startPaginationRequest, cancelLatestRequest: cancelPaginationRequest } = useLatestRequest();
@@ -128,7 +178,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeFilters, setActiveFilters] = useState(EMPTY_FILTERS);
-  const [showRecentOnly, setShowRecentOnly] = useState(false);
   const [activeView, setActiveView] = useState('news');
   const [readerState, setReaderState] = useState({ isOpen: false, group: null, articleId: null });
   const [thematicSummaries, setThematicSummaries] = useState([]);
@@ -140,18 +189,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [pendingNewsGroupIds, setPendingNewsGroupIds] = useState([]);
   const [desktopFiltersCloseSignal, setDesktopFiltersCloseSignal] = useState(0);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [showMobileBackToTop, setShowMobileBackToTop] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(true);
   const [topNavCompact, setTopNavCompact] = useState(false);
   const [readLaterUpdatingGroupIds, setReadLaterUpdatingGroupIds] = useState([]);
   const lastScrollY = useRef(0);
   const userMenuRef = useRef(null);
+  const userMenuButtonRef = useRef(null);
   const visibleNewsCountRef = useRef(0);
   const preservedNewsCountRef = useRef(0);
   const activeListLoadingRequestIdRef = useRef(null);
-  const recentHours = Math.max(
-    settingsLimits.recentHours.min,
-    Math.min(Number(currentUser?.settings?.recentHours) || settingsLimits.recentHours.max, settingsLimits.recentHours.max)
-  );
   const excludedSourceIds = useMemo(() => currentUser?.settings?.excludedSourceIds || [], [currentUser?.settings?.excludedSourceIds]);
   const excludedSubSourceIds = useMemo(() => currentUser?.settings?.excludedSubSourceIds || [], [currentUser?.settings?.excludedSubSourceIds]);
   const sourceReloadSignature = useMemo(() => {
@@ -204,14 +251,15 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const refreshTitle = manualRefreshPending
     ? t('refreshPendingTitle')
     : t('refresh');
+  const refreshDisabled = isFeedRefreshActive || (!isReadLaterView && manualRefreshPending);
+  const userInitials = getUserInitials(currentUser?.user?.username);
   const socketSubscription = useMemo(() => ({
     search: debouncedSearch,
     sourceIds: activeFilters.sourceIds,
     topics: activeFilters.topics,
-    recentHours: showRecentOnly ? recentHours : null,
     excludedSourceIds,
     excludedSubSourceIds
-  }), [activeFilters.sourceIds, activeFilters.topics, debouncedSearch, excludedSourceIds, excludedSubSourceIds, recentHours, showRecentOnly]);
+  }), [activeFilters.sourceIds, activeFilters.topics, debouncedSearch, excludedSourceIds, excludedSubSourceIds]);
 
   useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
 
@@ -245,10 +293,12 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       scrollFrameRef.current = window.requestAnimationFrame(() => {
         const currentY = window.scrollY;
         const nextShowBackToTop = currentY > BACK_TO_TOP_THRESHOLD;
+        const nextShowMobileBackToTop = currentY > 0;
         const nextTopNavCompact = currentY > TOP_NAV_SHRINK_THRESHOLD;
         const nextShowMobileNav = !(currentY > lastScrollY.current && currentY > 50);
 
         setShowBackToTop((current) => (current === nextShowBackToTop ? current : nextShowBackToTop));
+        setShowMobileBackToTop((current) => (current === nextShowMobileBackToTop ? current : nextShowMobileBackToTop));
         setTopNavCompact((current) => (current === nextTopNavCompact ? current : nextTopNavCompact));
         setUserMenuOpen((current) => (current ? false : current));
         setShowMobileNav((current) => (current === nextShowMobileNav ? current : nextShowMobileNav));
@@ -281,6 +331,16 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       };
     });
   }, [excludedSourceIds]);
+
+  useEffect(() => {
+    const validSourceIds = new Set(availableSources.map((source) => source.id));
+    setActiveFilters((current) => {
+      const nextSourceIds = current.sourceIds.filter((sourceId) => validSourceIds.has(sourceId));
+      return nextSourceIds.length === current.sourceIds.length
+        ? current
+        : { ...current, sourceIds: nextSourceIds };
+    });
+  }, [availableSources]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -330,9 +390,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           sourceIds: activeFilters.sourceIds,
           topics: activeFilters.topics,
         },
-        recentHours,
         search: debouncedSearch,
-        showRecentOnly,
         signal: request.signal,
       };
       const response = await (isReadLaterView ? fetchReadLaterNews : fetchNews)(buildFeedRequestParams({
@@ -421,7 +479,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         setBusyState(false);
       }
     }
-  }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, isReadLaterView, recentHours, showRecentOnly, startListRequest, startPaginationRequest]);
+  }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, isReadLaterView, startListRequest, startPaginationRequest]);
 
   const handleTopicRefresh = useCallback((payload = {}) => {
     if (needsSourceSetup) {
@@ -574,6 +632,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     });
   }, []);
 
+  const clearFilter = useCallback((type) => {
+    setActiveFilters((current) => ({ ...current, [type]: [] }));
+  }, []);
+
   const openReader = useCallback((group, articleId) => {
     setReaderState({ isOpen: true, group, articleId });
   }, []);
@@ -644,7 +706,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [isReadLaterView]);
 
   const scrollToTop = useCallback(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
   }, []);
 
   const clearSearch = useCallback(() => {
@@ -652,130 +715,128 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     setDebouncedSearch('');
   }, []);
 
-  const toggleRecentOnly = useCallback(() => {
-    setShowRecentOnly((value) => !value);
-  }, []);
-
   const filterSurfaceProps = {
     visibleSources: visibleAvailableSources,
     availableTopics,
     activeFilters,
-    showRecentOnly,
     search,
-    recentHours,
     t,
     locale,
+    onClearFilter: clearFilter,
     onToggleFilter: toggleFilter,
-    onToggleRecent: toggleRecentOnly,
     onSearchChange: setSearch,
     onSearchClear: clearSearch
   };
 
   return (
     <div className="min-h-screen overflow-x-clip bg-slate-100 text-slate-900">
-      <header className={`sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md transition-shadow duration-200 ${topNavCompact ? 'shadow-md' : 'shadow-sm'}`}>
-        <div className={`mx-auto flex max-w-7xl flex-col px-4 transition-all duration-200 lg:px-6 ${topNavCompact ? 'gap-2 py-2.5' : 'gap-4 py-5'}`}>
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-3">
-                <BrandMark className={`transition-all duration-200 ${topNavCompact ? 'h-9 w-9' : 'h-11 w-11'}`} />
-                <div className="min-w-0">
-                  <h1 className={`truncate font-semibold tracking-tight transition-all duration-200 ${topNavCompact ? 'text-xl' : 'text-2xl'}`}>{t('pageTitle')}</h1>
+      <header className={`sticky top-[env(safe-area-inset-top)] z-50 transition-[padding] duration-300 ${topNavCompact ? 'px-4 pt-2' : ''}`}>
+        <div className={`border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl transition-all duration-300 ${topNavCompact ? 'rounded-[1.6rem] border border-slate-200/80 bg-white/90 shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] 2xl:mx-auto 2xl:max-w-7xl' : ''}`}>
+          <div className={`mx-auto flex max-w-7xl flex-col px-4 transition-all duration-300 lg:px-6 ${topNavCompact ? 'gap-2 py-2.5' : 'gap-4 py-5'}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-3">
+                  <BrandMark className={`transition-all duration-300 ${topNavCompact ? 'h-9 w-9' : 'h-11 w-11'}`} />
+                  <div className="min-w-0">
+                    <h1 className={`truncate font-semibold tracking-tight transition-all duration-300 focus:outline-none ${topNavCompact ? 'text-xl' : 'text-2xl'}`} data-focus-fallback tabIndex={-1}>{t('pageTitle')}</h1>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="flex shrink-0 items-center gap-3">
-              <DesktopTopNavFilters
-                {...filterSurfaceProps}
-                onToggleReadLater={() => setActiveView((current) => current === 'readLater' ? 'news' : 'readLater')}
-                onOpenSurface={() => setUserMenuOpen(false)}
-                readLaterActive={isReadLaterView}
-                closeSignal={desktopFiltersCloseSignal}
-                compact={topNavCompact}
-              />
-
-              <div className="relative">
-                <TopNavActionButton
-                  icon={RefreshCw}
-                  label={t('refresh')}
-                  onClick={handleManualRefresh}
-                  disabled={isFeedRefreshActive || (!isReadLaterView && manualRefreshPending)}
-                  aria-label={refreshTitle}
-                  title={refreshTitle}
-                  iconClassName={isFeedRefreshActive || (!isReadLaterView && manualRefreshPending) ? 'animate-spin' : ''}
-                />
-              </div>
-
-              <div className="relative" ref={userMenuRef}>
-                <TopNavActionButton
-                  icon={User}
-                  label={t('userMenu')}
-                  onClick={() => {
-                    setUserMenuOpen((current) => {
-                      const nextOpen = !current;
-                      if (nextOpen) {
-                        setDesktopFiltersCloseSignal((value) => value + 1);
-                      }
-                      return nextOpen;
-                    });
-                  }}
-                  active={userMenuOpen}
-                  className="z-20"
-                  aria-expanded={userMenuOpen}
-                  aria-haspopup="menu"
-                  aria-label={t('userMenu')}
+              <div className="flex shrink-0 items-center gap-3">
+                <DesktopTopNavFilters
+                  {...filterSurfaceProps}
+                  onToggleReadLater={() => setActiveView((current) => current === 'readLater' ? 'news' : 'readLater')}
+                  onOpenSurface={() => setUserMenuOpen(false)}
+                  readLaterActive={isReadLaterView}
+                  closeSignal={desktopFiltersCloseSignal}
+                  compact={topNavCompact}
                 />
 
-                {userMenuOpen && (
-                  <div className={`absolute right-0 ${topNavCompact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]'} z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white/95 shadow-2xl backdrop-blur transition-all duration-200`} role="menu">
-                    <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-4">
-                      <div className="flex items-start gap-3">
-                        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 shadow-sm">
-                          <User className="h-5 w-5" aria-hidden="true" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{t('userMenu')}</p>
-                          <p className="mt-1 truncate text-sm font-semibold text-slate-900">{currentUser?.user?.username}</p>
+                <div className="relative hidden md:block">
+                  <TopNavActionButton
+                    icon={RefreshCw}
+                    label={t('refresh')}
+                    onClick={handleManualRefresh}
+                    disabled={refreshDisabled}
+                    aria-label={refreshTitle}
+                    title={refreshTitle}
+                    iconClassName={refreshDisabled ? 'animate-spin' : ''}
+                  />
+                </div>
+
+                <div className="relative" ref={userMenuRef}>
+                  <TopNavActionButton
+                    icon={User}
+                    iconNode={userInitials ? (
+                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-200 text-xs font-bold leading-none text-sky-800" aria-hidden="true">
+                        {userInitials}
+                      </span>
+                    ) : (
+                      <User className="h-7 w-7" aria-hidden="true" />
+                    )}
+                    label={null}
+                    onClick={() => {
+                      setUserMenuOpen((current) => {
+                        const nextOpen = !current;
+                        if (nextOpen) {
+                          setDesktopFiltersCloseSignal((value) => value + 1);
+                        }
+                        return nextOpen;
+                      });
+                    }}
+                    active={userMenuOpen}
+                    buttonRef={userMenuButtonRef}
+                    className="z-20"
+                    style={{
+                      filter: userMenuOpen
+                        ? 'drop-shadow(0 0 8px rgb(14 165 233 / 0.65))'
+                        : 'drop-shadow(0 0 0 rgb(14 165 233 / 0))',
+                      transition: 'filter 220ms ease-out'
+                    }}
+                    sizeClassName="h-12 w-12 min-w-12 shrink-0 rounded-[1rem] px-0"
+                    aria-expanded={userMenuOpen}
+                    aria-haspopup="menu"
+                    aria-label={t('userMenu')}
+                  />
+
+                  {userMenuOpen && (
+                    <div className={`absolute right-0 ${topNavCompact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]'} z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200/80 bg-white/95 shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] backdrop-blur-xl transition-all duration-200`} role="menu">
+                      <div className="space-y-3 p-3">
+                        <div className="space-y-2 pt-1">
+                          <UserMenuItem
+                            icon={Cog}
+                            label={t('settings')}
+                            onClick={() => {
+                              setSettingsOpen(true);
+                              setUserMenuOpen(false);
+                            }}
+                            iconClassName="bg-sky-100 text-sky-700"
+                          />
+                          <UserMenuItem
+                            icon={MessageSquare}
+                            label={t('feedbackMenuItem')}
+                            onClick={() => {
+                              setFeedbackOpen(true);
+                              setUserMenuOpen(false);
+                            }}
+                            iconClassName="bg-emerald-100 text-emerald-700"
+                          />
+                          <UserMenuItem
+                            icon={LogOut}
+                            label={t('logout')}
+                            onClick={onLogout}
+                            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-left text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100"
+                            iconClassName="bg-white text-rose-700"
+                          />
                         </div>
                       </div>
                     </div>
-
-                    <div className="space-y-3 p-3">
-                      <div className="space-y-2 pt-1">
-                        <UserMenuItem
-                          icon={Cog}
-                          label={t('settings')}
-                          onClick={() => {
-                            setSettingsOpen(true);
-                            setUserMenuOpen(false);
-                          }}
-                          iconClassName="bg-sky-100 text-sky-700"
-                        />
-                        <UserMenuItem
-                          icon={MessageSquare}
-                          label={t('feedbackMenuItem')}
-                          onClick={() => {
-                            setFeedbackOpen(true);
-                            setUserMenuOpen(false);
-                          }}
-                          iconClassName="bg-emerald-100 text-emerald-700"
-                        />
-                        <UserMenuItem
-                          icon={LogOut}
-                          label={t('logout')}
-                          onClick={onLogout}
-                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-left text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100"
-                          iconClassName="bg-white text-rose-700"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </div>
-
         </div>
       </header>
 
@@ -791,8 +852,14 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         )}
 
         {loading && !loadingMore ? (
-          <div className="flex h-64 flex-col items-center justify-center gap-3">
-            <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
+          <div
+            className="-mx-4 grid w-auto min-w-0 animate-pulse grid-cols-1 gap-2 sm:mx-0 sm:w-full sm:gap-4 md:grid-cols-2 xl:grid-cols-3"
+            role="status"
+            aria-label={t('loadingMore')}
+          >
+            {Array.from({ length: SKELETON_CARD_COUNT }, (_, index) => (
+              <NewsCardSkeleton key={index} showImage={showNewsImages} />
+            ))}
           </div>
         ) : error ? (
           <ErrorMessage error={error} onRetry={() => loadNews({ page: 1, append: false, forceRefresh: true })} t={t} />
@@ -818,18 +885,19 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
               </div>
             )}
 
-            <div className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="-mx-4 grid w-auto min-w-0 grid-cols-1 gap-2 sm:mx-0 sm:w-full sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
               {visibleNews.map((group) => (
-                <NewsCard
-                  key={group.id || group.cursorId || group.items?.[0]?.id}
-                  group={group}
-                  showImages={showNewsImages}
-                  locale={locale}
-                  t={t}
-                  onOpenReader={openReader}
-                  onToggleReadLater={handleToggleReadLater}
-                  readLaterUpdating={readLaterUpdatingGroupIds.includes(group.id)}
-                />
+                <div key={group.id || group.cursorId || group.items?.[0]?.id} className="feed-card-enter h-full">
+                  <NewsCard
+                    group={group}
+                    showImages={showNewsImages}
+                    locale={locale}
+                    t={t}
+                    onOpenReader={openReader}
+                    onToggleReadLater={handleToggleReadLater}
+                    readLaterUpdating={readLaterUpdatingGroupIds.includes(group.id)}
+                  />
+                </div>
               ))}
             </div>
 
@@ -891,6 +959,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           onClose={() => setSettingsOpen(false)}
           onOpenReleaseNotes={onOpenReleaseNotes}
           onUserUpdate={onUserUpdate}
+          restoreFocusRef={userMenuButtonRef}
         />
       )}
 
@@ -899,6 +968,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           t={t}
           feedbackLimits={currentUser?.limits}
           onClose={() => setFeedbackOpen(false)}
+          restoreFocusRef={userMenuButtonRef}
         />
       )}
 
@@ -914,22 +984,31 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       <button
         type="button"
         onClick={scrollToTop}
-        className={`fixed bottom-20 left-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-700 shadow-lg backdrop-blur transition-all duration-200 hover:bg-white hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 sm:bottom-6 sm:left-6 ${
+        className={`fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-[calc(1.5rem+env(safe-area-inset-left))] z-40 hidden h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/90 text-slate-700 shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] backdrop-blur-xl transition-all duration-200 hover:bg-white hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 md:inline-flex ${
           showBackToTop
             ? 'translate-y-0 opacity-100'
             : 'pointer-events-none translate-y-3 opacity-0'
         }`}
+        disabled={!showBackToTop}
+        tabIndex={showBackToTop ? 0 : -1}
+        aria-hidden={!showBackToTop}
         aria-label={t('backToTop')}
       >
         <ArrowUp className="h-5 w-5" aria-hidden="true" />
       </button>
 
-      {!readerState.isOpen && !displayedThematicSummary && !settingsOpen && !feedbackOpen ? (
+      {!readerState.isOpen && !displayedThematicSummary && !settingsOpen && !feedbackOpen && !needsSourceSetup ? (
         <MobileBottomNav
           {...filterSurfaceProps}
           activeView={activeView}
+          onRefresh={handleManualRefresh}
           onViewChange={setActiveView}
+          refreshActive={refreshDisabled}
+          refreshDisabled={refreshDisabled}
+          refreshTitle={refreshTitle}
           visible={showMobileNav}
+          backToTopVisible={showMobileBackToTop}
+          onBackToTop={scrollToTop}
         />
       ) : null}
     </div>

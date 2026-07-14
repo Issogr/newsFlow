@@ -67,7 +67,10 @@ describe('NewsCard', () => {
 
     renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
-    fireEvent.click(screen.getByRole('button', { name: 'openOriginalSource' }));
+    const originalSourceButton = screen.getByRole('button', { name: 'openOriginalSource' });
+
+    expect(originalSourceButton).toHaveClass('border-slate-300', 'bg-white', 'text-slate-700');
+    fireEvent.click(originalSourceButton);
 
     expect(window.open).toHaveBeenCalledWith('https://example.com/story', '_blank', 'noopener,noreferrer');
   });
@@ -146,13 +149,27 @@ describe('NewsCard', () => {
   });
 
   test('renders icon-only topic pills on standard cards', () => {
-    renderNewsCard({ cardGroup: createGroup({ topics: ['Tecnologia', 'Economia'] }) });
+    const topicGroup = createGroup({
+      topicDetails: [
+        { topic: 'Tecnologia', source: 'ai' },
+        { topic: 'Economia', source: 'canonical' }
+      ]
+    });
+    const { rerender } = renderNewsCard({ cardGroup: topicGroup });
+
+    const technologyTopic = screen.getByLabelText('Technology');
+    expect(technologyTopic).toHaveClass('rounded-full');
+    expect(technologyTopic.firstElementChild).toHaveClass('rounded-full');
+    expect(technologyTopic.getAttribute('style')).toContain('conic-gradient');
+    expect(screen.getByLabelText('Economy')).toHaveClass('rounded-full');
+    expect(technologyTopic.parentElement).toHaveClass('-space-x-1');
+    expect(screen.queryByText('Technology')).not.toBeInTheDocument();
+    expect(screen.queryByText('Economy')).not.toBeInTheDocument();
+
+    rerender(createNewsCardElement({ cardGroup: topicGroup, showImages: false }));
 
     expect(screen.getByLabelText('Technology')).toBeInTheDocument();
     expect(screen.getByLabelText('Economy')).toBeInTheDocument();
-    expect(screen.getByLabelText('Technology').parentElement).toHaveClass('-space-x-1');
-    expect(screen.queryByText('Technology')).not.toBeInTheDocument();
-    expect(screen.queryByText('Economy')).not.toBeInTheDocument();
   });
 
   test('renders the published date and time pill', () => {
@@ -214,6 +231,9 @@ describe('NewsCard', () => {
 
     expect(screen.getByLabelText('Source A')).toBeInTheDocument();
     expect(screen.getByLabelText('Source B')).toBeInTheDocument();
+    expect(screen.getByLabelText('Source A')).toHaveClass('flex', 'h-10', 'w-10', 'leading-none');
+    expect(screen.getByLabelText('Source A').querySelector('img').parentElement).toHaveClass('h-10', 'w-10', 'outline-2');
+    expect(screen.getByLabelText('Source A').querySelector('img').parentElement).not.toHaveClass('border-2');
     expect(screen.getByText('Source A +1')).toBeInTheDocument();
     expect(screen.queryByText('Source B')).not.toBeInTheDocument();
   });

@@ -9,7 +9,6 @@ import {
   updateUserSource,
   updateUserSettings
 } from '../../services/api';
-import { clampSettingValue, getSettingsLimits } from '../../config/settingsLimits';
 import { getStoredReaderTextSizePreference, setStoredReaderTextSizePreference } from '../../utils/readerTextSizePreference';
 
 const createInitialSourceForm = () => ({ url: '' });
@@ -28,12 +27,11 @@ const areSettingValuesEqual = (left, right) => {
   return left === right;
 };
 
-const createSettingsPatch = (nextSettings, currentUser, dirtyKeys = null) => {
-  const initialSettings = getInitialSettings(currentUser);
-  const candidateKeys = Array.isArray(dirtyKeys) ? dirtyKeys : Object.keys(nextSettings);
+const createSettingsPatch = (nextSettings, currentUser, dirtyKeys) => {
+  const persistedSettings = getInitialSettings(currentUser);
 
-  return candidateKeys.reduce((patch, key) => {
-    if (!areSettingValuesEqual(nextSettings[key], initialSettings[key])) {
+  return dirtyKeys.reduce((patch, key) => {
+    if (!areSettingValuesEqual(nextSettings[key], persistedSettings[key])) {
       patch[key] = nextSettings[key];
     }
 
@@ -41,7 +39,7 @@ const createSettingsPatch = (nextSettings, currentUser, dirtyKeys = null) => {
   }, {});
 };
 
-const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserUpdate }) => {
+const useSettingsPanelState = ({ currentUser, availableSources, onUserUpdate }) => {
   const [settings, setSettings] = useState(() => getInitialSettings(currentUser));
   const [customSources, setCustomSources] = useState(currentUser.customSources || []);
   const [saving, setSaving] = useState(false);
@@ -54,30 +52,24 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
   const [editingSourceForm, setEditingSourceForm] = useState(createInitialEditingSourceForm);
   const importInputRef = useRef(null);
   const userIdentityRef = useRef(getCurrentUserIdentity(currentUser));
+  const currentUserRef = useRef(currentUser);
   const dirtySettingKeysRef = useRef(new Set());
-  const settingsLimits = useMemo(() => getSettingsLimits(currentUser), [currentUser]);
+  const savingActionsRef = useRef(0);
+  currentUserRef.current = currentUser;
+  const settingsLimits = {
+    apiTokenTtlDays: Number.isFinite(currentUser?.limits?.apiTokenTtlDays) ? currentUser.limits.apiTokenTtlDays : 30
+  };
 
   const excludedSourceCatalog = useMemo(() => {
     const customSourceIds = new Set(customSources.map((source) => source.id));
     return availableSources.filter((source) => !customSourceIds.has(source.id));
   }, [availableSources, customSources]);
 
-  const excludedSubFeedCatalog = useMemo(() => {
-    return excludedSourceCatalog
-      .filter((source) => Array.isArray(source.subSources) && source.subSources.length > 1)
-      .map((source) => ({
-        id: source.id,
-        name: source.name,
-        subSources: source.subSources
-      }));
-  }, [excludedSourceCatalog]);
-
   const subSourceIdsBySourceId = useMemo(() => {
-    return new Map(excludedSubFeedCatalog.map((source) => [
-      source.id,
-      new Set(source.subSources.map((subSource) => subSource.id))
-    ]));
-  }, [excludedSubFeedCatalog]);
+    return new Map(excludedSourceCatalog
+      .filter((source) => Array.isArray(source.subSources) && source.subSources.length > 1)
+      .map((source) => [source.id, new Set(source.subSources.map((subSource) => subSource.id))]));
+  }, [excludedSourceCatalog]);
 
   useEffect(() => {
     const nextUserIdentity = getCurrentUserIdentity(currentUser);
@@ -92,13 +84,14 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
       setEditingSourceForm(createInitialEditingSourceForm());
     } else {
       setSettings((current) => {
-        const latestPersistedSettings = getInitialSettings(currentUser);
-        const dirtyKeys = dirtySettingKeysRef.current;
-        let changed = false;
+        const persistedSettings = getInitialSettings(currentUser);
         const nextSettings = { ...current };
+        let changed = false;
 
-        Object.entries(latestPersistedSettings).forEach(([key, value]) => {
-          if (!dirtyKeys.has(key) && !areSettingValuesEqual(current[key], value)) {
+        Object.entries(persistedSettings).forEach(([key, value]) => {
+          if (dirtySettingKeysRef.current.has(key) && areSettingValuesEqual(current[key], value)) {
+            dirtySettingKeysRef.current.delete(key);
+          } else if (!dirtySettingKeysRef.current.has(key) && !areSettingValuesEqual(current[key], value)) {
             nextSettings[key] = value;
             changed = true;
           }
@@ -117,22 +110,23 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     setSettings(nextSettings);
     setCustomSources(nextCustomSources);
     onUserUpdate({
-      ...currentUser,
+      ...currentUserRef.current,
       settings: nextSettings,
       customSources: nextCustomSources
     });
-  }, [currentUser, onUserUpdate]);
+  }, [onUserUpdate]);
 
   const syncCustomSourcesState = useCallback((nextCustomSources, nextSettings = null) => {
     setCustomSources(nextCustomSources);
     onUserUpdate({
-      ...currentUser,
+      ...currentUserRef.current,
       ...(nextSettings ? { settings: nextSettings } : {}),
       customSources: nextCustomSources
     });
-  }, [currentUser, onUserUpdate]);
+  }, [onUserUpdate]);
 
   const runSavingAction = useCallback(async (action, options = {}) => {
+    savingActionsRef.current += 1;
     setSaving(true);
     setError(null);
 
@@ -145,73 +139,130 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
       options.onError?.(requestError);
       return null;
     } finally {
-      setSaving(false);
+      savingActionsRef.current -= 1;
+      if (savingActionsRef.current === 0) {
+        setSaving(false);
+      }
+    }
+  }, []);
+
+  const markSettingDirty = useCallback((key, value) => {
+    const persistedValue = getInitialSettings(currentUserRef.current)[key];
+    if (areSettingValuesEqual(value, persistedValue)) {
+      dirtySettingKeysRef.current.delete(key);
+    } else {
+      dirtySettingKeysRef.current.add(key);
     }
   }, []);
 
   const setSetting = useCallback((key, value) => {
-    dirtySettingKeysRef.current.add(key);
-    setSettings((current) => ({
-      ...current,
-      [key]: value
-    }));
-  }, []);
-
-  const updateNumericSetting = useCallback((key, value, limits) => {
-    setSetting(key, clampSettingValue(value, limits));
-  }, [setSetting]);
+    markSettingDirty(key, value);
+    setSettings((current) => ({ ...current, [key]: value }));
+  }, [markSettingDirty]);
 
   const toggleExcludedSource = useCallback((sourceId) => {
-    dirtySettingKeysRef.current.add('excludedSourceIds');
-    dirtySettingKeysRef.current.add('excludedSubSourceIds');
-    setSettings((current) => {
-      const excludedSourceIds = current.excludedSourceIds || [];
-      const excludedSubSourceIds = current.excludedSubSourceIds || [];
-      const exists = excludedSourceIds.includes(sourceId);
+    const excludedSourceIds = settings.excludedSourceIds || [];
+    const excludedSubSourceIds = settings.excludedSubSourceIds || [];
+    const subSourceIds = subSourceIdsBySourceId.get(sourceId);
+    const isHidden = excludedSourceIds.includes(sourceId)
+      || (subSourceIds && [...subSourceIds].every((id) => excludedSubSourceIds.includes(id)));
+    const nextExcludedSourceIds = isHidden
+      ? excludedSourceIds.filter((item) => item !== sourceId)
+      : [...excludedSourceIds, sourceId];
+    const nextExcludedSubSourceIds = excludedSubSourceIds.filter((item) => !subSourceIds?.has(item));
 
-      return {
-        ...current,
-        excludedSourceIds: exists
-          ? excludedSourceIds.filter((item) => item !== sourceId)
-          : [...excludedSourceIds, sourceId],
-        excludedSubSourceIds: exists
-          ? excludedSubSourceIds
-          : excludedSubSourceIds.filter((item) => !subSourceIdsBySourceId.get(sourceId)?.has(item))
-      };
+    markSettingDirty('excludedSourceIds', nextExcludedSourceIds);
+    markSettingDirty('excludedSubSourceIds', nextExcludedSubSourceIds);
+    setSettings({
+      ...settings,
+      excludedSourceIds: nextExcludedSourceIds,
+      excludedSubSourceIds: nextExcludedSubSourceIds
     });
-  }, [subSourceIdsBySourceId]);
+  }, [markSettingDirty, settings, subSourceIdsBySourceId]);
 
   const toggleExcludedSubFeed = useCallback((subSourceId) => {
-    dirtySettingKeysRef.current.add('excludedSubSourceIds');
-    setSettings((current) => {
-      const excludedSubSourceIds = current.excludedSubSourceIds || [];
-      const exists = excludedSubSourceIds.includes(subSourceId);
+    const parentSource = [...subSourceIdsBySourceId].find(([, subSourceIds]) => subSourceIds.has(subSourceId));
+    const excludedSubSourceIds = settings.excludedSubSourceIds || [];
+    const exists = excludedSubSourceIds.includes(subSourceId);
+    let nextExcludedSubSourceIds = exists
+      ? excludedSubSourceIds.filter((item) => item !== subSourceId)
+      : [...excludedSubSourceIds, subSourceId];
+    let nextExcludedSourceIds = settings.excludedSourceIds || [];
 
-      return {
-        ...current,
-        excludedSubSourceIds: exists
-          ? excludedSubSourceIds.filter((item) => item !== subSourceId)
-          : [...excludedSubSourceIds, subSourceId]
-      };
+    if (parentSource?.[1] && [...parentSource[1]].every((id) => nextExcludedSubSourceIds.includes(id))) {
+      nextExcludedSourceIds = [...new Set([...nextExcludedSourceIds, parentSource[0]])];
+      nextExcludedSubSourceIds = nextExcludedSubSourceIds.filter((item) => !parentSource[1].has(item));
+    }
+
+    markSettingDirty('excludedSourceIds', nextExcludedSourceIds);
+    markSettingDirty('excludedSubSourceIds', nextExcludedSubSourceIds);
+    setSettings({
+      ...settings,
+      excludedSourceIds: nextExcludedSourceIds,
+      excludedSubSourceIds: nextExcludedSubSourceIds
     });
-  }, []);
+  }, [markSettingDirty, settings, subSourceIdsBySourceId]);
+
+  const editingSource = customSources.find((source) => source.id === editingSourceId);
+  const hasSourceFormChanges = Boolean(sourceForm.url.trim());
+  const hasEditingSourceChanges = Boolean(editingSource) && (
+    editingSourceForm.name !== editingSource.name
+    || editingSourceForm.url !== editingSource.url
+    || editingSourceForm.language !== (editingSource.language || 'it')
+  );
 
   const handleSave = useCallback(async () => {
-    await runSavingAction(async () => {
-      const dirtySettingKeys = [...dirtySettingKeysRef.current];
-      const settingsPatch = createSettingsPatch(settings, currentUser, dirtySettingKeys);
-      if (Object.keys(settingsPatch).length === 0) {
-        dirtySettingKeysRef.current.clear();
-        onClose();
-        return;
+    const dirtySettingKeys = [...dirtySettingKeysRef.current];
+    const settingsPatch = createSettingsPatch(settings, currentUserRef.current, dirtySettingKeys);
+    if (Object.keys(settingsPatch).length === 0 && !hasSourceFormChanges && !hasEditingSourceChanges) {
+      dirtySettingKeysRef.current.clear();
+      return true;
+    }
+
+    setSourceError(null);
+    const result = await runSavingAction(async () => {
+      let nextCustomSources = customSources;
+      let nextSettings = getInitialSettings(currentUserRef.current);
+
+      if (hasSourceFormChanges) {
+        const response = await addUserSource(sourceForm);
+        nextCustomSources = [response.source, ...nextCustomSources];
+        setSourceForm(createInitialSourceForm());
+        syncCustomSourcesState(nextCustomSources);
       }
 
-      const response = await updateUserSettings(settingsPatch);
-      setStoredReaderTextSizePreference(response.settings.readerTextSize);
-      syncPersistedUserState(response.settings, customSources);
-      onClose();
+      if (hasEditingSourceChanges) {
+        const response = await updateUserSource(editingSourceId, editingSourceForm);
+        nextCustomSources = nextCustomSources.map((source) => (
+          source.id === editingSourceId ? response.source : source
+        ));
+        setEditingSourceId('');
+        setEditingSourceForm(createInitialEditingSourceForm());
+        syncCustomSourcesState(nextCustomSources);
+      }
+
+      if (Object.keys(settingsPatch).length > 0) {
+        const response = await updateUserSettings(settingsPatch);
+        const persistedPatch = Object.keys(settingsPatch).reduce((patch, key) => ({
+          ...patch,
+          [key]: response.settings[key]
+        }), {});
+        nextSettings = { ...getInitialSettings(currentUserRef.current), ...persistedPatch };
+      }
+
+      return { nextCustomSources, nextSettings };
     });
-  }, [currentUser, customSources, onClose, runSavingAction, settings, syncPersistedUserState]);
+    if (!result) {
+      return false;
+    }
+
+    const nextSettings = Object.keys(settingsPatch).length > 0
+      ? result.nextSettings
+      : getInitialSettings(currentUserRef.current);
+    setStoredReaderTextSizePreference(nextSettings.readerTextSize);
+    syncPersistedUserState(nextSettings, result.nextCustomSources);
+    return true;
+  }, [customSources, editingSourceForm, editingSourceId, hasEditingSourceChanges, hasSourceFormChanges, runSavingAction, settings, sourceForm, syncCustomSourcesState, syncPersistedUserState]);
 
   const handleCreateApiToken = useCallback(async () => {
     await runSavingAction(async () => {
@@ -219,11 +270,11 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
       setApiToken(response.tokenInfo || null);
       setNewApiToken(response.token || '');
       onUserUpdate({
-        ...currentUser,
+        ...currentUserRef.current,
         apiToken: response.tokenInfo || null
       });
     });
-  }, [currentUser, onUserUpdate, runSavingAction]);
+  }, [onUserUpdate, runSavingAction]);
 
   const handleRevokeApiToken = useCallback(async () => {
     await runSavingAction(async () => {
@@ -231,11 +282,11 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
       setApiToken(null);
       setNewApiToken('');
       onUserUpdate({
-        ...currentUser,
+        ...currentUserRef.current,
         apiToken: null
       });
     });
-  }, [currentUser, onUserUpdate, runSavingAction]);
+  }, [onUserUpdate, runSavingAction]);
 
   const handleExport = useCallback(async () => {
     await runSavingAction(async () => {
@@ -287,11 +338,12 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     event.preventDefault();
     setSourceError(null);
 
-    await runSavingAction(async () => {
+    return runSavingAction(async () => {
       const response = await addUserSource(sourceForm);
       const nextCustomSources = [response.source, ...customSources];
       setSourceForm(createInitialSourceForm());
       syncCustomSourcesState(nextCustomSources);
+      return true;
     }, { globalError: false, onError: setSourceError });
   }, [customSources, runSavingAction, sourceForm, syncCustomSourcesState]);
 
@@ -330,17 +382,25 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
         ...settings,
         excludedSourceIds: (settings.excludedSourceIds || []).filter((item) => item !== sourceId)
       };
+      const persistedSettings = currentUserRef.current?.settings || {};
       const nextPersistedSettings = {
-        ...(currentUser?.settings || {}),
-        excludedSourceIds: (currentUser?.settings?.excludedSourceIds || []).filter((item) => item !== sourceId)
+        ...persistedSettings,
+        excludedSourceIds: (persistedSettings.excludedSourceIds || []).filter((item) => item !== sourceId)
       };
       setSettings(nextSettings);
       syncCustomSourcesState(nextCustomSources, nextPersistedSettings);
     });
-  }, [currentUser?.settings, customSources, runSavingAction, settings, syncCustomSourcesState]);
+  }, [customSources, runSavingAction, settings, syncCustomSourcesState]);
+
+  const hasUnsavedChanges = Object.keys(createSettingsPatch(
+    settings,
+    currentUser,
+    [...dirtySettingKeysRef.current]
+  )).length > 0 || hasSourceFormChanges || hasEditingSourceChanges;
 
   return {
     saving,
+    hasUnsavedChanges,
     error,
     sourceError,
     settings,
@@ -353,11 +413,9 @@ const useSettingsPanelState = ({ currentUser, availableSources, onClose, onUserU
     importInputRef,
     settingsLimits,
     excludedSourceCatalog,
-    excludedSubFeedCatalog,
     setSourceForm,
     setEditingSourceForm,
     setSetting,
-    updateNumericSetting,
     toggleExcludedSource,
     toggleExcludedSubFeed,
     handleSave,

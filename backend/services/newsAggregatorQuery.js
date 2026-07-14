@@ -73,7 +73,8 @@ function expandUserSources(userSources = []) {
       url: source.url,
       type: 'rss',
       language: source.language || 'it',
-      ownerUserId: source.userId
+      ownerUserId: source.userId,
+      updatedAt: source.updatedAt || null
     }));
 }
 
@@ -114,17 +115,10 @@ function getAvailableSources(userContext = {}, userSources = null) {
   return [...availableSources.values()];
 }
 
-function getMaxArticleAgeHours(userContext = {}, articleRetentionHours = ARTICLE_RETENTION_HOURS) {
-  return Math.min(
-    articleRetentionHours,
-    Number.isFinite(userContext.articleRetentionHours) ? userContext.articleRetentionHours : articleRetentionHours
-  );
-}
-
 function getQueryOptions(userContext = {}) {
   return {
     userId: userContext.userId || null,
-    maxArticleAgeHours: getMaxArticleAgeHours(userContext),
+    maxArticleAgeHours: ARTICLE_RETENTION_HOURS,
     excludedSourceIds: Array.isArray(userContext.excludedSourceIds) ? userContext.excludedSourceIds : [],
     excludedSubSourceIds: Array.isArray(userContext.excludedSubSourceIds) ? userContext.excludedSubSourceIds : []
   };
@@ -458,6 +452,7 @@ async function getReadLaterFeed(filters = {}, userContext = {}) {
   const customSourceGroups = buildDomainSourceGroups(userSources);
   const queryOptions = {
     userId,
+    readLaterUserId: userId,
     customSourceGroups,
     sourceMetadataCache: new Map()
   };
@@ -490,9 +485,9 @@ async function getReadLaterFeed(filters = {}, userContext = {}) {
 }
 
 module.exports = {
+  ARTICLE_RETENTION_HOURS,
   newsSources,
   expandUserSources,
-  getMaxArticleAgeHours,
   getNewsFeed,
   getReadLaterFeed,
   _resetFilterStatsCache: resetFilterStatsCache

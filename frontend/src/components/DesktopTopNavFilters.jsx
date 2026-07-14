@@ -1,10 +1,6 @@
-import {
-  Bookmark,
-} from 'lucide-react';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import useFilterSurfaceState from '../hooks/useFilterSurfaceState';
 import { FilterSearchInput } from './FilterSurfaceControls';
-import TopNavActionButton from './TopNavActionButton';
 import FilterBubbles from './FilterBubbles';
 import FilterNavActions from './FilterNavActions';
 
@@ -14,13 +10,11 @@ const DesktopTopNavFilters = ({
   visibleSources,
   availableTopics,
   activeFilters,
-  showRecentOnly,
   search,
-  recentHours,
   t,
   locale,
+  onClearFilter,
   onToggleFilter,
-  onToggleRecent,
   onSearchChange,
   onSearchClear,
   onToggleReadLater,
@@ -43,7 +37,7 @@ const DesktopTopNavFilters = ({
 
   useOnClickOutside(surfaceRef, () => closeAll({ closeSearch: true }));
 
-  const bubbleClassName = `absolute right-0 ${compact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]'} z-50 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md`;
+  const bubbleClassName = `absolute right-0 ${compact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]'} z-50 w-[min(42rem,calc(100vw-3rem))] overflow-hidden rounded-[1.6rem] border border-slate-200/80 bg-white/95 shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] backdrop-blur-xl`;
 
   return (
     <div ref={surfaceRef} className="relative hidden md:block">
@@ -55,24 +49,17 @@ const DesktopTopNavFilters = ({
         emptyLabel={t('noNewsText')}
         locale={locale}
         maxHeight={TOP_BUBBLE_MAX_HEIGHT}
+        onClearFilter={onClearFilter}
         onToggleFilter={onToggleFilter}
         openBubble={openBubble}
+        t={t}
         visibleSources={visibleSources}
       />
 
       {searchMode ? (
         <div className="flex items-center gap-1.5 transition-all duration-200 ease-out">
-          <TopNavActionButton
-            icon={Bookmark}
-            label={t('readLater')}
-            onClick={onToggleReadLater}
-            active={readLaterActive}
-            activeClassName="text-amber-600"
-            aria-label={t('readLater')}
-            title={t('readLater')}
-          />
           <FilterSearchInput
-            className="flex w-[min(32vw,25rem)] items-center gap-2"
+            className="flex h-12 w-[clamp(14rem,36vw,30rem)] items-center gap-2"
             cancelIconClassName="h-[1.125rem] w-[1.125rem]"
             onCancel={handleExitSearch}
             onSearchChange={onSearchChange}
@@ -90,18 +77,13 @@ const DesktopTopNavFilters = ({
             handleBubbleButtonPress={handleBubbleButtonPress}
             handleEnterSearch={handleEnterSearch}
             onReadLaterClick={onToggleReadLater}
-            onToggleRecent={onToggleRecent}
             openBubble={openBubble}
             readLaterActive={readLaterActive}
             readLaterAriaLabel={t('readLater')}
             readLaterLabel={t('readLater')}
             readLaterTitle={t('readLater')}
-            recentHours={recentHours}
             search={search}
-            showRecentOnly={showRecentOnly}
             t={t}
-            timeLabelClassName="whitespace-nowrap"
-            timeMinWidthClassName="min-w-16"
           />
         </div>
       )}

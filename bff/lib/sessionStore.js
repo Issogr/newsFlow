@@ -42,7 +42,6 @@ class ManagedSqliteStore extends session.Store {
   constructor(db) {
     super();
     this.db = db;
-    this.cleanupInterval = null;
 
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS sessions (
@@ -115,6 +114,7 @@ class ManagedSqliteStore extends session.Store {
   destroy(sid, callback = () => {}) {
     try {
       this.db.prepare('DELETE FROM sessions WHERE sid = ?').run(sid);
+      this.db.prepare('DELETE FROM session_users WHERE sid = ?').run(sid);
       callback(null);
     } catch (error) {
       callback(error);
@@ -166,19 +166,11 @@ function createSessionStore(options = {}) {
 
 function destroyStoredSessionsByUserId(sessionDb, userId) {
   if (!sessionDb || !userId) {
-    return 0;
+    return;
   }
-
-  const matchingSessionIds = sessionDb.prepare(`
-    SELECT sid
-    FROM session_users
-    WHERE user_id = ?
-  `).all(userId).map((row) => row.sid);
 
   sessionDb.prepare('DELETE FROM sessions WHERE sid IN (SELECT sid FROM session_users WHERE user_id = ?)').run(userId);
   sessionDb.prepare('DELETE FROM session_users WHERE user_id = ?').run(userId);
-
-  return matchingSessionIds.length;
 }
 
 function upsertStoredSessionUser(sessionDb, sid, userId) {
@@ -193,20 +185,13 @@ function upsertStoredSessionUser(sessionDb, sid, userId) {
   `).run(sid, userId);
 }
 
-function destroySession(req, sessionDb = null) {
+function destroySession(req) {
   if (!req.session) {
     return Promise.resolve();
   }
 
-  const sessionId = req.sessionID;
-
   return new Promise((resolve) => {
-    req.session.destroy(() => {
-      if (sessionDb && sessionId) {
-        sessionDb.prepare('DELETE FROM session_users WHERE sid = ?').run(sessionId);
-      }
-      resolve();
-    });
+    req.session.destroy(() => resolve());
   });
 }
 
@@ -245,7 +230,7 @@ function renewSessionExpiryIfNeeded(req, res, next) {
   next();
 }
 
-function normalizeSessionState(req, res, next, sessionDb = null) {
+function normalizeSessionState(req, res, next) {
   if (!req.session) {
     next();
     return;
@@ -262,7 +247,7 @@ function normalizeSessionState(req, res, next, sessionDb = null) {
     return;
   }
 
-  destroySession(req, sessionDb).then(() => {
+  destroySession(req).then(() => {
     clearBffSessionCookie(res);
     next();
   });

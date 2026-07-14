@@ -1,8 +1,11 @@
 const { createError } = require('../utils/errorHandler');
 const { getFeedbackAttachmentType } = require('../utils/feedback');
+const { parseIntegerEnv } = require('../utils/env');
 
 const TELEGRAM_API_BASE = String(process.env.TELEGRAM_API_BASE_URL || 'https://api.telegram.org').trim().replace(/\/+$/, '');
+const FEEDBACK_DELIVERY_TIMEOUT_MS = parseIntegerEnv('FEEDBACK_DELIVERY_TIMEOUT_MS', 25000, { min: 1000, max: 120000 });
 const runtimeFetch = globalThis.fetch;
+const RuntimeAbortSignal = globalThis.AbortSignal;
 const RuntimeURLSearchParams = globalThis.URLSearchParams;
 const RuntimeFormData = globalThis.FormData;
 const RuntimeBlob = globalThis.Blob;
@@ -85,7 +88,7 @@ function buildAttachmentCaption(user, attachmentType) {
   ].join('\n');
 }
 
-async function sendTextMessage(config, message) {
+async function sendTextMessage(config, message, signal) {
   const params = new RuntimeURLSearchParams({
     chat_id: config.chatId,
     text: message,
@@ -100,12 +103,13 @@ async function sendTextMessage(config, message) {
   const response = await runtimeFetch(`${TELEGRAM_API_BASE}/bot${config.botToken}/sendMessage`, {
     method: 'POST',
     body: params,
+    signal,
   });
 
   return readTelegramResult(response);
 }
 
-async function sendAttachment(config, user, attachment) {
+async function sendAttachment(config, user, attachment, signal) {
   if (typeof RuntimeFormData !== 'function' || typeof RuntimeBlob !== 'function') {
     throw createError(500, 'Server runtime does not support feedback attachments.', 'SERVER_ERROR');
   }
@@ -136,6 +140,7 @@ async function sendAttachment(config, user, attachment) {
   const response = await runtimeFetch(`${TELEGRAM_API_BASE}/bot${config.botToken}/${attachmentType === 'video' ? 'sendVideo' : 'sendPhoto'}`, {
     method: 'POST',
     body: formData,
+    signal,
   });
 
   return readTelegramResult(response);
@@ -146,9 +151,10 @@ async function sendFeedback({ user, category, title, description, attachment = n
 
   try {
     const attachmentType = getFeedbackAttachmentType(attachment);
+    const signal = RuntimeAbortSignal.timeout(FEEDBACK_DELIVERY_TIMEOUT_MS);
 
     if (attachment?.buffer?.length) {
-      await sendAttachment(config, user, attachment);
+      await sendAttachment(config, user, attachment, signal);
     }
 
     const message = buildFeedbackMessage({
@@ -158,7 +164,7 @@ async function sendFeedback({ user, category, title, description, attachment = n
       description,
       attachmentType,
     });
-    const result = await sendTextMessage(config, message);
+    const result = await sendTextMessage(config, message, signal);
 
     return {
       messageId: result?.message_id || null,

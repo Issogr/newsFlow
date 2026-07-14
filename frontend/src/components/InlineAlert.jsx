@@ -6,6 +6,7 @@ const TONE_CLASS_NAMES = {
 const InlineAlert = ({ as: Tag = 'div', children, className = '', tone = 'error', ...props }) => (
   <Tag
     className={`rounded-2xl border px-4 py-3 text-sm ${TONE_CLASS_NAMES[tone] || TONE_CLASS_NAMES.error} ${className}`.trim()}
+    role={tone === 'error' ? 'alert' : undefined}
     {...props}
   >
     {children}

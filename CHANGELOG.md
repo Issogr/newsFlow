@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.5.11
+
+- removed the per-user article retention field from settings; retention now follows the app-wide server configuration only
+- removed the latest-hours quick filter and its settings field because the feed is already ordered by age and paginated
+- redesigned news cards as vibrant social-feed posts with consistently sized source icons, 16:9 imagery, image-overlay topics, quieter hover effects, distinct primary and secondary actions, and edge-to-edge mobile cards
+- added card-shaped loading placeholders, matching floating navigation surfaces across desktop and mobile, and reduced-motion-aware feed animations
+- integrated mobile back-to-top with the bottom navigation so the navbar uses a liquid-style expansion from the separate button while scrolling up
+- restyled the search field and filter/account popups to match the frosted floating navigation, with responsive search sizing across desktop and mobile
+- clarified source and topic filters with explicit headings, compact count-and-clear controls, and stronger selected states
+- redesigned settings as a flatter, more readable page with clearer sections, fewer nested containers, and styling aligned with the news experience
+- simplified settings with explicit saving and an unsaved-change reminder, positive source visibility controls, on-demand source details, concise labels, and collapsed advanced API/data actions
+- refreshed reader mode and AI summaries with a focused 64-character reading measure, tighter prose rhythm, shared text sizing, compact source controls and citations, and fewer fixed distractions
+- refreshed feedback with compact contextual categories, category-specific prompts, inline validation, quieter counters, simpler attachments, and unambiguous sending state
+- kept rounded-square action buttons while restoring circular topic icons and standard pill shapes for badges, filters, and chips
+- added accessible modal focus containment, restoration, Escape/backdrop policies, and mobile safe-area spacing across settings, feedback, reader, summaries, release notes, and source setup
+- improved dark-mode contrast and flattened Source Setup and Admin data layouts to match the refreshed interface
+- batched AI story-grouping retry lookups so large ingestions no longer block the backend with one SQLite query per article
+- fixed shared custom RSS freshness fan-out and discarded in-flight results after a source is deleted or changed
+- revoked live WebSocket access on logout, password reset, and session expiry, and fixed persisted BFF session renewal
+- bounded Telegram feedback delivery below the BFF timeout and kept timeout failures as structured API responses
+- scoped read-later filter counts to saved articles and cleared active source filters when their custom source disappears
+
 ## 3.5.10
 
 - added mobile swipe navigation between AI summary topics inside the summary panel, with card movement feedback while swiping

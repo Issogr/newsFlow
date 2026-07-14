@@ -1,20 +1,13 @@
 backend/logs/
 backend/data/
-backend/node_modules/
-backend/coverage/
-backend/.eslintcache
-bff/node_modules/
 bff/data/
-bff/coverage/
-bff/.eslintcache
-frontend/node_modules/
 frontend/build/
 frontend/dist/
-frontend/coverage/
-frontend/.eslintcache
 frontend/.vite/
 
+node_modules/
 coverage/
+.eslintcache
 
 **/.DS_Store
 .idea/

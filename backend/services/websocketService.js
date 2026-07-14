@@ -16,6 +16,49 @@ const statistics = {
   newsUpdatesSent: 0,
   failedBroadcasts: 0
 };
+const MAX_TIMEOUT_MS = 2_147_483_647;
+
+function removeActiveSocket(socket) {
+  if (socket?.data?.sessionExpiryTimer) {
+    clearTimeout(socket.data.sessionExpiryTimer);
+    socket.data.sessionExpiryTimer = null;
+  }
+
+  if (socket?.id && activeConnections.delete(socket.id)) {
+    statistics.activeConnectionsCount = Math.max(0, statistics.activeConnectionsCount - 1);
+  }
+}
+
+function disconnectSocket(socket) {
+  removeActiveSocket(socket);
+  socket?.disconnect?.(true);
+}
+
+function scheduleSessionExpiryCheck(socket) {
+  const expiresAt = Date.parse(socket?.data?.sessionExpiresAt || '');
+  if (!socket?.data?.sessionTokenHash || !Number.isFinite(expiresAt)) {
+    return;
+  }
+
+  const delay = Math.min(Math.max(0, expiresAt - Date.now()), MAX_TIMEOUT_MS);
+  socket.data.sessionExpiryTimer = setTimeout(() => {
+    try {
+      const session = database.findSessionByTokenHash(socket.data.sessionTokenHash);
+      const nextExpiresAt = Date.parse(session?.expiresAt || '');
+      if (!session || !Number.isFinite(nextExpiresAt) || nextExpiresAt <= Date.now()) {
+        disconnectSocket(socket);
+        return;
+      }
+
+      socket.data.sessionExpiresAt = session.expiresAt;
+      scheduleSessionExpiryCheck(socket);
+    } catch (error) {
+      logger.warn(`WebSocket session expiry check failed: ${error.message}`);
+      disconnectSocket(socket);
+    }
+  }, delay);
+  socket.data.sessionExpiryTimer?.unref?.();
+}
 
 function normalizeFilterValues(values = []) {
   return [...new Set((Array.isArray(values) ? values : []).filter(Boolean))].sort();
@@ -102,7 +145,7 @@ function initialize(server) {
   io.use((socket, next) => {
     try {
       const auth = socket.handshake?.auth || {};
-      const { user } = resolveAuthenticatedSession({
+      const { session, user } = resolveAuthenticatedSession({
         headers: socket.handshake?.headers || {},
         authToken: auth.token,
         touchActivitySeconds: 60
@@ -110,6 +153,8 @@ function initialize(server) {
 
       socket.data.userId = user.id;
       socket.data.username = user.username;
+      socket.data.sessionTokenHash = session.tokenHash;
+      socket.data.sessionExpiresAt = session.expiresAt;
       next();
     } catch (error) {
       next(new Error(`WebSocket auth failed: ${error.message}`));
@@ -121,6 +166,7 @@ function initialize(server) {
     statistics.activeConnectionsCount += 1;
     activeConnections.set(socket.id, socket);
     Object.assign(socket.data, buildSocketFilters());
+    scheduleSessionExpiryCheck(socket);
 
     socket.on('subscribe:filters', (filters = {}) => {
       database.touchUserActivity(socket.data.userId, new Date().toISOString(), 60);
@@ -128,9 +174,7 @@ function initialize(server) {
     });
 
     socket.on('disconnect', () => {
-      if (activeConnections.delete(socket.id)) {
-        statistics.activeConnectionsCount = Math.max(0, statistics.activeConnectionsCount - 1);
-      }
+      removeActiveSocket(socket);
     });
   });
 
@@ -152,14 +196,10 @@ function disconnectUserSockets(userId) {
       return;
     }
 
-    if (activeConnections.delete(socket.id)) {
-      statistics.activeConnectionsCount = Math.max(0, statistics.activeConnectionsCount - 1);
-    }
-
     disconnected += 1;
 
     try {
-      socket.disconnect?.(true);
+      disconnectSocket(socket);
     } catch (error) {
       logger.warn(`WebSocket disconnect failed for deleted user ${userId}: ${error.message}`);
     }
@@ -169,6 +209,27 @@ function disconnectUserSockets(userId) {
     logger.info(`Disconnected ${disconnected} active WebSocket connection(s) for deleted user ${userId}`);
   }
 
+  return disconnected;
+}
+
+function disconnectSessionSockets(sessionTokenHash) {
+  if (!sessionTokenHash) {
+    return 0;
+  }
+
+  let disconnected = 0;
+  activeConnections.forEach((socket) => {
+    if (socket.data?.sessionTokenHash !== sessionTokenHash) {
+      return;
+    }
+
+    disconnected += 1;
+    try {
+      disconnectSocket(socket);
+    } catch (error) {
+      logger.warn(`WebSocket disconnect failed for revoked session: ${error.message}`);
+    }
+  });
   return disconnected;
 }
 
@@ -432,6 +493,7 @@ function getStatistics() {
 module.exports = {
   initialize,
   disconnectUserSockets,
+  disconnectSessionSockets,
   broadcastNewsUpdate,
   broadcastFeedRefresh,
   getStatistics

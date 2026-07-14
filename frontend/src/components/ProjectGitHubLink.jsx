@@ -7,7 +7,7 @@ const ProjectGitHubLink = () => (
     target="_blank"
     rel="noopener noreferrer"
     aria-label="GitHub"
-    className="inline-flex items-center justify-center rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+    className="inline-flex items-center justify-center rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
   >
     <GitHubIcon className="h-5 w-5" />
   </a>

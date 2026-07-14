@@ -3,42 +3,44 @@ const TopNavActionButton = ({
   label,
   active = false,
   activeClassName = 'text-slate-900',
-  inactiveClassName = 'text-slate-500 hover:text-slate-700',
-  disabledClassName = 'cursor-not-allowed text-slate-300',
-  minWidthClassName = 'min-w-14',
-  sizeClassName = `h-12 ${minWidthClassName} rounded-2xl px-2`,
+  sizeClassName = 'h-12 min-w-14 rounded-2xl px-2',
   badge = null,
   badgeClassName = 'bg-slate-800 text-white',
   badgeSizeClassName = 'h-3.5 min-w-3.5 px-1',
   iconClassName = '',
-  labelClassName = '',
+  iconNode = null,
   className = '',
+  buttonRef,
   disabled = false,
   type = 'button',
   ...buttonProps
 }) => {
+  const hasLabel = label !== null && label !== undefined && label !== '';
   const stateClassName = disabled
-    ? disabledClassName
+    ? 'cursor-not-allowed text-slate-300'
     : active
       ? activeClassName
-      : inactiveClassName;
+      : 'text-slate-500 hover:text-slate-700';
 
   return (
     <button
+      ref={buttonRef}
       type={type}
       disabled={disabled}
-      className={`relative flex ${sizeClassName} flex-col items-center justify-center gap-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 ${stateClassName} ${className}`}
+      className={`relative flex ${sizeClassName} ${hasLabel ? 'flex-col gap-0.5' : ''} items-center justify-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 ${stateClassName} ${className}`}
       {...buttonProps}
     >
-      <span className="relative flex h-5 w-5 items-center justify-center">
-        <Icon className={`h-5 w-5 ${iconClassName}`} aria-hidden="true" />
+      <span className={`relative flex items-center justify-center ${iconNode ? '' : 'h-5 w-5'}`}>
+        {iconNode || <Icon className={`h-5 w-5 ${iconClassName}`} aria-hidden="true" />}
         {badge !== null && badge !== undefined && (
           <span className={`absolute -right-1.5 -top-1 flex ${badgeSizeClassName} items-center justify-center rounded-full text-[8px] font-bold ${badgeClassName}`}>
             {badge}
           </span>
         )}
       </span>
-      <span className={`h-3.5 text-center text-[10px] font-medium leading-none ${labelClassName}`}>{label}</span>
+      {hasLabel ? (
+        <span className="h-3.5 text-center text-[10px] font-medium leading-none">{label}</span>
+      ) : null}
     </button>
   );
 };

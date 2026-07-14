@@ -9,49 +9,11 @@ on:
 permissions:
   contents: read
 
+env:
+  INTERNAL_PROXY_TOKEN: ci-internal-proxy-token-at-least-32-chars
+  BFF_SESSION_SECRET: ci-bff-session-secret-at-least-32-chars
+
 jobs:
-  package-checks:
-    name: ${{ matrix.package }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - backend
-          - bff
-          - frontend
-
-    defaults:
-      run:
-        working-directory: ${{ matrix.package }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: ${{ matrix.package }}/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Build frontend
-        if: matrix.package == 'frontend'
-        run: npm run build
-
-      - name: Test
-        run: npm test
-
-      - name: Audit production dependencies
-        run: npm audit --omit=dev
-
   validate:
     uses: ./.github/workflows/validate-services.yml
 
@@ -92,7 +54,7 @@ jobs:
         if: matrix.service == 'backend'
         run: |
           docker run -d --name newsflow-backend-ci -p 5000:5000 \
-            -e INTERNAL_PROXY_TOKEN=ci-internal-token \
+            -e INTERNAL_PROXY_TOKEN \
             newsflow-backend:ci
           for attempt in {1..30}; do
             if wget -qO- http://127.0.0.1:5000/health; then
@@ -121,8 +83,6 @@ jobs:
 
       - name: Start Compose stack
         env:
-          INTERNAL_PROXY_TOKEN: ci-internal-token
-          BFF_SESSION_SECRET: ci-session-secret
           APP_BASE_URL: http://127.0.0.1
           OPENROUTER_API_KEY: ''
           PUBLIC_API_ANONYMOUS_ENABLED: 'true'
@@ -141,7 +101,4 @@ jobs:
 
       - name: Stop Compose stack
         if: always()
-        env:
-          INTERNAL_PROXY_TOKEN: ci-internal-token
-          BFF_SESSION_SECRET: ci-session-secret
         run: docker compose down -v

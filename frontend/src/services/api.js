@@ -137,9 +137,8 @@ function buildFeedParams({
   search = '',
   sourceIds = [],
   topics = [],
-  recentHours = null,
   includeFilters = true
-} = {}, options = {}) {
+} = {}) {
   const params = { page, pageSize };
 
   if (search?.trim()) {
@@ -152,13 +151,6 @@ function buildFeedParams({
 
   if (Array.isArray(topics) && topics.length > 0) {
     params.topics = topics.join(',');
-  }
-
-  const shouldIncludeRecentHours = options.truthyRecentHours
-    ? Boolean(recentHours)
-    : Number.isFinite(recentHours) && recentHours > 0;
-  if (shouldIncludeRecentHours) {
-    params.recentHours = recentHours;
   }
 
   if (includeFilters) {
@@ -174,7 +166,6 @@ export const fetchNews = async ({
   search = '',
   sourceIds = [],
   topics = [],
-  recentHours = null,
   beforePubDate = '',
   beforeId = '',
   excludeArticleIds = [],
@@ -182,9 +173,7 @@ export const fetchNews = async ({
   includeFilters = true,
   signal
 } = {}) => {
-  const params = buildFeedParams({ page, pageSize, search, sourceIds, topics, recentHours, includeFilters }, {
-    truthyRecentHours: true
-  });
+  const params = buildFeedParams({ page, pageSize, search, sourceIds, topics, includeFilters });
 
   if (beforePubDate) {
     params.beforePubDate = beforePubDate;
@@ -211,11 +200,10 @@ export const fetchReadLaterNews = async ({
   search = '',
   sourceIds = [],
   topics = [],
-  recentHours = null,
   includeFilters = true,
   signal
 } = {}) => {
-  const params = buildFeedParams({ page, pageSize, search, sourceIds, topics, recentHours, includeFilters });
+  const params = buildFeedParams({ page, pageSize, search, sourceIds, topics, includeFilters });
 
   return responseData(api.get('/read-later', { params, signal }));
 };

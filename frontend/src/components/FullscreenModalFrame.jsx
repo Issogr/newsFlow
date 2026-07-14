@@ -1,53 +1,36 @@
-import { useEffect } from 'react';
 import { X } from 'lucide-react';
-import useLockBodyScroll from '../hooks/useLockBodyScroll';
+import ModalDialog from './ModalDialog';
 
 const DEFAULT_OVERLAY_CLASS_NAME = 'fixed inset-0 z-50 bg-slate-950/35 backdrop-blur-sm';
-const DEFAULT_HEADER_CLASS_NAME = 'sticky top-0 z-10 flex items-center justify-between border-b border-stone-200/80 bg-white/85 px-5 py-4 backdrop-blur-md md:px-6';
-const DEFAULT_CLOSE_BUTTON_CLASS_NAME = 'inline-flex h-11 w-11 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-500 shadow-sm transition-colors hover:bg-stone-100 hover:text-stone-800';
+const DEFAULT_HEADER_CLASS_NAME = 'flex shrink-0 items-center justify-between border-b border-slate-200 bg-white pb-3 pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-[calc(0.75rem+env(safe-area-inset-top))] sm:pb-4 sm:pl-[calc(1.25rem+env(safe-area-inset-left))] sm:pr-[calc(1.25rem+env(safe-area-inset-right))] sm:pt-[calc(1rem+env(safe-area-inset-top))] md:pl-[calc(1.5rem+env(safe-area-inset-left))] md:pr-[calc(1.5rem+env(safe-area-inset-right))]';
+const DEFAULT_CLOSE_BUTTON_CLASS_NAME = 'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] border border-slate-200 bg-slate-50 text-slate-700 transition-colors hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300';
 
-const FullscreenModalFrame = ({ children, closeLabel, onClose, overlayClassName = DEFAULT_OVERLAY_CLASS_NAME }) => {
-  useLockBodyScroll();
-
-  useEffect(() => {
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [onClose]);
-
-  return (
-    <div className={overlayClassName}>
-      <button
-        type="button"
-        className="absolute inset-0 hidden cursor-default lg:block"
-        aria-label={closeLabel}
-        onClick={onClose}
-      />
+const FullscreenModalFrame = ({ ariaLabelledBy, children, onClose, overlayClassName = DEFAULT_OVERLAY_CLASS_NAME, restoreFocusRef }) => (
+    <ModalDialog
+      ariaLabelledBy={ariaLabelledBy}
+      className={overlayClassName}
+      dismissOnBackdrop
+      onRequestClose={onClose}
+      restoreFocusRef={restoreFocusRef}
+    >
       {children}
-    </div>
-  );
-};
+    </ModalDialog>
+);
 
 export const FullscreenPanelFrame = ({
   children,
   closeLabel,
   containerClassName,
   headerStart,
+  labelledBy,
   onClose,
   overlayClassName,
-  panelClassName
+  panelClassName,
+  restoreFocusRef,
 }) => (
-  <FullscreenModalFrame closeLabel={closeLabel} onClose={onClose} overlayClassName={overlayClassName}>
+  <FullscreenModalFrame ariaLabelledBy={labelledBy} onClose={onClose} overlayClassName={overlayClassName} restoreFocusRef={restoreFocusRef}>
     <div className={containerClassName}>
-      <section className={panelClassName}>
+      <section className={panelClassName} data-modal-content>
         <div className={DEFAULT_HEADER_CLASS_NAME}>
           {headerStart}
           <div className="flex items-center gap-2">
@@ -57,7 +40,7 @@ export const FullscreenPanelFrame = ({
               className={DEFAULT_CLOSE_BUTTON_CLASS_NAME}
               aria-label={closeLabel}
             >
-              <X className="h-5 w-5" />
+              <X className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
         </div>

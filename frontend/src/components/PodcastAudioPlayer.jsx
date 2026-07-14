@@ -166,11 +166,11 @@ const PodcastAudioPlayer = ({ src, t }) => {
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-semibold text-sky-100/90 sm:mt-4">
-        <button type="button" onClick={() => seekTo(currentTime - 15)} disabled={error || !audioUrl} className="inline-flex items-center justify-center gap-1.5 rounded-full bg-white/10 px-3 py-2 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50 sm:py-1.5">
+        <button type="button" onClick={() => seekTo(currentTime - 15)} disabled={error || !audioUrl} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 py-2 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50 sm:py-1.5">
           <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
           {t('podcastAudioBack')}
         </button>
-        <button type="button" onClick={() => seekTo(currentTime + 30)} disabled={error || !audioUrl} className="inline-flex items-center justify-center gap-1.5 rounded-full bg-white/10 px-3 py-2 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50 sm:py-1.5">
+        <button type="button" onClick={() => seekTo(currentTime + 30)} disabled={error || !audioUrl} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 py-2 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50 sm:py-1.5">
           {t('podcastAudioForward')}
           <SkipForward className="h-3.5 w-3.5" aria-hidden="true" />
         </button>

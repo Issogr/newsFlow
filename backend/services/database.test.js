@@ -65,7 +65,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('39');
+    expect(migrationVersion).toBe('41');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -82,6 +82,8 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('last_seen_release_notes_version');
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
+    expect(settingsColumns).not.toContain('article_retention_hours');
+    expect(settingsColumns).not.toContain('recent_hours');
     expect(settingsColumns).not.toContain('default_source_ids');
     expect(userColumns).not.toContain('role');
     expect(userColumns).toContain('last_login_at');
@@ -152,10 +154,12 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('39');
+    expect(migratedVersion).toBe('41');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
+    expect(settingsColumns).not.toContain('article_retention_hours');
+    expect(settingsColumns).not.toContain('recent_hours');
     expect(settingsColumns).not.toContain('default_source_ids');
     expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason', 'clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
@@ -271,7 +275,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('39');
+    expect(migratedVersion).toBe('41');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason', 'clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -281,6 +285,8 @@ describe('database migrations', () => {
     expect(settingsColumns).toContain('theme_mode');
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
+    expect(settingsColumns).not.toContain('article_retention_hours');
+    expect(settingsColumns).not.toContain('recent_hours');
     expect(settingsColumns).not.toContain('default_source_ids');
     expect(userColumns).not.toContain('role');
     expect(userColumns).toContain('last_login_at');
@@ -308,8 +314,6 @@ describe('database migrations', () => {
     });
     database.upsertUserSettings('user-1', {
       defaultLanguage: 'en',
-      articleRetentionHours: 24,
-      recentHours: 3,
       readerPanelPosition: 'right',
       readerTextSize: 'medium',
       sourceSetupCompleted: true,
@@ -384,7 +388,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
 
-    expect(migratedVersion).toBe('39');
+    expect(migratedVersion).toBe('41');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -470,7 +474,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('39');
+    expect(migratedVersion).toBe('41');
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
     expect(row).toEqual({
       summaryText: 'English text [1]',
@@ -531,7 +535,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('39');
+    expect(migratedVersion).toBe('41');
     expect(audioRow).toEqual({
       podcastId: 'legacy-podcast',
       locale: 'it',
@@ -1573,6 +1577,28 @@ describe('database queries and user data', () => {
     ]));
   });
 
+  test('batches AI story retry lookups across many anchors', () => {
+    const publishedAt = new Date().toISOString();
+    const anchors = Array.from({ length: 401 }, (_, index) => ({
+      id: `story-anchor-${index}`,
+      sourceId: primarySource.id,
+      source: primarySource.name,
+      title: `Story anchor ${index}`,
+      description: '',
+      content: '',
+      url: `https://example.com/story-anchor-${index}`,
+      language: 'en',
+      pubDate: publishedAt
+    }));
+    database.upsertArticles(anchors);
+    const prepareSpy = jest.spyOn(database.getDb(), 'prepare');
+
+    expect(database.getArticleIdsForAiStoryGroupingRetry(anchors.map((article) => article.id))).toEqual([]);
+    expect(prepareSpy.mock.calls.filter(([sql]) => String(sql).includes('WITH anchors'))).toHaveLength(3);
+
+    prepareSpy.mockRestore();
+  });
+
   test('moves read-later state, reader cache, and topics before deleting duplicate articles', () => {
     const now = new Date('2026-03-15T14:30:00.000Z').toISOString();
     const duplicateUpdatedAt = new Date('2026-03-15T14:00:00.000Z').toISOString();
@@ -1788,8 +1814,6 @@ describe('database queries and user data', () => {
 
     const settings = database.upsertUserSettings('user-1', {
       defaultLanguage: 'en',
-      articleRetentionHours: 12,
-      recentHours: 2,
       compactNewsCards: true,
       compactNewsCardsMode: 'everywhere',
       readerPanelPosition: 'left',
@@ -1802,8 +1826,6 @@ describe('database queries and user data', () => {
     expect(settings).toMatchObject({
       userId: 'user-1',
       defaultLanguage: 'en',
-      articleRetentionHours: 12,
-      recentHours: 2,
       compactNewsCards: true,
       compactNewsCardsMode: 'everywhere',
       readerPanelPosition: 'left',
@@ -1858,33 +1880,6 @@ describe('database queries and user data', () => {
     expect(database.deleteUserSource('user-1', 'custom-1')).toBe(1);
     expect(database.listUserSources('user-1')).toEqual([]);
     expect(database.getArticles({}, { userId: 'user-1' })).toEqual([]);
-  });
-
-  test('persists zero article retention as a valid setting value', () => {
-    const now = new Date().toISOString();
-
-    database.createUser({
-      id: 'zero-retention-user',
-      username: 'zero-retention',
-      passwordHash: null,
-      createdAt: now,
-      updatedAt: now
-    });
-
-    const settings = database.upsertUserSettings('zero-retention-user', {
-      defaultLanguage: 'auto',
-      articleRetentionHours: 0,
-      recentHours: 3,
-      excludedSourceIds: [],
-      excludedSubSourceIds: []
-    });
-
-    expect(settings.articleRetentionHours).toBe(0);
-    expect(database.getDb().prepare(`
-      SELECT article_retention_hours AS articleRetentionHours
-      FROM user_settings
-      WHERE user_id = ?
-    `).get('zero-retention-user').articleRetentionHours).toBe(0);
   });
 
   test('deleting one user shared custom source does not remove another user shared source data', () => {
@@ -1968,19 +1963,15 @@ describe('database queries and user data', () => {
       INSERT INTO user_settings (
         user_id,
         default_language,
-        article_retention_hours,
-        recent_hours,
         reader_panel_position,
         last_seen_release_notes_version,
         excluded_source_ids,
         excluded_sub_source_ids,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       'user-1',
       'en',
-      12,
-      2,
       'right',
       '3.2.3',
       '{bad json',
@@ -2102,6 +2093,7 @@ describe('database queries and user data', () => {
   test('builds source and topic stats with canonical source ids and search filters', () => {
     const now = Date.now();
     const recentIso = new Date(now - (30 * 60 * 1000)).toISOString();
+    database.createUser({ id: 'user-1', username: 'alice', passwordHash: null, createdAt: recentIso, updatedAt: recentIso });
 
     database.upsertArticles([
       {
@@ -2132,6 +2124,7 @@ describe('database queries and user data', () => {
       { articleId: 'global-1', topics: ['Economy', 'Markets'] },
       { articleId: 'global-2', topics: ['Science'] }
     ]);
+    database.saveReadLaterArticles('user-1', ['global-1']);
 
     const sourceStats = database.getSourceStats([
       { id: groupedSourceFamilyId, name: groupedSourceFamilyName, language: 'it' },
@@ -2164,6 +2157,16 @@ describe('database queries and user data', () => {
 
     const excludedTopics = database.getTopicStatsByFilters({}, 10, { excludedSourceIds: [groupedSourceFamilyId] });
     expect(excludedTopics).toEqual([{ topic: 'Scienza', count: 1 }]);
+
+    const readLaterOptions = { userId: 'user-1', readLaterUserId: 'user-1' };
+    expect(database.getSourceStats([
+      { id: groupedSourceFamilyId, name: groupedSourceFamilyName, language: 'it' },
+      { id: secondarySourceFamilyId, name: secondarySourceFamilyName, language: 'en' }
+    ], readLaterOptions)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: groupedSourceFamilyId, count: 1 }),
+      expect.objectContaining({ id: secondarySourceFamilyId, count: 0 })
+    ]));
+    expect(database.getTopicStatsByFilters({}, 10, readLaterOptions)).toEqual([{ topic: 'Economia', count: 1 }]);
   });
 
   test('groups custom user feeds by registrable domain for filtering and display', () => {
@@ -2248,8 +2251,6 @@ describe('database queries and user data', () => {
 
     database.upsertUserSettings('user-1', {
       defaultLanguage: 'en',
-      articleRetentionHours: 24,
-      recentHours: 3,
       readerPanelPosition: 'center',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: ['retired-source', primarySourceFamilyId, 'custom-1'],
@@ -2340,8 +2341,6 @@ describe('database queries and user data', () => {
 
     database.upsertUserSettings('user-1', {
       defaultLanguage: 'en',
-      articleRetentionHours: 12,
-      recentHours: 2,
       readerPanelPosition: 'left',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: [primarySourceFamilyId],
@@ -2374,8 +2373,6 @@ describe('database queries and user data', () => {
         }
       ], {
         defaultLanguage: 'it',
-        articleRetentionHours: 24,
-        recentHours: 3,
         readerPanelPosition: 'center',
         lastSeenReleaseNotesVersion: '3.2.3',
         excludedSourceIds: ['bbc'],
@@ -2393,8 +2390,6 @@ describe('database queries and user data', () => {
     ]);
     expect(database.getUserSettings('user-1')).toMatchObject({
       defaultLanguage: 'en',
-      articleRetentionHours: 12,
-      recentHours: 2,
       readerPanelPosition: 'left',
       lastSeenReleaseNotesVersion: '3.2.3',
       excludedSourceIds: [primarySourceFamilyId]

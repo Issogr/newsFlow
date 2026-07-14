@@ -130,17 +130,17 @@ The public API is read-only and cache-only. It must not trigger RSS refreshes, a
 
 ## AI Provider And Feature Switches
 
-AI features run only in the backend. Feature switches default to `true`, but provider-backed work still requires `OPENROUTER_API_KEY`.
+AI features run only in the backend, and provider-backed work requires `OPENROUTER_API_KEY`. Raw backend feature switches default to `true`; Docker Compose defaults only topic detection to `true` and the other four switches to `false`.
 
 | Variable | Default | Details |
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | unset | Server-side OpenRouter API key used for topic detection, clickbait detection, story grouping, summaries, podcast scripts, and TTS. |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL. Trailing slashes are removed. |
-| `AI_TOPIC_DETECTION_ENABLED` | `true` | Enables AI topic classification when the API key is present. Invalid values disable it. |
-| `AI_CLICKBAIT_DETECTION_ENABLED` | `true` | Enables clickbait labels when the API key is present. Invalid values disable it. |
-| `AI_STORY_GROUPING_ENABLED` | `true` | Enables AI-assisted story grouping when the API key is present. Invalid values disable it. |
-| `AI_SUMMARY_GENERATION_ENABLED` | `true` | Enables thematic summaries when the API key is present and controls summary UI visibility. Invalid values disable it. |
-| `AI_PODCAST_GENERATION_ENABLED` | `true` | Enables podcast script and audio generation when the API key is present and controls podcast UI visibility. Invalid values disable it. |
+| `AI_TOPIC_DETECTION_ENABLED` | Code and Compose: `true` | Enables AI topic classification when the API key is present. Invalid values disable it. |
+| `AI_CLICKBAIT_DETECTION_ENABLED` | Code: `true`; Compose: `false` | Enables clickbait labels when the API key is present. Invalid values disable it. |
+| `AI_STORY_GROUPING_ENABLED` | Code: `true`; Compose: `false` | Enables AI-assisted story grouping when the API key is present. Invalid values disable it. |
+| `AI_SUMMARY_GENERATION_ENABLED` | Code: `true`; Compose: `false` | Enables thematic summaries when the API key is present and controls summary UI visibility. Invalid values disable it. |
+| `AI_PODCAST_GENERATION_ENABLED` | Code: `true`; Compose: `false` | Enables podcast script and audio generation when the API key is present and controls podcast UI visibility. Invalid values disable it. |
 
 ## AI Topic Detection
 
@@ -232,6 +232,7 @@ AI features run only in the backend. Feature switches default to `true`, but pro
 | `TELEGRAM_BOT_TOKEN` | unset | Bot token used to forward feedback submissions. Required with `TELEGRAM_CHAT_ID` for feedback delivery. |
 | `TELEGRAM_CHAT_ID` | unset | Target Telegram chat/channel/supergroup id. Required with `TELEGRAM_BOT_TOKEN` for feedback delivery. |
 | `TELEGRAM_MESSAGE_THREAD_ID` | unset | Optional Telegram forum topic id. Must be numeric when set. |
+| `FEEDBACK_DELIVERY_TIMEOUT_MS` | `25000` | Total deadline for attachment and text delivery to Telegram. Minimum `1000`, maximum `120000`; keep it below `BFF_UPSTREAM_TIMEOUT_MS`. |
 
 Feedback attachments are limited by code, not env: images up to 5 MB, videos up to 12 MB, one attachment per submission.
 

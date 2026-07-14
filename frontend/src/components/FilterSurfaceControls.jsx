@@ -22,7 +22,6 @@ export function FilterSearchInput({
   cancelIconClassName = 'h-4 w-4',
   className,
   inputTabIndex,
-  labelClassName = 'h-11',
   onCancel,
   onSearchChange,
   onSearchClear,
@@ -32,8 +31,8 @@ export function FilterSearchInput({
 }) {
   return (
     <div className={className}>
-      <label className={`group flex flex-1 items-center gap-2 rounded-full border border-slate-200/80 bg-gradient-to-r from-slate-50 to-white px-3.5 shadow-inner shadow-slate-200/60 transition-colors focus-within:border-sky-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100 ${labelClassName}`}>
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm transition-colors group-focus-within:text-sky-600">
+      <label className="group flex h-full min-w-0 flex-1 items-center gap-2 rounded-[1.25rem] border border-slate-200/80 bg-slate-50/80 px-3 shadow-sm transition-[border-color,background-color,box-shadow] focus-within:border-sky-300 focus-within:bg-white focus-within:shadow-[0_10px_25px_-18px_rgba(14,165,233,0.7)]">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-slate-500 transition-colors group-focus-within:text-sky-600">
           <Search className="h-4 w-4" aria-hidden="true" />
         </span>
         <input
@@ -44,13 +43,13 @@ export function FilterSearchInput({
           placeholder={t('searchPlaceholder')}
           aria-label={t('searchLabel')}
           tabIndex={inputTabIndex}
-          className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:font-normal placeholder:text-slate-400"
+          className="min-w-0 flex-1 bg-transparent text-base font-medium text-slate-800 outline-none placeholder:font-normal placeholder:text-slate-400 md:text-sm"
         />
         {search && (
           <button
             type="button"
             onClick={onSearchClear}
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-200/70 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
             aria-label={t('clearSearch')}
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -60,7 +59,7 @@ export function FilterSearchInput({
       <button
         type="button"
         onClick={onCancel}
-        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-sm transition-colors hover:bg-slate-700"
+        className="inline-flex h-full aspect-square shrink-0 items-center justify-center rounded-[1.25rem] border border-slate-200/80 bg-slate-50/80 text-slate-500 shadow-sm transition-colors hover:bg-white hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
         aria-label={t('cancel')}
       >
         <X className={cancelIconClassName} aria-hidden="true" />

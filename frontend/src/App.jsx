@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CURRENT_CHANGELOG_ENTRY, getCurrentChangelog } from './config/changelog';
 import { createTranslator, resolvePreferredLocale } from './i18n';
 import {
@@ -69,6 +69,7 @@ function App() {
     saving: false,
     modalOpen: false
   });
+  const releaseNotesOpenerRef = useRef(null);
 
   const locale = resolvePreferredLocale(authData?.settings?.defaultLanguage);
   const themeMode = authData?.settings?.themeMode || 'system';
@@ -86,12 +87,14 @@ function App() {
   const isPasswordSetupRoute = PASSWORD_SETUP_PATHS.has(locationState.pathname);
   const isApiDocsRoute = API_DOCS_PATHS.has(locationState.pathname);
   const legalPolicy = LEGAL_POLICY_BY_PATH[locationState.pathname] || '';
+  const sourceSetupPending = authData?.settings?.sourceSetupCompleted === false && !authData?.user?.isAdmin;
   const needsReleaseNotesAck = authData?.settings?.lastSeenReleaseNotesVersion !== releaseNotes.version;
   const shouldShowReleaseNotesModal = Boolean(
     authData
     && !authData?.user?.isAdmin
     && releaseNotes.version
     && releaseNotesState.modalOpen
+    && !sourceSetupPending
   );
   const shouldShowReleaseNotice = Boolean(
     authData
@@ -100,6 +103,7 @@ function App() {
     && needsReleaseNotesAck
     && releaseNotesState.noticeHiddenVersion !== releaseNotes.version
     && !releaseNotesState.modalOpen
+    && !sourceSetupPending
   );
 
   useEffect(() => {
@@ -278,7 +282,8 @@ function App() {
     }
   }, [needsReleaseNotesAck]);
 
-  const handleOpenReleaseNotes = useCallback(() => {
+  const handleOpenReleaseNotes = useCallback((eventOrElement) => {
+    releaseNotesOpenerRef.current = eventOrElement?.currentTarget || eventOrElement || document.activeElement;
     setReleaseNotesState((current) => ({
       ...current,
       modalOpen: true,
@@ -362,7 +367,6 @@ function App() {
             t={t}
             releaseNotes={releaseNotes}
             onOpen={handleOpenReleaseNotes}
-            onExpire={acknowledgeCurrentReleaseNotes}
             onDismiss={acknowledgeCurrentReleaseNotes}
           />
         </Suspense>
@@ -374,6 +378,7 @@ function App() {
             releaseNotes={releaseNotes}
             saving={releaseNotesState.saving}
             onDismiss={acknowledgeCurrentReleaseNotes}
+            restoreFocusRef={releaseNotesOpenerRef}
           />
         </Suspense>
       )}

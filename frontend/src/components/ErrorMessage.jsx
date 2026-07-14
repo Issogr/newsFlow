@@ -4,8 +4,6 @@ import { getApiErrorPayload, getApiErrorStatus, isApiNetworkError, isApiTimeoutE
 const ErrorMessage = ({
   error,
   onRetry,
-  title,
-  className = '',
   t
 }) => {
   const getErrorMessage = () => {
@@ -53,11 +51,10 @@ const ErrorMessage = ({
 
   const errorMessage = getErrorMessage();
   const errorCode = error?.response?.status || (error?.code ? t('codeLabel', { code: error.code }) : '');
-  const resolvedTitle = title || t('errorTitle');
 
   return (
     <div 
-      className={`bg-red-50 border border-red-200 rounded-lg p-6 text-center ${className}`}
+      className="bg-red-50 border border-red-200 rounded-lg p-6 text-center"
       role="alert"
       aria-live="assertive"
     >
@@ -65,7 +62,7 @@ const ErrorMessage = ({
         <AlertCircle size={48} className="text-red-500" aria-hidden="true" />
       </div>
       <h2 className="text-xl font-semibold text-red-700 mb-2">
-        {resolvedTitle}
+        {t('errorTitle')}
         {errorCode && <span className="text-sm ml-2 text-red-500">({errorCode})</span>}
       </h2>
       <p className="text-red-600 mb-6">

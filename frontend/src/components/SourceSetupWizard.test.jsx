@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import SourceSetupWizard from './SourceSetupWizard';
 import { createTranslator } from '../i18n';
 
@@ -62,6 +62,12 @@ describe('SourceSetupWizard', () => {
 
     expect(screen.getByText('2 selected')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start reading' })).toBeEnabled();
+    const dialog = screen.getByRole('dialog', { name: 'Choose your news sources' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByRole('heading', { name: 'Choose your news sources' })).toHaveFocus();
+
+    fireEvent(dialog, new Event('cancel', { bubbles: false, cancelable: true }));
+    expect(dialog).toBeInTheDocument();
   });
 
   test('preserves existing source review selections from saved exclusions', () => {

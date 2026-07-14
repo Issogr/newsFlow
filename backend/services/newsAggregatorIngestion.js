@@ -47,6 +47,7 @@ const pendingAiTopicProcessingIds = new Set();
 const pendingAiClickbaitProcessingIds = new Set();
 const pendingAiStoryGroupingIds = new Set();
 const sourceFetchTimestamps = new Map();
+const sourceFetchResults = new Map();
 const sourceFetchFailures = new Map();
 const sourceFetchPromises = new Map();
 let summaryAfterTopicTimer = null;
@@ -133,6 +134,7 @@ function pruneSourceFetchTimestamps(referenceTime = Date.now()) {
   sourceFetchTimestamps.forEach((timestamp, fetchKey) => {
     if (!Number.isFinite(timestamp) || referenceTime - timestamp > SOURCE_FETCH_FRESHNESS_RETENTION_MS) {
       sourceFetchTimestamps.delete(fetchKey);
+      sourceFetchResults.delete(fetchKey);
       removedCount += 1;
     }
   });
@@ -151,6 +153,7 @@ function pruneSourceFetchTimestamps(referenceTime = Date.now()) {
     }
 
     sourceFetchTimestamps.delete(oldestFetchKey);
+    sourceFetchResults.delete(oldestFetchKey);
     sourceFetchFailures.delete(oldestFetchKey);
     removedCount += 1;
   }
@@ -222,7 +225,9 @@ function cloneArticleForSource(article = {}, source = {}) {
     source: source.name,
     sourceId: source.id,
     language: source.language || article.language || 'it',
-    ownerUserId: source.ownerUserId || null
+    ownerUserId: source.ownerUserId || null,
+    sourceFeedUrl: normalizeSourceFetchUrl(source.url),
+    sourceUpdatedAt: source.updatedAt || null
   };
 
   return clonedArticle;
@@ -259,18 +264,21 @@ async function fetchSourceTask(task, options = {}) {
     sourceFetchFreshnessMs = SOURCE_FETCH_FRESHNESS_MS
   } = options;
 
-  if (!bypassSourceFreshness && isSourceFetchFresh(task.fetchSource, sourceFetchFreshnessMs)) {
+  const fetchKey = getSourceFetchKey(task.fetchSource);
+  const sourceIsFresh = !bypassSourceFreshness && isSourceFetchFresh(task.fetchSource, sourceFetchFreshnessMs);
+  let fetchResult = sourceIsFresh ? sourceFetchResults.get(fetchKey) : null;
+
+  if (sourceIsFresh && !fetchResult) {
     return [];
   }
 
-  if (!bypassSourceFailureBackoff && isSourceFetchFailureBackoffActive(task.fetchSource)) {
+  if (!fetchResult && !bypassSourceFailureBackoff && isSourceFetchFailureBackoffActive(task.fetchSource)) {
     logger.debug(`Skipping RSS fetch during failure backoff: source=${task.fetchSource?.id || task.fetchSource?.name || task.fetchSource?.url}`);
     return [];
   }
 
-  const fetchKey = getSourceFetchKey(task.fetchSource);
   const existingFetch = fetchKey ? sourceFetchPromises.get(fetchKey) : null;
-  const fetchPromise = existingFetch || (async () => {
+  const fetchPromise = fetchResult ? null : (existingFetch || (async () => {
     let articles;
     try {
       articles = await rssParser.parseFeed(task.fetchSource, {
@@ -283,19 +291,24 @@ async function fetchSourceTask(task, options = {}) {
     }
 
     markSourceFetched(task.fetchSource);
-    return { articles, fetchSource: task.fetchSource };
-  })();
+    const result = { articles, fetchSource: task.fetchSource };
+    if (fetchKey) {
+      sourceFetchResults.set(fetchKey, result);
+    }
+    return result;
+  })());
 
-  if (fetchKey && !existingFetch) {
+  if (fetchKey && fetchPromise && !existingFetch) {
     sourceFetchPromises.set(fetchKey, fetchPromise);
   }
 
-  let fetchResult;
-  try {
-    fetchResult = await fetchPromise;
-  } finally {
-    if (fetchKey && sourceFetchPromises.get(fetchKey) === fetchPromise) {
-      sourceFetchPromises.delete(fetchKey);
+  if (fetchPromise) {
+    try {
+      fetchResult = await fetchPromise;
+    } finally {
+      if (fetchKey && sourceFetchPromises.get(fetchKey) === fetchPromise) {
+        sourceFetchPromises.delete(fetchKey);
+      }
     }
   }
 
@@ -706,6 +719,7 @@ function resetRuntimeStateForTests() {
   pendingAiClickbaitProcessingIds.clear();
   pendingAiStoryGroupingIds.clear();
   sourceFetchTimestamps.clear();
+  sourceFetchResults.clear();
   sourceFetchFailures.clear();
   sourceFetchPromises.clear();
   if (summaryAfterTopicTimer) {
@@ -728,18 +742,35 @@ function mergeNormalizedArticleTopics(normalizedArticles = []) {
 }
 
 async function persistNormalizedArticles(normalizedArticles = []) {
-  const upsertResult = database.upsertArticles(normalizedArticles);
+  const currentSourceById = new Map();
+  const currentArticles = normalizedArticles.filter((article) => {
+    if (!article?.ownerUserId) {
+      return true;
+    }
+
+    const sourceId = article.rawSourceId || article.sourceId;
+    const sourceKey = `${article.ownerUserId}:${sourceId}`;
+    if (!currentSourceById.has(sourceKey)) {
+      currentSourceById.set(sourceKey, database.findUserSourceById(article.ownerUserId, sourceId));
+    }
+
+    const currentSource = currentSourceById.get(sourceKey);
+    return currentSource?.isActive !== false
+      && normalizeSourceFetchUrl(currentSource?.url) === article.sourceFeedUrl
+      && (!article.sourceUpdatedAt || currentSource.updatedAt === article.sourceUpdatedAt);
+  });
+  const upsertResult = database.upsertArticles(currentArticles);
   const storyGroupingOptions = { retryAnchorArticleIds: upsertResult.insertedIds || [] };
-  mergeNormalizedArticleTopics(normalizedArticles);
-  scheduleAiClickbaitForPendingArticles(normalizedArticles);
-  const scheduledTopicProcessing = scheduleAiTopicsForPendingArticles(normalizedArticles, {
-    onComplete: () => scheduleAiStoryGroupingForPendingArticles(normalizedArticles, storyGroupingOptions)
+  mergeNormalizedArticleTopics(currentArticles);
+  scheduleAiClickbaitForPendingArticles(currentArticles);
+  const scheduledTopicProcessing = scheduleAiTopicsForPendingArticles(currentArticles, {
+    onComplete: () => scheduleAiStoryGroupingForPendingArticles(currentArticles, storyGroupingOptions)
   });
 
   if (!scheduledTopicProcessing) {
-    scheduleAiStoryGroupingForPendingArticles(normalizedArticles, storyGroupingOptions);
+    scheduleAiStoryGroupingForPendingArticles(currentArticles, storyGroupingOptions);
   }
-  return upsertResult;
+  return { ...upsertResult, articles: currentArticles };
 }
 
 function broadcastInsertedGroups(insertedGroups) {
@@ -804,7 +835,7 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
     const retainedArticles = filterArticlesWithinRetention(normalizedArticles);
 
     const upsertResult = await persistNormalizedArticles(retainedArticles);
-    const insertedGroups = buildInsertedGroupsByOwner(retainedArticles, upsertResult.insertedIds);
+    const insertedGroups = buildInsertedGroupsByOwner(upsertResult.articles, upsertResult.insertedIds);
 
     if (broadcast) {
       broadcastInsertedGroups(insertedGroups);

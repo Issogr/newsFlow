@@ -6,15 +6,6 @@ const READER_CACHE_SELECT = `
   content_blocks AS contentBlocks, minutes_to_read AS minutesToRead, fetched_at AS fetchedAt
 `;
 
-function chunkValues(values = [], size = 500) {
-  const chunks = [];
-  for (let index = 0; index < values.length; index += size) {
-    chunks.push(values.slice(index, index + size));
-  }
-
-  return chunks;
-}
-
 function mapReaderCacheRow(row) {
   if (!row) {
     return null;
@@ -35,7 +26,7 @@ function isReaderCacheFresh(row, maxAgeMs) {
   return Number.isFinite(ageMs) && ageMs < maxAgeMs;
 }
 
-function createReaderCacheRepository({ getDb }) {
+function createReaderCacheRepository({ getDb, chunkValues }) {
   function getReaderCache(articleId, maxAgeMs) {
     if (!articleId) {
       return null;
@@ -68,7 +59,7 @@ function createReaderCacheRepository({ getDb }) {
       return cacheByArticleId;
     }
 
-    chunkValues(normalizedArticleIds).forEach((ids) => {
+    chunkValues(normalizedArticleIds, 500).forEach((ids) => {
       const rows = getDb().prepare(`
         SELECT ${READER_CACHE_SELECT}
         FROM reader_cache
