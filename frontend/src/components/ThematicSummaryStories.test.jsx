@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createTranslator } from '../i18n';
 import { createPodcastSummary } from '../test-utils/thematicSummaries';
 import ThematicSummaryStories from './ThematicSummaryStories';
@@ -258,6 +258,34 @@ describe('thematic summary podcast UI', () => {
     expect(screen.queryByText(/2026/u)).not.toBeInTheDocument();
     expect(screen.getByText('The first argument covers chip supply and infrastructure.')).toBeInTheDocument();
     expect(screen.getByText('The second argument moves to software policy and regulation.')).toBeInTheDocument();
+  });
+
+  test('shows text-shaped loading feedback while a thematic summary opens', () => {
+    vi.useFakeTimers();
+
+    try {
+      render(
+        <ThematicSummaryPanel
+          summary={createTopicSummary('technology')}
+          locale="en"
+          t={t}
+          onClose={vi.fn()}
+          showOpeningSkeleton
+        />
+      );
+
+      const loadingStatus = screen.getByRole('status', { name: 'Loading AI summary...' });
+      expect(loadingStatus).toHaveClass('animate-pulse');
+      expect(loadingStatus.querySelectorAll('.rounded-full')).toHaveLength(8);
+      expect(screen.queryByText('Technology summary')).not.toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(500));
+
+      expect(screen.queryByRole('status', { name: 'Loading AI summary...' })).not.toBeInTheDocument();
+      expect(screen.getByText('Technology summary')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('uses reader sizing and compact citations with sources after the summary', () => {

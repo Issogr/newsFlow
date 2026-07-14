@@ -947,6 +947,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           t={t}
           onClose={() => setSelectedThematicSummary(null)}
           onSelectSummary={openThematicSummary}
+          showOpeningSkeleton
         />
       )}
 

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
-  BookOpenText,
   Clock3,
   Newspaper,
   RefreshCw,
@@ -14,6 +13,7 @@ import useShareArticle from '../hooks/useShareArticle';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { FullscreenPanelFrame } from './FullscreenModalFrame';
 import ShareStatusBubble from './ShareStatusBubble';
+import TextContentSkeleton from './TextContentSkeleton';
 import {
   DEFAULT_READER_TEXT_SIZE,
   READER_TEXT_SIZE_ORDER,
@@ -403,12 +403,8 @@ const ReaderPanel = ({
                 </div>
 
                 {loading && !selectedReader ? (
-                  <div className="py-12 text-center">
-                    <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-stone-200 border-t-slate-900" />
-                    <p className="mt-4 inline-flex items-center gap-2 text-sm text-stone-500">
-                      <BookOpenText className="h-4 w-4" />
-                      {t('loadingReader')}
-                    </p>
+                  <div className="py-2">
+                    <TextContentSkeleton label={t('loadingReader')} />
                   </div>
                 ) : error && !selectedReader ? (
                   <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-8 text-center text-red-700">

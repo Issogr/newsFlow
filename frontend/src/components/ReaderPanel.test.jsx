@@ -149,6 +149,22 @@ describe('ReaderPanel', () => {
     expect(fetchReaderArticle).toHaveBeenCalledTimes(1);
   });
 
+  test('shows text-shaped loading feedback while reader content loads', async () => {
+    const request = createDeferred();
+    fetchReaderArticle.mockReturnValue(request.promise);
+
+    const { container } = renderReaderPanel();
+
+    const loadingStatus = screen.getByRole('status', { name: 'loadingReader' });
+    expect(loadingStatus).toHaveClass('animate-pulse');
+    expect(loadingStatus.querySelectorAll('.rounded-full')).toHaveLength(8);
+    expect(container.querySelector('.border-4')).toBeNull();
+
+    await resolveDeferred(request, createReaderPayload('Loaded body'));
+    expect(await screen.findByText('Loaded body')).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'loadingReader' })).not.toBeInTheDocument();
+  });
+
   test('ignores malformed reader list blocks without crashing', async () => {
     fetchReaderArticle.mockResolvedValue(createReaderPayload('Visible body', {
       title: 'Reader title',

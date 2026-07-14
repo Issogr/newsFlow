@@ -235,6 +235,7 @@ const it = {
   closeReader: 'Chiudi lettura',
   refreshReader: 'Riprova lettura',
   loadingReader: 'Caricamento modalita lettura...',
+  loadingThematicSummary: 'Caricamento sintesi IA...',
   readerUnavailable: 'La modalita lettura non e disponibile per questo articolo.',
   readerFallback: 'Mostro il testo di fallback estratto dal feed.',
   readTime: ({ minutes }) => `${minutes} min di lettura`,

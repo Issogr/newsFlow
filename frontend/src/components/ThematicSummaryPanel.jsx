@@ -7,12 +7,14 @@ import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_STYLES } from '../config/rea
 import { getStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
 import { FullscreenPanelFrame } from './FullscreenModalFrame';
 import PodcastAudioPlayer from './PodcastAudioPlayer';
+import TextContentSkeleton from './TextContentSkeleton';
 
 const SUMMARY_SLOTS = new Set(['morning', 'lunch', 'evening']);
 const MOBILE_SUMMARY_SWIPE_QUERY = '(max-width: 767px)';
 const SUMMARY_SWIPE_MIN_DISTANCE = 60;
 const SUMMARY_SWIPE_AXIS_RATIO = 1.35;
 const SUMMARY_SWIPE_FEEDBACK_MAX_OFFSET = 72;
+const SUMMARY_OPENING_SKELETON_MS = 500;
 const PODCAST_LANGUAGE_LABELS = {
   en: { en: 'English', it: 'inglese' },
   it: { en: 'Italian', it: 'italiano' }
@@ -345,16 +347,18 @@ function renderParagraphWithSources(paragraph, paragraphIndex, sourceByIndex) {
   return parts;
 }
 
-const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onSelectSummary }) => {
+const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onSelectSummary, showOpeningSkeleton = false }) => {
   const touchStartRef = useRef(null);
   const swipeFeedbackFrameRef = useRef(0);
   const swipeFeedbackOffsetRef = useRef(0);
   const [swipeFeedbackOffset, setSwipeFeedbackOffset] = useState(0);
   const [readerTextSize] = useState(getStoredReaderTextSizePreference);
+  const [readySummaryId, setReadySummaryId] = useState('');
   const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [locale, summary]);
   const sourceByIndex = useMemo(() => new Map((summary?.sources || []).map((source) => [Number(source.index), source])), [summary?.sources]);
   const summarySources = [...sourceByIndex.values()];
   const isPodcast = isPodcastSummary(summary);
+  const showSummaryOpeningSkeleton = showOpeningSkeleton && !isPodcast && readySummaryId !== summary?.id;
   const podcastSummaries = useMemo(() => getPodcastSummariesForPanel(summary, summaries), [summaries, summary]);
   const swipeSummaries = useMemo(() => getSwipeSummariesForPanel(summary, summaries), [summaries, summary]);
   const swipeSummaryIndex = useMemo(() => getSwipeSummaryIndex(summary, swipeSummaries), [summary, swipeSummaries]);
@@ -417,6 +421,14 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
       }
     };
   }, []);
+  useEffect(() => {
+    if (!showOpeningSkeleton || isPodcast || !summary?.id) {
+      return undefined;
+    }
+
+    const timeoutId = setTimeout(() => setReadySummaryId(summary.id), SUMMARY_OPENING_SKELETON_MS);
+    return () => clearTimeout(timeoutId);
+  }, [isPodcast, showOpeningSkeleton, summary?.id]);
   const handleTouchStart = (event) => {
     touchStartRef.current = null;
     resetSwipeFeedbackOffset();
@@ -532,7 +544,9 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
               )}
 
               <article className="pb-8">
-                {isPodcast ? (
+                {showSummaryOpeningSkeleton ? (
+                  <TextContentSkeleton label={t('loadingThematicSummary')} />
+                ) : isPodcast ? (
                   <div className="space-y-5">
                     {podcastSummaries.map((podcastSummary) => {
                       const audioChoice = getPodcastAudioChoice(podcastSummary, locale);
@@ -591,7 +605,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                   </div>
                 )}
 
-                {!isPodcast && summarySources.length > 0 && (
+                {!showSummaryOpeningSkeleton && !isPodcast && summarySources.length > 0 && (
                   <footer className="mt-10 border-t border-slate-200 pt-5">
                     <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">{t('sources')}</h3>
                     <ol className="space-y-1">

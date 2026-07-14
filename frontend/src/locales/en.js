@@ -235,6 +235,7 @@ const en = {
   closeReader: 'Close reader',
   refreshReader: 'Refresh reader',
   loadingReader: 'Loading reader view...',
+  loadingThematicSummary: 'Loading AI summary...',
   readerUnavailable: 'Reader mode is not available for this article.',
   readerFallback: 'Showing fallback text extracted from the feed.',
   readTime: ({ minutes }) => `${minutes} min read`,

@@ -362,8 +362,9 @@ describe('NewsAggregator', () => {
     expect(markThematicSummariesRead).toHaveBeenCalledWith(['summary-technology']);
     expect(screen.getByText('Ora di pranzo')).toBeInTheDocument();
     expect(screen.getByText('1 articolo valutato')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Caricamento sintesi IA...' })).toBeInTheDocument();
     expect(screen.queryByText('I chip AI sono avanzati rapidamente nella finestra [1].')).not.toBeInTheDocument();
-    expect(screen.getAllByText('BBC')).not.toHaveLength(0);
+    expect(await screen.findAllByText('BBC')).not.toHaveLength(0);
     expect(screen.queryByText('AI chips accelerate')).not.toBeInTheDocument();
   });
 

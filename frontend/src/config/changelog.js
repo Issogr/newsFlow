@@ -4,13 +4,17 @@ export const CURRENT_CHANGELOG_ENTRY = {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
-    items: []
+    items: [
+      'Replaced circular Reader loading with pulsing text placeholders and added the same opening effect to AI summaries.'
+    ]
   },
   it: {
     eyebrow: 'Ultimo aggiornamento',
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
-    items: []
+    items: [
+      'Sostituito il caricamento circolare della modalita lettura con segnaposto testuali pulsanti e aggiunto lo stesso effetto all\'apertura delle sintesi IA.'
+    ]
   }
 };
 

@@ -2,6 +2,8 @@
 
 ## 3.5.12
 
+- replaced the circular Reader loading indicator with pulsing text placeholders and added the same opening effect to AI summaries
+
 ## 3.5.11
 
 - removed the per-user article retention field from settings; retention now follows the app-wide server configuration only
