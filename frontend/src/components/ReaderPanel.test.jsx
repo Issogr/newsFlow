@@ -141,6 +141,9 @@ describe('ReaderPanel', () => {
     expect(await screen.findByText('Cached body')).toBeInTheDocument();
     expect(screen.getByText('Article one')).toBeInTheDocument();
     expect(screen.queryByText('Backend cached reader title')).not.toBeInTheDocument();
+    const textSizeControls = screen.getByRole('group', { name: 'readerTextSizeSetting' });
+    expect(textSizeControls.parentElement).toHaveClass('ml-auto');
+    expect(textSizeControls.nextElementSibling).toBe(screen.getByRole('button', { name: 'closeReader' }));
     expect(screen.getByRole('combobox', { name: 'sourceVersions' }).parentElement.parentElement).toHaveClass('min-w-0', 'flex-1');
     expect(screen.getByRole('button', { name: 'shareArticle' }).parentElement.parentElement).toHaveClass('shrink-0');
     expect(fetchReaderArticle).toHaveBeenCalledWith('article-1', expect.objectContaining({

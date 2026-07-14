@@ -943,6 +943,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         <ThematicSummaryPanel
           summary={displayedThematicSummary}
           summaries={visibleThematicSummaries}
+          currentUser={currentUser}
           locale={locale}
           t={t}
           onClose={() => setSelectedThematicSummary(null)}

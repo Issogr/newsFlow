@@ -243,6 +243,7 @@ const en = {
   thematicSummariesTitle: 'Topic stories',
   thematicSummary: 'Thematic summary',
   openThematicSummary: ({ topic }) => `Open ${topic} summary`,
+  openSummarySource: ({ source }) => `Open source article: ${source}`,
   closeThematicSummary: 'Close summary',
   summaryArticleCount: ({ count }) => `${count} ${count === 1 ? 'article' : 'articles'} evaluated`,
   summarySlotMorning: 'Morning',

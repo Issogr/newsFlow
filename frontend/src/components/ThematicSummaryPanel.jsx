@@ -7,6 +7,7 @@ import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_STYLES } from '../config/rea
 import { getStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
 import { FullscreenPanelFrame } from './FullscreenModalFrame';
 import PodcastAudioPlayer from './PodcastAudioPlayer';
+import ReaderTextSizeControls from './ReaderTextSizeControls';
 import TextContentSkeleton from './TextContentSkeleton';
 
 const SUMMARY_SLOTS = new Set(['morning', 'lunch', 'evening']);
@@ -271,60 +272,38 @@ function getPodcastAudioChoice(summary = {}, locale = 'en') {
   };
 }
 
-function getSummarySourceId(source) {
-  return `thematic-summary-source-${Number(source?.index)}`;
-}
+function renderSourceReference(source, key, t) {
+  const safeUrl = getSafeExternalUrl(source?.url);
+  const sourceName = source?.source || source?.title || t('sources');
+  const className = 'inline-flex h-5 w-5 items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sky-700 shadow-sm';
 
-function renderSourceReference(source, key) {
-  const sourceIndex = Number(source?.index);
-  const sourceName = source?.source || source?.title || '';
+  if (!safeUrl) {
+    return (
+      <span key={key} className="ml-1 inline-flex align-middle leading-none">
+        <span className={className} role="img" aria-label={sourceName} title={sourceName}>
+          <Newspaper className="h-3 w-3" aria-hidden="true" />
+        </span>
+      </span>
+    );
+  }
 
   return (
-    <sup key={key} className="ml-0.5 align-super text-[0.7em] leading-none">
+    <span key={key} className="ml-1 inline-flex align-middle leading-none">
       <a
-        href={`#${getSummarySourceId(source)}`}
-        className="font-semibold text-sky-700 no-underline hover:underline"
+        href={safeUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`${className} no-underline transition-colors hover:border-sky-300 hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-1`}
+        aria-label={t('openSummarySource', { source: sourceName })}
         title={sourceName}
       >
-        [{sourceIndex}]
+        <ExternalLink className="h-3 w-3" aria-hidden="true" />
       </a>
-    </sup>
+    </span>
   );
 }
 
-function renderSummarySource(source) {
-  const safeUrl = getSafeExternalUrl(source?.url);
-  const safeIconUrl = getSafeExternalUrl(source?.sourceIconUrl);
-  const sourceName = source?.source || source?.title || '';
-  const content = (
-    <>
-      <span className="w-5 shrink-0 text-xs font-semibold tabular-nums text-stone-400">{source.index}.</span>
-      {safeIconUrl ? (
-        <img src={safeIconUrl} alt="" loading="lazy" className="h-5 w-5 shrink-0 rounded-md object-contain" />
-      ) : (
-        <Newspaper className="h-4 w-4 shrink-0 text-stone-400" aria-hidden="true" />
-      )}
-      <span className="min-w-0 flex-1 truncate" title={sourceName}>{sourceName}</span>
-      {safeUrl && <ExternalLink className="h-3.5 w-3.5 shrink-0 text-stone-400" aria-hidden="true" />}
-    </>
-  );
-
-  return (
-    <li key={source.index} id={getSummarySourceId(source)} className="scroll-mt-4">
-      {safeUrl ? (
-        <a href={safeUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-stone-700 no-underline hover:bg-stone-50 hover:text-stone-900">
-          {content}
-        </a>
-      ) : (
-        <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-stone-700">
-          {content}
-        </div>
-      )}
-    </li>
-  );
-}
-
-function renderParagraphWithSources(paragraph, paragraphIndex, sourceByIndex) {
+function renderParagraphWithSources(paragraph, paragraphIndex, sourceByIndex, t) {
   const parts = [];
   const citationPattern = /\[(\d+)\]/gu;
   let lastIndex = 0;
@@ -336,7 +315,7 @@ function renderParagraphWithSources(paragraph, paragraphIndex, sourceByIndex) {
     }
 
     const source = sourceByIndex.get(Number(match[1]));
-    parts.push(source ? renderSourceReference(source, `source-reference-${paragraphIndex}-${match.index}`) : match[0]);
+    parts.push(source ? renderSourceReference(source, `source-reference-${paragraphIndex}-${match.index}`, t) : match[0]);
     lastIndex = match.index + match[0].length;
   }
 
@@ -347,16 +326,15 @@ function renderParagraphWithSources(paragraph, paragraphIndex, sourceByIndex) {
   return parts;
 }
 
-const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onSelectSummary, showOpeningSkeleton = false }) => {
+const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onSelectSummary, showOpeningSkeleton = false, currentUser }) => {
   const touchStartRef = useRef(null);
   const swipeFeedbackFrameRef = useRef(0);
   const swipeFeedbackOffsetRef = useRef(0);
   const [swipeFeedbackOffset, setSwipeFeedbackOffset] = useState(0);
-  const [readerTextSize] = useState(getStoredReaderTextSizePreference);
+  const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   const [readySummaryId, setReadySummaryId] = useState('');
   const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [locale, summary]);
   const sourceByIndex = useMemo(() => new Map((summary?.sources || []).map((source) => [Number(source.index), source])), [summary?.sources]);
-  const summarySources = [...sourceByIndex.values()];
   const isPodcast = isPodcastSummary(summary);
   const showSummaryOpeningSkeleton = showOpeningSkeleton && !isPodcast && readySummaryId !== summary?.id;
   const podcastSummaries = useMemo(() => getPodcastSummariesForPanel(summary, summaries), [summaries, summary]);
@@ -429,6 +407,9 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
     const timeoutId = setTimeout(() => setReadySummaryId(summary.id), SUMMARY_OPENING_SKELETON_MS);
     return () => clearTimeout(timeoutId);
   }, [isPodcast, showOpeningSkeleton, summary?.id]);
+  useEffect(() => {
+    setReaderTextSize(getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
+  }, [currentUser?.settings?.readerTextSize]);
   const handleTouchStart = (event) => {
     touchStartRef.current = null;
     resetSwipeFeedbackOffset();
@@ -510,6 +491,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
     <FullscreenPanelFrame
       closeLabel={closeLabel}
       containerClassName="relative flex h-[100dvh] w-full justify-center overflow-hidden overscroll-none"
+      headerActions={!isPodcast ? <ReaderTextSizeControls currentUser={currentUser} onChange={setReaderTextSize} t={t} value={readerTextSize} /> : null}
       headerStart={headerStart}
       labelledBy="thematic-summary-panel-title"
       onClose={onClose}
@@ -600,18 +582,9 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                 ) : (
                   <div className={`space-y-5 ${readerTextStyles.paragraph}`}>
                     {paragraphs.map((paragraph, index) => (
-                      <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex)}</p>
+                      <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex, t)}</p>
                     ))}
                   </div>
-                )}
-
-                {!showSummaryOpeningSkeleton && !isPodcast && summarySources.length > 0 && (
-                  <footer className="mt-10 border-t border-slate-200 pt-5">
-                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">{t('sources')}</h3>
-                    <ol className="space-y-1">
-                      {summarySources.map(renderSummarySource)}
-                    </ol>
-                  </footer>
                 )}
 
               </article>

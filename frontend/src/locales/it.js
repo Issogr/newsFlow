@@ -243,6 +243,7 @@ const it = {
   thematicSummariesTitle: 'Storie per topic',
   thematicSummary: 'Sintesi tematica',
   openThematicSummary: ({ topic }) => `Apri sintesi ${topic}`,
+  openSummarySource: ({ source }) => `Apri articolo fonte: ${source}`,
   closeThematicSummary: 'Chiudi sintesi',
   summaryArticleCount: ({ count }) => `${count} ${count === 1 ? 'articolo valutato' : 'articoli valutati'}`,
   summarySlotMorning: 'Mattina',

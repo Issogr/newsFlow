@@ -21,6 +21,7 @@ export const FullscreenPanelFrame = ({
   children,
   closeLabel,
   containerClassName,
+  headerActions,
   headerStart,
   labelledBy,
   onClose,
@@ -33,7 +34,8 @@ export const FullscreenPanelFrame = ({
       <section className={panelClassName} data-modal-content>
         <div className={DEFAULT_HEADER_CLASS_NAME}>
           {headerStart}
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
+            {headerActions}
             <button
               type="button"
               onClick={onClose}

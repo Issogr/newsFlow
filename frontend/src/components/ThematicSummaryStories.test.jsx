@@ -288,7 +288,7 @@ describe('thematic summary podcast UI', () => {
     }
   });
 
-  test('uses reader sizing and compact citations with sources after the summary', () => {
+  test('uses reader sizing and direct circular source links', () => {
     window.localStorage.setItem('news-flow-reader-text-size', 'large');
 
     render(
@@ -297,8 +297,11 @@ describe('thematic summary podcast UI', () => {
           id: 'summary-technology',
           topicKey: 'technology',
           topicLabel: 'Technology',
-          summaryTextByLocale: { en: 'Chip demand increased sharply [1].' },
-          sources: [{ index: 1, source: 'Example News', url: 'https://example.com/story' }]
+          summaryTextByLocale: { en: 'Chip demand increased sharply [1]. Another claim followed [2].' },
+          sources: [
+            { index: 1, source: 'Example News', url: 'https://example.com/story' },
+            { index: 2, source: 'Unsafe Source', url: 'javascript:alert(1)' }
+          ]
         }}
         locale="en"
         t={t}
@@ -307,14 +310,24 @@ describe('thematic summary podcast UI', () => {
     );
 
     const paragraph = screen.getByText(/Chip demand increased sharply/u);
-    const citation = screen.getByRole('link', { name: '[1]' });
-    const sourceLink = screen.getByRole('link', { name: /Example News/u });
+    const sourceLink = screen.getByRole('link', { name: 'Open source article: Example News' });
+    const decreaseTextSizeButton = screen.getByRole('button', { name: 'Decrease reader text size' });
 
     expect(paragraph.closest('article').parentElement).toHaveClass('max-w-[64ch]');
     expect(paragraph.parentElement).toHaveClass('text-[1.18rem]', 'leading-[1.65]');
-    expect(citation).toHaveAttribute('href', '#thematic-summary-source-1');
+    expect(screen.getByRole('group', { name: 'Text size' })).toBeInTheDocument();
     expect(sourceLink).toHaveAttribute('href', 'https://example.com/story');
-    expect(sourceLink.closest('li')).toHaveAttribute('id', 'thematic-summary-source-1');
+    expect(sourceLink).toHaveAttribute('target', '_blank');
+    expect(sourceLink).toHaveClass('h-5', 'w-5', 'rounded-full');
+    expect(screen.getByRole('img', { name: 'Unsafe Source' })).toHaveClass('rounded-full');
+    expect(screen.queryByRole('link', { name: 'Open source article: Unsafe Source' })).not.toBeInTheDocument();
+    expect(screen.queryByText('[1]')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Sources' })).not.toBeInTheDocument();
+
+    fireEvent.click(decreaseTextSizeButton);
+
+    expect(paragraph.parentElement).toHaveClass('text-[1.08rem]', 'leading-[1.65]');
+    expect(window.localStorage.getItem('news-flow-reader-text-size')).toBe('medium');
   });
 
   test('switches to the next thematic summary with a mobile left swipe', () => {

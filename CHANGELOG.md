@@ -3,6 +3,8 @@
 ## 3.5.12
 
 - replaced the circular Reader loading indicator with pulsing text placeholders and added the same opening effect to AI summaries
+- replaced numbered AI summary references with circular links that open source articles directly
+- added the shared Reader font-size controls to AI summaries
 
 ## 3.5.11
 
