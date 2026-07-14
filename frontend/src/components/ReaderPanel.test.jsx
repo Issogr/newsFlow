@@ -66,6 +66,12 @@ function renderReaderPanel(props = {}) {
   return render(buildReaderPanel(props));
 }
 
+function selectSourceVersion(articleId) {
+  fireEvent.change(screen.getByRole('combobox', { name: 'sourceVersions' }), {
+    target: { value: articleId }
+  });
+}
+
 function createReaderPayload(text = 'Body', overrides = {}) {
   return {
     title: 'Reader title',
@@ -102,7 +108,7 @@ describe('ReaderPanel', () => {
 
     renderReaderPanel();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
+    selectSourceVersion('article-2');
 
     await resolveDeferred(secondRequest, createReaderPayload('Latest body', {
       title: 'Latest reader title',
@@ -135,6 +141,8 @@ describe('ReaderPanel', () => {
     expect(await screen.findByText('Cached body')).toBeInTheDocument();
     expect(screen.getByText('Article one')).toBeInTheDocument();
     expect(screen.queryByText('Backend cached reader title')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'sourceVersions' }).parentElement.parentElement).toHaveClass('min-w-0', 'flex-1');
+    expect(screen.getByRole('button', { name: 'shareArticle' }).parentElement.parentElement).toHaveClass('shrink-0');
     expect(fetchReaderArticle).toHaveBeenCalledWith('article-1', expect.objectContaining({
       refresh: false
     }));
@@ -170,7 +178,7 @@ describe('ReaderPanel', () => {
 
     expect(await screen.findByText('readerUnavailable')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
+    selectSourceVersion('article-2');
 
     expect(await screen.findByText('Second body')).toBeInTheDocument();
     expect(screen.getByText('Article two')).toBeInTheDocument();
@@ -191,9 +199,9 @@ describe('ReaderPanel', () => {
     renderReaderPanel();
 
     expect(await screen.findByText('First body')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
+    selectSourceVersion('article-2');
     expect(await screen.findByText('Second body')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Source A' }));
+    selectSourceVersion('article-1');
 
     expect(await screen.findByText('First body')).toBeInTheDocument();
     expect(fetchReaderArticle).toHaveBeenCalledTimes(2);
@@ -206,7 +214,7 @@ describe('ReaderPanel', () => {
     const { rerender } = renderReaderPanel();
 
     expect(await screen.findByText('First body')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Source B' }));
+    selectSourceVersion('article-2');
     expect(await screen.findByText('Second body')).toBeInTheDocument();
 
     rerender(buildReaderPanel({
@@ -257,9 +265,9 @@ describe('ReaderPanel', () => {
     });
 
     expect(await screen.findByText('First body')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Source A #1' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Source A #1' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Source A #2' }));
+    selectSourceVersion('same-source-2');
 
     expect(await screen.findByText('Second body')).toBeInTheDocument();
     expect(fetchReaderArticle).toHaveBeenNthCalledWith(2, 'same-source-2', expect.objectContaining({
@@ -267,7 +275,7 @@ describe('ReaderPanel', () => {
     }));
   });
 
-  test('keeps many grouped source versions in one horizontal scroll row', async () => {
+  test('keeps many grouped source versions in one compact selector', async () => {
     fetchReaderArticle.mockResolvedValue(createReaderPayload());
     const sixSourceGroup = {
       ...group,
@@ -289,14 +297,12 @@ describe('ReaderPanel', () => {
 
     expect(await screen.findByText('Body')).toBeInTheDocument();
 
-    const sourceVersionRow = screen.getByText('sourceVersions').nextElementSibling;
-    expect(sourceVersionRow).toHaveClass('overflow-x-auto');
-    expect(sourceVersionRow).not.toHaveClass('flex-wrap');
+    const sourceVersionSelector = screen.getByRole('combobox', { name: 'sourceVersions' });
+    expect(sourceVersionSelector).toHaveValue('similar-article-1');
+    expect(screen.getAllByRole('option')).toHaveLength(6);
 
     for (let index = 1; index <= 6; index += 1) {
-      const button = screen.getByRole('button', { name: `Source ${index}` });
-      expect(button).toHaveClass('shrink-0');
-      expect(button).toHaveClass('whitespace-nowrap');
+      expect(screen.getByRole('option', { name: `Source ${index}` })).toBeInTheDocument();
     }
   });
 

@@ -52,6 +52,7 @@ describe('thematic summary podcast UI', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    window.localStorage.removeItem('news-flow-reader-text-size');
   });
 
   test('places the podcast story first and opens the selected item', () => {
@@ -257,6 +258,35 @@ describe('thematic summary podcast UI', () => {
     expect(screen.queryByText(/2026/u)).not.toBeInTheDocument();
     expect(screen.getByText('The first argument covers chip supply and infrastructure.')).toBeInTheDocument();
     expect(screen.getByText('The second argument moves to software policy and regulation.')).toBeInTheDocument();
+  });
+
+  test('uses reader sizing and compact citations with sources after the summary', () => {
+    window.localStorage.setItem('news-flow-reader-text-size', 'large');
+
+    render(
+      <ThematicSummaryPanel
+        summary={{
+          id: 'summary-technology',
+          topicKey: 'technology',
+          topicLabel: 'Technology',
+          summaryTextByLocale: { en: 'Chip demand increased sharply [1].' },
+          sources: [{ index: 1, source: 'Example News', url: 'https://example.com/story' }]
+        }}
+        locale="en"
+        t={t}
+        onClose={vi.fn()}
+      />
+    );
+
+    const paragraph = screen.getByText(/Chip demand increased sharply/u);
+    const citation = screen.getByRole('link', { name: '[1]' });
+    const sourceLink = screen.getByRole('link', { name: /Example News/u });
+
+    expect(paragraph.closest('article').parentElement).toHaveClass('max-w-[64ch]');
+    expect(paragraph.parentElement).toHaveClass('text-[1.18rem]', 'leading-[1.65]');
+    expect(citation).toHaveAttribute('href', '#thematic-summary-source-1');
+    expect(sourceLink).toHaveAttribute('href', 'https://example.com/story');
+    expect(sourceLink.closest('li')).toHaveAttribute('id', 'thematic-summary-source-1');
   });
 
   test('switches to the next thematic summary with a mobile left swipe', () => {

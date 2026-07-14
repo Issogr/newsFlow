@@ -293,23 +293,6 @@ const ReaderPanel = ({
       <h2 id="reader-panel-title" className="sr-only focus:outline-none" data-modal-title tabIndex={-1}>
         {t('readerMode')}: {selectedArticle?.title || t('readerMode')}
       </h2>
-      <div className="relative inline-flex items-center">
-        <ShareStatusBubble
-          shareState={shareState}
-          t={t}
-          className="share-status-pill-from-button mr-2 max-w-[min(18rem,calc(100vw-6rem))]"
-        />
-        <button
-          type="button"
-          onClick={handleShare}
-          disabled={!safeOriginalUrl}
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] border border-slate-200 bg-slate-50 text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-          aria-label={t('shareArticle')}
-        >
-          <Share2 className="h-4 w-4" />
-        </button>
-      </div>
-
       <div className="flex h-11 items-center gap-1 rounded-[1rem] border border-slate-200 bg-slate-50 px-1.5">
         <button
           type="button"
@@ -338,17 +321,6 @@ const ReaderPanel = ({
           +
         </button>
       </div>
-
-      <button
-        type="button"
-        onClick={refreshReader}
-        disabled={!selectedArticleId || loading}
-        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] border border-slate-200 bg-slate-50 text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-        aria-label={t('refreshReader')}
-        title={t('refreshReader')}
-      >
-        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-      </button>
     </div>
   );
 
@@ -361,54 +333,72 @@ const ReaderPanel = ({
       onClose={onClose}
       panelClassName="flex h-full w-full flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(72rem,calc(100vw-2rem))] lg:rounded-[1.6rem] lg:border lg:border-slate-200"
     >
-          {sourceVersionItems.length > 1 && (
-            <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 sm:px-5 md:px-6">
-              <p className="mb-3 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                <Newspaper className="h-4 w-4" />
-                {t('sourceVersions')}
-              </p>
-              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300 [&::-webkit-scrollbar-track]:bg-transparent">
-                {sourceVersionItems.map(({ item, label }) => {
-                  const isActive = item.id === selectedArticle?.id;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setSelectedArticleId(item.id)}
-                      aria-pressed={isActive}
-                      className={`shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                        isActive
-                          ? 'border-slate-900 bg-slate-900 text-white'
-                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           <div className="min-h-0 flex-1 overflow-y-auto bg-white pb-[calc(1.5rem+env(safe-area-inset-bottom))] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-6 sm:pl-[calc(1.25rem+env(safe-area-inset-left))] sm:pr-[calc(1.25rem+env(safe-area-inset-right))] md:pb-[calc(2rem+env(safe-area-inset-bottom))] md:pt-8 lg:pl-[calc(1.5rem+env(safe-area-inset-left))] lg:pr-[calc(1.5rem+env(safe-area-inset-right))]">
             {selectedArticle && (
-              <div className="mx-auto max-w-[72ch] space-y-6">
+              <div className="mx-auto max-w-[64ch] space-y-6">
                 <div className="border-b border-slate-200 pb-6 md:pb-7">
-                  <h2 className="text-2xl font-semibold leading-tight tracking-tight text-stone-900 md:text-[2rem] md:leading-[1.15]">
+                  <h2 className="text-pretty text-2xl font-semibold leading-tight tracking-tight text-stone-900 md:text-[2rem] md:leading-[1.15]">
                     {selectedArticle?.title || t('readerMode')}
                   </h2>
 
-                  <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3">
-                    <span className={sourceChipClassName}>
-                      <Newspaper className="h-3.5 w-3.5" />
-                      <span className="truncate">{getArticleSourceLabel(selectedArticle)}</span>
-                    </span>
-                    {selectedReader?.minutesToRead && (
-                      <span className={readTimeChipClassName}>
-                        <Clock3 className="h-3.5 w-3.5" />
-                        {t('readTime', { minutes: selectedReader.minutesToRead })}
-                      </span>
-                    )}
+                  <div className="mt-4 flex items-start gap-3">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-3">
+                      {sourceVersionItems.length > 1 ? (
+                        <label className={`${sourceChipClassName} min-w-0 max-w-full`}>
+                          <Newspaper className="h-3.5 w-3.5 shrink-0" />
+                          <span className="sr-only">{t('sourceVersions')}</span>
+                          <select
+                            value={selectedArticle?.id || ''}
+                            onChange={(event) => setSelectedArticleId(event.target.value)}
+                            className="min-w-0 max-w-[14rem] bg-transparent text-xs font-medium text-sky-900 outline-none"
+                            aria-label={t('sourceVersions')}
+                          >
+                            {sourceVersionItems.map(({ item, label }) => (
+                              <option key={item.id} value={item.id}>{label}</option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <span className={`${sourceChipClassName} min-w-0 max-w-full`}>
+                          <Newspaper className="h-3.5 w-3.5 shrink-0" />
+                          <span className="min-w-0 truncate">{getArticleSourceLabel(selectedArticle)}</span>
+                        </span>
+                      )}
+                      {selectedReader?.minutesToRead && (
+                        <span className={`${readTimeChipClassName} shrink-0`}>
+                          <Clock3 className="h-3.5 w-3.5" />
+                          {t('readTime', { minutes: selectedReader.minutesToRead })}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <div className="relative inline-flex items-center">
+                        <ShareStatusBubble
+                          shareState={shareState}
+                          t={t}
+                          className="share-status-pill-from-button mr-2 max-w-[min(18rem,calc(100vw-6rem))]"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleShare}
+                          disabled={!safeOriginalUrl}
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          aria-label={t('shareArticle')}
+                        >
+                          <Share2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={refreshReader}
+                        disabled={!selectedArticleId || loading}
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        aria-label={t('refreshReader')}
+                        title={t('refreshReader')}
+                      >
+                        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -447,7 +437,7 @@ const ReaderPanel = ({
                       <p className="mb-8 text-sm font-medium uppercase tracking-[0.16em] text-stone-400">{selectedReader.byline}</p>
                     )}
 
-                    <div className="space-y-7">
+                    <div className="space-y-5">
                       {(selectedReader.contentBlocks || []).map((block, index) => renderReaderBlock(block, index, readerTextStyles))}
                     </div>
                   </article>

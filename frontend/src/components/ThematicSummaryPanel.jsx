@@ -3,6 +3,8 @@ import { ExternalLink, Newspaper, Sparkles } from 'lucide-react';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { getTopicPresentation } from '../topicPresentation';
 import { getLocalizedThematicSummary, getThematicSummaryPresentationKey, isPodcastSummary } from '../utils/thematicSummaryLocale';
+import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_STYLES } from '../config/readerTextSize';
+import { getStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
 import { FullscreenPanelFrame } from './FullscreenModalFrame';
 import PodcastAudioPlayer from './PodcastAudioPlayer';
 
@@ -267,30 +269,56 @@ function getPodcastAudioChoice(summary = {}, locale = 'en') {
   };
 }
 
-function renderSourceChip(source, key) {
+function getSummarySourceId(source) {
+  return `thematic-summary-source-${Number(source?.index)}`;
+}
+
+function renderSourceReference(source, key) {
+  const sourceIndex = Number(source?.index);
+  const sourceName = source?.source || source?.title || '';
+
+  return (
+    <sup key={key} className="ml-0.5 align-super text-[0.7em] leading-none">
+      <a
+        href={`#${getSummarySourceId(source)}`}
+        className="font-semibold text-sky-700 no-underline hover:underline"
+        title={sourceName}
+      >
+        [{sourceIndex}]
+      </a>
+    </sup>
+  );
+}
+
+function renderSummarySource(source) {
   const safeUrl = getSafeExternalUrl(source?.url);
   const safeIconUrl = getSafeExternalUrl(source?.sourceIconUrl);
   const sourceName = source?.source || source?.title || '';
-  const chip = (
-    <span className="mx-0.5 inline-flex max-w-[12rem] items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 align-middle text-xs font-semibold leading-5 text-sky-900 md:max-w-[16rem]">
+  const content = (
+    <>
+      <span className="w-5 shrink-0 text-xs font-semibold tabular-nums text-stone-400">{source.index}.</span>
       {safeIconUrl ? (
-        <img src={safeIconUrl} alt="" loading="lazy" className="h-4 w-4 rounded-full object-contain" />
+        <img src={safeIconUrl} alt="" loading="lazy" className="h-5 w-5 shrink-0 rounded-md object-contain" />
       ) : (
-        <Newspaper className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <Newspaper className="h-4 w-4 shrink-0 text-stone-400" aria-hidden="true" />
       )}
-      <span className="truncate">{sourceName}</span>
-      {safeUrl && <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />}
-    </span>
+      <span className="min-w-0 flex-1 truncate" title={sourceName}>{sourceName}</span>
+      {safeUrl && <ExternalLink className="h-3.5 w-3.5 shrink-0 text-stone-400" aria-hidden="true" />}
+    </>
   );
 
-  if (!safeUrl) {
-    return <span key={key}>{chip}</span>;
-  }
-
   return (
-    <a key={key} href={safeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex no-underline">
-      {chip}
-    </a>
+    <li key={source.index} id={getSummarySourceId(source)} className="scroll-mt-4">
+      {safeUrl ? (
+        <a href={safeUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-stone-700 no-underline hover:bg-stone-50 hover:text-stone-900">
+          {content}
+        </a>
+      ) : (
+        <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-stone-700">
+          {content}
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -306,7 +334,7 @@ function renderParagraphWithSources(paragraph, paragraphIndex, sourceByIndex) {
     }
 
     const source = sourceByIndex.get(Number(match[1]));
-    parts.push(source ? renderSourceChip(source, `source-chip-${paragraphIndex}-${match.index}`) : match[0]);
+    parts.push(source ? renderSourceReference(source, `source-reference-${paragraphIndex}-${match.index}`) : match[0]);
     lastIndex = match.index + match[0].length;
   }
 
@@ -322,8 +350,10 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   const swipeFeedbackFrameRef = useRef(0);
   const swipeFeedbackOffsetRef = useRef(0);
   const [swipeFeedbackOffset, setSwipeFeedbackOffset] = useState(0);
+  const [readerTextSize] = useState(getStoredReaderTextSizePreference);
   const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [locale, summary]);
   const sourceByIndex = useMemo(() => new Map((summary?.sources || []).map((source) => [Number(source.index), source])), [summary?.sources]);
+  const summarySources = [...sourceByIndex.values()];
   const isPodcast = isPodcastSummary(summary);
   const podcastSummaries = useMemo(() => getPodcastSummariesForPanel(summary, summaries), [summaries, summary]);
   const swipeSummaries = useMemo(() => getSwipeSummariesForPanel(summary, summaries), [summaries, summary]);
@@ -333,6 +363,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   }, [isPodcast, localizedSummary.displaySummaryText]);
   const primaryPresentation = getTopicPresentation(getThematicSummaryPresentationKey(summary));
   const PrimaryIcon = primaryPresentation.Icon;
+  const readerTextStyles = READER_TEXT_SIZE_STYLES[readerTextSize] || READER_TEXT_SIZE_STYLES[DEFAULT_READER_TEXT_SIZE];
   const closeLabel = isPodcast ? t('closePodcastSummary') : t('closeThematicSummary');
   const canSwipeSummaries = swipeSummaries.length > 1 && swipeSummaryIndex >= 0 && typeof onSelectSummary === 'function';
   const swipeFeedbackStrength = Math.min(Math.abs(swipeFeedbackOffset) / SUMMARY_SWIPE_FEEDBACK_MAX_OFFSET, 1);
@@ -454,7 +485,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
       </span>
       <div className="min-w-0">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">{isPodcast ? t('podcastBriefing') : t('thematicSummary')}</p>
-        <h2 id="thematic-summary-panel-title" className="truncate text-base font-semibold text-stone-900 focus:outline-none" data-modal-title tabIndex={-1}>{localizedSummary.displayTopicLabel}</h2>
+        <h2 id="thematic-summary-panel-title" className="line-clamp-2 text-pretty text-base font-semibold leading-tight text-stone-900 focus:outline-none" data-modal-title tabIndex={-1}>{localizedSummary.displayTopicLabel}</h2>
       </div>
     </div>
   );
@@ -481,7 +512,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
             onTouchStart={handleTouchStart}
           >
             <div
-              className={`mx-auto max-w-[72ch] space-y-5 transition-[opacity,transform] ease-out will-change-transform ${swipeFeedbackActive ? 'duration-75' : 'duration-200'}`}
+              className={`mx-auto max-w-[64ch] space-y-5 transition-[opacity,transform] ease-out will-change-transform ${swipeFeedbackActive ? 'duration-75' : 'duration-200'}`}
               data-testid="thematic-summary-swipe-frame"
               style={swipeFeedbackStyle}
             >
@@ -553,11 +584,20 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                     })}
                   </div>
                 ) : (
-                  <div className="space-y-5 text-[1.05rem] leading-7 text-stone-800 md:text-lg md:leading-8">
+                  <div className={`space-y-5 ${readerTextStyles.paragraph}`}>
                     {paragraphs.map((paragraph, index) => (
                       <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex)}</p>
                     ))}
                   </div>
+                )}
+
+                {!isPodcast && summarySources.length > 0 && (
+                  <footer className="mt-10 border-t border-slate-200 pt-5">
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">{t('sources')}</h3>
+                    <ol className="space-y-1">
+                      {summarySources.map(renderSummarySource)}
+                    </ol>
+                  </footer>
                 )}
 
               </article>
