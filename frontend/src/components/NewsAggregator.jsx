@@ -61,8 +61,8 @@ function NewsCardSkeleton({ showImage }) {
           <div className="h-3 w-3/5 rounded-full bg-slate-100" />
         </div>
         <div className="flex gap-2">
-          <div className="h-9 w-9 rounded-xl bg-amber-100" />
-          <div className="h-9 w-9 rounded-xl bg-sky-100" />
+          <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white" />
+          <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white" />
         </div>
       </div>
       {showImage ? (
@@ -84,7 +84,7 @@ function NewsCardSkeleton({ showImage }) {
       </div>
       <div className="grid grid-cols-2 gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-3.5 sm:px-5">
         <div className="h-10 rounded-xl bg-violet-200" />
-        <div className="h-10 rounded-xl bg-emerald-200" />
+        <div className="h-10 rounded-xl border border-slate-200 bg-white" />
       </div>
     </article>
   );

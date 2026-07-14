@@ -240,8 +240,8 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     }
   };
 
-  const readerActionButtonClassName = 'inline-flex min-w-0 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white no-underline shadow-sm transition-all hover:-translate-y-0.5 hover:bg-violet-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 active:translate-y-0';
-  const originalActionButtonClassName = 'inline-flex min-w-0 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white no-underline shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-600 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 active:translate-y-0';
+  const readerActionButtonClassName = 'inline-flex min-w-0 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white no-underline shadow-sm transition-colors hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2';
+  const originalActionButtonClassName = 'inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 no-underline transition-colors hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2';
   const disabledActionButtonClassName = 'inline-flex min-w-0 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-400';
   const openOriginalSourceUnavailableMessage = t('openOriginalSourceUnavailable');
 
@@ -288,10 +288,10 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   );
 
   const sourceIconItems = sourceEntries.slice(0, 2).map((source) => (
-    <span key={source.id} title={source.name} aria-label={source.name}>
+    <span key={source.id} title={source.name} aria-label={source.name} className="flex h-10 w-10 shrink-0 leading-none">
       <SourceIcon
         source={source}
-        className="h-10 w-10 border-2 border-white bg-white shadow-md"
+        className="h-10 w-10 shadow-md outline outline-2 outline-white"
       />
     </span>
   ));
@@ -318,11 +318,11 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   const clickbaitSource = String(group?.clickbaitSource || group?.items?.[0]?.clickbaitSource || '').toLowerCase();
   const clickbaitBadge = clickbaitText ? (
     <span
-      className={clickbaitSource === 'ai' ? 'inline-flex rounded-full p-[1.5px] shadow-sm' : ''}
+      className={clickbaitSource === 'ai' ? 'inline-flex rounded-full p-px' : ''}
       style={clickbaitSource === 'ai' ? AI_ACCENT_GRADIENT_STYLE : undefined}
       title={clickbaitSource === 'ai' ? t('aiClickbaitLabel') : clickbaitText}
     >
-      <span className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold shadow-sm ${CLICKBAIT_BADGE_CLASS_NAMES[clickbaitLabel]}`}>
+      <span className={`inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${CLICKBAIT_BADGE_CLASS_NAMES[clickbaitLabel]}`}>
         {clickbaitText}
       </span>
     </span>
@@ -374,7 +374,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         type="button"
         onClick={() => onToggleReadLater?.(group)}
         disabled={readLaterUpdating}
-        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 active:translate-y-0 disabled:cursor-wait disabled:opacity-70 ${group.readLater ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100'}`}
+        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70 ${group.readLater ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
         aria-label={group.readLater ? t('removeReadLater') : t('saveReadLater')}
         aria-pressed={Boolean(group.readLater)}
         title={group.readLater ? t('removeReadLater') : t('saveReadLater')}
@@ -385,7 +385,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         type="button"
         onClick={handleShare}
         disabled={!safeOriginalUrl}
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 text-sky-800 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-sky-100 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 active:translate-y-0 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
         aria-label={t('shareArticle')}
       >
         <Share2 className="h-4 w-4" />
@@ -394,7 +394,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   );
 
   return (
-    <article className="group relative flex h-full min-h-[20rem] w-full min-w-0 flex-col overflow-hidden rounded-none border-y border-slate-200 bg-white shadow-[0_12px_34px_-20px_rgba(15,23,42,0.45)] transition-all duration-200 ease-out hover:-translate-y-1 hover:border-sky-200 hover:shadow-[0_24px_48px_-24px_rgba(14,165,233,0.5)] focus-within:ring-2 focus-within:ring-sky-300 sm:rounded-[1.75rem] sm:border">
+    <article className="group relative flex h-full min-h-[20rem] w-full min-w-0 flex-col overflow-hidden rounded-none border-y border-slate-200 bg-white shadow-[0_12px_34px_-20px_rgba(15,23,42,0.45)] transition-[border-color,box-shadow] duration-200 ease-out hover:border-sky-200 hover:shadow-[0_20px_42px_-24px_rgba(14,165,233,0.42)] focus-within:ring-2 focus-within:ring-sky-300 sm:rounded-[1.75rem] sm:border">
       <div className="flex min-w-0 items-center gap-3 px-4 pb-3 pt-5 sm:px-5">
         {sourceIconStack}
         <div className="min-w-0 flex-1">
