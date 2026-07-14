@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createTranslator } from '../i18n';
 import { createPodcastSummary } from '../test-utils/thematicSummaries';
 import ThematicSummaryStories from './ThematicSummaryStories';
@@ -53,6 +53,7 @@ describe('thematic summary podcast UI', () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     window.localStorage.removeItem('news-flow-reader-text-size');
+    window.localStorage.removeItem('news-flow-reader-text-width');
   });
 
   test('places the podcast story first and opens the selected item', () => {
@@ -260,7 +261,35 @@ describe('thematic summary podcast UI', () => {
     expect(screen.getByText('The second argument moves to software policy and regulation.')).toBeInTheDocument();
   });
 
-  test('uses reader sizing and compact citations with sources after the summary', () => {
+  test('shows text-shaped loading feedback while a thematic summary opens', () => {
+    vi.useFakeTimers();
+
+    try {
+      render(
+        <ThematicSummaryPanel
+          summary={createTopicSummary('technology')}
+          locale="en"
+          t={t}
+          onClose={vi.fn()}
+          showOpeningSkeleton
+        />
+      );
+
+      const loadingStatus = screen.getByRole('status', { name: 'Loading AI summary...' });
+      expect(loadingStatus).toHaveClass('animate-pulse');
+      expect(loadingStatus.querySelectorAll('.rounded-full')).toHaveLength(8);
+      expect(screen.queryByText('Technology summary')).not.toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(500));
+
+      expect(screen.queryByRole('status', { name: 'Loading AI summary...' })).not.toBeInTheDocument();
+      expect(screen.getByText('Technology summary')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('uses reader sizing and direct circular source links', () => {
     window.localStorage.setItem('news-flow-reader-text-size', 'large');
 
     render(
@@ -269,8 +298,11 @@ describe('thematic summary podcast UI', () => {
           id: 'summary-technology',
           topicKey: 'technology',
           topicLabel: 'Technology',
-          summaryTextByLocale: { en: 'Chip demand increased sharply [1].' },
-          sources: [{ index: 1, source: 'Example News', url: 'https://example.com/story' }]
+          summaryTextByLocale: { en: 'Chip demand increased sharply [1]. Another claim followed [2].' },
+          sources: [
+            { index: 1, source: 'Example News', url: 'https://example.com/story' },
+            { index: 2, source: 'Unsafe Source', url: 'javascript:alert(1)' }
+          ]
         }}
         locale="en"
         t={t}
@@ -279,14 +311,39 @@ describe('thematic summary podcast UI', () => {
     );
 
     const paragraph = screen.getByText(/Chip demand increased sharply/u);
-    const citation = screen.getByRole('link', { name: '[1]' });
-    const sourceLink = screen.getByRole('link', { name: /Example News/u });
+    const sourceLink = screen.getByRole('link', { name: 'Open source article: Example News' });
+    const decreaseTextSizeButton = screen.getByRole('button', { name: 'Decrease reader text size' });
+    const increaseTextWidthButton = screen.getByRole('button', { name: 'Increase reader text width' });
+    const summaryFrame = paragraph.closest('article').parentElement;
 
-    expect(paragraph.closest('article').parentElement).toHaveClass('max-w-[64ch]');
+    expect(summaryFrame).toHaveClass('max-w-[64ch]');
     expect(paragraph.parentElement).toHaveClass('text-[1.18rem]', 'leading-[1.65]');
-    expect(citation).toHaveAttribute('href', '#thematic-summary-source-1');
+    const textWidthControls = screen.getByRole('group', { name: 'Text width' });
+    const textSizeControls = screen.getByRole('group', { name: 'Text size' });
+    expect(textWidthControls.parentElement).toHaveClass('ml-auto', 'gap-1.5');
+    expect(textWidthControls).toHaveClass('hidden', 'sm:flex');
+    expect(textWidthControls.nextElementSibling).toBe(textSizeControls);
+    const summaryHeadings = screen.getAllByRole('heading', { name: 'Technology' });
+    expect(summaryHeadings.some((heading) => !heading.classList.contains('sr-only'))).toBe(true);
     expect(sourceLink).toHaveAttribute('href', 'https://example.com/story');
-    expect(sourceLink.closest('li')).toHaveAttribute('id', 'thematic-summary-source-1');
+    expect(sourceLink).toHaveAttribute('target', '_blank');
+    expect(sourceLink).toHaveClass('h-5', 'w-5', 'rounded-full');
+    expect(screen.getByRole('img', { name: 'Unsafe Source' })).toHaveClass('rounded-full');
+    expect(screen.queryByRole('link', { name: 'Open source article: Unsafe Source' })).not.toBeInTheDocument();
+    expect(screen.queryByText('[1]')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Sources' })).not.toBeInTheDocument();
+
+    fireEvent.click(decreaseTextSizeButton);
+
+    expect(paragraph.parentElement).toHaveClass('text-[1.08rem]', 'leading-[1.65]');
+    expect(window.localStorage.getItem('news-flow-reader-text-size')).toBe('medium');
+
+    fireEvent.click(increaseTextWidthButton);
+    fireEvent.click(increaseTextWidthButton);
+
+    expect(summaryFrame).toHaveClass('max-w-[80ch]');
+    expect(window.localStorage.getItem('news-flow-reader-text-width')).toBe('widest');
+    expect(textWidthControls).toHaveTextContent('80ch');
   });
 
   test('switches to the next thematic summary with a mobile left swipe', () => {

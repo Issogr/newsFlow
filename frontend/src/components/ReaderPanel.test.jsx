@@ -44,7 +44,8 @@ const t = (key, params = {}) => {
 const currentUser = {
   user: { username: 'alice', isAdmin: false },
   settings: {
-    readerTextSize: 'medium'
+    readerTextSize: 'medium',
+    readerTextWidth: 'default'
   }
 };
 
@@ -96,6 +97,8 @@ describe('ReaderPanel', () => {
     document.body.style.overflow = '';
     navigator.share = originalShare;
     navigator.clipboard = originalClipboard;
+    window.localStorage.removeItem('news-flow-reader-text-size');
+    window.localStorage.removeItem('news-flow-reader-text-width');
   });
 
   test('keeps the latest article payload when an older reader request resolves later', async () => {
@@ -141,12 +144,37 @@ describe('ReaderPanel', () => {
     expect(await screen.findByText('Cached body')).toBeInTheDocument();
     expect(screen.getByText('Article one')).toBeInTheDocument();
     expect(screen.queryByText('Backend cached reader title')).not.toBeInTheDocument();
+    const textSizeControls = screen.getByRole('group', { name: 'readerTextSizeSetting' });
+    const textWidthControls = screen.getByRole('group', { name: 'readerTextWidthSetting' });
+    const headerActions = textSizeControls.parentElement;
+    const closeButton = screen.getByRole('button', { name: 'closeReader' });
+    expect(headerActions).toHaveClass('ml-auto', 'gap-1.5');
+    expect(textWidthControls.nextElementSibling).toBe(textSizeControls);
+    expect(textWidthControls).toHaveClass('hidden', 'sm:flex');
+    expect(textWidthControls).toHaveTextContent('64ch');
+    expect(textSizeControls.nextElementSibling).toBe(closeButton);
     expect(screen.getByRole('combobox', { name: 'sourceVersions' }).parentElement.parentElement).toHaveClass('min-w-0', 'flex-1');
     expect(screen.getByRole('button', { name: 'shareArticle' }).parentElement.parentElement).toHaveClass('shrink-0');
     expect(fetchReaderArticle).toHaveBeenCalledWith('article-1', expect.objectContaining({
       refresh: false
     }));
     expect(fetchReaderArticle).toHaveBeenCalledTimes(1);
+  });
+
+  test('shows text-shaped loading feedback while reader content loads', async () => {
+    const request = createDeferred();
+    fetchReaderArticle.mockReturnValue(request.promise);
+
+    const { container } = renderReaderPanel();
+
+    const loadingStatus = screen.getByRole('status', { name: 'loadingReader' });
+    expect(loadingStatus).toHaveClass('animate-pulse');
+    expect(loadingStatus.querySelectorAll('.rounded-full')).toHaveLength(8);
+    expect(container.querySelector('.border-4')).toBeNull();
+
+    await resolveDeferred(request, createReaderPayload('Loaded body'));
+    expect(await screen.findByText('Loaded body')).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'loadingReader' })).not.toBeInTheDocument();
   });
 
   test('ignores malformed reader list blocks without crashing', async () => {
@@ -364,6 +392,31 @@ describe('ReaderPanel', () => {
 
     expect(updateUserSettings).toHaveBeenCalledWith({ readerTextSize: 'large' });
     expect(window.localStorage.getItem('news-flow-reader-text-size')).toBe('large');
+  });
+
+  test('updates reader text width and persists it without reloading parent state', async () => {
+    fetchReaderArticle.mockResolvedValue(createReaderPayload());
+    updateUserSettings.mockResolvedValue({
+      settings: {
+        ...currentUser.settings,
+        readerTextWidth: 'wide'
+      }
+    });
+
+    renderReaderPanel();
+
+    await screen.findByText('Body');
+    const textContainer = screen.getByText('Article one').closest('.mx-auto');
+    expect(textContainer).toHaveClass('max-w-[64ch]');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'increaseReaderTextWidth' }));
+    });
+
+    expect(updateUserSettings).toHaveBeenCalledWith({ readerTextWidth: 'wide' });
+    expect(window.localStorage.getItem('news-flow-reader-text-width')).toBe('wide');
+    expect(textContainer).toHaveClass('max-w-[72ch]');
+    expect(screen.getByRole('group', { name: 'readerTextWidthSetting' })).toHaveTextContent('72ch');
   });
 
   test('refreshes reader mode and bypasses the cached article payload', async () => {

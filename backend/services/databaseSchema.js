@@ -4,7 +4,7 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 41;
+  const CURRENT_SCHEMA_VERSION = 42;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getPodcastSummariesSchemaSql() {
@@ -241,6 +241,7 @@ function createDatabaseSchema({ logger }) {
         compact_news_cards_mode TEXT NOT NULL DEFAULT 'off',
         reader_panel_position TEXT NOT NULL DEFAULT 'right',
         reader_text_size TEXT NOT NULL DEFAULT 'medium',
+        reader_text_width TEXT NOT NULL DEFAULT 'default',
         last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
         source_setup_completed INTEGER NOT NULL DEFAULT 1,
         excluded_source_ids TEXT NOT NULL DEFAULT '[]',
@@ -495,6 +496,10 @@ function createDatabaseSchema({ logger }) {
 
     if (tableExists(database, 'user_settings') && userSettingsColumns.has('recent_hours')) {
       return 40;
+    }
+
+    if (tableExists(database, 'user_settings') && !userSettingsColumns.has('reader_text_width')) {
+      return 41;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -1102,6 +1107,18 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 41);
       logger.info('Migrated DB schema from version 40 to 41');
+      migrateSchema(database, 41);
+      return;
+    }
+
+    if (currentVersion === 41) {
+      const settingsColumns = getColumnNames(database, 'user_settings');
+      if (!settingsColumns.has('reader_text_width')) {
+        database.exec("ALTER TABLE user_settings ADD COLUMN reader_text_width TEXT NOT NULL DEFAULT 'default'");
+      }
+
+      setCurrentSchemaVersion(database, 42);
+      logger.info('Migrated DB schema from version 41 to 42');
       return;
     }
 

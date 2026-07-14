@@ -221,6 +221,16 @@ describe('NewsAggregator', () => {
     expect(unnamedView.container.querySelector('button[aria-label="User"] .lucide-user')).toBeInTheDocument();
   });
 
+  test('syncs the account reader text width to local preferences', async () => {
+    fetchNews.mockResolvedValue(createFeedResponse([], { meta: { totalGroups: 0 } }));
+
+    await renderNewsAggregator({
+      currentUser: createTestCurrentUser({ settings: { readerTextWidth: 'widest' } })
+    });
+
+    expect(window.localStorage.getItem('news-flow-reader-text-width')).toBe('widest');
+  });
+
   test('shows card-shaped placeholders while the initial feed loads', async () => {
     const request = createDeferred();
     fetchNews.mockReturnValue(request.promise);
@@ -362,8 +372,9 @@ describe('NewsAggregator', () => {
     expect(markThematicSummariesRead).toHaveBeenCalledWith(['summary-technology']);
     expect(screen.getByText('Ora di pranzo')).toBeInTheDocument();
     expect(screen.getByText('1 articolo valutato')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Caricamento sintesi IA...' })).toBeInTheDocument();
     expect(screen.queryByText('I chip AI sono avanzati rapidamente nella finestra [1].')).not.toBeInTheDocument();
-    expect(screen.getAllByText('BBC')).not.toHaveLength(0);
+    expect(await screen.findByRole('link', { name: 'Apri articolo fonte: BBC' })).toHaveAttribute('href', 'https://example.com/ai');
     expect(screen.queryByText('AI chips accelerate')).not.toBeInTheDocument();
   });
 

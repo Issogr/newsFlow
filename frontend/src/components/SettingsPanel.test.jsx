@@ -37,6 +37,7 @@ const renderPanel = (overrides = {}) => {
 describe('SettingsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
   });
 
   test('offers save, discard, or continued editing when closing a draft', () => {
@@ -111,5 +112,19 @@ describe('SettingsPanel', () => {
     expect(updateUserSettings).toHaveBeenCalledWith({ themeMode: 'dark' });
     expect(onUserUpdate).toHaveBeenCalledWith(expect.objectContaining({ settings: nextSettings }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('saves the reader text width preference', async () => {
+    const nextSettings = { ...currentUser.settings, readerTextWidth: 'widest' };
+    updateUserSettings.mockResolvedValue({ settings: nextSettings });
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText('Text width'), { target: { value: 'widest' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(updateUserSettings).toHaveBeenCalledWith({ readerTextWidth: 'widest' });
+    });
+    expect(window.localStorage.getItem('news-flow-reader-text-width')).toBe('widest');
   });
 });

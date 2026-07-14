@@ -43,6 +43,7 @@ const SUPPORTED_LANGUAGES = new Set(['auto', 'it', 'en']);
 const SUPPORTED_THEME_MODES = new Set(['system', 'light', 'dark']);
 const SUPPORTED_READER_PANEL_POSITIONS = new Set(['left', 'center', 'right']);
 const SUPPORTED_READER_TEXT_SIZES = new Set(['small', 'medium', 'large']);
+const SUPPORTED_READER_TEXT_WIDTHS = new Set(['default', 'wide', 'widest']);
 const SUPPORTED_COMPACT_NEWS_CARD_MODES = new Set(['off', 'mobile', 'desktop', 'everywhere']);
 
 let pendingAnonymousPublicApiRequests = 0;
@@ -159,6 +160,10 @@ function normalizeReaderPanelPosition(position) {
 
 function normalizeReaderTextSize(size) {
   return normalizeEnumValue(size, SUPPORTED_READER_TEXT_SIZES, 'medium');
+}
+
+function normalizeReaderTextWidth(width) {
+  return normalizeEnumValue(width, SUPPORTED_READER_TEXT_WIDTHS, 'default');
 }
 
 function normalizeReleaseNotesVersion(version) {
@@ -299,6 +304,7 @@ function getDefaultSettings(overrides = {}) {
     compactNewsCardsMode: 'off',
     readerPanelPosition: 'right',
     readerTextSize: 'medium',
+    readerTextWidth: 'default',
     lastSeenReleaseNotesVersion: '',
     sourceSetupCompleted: overrides.sourceSetupCompleted !== false,
     excludedSourceIds: [],
@@ -400,6 +406,7 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     })(),
     readerPanelPosition: normalizeReaderPanelPosition(payload.readerPanelPosition || currentSettings.readerPanelPosition),
     readerTextSize: normalizeReaderTextSize(payload.readerTextSize || currentSettings.readerTextSize),
+    readerTextWidth: normalizeReaderTextWidth(payload.readerTextWidth || currentSettings.readerTextWidth),
     lastSeenReleaseNotesVersion: Object.prototype.hasOwnProperty.call(payload, 'lastSeenReleaseNotesVersion')
       ? normalizeReleaseNotesVersion(payload.lastSeenReleaseNotesVersion)
       : normalizeReleaseNotesVersion(currentSettings.lastSeenReleaseNotesVersion),
@@ -705,7 +712,7 @@ function exportUserSettings(userId) {
   const customSourceIds = new Set(customSources.map((source) => source.id));
 
   return {
-    version: 9,
+    version: 10,
     exportedAt: new Date().toISOString(),
     settings: {
       defaultLanguage: settings.defaultLanguage,
@@ -715,6 +722,7 @@ function exportUserSettings(userId) {
       compactNewsCardsMode: normalizeCompactNewsCardsMode(settings.compactNewsCardsMode, settings.compactNewsCards === true ? 'everywhere' : 'off'),
       readerPanelPosition: settings.readerPanelPosition || 'right',
       readerTextSize: settings.readerTextSize || 'medium',
+      readerTextWidth: settings.readerTextWidth || 'default',
       lastSeenReleaseNotesVersion: settings.lastSeenReleaseNotesVersion || '',
       excludedSourceIds: settings.excludedSourceIds.filter((sourceId) => !customSourceIds.has(sourceId)),
       excludedSubSourceIds: settings.excludedSubSourceIds

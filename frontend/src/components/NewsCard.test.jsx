@@ -234,6 +234,7 @@ describe('NewsCard', () => {
     expect(screen.getByLabelText('Source A')).toHaveClass('flex', 'h-10', 'w-10', 'leading-none');
     expect(screen.getByLabelText('Source A').querySelector('img').parentElement).toHaveClass('h-10', 'w-10', 'outline-2');
     expect(screen.getByLabelText('Source A').querySelector('img').parentElement).not.toHaveClass('border-2');
+    expect(screen.getByLabelText('sources')).toHaveClass('rounded-full');
     expect(screen.getByText('Source A +1')).toBeInTheDocument();
     expect(screen.queryByText('Source B')).not.toBeInTheDocument();
   });
@@ -282,7 +283,8 @@ describe('NewsCard', () => {
     });
 
     const aiGroupedSourceStack = screen.getByLabelText('aiGroupedStory');
-    expect(aiGroupedSourceStack).toBeInTheDocument();
+    expect(aiGroupedSourceStack).toHaveClass('rounded-full');
+    expect(aiGroupedSourceStack.firstElementChild).toHaveClass('rounded-full');
     expect(aiGroupedSourceStack.getAttribute('style')).toContain('conic-gradient');
 
     rerender(

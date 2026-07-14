@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.5.12
+
+- replaced the circular Reader loading indicator with pulsing text placeholders and added the same opening effect to AI summaries
+- replaced numbered AI summary references with circular links that open source articles directly
+- added the shared Reader font-size controls to AI summaries
+- added persistent 64, 72, and 80-character reading widths to Reader mode, AI summaries, and Settings, with width controls hidden on full-screen mobile views
+
 ## 3.5.11
 
 - removed the per-user article retention field from settings; retention now follows the app-wide server configuration only

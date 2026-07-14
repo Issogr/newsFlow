@@ -21,6 +21,7 @@ import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
+import { setStoredReaderTextWidthPreference } from '../utils/readerTextWidthPreference';
 import {
   buildFeedRequestParams,
   getGroupMergeKeys,
@@ -55,7 +56,7 @@ function NewsCardSkeleton({ showImage }) {
   return (
     <article className="relative flex h-full min-h-[20rem] flex-col overflow-hidden rounded-none border-y border-slate-200 bg-white shadow-[0_12px_34px_-20px_rgba(15,23,42,0.35)] sm:rounded-[1.75rem] sm:border" aria-hidden="true">
       <div className="flex items-center gap-3 px-4 pb-3 pt-5 sm:px-5">
-        <div className="h-12 w-12 shrink-0 rounded-xl bg-sky-100" />
+        <div className="h-12 w-12 shrink-0 rounded-full bg-sky-100" />
         <div className="flex-1 space-y-2">
           <div className="h-3.5 w-2/5 rounded-full bg-slate-200" />
           <div className="h-3 w-3/5 rounded-full bg-slate-100" />
@@ -283,6 +284,10 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   useEffect(() => {
     setStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize || 'medium');
   }, [currentUser?.settings?.readerTextSize]);
+
+  useEffect(() => {
+    setStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth || 'default');
+  }, [currentUser?.settings?.readerTextWidth]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -943,10 +948,12 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         <ThematicSummaryPanel
           summary={displayedThematicSummary}
           summaries={visibleThematicSummaries}
+          currentUser={currentUser}
           locale={locale}
           t={t}
           onClose={() => setSelectedThematicSummary(null)}
           onSelectSummary={openThematicSummary}
+          showOpeningSkeleton
         />
       )}
 
