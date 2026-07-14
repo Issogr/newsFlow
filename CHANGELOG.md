@@ -11,7 +11,7 @@
 - redesigned settings as a flatter, more readable page with clearer sections, fewer nested containers, and styling aligned with the news experience
 - simplified settings with explicit saving and an unsaved-change reminder, positive source visibility controls, on-demand source details, concise labels, and collapsed advanced API/data actions
 - refreshed reader mode and AI summaries with a focused 64-character reading measure, tighter prose rhythm, shared text sizing, compact source controls and citations, and fewer fixed distractions
-- refreshed feedback with the same opaque panel, flatter sections, clearer category choices, and simpler attachment handling
+- refreshed feedback with compact contextual categories, category-specific prompts, inline validation, quieter counters, simpler attachments, and unambiguous sending state
 - kept rounded-square action buttons while restoring circular topic icons and standard pill shapes for badges, filters, and chips
 - added accessible modal focus containment, restoration, Escape/backdrop policies, and mobile safe-area spacing across settings, feedback, reader, summaries, release notes, and source setup
 - improved dark-mode contrast and flattened Source Setup and Admin data layouts to match the refreshed interface

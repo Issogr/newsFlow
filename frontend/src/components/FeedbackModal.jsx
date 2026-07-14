@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bug, CheckCircle2, ImagePlus, Lightbulb, MessageSquare, Paperclip, Send, Trash2 } from 'lucide-react';
 import { submitFeedback } from '../services/api';
 import { getApiErrorPayload, hasApiResponse, isApiTimeoutError } from '../utils/apiError';
@@ -10,11 +10,11 @@ const DEFAULT_MAX_DESCRIPTION_LENGTH = 2800;
 const DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_VIDEO_ATTACHMENT_BYTES = 12 * 1024 * 1024;
 const FEEDBACK_FORM_ID = 'feedback-form';
-const fieldClassName = 'w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition-[border-color,background-color,box-shadow] placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100';
+const fieldClassName = 'w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition-[border-color,background-color,box-shadow] placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100 aria-invalid:border-red-300 aria-invalid:ring-1 aria-invalid:ring-red-100';
 const FEEDBACK_CATEGORIES = [
-  { id: 'bug', labelKey: 'feedbackCategoryBug', helpKey: 'feedbackCategoryBugHelp', icon: Bug, badgeClassName: 'bg-rose-100 text-rose-700', ringClassName: 'border-rose-200 bg-rose-50' },
-  { id: 'feedback', labelKey: 'feedbackCategoryFeedback', helpKey: 'feedbackCategoryFeedbackHelp', icon: MessageSquare, badgeClassName: 'bg-sky-100 text-sky-700', ringClassName: 'border-sky-200 bg-sky-50' },
-  { id: 'idea', labelKey: 'feedbackCategoryIdea', helpKey: 'feedbackCategoryIdeaHelp', icon: Lightbulb, badgeClassName: 'bg-amber-100 text-amber-700', ringClassName: 'border-amber-200 bg-amber-50' },
+  { id: 'bug', labelKey: 'feedbackCategoryBug', helpKey: 'feedbackCategoryBugHelp', descriptionHelpKey: 'feedbackDescriptionBugHelp', icon: Bug, badgeClassName: 'bg-rose-100 text-rose-700', ringClassName: 'border-rose-200 bg-rose-50' },
+  { id: 'feedback', labelKey: 'feedbackCategoryFeedback', helpKey: 'feedbackCategoryFeedbackHelp', descriptionHelpKey: 'feedbackDescriptionFeedbackHelp', icon: MessageSquare, badgeClassName: 'bg-sky-100 text-sky-700', ringClassName: 'border-sky-200 bg-sky-50' },
+  { id: 'idea', labelKey: 'feedbackCategoryIdea', helpKey: 'feedbackCategoryIdeaHelp', descriptionHelpKey: 'feedbackDescriptionIdeaHelp', icon: Lightbulb, badgeClassName: 'bg-amber-100 text-amber-700', ringClassName: 'border-amber-200 bg-amber-50' },
 ];
 
 function getFriendlyFeedbackError(error, t) {
@@ -82,34 +82,18 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }) => {
   const [attachment, setAttachment] = useState(null);
   const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [attachmentError, setAttachmentError] = useState('');
+  const [submitError, setSubmitError] = useState('');
   const [sent, setSent] = useState(false);
+  const titleInputRef = useRef(null);
+  const descriptionInputRef = useRef(null);
+  const selectedCategory = FEEDBACK_CATEGORIES.find(({ id }) => id === category) || FEEDBACK_CATEGORIES[0];
   const attachmentLabel = attachment
     ? `${attachment.name} (${formatAttachmentSize(attachment.size)})`
     : '';
   const attachmentType = String(attachment?.type || '');
   const isVideoAttachment = attachmentType.startsWith('video/');
-  let attachmentStatus = {
-    text: t('feedbackImageHelp'),
-    className: 'text-slate-500',
-  };
-  if (attachmentType.startsWith('image/')) {
-    attachmentStatus = {
-      text: t('feedbackAttachmentStatusImage', {
-        size: formatAttachmentSize(attachment.size),
-        limit: formatAttachmentSize(limits.feedbackImageMaxBytes),
-      }),
-      className: 'text-emerald-600',
-    };
-  } else if (attachmentType.startsWith('video/')) {
-    attachmentStatus = {
-      text: t('feedbackAttachmentStatusVideo', {
-        size: formatAttachmentSize(attachment.size),
-        limit: formatAttachmentSize(limits.feedbackVideoMaxBytes),
-      }),
-      className: 'text-emerald-600',
-    };
-  }
 
   useEffect(() => {
     if (!attachment) {
@@ -127,28 +111,34 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }) => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setError('');
+    setSubmitError('');
 
     const trimmedTitle = title.trim();
     const trimmedDescription = description.trim();
+    const nextFieldErrors = {};
 
     if (trimmedTitle.length < 3) {
-      setError(t('feedbackErrorTitleShort'));
-      return;
+      nextFieldErrors.title = t('feedbackErrorTitleShort');
     }
 
     if (!trimmedDescription) {
-      setError(t('feedbackErrorDescriptionRequired'));
+      nextFieldErrors.description = t('feedbackErrorDescriptionRequired');
+    }
+
+    setFieldErrors(nextFieldErrors);
+    if (nextFieldErrors.title || nextFieldErrors.description) {
+      (nextFieldErrors.title ? titleInputRef : descriptionInputRef).current?.focus();
       return;
     }
 
     if (attachment) {
-      const attachmentError = getAttachmentValidationError(attachment, t, limits);
-      if (attachmentError) {
-        setError(attachmentError);
+      const nextAttachmentError = getAttachmentValidationError(attachment, t, limits);
+      if (nextAttachmentError) {
+        setAttachmentError(nextAttachmentError);
         return;
       }
     }
+    setAttachmentError('');
 
     setSubmitting(true);
 
@@ -164,17 +154,20 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }) => {
       setTitle('');
       setDescription('');
       setAttachment(null);
+      setFieldErrors({});
+      setAttachmentError('');
     } catch (requestError) {
-      setError(getFriendlyFeedbackError(requestError, t));
+      setSubmitError(getFriendlyFeedbackError(requestError, t));
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <SlideOverPanelFrame ariaLabelledBy="feedback-panel-title" onClose={onClose} restoreFocusRef={restoreFocusRef}>
+    <SlideOverPanelFrame ariaLabelledBy="feedback-panel-title" dismissOnEscape={!submitting} onClose={onClose} restoreFocusRef={restoreFocusRef}>
         <SlideOverPanelHeader
-          closeLabel={t('cancel')}
+          closeDisabled={submitting}
+          closeLabel={sent ? t('close') : t('cancel')}
           eyebrow={t('feedbackMenuItem')}
           icon={MessageSquare}
           onClose={onClose}
@@ -195,17 +188,16 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }) => {
               </div>
             </div>
           ) : (
-            <form id={FEEDBACK_FORM_ID} className="space-y-6" onSubmit={handleSubmit}>
-              <div className="border-b border-slate-200 pb-6 text-sm leading-6 text-slate-600">
-                {t('feedbackSenderHelp')}
-              </div>
+            <form id={FEEDBACK_FORM_ID} noValidate onSubmit={handleSubmit}>
+              <fieldset disabled={submitting} className="m-0 min-w-0 space-y-6 border-0 p-0">
+                <p className="text-xs leading-5 text-slate-500">{t('feedbackSenderHelp')}</p>
 
               <div className="border-b border-slate-200 pb-6">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <span className="text-sm font-medium text-slate-700">{t('feedbackFieldCategory')}</span>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {FEEDBACK_CATEGORIES.map(({ id, labelKey, helpKey, icon: Icon, badgeClassName, ringClassName }) => {
+                <div className="grid grid-cols-3 gap-2">
+                  {FEEDBACK_CATEGORIES.map(({ id, labelKey, icon: Icon, badgeClassName, ringClassName }) => {
                     const isActive = category === id;
 
                     return (
@@ -214,65 +206,82 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }) => {
                         type="button"
                         onClick={() => {
                           setCategory(id);
-                          setError('');
+                          setSubmitError('');
                         }}
                         aria-pressed={isActive}
-                        className={`rounded-[1.25rem] border px-4 py-4 text-left transition-colors ${isActive ? ringClassName : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}
+                        className={`flex min-w-0 flex-col items-center rounded-[1.25rem] border px-2 py-3 text-center transition-colors ${isActive ? ringClassName : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}
                       >
-                        <span className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${badgeClassName}`}>
-                          <Icon className="h-5 w-5" aria-hidden="true" />
+                        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${badgeClassName}`}>
+                          <Icon className="h-4 w-4" aria-hidden="true" />
                         </span>
-                        <p className="mt-3 text-sm font-semibold text-slate-900">{t(labelKey)}</p>
-                        <p className="mt-1 text-sm leading-5 text-slate-600">{t(helpKey)}</p>
+                        <span className="mt-2 truncate text-xs font-semibold text-slate-900 sm:text-sm">{t(labelKey)}</span>
                       </button>
                     );
                   })}
                 </div>
+                <p className="mt-3 text-sm leading-5 text-slate-600" aria-live="polite">{t(selectedCategory.helpKey)}</p>
               </div>
 
               <label className="block">
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-slate-700">{t('feedbackFieldTitle')}</span>
-                  <span className="text-xs text-slate-400">{title.trim().length}/{limits.feedbackTitleMaxLength}</span>
+                  <span className="text-sm font-medium text-slate-700">
+                    {t('feedbackFieldTitle')} <span className="text-xs font-normal text-slate-400">({t('feedbackRequired')})</span>
+                  </span>
+                  {title.length > 0 && <span className="text-xs text-slate-400">{title.length}/{limits.feedbackTitleMaxLength}</span>}
                 </div>
                 <input
+                  ref={titleInputRef}
                   type="text"
                   value={title}
                   onChange={(event) => {
                     setTitle(event.target.value.slice(0, limits.feedbackTitleMaxLength));
-                    setError('');
+                    setFieldErrors((current) => ({ ...current, title: '' }));
+                    setSubmitError('');
                   }}
                   placeholder={t('feedbackTitlePlaceholder')}
                   className={fieldClassName}
+                  aria-invalid={Boolean(fieldErrors.title)}
+                  aria-describedby={fieldErrors.title ? 'feedback-title-error' : undefined}
                   required
                   minLength={3}
                   maxLength={limits.feedbackTitleMaxLength}
                 />
+                {fieldErrors.title && <p id="feedback-title-error" className="mt-2 text-sm text-red-600" role="alert">{fieldErrors.title}</p>}
               </label>
 
               <label className="block">
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-slate-700">{t('feedbackFieldDescription')}</span>
-                  <span className="text-xs text-slate-400">{description.trim().length}/{limits.feedbackDescriptionMaxLength}</span>
+                  <span className="text-sm font-medium text-slate-700">
+                    {t('feedbackFieldDescription')} <span className="text-xs font-normal text-slate-400">({t('feedbackRequired')})</span>
+                  </span>
+                  {description.length > 0 && <span className="text-xs text-slate-400">{description.length}/{limits.feedbackDescriptionMaxLength}</span>}
                 </div>
+                <p id="feedback-description-help" className="mb-2 text-sm leading-5 text-slate-500">{t(selectedCategory.descriptionHelpKey)}</p>
                 <textarea
+                  ref={descriptionInputRef}
                   value={description}
                   onChange={(event) => {
                     setDescription(event.target.value.slice(0, limits.feedbackDescriptionMaxLength));
-                    setError('');
+                    setFieldErrors((current) => ({ ...current, description: '' }));
+                    setSubmitError('');
                   }}
                   placeholder={t('feedbackDescriptionPlaceholder')}
                   className={`min-h-44 ${fieldClassName}`}
+                  aria-invalid={Boolean(fieldErrors.description)}
+                  aria-describedby={`feedback-description-help${fieldErrors.description ? ' feedback-description-error' : ''}`}
                   required
                   maxLength={limits.feedbackDescriptionMaxLength}
                 />
+                {fieldErrors.description && <p id="feedback-description-error" className="mt-2 text-sm text-red-600" role="alert">{fieldErrors.description}</p>}
               </label>
 
               <div className="border-t border-slate-200 pt-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-sm font-medium text-slate-700">{t('feedbackFieldImage')}</p>
-                    <p className={`mt-1 text-sm ${attachmentStatus.className}`}>{attachmentStatus.text}</p>
+                    <p className="text-sm font-medium text-slate-700">
+                      {t('feedbackFieldImage')} <span className="text-xs font-normal text-slate-400">({t('feedbackOptional')})</span>
+                    </p>
+                    {!attachment && <p className="mt-1 text-sm text-slate-500">{t('feedbackImageHelp')}</p>}
                   </div>
 
                   <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 focus-within:ring-2 focus-within:ring-sky-100">
@@ -284,14 +293,15 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }) => {
                       className="sr-only"
                       onChange={(event) => {
                         const nextAttachment = event.target.files?.[0] || null;
-                        const attachmentError = nextAttachment ? getAttachmentValidationError(nextAttachment, t, limits) : '';
+                        const nextAttachmentError = nextAttachment ? getAttachmentValidationError(nextAttachment, t, limits) : '';
 
-                        if (attachmentError) {
+                        if (nextAttachmentError) {
                           setAttachment(null);
-                          setError(attachmentError);
+                          setAttachmentError(nextAttachmentError);
                         } else {
                           setAttachment(nextAttachment);
-                          setError('');
+                          setAttachmentError('');
+                          setSubmitError('');
                         }
 
                         event.target.value = '';
@@ -300,8 +310,10 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }) => {
                   </label>
                 </div>
 
+                {attachmentError && <p className="mt-3 text-sm text-red-600" role="alert">{attachmentError}</p>}
+
                 {attachment && (
-                  <div className="mt-5 border-t border-slate-200 pt-5">
+                  <div className="mt-5">
                     {attachmentPreviewUrl && (
                       <div className="overflow-hidden rounded-[1.25rem] border border-slate-200 bg-slate-50">
                         {isVideoAttachment ? (
@@ -315,11 +327,13 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }) => {
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-slate-700">{attachmentLabel}</p>
-                        <p className="mt-1 text-xs text-slate-500">{attachment.type || t('feedbackImageAttached')}</p>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setAttachment(null)}
+                        onClick={() => {
+                          setAttachment(null);
+                          setAttachmentError('');
+                        }}
                         className="inline-flex items-center justify-center gap-2 rounded-[1.25rem] border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -330,25 +344,26 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }) => {
                 )}
               </div>
 
-              {error && (
-                <InlineAlert>
-                  {error}
-                </InlineAlert>
-              )}
+              </fieldset>
             </form>
           )}
         </SlideOverPanelBody>
 
         <SlideOverPanelFooter>
-          <button type="button" onClick={onClose} className="rounded-[1.25rem] border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300">
-            {sent ? t('close') : t('cancel')}
-          </button>
-          {!sent && (
-            <button type="submit" form={FEEDBACK_FORM_ID} disabled={submitting} className="inline-flex items-center gap-2 rounded-[1.25rem] bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60">
-              <Send className="h-4 w-4" />
-              {submitting ? t('feedbackSending') : t('feedbackSubmit')}
-            </button>
-          )}
+          <div className="w-full">
+            {submitError && <InlineAlert className="mb-3">{submitError}</InlineAlert>}
+            <div className="flex items-center justify-between gap-4">
+              <button type="button" onClick={onClose} disabled={submitting} className="rounded-[1.25rem] border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-50">
+                {sent ? t('close') : t('cancel')}
+              </button>
+              {!sent && (
+                <button type="submit" form={FEEDBACK_FORM_ID} disabled={submitting} className="inline-flex items-center gap-2 rounded-[1.25rem] bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60">
+                  <Send className="h-4 w-4" />
+                  {submitting ? t('feedbackSending') : t('feedbackSubmit')}
+                </button>
+              )}
+            </div>
+          </div>
         </SlideOverPanelFooter>
     </SlideOverPanelFrame>
   );
