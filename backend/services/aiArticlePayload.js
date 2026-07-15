@@ -2,7 +2,6 @@ const { parseIntegerEnv } = require('../utils/env');
 
 const DEFAULT_READER_TEXT_MAX_CHARS = 3000;
 const DEFAULT_RSS_METADATA_MAX_CHARS = 520;
-const MIN_ARTICLE_TEXT_CHARS = 220;
 
 function truncateText(value, maxLength) {
   const limit = Math.max(0, Number(maxLength) || 0);
@@ -20,10 +19,7 @@ function truncateText(value, maxLength) {
 
 function getArticleTextLimit(articleCount, options = {}) {
   const budget = parseIntegerEnv(options.envName, options.defaultBudgetChars, { min: 10000, max: 240000 });
-  return Math.max(
-    options.minArticleTextChars || MIN_ARTICLE_TEXT_CHARS,
-    Math.floor(budget / Math.max(1, Number(articleCount) || 1))
-  );
+  return Math.max(1, Math.floor(budget / Math.max(1, Number(articleCount) || 1)));
 }
 
 function buildArticlePayload(article = {}, index = 0, options = {}) {

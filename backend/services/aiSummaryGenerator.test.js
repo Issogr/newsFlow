@@ -48,7 +48,7 @@ describe('aiSummaryGenerator', () => {
       ...originalEnv,
       AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS: '10000'
     };
-    const articles = Array.from({ length: 40 }, (_, index) => ({
+    const articles = Array.from({ length: 60 }, (_, index) => ({
       id: `article-${index}`,
       title: `Article ${index}`,
       description: 'RSS description',
@@ -61,9 +61,9 @@ describe('aiSummaryGenerator', () => {
     const prompt = aiSummaryGenerator._buildPrompt({ key: 'science', label: 'Science' }, articles);
     const payload = JSON.parse(prompt.split('\n').at(-1));
 
-    expect(aiSummaryGenerator._getArticleTextLimit(articles.length)).toBe(250);
-    expect(payload.articles).toHaveLength(40);
-    expect(payload.articles[0].description.length).toBeLessThanOrEqual(250);
+    expect(aiSummaryGenerator._getArticleTextLimit(articles.length)).toBe(166);
+    expect(payload.articles).toHaveLength(60);
+    expect(payload.articles.reduce((total, article) => total + article.description.length, 0)).toBeLessThanOrEqual(10000);
     expect(payload.articles[0]).not.toHaveProperty('url');
 
     delete process.env.AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS;

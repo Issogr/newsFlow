@@ -94,6 +94,53 @@ describe('aiStoryGrouper', () => {
     expect(sendMock).not.toHaveBeenCalled();
   });
 
+  test('keeps broad topic candidates available for paraphrased or multilingual stories', async () => {
+    await aiStoryGrouper.findSimilarStoriesForArticle({
+      id: 'target-1',
+      title: 'Parliament approves a tax reform',
+      topics: ['Politica']
+    }, [{
+      id: 'candidate-1',
+      title: 'Mayor opens a new city hospital',
+      topics: ['Politica']
+    }]);
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('allows weaker lexical evidence when canonical topics overlap', async () => {
+    await aiStoryGrouper.findSimilarStoriesForArticle({
+      id: 'target-1',
+      title: 'Alpha beta gamma delta epsilon zeta eta theta iota summit',
+      topics: ['Politica']
+    }, [{
+      id: 'candidate-1',
+      title: 'Summit kappa lambda mu nu xi omicron pi rho sigma',
+      topics: ['Politica']
+    }]);
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('skips candidates already grouped deterministically', async () => {
+    const target = {
+      id: 'target-1',
+      title: 'Shared story update',
+      storyGroupId: 'story-1',
+      url: 'https://example.com/story?utm_source=rss'
+    };
+    const result = await aiStoryGrouper.findSimilarStoriesForArticle(target, [
+      { id: 'candidate-1', title: 'Shared story update', storyGroupId: 'story-1', url: 'https://other.example/story' },
+      { id: 'candidate-2', title: 'Shared story update', url: 'https://example.com/story?utm_medium=email' }
+    ]);
+
+    expect(result.skipped).toBe('no_candidates');
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(aiStoryGrouper.getCandidateSignature(target, [
+      { id: 'candidate-1', title: 'Shared story update', storyGroupId: 'story-1' }
+    ])).toEqual([]);
+  });
+
   test('defaults to DeepSeek flash when the story grouping model env var is unset', () => {
     delete process.env.OPENROUTER_STORY_GROUPING_MODEL;
 

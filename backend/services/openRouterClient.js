@@ -11,9 +11,12 @@ const {
 
 const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_TIMEOUT_MS = 120000;
+const DEFAULT_FAILURE_BACKOFF_MS = 60 * 1000;
+const DEFAULT_FAILURE_MAX_BACKOFF_MS = 15 * 60 * 1000;
 
 let openRouterSdkLoader = () => import('@openrouter/sdk');
 let openRouterSdkPromise = null;
+const failureBackoffByModel = new Map();
 
 function setOpenRouterSdkLoader(loader) {
   openRouterSdkLoader = loader || (() => import('@openrouter/sdk'));
@@ -57,6 +60,112 @@ async function createOpenRouterClient(config = {}) {
     httpReferer: String(process.env.APP_BASE_URL || 'http://localhost'),
     appTitle: 'News Flow'
   });
+}
+
+function getErrorStatus(error = {}) {
+  const status = Number(error.statusCode ?? error.response?.status ?? error.status);
+  return Number.isInteger(status) ? status : null;
+}
+
+function getErrorHeader(error = {}, name = '') {
+  const headers = error.headers || error.response?.headers || {};
+  if (typeof headers.get === 'function') {
+    return headers.get(name);
+  }
+
+  const normalizedName = String(name || '').toLowerCase();
+  const key = Object.keys(headers).find((candidate) => candidate.toLowerCase() === normalizedName);
+  return key ? headers[key] : null;
+}
+
+function getRetryAfterMs(error = {}, now = Date.now()) {
+  const value = String(getErrorHeader(error, 'retry-after') || '').trim();
+  if (!value) {
+    return 0;
+  }
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) {
+    return Math.max(0, Math.ceil(seconds * 1000));
+  }
+
+  const retryAt = Date.parse(value);
+  return Number.isFinite(retryAt) ? Math.max(0, retryAt - now) : 0;
+}
+
+function isTransientOpenRouterError(error = {}) {
+  const status = getErrorStatus(error);
+  if ([408, 425, 429].includes(status) || status >= 500) {
+    return true;
+  }
+  if (status) {
+    return false;
+  }
+
+  const signal = `${error.name || ''} ${error.code || ''} ${error.message || ''}`.toLowerCase();
+  return /timeout|timed out|abort|network|fetch|connection|econn|socket|enotfound|eai_again/u.test(signal);
+}
+
+function shouldBackoffOpenRouterError(error = {}) {
+  const status = getErrorStatus(error);
+  if (isTransientOpenRouterError(error) || [401, 402, 404].includes(status)) {
+    return true;
+  }
+  if (status !== 403) {
+    return false;
+  }
+
+  const signal = `${error.message || ''} ${error.error?.metadata?.error_type || ''} ${error.error?.metadata?.provider_code || ''}`.toLowerCase();
+  return !/moderation|guardrail|content[_ -]?filter|policy|blocked/u.test(signal);
+}
+
+function getBackoffConfig() {
+  return {
+    initialMs: parseIntegerEnv('OPENROUTER_FAILURE_BACKOFF_MS', DEFAULT_FAILURE_BACKOFF_MS, { min: 1000, max: 60 * 60 * 1000 }),
+    maxMs: parseIntegerEnv('OPENROUTER_FAILURE_MAX_BACKOFF_MS', DEFAULT_FAILURE_MAX_BACKOFF_MS, { min: 1000, max: 24 * 60 * 60 * 1000 })
+  };
+}
+
+function getBackoffKey(model = '') {
+  return String(model || '').trim().toLowerCase() || 'unknown';
+}
+
+function recordOpenRouterFailure(model, error, now = Date.now()) {
+  if (!shouldBackoffOpenRouterError(error)) {
+    return 0;
+  }
+
+  const key = getBackoffKey(model);
+  const previous = failureBackoffByModel.get(key);
+  const failureCount = (previous?.failureCount || 0) + 1;
+  const config = getBackoffConfig();
+  const delayMs = Math.min(
+    config.maxMs,
+    Math.max(getRetryAfterMs(error, now), config.initialMs * (2 ** Math.min(failureCount - 1, 4)))
+  );
+  failureBackoffByModel.set(key, { failureCount, openedAt: now, retryAt: now + delayMs });
+  return delayMs;
+}
+
+function clearOpenRouterFailure(model, requestStartedAt = Number.POSITIVE_INFINITY) {
+  const key = getBackoffKey(model);
+  const state = failureBackoffByModel.get(key);
+  if (!state || state.openedAt < requestStartedAt) {
+    failureBackoffByModel.delete(key);
+  }
+}
+
+function assertOpenRouterRequestAllowed(model, now = Date.now()) {
+  const key = getBackoffKey(model);
+  const state = failureBackoffByModel.get(key);
+  if (!state || state.retryAt <= now) {
+    return;
+  }
+
+  const error = new Error(`OpenRouter requests for model ${model || 'unknown'} are temporarily paused`);
+  error.code = 'OPENROUTER_PROVIDER_BACKOFF';
+  error.retryAfterMs = state.retryAt - now;
+  throw error;
 }
 
 function extractContentPart(value) {
@@ -149,6 +258,7 @@ function buildJsonChatRequest(request = {}) {
 
 async function sendJsonChatCompletion(openRouter, chatRequest, options = {}) {
   const request = buildJsonChatRequest(chatRequest);
+  assertOpenRouterRequestAllowed(request.model || options.metrics?.model);
   const startedAt = Date.now();
   const promptChars = getChatPromptCharCount(request);
   const baseMetric = {
@@ -165,6 +275,15 @@ async function sendJsonChatCompletion(openRouter, chatRequest, options = {}) {
     const response = await sendChatCompletion(openRouter, request, options);
     const outputChars = getChatOutputCharCount(response);
     const usage = extractUsage(response);
+    const finishReason = getFinishReason(response);
+    if (finishReason === 'error' || finishReason === 'content_filter') {
+      const responseError = response.error || response.choices?.[0]?.error || {};
+      const error = new Error(responseError.message || 'OpenRouter returned an error completion');
+      error.code = responseError.code || (finishReason === 'content_filter' ? 'OPENROUTER_CONTENT_FILTER' : 'OPENROUTER_COMPLETION_ERROR');
+      error.statusCode = Number(responseError.statusCode || responseError.status || responseError.code) || undefined;
+      error.error = responseError;
+      throw error;
+    }
 
     logAiRequestMetric({
       ...baseMetric,
@@ -172,18 +291,28 @@ async function sendJsonChatCompletion(openRouter, chatRequest, options = {}) {
       durationMs: Date.now() - startedAt,
       outputChars,
       estimatedOutputTokens: estimateTokenCountFromChars(outputChars),
-      finishReason: getFinishReason(response),
+      finishReason,
+      generationId: response.id,
+      resolvedModel: response.model,
+      serviceTier: response.serviceTier || response.service_tier,
       ...(usage || {})
     });
 
+    clearOpenRouterFailure(request.model || options.metrics?.model, startedAt);
+
     return response;
   } catch (error) {
+    const backoffMs = recordOpenRouterFailure(request.model || options.metrics?.model, error);
     logAiRequestMetric({
       ...baseMetric,
       status: 'failed',
       durationMs: Date.now() - startedAt,
       errorName: error?.name || 'Error',
-      errorCode: error?.code,
+      errorCode: error?.code ?? error?.error?.code,
+      httpStatus: getErrorStatus(error),
+      errorType: error?.error?.metadata?.error_type,
+      providerErrorCode: error?.error?.metadata?.provider_code,
+      backoffMs,
       errorMessage: error?.message
     }, 'warn');
     throw error;
@@ -191,10 +320,16 @@ async function sendJsonChatCompletion(openRouter, chatRequest, options = {}) {
 }
 
 module.exports = {
+  assertOpenRouterRequestAllowed,
+  clearOpenRouterFailure,
   createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
+  getRetryAfterMs,
+  isTransientOpenRouterError,
   parseJsonContent,
+  recordOpenRouterFailure,
   sendJsonChatCompletion,
-  setOpenRouterSdkLoader
+  setOpenRouterSdkLoader,
+  _resetFailureBackoff: () => failureBackoffByModel.clear()
 };

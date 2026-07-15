@@ -82,6 +82,7 @@ function buildSummaryArticleQuery(topicConfig, window) {
 
 let schedulerHandle = null;
 let generationPromise = null;
+let pendingGenerationOptions = [];
 let prewarmPromise = null;
 const attemptedPrewarmArticleIdsByWindow = new Map();
 const podcastAudioGenerationPromises = new Map();
@@ -103,7 +104,8 @@ const SUMMARY_TIME_ZONE = getConfiguredSummaryTimeZone();
 
 function isReaderPrewarmEnabled() {
   const enabledValue = readAiToggleValue('AI_SUMMARY_READER_PREWARM_ENABLED');
-  return enabledValue !== 'false' && aiSummaryGenerator.isAiSummaryGenerationAvailable();
+  return enabledValue !== 'false'
+    && (aiSummaryGenerator.isAiSummaryGenerationAvailable() || aiPodcastGenerator.isAiPodcastGenerationAvailable());
 }
 
 function getTimeZoneParts(date, timeZone = SUMMARY_TIME_ZONE) {
@@ -324,6 +326,9 @@ function buildPodcastSummaryId(periodStart, periodEnd) {
 }
 
 function getSummaryFailureCategory(error = {}) {
+  if (error.code === 'OPENROUTER_PROVIDER_BACKOFF') {
+    return 'provider_unavailable';
+  }
   if (error.code === 'PODCAST_SCRIPT_VALIDATION_FAILED') {
     return 'invalid_script';
   }
@@ -646,6 +651,24 @@ function selectPromptArticles(articles = [], maxArticles = 40) {
   return selected;
 }
 
+function getSelectedSummaryArticles(topicConfig, window, articleContext = null, existingArticles = null) {
+  const articles = Array.isArray(existingArticles)
+    ? existingArticles
+    : (articleContext?.getArticlesForTopic
+      ? articleContext.getArticlesForTopic(topicConfig)
+      : getArticlesForSummaryTopic(topicConfig, window));
+  return selectPromptArticles(articles, SUMMARY_PROMPT_MAX_ARTICLES);
+}
+
+function getSelectedPodcastArticles(window, articleContext = null, existingArticles = null) {
+  return selectPromptArticles(
+    Array.isArray(existingArticles)
+      ? existingArticles
+      : sortArticlesForPodcast(getCandidateArticlesForWindow(window, articleContext)),
+    PODCAST_PROMPT_MAX_ARTICLES
+  );
+}
+
 function getSummarySourceArticleIds(summary = {}) {
   return (Array.isArray(summary.sources) ? summary.sources : [])
     .map((source) => String(source?.articleId || '').trim())
@@ -931,7 +954,19 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
     const { retainedWindowEnds } = prunePrewarmAttempts(referenceDate);
     const shouldRetainAttempts = retainedWindowEnds.has(window.periodEnd);
     const attemptedArticles = shouldRetainAttempts ? (attemptedPrewarmArticleIdsByWindow.get(window.periodEnd) || new Map()) : new Map();
-    const candidateArticles = getCandidateArticlesForWindow(window);
+    const articleContext = createSummaryArticleContext(window);
+    const candidateArticlesById = new Map();
+    if (aiSummaryGenerator.isAiSummaryGenerationAvailable() || options.force === true) {
+      SUMMARY_TOPICS.forEach((topicConfig) => {
+        getSelectedSummaryArticles(topicConfig, window, articleContext)
+          .forEach((article) => candidateArticlesById.set(article.id, article));
+      });
+    }
+    if (aiPodcastGenerator.isAiPodcastGenerationAvailable() || options.force === true) {
+      getSelectedPodcastArticles(window, articleContext)
+        .forEach((article) => candidateArticlesById.set(article.id, article));
+    }
+    const candidateArticles = [...candidateArticlesById.values()];
     const readerCacheByArticleId = getReaderCacheMap(candidateArticles.map((article) => article.id));
     const candidates = candidateArticles.filter((article) => {
       return article?.id
@@ -986,7 +1021,7 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
   const articles = options.articleContext?.getArticlesForTopic
     ? options.articleContext.getArticlesForTopic(topicConfig)
     : getArticlesForSummaryTopic(topicConfig, window);
-  const selectedArticles = selectPromptArticles(articles, SUMMARY_PROMPT_MAX_ARTICLES);
+  const selectedArticles = getSelectedSummaryArticles(topicConfig, window, options.articleContext, articles);
 
   if (existingSummary?.status === 'completed' && options.force !== true) {
     if (hasSameArticleSelection(existingSummary, selectedArticles)) {
@@ -1100,7 +1135,7 @@ async function generatePodcastForWindow(window, options = {}) {
     };
   }
 
-  const enrichedArticles = selectPromptArticles(withCachedReaderText(articles), PODCAST_PROMPT_MAX_ARTICLES);
+  const enrichedArticles = withCachedReaderText(getSelectedPodcastArticles(window, options.articleContext, articles));
   const sources = buildSourceList(enrichedArticles);
   const basePayload = {
     id: buildPodcastSummaryId(window.periodStart, window.periodEnd),
@@ -1166,12 +1201,7 @@ async function generatePodcastForWindow(window, options = {}) {
   }
 }
 
-async function generateDueSummaries(options = {}) {
-  if (generationPromise && options.force !== true) {
-    return generationPromise;
-  }
-
-  generationPromise = (async () => {
+async function runDueSummaries(options = {}) {
     const referenceDate = options.referenceDate || new Date();
     const summaryWindow = options.summaryWindow || options.window || getLatestDueWindow(referenceDate);
     const podcastWindow = options.podcastWindow || options.window || getLatestDueWindow(referenceDate);
@@ -1250,6 +1280,51 @@ async function generateDueSummaries(options = {}) {
       podcastWindow,
       items: summaries
     };
+}
+
+function getGenerationOptionsKey(options = {}) {
+  const referenceDate = options.referenceDate || new Date();
+  const summaryWindow = options.summaryWindow || options.window || getLatestDueWindow(referenceDate);
+  const podcastWindow = options.podcastWindow || options.window || getLatestDueWindow(referenceDate);
+  return [summaryWindow.periodStart, summaryWindow.periodEnd, podcastWindow.periodStart, podcastWindow.periodEnd].join('|');
+}
+
+function mergeGenerationOptions(current, incoming = {}) {
+  return {
+    ...(current || {}),
+    ...incoming,
+    force: current?.force === true || incoming.force === true,
+    broadcast: (current ? current.broadcast !== false : false) || incoming.broadcast !== false
+  };
+}
+
+async function generateDueSummaries(options = {}) {
+  const optionsKey = getGenerationOptionsKey(options);
+  const pendingIndex = pendingGenerationOptions.findIndex((pending) => pending.key === optionsKey);
+  if (pendingIndex >= 0) {
+    pendingGenerationOptions[pendingIndex].options = mergeGenerationOptions(pendingGenerationOptions[pendingIndex].options, options);
+  } else {
+    pendingGenerationOptions.push({ key: optionsKey, options: mergeGenerationOptions(null, options) });
+  }
+  if (generationPromise) {
+    return generationPromise;
+  }
+
+  generationPromise = (async () => {
+    let result;
+    let firstError = null;
+    while (pendingGenerationOptions.length > 0) {
+      const nextOptions = pendingGenerationOptions.shift().options;
+      try {
+        result = await runDueSummaries(nextOptions);
+      } catch (error) {
+        firstError ||= error;
+      }
+    }
+    if (firstError) {
+      throw firstError;
+    }
+    return result;
   })().finally(() => {
     generationPromise = null;
   });
@@ -1320,6 +1395,7 @@ function stopScheduler() {
   podcastAudioGenerationTimers.forEach((timer) => clearTimeout(timer));
   podcastAudioGenerationTimers.clear();
   attemptedPrewarmArticleIdsByWindow.clear();
+  pendingGenerationOptions = [];
 }
 
 module.exports = {

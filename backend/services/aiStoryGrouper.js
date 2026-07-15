@@ -10,13 +10,15 @@ const {
   setOpenRouterSdkLoader
 } = require('./openRouterClient');
 const { truncateText } = require('./aiArticlePayload');
+const { normalizeArticleUrl } = require('../utils/articleIdentity');
 
 const DEFAULT_OPENROUTER_STORY_GROUPING_MODEL = 'deepseek/deepseek-v4-flash';
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_AI_CANDIDATE_LIMIT = 8;
 const MIN_MATCH_CONFIDENCE = 0.82;
 const STORY_GROUP_TOKEN_STOP_WORDS = new Set([
-  'a', 'ad', 'al', 'alla', 'and', 'con', 'da', 'dal', 'dalla', 'de', 'del', 'della', 'di', 'e', 'for', 'from', 'gli', 'il', 'in', 'la', 'le', 'lo', 'of', 'on', 'per', 'the', 'to', 'un', 'una', 'with'
+  'a', 'ad', 'al', 'alla', 'and', 'con', 'da', 'dal', 'dalla', 'de', 'del', 'della', 'di', 'e', 'for', 'from', 'gli', 'il', 'in', 'la', 'le', 'lo', 'of', 'on', 'per', 'the', 'to', 'un', 'una', 'with',
+  'aggiornamento', 'latest', 'live', 'news', 'notizie', 'oggi', 'today', 'ultime', 'update'
 ]);
 
 function getConfig() {
@@ -78,9 +80,21 @@ function getCandidateScore(overlapScore, topicOverlap) {
 
 function filterCandidateArticles(target = {}, candidates = [], options = {}) {
   const candidateLimit = getAiCandidateLimit(options.limit);
+  const targetGroupId = String(target.storyGroupId || '').trim();
+  const targetUrl = normalizeArticleUrl(target.canonicalUrl || target.url || '');
 
   return (Array.isArray(candidates) ? candidates : [])
-    .filter((candidate) => candidate?.id && candidate.id !== target?.id)
+    .filter((candidate) => {
+      if (!candidate?.id || candidate.id === target?.id) {
+        return false;
+      }
+      if (targetGroupId && String(candidate.storyGroupId || '').trim() === targetGroupId) {
+        return false;
+      }
+
+      const candidateUrl = normalizeArticleUrl(candidate.canonicalUrl || candidate.url || '');
+      return !targetUrl || !candidateUrl || candidateUrl !== targetUrl;
+    })
     .map((candidate) => ({
       candidate,
       overlapScore: getTokenOverlapScore(target, candidate),

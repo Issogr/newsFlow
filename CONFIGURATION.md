@@ -136,6 +136,8 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | unset | Server-side OpenRouter API key used for topic detection, clickbait detection, story grouping, summaries, podcast scripts, and TTS. |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL. Trailing slashes are removed. |
+| `OPENROUTER_FAILURE_BACKOFF_MS` | `60000` | Initial model-specific pause after transient provider, network, rate-limit, or authentication failures. Minimum `1000`, maximum `3600000`. |
+| `OPENROUTER_FAILURE_MAX_BACKOFF_MS` | `900000` | Maximum model-specific provider pause after repeated failures. Minimum `1000`, maximum `86400000`. Successful requests clear the backoff. |
 | `AI_TOPIC_DETECTION_ENABLED` | Code and Compose: `true` | Enables AI topic classification when the API key is present. Invalid values disable it. |
 | `AI_CLICKBAIT_DETECTION_ENABLED` | Code: `true`; Compose: `false` | Enables clickbait labels when the API key is present. Invalid values disable it. |
 | `AI_STORY_GROUPING_ENABLED` | Code: `true`; Compose: `false` | Enables AI-assisted story grouping when the API key is present. Invalid values disable it. |
@@ -174,7 +176,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 | `AI_STORY_GROUPING_CONCURRENCY` | `1` | Concurrent story-grouping jobs during ingestion. Minimum `1`, maximum `4`. |
 | `AI_STORY_GROUPING_WINDOW_HOURS` | `24` | Candidate article age window for grouping. Minimum `1`, maximum `72`. |
 | `AI_STORY_GROUPING_CANDIDATE_LIMIT` | `64` | Candidate articles considered before AI filtering. Minimum `8`, maximum `100`. |
-| `AI_STORY_GROUPING_AI_CANDIDATE_LIMIT` | `8` | Candidate articles sent to AI for one grouping decision. Minimum `1`, maximum `12`. |
+| `AI_STORY_GROUPING_AI_CANDIDATE_LIMIT` | `8` | Candidate articles sent to AI for one grouping decision after lexical/topic filtering. Minimum `1`, maximum `12`. |
 | `AI_STORY_GROUPING_RETRY_LIMIT` | `12` | Retry limit for deferred story grouping. Minimum `0`, maximum `50`. |
 
 ## AI Summaries And Prewarm
@@ -185,14 +187,14 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 | `AI_SUMMARY_REQUEST_TIMEOUT_MS` | `120000` | Timeout for thematic-summary requests and podcast-script requests. Strict integer, valid `1000..120000`; invalid/out-of-range falls back. |
 | `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for `08:00` and `20:00` summary and podcast slots. Invalid zones fall back to `Europe/Rome`. |
 | `THEMATIC_SUMMARY_CHECK_INTERVAL_MS` | `60000` | Scheduler interval for checking due summaries and podcasts. Minimum `1000`. |
-| `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in topic-tagged articles sent to one thematic-summary request. Minimum `1`, maximum `300`. |
+| `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in topic-tagged articles queried before deduplication and prompt selection. Minimum `1`, maximum `300`. |
 | `AI_SUMMARY_PROMPT_MAX_ARTICLES` | `60` | Max deduped/source-balanced articles included in one thematic-summary prompt. Minimum `1`, maximum `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC`. |
 | `AI_SUMMARY_GENERATION_CONCURRENCY` | `2` | Max topic summary generations run concurrently for one due window. Minimum `1`, maximum `6`. |
-| `AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS` | `30000` | Approximate total article text budget for one summary prompt. Minimum `10000`, maximum `240000`. |
+| `AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS` | `30000` | Hard aggregate description/reader-text budget divided across selected summary articles. Prompt instructions and bounded article metadata are additional. Minimum `10000`, maximum `240000`. |
 | `AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES` | `2` | Additional retries for invalid summary or podcast-script model output before treating it as terminal. Minimum `0`, maximum `10`. |
 | `AI_SUMMARY_PENDING_TOPIC_GRACE_MS` | `900000` | How long after a summary slot to wait for pending topic classification before persisting an empty window from available data. Minimum `0`, maximum `21600000`. |
 | `AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS` | `5000` | Debounce delay for summary checks triggered by completed topic-classification batches. Minimum `0`, maximum `60000`. |
-| `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarms reader-mode text before summary windows when summary generation is available. Invalid values disable it. |
+| `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarms only articles selected for enabled summary or podcast prompts before a due window. Invalid values disable it. |
 | `AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE` | `30` | Minutes before a summary slot when prewarm can start. Minimum `1`, maximum `180`. |
 | `AI_SUMMARY_READER_PREWARM_CONCURRENCY` | `2` | Concurrent reader extractions during summary prewarm. Minimum `1`, maximum `8`. |
 | `AI_SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS` | `300000` | Cooldown before retrying a failed reader prewarm attempt for the same article/window. Minimum `0`, maximum `3600000`. |
@@ -207,20 +209,24 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 | Variable | Default | Details |
 | --- | --- | --- |
 | `OPENROUTER_PODCAST_SCRIPT_MODEL` | `deepseek/deepseek-v4-flash` | Model used for podcast script generation. |
-| `AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS` | `42000` | Approximate total article text budget for one podcast script prompt. Minimum `10000`, maximum `240000`. |
+| `AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS` | `42000` | Hard aggregate description/reader-text budget divided across selected podcast articles. Prompt instructions and bounded article metadata are additional. Minimum `10000`, maximum `240000`. |
 | `AI_PODCAST_PROMPT_MAX_ARTICLES` | `40` | Max deduped/source-balanced articles included in one podcast-script prompt. Minimum `1`, maximum `300`. |
 | `AI_PODCAST_LANGUAGES` | `en` | Comma-separated podcast locales. Supported values are `en` and `it`; invalid entries are ignored. |
 | `AI_PODCAST_BACKGROUND_AUDIO_ENABLED` | `true` | Persists podcast scripts with audio marked `generating`, then runs TTS audio generation in the background. Invalid values disable background startup. |
 | `AI_PODCAST_HISTORY_RETAIN_COUNT` | `2` | Number of historical podcast entries retained. Minimum `1`, maximum `10`. |
 | `OPENROUTER_PODCAST_AUDIO_MODEL` | `google/gemini-3.1-flash-tts-preview` | Model used for podcast TTS audio generation. |
 | `AI_PODCAST_TTS_TIMEOUT_MS` | `120000` | Timeout for one podcast audio request. Strict integer, valid `1000..120000`; invalid/out-of-range falls back. |
+| `AI_PODCAST_TTS_TOTAL_TIMEOUT_MS` | `600000` | Total deadline shared by all chunks and internal retries for one locale. Minimum `1000`, maximum `1800000`. |
 | `AI_PODCAST_TTS_FORMAT` | `mp3` | Requested OpenRouter TTS `response_format`. Gemini TTS requests may need `pcm`; the backend wraps Gemini PCM into playable WAV audio when PCM is returned. |
 | `AI_PODCAST_TTS_VOICE` | `Charon` | Requested TTS voice. Gemini voices include examples such as `Charon`, `Puck`, and `Orus`. |
 | `AI_PODCAST_TTS_MAX_INPUT_BYTES` | Gemini model `3800`, otherwise `6000` | Max script input bytes sent to one TTS request. Minimum `500`, maximum `16000`. |
 | `AI_PODCAST_TTS_MIN_AUDIO_BYTES` | `1024` | Minimum accepted audio response size. Minimum `44`, maximum `100000`. |
+| `AI_PODCAST_TTS_MAX_AUDIO_BYTES` | `25165824` | Maximum accepted final audio size, including stitched WAV header and silence. Minimum `1024`, maximum `104857600`. |
 | `AI_PODCAST_TTS_CHUNK_MAX_BYTES` | Gemini model `min(700, max input)`, otherwise max input | Max script bytes per TTS chunk. Minimum `300`, maximum is `AI_PODCAST_TTS_MAX_INPUT_BYTES`. |
 | `AI_PODCAST_TTS_MAX_CHUNKS` | `12` | Max TTS chunks generated for one podcast. Minimum `1`, maximum `30`. |
 | `AI_PODCAST_TTS_CHUNK_SILENCE_MS` | `60` | Silence inserted between TTS chunks. Minimum `0`, maximum `500`. |
+| `AI_PODCAST_TTS_CHUNK_MAX_RETRIES` | `2` | Additional transient retries for only the failed TTS chunk. Minimum `0`, maximum `5`. |
+| `AI_PODCAST_TTS_CHUNK_RETRY_DELAY_MS` | `500` | Initial internal TTS chunk retry delay with bounded exponential growth. Minimum `0`, maximum `30000`. Provider `Retry-After` is honored when longer. |
 | `AI_PODCAST_TTS_RETRY_COOLDOWN_MS` | `600000` | Cooldown before retrying failed podcast audio. Minimum `0`, maximum `86400000`. |
 | `AI_PODCAST_TTS_MAX_RETRIES` | `4` | Max podcast TTS retries. Minimum `0`, maximum `20`. |
 
