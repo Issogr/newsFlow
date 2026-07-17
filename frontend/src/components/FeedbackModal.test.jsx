@@ -18,10 +18,6 @@ function renderFeedbackModal(locale = 'en') {
 }
 
 describe('FeedbackModal', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   test('shows compact localized categories and contextual guidance', () => {
     renderFeedbackModal('en');
 

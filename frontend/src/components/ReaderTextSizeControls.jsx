@@ -1,5 +1,5 @@
 import { READER_TEXT_SIZE_ORDER } from '../config/readerTextSize';
-import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
+import { setStoredReaderTextSizePreference } from '../utils/readerPreferences';
 import ReaderStepControls from './ReaderStepControls';
 
 const ReaderTextSizeControls = ({ currentUser, onChange, t, value }) => (

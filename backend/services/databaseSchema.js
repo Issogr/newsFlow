@@ -725,7 +725,7 @@ function createDatabaseSchema({ logger }) {
         SELECT id, user_id AS userId, url
         FROM user_sources
       `).all().filter((source) => {
-        const urlKey = normalizeArticleUrl(source.url || '') || String(source.url || '').trim();
+        const urlKey = normalizeArticleUrl(source.url || '');
         return configuredSourceUrlKeys.has(urlKey);
       });
       const sourceExclusionColumn = getColumnNames(database, 'user_settings').has('excluded_source_ids')

@@ -1,5 +1,5 @@
 import { READER_TEXT_WIDTH_ORDER } from '../config/readerTextWidth';
-import { setStoredReaderTextWidthPreference } from '../utils/readerTextWidthPreference';
+import { setStoredReaderTextWidthPreference } from '../utils/readerPreferences';
 import ReaderStepControls from './ReaderStepControls';
 
 const WIDTH_INDICATORS = {

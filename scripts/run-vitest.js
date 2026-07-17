@@ -3,7 +3,6 @@
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { createRequire } = require('module');
-const { getStableNodeRuntimeArgs } = require('./nodeRuntimeFlags');
 
 const projectRequire = createRequire(path.join(process.cwd(), 'package.json'));
 const vitestPackagePath = projectRequire.resolve('vitest/package.json');
@@ -28,9 +27,7 @@ for (let index = 0; index < userArgs.length; index += 1) {
 
 const shouldRunOnce = !normalizedArgs.includes('--watch') && !normalizedArgs.includes('--ui');
 const vitestArgs = shouldRunOnce ? ['run', ...normalizedArgs] : normalizedArgs;
-const nodeArgs = getStableNodeRuntimeArgs();
-
-const result = spawnSync(process.execPath, [...nodeArgs, vitestBinPath, ...vitestArgs], {
+const result = spawnSync(process.execPath, ['--no-experimental-webstorage', vitestBinPath, ...vitestArgs], {
   stdio: 'inherit'
 });
 

@@ -79,12 +79,7 @@ function flushAuthenticatedPublicApiUsage({ force = false } = {}) {
       database.incrementUserPublicApiUsage(userId, usage.usedAt, usage.count);
     });
 
-    const db = database.getDb();
-    if (db && typeof db.transaction === 'function') {
-      db.transaction(flushEntries)();
-    } else {
-      flushEntries();
-    }
+    database.getDb().transaction(flushEntries)();
   } catch (error) {
     pendingEntries.forEach(([userId, usage]) => {
       const current = pendingAuthenticatedPublicApiRequests.get(userId) || { count: 0, usedAt: usage.usedAt };
@@ -329,11 +324,10 @@ function buildUserPayload(user) {
   };
 }
 
-function buildAuthResponse(user, sessionToken) {
+function buildCurrentUserResponse(user) {
   const features = getUserFeatures();
 
   return {
-    token: sessionToken,
     user: buildUserPayload(user),
     settings: getUserSettings(user.id),
     limits: getUserLimits(),
@@ -342,6 +336,10 @@ function buildAuthResponse(user, sessionToken) {
     customSources: database.listUserSources(user.id),
     apiToken: features.publicApi.authenticatedEnabled ? getUserApiToken(user.id) : null
   };
+}
+
+function buildAuthResponse(user, sessionToken) {
+  return { token: sessionToken, ...buildCurrentUserResponse(user) };
 }
 
 function getUserFeatures() {
@@ -516,15 +514,7 @@ function getCurrentUser(userId) {
     throw createError(404, 'User not found', 'RESOURCE_NOT_FOUND');
   }
 
-  return {
-    user: buildUserPayload(user),
-    settings: getUserSettings(userId),
-    limits: getUserLimits(),
-    features: getUserFeatures(),
-    sourceCatalog: getConfiguredSourceGroups(),
-    customSources: database.listUserSources(userId),
-    apiToken: isAuthenticatedPublicApiEnabled() ? getUserApiToken(userId) : null
-  };
+  return buildCurrentUserResponse(user);
 }
 
 function createApiTokenLabel(label) {
@@ -582,9 +572,7 @@ function revokeUserApiToken(userId) {
 
 function updateUserSettings(userId, payload = {}) {
   const currentSettings = getUserSettings(userId);
-  const settings = database.upsertUserSettings(userId, normalizeUserSettingsPayload(payload, currentSettings));
-
-  return settings;
+  return database.upsertUserSettings(userId, normalizeUserSettingsPayload(payload, currentSettings));
 }
 
 async function addUserSource(userId, payload = {}) {

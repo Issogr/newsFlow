@@ -1,6 +1,6 @@
 const http = require('http');
 const path = require('path');
-const { URL } = require('url');
+const { promisify } = require('node:util');
 const express = require('express');
 const compression = require('compression');
 const helmet = require('helmet');
@@ -24,7 +24,6 @@ const {
   loadUpgradeSession,
   normalizeSessionState,
   persistSessionUserId,
-  renewSessionExpiryIfNeeded,
   saveExpressSession,
   upsertStoredSessionUser
 } = require('./lib/sessionStore');
@@ -50,8 +49,6 @@ const UPSTREAM_ERROR_RESPONSE = {
   },
 };
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-const runtimeFetch = globalThis.fetch;
-const RuntimeAbortSignal = globalThis.AbortSignal;
 
 function getTrustProxySetting(value = process.env.TRUST_PROXY) {
   const normalized = String(value || '').trim();
@@ -106,40 +103,15 @@ async function normalizeBackendResponse(response) {
   };
 }
 
-function regenerateSession(req) {
-  return new Promise((resolve, reject) => {
-    req.session.regenerate((error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve();
-    });
-  });
-}
-
 function createApp(options = {}) {
   const backendBaseUrl = String(options.backendBaseUrl || process.env.BACKEND_BASE_URL || 'http://backend:5000').trim().replace(/\/+$/, '');
   const frontendDistDir = options.frontendDistDir || process.env.FRONTEND_DIST_DIR || DEFAULT_FRONTEND_DIST_DIR;
   const internalProxyToken = getInternalProxyToken();
-  const createdSessionStore = createSessionStore(options);
-  const sessionStore = createdSessionStore.store;
-  const sessionDb = createdSessionStore.db;
+  const { store: sessionStore, db: sessionDb } = createSessionStore(options);
   const sessionSecret = getBffSessionSecret();
   const sessionMiddleware = buildSessionMiddleware(sessionStore, sessionSecret);
   const configuredAppOrigin = String(options.appBaseUrl || process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim().replace(/\/+$/, '');
-  const configuredExpectedOrigin = (() => {
-    if (!configuredAppOrigin) {
-      return '';
-    }
-
-    try {
-      return new URL(configuredAppOrigin).origin;
-    } catch {
-      return configuredAppOrigin;
-    }
-  })();
+  const configuredExpectedOrigin = globalThis.URL.parse(configuredAppOrigin)?.origin || configuredAppOrigin;
   const app = express();
   const jsonParser = express.json({ limit: '1mb' });
 
@@ -209,15 +181,7 @@ function createApp(options = {}) {
   }
 
   function headerMatchesExpectedOrigin(value, expectedOrigin) {
-    if (!value) {
-      return false;
-    }
-
-    try {
-      return new URL(value).origin === expectedOrigin;
-    } catch {
-      return false;
-    }
+    return globalThis.URL.parse(value)?.origin === expectedOrigin;
   }
 
   function hasSameOriginRequestHeaders(req, options = {}) {
@@ -260,7 +224,7 @@ function createApp(options = {}) {
   const requireSameOriginSocketRequest = requireSameOriginRequest({ allowMissingHeaders: true });
 
   async function requestInternalBackend(req, pathName, options = {}) {
-    const url = new URL(`/internal-api${pathName}`, `${backendBaseUrl}/`);
+    const url = new globalThis.URL(`/internal-api${pathName}`, `${backendBaseUrl}/`);
     appendQueryParams(url, options.params);
 
     const headers = {
@@ -271,7 +235,7 @@ function createApp(options = {}) {
       method: req.method,
       headers,
       redirect: 'manual',
-      signal: RuntimeAbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      signal: globalThis.AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     };
 
     if (Object.prototype.hasOwnProperty.call(options, 'data')) {
@@ -279,7 +243,7 @@ function createApp(options = {}) {
       requestOptions.body = JSON.stringify(options.data);
     }
 
-    return normalizeBackendResponse(await runtimeFetch(url, requestOptions));
+    return normalizeBackendResponse(await globalThis.fetch(url, requestOptions));
   }
 
   function sendBackendResponse(res, response) {
@@ -317,9 +281,7 @@ function createApp(options = {}) {
     }
 
     if (ws && includeBackendSession) {
-      on.proxyReqWs = (proxyReq, req) => {
-        applyBackendSessionProxyHeaders(proxyReq, req);
-      };
+      on.proxyReqWs = on.proxyReq;
     }
 
     return createProxyMiddleware({
@@ -331,38 +293,34 @@ function createApp(options = {}) {
     });
   }
 
-  async function handleSessionAuthRequest(req, res, next, pathName) {
-    try {
-      const response = await requestInternalBackend(req, pathName, {
-        data: req.body || {},
-        params: req.query,
-      });
+  async function handleSessionAuthRequest(req, res, pathName) {
+    const response = await requestInternalBackend(req, pathName, {
+      data: req.body || {},
+      params: req.query,
+    });
 
-      const backendSessionCookie = extractBackendSessionCookie(response.headers['set-cookie']);
+    const backendSessionCookie = extractBackendSessionCookie(response.headers['set-cookie']);
 
-      if (response.status >= 200 && response.status < 300) {
-        if (!backendSessionCookie) {
-          res.status(502).json({
-            error: {
-              message: 'Authentication bridge failed to establish a backend session.',
-              code: 'BFF_SESSION_ERROR',
-            },
-          });
-          return;
-        }
-
-        await regenerateSession(req);
-        req.session.version = SESSION_SCHEMA_VERSION;
-        req.session.backendSessionCookie = encryptBackendSessionCookie(backendSessionCookie);
-        req.session.userId = response.data?.user?.id || '';
-        await saveExpressSession(req.session);
-        upsertStoredSessionUser(sessionDb, req.sessionID, req.session.userId);
+    if (response.status >= 200 && response.status < 300) {
+      if (!backendSessionCookie) {
+        res.status(502).json({
+          error: {
+            message: 'Authentication bridge failed to establish a backend session.',
+            code: 'BFF_SESSION_ERROR',
+          },
+        });
+        return;
       }
 
-      sendBackendResponse(res, response);
-    } catch (error) {
-      next(error);
+      await promisify(req.session.regenerate).call(req.session);
+      req.session.version = SESSION_SCHEMA_VERSION;
+      req.session.backendSessionCookie = encryptBackendSessionCookie(backendSessionCookie);
+      req.session.userId = response.data?.user?.id || '';
+      await saveExpressSession(req.session);
+      upsertStoredSessionUser(sessionDb, req.sessionID, req.session.userId);
     }
+
+    sendBackendResponse(res, response);
   }
 
   function serveSpaIndex(res) {
@@ -422,50 +380,39 @@ function createApp(options = {}) {
     sessionMiddleware(req, res, next);
   });
   app.use(normalizeSessionState);
-  app.use(renewSessionExpiryIfNeeded);
 
   [
     ['/api/auth/register', '/auth/register'],
     ['/api/auth/login', '/auth/login'],
     ['/api/auth/password-setup/complete', '/auth/password-setup/complete']
   ].forEach(([routePath, backendPath]) => {
-    app.post(routePath, requireSameOriginUnsafeRequest, jsonParser, (req, res, next) => {
-      handleSessionAuthRequest(req, res, next, backendPath);
+    app.post(routePath, requireSameOriginUnsafeRequest, jsonParser, (req, res) => handleSessionAuthRequest(req, res, backendPath));
+  });
+
+  app.get('/api/auth/password-setup/validate', async (req, res) => {
+    const response = await requestInternalBackend(req, '/auth/password-setup/validate', {
+      params: req.query,
     });
+
+    sendBackendResponse(res, response);
   });
 
-  app.get('/api/auth/password-setup/validate', async (req, res, next) => {
-    try {
-      const response = await requestInternalBackend(req, '/auth/password-setup/validate', {
-        params: req.query,
-      });
+  app.get('/api/me', async (req, res) => {
+    const backendSessionCookie = getBackendSessionCookieFromRequest(req);
+    const response = await requestInternalBackend(req, '/me', {
+      backendSessionCookie,
+    });
 
-      sendBackendResponse(res, response);
-    } catch (error) {
-      next(error);
+    if (response.status === 401) {
+      await clearLocalSession(req, res);
+    } else {
+      await persistSessionUserId(req, response.data?.user?.id || '', sessionDb);
     }
+
+    sendBackendResponse(res, response);
   });
 
-  app.get('/api/me', async (req, res, next) => {
-    try {
-      const backendSessionCookie = getBackendSessionCookieFromRequest(req);
-      const response = await requestInternalBackend(req, '/me', {
-        backendSessionCookie,
-      });
-
-      if (response.status === 401) {
-        await clearLocalSession(req, res);
-      } else {
-        await persistSessionUserId(req, response.data?.user?.id || '', sessionDb);
-      }
-
-      sendBackendResponse(res, response);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.post('/api/auth/logout', requireSameOriginUnsafeRequest, async (req, res, next) => {
+  app.post('/api/auth/logout', requireSameOriginUnsafeRequest, async (req, res) => {
     const backendSessionCookie = getBackendSessionCookieFromRequest(req);
     let backendResponse = null;
 
@@ -478,18 +425,14 @@ function createApp(options = {}) {
       }
     } catch {}
 
-    try {
-      await clearLocalSession(req, res);
+    await clearLocalSession(req, res);
 
-      if (backendResponse?.status && backendResponse.status < 500) {
-        sendBackendResponse(res, backendResponse);
-        return;
-      }
-
-      res.status(200).json({ success: true });
-    } catch (error) {
-      next(error);
+    if (backendResponse?.status && backendResponse.status < 500) {
+      sendBackendResponse(res, backendResponse);
+      return;
     }
+
+    res.status(200).json({ success: true });
   });
 
   app.use('/api', requireBackendSession, requireSameOriginUnsafeRequest, appApiProxy);

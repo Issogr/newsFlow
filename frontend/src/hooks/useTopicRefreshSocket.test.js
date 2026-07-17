@@ -11,7 +11,6 @@ describe('useTopicRefreshSocket', () => {
   let socket;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     handlers = new Map();
     socket = {
       on: vi.fn((event, handler) => handlers.set(event, handler)),

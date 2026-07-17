@@ -256,28 +256,26 @@ async function refreshUserSources(userId, options = {}) {
     return createEmptyRefreshPayload(getLastRefreshAt());
   }
 
-  return (async () => {
-    const selectedSourceIds = Array.isArray(options.sourceIds) && options.sourceIds.length > 0
-      ? new Set(options.sourceIds)
-      : null;
-    const activeSources = database.listUserSources(userId)
-      .filter((source) => source?.isActive !== false)
-      .filter((source) => !selectedSourceIds || selectedSourceIds.has(source.id));
+  const selectedSourceIds = Array.isArray(options.sourceIds) && options.sourceIds.length > 0
+    ? new Set(options.sourceIds)
+    : null;
+  const activeSources = database.listUserSources(userId)
+    .filter((source) => source?.isActive !== false)
+    .filter((source) => !selectedSourceIds || selectedSourceIds.has(source.id));
 
-    if (activeSources.length === 0) {
-      return createEmptyRefreshPayload(getLastRefreshAt());
-    }
+  if (activeSources.length === 0) {
+    return createEmptyRefreshPayload(getLastRefreshAt());
+  }
 
-    return ingestSourceConfigs(expandUserSources(activeSources), {
-      broadcast: options.broadcast === true,
-      includeMaintenance: false,
-      failWhenEmpty: false,
-      bypassSourceFailureBackoff: options.bypassSourceFailureBackoff === true,
-      bypassSourceFreshness: options.bypassSourceFreshness !== false,
-      updateRefreshTimestamp: false,
-      trackIngestionRun: false
-    }, getIngestionRuntime());
-  })();
+  return ingestSourceConfigs(expandUserSources(activeSources), {
+    broadcast: options.broadcast === true,
+    includeMaintenance: false,
+    failWhenEmpty: false,
+    bypassSourceFailureBackoff: options.bypassSourceFailureBackoff === true,
+    bypassSourceFreshness: options.bypassSourceFreshness !== false,
+    updateRefreshTimestamp: false,
+    trackIngestionRun: false
+  }, getIngestionRuntime());
 }
 
 function startSeedDataRefresh() {

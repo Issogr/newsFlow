@@ -528,22 +528,8 @@ function createSummaryArticleContext(window) {
   };
 }
 
-function getReaderCacheMap(articleIds = []) {
-  const normalizedArticleIds = [...new Set((Array.isArray(articleIds) ? articleIds : [])
-    .map((articleId) => String(articleId || '').trim())
-    .filter(Boolean))];
-
-  if (normalizedArticleIds.length === 0) {
-    return new Map();
-  }
-
-  return database.getReaderCaches(normalizedArticleIds, null);
-}
-
-function getCachedReaderText(articleId, cacheByArticleId = null) {
-  const cached = cacheByArticleId instanceof Map
-    ? cacheByArticleId.get(articleId)
-    : database.getReaderCache(articleId, null);
+function getCachedReaderText(articleId, cacheByArticleId) {
+  const cached = cacheByArticleId.get(articleId);
   if (!isUsefulReaderText(cached?.contentText)) {
     return '';
   }
@@ -552,7 +538,7 @@ function getCachedReaderText(articleId, cacheByArticleId = null) {
 }
 
 function withCachedReaderText(articles = []) {
-  const cacheByArticleId = getReaderCacheMap(articles.map((article) => article.id));
+  const cacheByArticleId = database.getReaderCaches(articles.map((article) => article.id), null);
 
   return articles.map((article) => ({
     ...article,
@@ -779,9 +765,7 @@ function getPodcastAudioLocalesToGenerate(summary = {}, options = {}) {
   return localesWithScripts.filter((locale) => {
     const audio = summary.audioByLocale?.[locale] || (summary.audioLocale === locale ? summary : null) || {};
     const sameAudioConfig = isSamePodcastAudioConfig(audio, ttsConfig, expectedVoice);
-    const audioMatchesConfig = audio.audioStatus === 'completed'
-      && audio.audioModel === ttsConfig.model
-      && audio.audioVoice === expectedVoice;
+    const audioMatchesConfig = audio.audioStatus === 'completed' && sameAudioConfig;
     if (audioMatchesConfig) {
       return false;
     }
@@ -800,14 +784,14 @@ function shouldRetryPodcastAudio(summary = {}, options = {}) {
 }
 
 async function retryPodcastAudio(summary = {}, options = {}) {
-  if (!shouldRetryPodcastAudio(summary, options)) {
+  const localesToGenerate = getPodcastAudioLocalesToGenerate(summary, options);
+  if (localesToGenerate.length === 0) {
     return { summary, generatedNow: false };
   }
 
   const ttsConfig = aiPodcastGenerator._getTtsConfig();
   const expectedVoice = aiPodcastGenerator._getTtsVoice();
   const scriptTextByLocale = getPodcastScriptTextByLocale(summary);
-  const localesToGenerate = getPodcastAudioLocalesToGenerate(summary, options);
   const generatingAudioByLocale = Object.fromEntries(localesToGenerate.map((locale) => {
     const audio = summary.audioByLocale?.[locale] || {};
     const sameAudioConfig = isSamePodcastAudioConfig(audio, ttsConfig, expectedVoice);
@@ -967,7 +951,7 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
         .forEach((article) => candidateArticlesById.set(article.id, article));
     }
     const candidateArticles = [...candidateArticlesById.values()];
-    const readerCacheByArticleId = getReaderCacheMap(candidateArticles.map((article) => article.id));
+    const readerCacheByArticleId = database.getReaderCaches(candidateArticles.map((article) => article.id), null);
     const candidates = candidateArticles.filter((article) => {
       return article?.id
         && (options.force === true || isPrewarmAttemptDue(attemptedArticles.get(article.id), referenceDate))

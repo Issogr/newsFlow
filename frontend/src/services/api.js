@@ -37,52 +37,32 @@ api.interceptors.response.use(
   }
 );
 
-export const isRequestCanceled = (error) => {
-  return axios.isCancel?.(error) || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';
-};
+export const isRequestCanceled = (error) => axios.isCancel?.(error) || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';
 
 async function responseData(request) {
   const response = await request;
   return response.data;
 }
 
-export const registerUser = async ({ username, password }) => {
-  return responseData(api.post('/auth/register', { username, password }));
-};
+export const registerUser = async ({ username, password }) => responseData(api.post('/auth/register', { username, password }));
 
-export const loginUser = async ({ username, password }) => {
-  return responseData(api.post('/auth/login', { username, password }));
-};
+export const loginUser = async ({ username, password }) => responseData(api.post('/auth/login', { username, password }));
 
-export const validatePasswordSetupToken = async (token) => {
-  return responseData(api.get('/auth/password-setup/validate', {
-    params: { token }
-  }));
-};
+export const validatePasswordSetupToken = async (token) => responseData(api.get('/auth/password-setup/validate', {
+  params: { token }
+}));
 
-export const completePasswordSetup = async ({ token, password }) => {
-  return responseData(api.post('/auth/password-setup/complete', { token, password }));
-};
+export const completePasswordSetup = async ({ token, password }) => responseData(api.post('/auth/password-setup/complete', { token, password }));
 
-export const logoutUser = async () => {
-  return responseData(api.post('/auth/logout'));
-};
+export const logoutUser = async () => responseData(api.post('/auth/logout'));
 
-export const fetchCurrentUser = async () => {
-  return responseData(api.get('/me'));
-};
+export const fetchCurrentUser = async () => responseData(api.get('/me'));
 
-export const createApiToken = async (payload = {}) => {
-  return responseData(api.post('/me/api-token', payload));
-};
+export const createApiToken = async (payload = {}) => responseData(api.post('/me/api-token', payload));
 
-export const revokeApiToken = async () => {
-  return responseData(api.delete('/me/api-token'));
-};
+export const revokeApiToken = async () => responseData(api.delete('/me/api-token'));
 
-export const updateUserSettings = async (payload) => {
-  return responseData(api.patch('/me/settings', payload));
-};
+export const updateUserSettings = async (payload) => responseData(api.patch('/me/settings', payload));
 
 export const submitFeedback = async ({ category, title, description, attachment = null }) => {
   const formData = new FormData();
@@ -99,37 +79,21 @@ export const submitFeedback = async ({ category, title, description, attachment 
   }));
 };
 
-export const exportUserSettings = async () => {
-  return responseData(api.get('/me/settings/export'));
-};
+export const exportUserSettings = async () => responseData(api.get('/me/settings/export'));
 
-export const importUserSettings = async (payload) => {
-  return responseData(api.post('/me/settings/import', payload));
-};
+export const importUserSettings = async (payload) => responseData(api.post('/me/settings/import', payload));
 
-export const addUserSource = async (payload) => {
-  return responseData(api.post('/me/sources', payload));
-};
+export const addUserSource = async (payload) => responseData(api.post('/me/sources', payload));
 
-export const updateUserSource = async (sourceId, payload) => {
-  return responseData(api.patch(`/me/sources/${sourceId}`, payload));
-};
+export const updateUserSource = async (sourceId, payload) => responseData(api.patch(`/me/sources/${sourceId}`, payload));
 
-export const deleteUserSource = async (sourceId) => {
-  return responseData(api.delete(`/me/sources/${sourceId}`));
-};
+export const deleteUserSource = async (sourceId) => responseData(api.delete(`/me/sources/${sourceId}`));
 
-export const fetchAdminUsers = async ({ signal } = {}) => {
-  return responseData(api.get('/admin/users', { signal }));
-};
+export const fetchAdminUsers = async ({ signal } = {}) => responseData(api.get('/admin/users', { signal }));
 
-export const createAdminPasswordSetupLink = async (userId) => {
-  return responseData(api.post(`/admin/users/${userId}/password-setup-link`));
-};
+export const createAdminPasswordSetupLink = async (userId) => responseData(api.post(`/admin/users/${userId}/password-setup-link`));
 
-export const deleteAdminUser = async (userId) => {
-  return responseData(api.delete(`/admin/users/${userId}`));
-};
+export const deleteAdminUser = async (userId) => responseData(api.delete(`/admin/users/${userId}`));
 
 function buildFeedParams({
   page = 1,
@@ -203,31 +167,22 @@ export const fetchReadLaterNews = async ({
   includeFilters = true,
   signal
 } = {}) => {
-  const params = buildFeedParams({ page, pageSize, search, sourceIds, topics, includeFilters });
-
-  return responseData(api.get('/read-later', { params, signal }));
-};
-
-export const fetchThematicSummaries = async ({ signal } = {}) => {
-  return responseData(api.get('/thematic-summaries', { signal }));
-};
-
-export const markThematicSummariesRead = async (summaryIds = []) => {
-  return responseData(api.post('/me/thematic-summaries/read', { summaryIds }));
-};
-
-export const saveReadLaterArticles = async (articleIds = []) => {
-  return responseData(api.post('/me/read-later', { articleIds }));
-};
-
-export const removeReadLaterArticles = async (articleIds = []) => {
-  return responseData(api.post('/me/read-later/remove', { articleIds }));
-};
-
-export const fetchReaderArticle = async (articleId, { refresh = false, signal } = {}) => {
-  return responseData(api.get(`/articles/${encodeURIComponent(articleId)}/reader`, {
-    params: refresh ? { refresh: 'true' } : undefined,
-    signal,
-    timeout: READER_REQUEST_TIMEOUT_MS
+  return responseData(api.get('/read-later', {
+    params: buildFeedParams({ page, pageSize, search, sourceIds, topics, includeFilters }),
+    signal
   }));
 };
+
+export const fetchThematicSummaries = async ({ signal } = {}) => responseData(api.get('/thematic-summaries', { signal }));
+
+export const markThematicSummariesRead = async (summaryIds = []) => responseData(api.post('/me/thematic-summaries/read', { summaryIds }));
+
+export const saveReadLaterArticles = async (articleIds = []) => responseData(api.post('/me/read-later', { articleIds }));
+
+export const removeReadLaterArticles = async (articleIds = []) => responseData(api.post('/me/read-later/remove', { articleIds }));
+
+export const fetchReaderArticle = async (articleId, { refresh = false, signal } = {}) => responseData(api.get(`/articles/${encodeURIComponent(articleId)}/reader`, {
+  params: refresh ? { refresh: 'true' } : undefined,
+  signal,
+  timeout: READER_REQUEST_TIMEOUT_MS
+}));

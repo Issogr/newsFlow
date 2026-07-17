@@ -370,7 +370,6 @@ function isAiTopicDetectionAvailable() {
 module.exports = {
   classifyTopicDetailsForArticlesWithStatus,
   isAiTopicDetectionAvailable,
-  _buildPrompt: buildPrompt,
   _getConfig: getConfig,
   _getCompletionTokenBudget: getCompletionTokenBudget,
   _normalizeClassifierDetails: normalizeClassifierDetails,

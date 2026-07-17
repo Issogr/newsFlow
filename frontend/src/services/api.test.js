@@ -37,7 +37,6 @@ vi.mock('axios', () => {
 
 describe('api service', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     axios.isCancel.mockReturnValue(false);
     window.localStorage.clear();
   });

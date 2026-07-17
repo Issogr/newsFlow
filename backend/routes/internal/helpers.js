@@ -8,14 +8,9 @@ const { buildUserContext } = require('../../utils/userContext');
 const logger = require('../../utils/logger');
 
 function refreshUserSourcesInBackground(userId, options = {}, label = 'user sources') {
-  try {
-    Promise.resolve(newsService.refreshUserSources(userId, options))
-      .catch((error) => {
-        logger.warn(`Background refresh failed for ${label}: ${error.message}`);
-      });
-  } catch (error) {
+  newsService.refreshUserSources(userId, options).catch((error) => {
     logger.warn(`Background refresh failed for ${label}: ${error.message}`);
-  }
+  });
 }
 
 function refreshUserSourceInBackground(userId, sourceId) {

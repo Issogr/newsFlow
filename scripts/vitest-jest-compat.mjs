@@ -119,20 +119,12 @@ globalThis.jest = {
   fn: createMockFunction,
   spyOn: (...args) => vi.spyOn(...args),
   clearAllMocks: () => vi.clearAllMocks(),
-  resetAllMocks: () => vi.resetAllMocks(),
-  restoreAllMocks: () => vi.restoreAllMocks(),
   useFakeTimers: (...args) => vi.useFakeTimers(...args),
   useRealTimers: () => vi.useRealTimers(),
   advanceTimersByTime: (...args) => vi.advanceTimersByTime(...args),
   setSystemTime: (...args) => vi.setSystemTime(...args),
-  getRealSystemTime: () => vi.getRealSystemTime(),
   mock: registerMock,
   doMock: registerMock,
-  unmock(request) {
-    const resolvedRequest = resolveRequestFromCaller(request);
-    state.mockFactories.delete(resolvedRequest);
-    state.mockInstances.delete(resolvedRequest);
-  },
   resetModules() {
     state.mockFactories.clear();
     clearProjectRequireCache();
@@ -140,25 +132,5 @@ globalThis.jest = {
   isolateModules(callback) {
     clearProjectRequireCache();
     callback();
-  },
-  requireActual(request) {
-    const resolvedRequest = resolveRequestFromCaller(request);
-    const hadMock = state.mockFactories.has(resolvedRequest);
-    const mockFactory = state.mockFactories.get(resolvedRequest);
-    const mockInstance = state.mockInstances.get(resolvedRequest);
-
-    state.mockFactories.delete(resolvedRequest);
-    state.mockInstances.delete(resolvedRequest);
-
-    try {
-      return require(resolvedRequest);
-    } finally {
-      if (hadMock) {
-        state.mockFactories.set(resolvedRequest, mockFactory);
-        if (mockInstance !== undefined) {
-          state.mockInstances.set(resolvedRequest, mockInstance);
-        }
-      }
-    }
   }
 };

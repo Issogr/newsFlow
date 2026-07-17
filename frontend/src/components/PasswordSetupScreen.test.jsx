@@ -11,10 +11,6 @@ vi.mock('../services/api', () => ({
 describe('PasswordSetupScreen', () => {
   const t = createTranslator('en');
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   test('validates the token and completes password setup', async () => {
     const onComplete = vi.fn();
 

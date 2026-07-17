@@ -397,12 +397,11 @@ function createArticleRepository({
     });
 
     const canonicalUrlsByOwner = new Map();
-    canonicalRowsByKey.forEach((rows, key) => {
+    canonicalRowsByKey.forEach((_, key) => {
       const [ownerUserId, canonicalUrl] = key.split('\u0000');
       const urls = canonicalUrlsByOwner.get(ownerUserId) || [];
       urls.push(canonicalUrl);
       canonicalUrlsByOwner.set(ownerUserId, urls);
-      canonicalRowsByKey.set(key, rows);
     });
 
     canonicalUrlsByOwner.forEach((urls, ownerUserId) => {

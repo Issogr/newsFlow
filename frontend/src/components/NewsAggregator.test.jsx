@@ -173,7 +173,6 @@ describe('NewsAggregator', () => {
   let desktopMediaQuery;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.useFakeTimers();
     Object.defineProperty(window, 'scrollY', {
       value: 0,

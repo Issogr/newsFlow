@@ -68,7 +68,6 @@ describe('AdminDashboard', () => {
   }
 
   beforeEach(() => {
-    vi.clearAllMocks();
     window.confirm = vi.fn(() => true);
   });
 

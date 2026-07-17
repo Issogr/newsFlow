@@ -77,10 +77,8 @@ function getCookieSecureSetting() {
     return false;
   }
 
-  if (cookieSecureValue !== 'auto') {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('COOKIE_SECURE must be one of: auto, true, false.');
-    }
+  if (cookieSecureValue !== 'auto' && process.env.NODE_ENV === 'production') {
+    throw new Error('COOKIE_SECURE must be one of: auto, true, false.');
   }
 
   const appBaseUrl = String(process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim();

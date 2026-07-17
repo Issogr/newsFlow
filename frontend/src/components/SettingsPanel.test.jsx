@@ -36,7 +36,6 @@ const renderPanel = (overrides = {}) => {
 
 describe('SettingsPanel', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     window.localStorage.clear();
   });
 

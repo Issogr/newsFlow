@@ -122,7 +122,7 @@ function createEmptyRefreshPayload(lastRefreshAt = null) {
 }
 
 function normalizeSourceFetchUrl(url) {
-  return normalizeArticleUrl(url || '') || String(url || '').trim();
+  return normalizeArticleUrl(url || '');
 }
 
 function getSourceFetchKey(source = {}) {

@@ -89,7 +89,6 @@ describe('ReaderPanel', () => {
   const originalClipboard = navigator.clipboard;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     document.body.style.overflow = '';
   });
 

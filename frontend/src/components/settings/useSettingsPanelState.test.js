@@ -34,7 +34,6 @@ const renderSettingsHook = (overrides = {}) => {
 
 describe('useSettingsPanelState', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     window.localStorage.clear();
   });
 

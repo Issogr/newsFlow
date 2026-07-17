@@ -20,8 +20,7 @@ import useLatestRequest from '../hooks/useLatestRequest';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
-import { setStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
-import { setStoredReaderTextWidthPreference } from '../utils/readerTextWidthPreference';
+import { setStoredReaderTextSizePreference, setStoredReaderTextWidthPreference } from '../utils/readerPreferences';
 import {
   buildFeedRequestParams,
   getGroupMergeKeys,

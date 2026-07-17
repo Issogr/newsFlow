@@ -1,8 +1,7 @@
 const winston = require('winston');
-const { format } = require('winston');
 
 // Custom formatting for console output.
-const consoleFormat = format.printf(({ level, message, timestamp, ...meta }) => {
+const consoleFormat = winston.format.printf(({ level, message, timestamp, ...meta }) => {
   const metaStr = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
   return `${timestamp} [${level.toUpperCase()}]: ${message} ${metaStr}`;
 });
