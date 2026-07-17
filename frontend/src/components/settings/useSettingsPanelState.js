@@ -9,8 +9,12 @@ import {
   updateUserSource,
   updateUserSettings
 } from '../../services/api';
-import { getStoredReaderTextSizePreference, setStoredReaderTextSizePreference } from '../../utils/readerTextSizePreference';
-import { getStoredReaderTextWidthPreference, setStoredReaderTextWidthPreference } from '../../utils/readerTextWidthPreference';
+import {
+  getStoredReaderTextSizePreference,
+  getStoredReaderTextWidthPreference,
+  setStoredReaderTextSizePreference,
+  setStoredReaderTextWidthPreference
+} from '../../utils/readerPreferences';
 
 const createInitialSourceForm = () => ({ url: '' });
 const createInitialEditingSourceForm = () => ({ name: '', url: '', language: 'it' });

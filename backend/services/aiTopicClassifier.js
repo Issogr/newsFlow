@@ -1,5 +1,5 @@
 const logger = require('../utils/logger');
-const { readAiToggleValue } = require('../config/aiFeatures');
+const { isAiToggleEnabled } = require('../config/aiFeatures');
 const topicNormalizer = require('./topicNormalizer');
 const { parseIntegerEnv } = require('../utils/env');
 const {
@@ -38,7 +38,7 @@ const TOPIC_GUIDANCE = [
 ];
 
 function isAiArticleDebugLoggingEnabled() {
-  return readAiToggleValue('AI_TOPIC_DEBUG_LOG_ARTICLES', 'false') === 'true';
+  return isAiToggleEnabled('AI_TOPIC_DEBUG_LOG_ARTICLES', false);
 }
 
 function summarizeArticleForDebug(article = {}) {
@@ -82,7 +82,7 @@ function getConfig() {
     batchSize: parseIntegerEnv('AI_TOPIC_BATCH_SIZE', DEFAULT_BATCH_SIZE, { min: 1, max: 50, clamp: true, strict: true }),
     batchConcurrency: parseIntegerEnv('AI_TOPIC_BATCH_CONCURRENCY', DEFAULT_BATCH_CONCURRENCY, { min: 1, max: 4, clamp: true, strict: true }),
     maxArticlesPerRefresh: parseIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, { min: 1, max: 1000, clamp: true, strict: true }),
-    deterministicSkipEnabled: readAiToggleValue('AI_TOPIC_DETERMINISTIC_SKIP_ENABLED') !== 'false'
+    deterministicSkipEnabled: isAiToggleEnabled('AI_TOPIC_DETERMINISTIC_SKIP_ENABLED')
   };
 }
 
@@ -370,7 +370,6 @@ function isAiTopicDetectionAvailable() {
 module.exports = {
   classifyTopicDetailsForArticlesWithStatus,
   isAiTopicDetectionAvailable,
-  _buildPrompt: buildPrompt,
   _getConfig: getConfig,
   _getCompletionTokenBudget: getCompletionTokenBudget,
   _normalizeClassifierDetails: normalizeClassifierDetails,

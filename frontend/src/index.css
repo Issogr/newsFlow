@@ -49,7 +49,7 @@ body {
   background-color: rgb(15 23 42 / 0.95) !important;
 }
 
-:root[data-theme='dark'] :is(.bg-white\/85, .bg-white\/90, .bg-white\/80, .bg-white\/70) {
+:root[data-theme='dark'] :is(.bg-white\/90, .bg-white\/80) {
   background-color: rgb(15 23 42 / 0.9) !important;
 }
 
@@ -57,7 +57,7 @@ body {
   background-color: rgb(15 23 42) !important;
 }
 
-:root[data-theme='dark'] :is(.bg-slate-50\/80, .bg-slate-50\/70, .bg-slate-50\/60) {
+:root[data-theme='dark'] :is(.bg-slate-50\/80, .bg-slate-50\/60) {
   background-color: rgb(15 23 42 / 0.92) !important;
 }
 
@@ -71,10 +71,6 @@ body {
 
 :root[data-theme='dark'] .bg-slate-200\/70 {
   background-color: rgb(51 65 85 / 0.7) !important;
-}
-
-:root[data-theme='dark'] .bg-sky-50\/80 {
-  background-color: rgb(14 165 233 / 0.18) !important;
 }
 
 :root[data-theme='dark'] :is(.bg-violet-100, .bg-violet-200) {
@@ -110,14 +106,9 @@ body {
   .border-slate-200,
   .border-slate-300,
   .border-slate-400,
-  .border-stone-200,
   .border-stone-300
 ) {
   border-color: rgb(51 65 85) !important;
-}
-
-:root[data-theme='dark'] .border-slate-900 {
-  border-color: rgb(71 85 105) !important;
 }
 
 :root[data-theme='dark'] .border-slate-200\/80 {
@@ -130,10 +121,6 @@ body {
 
 :root[data-theme='dark'] .divide-slate-200 > :not(:last-child) {
   border-color: rgb(51 65 85) !important;
-}
-
-:root[data-theme='dark'] .border-t-slate-900 {
-  border-top-color: rgb(248 250 252) !important;
 }
 
 :root[data-theme='dark'] :is(button.bg-slate-900, a.bg-slate-900) {
@@ -214,14 +201,9 @@ body {
   .hover\:bg-slate-50:hover,
   .hover\:bg-slate-100:hover,
   .hover\:bg-slate-200:hover,
-  .hover\:bg-slate-400:hover,
-  .hover\:bg-stone-100:hover
+  .hover\:bg-slate-400:hover
 ) {
   background-color: rgb(51 65 85) !important;
-}
-
-:root[data-theme='dark'] .hover\:bg-amber-200:hover {
-  background-color: rgb(146 64 14 / 0.5) !important;
 }
 
 :root[data-theme='dark'] .hover\:bg-amber-100:hover {
@@ -244,7 +226,7 @@ body {
   background-color: rgb(6 95 70 / 0.5) !important;
 }
 
-:root[data-theme='dark'] :is(.hover\:text-slate-700:hover, .hover\:text-slate-800:hover, .hover\:text-slate-900:hover, .hover\:text-slate-950:hover, .hover\:text-stone-800:hover) {
+:root[data-theme='dark'] :is(.hover\:text-slate-700:hover, .hover\:text-slate-800:hover, .hover\:text-slate-900:hover, .hover\:text-slate-950:hover) {
   color: rgb(248 250 252) !important;
 }
 

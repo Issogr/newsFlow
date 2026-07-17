@@ -15,6 +15,9 @@ const PODCAST_ENV_NAMES = [
   'AI_PODCAST_TTS_CHUNK_MAX_BYTES',
   'AI_PODCAST_TTS_MAX_CHUNKS',
   'AI_PODCAST_TTS_CHUNK_SILENCE_MS',
+  'AI_PODCAST_TTS_CHUNK_MAX_RETRIES',
+  'AI_PODCAST_TTS_CHUNK_RETRY_DELAY_MS',
+  'AI_PODCAST_TTS_TOTAL_TIMEOUT_MS',
   'AI_PODCAST_TTS_FORMAT',
   'AI_PODCAST_TTS_VOICE'
 ];
@@ -45,6 +48,14 @@ function createTestPcmBuffer(byteLength = 2400, sampleValue = 1000) {
   return buffer;
 }
 
+function createAudioHttpResponse(data, { contentType = 'audio/pcm', status = 200 } = {}) {
+  return {
+    status,
+    headers: { 'content-type': contentType },
+    data
+  };
+}
+
 describe('aiPodcastGenerator', () => {
   const originalEnv = process.env;
 
@@ -53,7 +64,7 @@ describe('aiPodcastGenerator', () => {
     PODCAST_ENV_NAMES.forEach((envName) => {
       delete nextEnv[envName];
     });
-    process.env = { ...nextEnv, ...overrides };
+    process.env = { ...nextEnv, AI_PODCAST_TTS_CHUNK_RETRY_DELAY_MS: '0', ...overrides };
   }
 
   afterEach(() => {
@@ -112,6 +123,22 @@ describe('aiPodcastGenerator', () => {
     }));
     expect(payload.articles[0]).not.toHaveProperty('id');
     expect(payload.articles[0]).not.toHaveProperty('url');
+  });
+
+  test('keeps aggregate podcast article text within its configured budget', () => {
+    setPodcastTestEnv({ AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS: '10000' });
+    const articles = Array.from({ length: 300 }, (_, index) => ({
+      id: `article-${index}`,
+      title: `Article ${index}`,
+      readerText: 'Detailed cached reader text. '.repeat(100),
+      source: 'BBC'
+    }));
+
+    const payload = JSON.parse(aiPodcastGenerator._buildPrompt({}, articles).split('\n').at(-1));
+
+    expect(aiPodcastGenerator._getArticleTextLimit(articles.length)).toBe(33);
+    expect(payload.articles).toHaveLength(300);
+    expect(payload.articles.reduce((total, article) => total + article.description.length, 0)).toBeLessThanOrEqual(10000);
   });
 
   test('removes inferred time-of-day labels from generated podcast title and opening', () => {
@@ -267,11 +294,7 @@ describe('aiPodcastGenerator', () => {
     });
     const pcmBytes = Buffer.alloc(48000);
     const httpClient = {
-      post: jest.fn().mockResolvedValue({
-        status: 200,
-        headers: { 'content-type': 'audio/pcm' },
-        data: pcmBytes
-      })
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(pcmBytes))
     };
     aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
 
@@ -301,11 +324,7 @@ describe('aiPodcastGenerator', () => {
     const httpClient = {
       post: jest.fn().mockImplementation(() => {
         callIndex += 1;
-        return Promise.resolve({
-          status: 200,
-          headers: { 'content-type': 'audio/pcm' },
-          data: createTestPcmBuffer(pcmByteLength, 1000 + callIndex)
-        });
+        return Promise.resolve(createAudioHttpResponse(createTestPcmBuffer(pcmByteLength, 1000 + callIndex)));
       })
     };
     const sentence = 'La Francia ha comunicato una decisione politica importante e il servizio spiega il contesto per gli ascoltatori.';
@@ -337,11 +356,7 @@ describe('aiPodcastGenerator', () => {
     });
     const pcmByteLength = 2400;
     const httpClient = {
-      post: jest.fn().mockResolvedValue({
-        status: 200,
-        headers: { 'content-type': 'audio/pcm' },
-        data: createTestPcmBuffer(pcmByteLength)
-      })
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(createTestPcmBuffer(pcmByteLength)))
     };
     const paragraph = 'Questa parte del podcast spiega una notizia importante con contesto chiaro, conseguenze pratiche, una transizione naturale per chi ascolta e un dettaglio finale che mantiene il racconto parlato fluido.';
     const longScript = Array.from({ length: 10 }, () => paragraph).join('\n\n');
@@ -354,6 +369,49 @@ describe('aiPodcastGenerator', () => {
     expect(Buffer.from(audio.data, 'base64').subarray(0, 4).toString('ascii')).toBe('RIFF');
   });
 
+  test('retries only the failed TTS chunk', async () => {
+    setPodcastTestEnv({
+      OPENROUTER_API_KEY: 'test-key',
+      AI_PODCAST_TTS_CHUNK_MAX_BYTES: '300',
+      AI_PODCAST_TTS_CHUNK_MAX_RETRIES: '2'
+    });
+    const firstPcm = createTestPcmBuffer(2400, 1000);
+    const secondPcm = createTestPcmBuffer(2400, 2000);
+    const httpClient = {
+      post: jest.fn()
+        .mockResolvedValueOnce(createAudioHttpResponse(firstPcm))
+        .mockResolvedValueOnce(createAudioHttpResponse(Buffer.from('{"error":{"message":"busy"}}'), { contentType: 'application/json', status: 503 }))
+        .mockResolvedValueOnce(createAudioHttpResponse(secondPcm))
+    };
+    const firstParagraph = 'The first section explains an important policy decision with enough context and a clear consequence for listeners.';
+    const secondParagraph = 'The second section covers a scientific discovery with practical details and a different conclusion for listeners.';
+    aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
+
+    const audio = await aiPodcastGenerator.generateAudioForLocale(`${firstParagraph} ${firstParagraph}\n\n${secondParagraph} ${secondParagraph}`, 'en');
+
+    expect(httpClient.post).toHaveBeenCalledTimes(3);
+    expect(httpClient.post.mock.calls[1][1].input).toBe(httpClient.post.mock.calls[2][1].input);
+    expect(httpClient.post.mock.calls[0][1].input).not.toBe(httpClient.post.mock.calls[1][1].input);
+    expect(audio.mimeType).toBe('audio/wav');
+  });
+
+  test('stops chunked TTS when cumulative audio exceeds the storage limit', async () => {
+    setPodcastTestEnv({
+      OPENROUTER_API_KEY: 'test-key',
+      AI_PODCAST_TTS_CHUNK_MAX_BYTES: '300',
+      AI_PODCAST_TTS_MAX_AUDIO_BYTES: '1500'
+    });
+    const httpClient = {
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(createTestPcmBuffer(1200)))
+    };
+    const paragraph = 'This paragraph explains an important policy decision with enough context and a clear consequence for listeners.';
+    aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
+
+    await expect(aiPodcastGenerator.generateAudioForLocale(Array.from({ length: 6 }, () => paragraph).join('\n\n'), 'en'))
+      .rejects.toThrow('audio is too large');
+    expect(httpClient.post.mock.calls.length).toBeLessThan(6);
+  });
+
   test('uses the OpenRouter audio speech endpoint for Italian TTS', async () => {
     setPodcastTestEnv({
       OPENROUTER_API_KEY: 'test-key',
@@ -364,11 +422,7 @@ describe('aiPodcastGenerator', () => {
     });
     const audioBytes = createTestWavBuffer();
     const httpClient = {
-      post: jest.fn().mockResolvedValue({
-        status: 200,
-        headers: { 'content-type': 'audio/wav' },
-        data: audioBytes
-      })
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(audioBytes, { contentType: 'audio/wav' }))
     };
     aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
 
@@ -411,11 +465,10 @@ describe('aiPodcastGenerator', () => {
       OPENROUTER_API_KEY: 'test-key'
     });
     aiPodcastGenerator._setAudioSpeechHttpClient({
-      post: jest.fn().mockResolvedValue({
-        status: 400,
-        headers: { 'content-type': 'application/json' },
-        data: Buffer.from(JSON.stringify({ error: { message: 'Unsupported voice' } }))
-      })
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(
+        Buffer.from(JSON.stringify({ error: { message: 'Unsupported voice' } })),
+        { contentType: 'application/json', status: 400 }
+      ))
     });
 
     await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it'))
@@ -427,16 +480,15 @@ describe('aiPodcastGenerator', () => {
       OPENROUTER_API_KEY: 'test-key'
     });
     aiPodcastGenerator._setAudioSpeechHttpClient({
-      post: jest.fn().mockResolvedValue({
-        status: 400,
-        headers: { 'content-type': 'application/json' },
-        data: Buffer.from(JSON.stringify({
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(
+        Buffer.from(JSON.stringify({
           error: {
             message: 'Provider returned 400',
             metadata: { raw: 'Invalid voice: UnknownVoice' }
           }
-        }))
-      })
+        })),
+        { contentType: 'application/json', status: 400 }
+      ))
     });
 
     await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it'))
@@ -462,11 +514,7 @@ describe('aiPodcastGenerator', () => {
       OPENROUTER_API_KEY: 'test-key'
     });
     aiPodcastGenerator._setAudioSpeechHttpClient({
-      post: jest.fn().mockResolvedValue({
-        status: 200,
-        headers: { 'content-type': 'audio/wav' },
-        data: Buffer.from('RIFF broken')
-      })
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(Buffer.from('RIFF broken'), { contentType: 'audio/wav' }))
     });
 
     await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it'))
@@ -481,11 +529,7 @@ describe('aiPodcastGenerator', () => {
       AI_PODCAST_TTS_MAX_AUDIO_BYTES: '1500'
     });
     aiPodcastGenerator._setAudioSpeechHttpClient({
-      post: jest.fn().mockResolvedValue({
-        status: 200,
-        headers: { 'content-type': 'audio/wav' },
-        data: createTestWavBuffer(2048)
-      })
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(createTestWavBuffer(2048), { contentType: 'audio/wav' }))
     });
 
     await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it'))

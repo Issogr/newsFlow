@@ -41,7 +41,7 @@ describe('database migrations', () => {
     database = require('./database');
     database.getDb();
 
-    const sqlite = new SqliteDatabase(dbPath, { readonly: true });
+    const sqlite = new SqliteDatabase(dbPath, { readOnly: true });
     const migrationVersion = sqlite.prepare(`
       SELECT value
       FROM app_meta
@@ -124,7 +124,7 @@ describe('database migrations', () => {
     database = require('./database');
     database.getDb();
 
-    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const migrationVersion = migratedDb.prepare("SELECT value FROM app_meta WHERE key = 'migration_version'").get()?.value;
     const width = migratedDb.prepare('SELECT reader_text_width AS readerTextWidth FROM user_settings WHERE user_id = ?').get('user-1')?.readerTextWidth;
     migratedDb.close();
@@ -169,7 +169,7 @@ describe('database migrations', () => {
     database = require('./database');
     database.getDb();
 
-    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const migratedVersion = migratedDb.prepare(`
       SELECT value
       FROM app_meta
@@ -278,7 +278,7 @@ describe('database migrations', () => {
     database = require('./database');
     database.getDb();
 
-    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const topicRows = migratedDb.prepare(`
       SELECT article_id AS articleId, topic
       FROM article_topics
@@ -489,7 +489,7 @@ describe('database migrations', () => {
     database = require('./database');
     database.getDb();
 
-    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const migratedVersion = migratedDb.prepare(`
       SELECT value
       FROM app_meta
@@ -551,7 +551,7 @@ describe('database migrations', () => {
     database = require('./database');
     database.getDb();
 
-    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const migratedVersion = migratedDb.prepare(`
       SELECT value
       FROM app_meta
@@ -1486,6 +1486,15 @@ describe('database queries and user data', () => {
       clickbaitModel: 'clickbait-model'
     }));
     expect(clickbaitState).toEqual({ processedAt: expect.any(String), status: 'completed' });
+
+    expect(database.updateArticleClickbaitClassifications([
+      { articleId: 'clickbait-article', classification: { label: 'high', score: 87, source: 'local', confidence: 0.92, reasonCode: 'local_clear_high' } }
+    ], 'clickbait-model')).toBe(1);
+    expect(database.getArticles({}, { maxArticleAgeHours: 9999 })[0]).toEqual(expect.objectContaining({
+      clickbaitSource: 'local',
+      clickbaitModel: '',
+      clickbaitReasonCode: 'local_clear_high'
+    }));
   });
 
   test('retries failed and deferred AI topic processing statuses', () => {
@@ -1598,6 +1607,7 @@ describe('database queries and user data', () => {
     ])).toBe(2);
     expect(database.getArticleIdsForStoryGroups(['ai-story-test'])).toEqual(expect.arrayContaining(['story-target', 'story-candidate']));
     expect(database.getArticleIdsPendingAiStoryGrouping(['story-target', 'story-candidate'])).toEqual([]);
+    expect(database.getAiStoryGroupingCandidateSet('story-target', { windowHours: 2 }).candidates).toEqual([]);
     expect([
       database.getArticleById('story-target', { maxArticleAgeHours: null }),
       database.getArticleById('story-candidate', { maxArticleAgeHours: null })

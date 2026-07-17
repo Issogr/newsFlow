@@ -1,55 +1,20 @@
 import { AlertCircle, RefreshCw } from 'lucide-react';
-import { getApiErrorPayload, getApiErrorStatus, isApiNetworkError, isApiTimeoutError } from '../utils/apiError';
+import { getApiErrorStatus, getFriendlyApiErrorMessage, hasApiResponse } from '../utils/apiError';
 
 const ErrorMessage = ({
   error,
   onRetry,
   t
 }) => {
-  const getErrorMessage = () => {
-    if (!error) {
-      return t('unknownError');
-    }
-
-    if (isApiTimeoutError(error)) {
-      return t('requestTimeoutError');
-    }
-
-    if (isApiNetworkError(error)) {
-      return t('networkError');
-    }
-
-    const { message: apiMessage } = getApiErrorPayload(error);
-    const status = getApiErrorStatus(error);
-
-    if (error.response) {
-      switch (status) {
-        case 400:
-          return apiMessage || t('error400');
-        case 401:
-          return apiMessage || t('error401');
-        case 403:
-          return apiMessage || t('error403');
-        case 404:
-          return apiMessage || t('error404');
-        case 429:
-          return apiMessage || t('error429');
-        case 503:
-          return apiMessage || t('error503');
-        case 500:
-          return apiMessage || t('error500');
-        default:
-          return apiMessage || t('unknownStatusError', {
-            status,
-            statusText: error.response.statusText
-          });
-      }
-    }
-
-    return error.message || t('genericError');
-  };
-
-  const errorMessage = getErrorMessage();
+  const status = getApiErrorStatus(error);
+  const errorMessage = !error
+    ? t('unknownError')
+    : getFriendlyApiErrorMessage(
+        error,
+        t,
+        hasApiResponse(error) ? 'unknownStatusError' : 'genericError',
+        { status, statusText: error.response?.statusText }
+      );
   const errorCode = error?.response?.status || (error?.code ? t('codeLabel', { code: error.code }) : '');
 
   return (

@@ -5,7 +5,7 @@ module.exports = [
     ignores: ['dist/**', 'coverage/**'],
   },
   {
-    files: ['src/**/*.{js,jsx}', 'scripts/**/*.js', 'vite.config.mjs'],
+    files: ['src/**/*.{js,jsx}', 'vite.config.mjs'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

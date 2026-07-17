@@ -18,6 +18,13 @@ function redactUrlForLog(value, options = {}) {
   return redactQueryValues(redactUrlCredentials(value), options);
 }
 
+function redactSecretsForLog(value, options = {}) {
+  return redactUrlForLog(value, options)
+    .replace(/\b(Bearer\s+)[^\s,;]+/giu, '$1[REDACTED]')
+    .replace(/((?:["']?(?:api[_-]?key|apikey|secret|access[_-]?token|refresh[_-]?token)["']?)\s*[=:]\s*["']?)[^"'\s,;&}]+/giu, '$1[REDACTED]');
+}
+
 module.exports = {
+  redactSecretsForLog,
   redactUrlForLog
 };

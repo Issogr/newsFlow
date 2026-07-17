@@ -18,7 +18,7 @@ export function isApiNetworkError(error) {
   return error?.newsFlowClientCode === 'network' || error?.message === 'Network Error';
 }
 
-export function getFriendlyApiErrorMessage(error, t, fallbackKey = 'genericError') {
+export function getFriendlyApiErrorMessage(error, t, fallbackKey = 'genericError', fallbackParams) {
   if (isApiTimeoutError(error)) {
     return t('requestTimeoutError');
   }
@@ -49,9 +49,9 @@ export function getFriendlyApiErrorMessage(error, t, fallbackKey = 'genericError
       case 503:
         return t('error503');
       default:
-        return t(fallbackKey);
+        return t(fallbackKey, fallbackParams);
     }
   }
 
-  return error?.message || t(fallbackKey);
+  return error?.message || t(fallbackKey, fallbackParams);
 }

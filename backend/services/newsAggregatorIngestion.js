@@ -122,7 +122,7 @@ function createEmptyRefreshPayload(lastRefreshAt = null) {
 }
 
 function normalizeSourceFetchUrl(url) {
-  return normalizeArticleUrl(url || '') || String(url || '').trim();
+  return normalizeArticleUrl(url || '');
 }
 
 function getSourceFetchKey(source = {}) {
@@ -548,18 +548,19 @@ function getMatchesByArticleId(matches = []) {
 
 function selectMatchesForConservativeMerge(target = {}, candidates = [], matches = []) {
   const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
-  const matchedCandidates = matches.map((match) => candidateById.get(match.articleId)).filter(Boolean);
+  const eligibleMatches = matches.filter((match) => candidateById.has(match.articleId));
+  const matchedCandidates = eligibleMatches.map((match) => candidateById.get(match.articleId));
   const involvedStoryGroupIds = [...new Set([target, ...matchedCandidates].map(getStoryGroupId).filter(Boolean))];
 
   if (involvedStoryGroupIds.length <= 1) {
-    return matches;
+    return eligibleMatches;
   }
 
   const selectedGroupId = getStoryGroupId(target)
     || getStoryGroupId(matchedCandidates.find((candidate) => getStoryGroupId(candidate)))
     || '';
 
-  return matches.filter((match) => {
+  return eligibleMatches.filter((match) => {
     const candidateGroupId = getStoryGroupId(candidateById.get(match.articleId));
     return !candidateGroupId
       || !selectedGroupId
@@ -581,6 +582,10 @@ async function processAiStoryGroupingForArticle(article = {}) {
   const target = candidateSet.target || article;
   const candidates = candidateSet.candidates || [];
 
+  if (!candidateSet.target || target.aiStoryGroupStatus === 'matched') {
+    return;
+  }
+
   if (candidates.length === 0) {
     database.markArticlesAiStoryGrouping([articleId], 'no_candidates');
     return;
@@ -598,6 +603,11 @@ async function processAiStoryGroupingForArticle(article = {}) {
   }
 
   const result = await findSimilarStoriesForArticle(target, candidates);
+  const storedTarget = database.getArticleById(articleId, { maxArticleAgeHours: null });
+  if (!storedTarget || storedTarget.aiStoryGroupStatus === 'matched') {
+    return;
+  }
+  const currentTarget = { ...target, ...storedTarget };
   if (result.skipped === 'no_candidates') {
     database.markArticlesAiStoryGrouping([articleId], 'no_candidates', result.model);
     return;
@@ -608,10 +618,16 @@ async function processAiStoryGroupingForArticle(article = {}) {
     return;
   }
 
-  const matches = selectMatchesForConservativeMerge(target, candidates, result.matches || []);
+  const currentCandidates = (result.candidates || candidates)
+    .map((candidate) => {
+      const storedCandidate = database.getArticleById(candidate.id, { maxArticleAgeHours: null });
+      return storedCandidate ? { ...candidate, ...storedCandidate } : null;
+    })
+    .filter(Boolean);
+  const matches = selectMatchesForConservativeMerge(currentTarget, currentCandidates, result.matches || []);
   if (matches.length === 0) {
     database.markArticlesAiStoryGrouping([articleId], 'no_match', result.model, {
-      matchIds: (result.candidates || []).map((candidate) => candidate.id).filter(Boolean).sort(),
+      matchIds: currentCandidates.map((candidate) => candidate.id).filter(Boolean).sort(),
       reason: 'unchanged_candidate_signature'
     });
     return;
@@ -619,18 +635,18 @@ async function processAiStoryGroupingForArticle(article = {}) {
 
   const matchesByArticleId = getMatchesByArticleId(matches);
   const matchedIds = matches.map((match) => match.articleId);
-  const matchedCandidates = candidates.filter((candidate) => matchedIds.includes(candidate.id));
-  const involvedStoryGroupIds = [...new Set([target, ...matchedCandidates]
+  const matchedCandidates = currentCandidates.filter((candidate) => matchedIds.includes(candidate.id));
+  const involvedStoryGroupIds = [...new Set([currentTarget, ...matchedCandidates]
     .map(getStoryGroupId)
     .filter(Boolean))];
   const existingGroupId = involvedStoryGroupIds[0] || '';
   const groupedArticleIds = [...new Set([
     articleId,
     ...matchedIds,
-    ...database.getArticleIdsForStoryGroups(involvedStoryGroupIds, target?.ownerUserId || null)
+    ...database.getArticleIdsForStoryGroups(involvedStoryGroupIds, currentTarget?.ownerUserId || null)
   ])];
   const storyGroupId = existingGroupId || buildStoryGroupId(groupedArticleIds);
-  const affectedUserIds = [target, ...matchedCandidates]
+  const affectedUserIds = [currentTarget, ...matchedCandidates]
     .map((item) => item?.ownerUserId)
     .filter(Boolean);
   const matchEvidence = matchedCandidates

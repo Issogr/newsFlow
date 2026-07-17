@@ -20,9 +20,8 @@ import {
   DEFAULT_READER_TEXT_SIZE,
   READER_TEXT_SIZE_STYLES
 } from '../config/readerTextSize';
-import { getStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
 import { DEFAULT_READER_TEXT_WIDTH, READER_TEXT_WIDTH_CLASS_NAMES } from '../config/readerTextWidth';
-import { getStoredReaderTextWidthPreference } from '../utils/readerTextWidthPreference';
+import { getStoredReaderTextSizePreference, getStoredReaderTextWidthPreference } from '../utils/readerPreferences';
 
 const sourceChipClassName = 'inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-900';
 const readTimeChipClassName = 'inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600';
@@ -126,7 +125,7 @@ const ReaderPanel = ({
 }) => {
   const [selectedArticleId, setSelectedArticleId] = useState(initialArticleId || group?.items?.[0]?.id || null);
   const [readerByArticleId, setReaderByArticleId] = useState({});
-  const readerByArticleIdRef = useRef(readerByArticleId);
+  const readerByArticleIdRef = useRef({});
   const [loading, setLoading] = useState(false);
   const { shareState, shareArticle, resetShareState } = useShareArticle();
   const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
@@ -178,10 +177,6 @@ const ReaderPanel = ({
   }, [group?.items]);
 
   const selectedReader = selectedArticleId ? readerByArticleId[selectedArticleId] : null;
-
-  useEffect(() => {
-    readerByArticleIdRef.current = readerByArticleId;
-  }, [readerByArticleId]);
 
   const loadReader = useCallback(async (articleId, { forceRefresh = false } = {}) => {
     if (!articleId) {

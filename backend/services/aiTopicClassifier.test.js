@@ -1,13 +1,11 @@
-jest.mock('../utils/logger', () => ({
-  debug: jest.fn(),
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn()
-}));
+const createMockLogger = require('../test-utils/mockLogger');
+
+jest.mock('../utils/logger', createMockLogger);
 
 const logger = require('../utils/logger');
 const aiTopicClassifier = require('./aiTopicClassifier');
-const { extractAssistantContent, parseJsonContent } = require('./openRouterClient');
+const openRouterClient = require('./openRouterClient');
+const { extractAssistantContent, parseJsonContent } = openRouterClient;
 
 describe('aiTopicClassifier', () => {
   const originalEnv = process.env;
@@ -16,6 +14,7 @@ describe('aiTopicClassifier', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    openRouterClient._resetFailureBackoff();
     chatSend = jest.fn();
     OpenRouterMock = jest.fn(() => ({
       chat: {
@@ -37,6 +36,7 @@ describe('aiTopicClassifier', () => {
 
   afterEach(() => {
     aiTopicClassifier._setOpenRouterSdkLoader();
+    openRouterClient._resetFailureBackoff();
     process.env = originalEnv;
   });
 
@@ -220,6 +220,33 @@ describe('aiTopicClassifier', () => {
     expect(result.attemptedArticleIds).toEqual(['article-1', 'article-2']);
     expect(result.failedArticleIds).toEqual(['article-2']);
     expect(result.cappedArticleIds).toEqual(['article-3']);
+  });
+
+  test('stops later provider batches during backoff while preserving local classifications', async () => {
+    process.env.AI_TOPIC_BATCH_SIZE = '1';
+    process.env.AI_TOPIC_DETERMINISTIC_SKIP_ENABLED = 'true';
+    process.env.OPENROUTER_FAILURE_BACKOFF_MS = '1000';
+    process.env.OPENROUTER_FAILURE_MAX_BACKOFF_MS = '1000';
+    chatSend.mockRejectedValue(Object.assign(new Error('rate limited'), {
+      statusCode: 429,
+      headers: { 'retry-after': '1' }
+    }));
+
+    const result = await aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus([
+      {
+        id: 'local-article',
+        title: 'AI software and cloud cybersecurity startup launches new chip platform',
+        description: 'The digital hardware update includes semiconductor tools for data centers.'
+      },
+      { id: 'provider-article-1', title: 'Officials discuss a new proposal' },
+      { id: 'provider-article-2', title: 'Markets react to the announcement' }
+    ]);
+
+    expect(chatSend).toHaveBeenCalledTimes(1);
+    expect(result.topicsByArticleId.get('local-article')).toEqual([
+      expect.objectContaining({ source: 'local' })
+    ]);
+    expect(result.failedArticleIds).toEqual(['provider-article-1', 'provider-article-2']);
   });
 
   test('drops unknown ids and topics outside the supported taxonomy', () => {

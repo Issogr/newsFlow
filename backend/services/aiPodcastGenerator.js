@@ -5,10 +5,15 @@ const { estimateTokenCountFromChars, logAiRequestMetric } = require('../utils/ai
 const { removePromotionalSentences } = require('../utils/promotionalContent');
 const { buildArticlePayload, getArticleTextLimit: getSharedArticleTextLimit, truncateText } = require('./aiArticlePayload');
 const {
+  assertOpenRouterRequestAllowed,
+  clearOpenRouterFailure,
   createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
+  getRetryAfterMs,
+  isTransientOpenRouterError,
   parseJsonContent,
+  recordOpenRouterFailure,
   sendJsonChatCompletion
 } = require('./openRouterClient');
 
@@ -26,6 +31,9 @@ const DEFAULT_GEMINI_TTS_CHUNK_MAX_BYTES = 700;
 const DEFAULT_TTS_MAX_CHUNKS = 12;
 const DEFAULT_TTS_CHUNK_SILENCE_MS = 60;
 const DEFAULT_TTS_CHUNK_EDGE_SILENCE_MS = 35;
+const DEFAULT_TTS_CHUNK_MAX_RETRIES = 2;
+const DEFAULT_TTS_CHUNK_RETRY_DELAY_MS = 500;
+const DEFAULT_TTS_TOTAL_TIMEOUT_MS = 10 * 60 * 1000;
 const PCM_SILENCE_THRESHOLD = 64;
 const MIN_PODCAST_SCRIPT_CHARS = 120;
 const GEMINI_TTS_PCM_SAMPLE_RATE_HZ = 24000;
@@ -143,6 +151,18 @@ function getTtsMaxChunks() {
 
 function getTtsChunkSilenceMs() {
   return parseIntegerEnv('AI_PODCAST_TTS_CHUNK_SILENCE_MS', DEFAULT_TTS_CHUNK_SILENCE_MS, { min: 0, max: 500 });
+}
+
+function getTtsChunkMaxRetries() {
+  return parseIntegerEnv('AI_PODCAST_TTS_CHUNK_MAX_RETRIES', DEFAULT_TTS_CHUNK_MAX_RETRIES, { min: 0, max: 5 });
+}
+
+function getTtsChunkRetryDelayMs() {
+  return parseIntegerEnv('AI_PODCAST_TTS_CHUNK_RETRY_DELAY_MS', DEFAULT_TTS_CHUNK_RETRY_DELAY_MS, { min: 0, max: 30000 });
+}
+
+function getTtsTotalTimeoutMs() {
+  return parseIntegerEnv('AI_PODCAST_TTS_TOTAL_TIMEOUT_MS', DEFAULT_TTS_TOTAL_TIMEOUT_MS, { min: 1000, max: 30 * 60 * 1000 });
 }
 
 function getNarrationInstructions(locale = 'en') {
@@ -401,9 +421,18 @@ function isWavBuffer(audioBuffer) {
     && audioBuffer.subarray(8, 12).toString('ascii') === 'WAVE';
 }
 
-function createTtsError(message, code = 'PODCAST_TTS_FAILED') {
+function createTtsError(message, code = 'PODCAST_TTS_FAILED', options = {}) {
   const error = new Error(message);
   error.code = code;
+  if (options.statusCode) {
+    error.statusCode = options.statusCode;
+  }
+  if (options.headers) {
+    error.headers = options.headers;
+  }
+  if (options.cause) {
+    error.cause = options.cause;
+  }
   return error;
 }
 
@@ -628,11 +657,15 @@ function normalizeAudioBufferToPcm(audioBuffer, mimeType = '', requestedFormat =
   const normalizedMimeType = String(mimeType || '').split(';')[0].trim().toLowerCase();
   const normalizedFormat = String(requestedFormat || '').trim().toLowerCase();
   if (isWavBuffer(audioBuffer)) {
-    return readWavPcmBuffer(audioBuffer);
+    const pcmAudio = readWavPcmBuffer(audioBuffer);
+    if (pcmAudio.pcmBuffer.length < getTtsMinAudioBytes()) {
+      throw createTtsError(`AI podcast TTS response audio is too small (${pcmAudio.pcmBuffer.length} bytes)`, 'PODCAST_TTS_AUDIO_INVALID');
+    }
+    return pcmAudio;
   }
   if (normalizedMimeType === 'audio/pcm' || normalizedFormat === 'pcm') {
-    if (!Buffer.isBuffer(audioBuffer) || audioBuffer.length === 0) {
-      throw createTtsError('AI podcast TTS response did not include audio data', 'PODCAST_TTS_AUDIO_INVALID');
+    if (!Buffer.isBuffer(audioBuffer) || audioBuffer.length < getTtsMinAudioBytes()) {
+      throw createTtsError(`AI podcast TTS response audio is too small (${audioBuffer?.length || 0} bytes)`, 'PODCAST_TTS_AUDIO_INVALID');
     }
     return {
       pcmBuffer: Buffer.from(audioBuffer),
@@ -745,7 +778,15 @@ function stitchPcmAudioChunks(chunks = [], options = {}) {
     }
   });
 
-  const wavBuffer = wrapPcmBufferInWav(Buffer.concat(buffers), format);
+  const pcmByteLength = buffers.reduce((total, buffer) => total + buffer.length, 0);
+  if (pcmByteLength + 44 > getTtsMaxAudioBytes()) {
+    throw createTtsError(
+      `AI podcast TTS response audio is too large (${pcmByteLength + 44} bytes > ${getTtsMaxAudioBytes()} bytes)`,
+      'PODCAST_TTS_AUDIO_TOO_LARGE'
+    );
+  }
+
+  const wavBuffer = wrapPcmBufferInWav(Buffer.concat(buffers, pcmByteLength), format);
   assertValidAudioBuffer(wavBuffer, 'audio/wav');
   return wavBuffer;
 }
@@ -829,27 +870,40 @@ function extractAudioPayload(response = {}, fallbackMimeType = 'audio/mpeg') {
 
 async function requestAudioBuffer(text = '', options = {}) {
   const { config, audioFormat, ttsVoice, fallbackMimeType, locale = 'en' } = options;
-  const response = await audioSpeechHttpClient.post(
-    getAudioSpeechUrl(config),
-    {
-      model: config.model,
-      input: text,
-      voice: ttsVoice,
-      response_format: audioFormat,
-      instructions: getNarrationInstructions(locale)
-    },
-    {
-      headers: getOpenRouterHeaders(config),
-      responseType: 'arraybuffer',
-      timeout: config.timeoutMs,
-      maxContentLength: getTtsMaxAudioBytes(),
-      maxBodyLength: getTtsMaxAudioBytes(),
-      validateStatus: () => true
-    }
-  );
+  let response;
+  try {
+    response = await audioSpeechHttpClient.post(
+      getAudioSpeechUrl(config),
+      {
+        model: config.model,
+        input: text,
+        voice: ttsVoice,
+        response_format: audioFormat,
+        instructions: getNarrationInstructions(locale)
+      },
+      {
+        headers: getOpenRouterHeaders(config),
+        responseType: 'arraybuffer',
+        timeout: options.timeoutMs || config.timeoutMs,
+        maxContentLength: getTtsMaxAudioBytes(),
+        maxBodyLength: getTtsMaxAudioBytes(),
+        validateStatus: () => true
+      }
+    );
+  } catch (error) {
+    throw createTtsError(
+      `AI podcast TTS request failed: ${error.message}`,
+      'PODCAST_TTS_PROVIDER_ERROR',
+      { statusCode: error.statusCode || error.response?.status, headers: error.headers || error.response?.headers, cause: error }
+    );
+  }
 
   if (response.status >= 400) {
-    throw createTtsError(`AI podcast TTS request failed (${response.status}): ${parseSpeechErrorMessage(response.data)}`, 'PODCAST_TTS_PROVIDER_ERROR');
+    throw createTtsError(
+      `AI podcast TTS request failed (${response.status}): ${parseSpeechErrorMessage(response.data)}`,
+      'PODCAST_TTS_PROVIDER_ERROR',
+      { statusCode: response.status, headers: response.headers }
+    );
   }
 
   const contentType = getResponseContentType(response.headers || {}, fallbackMimeType);
@@ -882,8 +936,62 @@ async function requestAudioBuffer(text = '', options = {}) {
   };
 }
 
+function isRetryableTtsError(error = {}) {
+  return isTransientOpenRouterError(error) || error.code === 'PODCAST_TTS_AUDIO_INVALID';
+}
+
+function sleep(delayMs) {
+  return delayMs > 0 ? new Promise((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
+}
+
+async function requestAudioWithRetry(text = '', options = {}, normalizeAudio) {
+  const { config, deadline } = options;
+  const maxRetries = getTtsChunkMaxRetries();
+  let attempt = 0;
+
+  while (true) {
+    assertOpenRouterRequestAllowed(config.model);
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw createTtsError('AI podcast TTS total timeout exceeded', 'PODCAST_TTS_TIMEOUT');
+    }
+
+    try {
+      const requestStartedAt = Date.now();
+      const audio = await requestAudioBuffer(text, {
+        ...options,
+        timeoutMs: Math.min(config.timeoutMs, remainingMs)
+      });
+      const value = normalizeAudio(audio);
+      clearOpenRouterFailure(config.model, requestStartedAt);
+      return { value, attemptCount: attempt + 1 };
+    } catch (error) {
+      if (!isRetryableTtsError(error) || attempt >= maxRetries) {
+        error.requestCount = attempt + 1;
+        error.retryCount = attempt;
+        recordOpenRouterFailure(config.model, error);
+        throw error;
+      }
+
+      const retryDelayMs = Math.max(
+        getRetryAfterMs(error),
+        getTtsChunkRetryDelayMs() * (2 ** attempt)
+      );
+      if (Date.now() + retryDelayMs >= deadline) {
+        recordOpenRouterFailure(config.model, error);
+        const timeoutError = createTtsError('AI podcast TTS total timeout exceeded', 'PODCAST_TTS_TIMEOUT');
+        timeoutError.requestCount = attempt + 1;
+        timeoutError.retryCount = attempt;
+        throw timeoutError;
+      }
+      attempt += 1;
+      await sleep(retryDelayMs);
+    }
+  }
+}
+
 async function generateChunkedAudio(text = '', options = {}) {
-  const { config, audioFormat, ttsVoice, fallbackMimeType, locale = 'en' } = options;
+  const { config, audioFormat } = options;
   const chunks = splitTextIntoTtsChunks(text, getTtsChunkMaxBytes(config.model));
   const maxChunks = getTtsMaxChunks();
   if (chunks.length > maxChunks) {
@@ -894,24 +1002,53 @@ async function generateChunkedAudio(text = '', options = {}) {
   }
 
   const pcmChunks = [];
+  let requestCount = 0;
+  let cumulativePcmBytes = 0;
   for (const chunk of chunks) {
     assertTtsInputWithinLimit(chunk, config.model);
-    const audio = await requestAudioBuffer(chunk, { config, audioFormat, ttsVoice, fallbackMimeType, locale });
-    pcmChunks.push(normalizeAudioBufferToPcm(audio.audioBuffer, audio.mimeType, audioFormat));
+    let pcmChunk;
+    let attemptCount;
+    try {
+      ({ value: pcmChunk, attemptCount } = await requestAudioWithRetry(
+        chunk,
+        options,
+        (audio) => normalizeAudioBufferToPcm(audio.audioBuffer, audio.mimeType, audioFormat)
+      ));
+    } catch (error) {
+      error.requestCount = requestCount + (error.requestCount || 0);
+      error.retryCount = (requestCount - pcmChunks.length) + (error.retryCount || 0);
+      throw error;
+    }
+    requestCount += attemptCount;
+    const silenceBytes = pcmChunks.length > 0 ? getPcmSilenceBuffer(pcmChunks[0], getTtsChunkSilenceMs()).length : 0;
+    cumulativePcmBytes += pcmChunk.pcmBuffer.length + silenceBytes;
+    if (cumulativePcmBytes + 44 > getTtsMaxAudioBytes()) {
+      throw createTtsError(
+        `AI podcast TTS response audio is too large (${cumulativePcmBytes + 44} bytes > ${getTtsMaxAudioBytes()} bytes)`,
+        'PODCAST_TTS_AUDIO_TOO_LARGE'
+      );
+    }
+    pcmChunks.push(pcmChunk);
   }
 
   return {
     data: stitchPcmAudioChunks(pcmChunks).toString('base64'),
     mimeType: 'audio/wav',
-    chunkCount: chunks.length
+    chunkCount: chunks.length,
+    requestCount,
+    retryCount: requestCount - chunks.length
   };
 }
 
 async function generateSingleAudio(text = '', options = {}) {
-  const { config, audioFormat, ttsVoice, fallbackMimeType, locale = 'en' } = options;
+  const { config, audioFormat } = options;
   assertTtsInputWithinLimit(text, config.model);
-  const audio = await requestAudioBuffer(text, { config, audioFormat, ttsVoice, fallbackMimeType, locale });
-  return normalizeAudioBufferForStorage(audio.audioBuffer, audio.mimeType, audioFormat);
+  const { value, attemptCount } = await requestAudioWithRetry(
+    text,
+    options,
+    (audio) => normalizeAudioBufferForStorage(audio.audioBuffer, audio.mimeType, audioFormat)
+  );
+  return { ...value, requestCount: attemptCount, retryCount: attemptCount - 1 };
 }
 
 async function generatePodcastScript(window = {}, articles = []) {
@@ -985,12 +1122,13 @@ async function generateAudioForLocale(scriptText = '', locale = 'en') {
   const ttsVoice = getTtsVoice();
   const fallbackMimeType = getAudioMimeType(audioFormat);
   const startedAt = Date.now();
+  const deadline = startedAt + getTtsTotalTimeoutMs();
   const inputBytes = Buffer.byteLength(text, 'utf8');
   let playableAudio;
   try {
     playableAudio = canStitchTtsAudio(config.model, audioFormat)
-      ? await generateChunkedAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType, locale: normalizedLocale })
-      : await generateSingleAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType, locale: normalizedLocale });
+      ? await generateChunkedAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType, locale: normalizedLocale, deadline })
+      : await generateSingleAudio(text, { config, audioFormat, ttsVoice, fallbackMimeType, locale: normalizedLocale, deadline });
   } catch (error) {
     logAiRequestMetric({
       provider: 'openrouter',
@@ -1002,12 +1140,14 @@ async function generateAudioForLocale(scriptText = '', locale = 'en') {
       inputBytes,
       estimatedInputTokens: estimateTokenCountFromChars(text.length),
       durationMs: Date.now() - startedAt,
+      requestCount: error?.requestCount,
+      retryCount: error?.retryCount,
       errorCode: error?.code,
       errorMessage: error?.message
     }, 'warn');
     throw error;
   }
-  const { chunkCount, ...audioForStorage } = playableAudio;
+  const { chunkCount, requestCount, retryCount, ...audioForStorage } = playableAudio;
 
   logAiRequestMetric({
     provider: 'openrouter',
@@ -1019,6 +1159,8 @@ async function generateAudioForLocale(scriptText = '', locale = 'en') {
     inputBytes,
     estimatedInputTokens: estimateTokenCountFromChars(text.length),
     chunkCount: chunkCount || 1,
+    requestCount: requestCount || 1,
+    retryCount: retryCount || 0,
     audioBytes: Buffer.byteLength(audioForStorage.data || '', 'base64'),
     durationMs: Date.now() - startedAt
   });

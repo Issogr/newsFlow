@@ -397,12 +397,11 @@ function createArticleRepository({
     });
 
     const canonicalUrlsByOwner = new Map();
-    canonicalRowsByKey.forEach((rows, key) => {
+    canonicalRowsByKey.forEach((_, key) => {
       const [ownerUserId, canonicalUrl] = key.split('\u0000');
       const urls = canonicalUrlsByOwner.get(ownerUserId) || [];
       urls.push(canonicalUrl);
       canonicalUrlsByOwner.set(ownerUserId, urls);
-      canonicalRowsByKey.set(key, rows);
     });
 
     canonicalUrlsByOwner.forEach((urls, ownerUserId) => {
@@ -1109,12 +1108,14 @@ function createArticleRepository({
     const score = Number(entry.score ?? entry.clickbaitScore);
     const confidence = Number(entry.confidence ?? entry.clickbaitConfidence);
     const source = String(entry.source || entry.clickbaitSource || '').trim().toLowerCase();
+    const normalizedSource = ['local', 'ai'].includes(source) ? source : 'ai';
+    const explicitModel = String(entry.model || entry.clickbaitModel || '').trim();
     return {
       label,
       score: Number.isFinite(score) ? Math.max(0, Math.min(100, Math.round(score))) : null,
-      source: ['local', 'ai'].includes(source) ? source : 'ai',
+      source: normalizedSource,
       confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : null,
-      model: String(entry.model || entry.clickbaitModel || defaultModel || '').trim().slice(0, 160),
+      model: (explicitModel || (normalizedSource === 'ai' ? String(defaultModel || '').trim() : '')).slice(0, 160),
       reasonCode: entry.reasonCode ? String(entry.reasonCode).trim().slice(0, 80) : null
     };
   }
@@ -1295,6 +1296,7 @@ function createArticleRepository({
             ai_story_group_confidence = ?,
             ai_story_group_reason = ?
         WHERE id IN (${ids.map(() => '?').join(', ')})
+          AND COALESCE(ai_story_group_status, '') != 'matched'
       `).run(
         processedAt,
         status,
@@ -1412,6 +1414,10 @@ function createArticleRepository({
 
     if (!targetRow) {
       return { target: null, candidates: [] };
+    }
+
+    if (targetRow.aiStoryGroupStatus === 'matched') {
+      return { target: hydrateArticleRows([targetRow], options)[0] || null, candidates: [] };
     }
 
     const targetTimestamp = Date.parse(targetRow.pubDate || '');

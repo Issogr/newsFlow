@@ -1,4 +1,6 @@
 const logger = require('./logger');
+const { redactSecretsForLog } = require('./logRedaction');
+const summarizeErrorMessage = require('./summarizeError');
 
 function safeNumber(value, fallback = 0) {
   const numberValue = Number(value);
@@ -48,8 +50,21 @@ function getChatOutputCharCount(response = {}) {
 }
 
 function getUsageValue(usage = {}, ...keys) {
-  const key = keys.find((candidate) => Number.isFinite(Number(usage?.[candidate])));
+  const key = keys.find((candidate) => {
+    const value = usage?.[candidate];
+    return value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value));
+  });
   return key ? Number(usage[key]) : null;
+}
+
+function getUsageObject(usage = {}, ...keys) {
+  const key = keys.find((candidate) => usage?.[candidate] && typeof usage[candidate] === 'object');
+  return key ? usage[key] : {};
+}
+
+function getUsageBoolean(usage = {}, ...keys) {
+  const key = keys.find((candidate) => typeof usage?.[candidate] === 'boolean');
+  return key ? usage[key] : null;
 }
 
 function extractUsage(response = {}) {
@@ -58,10 +73,22 @@ function extractUsage(response = {}) {
     return null;
   }
 
+  const promptDetails = getUsageObject(usage, 'promptTokensDetails', 'prompt_tokens_details');
+  const completionDetails = getUsageObject(usage, 'completionTokensDetails', 'completion_tokens_details');
+  const costDetails = getUsageObject(usage, 'costDetails', 'cost_details');
+
   return {
     promptTokens: getUsageValue(usage, 'promptTokens', 'prompt_tokens', 'inputTokens', 'input_tokens'),
     completionTokens: getUsageValue(usage, 'completionTokens', 'completion_tokens', 'outputTokens', 'output_tokens'),
-    totalTokens: getUsageValue(usage, 'totalTokens', 'total_tokens')
+    totalTokens: getUsageValue(usage, 'totalTokens', 'total_tokens'),
+    cachedPromptTokens: getUsageValue(promptDetails, 'cachedTokens', 'cached_tokens'),
+    cacheWritePromptTokens: getUsageValue(promptDetails, 'cacheWriteTokens', 'cache_write_tokens'),
+    reasoningTokens: getUsageValue(completionDetails, 'reasoningTokens', 'reasoning_tokens'),
+    cost: getUsageValue(usage, 'cost'),
+    isByok: getUsageBoolean(usage, 'isByok', 'is_byok'),
+    upstreamInferenceCost: getUsageValue(costDetails, 'upstreamInferenceCost', 'upstream_inference_cost'),
+    upstreamInferencePromptCost: getUsageValue(costDetails, 'upstreamInferencePromptCost', 'upstream_inference_prompt_cost'),
+    upstreamInferenceCompletionsCost: getUsageValue(costDetails, 'upstreamInferenceCompletionsCost', 'upstream_inference_completions_cost')
   };
 }
 
@@ -71,7 +98,13 @@ function getFinishReason(response = {}) {
 }
 
 function logAiRequestMetric(metric = {}, level = 'info') {
-  const sanitizedMetric = Object.fromEntries(Object.entries(metric)
+  const safeMetric = metric.errorMessage ? {
+    ...metric,
+    errorMessage: summarizeErrorMessage({
+      message: redactSecretsForLog(metric.errorMessage, { redactAllQuery: true })
+    })
+  } : metric;
+  const sanitizedMetric = Object.fromEntries(Object.entries(safeMetric)
     .filter(([, value]) => value !== undefined && value !== null && value !== ''));
   const logLevel = typeof logger[level] === 'function' ? level : 'info';
 

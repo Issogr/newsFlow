@@ -4,9 +4,8 @@ import { getSafeExternalUrl } from '../utils/urlSafety';
 import { getTopicPresentation } from '../topicPresentation';
 import { getLocalizedThematicSummary, getThematicSummaryPresentationKey, isPodcastSummary } from '../utils/thematicSummaryLocale';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_STYLES } from '../config/readerTextSize';
-import { getStoredReaderTextSizePreference } from '../utils/readerTextSizePreference';
 import { DEFAULT_READER_TEXT_WIDTH, READER_TEXT_WIDTH_CLASS_NAMES } from '../config/readerTextWidth';
-import { getStoredReaderTextWidthPreference } from '../utils/readerTextWidthPreference';
+import { getStoredReaderTextSizePreference, getStoredReaderTextWidthPreference } from '../utils/readerPreferences';
 import { FullscreenPanelFrame } from './FullscreenModalFrame';
 import PodcastAudioPlayer from './PodcastAudioPlayer';
 import ReaderTextSizeControls from './ReaderTextSizeControls';
@@ -14,6 +13,19 @@ import ReaderTextWidthControls from './ReaderTextWidthControls';
 import TextContentSkeleton from './TextContentSkeleton';
 
 const SUMMARY_SLOTS = new Set(['morning', 'lunch', 'evening']);
+const SUMMARY_SLOT_LABEL_KEYS = {
+  morning: 'summarySlotMorning',
+  lunch: 'summarySlotLunch',
+  evening: 'summarySlotEvening'
+};
+const PODCAST_SLOT_LABEL_KEYS = {
+  morning: 'morningPodcast',
+  evening: 'eveningPodcast'
+};
+const PODCAST_AUDIO_STATUS_KEYS = {
+  failed: 'podcastAudioFailed',
+  generating: 'podcastAudioGenerating'
+};
 const MOBILE_SUMMARY_SWIPE_QUERY = '(max-width: 767px)';
 const SUMMARY_SWIPE_MIN_DISTANCE = 60;
 const SUMMARY_SWIPE_AXIS_RATIO = 1.35;
@@ -60,18 +72,7 @@ function getSummarySlot(summary = {}) {
 }
 
 function getSummarySlotLabel(summary = {}, t) {
-  const slot = getSummarySlot(summary);
-  if (slot === 'morning') {
-    return t('summarySlotMorning');
-  }
-  if (slot === 'lunch') {
-    return t('summarySlotLunch');
-  }
-  if (slot === 'evening') {
-    return t('summarySlotEvening');
-  }
-
-  return t('summarySlotRecent');
+  return t(SUMMARY_SLOT_LABEL_KEYS[getSummarySlot(summary)] || 'summarySlotRecent');
 }
 
 function splitLongParagraph(paragraph = '', maxParagraphChars = 520) {
@@ -134,15 +135,7 @@ function getPodcastSlot(summary = {}) {
 }
 
 function getPodcastSlotLabel(summary = {}, t) {
-  const slot = getPodcastSlot(summary);
-  if (slot === 'morning') {
-    return t('morningPodcast');
-  }
-  if (slot === 'evening') {
-    return t('eveningPodcast');
-  }
-
-  return t('podcastBriefing');
+  return t(PODCAST_SLOT_LABEL_KEYS[getPodcastSlot(summary)] || 'podcastBriefing');
 }
 
 function formatPodcastGeneratedAt(value, locale = 'en') {
@@ -218,17 +211,8 @@ function getSwipeFeedbackOffset(deltaX, hasAdjacentSummary) {
 }
 
 function getPodcastAudioStatusText(summary = {}, t) {
-  if (summary.status === 'failed') {
-    return t('podcastAudioFailed');
-  }
-  if (summary.audioStatus === 'generating') {
-    return t('podcastAudioGenerating');
-  }
-  if (summary.audioStatus === 'failed') {
-    return t('podcastAudioFailed');
-  }
-
-  return t('podcastAudioUnavailable');
+  const status = summary.status === 'failed' ? 'failed' : summary.audioStatus;
+  return t(PODCAST_AUDIO_STATUS_KEYS[status] || 'podcastAudioUnavailable');
 }
 
 function getPodcastLanguageLabel(audioLocale = '', locale = 'en') {

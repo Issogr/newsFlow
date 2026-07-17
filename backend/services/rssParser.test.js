@@ -8,12 +8,9 @@ jest.mock('dns', () => ({
   }
 }));
 
-jest.mock('../utils/logger', () => ({
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-  debug: jest.fn()
-}));
+const createMockLogger = require('../test-utils/mockLogger');
+
+jest.mock('../utils/logger', createMockLogger);
 
 const { Readable } = require('stream');
 const axios = require('axios');

@@ -1,9 +1,38 @@
 import { getTopicPresentation } from './topicPresentation';
-import { Cpu, Film } from 'lucide-react';
+import {
+  Briefcase,
+  Cpu,
+  Film,
+  FlaskConical,
+  Globe2,
+  Headphones,
+  HeartPulse,
+  Landmark,
+  Leaf,
+  Newspaper,
+  Palette,
+  Shield,
+  Tags,
+  Trophy
+} from 'lucide-react';
 
 describe('getTopicPresentation', () => {
-  test('does not classify entertainment as technology because it contains ai', () => {
-    expect(getTopicPresentation('Entertainment').Icon).toBe(Film);
-    expect(getTopicPresentation('AI').Icon).toBe(Cpu);
+  test.each([
+    ['Politics', Landmark],
+    ['Economy', Briefcase],
+    ['AI', Cpu],
+    ['Science', FlaskConical],
+    ['Sport', Trophy],
+    ['Culture', Palette],
+    ['Health', HeartPulse],
+    ['Cronaca', Newspaper],
+    ['Entertainment', Film],
+    ['World', Globe2],
+    ['Climate', Leaf],
+    ['Security', Shield],
+    ['Podcast', Headphones],
+    ['Unknown', Tags]
+  ])('maps %s to its presentation', (topic, Icon) => {
+    expect(getTopicPresentation(topic).Icon).toBe(Icon);
   });
 });

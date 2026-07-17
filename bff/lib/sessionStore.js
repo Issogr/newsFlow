@@ -219,17 +219,6 @@ function buildSessionMiddleware(store, secret) {
   });
 }
 
-function renewSessionExpiryIfNeeded(req, res, next) {
-  if (!req.session || !isValidSessionPayload(req.session) || !shouldRenewSession(req.session)) {
-    next();
-    return;
-  }
-
-  req.session.cookie.maxAge = SESSION_TTL_MS;
-  req.session.renewedAt = new Date().toISOString();
-  next();
-}
-
 function normalizeSessionState(req, res, next) {
   if (!req.session) {
     next();
@@ -243,6 +232,10 @@ function normalizeSessionState(req, res, next) {
   }
 
   if (isValidSessionPayload(req.session)) {
+    if (shouldRenewSession(req.session)) {
+      req.session.cookie.maxAge = SESSION_TTL_MS;
+      req.session.renewedAt = new Date().toISOString();
+    }
     next();
     return;
   }
@@ -275,12 +268,7 @@ function loadUpgradeSession(req, sessionStore, secret) {
 
       req.session = sessionData;
       req.sessionID = sessionId;
-      if (typeof sessionStore.touch === 'function') {
-        sessionStore.touch(sessionId, sessionData, () => resolve(sessionData));
-        return;
-      }
-
-      resolve(sessionData);
+      sessionStore.touch(sessionId, sessionData, () => resolve(sessionData));
     });
   });
 }
@@ -318,7 +306,6 @@ module.exports = {
   loadUpgradeSession,
   normalizeSessionState,
   persistSessionUserId,
-  renewSessionExpiryIfNeeded,
   saveExpressSession,
   upsertStoredSessionUser
 };

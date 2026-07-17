@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 
-function createInitialRequestState() {
-  return {
-    id: 0,
-    controller: null
-  };
-}
-
 const useLatestRequest = () => {
-  const requestRef = useRef(createInitialRequestState());
+  const requestRef = useRef({ id: 0, controller: null });
 
   const cancelLatestRequest = useCallback(() => {
     requestRef.current.controller?.abort();
@@ -34,11 +27,7 @@ const useLatestRequest = () => {
     };
   }, [cancelLatestRequest]);
 
-  useEffect(() => {
-    return () => {
-      cancelLatestRequest();
-    };
-  }, [cancelLatestRequest]);
+  useEffect(() => cancelLatestRequest, [cancelLatestRequest]);
 
   return {
     startLatestRequest,

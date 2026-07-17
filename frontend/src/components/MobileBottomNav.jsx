@@ -83,7 +83,7 @@ const MobileBottomNav = ({
       {/* Bubbles + Nav wrapped together for outside-click detection */}
       <div
         ref={surfaceRef}
-        className="relative mx-auto w-[calc(100%-2rem)] max-w-md pb-[calc(env(safe-area-inset-bottom)+1.25rem+var(--mobile-keyboard-offset,0px))] transition-[padding-bottom] duration-200 ease-out"
+        className="relative mx-auto w-[calc(100%-2rem)] max-w-md pb-[calc(env(safe-area-inset-bottom)+1rem+var(--mobile-keyboard-offset,0px))] transition-[padding-bottom] duration-200 ease-out"
         style={{ '--mobile-keyboard-offset': `${keyboardOffset}px` }}
       >
         <FilterBubbles

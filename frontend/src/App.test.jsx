@@ -47,7 +47,6 @@ vi.mock('./components/AdminDashboard', () => ({
 
 describe('App', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.useRealTimers();
     window.localStorage.clear();
     document.body.style.overflow = '';

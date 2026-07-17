@@ -29,6 +29,7 @@ jest.mock('./database', () => ({
   saveReadLaterArticles: jest.fn(() => ({ savedArticleIds: [], savedCount: 0 })),
   removeReadLaterArticles: jest.fn(() => ({ removedArticleIds: [], removedCount: 0, deletedExpiredArticleCount: 0 })),
   getArticles: jest.fn(() => []),
+  getArticleById: jest.fn((articleId) => ({ id: articleId })),
   getLatestIngestionRun: jest.fn(() => null),
   getSourceStats: jest.fn(() => []),
   getTopicStatsByFilters: jest.fn(() => []),
@@ -39,12 +40,9 @@ jest.mock('./database', () => ({
   findUserSourceById: jest.fn(() => null)
 }));
 
-jest.mock('../utils/logger', () => ({
-  debug: jest.fn(),
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn()
-}));
+const createMockLogger = require('../test-utils/mockLogger');
+
+jest.mock('../utils/logger', createMockLogger);
 
 jest.mock('./websocketService', () => ({
   broadcastNewsUpdate: jest.fn(),
@@ -145,6 +143,7 @@ describe('newsAggregator service flows', () => {
     database.getArticleIdsPendingAiStoryGrouping.mockReturnValue([]);
     database.getArticleIdsForAiStoryGroupingRetry.mockReturnValue([]);
     database.getArticles.mockReturnValue([]);
+    database.getArticleById.mockImplementation((articleId) => ({ id: articleId }));
     database.getLatestIngestionRun.mockReturnValue(null);
     database.getSourceStats.mockReturnValue([]);
     database.getTopicStatsByFilters.mockReturnValue([]);
@@ -1122,6 +1121,96 @@ describe('newsAggregator service flows', () => {
       { articleId: 'story-candidate', confidence: 0.9 }
     ]);
     expect(websocketService.broadcastFeedRefresh).toHaveBeenCalledWith({ userIds: [], reason: 'stories' });
+  });
+
+  test('skips queued story targets that were matched by an earlier grouping job', async () => {
+    const target = { id: 'story-target', aiStoryGroupStatus: 'matched', storyGroupId: 'story-1' };
+    aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(true);
+    database.getArticleIdsPendingAiStoryGrouping.mockReturnValue(['story-target']);
+    database.getAiStoryGroupingCandidateSet.mockReturnValue({ target, candidates: [] });
+
+    scheduleAiStoryGroupingForPendingArticles([target]);
+    await flushBackgroundAiProcessing();
+
+    expect(aiStoryGrouper.findSimilarStoriesForArticle).not.toHaveBeenCalled();
+    expect(database.markArticlesAiStoryGrouping).not.toHaveBeenCalled();
+  });
+
+  test('does not overwrite a story matched while another model request is in flight', async () => {
+    const target = { id: 'story-target', title: 'Shared summit report' };
+    const candidate = { id: 'story-candidate', title: 'Shared summit update' };
+    const deferredResult = createDeferred();
+    aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(true);
+    database.getArticleIdsPendingAiStoryGrouping.mockReturnValue(['story-target']);
+    database.getAiStoryGroupingCandidateSet.mockReturnValue({ target, candidates: [candidate] });
+    aiStoryGrouper.findSimilarStoriesForArticle.mockReturnValue(deferredResult.promise);
+
+    scheduleAiStoryGroupingForPendingArticles([target]);
+    await flushBackgroundAiProcessing();
+    database.getArticleById.mockReturnValue({ ...target, aiStoryGroupStatus: 'matched', storyGroupId: 'story-newer' });
+    deferredResult.resolve({ matches: [], model: 'test-story-model', candidates: [candidate] });
+    await flushBackgroundAiProcessing();
+
+    expect(database.markArticlesAiStoryGrouping).not.toHaveBeenCalled();
+    expect(database.assignArticlesToStoryGroup).not.toHaveBeenCalled();
+  });
+
+  test('uses a candidate group created while the model request is in flight', async () => {
+    const target = { id: 'story-target', title: 'Shared summit report' };
+    const candidate = { id: 'story-candidate', title: 'Shared summit update' };
+    const deferredResult = createDeferred();
+    aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(true);
+    database.getArticleIdsPendingAiStoryGrouping.mockReturnValue(['story-target']);
+    database.getAiStoryGroupingCandidateSet.mockReturnValue({ target, candidates: [candidate] });
+    aiStoryGrouper.findSimilarStoriesForArticle.mockReturnValue(deferredResult.promise);
+    database.assignArticlesToStoryGroup.mockReturnValue(2);
+
+    scheduleAiStoryGroupingForPendingArticles([target]);
+    await flushBackgroundAiProcessing();
+    database.getArticleById.mockImplementation((articleId) => articleId === candidate.id
+      ? { ...candidate, aiStoryGroupStatus: 'matched', storyGroupId: 'story-newer' }
+      : target);
+    database.getArticleIdsForStoryGroups.mockReturnValue(['story-candidate']);
+    deferredResult.resolve({
+      matches: [{ articleId: candidate.id, confidence: 0.9 }],
+      model: 'test-story-model',
+      candidates: [candidate]
+    });
+    await flushBackgroundAiProcessing();
+
+    expect(database.getArticleIdsForStoryGroups).toHaveBeenCalledWith(['story-newer'], null);
+    expect(database.assignArticlesToStoryGroup).toHaveBeenCalledWith(
+      ['story-target', 'story-candidate'],
+      'story-newer',
+      'test-story-model',
+      [{ articleId: 'story-candidate', confidence: 0.9 }]
+    );
+  });
+
+  test('does not create a story group from a candidate deleted during the model request', async () => {
+    const target = { id: 'story-target', title: 'Shared summit report' };
+    const candidate = { id: 'story-candidate', title: 'Shared summit update' };
+    const deferredResult = createDeferred();
+    aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(true);
+    database.getArticleIdsPendingAiStoryGrouping.mockReturnValue(['story-target']);
+    database.getAiStoryGroupingCandidateSet.mockReturnValue({ target, candidates: [candidate] });
+    aiStoryGrouper.findSimilarStoriesForArticle.mockReturnValue(deferredResult.promise);
+
+    scheduleAiStoryGroupingForPendingArticles([target]);
+    await flushBackgroundAiProcessing();
+    database.getArticleById.mockImplementation((articleId) => articleId === candidate.id ? null : target);
+    deferredResult.resolve({
+      matches: [{ articleId: candidate.id, confidence: 0.9 }],
+      model: 'test-story-model',
+      candidates: [candidate]
+    });
+    await flushBackgroundAiProcessing();
+
+    expect(database.assignArticlesToStoryGroup).not.toHaveBeenCalled();
+    expect(database.markArticlesAiStoryGrouping).toHaveBeenCalledWith(['story-target'], 'no_match', 'test-story-model', {
+      matchIds: [],
+      reason: 'unchanged_candidate_signature'
+    });
   });
 
   test('AI story grouping bridges all members of existing story groups', async () => {

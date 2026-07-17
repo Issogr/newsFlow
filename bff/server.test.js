@@ -28,14 +28,14 @@ const HOSTILE_SESSION_HEADERS = {
   'x-newsflow-app': 'hostile',
 };
 
-async function listen(server) {
-  await new Promise((resolve) => {
+function listen(server) {
+  return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', resolve);
   });
 }
 
-async function close(server) {
-  await new Promise((resolve) => {
+function close(server) {
+  return new Promise((resolve) => {
     server.close(resolve);
   });
 }
@@ -206,9 +206,12 @@ describe('bff server', () => {
 
     const backendApp = express();
     backendApp.use(express.json());
+    backendApp.use((req, res, next) => {
+      lastBackendHeaders = req.headers;
+      next();
+    });
 
     backendApp.post('/internal-api/auth/login', (req, res) => {
-      lastBackendHeaders = req.headers;
       const requestedUsername = String(req.body?.username || '').trim().toLowerCase();
       const user = requestedUsername === 'admin' ? usersById.get('admin-id') : usersById.get('user-1');
       const sessionValue = `backend-session-${user.id}`;
@@ -222,7 +225,6 @@ describe('bff server', () => {
     });
 
     backendApp.post('/internal-api/auth/logout', (req, res) => {
-      lastBackendHeaders = req.headers;
       if (logoutShouldFail) {
         res.status(503).json({ error: { message: 'Backend unavailable', code: 'UNAVAILABLE' } });
         return;
@@ -233,8 +235,6 @@ describe('bff server', () => {
     });
 
     backendApp.get('/internal-api/me', (req, res) => {
-      lastBackendHeaders = req.headers;
-
       const user = backendSessions.get(String(req.headers.cookie || ''));
       if (!user) {
         res.status(401).json({ error: { message: 'Authentication required', code: 'UNAUTHORIZED' } });
@@ -253,7 +253,6 @@ describe('bff server', () => {
     });
 
     backendApp.delete('/internal-api/admin/users/:userId', (req, res) => {
-      lastBackendHeaders = req.headers;
       const actingUser = backendSessions.get(String(req.headers.cookie || ''));
 
       if (!actingUser || actingUser.id !== 'admin-id') {
@@ -271,7 +270,6 @@ describe('bff server', () => {
     });
 
     backendApp.post('/internal-api/me/feedback', (req, res) => {
-      lastBackendHeaders = req.headers;
       let byteCount = 0;
 
       req.on('data', (chunk) => {
@@ -283,13 +281,11 @@ describe('bff server', () => {
     });
 
     backendApp.get('/api/public/ping', (req, res) => {
-      lastBackendHeaders = req.headers;
       res.cookie('newsflow_session', 'backend-public-cookie', { httpOnly: true, path: '/' });
       res.json({ ok: true });
     });
 
     backendApp.get('/socket.io/ping', (req, res) => {
-      lastBackendHeaders = req.headers;
       res.json({ path: req.path });
     });
 
@@ -406,8 +402,7 @@ describe('bff server', () => {
 
   test('keeps the session valid after recreating the BFF app instance', async () => {
     const bffSessionCookie = await login(app);
-    sessionDb.close();
-    sessionStore.stopCleanupInterval();
+    cleanupCreatedApp({ sessionStore, sessionDb });
 
     const restarted = createApp({ backendBaseUrl, frontendDistDir, sessionDbPath, appBaseUrl: SAME_ORIGIN });
     const meResponse = await request(restarted.app)
@@ -415,8 +410,7 @@ describe('bff server', () => {
       .set('Cookie', bffSessionCookie)
       .expect(200);
 
-    restarted.sessionStore.stopCleanupInterval();
-    restarted.sessionDb.close();
+    cleanupCreatedApp(restarted);
     expect(meResponse.body).toEqual({ user: { id: 'user-1', username: 'alice' } });
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
   });

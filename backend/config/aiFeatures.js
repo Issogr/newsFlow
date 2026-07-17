@@ -4,13 +4,12 @@ function hasOpenRouterApiKey() {
   return Boolean(String(process.env.OPENROUTER_API_KEY || '').trim());
 }
 
-function readAiToggleValue(envName, fallback = 'true') {
-  return parseBooleanEnv(envName, fallback !== 'false', { invalidFallback: false }) ? 'true' : 'false';
+function isAiToggleEnabled(envName, fallback = true) {
+  return parseBooleanEnv(envName, fallback, { invalidFallback: false });
 }
 
 function isOpenRouterFeatureEnabled(envName) {
-  const enabledValue = readAiToggleValue(envName);
-  return enabledValue !== 'false' && hasOpenRouterApiKey();
+  return isAiToggleEnabled(envName) && hasOpenRouterApiKey();
 }
 
 function getAiFeatures() {
@@ -27,6 +26,6 @@ function getAiFeatures() {
 
 module.exports = {
   getAiFeatures,
+  isAiToggleEnabled,
   isOpenRouterFeatureEnabled,
-  readAiToggleValue
 };

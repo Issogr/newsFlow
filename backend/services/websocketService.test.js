@@ -1,3 +1,5 @@
+const createMockLogger = require('../test-utils/mockLogger');
+
 function createSocket(id, handshake = {}) {
   const handlers = {};
 
@@ -57,12 +59,7 @@ describe('websocketService', () => {
     };
 
     jest.doMock('socket.io', () => socketFactory);
-    jest.doMock('../utils/logger', () => ({
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-      debug: jest.fn()
-    }));
+    jest.doMock('../utils/logger', createMockLogger);
     jest.doMock('../utils/networkConfig', () => ({
       getAllowedOrigins: jest.fn(() => ['http://localhost:3000']),
       isOriginAllowed: jest.fn(() => true)

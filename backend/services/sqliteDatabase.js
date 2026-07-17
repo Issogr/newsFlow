@@ -12,13 +12,6 @@ function toPlainObject(row) {
   return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, toPlainValue(value)]));
 }
 
-function toDatabaseOptions(options = {}) {
-  return {
-    readOnly: Boolean(options.readonly || options.readOnly),
-    timeout: typeof options.timeout === 'number' ? options.timeout : 5000
-  };
-}
-
 class SqliteStatement {
   constructor(statement) {
     this.statement = statement;
@@ -38,8 +31,8 @@ class SqliteStatement {
 }
 
 class SqliteDatabase {
-  constructor(filename, options = {}) {
-    this.database = new DatabaseSync(filename, toDatabaseOptions(options));
+  constructor(filename, { timeout = 5000, ...options } = {}) {
+    this.database = new DatabaseSync(filename, { ...options, timeout });
     this.transactionDepth = 0;
     this.closed = false;
   }

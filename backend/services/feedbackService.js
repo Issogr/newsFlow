@@ -5,10 +5,7 @@ const { parseIntegerEnv } = require('../utils/env');
 const TELEGRAM_API_BASE = String(process.env.TELEGRAM_API_BASE_URL || 'https://api.telegram.org').trim().replace(/\/+$/, '');
 const FEEDBACK_DELIVERY_TIMEOUT_MS = parseIntegerEnv('FEEDBACK_DELIVERY_TIMEOUT_MS', 25000, { min: 1000, max: 120000 });
 const runtimeFetch = globalThis.fetch;
-const RuntimeAbortSignal = globalThis.AbortSignal;
-const RuntimeURLSearchParams = globalThis.URLSearchParams;
-const RuntimeFormData = globalThis.FormData;
-const RuntimeBlob = globalThis.Blob;
+
 function formatCategoryLabel(category) {
   if (category === 'bug') return 'Bug report';
   if (category === 'idea') return 'Improvement idea';
@@ -32,10 +29,6 @@ function getTelegramConfig() {
 
   if (messageThreadId && !/^\d+$/.test(messageThreadId)) {
     throw createError(503, 'Feedback delivery is misconfigured on the server.', 'FEEDBACK_NOT_CONFIGURED');
-  }
-
-  if (typeof runtimeFetch !== 'function' || typeof RuntimeURLSearchParams !== 'function') {
-    throw createError(500, 'Server runtime does not support outbound feedback delivery.', 'SERVER_ERROR');
   }
 
   return {
@@ -89,7 +82,7 @@ function buildAttachmentCaption(user, attachmentType) {
 }
 
 async function sendTextMessage(config, message, signal) {
-  const params = new RuntimeURLSearchParams({
+  const params = new globalThis.URLSearchParams({
     chat_id: config.chatId,
     text: message,
     parse_mode: 'HTML',
@@ -110,12 +103,8 @@ async function sendTextMessage(config, message, signal) {
 }
 
 async function sendAttachment(config, user, attachment, signal) {
-  if (typeof RuntimeFormData !== 'function' || typeof RuntimeBlob !== 'function') {
-    throw createError(500, 'Server runtime does not support feedback attachments.', 'SERVER_ERROR');
-  }
-
   const attachmentType = getFeedbackAttachmentType(attachment);
-  const formData = new RuntimeFormData();
+  const formData = new globalThis.FormData();
   const attachmentName = String(attachment?.originalname || 'feedback-attachment').trim() || 'feedback-attachment';
   const attachmentMimeType = String(attachment?.mimetype || 'application/octet-stream').trim() || 'application/octet-stream';
 
@@ -133,7 +122,7 @@ async function sendAttachment(config, user, attachment, signal) {
 
   formData.append(
     attachmentType === 'video' ? 'video' : 'photo',
-    new RuntimeBlob([attachment.buffer], { type: attachmentMimeType }),
+    new globalThis.Blob([attachment.buffer], { type: attachmentMimeType }),
     attachmentName
   );
 
@@ -151,7 +140,7 @@ async function sendFeedback({ user, category, title, description, attachment = n
 
   try {
     const attachmentType = getFeedbackAttachmentType(attachment);
-    const signal = RuntimeAbortSignal.timeout(FEEDBACK_DELIVERY_TIMEOUT_MS);
+    const signal = globalThis.AbortSignal.timeout(FEEDBACK_DELIVERY_TIMEOUT_MS);
 
     if (attachment?.buffer?.length) {
       await sendAttachment(config, user, attachment, signal);

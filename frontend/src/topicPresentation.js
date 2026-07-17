@@ -47,60 +47,24 @@ function createTopicPresentation(Icon, iconBadgeClassName) {
   };
 }
 
+const TOPIC_PRESENTATIONS = [
+  { pattern: /(politic|politica|government|governo|election|elezion|parliament|parlamento)/, Icon: Landmark, badge: TOPIC_BADGE_CLASSES.politics },
+  { pattern: /(econom|market|mercat|business|finance|finanz)/, Icon: Briefcase, badge: TOPIC_BADGE_CLASSES.economy },
+  { pattern: /(tech|tecnolog|\bai\b|artificial intelligence|intelligenza artificiale|software|digital|startup)/, Icon: Cpu, badge: TOPIC_BADGE_CLASSES.technology },
+  { pattern: /(science|scienz|research|ricerca|space|spazio)/, Icon: FlaskConical, badge: TOPIC_BADGE_CLASSES.science },
+  { pattern: /(sport|football|calcio|tennis|basket|olympic|formula 1|motogp)/, Icon: Trophy, badge: TOPIC_BADGE_CLASSES.sport },
+  { pattern: /(culture|cultura|art|arte|book|libri|museum|museo|teatro)/, Icon: Palette, badge: TOPIC_BADGE_CLASSES.culture },
+  { pattern: /(health|salute|sanita|medicine|medicina|hospital|ospedale|vaccin|virus)/, Icon: HeartPulse, badge: TOPIC_BADGE_CLASSES.health },
+  { pattern: /(cronaca|local news|crime)/, Icon: Newspaper, badge: TOPIC_BADGE_CLASSES.localNews },
+  { pattern: /(spettacolo|entertainment|cinema|film|music|musica|tv|televisione|celebrity)/, Icon: Film, badge: TOPIC_BADGE_CLASSES.entertainment },
+  { pattern: /(world|esteri|international|europa|europe|global)/, Icon: Globe2, badge: TOPIC_BADGE_CLASSES.world },
+  { pattern: /(climate|clima|environment|ambiente|green|energia)/, Icon: Leaf, badge: TOPIC_BADGE_CLASSES.climate },
+  { pattern: /(security|sicurezza|war|guerra|defense|difesa)/, Icon: Shield, badge: TOPIC_BADGE_CLASSES.security },
+  { pattern: /(podcast|audio|briefing)/, Icon: Headphones, badge: TOPIC_BADGE_CLASSES.podcast }
+];
+
 export function getTopicPresentation(topic) {
   const normalized = normalizeTopic(topic);
-
-  if (/(politic|politica|government|governo|election|elezion|parliament|parlamento)/.test(normalized)) {
-    return createTopicPresentation(Landmark, TOPIC_BADGE_CLASSES.politics);
-  }
-
-  if (/(econom|market|mercat|business|finance|finanz)/.test(normalized)) {
-    return createTopicPresentation(Briefcase, TOPIC_BADGE_CLASSES.economy);
-  }
-
-  if (/(tech|tecnolog|\bai\b|artificial intelligence|intelligenza artificiale|software|digital|startup)/.test(normalized)) {
-    return createTopicPresentation(Cpu, TOPIC_BADGE_CLASSES.technology);
-  }
-
-  if (/(science|scienz|research|ricerca|space|spazio)/.test(normalized)) {
-    return createTopicPresentation(FlaskConical, TOPIC_BADGE_CLASSES.science);
-  }
-
-  if (/(sport|football|calcio|tennis|basket|olympic|formula 1|motogp)/.test(normalized)) {
-    return createTopicPresentation(Trophy, TOPIC_BADGE_CLASSES.sport);
-  }
-
-  if (/(culture|cultura|art|arte|book|libri|museum|museo|teatro)/.test(normalized)) {
-    return createTopicPresentation(Palette, TOPIC_BADGE_CLASSES.culture);
-  }
-
-  if (/(health|salute|sanita|medicine|medicina|hospital|ospedale|vaccin|virus)/.test(normalized)) {
-    return createTopicPresentation(HeartPulse, TOPIC_BADGE_CLASSES.health);
-  }
-
-  if (/(cronaca|local news|crime)/.test(normalized)) {
-    return createTopicPresentation(Newspaper, TOPIC_BADGE_CLASSES.localNews);
-  }
-
-  if (/(spettacolo|entertainment|cinema|film|music|musica|tv|televisione|celebrity)/.test(normalized)) {
-    return createTopicPresentation(Film, TOPIC_BADGE_CLASSES.entertainment);
-  }
-
-  if (/(world|esteri|international|europa|europe|global)/.test(normalized)) {
-    return createTopicPresentation(Globe2, TOPIC_BADGE_CLASSES.world);
-  }
-
-  if (/(climate|clima|environment|ambiente|green|energia)/.test(normalized)) {
-    return createTopicPresentation(Leaf, TOPIC_BADGE_CLASSES.climate);
-  }
-
-  if (/(security|sicurezza|war|guerra|defense|difesa)/.test(normalized)) {
-    return createTopicPresentation(Shield, TOPIC_BADGE_CLASSES.security);
-  }
-
-  if (/(podcast|audio|briefing)/.test(normalized)) {
-    return createTopicPresentation(Headphones, TOPIC_BADGE_CLASSES.podcast);
-  }
-
-  return createTopicPresentation(Tags, TOPIC_BADGE_CLASSES.fallback);
+  const presentation = TOPIC_PRESENTATIONS.find(({ pattern }) => pattern.test(normalized));
+  return createTopicPresentation(presentation?.Icon || Tags, presentation?.badge || TOPIC_BADGE_CLASSES.fallback);
 }

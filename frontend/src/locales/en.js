@@ -20,7 +20,6 @@ const en = {
   noNewsTitle: 'No news found',
   noNewsText: 'Try widening the filters or refresh the feed.',
   loadingMore: 'Loading...',
-  loadMore: 'Load more',
   noMoreResults: 'You reached the end of the available results.',
   settings: 'Settings',
   close: 'Close',

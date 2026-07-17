@@ -16,4 +16,10 @@ describe('ErrorMessage', () => {
 
     expect(screen.getByText('Impossibile connettersi al server. Verifica la tua connessione internet.')).toBeInTheDocument();
   });
+
+  test('interpolates unknown response status details', () => {
+    render(<ErrorMessage error={{ response: { status: 418, statusText: 'Teapot' } }} t={t} />);
+
+    expect(screen.getByText('Errore 418: Teapot')).toBeInTheDocument();
+  });
 });
