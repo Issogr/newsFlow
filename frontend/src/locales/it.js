@@ -21,7 +21,6 @@ const it = {
   noNewsTitle: 'Nessuna notizia trovata',
   noNewsText: 'Prova ad allargare i filtri oppure aggiorna il feed.',
   loadingMore: 'Caricamento...',
-  loadMore: 'Carica altro',
   noMoreResults: 'Hai raggiunto la fine dei risultati disponibili.',
   settings: 'Impostazioni',
   close: 'Chiudi',

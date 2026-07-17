@@ -173,6 +173,35 @@ async function dispatchSocketHandler(handler, payload) {
   });
 }
 
+let intersectionObservers = [];
+
+class MockIntersectionObserver {
+  constructor(callback) {
+    this.callback = callback;
+    intersectionObservers.push(this);
+  }
+
+  observe(target) {
+    this.target = target;
+  }
+
+  disconnect() {}
+}
+
+function setLoadMoreIntersection(isIntersecting) {
+  const observer = intersectionObservers.at(-1);
+  expect(observer).toBeDefined();
+  act(() => observer.callback([{ isIntersecting, target: observer.target }], observer));
+}
+
+async function triggerAutoLoadMore() {
+  setLoadMoreIntersection(true);
+  await act(async () => {
+    vi.advanceTimersByTime(3000);
+    await Promise.resolve();
+  });
+}
+
 const currentUser = createTestCurrentUser();
 
 describe('NewsAggregator', () => {
@@ -180,6 +209,8 @@ describe('NewsAggregator', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    intersectionObservers = [];
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
     Object.defineProperty(window, 'scrollY', {
       value: 0,
       writable: true,
@@ -203,6 +234,7 @@ describe('NewsAggregator', () => {
       vi.runOnlyPendingTimers();
     });
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   test('shows account initials and falls back to the user icon without a username', async () => {
@@ -981,7 +1013,7 @@ describe('NewsAggregator', () => {
     await renderNewsAggregator();
     expect(await screen.findByText('initial headline 12')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    await triggerAutoLoadMore();
     expect(await screen.findByText('older headline 13')).toBeInTheDocument();
 
     await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
@@ -1025,7 +1057,8 @@ describe('NewsAggregator', () => {
     });
 
     await renderNewsAggregator();
-    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+    await screen.findByRole('status', { name: 'Loading...' });
+    await triggerAutoLoadMore();
 
     await act(async () => {
       appendRequest.resolve(createFeedResponse(createGroups('older', 13, 1), { meta: { nextCursor: null } }));
@@ -1077,14 +1110,15 @@ describe('NewsAggregator', () => {
     });
 
     await renderNewsAggregator();
-    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+    await screen.findByRole('status', { name: 'Loading...' });
+    await triggerAutoLoadMore();
     expect(await screen.findByText('older headline 24')).toBeInTheDocument();
 
     await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
 
     expect(await screen.findByText('refreshed headline 12')).toBeInTheDocument();
     expect(screen.getByText('older headline 24')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Load more' })).toBeEnabled();
+    expect(screen.getByRole('status', { name: 'Loading...' })).toBeInTheDocument();
   });
 
   test('reloads cached feed from the new article pill', async () => {
@@ -1119,7 +1153,7 @@ describe('NewsAggregator', () => {
     expect(screen.queryByRole('button', { name: '2 new articles available' })).not.toBeInTheDocument();
   });
 
-  test('uses the server cursor for load more requests', async () => {
+  test('loads from the server cursor after the bottom sentinel stays visible for three seconds', async () => {
     fetchNews.mockImplementation(({ beforeId }) => {
       if (beforeId === 'article-1') {
         return Promise.resolve(createFeedResponse([{ id: 'group-older', title: 'Older headline', items: [{ id: 'article-0', pubDate: '2026-03-14T09:00:00.000Z' }] }], {
@@ -1147,9 +1181,15 @@ describe('NewsAggregator', () => {
       }));
     });
 
-    expect(await screen.findByRole('button', { name: 'Load more' })).toBeInTheDocument();
+    expect(await screen.findByRole('status', { name: 'Loading...' })).toBeInTheDocument();
+    setLoadMoreIntersection(true);
+    act(() => vi.advanceTimersByTime(2999));
+    expect(fetchNews).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
 
     await waitFor(() => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -1226,7 +1266,7 @@ describe('NewsAggregator', () => {
     await renderNewsAggregator();
     expect(await screen.findByText('Current merged headline')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    await triggerAutoLoadMore();
 
     await waitFor(() => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -1260,12 +1300,12 @@ describe('NewsAggregator', () => {
     expect(await screen.findByText('page-1 headline 1')).toBeInTheDocument();
 
     for (let pageNumber = 2; pageNumber <= 6; pageNumber += 1) {
-      fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+      await triggerAutoLoadMore();
       expect(await screen.findByText(`page-${pageNumber} headline ${pageNumber * 12}`)).toBeInTheDocument();
     }
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('status', { name: 'Loading...' })).not.toBeInTheDocument();
     });
 
     expect(screen.getByText('page-1 headline 1')).toBeInTheDocument();
@@ -1274,7 +1314,7 @@ describe('NewsAggregator', () => {
     expect(fetchNews.mock.calls.some(([params]) => params.beforeId === 'article-page-6-72')).toBe(false);
   });
 
-  test('clears loading-more state when a list reload cancels pagination', async () => {
+  test('restores automatic pagination when a list reload cancels an append', async () => {
     const appendRequest = createDeferred();
     const reloadRequest = createDeferred();
     let callCount = 0;
@@ -1302,10 +1342,9 @@ describe('NewsAggregator', () => {
     });
 
     await renderNewsAggregator();
-    const loadMoreButton = await screen.findByRole('button', { name: 'Load more' });
-
-    fireEvent.click(loadMoreButton);
-    expect(await screen.findByRole('button', { name: 'Loading...' })).toBeDisabled();
+    await screen.findByRole('status', { name: 'Loading...' });
+    await triggerAutoLoadMore();
+    expect(fetchNews).toHaveBeenCalledTimes(2);
 
     openDesktopSearch();
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'economy' } });
@@ -1324,9 +1363,10 @@ describe('NewsAggregator', () => {
       }
     }));
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Load more' })).toBeEnabled();
-    });
+    expect(await screen.findByText('Reloaded headline')).toBeInTheDocument();
+    await triggerAutoLoadMore();
+    expect(fetchNews).toHaveBeenCalledTimes(4);
+    expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ beforeId: 'article-2' }));
   });
 
   test('shows a clear-search button and clears the search field', async () => {

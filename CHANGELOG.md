@@ -2,6 +2,7 @@
 
 ## 3.5.13
 
+- replaced the Load more button with automatic pagination and staggered loading feedback after the user remains at the end of the feed for three seconds
 - reduced AI cost and failure amplification with model-specific provider backoff, selected-article reader prewarm, coalesced summary refreshes, stricter story candidates, bounded prompt text, and chunk-local TTS retries
 - expanded AI metrics with resolved model, cache-token, cost, HTTP failure, retry, and TTS request details while redacting provider error URLs
 

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowDown,
   ArrowUp,
   Cog,
   LogOut,
@@ -51,6 +50,7 @@ const BACK_TO_TOP_THRESHOLD = 280;
 const TOP_NAV_SHRINK_THRESHOLD = 28;
 const MOBILE_NAV_REVEAL_SCROLL_DELTA = 24;
 const MOBILE_NAV_SHOW_DELAY_MS = 250;
+const LOAD_MORE_DELAY_MS = 3000;
 const SKELETON_CARD_COUNT = 6;
 
 function NewsCardSkeleton({ showImage }) {
@@ -168,6 +168,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const mobileNavShowTimeoutRef = useRef(null);
   const mobileNavVisibleRef = useRef(true);
   const mobileNavRevealStartYRef = useRef(0);
+  const loadMoreSentinelRef = useRef(null);
+  const loadMoreTimeoutRef = useRef(null);
   const { startLatestRequest: startListRequest } = useLatestRequest();
   const { startLatestRequest: startPaginationRequest, cancelLatestRequest: cancelPaginationRequest } = useLatestRequest();
   const { startLatestRequest: startSummaryRequest, cancelLatestRequest: cancelSummaryRequest } = useLatestRequest();
@@ -214,6 +216,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   visibleNewsCountRef.current = visibleNews.length;
   const retainedNewsLimitReached = visibleNews.length >= MAX_RETAINED_NEWS_GROUPS;
   const isReadLaterView = activeView === 'readLater';
+  const canLoadMore = Boolean(meta?.hasMore && (isReadLaterView || !retainedNewsLimitReached));
   const metaRef = useRef(meta);
   metaRef.current = meta;
   const setupSourceCatalog = Array.isArray(currentUser?.sourceCatalog) && currentUser.sourceCatalog.length > 0
@@ -512,6 +515,42 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       }
     }
   }, [activeFilters.sourceIds, activeFilters.topics, cancelPaginationRequest, debouncedSearch, isReadLaterView, startListRequest, startPaginationRequest]);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || !canLoadMore || loading || loadingMore) {
+      return undefined;
+    }
+
+    const clearLoadMoreTimeout = () => {
+      if (loadMoreTimeoutRef.current) {
+        window.clearTimeout(loadMoreTimeoutRef.current);
+        loadMoreTimeoutRef.current = null;
+      }
+    };
+    const observer = new globalThis.IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting) {
+        clearLoadMoreTimeout();
+        return;
+      }
+      if (loadMoreTimeoutRef.current) {
+        return;
+      }
+
+      loadMoreTimeoutRef.current = window.setTimeout(() => {
+        loadMoreTimeoutRef.current = null;
+        loadNews(meta?.nextCursor
+          ? { append: true, cursor: meta.nextCursor }
+          : { page: (meta?.page || 1) + 1, append: true });
+      }, LOAD_MORE_DELAY_MS);
+    });
+
+    observer.observe(sentinel);
+    return () => {
+      observer.disconnect();
+      clearLoadMoreTimeout();
+    };
+  }, [canLoadMore, loadNews, loading, loadingMore, meta?.nextCursor, meta?.page]);
 
   const handleTopicRefresh = useCallback((payload = {}) => {
     if (needsSourceSetup) {
@@ -933,25 +972,20 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
               ))}
             </div>
 
-            <div className="mt-8 flex justify-center">
-              {meta?.hasMore && (isReadLaterView || !retainedNewsLimitReached) ? (
-                <button
-                  type="button"
-                  onClick={() => loadNews(
-                    meta?.nextCursor
-                      ? { append: true, cursor: meta.nextCursor }
-                      : { page: (meta?.page || 1) + 1, append: true }
-                  )}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={loadingMore}
+            <div className="mt-8 flex min-h-12 justify-center">
+              {canLoadMore ? (
+                <div
+                  ref={loadMoreSentinelRef}
+                  className="inline-flex items-center px-5 py-3 text-sm font-medium text-slate-500"
+                  role="status"
+                  aria-label={t('loadingMore')}
                 >
-                  {loadingMore ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <ArrowDown className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {loadingMore ? t('loadingMore') : t('loadMore')}
-                </button>
+                  <span className="inline-flex h-4 items-end gap-1" aria-hidden="true">
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-sky-500 [animation-delay:-300ms]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-violet-500 [animation-delay:-150ms]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-emerald-500" />
+                  </span>
+                </div>
               ) : (
                 <p className="text-sm text-slate-500">{t('noMoreResults')}</p>
               )}
