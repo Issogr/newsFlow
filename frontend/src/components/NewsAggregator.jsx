@@ -49,6 +49,8 @@ const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_FILTERS = { sourceIds: [], topics: [] };
 const BACK_TO_TOP_THRESHOLD = 280;
 const TOP_NAV_SHRINK_THRESHOLD = 28;
+const MOBILE_NAV_REVEAL_SCROLL_DELTA = 24;
+const MOBILE_NAV_SHOW_DELAY_MS = 250;
 const SKELETON_CARD_COUNT = 6;
 
 function NewsCardSkeleton({ showImage }) {
@@ -163,6 +165,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
   const t = useMemo(() => createTranslator(locale), [locale]);
   const scrollFrameRef = useRef(null);
+  const mobileNavShowTimeoutRef = useRef(null);
+  const mobileNavVisibleRef = useRef(true);
+  const mobileNavRevealStartYRef = useRef(0);
   const { startLatestRequest: startListRequest } = useLatestRequest();
   const { startLatestRequest: startPaginationRequest, cancelLatestRequest: cancelPaginationRequest } = useLatestRequest();
   const { startLatestRequest: startSummaryRequest, cancelLatestRequest: cancelSummaryRequest } = useLatestRequest();
@@ -299,13 +304,33 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         const nextShowBackToTop = currentY > BACK_TO_TOP_THRESHOLD;
         const nextShowMobileBackToTop = currentY > 0;
         const nextTopNavCompact = currentY > TOP_NAV_SHRINK_THRESHOLD;
-        const nextShowMobileNav = !(currentY > lastScrollY.current && currentY > 50);
+        const scrollingDown = currentY > lastScrollY.current;
+        const shouldHideMobileNav = scrollingDown && currentY > 50;
+        const shouldShowMobileNav = !scrollingDown && (
+          currentY <= 50 || mobileNavRevealStartYRef.current - currentY >= MOBILE_NAV_REVEAL_SCROLL_DELTA
+        );
 
         setShowBackToTop((current) => (current === nextShowBackToTop ? current : nextShowBackToTop));
         setShowMobileBackToTop((current) => (current === nextShowMobileBackToTop ? current : nextShowMobileBackToTop));
         setTopNavCompact((current) => (current === nextTopNavCompact ? current : nextTopNavCompact));
         setUserMenuOpen((current) => (current ? false : current));
-        setShowMobileNav((current) => (current === nextShowMobileNav ? current : nextShowMobileNav));
+        if (shouldShowMobileNav) {
+          if (!mobileNavVisibleRef.current && !mobileNavShowTimeoutRef.current) {
+            mobileNavShowTimeoutRef.current = window.setTimeout(() => {
+              mobileNavVisibleRef.current = true;
+              mobileNavShowTimeoutRef.current = null;
+              setShowMobileNav(true);
+            }, MOBILE_NAV_SHOW_DELAY_MS);
+          }
+        } else if (shouldHideMobileNav) {
+          if (mobileNavShowTimeoutRef.current) {
+            window.clearTimeout(mobileNavShowTimeoutRef.current);
+            mobileNavShowTimeoutRef.current = null;
+          }
+          mobileNavRevealStartYRef.current = currentY;
+          mobileNavVisibleRef.current = false;
+          setShowMobileNav(false);
+        }
         lastScrollY.current = currentY;
         scrollFrameRef.current = null;
       });
@@ -318,6 +343,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
       window.removeEventListener('scroll', handleScroll);
       if (scrollFrameRef.current) {
         window.cancelAnimationFrame(scrollFrameRef.current);
+      }
+      if (mobileNavShowTimeoutRef.current) {
+        window.clearTimeout(mobileNavShowTimeoutRef.current);
       }
     };
   }, []);

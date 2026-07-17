@@ -236,6 +236,33 @@ describe('NewsAggregator', () => {
     expect(window.localStorage.getItem('news-flow-reader-text-width')).toBe('widest');
   });
 
+  test('shows the mobile navbar only after enough upward scroll and a delay', async () => {
+    fetchNews.mockResolvedValue(createFeedResponse([], { meta: { totalGroups: 0 } }));
+    const view = await renderNewsAggregator();
+    const mobileNav = view.container.querySelector('.mobile-nav-liquid');
+
+    act(() => vi.advanceTimersToNextFrame());
+    window.scrollY = 100;
+    fireEvent.scroll(window);
+    act(() => vi.advanceTimersToNextFrame());
+    expect(mobileNav).toHaveClass('mobile-nav-liquid-hidden');
+
+    window.scrollY = 99;
+    fireEvent.scroll(window);
+    act(() => vi.advanceTimersToNextFrame());
+    act(() => vi.advanceTimersByTime(300));
+    expect(mobileNav).toHaveClass('mobile-nav-liquid-hidden');
+
+    window.scrollY = 76;
+    fireEvent.scroll(window);
+    act(() => vi.advanceTimersToNextFrame());
+    act(() => vi.advanceTimersByTime(249));
+    expect(mobileNav).toHaveClass('mobile-nav-liquid-hidden');
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(mobileNav).toHaveClass('mobile-nav-liquid-visible');
+  });
+
   test('shows card-shaped placeholders while the initial feed loads', async () => {
     const request = createDeferred();
     fetchNews.mockReturnValue(request.promise);
