@@ -48,6 +48,14 @@ function createTestPcmBuffer(byteLength = 2400, sampleValue = 1000) {
   return buffer;
 }
 
+function createAudioHttpResponse(data, { contentType = 'audio/pcm', status = 200 } = {}) {
+  return {
+    status,
+    headers: { 'content-type': contentType },
+    data
+  };
+}
+
 describe('aiPodcastGenerator', () => {
   const originalEnv = process.env;
 
@@ -286,11 +294,7 @@ describe('aiPodcastGenerator', () => {
     });
     const pcmBytes = Buffer.alloc(48000);
     const httpClient = {
-      post: jest.fn().mockResolvedValue({
-        status: 200,
-        headers: { 'content-type': 'audio/pcm' },
-        data: pcmBytes
-      })
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(pcmBytes))
     };
     aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
 
@@ -320,11 +324,7 @@ describe('aiPodcastGenerator', () => {
     const httpClient = {
       post: jest.fn().mockImplementation(() => {
         callIndex += 1;
-        return Promise.resolve({
-          status: 200,
-          headers: { 'content-type': 'audio/pcm' },
-          data: createTestPcmBuffer(pcmByteLength, 1000 + callIndex)
-        });
+        return Promise.resolve(createAudioHttpResponse(createTestPcmBuffer(pcmByteLength, 1000 + callIndex)));
       })
     };
     const sentence = 'La Francia ha comunicato una decisione politica importante e il servizio spiega il contesto per gli ascoltatori.';
@@ -356,11 +356,7 @@ describe('aiPodcastGenerator', () => {
     });
     const pcmByteLength = 2400;
     const httpClient = {
-      post: jest.fn().mockResolvedValue({
-        status: 200,
-        headers: { 'content-type': 'audio/pcm' },
-        data: createTestPcmBuffer(pcmByteLength)
-      })
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(createTestPcmBuffer(pcmByteLength)))
     };
     const paragraph = 'Questa parte del podcast spiega una notizia importante con contesto chiaro, conseguenze pratiche, una transizione naturale per chi ascolta e un dettaglio finale che mantiene il racconto parlato fluido.';
     const longScript = Array.from({ length: 10 }, () => paragraph).join('\n\n');
@@ -383,9 +379,9 @@ describe('aiPodcastGenerator', () => {
     const secondPcm = createTestPcmBuffer(2400, 2000);
     const httpClient = {
       post: jest.fn()
-        .mockResolvedValueOnce({ status: 200, headers: { 'content-type': 'audio/pcm' }, data: firstPcm })
-        .mockResolvedValueOnce({ status: 503, headers: { 'content-type': 'application/json' }, data: Buffer.from('{"error":{"message":"busy"}}') })
-        .mockResolvedValueOnce({ status: 200, headers: { 'content-type': 'audio/pcm' }, data: secondPcm })
+        .mockResolvedValueOnce(createAudioHttpResponse(firstPcm))
+        .mockResolvedValueOnce(createAudioHttpResponse(Buffer.from('{"error":{"message":"busy"}}'), { contentType: 'application/json', status: 503 }))
+        .mockResolvedValueOnce(createAudioHttpResponse(secondPcm))
     };
     const firstParagraph = 'The first section explains an important policy decision with enough context and a clear consequence for listeners.';
     const secondParagraph = 'The second section covers a scientific discovery with practical details and a different conclusion for listeners.';
@@ -406,11 +402,7 @@ describe('aiPodcastGenerator', () => {
       AI_PODCAST_TTS_MAX_AUDIO_BYTES: '1500'
     });
     const httpClient = {
-      post: jest.fn().mockResolvedValue({
-        status: 200,
-        headers: { 'content-type': 'audio/pcm' },
-        data: createTestPcmBuffer(1200)
-      })
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(createTestPcmBuffer(1200)))
     };
     const paragraph = 'This paragraph explains an important policy decision with enough context and a clear consequence for listeners.';
     aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
@@ -430,11 +422,7 @@ describe('aiPodcastGenerator', () => {
     });
     const audioBytes = createTestWavBuffer();
     const httpClient = {
-      post: jest.fn().mockResolvedValue({
-        status: 200,
-        headers: { 'content-type': 'audio/wav' },
-        data: audioBytes
-      })
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(audioBytes, { contentType: 'audio/wav' }))
     };
     aiPodcastGenerator._setAudioSpeechHttpClient(httpClient);
 
@@ -477,11 +465,10 @@ describe('aiPodcastGenerator', () => {
       OPENROUTER_API_KEY: 'test-key'
     });
     aiPodcastGenerator._setAudioSpeechHttpClient({
-      post: jest.fn().mockResolvedValue({
-        status: 400,
-        headers: { 'content-type': 'application/json' },
-        data: Buffer.from(JSON.stringify({ error: { message: 'Unsupported voice' } }))
-      })
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(
+        Buffer.from(JSON.stringify({ error: { message: 'Unsupported voice' } })),
+        { contentType: 'application/json', status: 400 }
+      ))
     });
 
     await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it'))
@@ -493,16 +480,15 @@ describe('aiPodcastGenerator', () => {
       OPENROUTER_API_KEY: 'test-key'
     });
     aiPodcastGenerator._setAudioSpeechHttpClient({
-      post: jest.fn().mockResolvedValue({
-        status: 400,
-        headers: { 'content-type': 'application/json' },
-        data: Buffer.from(JSON.stringify({
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(
+        Buffer.from(JSON.stringify({
           error: {
             message: 'Provider returned 400',
             metadata: { raw: 'Invalid voice: UnknownVoice' }
           }
-        }))
-      })
+        })),
+        { contentType: 'application/json', status: 400 }
+      ))
     });
 
     await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it'))
@@ -528,11 +514,7 @@ describe('aiPodcastGenerator', () => {
       OPENROUTER_API_KEY: 'test-key'
     });
     aiPodcastGenerator._setAudioSpeechHttpClient({
-      post: jest.fn().mockResolvedValue({
-        status: 200,
-        headers: { 'content-type': 'audio/wav' },
-        data: Buffer.from('RIFF broken')
-      })
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(Buffer.from('RIFF broken'), { contentType: 'audio/wav' }))
     });
 
     await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it'))
@@ -547,11 +529,7 @@ describe('aiPodcastGenerator', () => {
       AI_PODCAST_TTS_MAX_AUDIO_BYTES: '1500'
     });
     aiPodcastGenerator._setAudioSpeechHttpClient({
-      post: jest.fn().mockResolvedValue({
-        status: 200,
-        headers: { 'content-type': 'audio/wav' },
-        data: createTestWavBuffer(2048)
-      })
+      post: jest.fn().mockResolvedValue(createAudioHttpResponse(createTestWavBuffer(2048), { contentType: 'audio/wav' }))
     });
 
     await expect(aiPodcastGenerator.generateAudioForLocale('Testo podcast italiano', 'it'))

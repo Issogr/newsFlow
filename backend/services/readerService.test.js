@@ -8,12 +8,9 @@ jest.mock('./database', () => ({
   upsertReaderCache: jest.fn()
 }));
 
-jest.mock('../utils/logger', () => ({
-  warn: jest.fn(),
-  info: jest.fn(),
-  error: jest.fn(),
-  debug: jest.fn()
-}));
+const createMockLogger = require('../test-utils/mockLogger');
+
+jest.mock('../utils/logger', createMockLogger);
 
 jest.mock('../utils/urlSafety', () => ({
   fetchSafeTextUrl: jest.fn()

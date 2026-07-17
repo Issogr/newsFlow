@@ -371,15 +371,7 @@ function createApp(options = {}) {
     serveSpaIndex(res);
   });
 
-  app.use((req, res, next) => {
-    if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
-      next();
-      return;
-    }
-
-    sessionMiddleware(req, res, next);
-  });
-  app.use(normalizeSessionState);
+  app.use(/^\/(?:api|socket\.io).*/u, sessionMiddleware, normalizeSessionState);
 
   [
     ['/api/auth/register', '/auth/register'],

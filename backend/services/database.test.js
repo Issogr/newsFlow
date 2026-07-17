@@ -41,7 +41,7 @@ describe('database migrations', () => {
     database = require('./database');
     database.getDb();
 
-    const sqlite = new SqliteDatabase(dbPath, { readonly: true });
+    const sqlite = new SqliteDatabase(dbPath, { readOnly: true });
     const migrationVersion = sqlite.prepare(`
       SELECT value
       FROM app_meta
@@ -124,7 +124,7 @@ describe('database migrations', () => {
     database = require('./database');
     database.getDb();
 
-    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const migrationVersion = migratedDb.prepare("SELECT value FROM app_meta WHERE key = 'migration_version'").get()?.value;
     const width = migratedDb.prepare('SELECT reader_text_width AS readerTextWidth FROM user_settings WHERE user_id = ?').get('user-1')?.readerTextWidth;
     migratedDb.close();
@@ -169,7 +169,7 @@ describe('database migrations', () => {
     database = require('./database');
     database.getDb();
 
-    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const migratedVersion = migratedDb.prepare(`
       SELECT value
       FROM app_meta
@@ -278,7 +278,7 @@ describe('database migrations', () => {
     database = require('./database');
     database.getDb();
 
-    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const topicRows = migratedDb.prepare(`
       SELECT article_id AS articleId, topic
       FROM article_topics
@@ -489,7 +489,7 @@ describe('database migrations', () => {
     database = require('./database');
     database.getDb();
 
-    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const migratedVersion = migratedDb.prepare(`
       SELECT value
       FROM app_meta
@@ -551,7 +551,7 @@ describe('database migrations', () => {
     database = require('./database');
     database.getDb();
 
-    const migratedDb = new SqliteDatabase(dbPath, { readonly: true });
+    const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const migratedVersion = migratedDb.prepare(`
       SELECT value
       FROM app_meta

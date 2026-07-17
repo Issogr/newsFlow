@@ -6,16 +6,20 @@ import ThematicSummaryPanel from './ThematicSummaryPanel';
 
 const t = createTranslator('en');
 
-function renderPodcastPanel(summaryOverrides = {}, propsOverrides = {}) {
+function renderSummaryPanel(summary, propsOverrides = {}) {
   return render(
     <ThematicSummaryPanel
-      summary={createPodcastSummary(summaryOverrides)}
+      summary={summary}
       locale="en"
       t={t}
       onClose={vi.fn()}
       {...propsOverrides}
     />
   );
+}
+
+function renderPodcastPanel(summaryOverrides = {}, propsOverrides = {}) {
+  return renderSummaryPanel(createPodcastSummary(summaryOverrides), propsOverrides);
 }
 
 function mockSummarySwipeViewport(matches) {
@@ -217,15 +221,9 @@ describe('thematic summary podcast UI', () => {
       audioUrl: '/api/podcast-summary/podcast-evening/audio'
     });
 
-    render(
-      <ThematicSummaryPanel
-        summary={eveningPodcast}
-        summaries={[eveningPodcast, morningPodcast]}
-        locale="en"
-        t={t}
-        onClose={vi.fn()}
-      />
-    );
+    renderSummaryPanel(eveningPodcast, {
+      summaries: [eveningPodcast, morningPodcast]
+    });
 
     expect(screen.getByText('Morning podcast')).toBeInTheDocument();
     expect(screen.getByText('Evening podcast')).toBeInTheDocument();
@@ -235,25 +233,18 @@ describe('thematic summary podcast UI', () => {
   });
 
   test('uses single newlines as paragraph breaks for thematic summaries', () => {
-    render(
-      <ThematicSummaryPanel
-        summary={{
-          id: 'summary-technology',
-          topicKey: 'technology',
-          topicLabel: 'Technology',
-          periodStart: '2026-05-21T05:00:00.000Z',
-          periodEnd: '2026-05-21T11:00:00.000Z',
-          summarySlot: 'lunch',
-          articleCount: 2,
-          summaryTextByLocale: {
-            en: 'The first argument covers chip supply and infrastructure.\nThe second argument moves to software policy and regulation.'
-          }
-        }}
-        locale="en"
-        t={t}
-        onClose={vi.fn()}
-      />
-    );
+    renderSummaryPanel({
+      id: 'summary-technology',
+      topicKey: 'technology',
+      topicLabel: 'Technology',
+      periodStart: '2026-05-21T05:00:00.000Z',
+      periodEnd: '2026-05-21T11:00:00.000Z',
+      summarySlot: 'lunch',
+      articleCount: 2,
+      summaryTextByLocale: {
+        en: 'The first argument covers chip supply and infrastructure.\nThe second argument moves to software policy and regulation.'
+      }
+    });
 
     expect(screen.getByText('Lunch time')).toBeInTheDocument();
     expect(screen.queryByText(/2026/u)).not.toBeInTheDocument();
@@ -265,15 +256,9 @@ describe('thematic summary podcast UI', () => {
     vi.useFakeTimers();
 
     try {
-      render(
-        <ThematicSummaryPanel
-          summary={createTopicSummary('technology')}
-          locale="en"
-          t={t}
-          onClose={vi.fn()}
-          showOpeningSkeleton
-        />
-      );
+      renderSummaryPanel(createTopicSummary('technology'), {
+        showOpeningSkeleton: true
+      });
 
       const loadingStatus = screen.getByRole('status', { name: 'Loading AI summary...' });
       expect(loadingStatus).toHaveClass('animate-pulse');
@@ -292,23 +277,16 @@ describe('thematic summary podcast UI', () => {
   test('uses reader sizing and direct circular source links', () => {
     window.localStorage.setItem('news-flow-reader-text-size', 'large');
 
-    render(
-      <ThematicSummaryPanel
-        summary={{
-          id: 'summary-technology',
-          topicKey: 'technology',
-          topicLabel: 'Technology',
-          summaryTextByLocale: { en: 'Chip demand increased sharply [1]. Another claim followed [2].' },
-          sources: [
-            { index: 1, source: 'Example News', url: 'https://example.com/story' },
-            { index: 2, source: 'Unsafe Source', url: 'javascript:alert(1)' }
-          ]
-        }}
-        locale="en"
-        t={t}
-        onClose={vi.fn()}
-      />
-    );
+    renderSummaryPanel({
+      id: 'summary-technology',
+      topicKey: 'technology',
+      topicLabel: 'Technology',
+      summaryTextByLocale: { en: 'Chip demand increased sharply [1]. Another claim followed [2].' },
+      sources: [
+        { index: 1, source: 'Example News', url: 'https://example.com/story' },
+        { index: 2, source: 'Unsafe Source', url: 'javascript:alert(1)' }
+      ]
+    });
 
     const paragraph = screen.getByText(/Chip demand increased sharply/u);
     const sourceLink = screen.getByRole('link', { name: 'Open source article: Example News' });
@@ -352,16 +330,10 @@ describe('thematic summary podcast UI', () => {
     const technology = createTopicSummary('technology');
     const politics = createTopicSummary('politics');
 
-    render(
-      <ThematicSummaryPanel
-        summary={technology}
-        summaries={[technology, politics]}
-        locale="en"
-        t={t}
-        onClose={vi.fn()}
-        onSelectSummary={onSelectSummary}
-      />
-    );
+    renderSummaryPanel(technology, {
+      summaries: [technology, politics],
+      onSelectSummary
+    });
 
     const article = screen.getByRole('article');
     fireEvent.touchStart(article, { touches: [{ clientX: 240, clientY: 120 }] });
@@ -375,16 +347,10 @@ describe('thematic summary podcast UI', () => {
     const technology = createTopicSummary('technology');
     const politics = createTopicSummary('politics');
 
-    render(
-      <ThematicSummaryPanel
-        summary={technology}
-        summaries={[technology, politics]}
-        locale="en"
-        t={t}
-        onClose={vi.fn()}
-        onSelectSummary={vi.fn()}
-      />
-    );
+    renderSummaryPanel(technology, {
+      summaries: [technology, politics],
+      onSelectSummary: vi.fn()
+    });
 
     const article = screen.getByRole('article');
     const swipeFrame = screen.getByTestId('thematic-summary-swipe-frame');
@@ -407,16 +373,10 @@ describe('thematic summary podcast UI', () => {
     const technology = createTopicSummary('technology');
     const politics = createTopicSummary('politics');
 
-    render(
-      <ThematicSummaryPanel
-        summary={technology}
-        summaries={[technology, politics]}
-        locale="en"
-        t={t}
-        onClose={vi.fn()}
-        onSelectSummary={onSelectSummary}
-      />
-    );
+    renderSummaryPanel(technology, {
+      summaries: [technology, politics],
+      onSelectSummary
+    });
 
     const article = screen.getByRole('article');
     fireEvent.touchStart(article, { touches: [{ clientX: 240, clientY: 120 }] });

@@ -167,6 +167,12 @@ function captureSocketHandlers() {
   return socketHandlers;
 }
 
+async function dispatchSocketHandler(handler, payload) {
+  await act(async () => {
+    await Promise.resolve(handler(payload));
+  });
+}
+
 const currentUser = createTestCurrentUser();
 
 describe('NewsAggregator', () => {
@@ -254,10 +260,7 @@ describe('NewsAggregator', () => {
     fetchNews.mockClear();
     fetchReadLaterNews.mockClear();
 
-    await act(async () => {
-      socketHandlers.onTopicRefresh({ refresh: true, reason: 'news' });
-      await Promise.resolve();
-    });
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'news' });
 
     expect(fetchNews).not.toHaveBeenCalled();
     expect(fetchReadLaterNews).not.toHaveBeenCalled();
@@ -283,10 +286,7 @@ describe('NewsAggregator', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open reader group-1' }));
     expect(screen.getByTestId('reader-item-count')).toHaveTextContent('1');
 
-    await act(async () => {
-      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
-      await Promise.resolve();
-    });
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
 
     await waitFor(() => expect(screen.getByTestId('reader-item-count')).toHaveTextContent('2'));
   });
@@ -462,9 +462,7 @@ describe('NewsAggregator', () => {
     await renderNewsAggregator();
     expect(screen.queryByRole('button', { name: 'Open Science summary' })).not.toBeInTheDocument();
 
-    await act(async () => {
-      await socketHandlers.onSummariesRefresh({ refresh: true, reason: 'summaries' });
-    });
+    await dispatchSocketHandler(socketHandlers.onSummariesRefresh, { refresh: true, reason: 'summaries' });
 
     expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
   });
@@ -500,9 +498,7 @@ describe('NewsAggregator', () => {
 
     expect(screen.getByText('1 article evaluated')).toBeInTheDocument();
 
-    await act(async () => {
-      await socketHandlers.onSummariesRefresh({ refresh: true, reason: 'summaries' });
-    });
+    await dispatchSocketHandler(socketHandlers.onSummariesRefresh, { refresh: true, reason: 'summaries' });
 
     expect(await screen.findByText('2 articles evaluated')).toBeInTheDocument();
     expect(screen.queryByText('1 article evaluated')).not.toBeInTheDocument();
@@ -540,9 +536,7 @@ describe('NewsAggregator', () => {
     });
     expect(screen.getByText('1 article evaluated')).toBeInTheDocument();
 
-    await act(async () => {
-      await socketHandlers.onSummariesRefresh({ refresh: true, reason: 'summaries' });
-    });
+    await dispatchSocketHandler(socketHandlers.onSummariesRefresh, { refresh: true, reason: 'summaries' });
 
     expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
     expect(screen.queryByText('1 article evaluated')).not.toBeInTheDocument();
@@ -763,10 +757,7 @@ describe('NewsAggregator', () => {
     });
     const initialCallCount = fetchNews.mock.calls.length;
 
-    await act(async () => {
-      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
-      await Promise.resolve();
-    });
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
 
     await waitFor(() => {
       expect(fetchNews).toHaveBeenCalledTimes(initialCallCount + 1);
@@ -792,10 +783,7 @@ describe('NewsAggregator', () => {
 
     await renderNewsAggregator();
 
-    await act(async () => {
-      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
-      await Promise.resolve();
-    });
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
 
     expect(fetchNews).toHaveBeenCalledTimes(1);
     expect(initialRequestAborted).toBe(false);
@@ -842,10 +830,7 @@ describe('NewsAggregator', () => {
     await renderNewsAggregator();
     expect(await screen.findByTestId('topics-group-1')).toHaveTextContent('Economia:local');
 
-    await act(async () => {
-      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
-      await Promise.resolve();
-    });
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
 
     await waitFor(() => {
       expect(screen.getByTestId('topics-group-1')).toHaveTextContent('Tecnologia:ai');
@@ -871,10 +856,7 @@ describe('NewsAggregator', () => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
     });
 
-    await act(async () => {
-      socketHandlers.onTopicRefresh({ refresh: true, reason: 'news' });
-      await Promise.resolve();
-    });
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'news' });
 
     expect(await screen.findByText('Fresh manual refresh headline')).toBeInTheDocument();
     expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -895,17 +877,11 @@ describe('NewsAggregator', () => {
     await renderNewsAggregator();
     expect(await screen.findByText('Current headline')).toBeInTheDocument();
 
-    await act(async () => {
-      socketHandlers.onNewsUpdate({ count: 1, groupIds: ['group-new'] });
-      await Promise.resolve();
-    });
+    await dispatchSocketHandler(socketHandlers.onNewsUpdate, { count: 1, groupIds: ['group-new'] });
 
     expect(screen.getByText('1 new article available')).toBeInTheDocument();
 
-    await act(async () => {
-      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
-      await Promise.resolve();
-    });
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
 
     expect(await screen.findByText('Current headline with AI topics')).toBeInTheDocument();
     expect(screen.queryByText('New automatic headline')).not.toBeInTheDocument();
@@ -935,10 +911,7 @@ describe('NewsAggregator', () => {
     });
     expect(getDesktopRefreshButton()).toBeDisabled();
 
-    await act(async () => {
-      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
-      await Promise.resolve();
-    });
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
 
     expect(fetchNews).toHaveBeenCalledTimes(2);
     expect(manualRequestAborted).toBe(false);
@@ -984,10 +957,7 @@ describe('NewsAggregator', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
     expect(await screen.findByText('older headline 13')).toBeInTheDocument();
 
-    await act(async () => {
-      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
-      await Promise.resolve();
-    });
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
 
     expect(await screen.findByText('refreshed headline 13')).toBeInTheDocument();
     expect(screen.queryByText('older headline 13')).not.toBeInTheDocument();
@@ -1083,10 +1053,7 @@ describe('NewsAggregator', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
     expect(await screen.findByText('older headline 24')).toBeInTheDocument();
 
-    await act(async () => {
-      socketHandlers.onTopicRefresh({ refresh: true, reason: 'topics' });
-      await Promise.resolve();
-    });
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
 
     expect(await screen.findByText('refreshed headline 12')).toBeInTheDocument();
     expect(screen.getByText('older headline 24')).toBeInTheDocument();

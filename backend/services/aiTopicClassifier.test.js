@@ -1,9 +1,6 @@
-jest.mock('../utils/logger', () => ({
-  debug: jest.fn(),
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn()
-}));
+const createMockLogger = require('../test-utils/mockLogger');
+
+jest.mock('../utils/logger', createMockLogger);
 
 const logger = require('../utils/logger');
 const aiTopicClassifier = require('./aiTopicClassifier');

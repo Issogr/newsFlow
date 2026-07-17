@@ -1,5 +1,6 @@
 const originalEnv = process.env;
 const OPENROUTER_TEST_ENV = { OPENROUTER_API_KEY: 'test-key' };
+const createMockLogger = require('../test-utils/mockLogger');
 const { isPromotionalDealArticle } = require('../utils/promotionalContent');
 
 function resetServiceRuntime(env = {}) {
@@ -115,10 +116,6 @@ function mockAiPodcastGenerator(overrides = {}) {
   return mock;
 }
 
-function createLoggerMock() {
-  return { info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() };
-}
-
 function createSummaryWindow() {
   return {
     periodStart: '2026-05-20T17:00:00.000Z',
@@ -186,7 +183,7 @@ function loadServiceWithMocks({
     aiPodcastGeneratorMock: mockAiPodcastGenerator(aiPodcastGeneratorOverrides),
     readerServiceMock: readerServiceMock || { getReaderArticle: jest.fn() },
     websocketServiceMock: websocketServiceMock || { broadcastFeedRefresh: jest.fn() },
-    loggerMock: loggerMock || createLoggerMock()
+    loggerMock: loggerMock || createMockLogger()
   };
 
   jest.doMock('./database', () => createDatabaseMock(databaseMock));

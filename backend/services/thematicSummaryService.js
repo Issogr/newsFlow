@@ -5,7 +5,7 @@ const aiPodcastGenerator = require('./aiPodcastGenerator');
 const readerService = require('./readerService');
 const websocketService = require('./websocketService');
 const { parseIntegerEnv } = require('../utils/env');
-const { readAiToggleValue } = require('../config/aiFeatures');
+const { isAiToggleEnabled } = require('../config/aiFeatures');
 const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const { isPromotionalDealArticle } = require('../utils/promotionalContent');
 const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
@@ -103,8 +103,7 @@ function getConfiguredSummaryTimeZone() {
 const SUMMARY_TIME_ZONE = getConfiguredSummaryTimeZone();
 
 function isReaderPrewarmEnabled() {
-  const enabledValue = readAiToggleValue('AI_SUMMARY_READER_PREWARM_ENABLED');
-  return enabledValue !== 'false'
+  return isAiToggleEnabled('AI_SUMMARY_READER_PREWARM_ENABLED')
     && (aiSummaryGenerator.isAiSummaryGenerationAvailable() || aiPodcastGenerator.isAiPodcastGenerationAvailable());
 }
 
@@ -865,7 +864,7 @@ async function retryPodcastAudio(summary = {}, options = {}) {
 function startPodcastAudioGeneration(summary = {}, options = {}) {
   const summaryId = String(summary.id || '').trim();
   if (options.startPodcastAudioGeneration === false
-    || readAiToggleValue('AI_PODCAST_BACKGROUND_AUDIO_ENABLED') === 'false'
+    || !isAiToggleEnabled('AI_PODCAST_BACKGROUND_AUDIO_ENABLED')
     || !summaryId
     || !shouldRetryPodcastAudio(summary, options)) {
     return null;
