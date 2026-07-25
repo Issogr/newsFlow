@@ -24,4 +24,4 @@ pnpm-debug.log*
 
 patches/
 AGENTS.md
-.opencode/opencode.json
+.opencode
