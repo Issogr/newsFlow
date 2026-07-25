@@ -1,20 +1,16 @@
 export const CURRENT_CHANGELOG_ENTRY = {
-  version: '3.5.13',
+  version: '3.5.14',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
-    items: [
-      '♾️ Older articles now load automatically with animated feedback after you remain at the end of the feed for three seconds.'
-    ]
+    items: []
   },
   it: {
     eyebrow: 'Ultimo aggiornamento',
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
-    items: [
-      '♾️ Gli articoli precedenti ora vengono caricati automaticamente con un indicatore animato dopo tre secondi alla fine del feed.'
-    ]
+    items: []
   }
 };
 

@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.5.14
+
 ## 3.5.13
 
 - replaced the Load more button with automatic pagination and staggered loading feedback after the user remains at the end of the feed for three seconds
