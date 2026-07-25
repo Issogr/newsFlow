@@ -83,9 +83,7 @@ function ensureCleanupInterval() {
     pruneResponseCache();
   }, 5 * 60 * 1000);
 
-  if (typeof cleanupHandle.unref === 'function') {
-    cleanupHandle.unref();
-  }
+  cleanupHandle.unref?.();
 
   return cleanupHandle;
 }

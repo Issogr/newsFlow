@@ -4,7 +4,7 @@ import { Sparkles, X } from 'lucide-react';
 const DEFAULT_DURATION_MS = 30000;
 const ENTRY_DELAY_MS = 16;
 
-const ReleaseUpdateNotice = ({ t, releaseNotes, durationMs = DEFAULT_DURATION_MS, onOpen, onDismiss }) => {
+const ReleaseUpdateNotice = ({ t, releaseNotes, onOpen, onDismiss }) => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -14,13 +14,13 @@ const ReleaseUpdateNotice = ({ t, releaseNotes, durationMs = DEFAULT_DURATION_MS
     }, ENTRY_DELAY_MS);
     const timeoutId = window.setTimeout(() => {
       onDismiss();
-    }, durationMs);
+    }, DEFAULT_DURATION_MS);
 
     return () => {
       window.clearTimeout(frameTimeoutId);
       window.clearTimeout(timeoutId);
     };
-  }, [durationMs, onDismiss, releaseNotes.version]);
+  }, [onDismiss, releaseNotes.version]);
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-[calc(1rem+env(safe-area-inset-top))] z-50 flex justify-center pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:top-[calc(1.25rem+env(safe-area-inset-top))]">
@@ -63,7 +63,7 @@ const ReleaseUpdateNotice = ({ t, releaseNotes, durationMs = DEFAULT_DURATION_MS
             style={{
               transform: isVisible ? 'scaleX(0)' : 'scaleX(1)',
               transformOrigin: 'right center',
-              transitionDuration: `${durationMs}ms`,
+              transitionDuration: `${DEFAULT_DURATION_MS}ms`,
             }}
           />
         </div>

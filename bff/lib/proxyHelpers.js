@@ -11,12 +11,6 @@ const BLOCKED_BACKEND_RESPONSE_HEADERS = new Set([
   'upgrade',
 ]);
 
-function clearForwardedHeaders(proxyReq) {
-  proxyReq.removeHeader('x-forwarded-for');
-  proxyReq.removeHeader('x-forwarded-host');
-  proxyReq.removeHeader('x-forwarded-proto');
-}
-
 function getRequestHeader(req, name) {
   const value = typeof req.get === 'function'
     ? req.get(name)
@@ -39,15 +33,15 @@ function buildTrustedForwardedHeaders(req, options = {}) {
     headers['x-forwarded-host'] = forwardedHost;
   }
 
-  if (forwardedProto || options.includeEmpty) {
-    headers['x-forwarded-proto'] = forwardedProto;
-  }
+  headers['x-forwarded-proto'] = forwardedProto;
 
   return headers;
 }
 
 function applyProxyRequestHeaders(proxyReq, req, options = {}) {
-  clearForwardedHeaders(proxyReq);
+  proxyReq.removeHeader('x-forwarded-for');
+  proxyReq.removeHeader('x-forwarded-host');
+  proxyReq.removeHeader('x-forwarded-proto');
 
   if (options.mode === 'private') {
     proxyReq.removeHeader('authorization');

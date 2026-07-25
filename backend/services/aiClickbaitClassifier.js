@@ -1,6 +1,4 @@
 const logger = require('../utils/logger');
-const { isAiToggleEnabled } = require('../config/aiFeatures');
-const { parseIntegerEnv } = require('../utils/env');
 const {
   createOpenRouterClient,
   extractAssistantContent,
@@ -11,6 +9,8 @@ const {
 } = require('./openRouterClient');
 const { truncateText } = require('./aiArticlePayload');
 const {
+  getClassifierBatchConfig,
+  getClassifierEntries,
   isTimeoutError,
   resolveClassifierEntryId,
   runBatchedClassifier,
@@ -18,9 +18,6 @@ const {
 } = require('./aiClassifierUtils');
 
 const DEFAULT_OPENROUTER_TOPIC_MODEL = 'qwen/qwen3.5-9b';
-const DEFAULT_BATCH_SIZE = 10;
-const DEFAULT_BATCH_CONCURRENCY = 1;
-const DEFAULT_MAX_ARTICLES_PER_REFRESH = 160;
 const DEFAULT_TIMEOUT_MS = 30000;
 const VALID_LABELS = new Set(['low', 'medium', 'high']);
 
@@ -82,10 +79,7 @@ function getConfig() {
 
   return {
     ...openRouterConfig,
-    batchSize: parseIntegerEnv('AI_TOPIC_BATCH_SIZE', DEFAULT_BATCH_SIZE, { min: 1, max: 50, clamp: true, strict: true }),
-    batchConcurrency: parseIntegerEnv('AI_TOPIC_BATCH_CONCURRENCY', DEFAULT_BATCH_CONCURRENCY, { min: 1, max: 4, clamp: true, strict: true }),
-    maxArticlesPerRefresh: parseIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, { min: 1, max: 1000, clamp: true, strict: true }),
-    deterministicSkipEnabled: isAiToggleEnabled('AI_TOPIC_DETERMINISTIC_SKIP_ENABLED')
+    ...getClassifierBatchConfig()
   };
 }
 
@@ -267,27 +261,12 @@ function getCompletionTokenBudget(batchLength) {
   return Math.min(1600, 240 + (Math.max(1, batchLength) * 80));
 }
 
-function getClassifierEntries(payload) {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-
-  return [
-    payload?.clickbaitByRef,
-    payload?.clickbaitById,
-    payload?.results,
-    payload?.classifications,
-    payload?.articles,
-    payload?.items
-  ].find(Array.isArray) || [];
-}
-
 function getClassifierEntryLabel(entry = {}) {
   return normalizeLabel(entry.label || entry.clickbaitLabel || entry.clickbait || entry.level || entry.category || '');
 }
 
 function normalizeClassifierResults(payload, allowedIds = new Set(), refToArticleId = null) {
-  const entries = getClassifierEntries(payload);
+  const entries = getClassifierEntries(payload, ['clickbaitByRef', 'clickbaitById']);
   const result = new Map();
 
   entries.forEach((entry) => {
@@ -320,7 +299,7 @@ function summarizeClassifierResult(payload, allowedIds = new Set(), refToArticle
     return 'invalid_json';
   }
 
-  const entries = getClassifierEntries(payload);
+  const entries = getClassifierEntries(payload, ['clickbaitByRef', 'clickbaitById']);
   if (entries.length === 0) {
     return 'missing_clickbait_array';
   }

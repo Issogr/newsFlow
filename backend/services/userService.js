@@ -405,7 +405,7 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     readerPanelPosition: normalizeReaderPanelPosition(payload.readerPanelPosition || currentSettings.readerPanelPosition),
     readerTextSize: normalizeReaderTextSize(payload.readerTextSize || currentSettings.readerTextSize),
     readerTextWidth: normalizeReaderTextWidth(payload.readerTextWidth || currentSettings.readerTextWidth),
-    lastSeenReleaseNotesVersion: Object.prototype.hasOwnProperty.call(payload, 'lastSeenReleaseNotesVersion')
+    lastSeenReleaseNotesVersion: Object.hasOwn(payload, 'lastSeenReleaseNotesVersion')
       ? normalizeReleaseNotesVersion(payload.lastSeenReleaseNotesVersion)
       : normalizeReleaseNotesVersion(currentSettings.lastSeenReleaseNotesVersion),
     sourceSetupCompleted: typeof payload.sourceSetupCompleted === 'boolean'

@@ -13,15 +13,14 @@ function normalizePromotionalDetectionText(value = '') {
     .toLowerCase();
 }
 
-function hasPromotionalDealCue(value = '') {
-  const normalizedText = normalizePromotionalDetectionText(value);
-  return PROMOTIONAL_DEAL_PATTERN.test(normalizedText)
-    || /\b(?:best|top)\b.{0,50}\b(?:deals?|discounts?|offers?|sconti|offerte|prices?|prezzi)\b/u.test(normalizedText);
-}
-
 function isPromotionalDealText(value = '') {
   const normalizedText = normalizePromotionalDetectionText(value);
-  if (!normalizedText || !hasPromotionalDealCue(normalizedText)) {
+  if (!normalizedText) {
+    return false;
+  }
+
+  if (!PROMOTIONAL_DEAL_PATTERN.test(normalizedText)
+    && !/\b(?:best|top)\b.{0,50}\b(?:deals?|discounts?|offers?|sconti|offerte|prices?|prezzi)\b/u.test(normalizedText)) {
     return false;
   }
 

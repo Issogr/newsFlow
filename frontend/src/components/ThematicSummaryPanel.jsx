@@ -111,14 +111,13 @@ function splitLongParagraph(paragraph = '', maxParagraphChars = 520) {
   return paragraphs;
 }
 
-function splitSummaryParagraphs(summaryText = '', options = {}) {
-  const maxParagraphChars = Number(options.maxParagraphChars) || 520;
+function splitSummaryParagraphs(summaryText = '') {
   return String(summaryText || '')
     .replace(/\r\n?/g, '\n')
     .split(/\n+/u)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean)
-    .flatMap((paragraph) => splitLongParagraph(paragraph, maxParagraphChars));
+    .flatMap((paragraph) => splitLongParagraph(paragraph));
 }
 
 function getPodcastSlot(summary = {}) {
@@ -329,7 +328,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   const swipeSummaries = useMemo(() => getSwipeSummariesForPanel(summary, summaries), [summaries, summary]);
   const swipeSummaryIndex = useMemo(() => getSwipeSummaryIndex(summary, swipeSummaries), [summary, swipeSummaries]);
   const paragraphs = useMemo(() => {
-    return isPodcast ? [] : splitSummaryParagraphs(localizedSummary.displaySummaryText, { maxParagraphChars: 520 });
+    return isPodcast ? [] : splitSummaryParagraphs(localizedSummary.displaySummaryText);
   }, [isPodcast, localizedSummary.displaySummaryText]);
   const primaryPresentation = getTopicPresentation(getThematicSummaryPresentationKey(summary));
   const PrimaryIcon = primaryPresentation.Icon;

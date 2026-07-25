@@ -36,17 +36,6 @@ export const AI_ACCENT_GRADIENT_STYLE = {
   backgroundImage: 'conic-gradient(from 20deg, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f97316)'
 };
 
-function normalizeTopic(topic) {
-  return String(topic || '').trim().toLowerCase();
-}
-
-function createTopicPresentation(Icon, iconBadgeClassName) {
-  return {
-    Icon,
-    iconBadgeClassName
-  };
-}
-
 const TOPIC_PRESENTATIONS = [
   { pattern: /(politic|politica|government|governo|election|elezion|parliament|parlamento)/, Icon: Landmark, badge: TOPIC_BADGE_CLASSES.politics },
   { pattern: /(econom|market|mercat|business|finance|finanz)/, Icon: Briefcase, badge: TOPIC_BADGE_CLASSES.economy },
@@ -64,7 +53,10 @@ const TOPIC_PRESENTATIONS = [
 ];
 
 export function getTopicPresentation(topic) {
-  const normalized = normalizeTopic(topic);
+  const normalized = String(topic || '').trim().toLowerCase();
   const presentation = TOPIC_PRESENTATIONS.find(({ pattern }) => pattern.test(normalized));
-  return createTopicPresentation(presentation?.Icon || Tags, presentation?.badge || TOPIC_BADGE_CLASSES.fallback);
+  return {
+    Icon: presentation?.Icon || Tags,
+    iconBadgeClassName: presentation?.badge || TOPIC_BADGE_CLASSES.fallback
+  };
 }

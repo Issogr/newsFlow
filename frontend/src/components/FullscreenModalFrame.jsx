@@ -15,14 +15,12 @@ export const FullscreenPanelFrame = ({
   onClose,
   overlayClassName = DEFAULT_OVERLAY_CLASS_NAME,
   panelClassName,
-  restoreFocusRef,
 }) => (
   <ModalDialog
     ariaLabelledBy={labelledBy}
     className={overlayClassName}
     dismissOnBackdrop
     onRequestClose={onClose}
-    restoreFocusRef={restoreFocusRef}
   >
     <div className={containerClassName}>
       <section className={panelClassName} data-modal-content>

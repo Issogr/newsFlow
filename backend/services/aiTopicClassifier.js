@@ -1,7 +1,6 @@
 const logger = require('../utils/logger');
 const { isAiToggleEnabled } = require('../config/aiFeatures');
 const topicNormalizer = require('./topicNormalizer');
-const { parseIntegerEnv } = require('../utils/env');
 const {
   createOpenRouterClient,
   extractAssistantContent,
@@ -12,6 +11,8 @@ const {
 } = require('./openRouterClient');
 const { truncateText } = require('./aiArticlePayload');
 const {
+  getClassifierBatchConfig,
+  getClassifierEntries,
   isTimeoutError,
   resolveClassifierEntryId,
   runBatchedClassifier,
@@ -19,9 +20,6 @@ const {
 } = require('./aiClassifierUtils');
 
 const DEFAULT_OPENROUTER_TOPIC_MODEL = 'qwen/qwen3.5-9b';
-const DEFAULT_BATCH_SIZE = 10;
-const DEFAULT_BATCH_CONCURRENCY = 1;
-const DEFAULT_MAX_ARTICLES_PER_REFRESH = 160;
 const DEFAULT_TIMEOUT_MS = 30000;
 const TOPIC_GUIDANCE = [
   'Politica: government, elections, parties, institutions, protests, policy, public ceremonies.',
@@ -79,10 +77,7 @@ function getConfig() {
 
   return {
     ...openRouterConfig,
-    batchSize: parseIntegerEnv('AI_TOPIC_BATCH_SIZE', DEFAULT_BATCH_SIZE, { min: 1, max: 50, clamp: true, strict: true }),
-    batchConcurrency: parseIntegerEnv('AI_TOPIC_BATCH_CONCURRENCY', DEFAULT_BATCH_CONCURRENCY, { min: 1, max: 4, clamp: true, strict: true }),
-    maxArticlesPerRefresh: parseIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', DEFAULT_MAX_ARTICLES_PER_REFRESH, { min: 1, max: 1000, clamp: true, strict: true }),
-    deterministicSkipEnabled: isAiToggleEnabled('AI_TOPIC_DETERMINISTIC_SKIP_ENABLED')
+    ...getClassifierBatchConfig()
   };
 }
 
@@ -155,21 +150,6 @@ function splitDeterministicAndAiArticles(articles = [], config = {}) {
   return { aiArticles, deterministicTopicsByArticleId };
 }
 
-function getClassifierEntries(payload) {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-
-  return [
-    payload?.topicsByRef,
-    payload?.topicsById,
-    payload?.results,
-    payload?.classifications,
-    payload?.articles,
-    payload?.items
-  ].find(Array.isArray) || [];
-}
-
 function getClassifierEntryTopics(entry = {}) {
   if (Array.isArray(entry.topics)) {
     return entry.topics;
@@ -240,7 +220,7 @@ function summarizeClassifierResult(payload, allowedIds = new Set(), refToArticle
     return 'invalid_json';
   }
 
-  const entries = getClassifierEntries(payload);
+  const entries = getClassifierEntries(payload, ['topicsByRef', 'topicsById']);
   if (entries.length === 0) {
     return 'missing_topics_array';
   }
@@ -259,7 +239,7 @@ function summarizeClassifierResult(payload, allowedIds = new Set(), refToArticle
 }
 
 function normalizeClassifierDetails(payload, allowedIds = new Set(), articlesById = null, refToArticleId = null) {
-  const entries = getClassifierEntries(payload);
+  const entries = getClassifierEntries(payload, ['topicsByRef', 'topicsById']);
   const result = new Map();
 
   entries.forEach((entry) => {
