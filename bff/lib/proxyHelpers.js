@@ -45,6 +45,7 @@ function applyProxyRequestHeaders(proxyReq, req, options = {}) {
 
   if (options.mode === 'private') {
     proxyReq.removeHeader('authorization');
+    proxyReq.removeHeader('origin');
     proxyReq.removeHeader('x-session-token');
     proxyReq.removeHeader('x-newsflow-app');
     Object.entries(options.internalHeaders || {}).forEach(([name, value]) => {
@@ -69,12 +70,20 @@ function copyBackendResponseHeaders(res, headers = {}) {
   Object.entries(headers).forEach(([name, value]) => {
     const lowerName = String(name || '').toLowerCase();
 
-    if (BLOCKED_BACKEND_RESPONSE_HEADERS.has(lowerName)) {
+    if (BLOCKED_BACKEND_RESPONSE_HEADERS.has(lowerName) || lowerName.startsWith('access-control-')) {
       return;
     }
 
     if (value !== undefined) {
       res.setHeader(name, value);
+    }
+  });
+}
+
+function stripBackendCorsResponseHeaders(headers = {}) {
+  Object.keys(headers).forEach((name) => {
+    if (String(name).toLowerCase().startsWith('access-control-')) {
+      delete headers[name];
     }
   });
 }
@@ -94,5 +103,6 @@ module.exports = {
   buildTrustedForwardedHeaders,
   copyBackendResponseHeaders,
   extractDeletedAdminUserId,
-  getRequestHeader
+  getRequestHeader,
+  stripBackendCorsResponseHeaders
 };

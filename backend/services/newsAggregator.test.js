@@ -1457,6 +1457,37 @@ describe('newsAggregator service flows', () => {
     ]);
   });
 
+  test('fetches custom feeds separately when their query parameters differ', async () => {
+    const sourceA = { id: 'custom-query-a', name: 'Feed A', url: 'https://example.com/feed.xml?utm_source=a', language: 'en', ownerUserId: 'user-1' };
+    const sourceB = { id: 'custom-query-b', name: 'Feed B', url: 'https://example.com/feed.xml?utm_source=b', language: 'en', ownerUserId: 'user-2' };
+    database.findUserSourceById.mockImplementation((userId, sourceId) => {
+      const source = [sourceA, sourceB].find((candidate) => candidate.ownerUserId === userId && candidate.id === sourceId);
+      return source ? { ...source, userId, isActive: true } : null;
+    });
+    rssParser.parseFeed.mockImplementation(async (source) => [{
+      id: `article-${source.id}`,
+      sourceId: source.id,
+      source: source.name,
+      title: `Story for ${source.id}`,
+      pubDate: recentIso({ hoursAgo: 1 }),
+      url: `https://example.com/story-${source.id}`,
+      ownerUserId: source.ownerUserId
+    }]);
+    database.upsertArticles.mockImplementation((articles) => ({
+      insertedIds: articles.map((article) => article.id),
+      insertedCount: articles.length,
+      updatedCount: 0
+    }));
+
+    await ingestSourceConfigs([sourceA, sourceB], { broadcast: false, bypassSourceFreshness: true });
+
+    expect(rssParser.parseFeed).toHaveBeenCalledTimes(2);
+    expect(database.upsertArticles).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ sourceId: sourceA.id, ownerUserId: sourceA.ownerUserId }),
+      expect.objectContaining({ sourceId: sourceB.id, ownerUserId: sourceB.ownerUserId })
+    ]));
+  });
+
   test.each(['deleted', 'updated'])('discards custom source results when the source is %s during refresh', async (change) => {
     const source = {
       id: `custom-${change}`,

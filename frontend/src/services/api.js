@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const READER_REQUEST_TIMEOUT_MS = 30000;
 const FEEDBACK_REQUEST_TIMEOUT_MS = 60000;
+const CUSTOM_SOURCE_REQUEST_TIMEOUT_MS = 45000;
 export const AUTH_EXPIRED_EVENT = 'newsflow:auth-expired';
 
 function isAuthRoute(url = '') {
@@ -81,11 +82,20 @@ export const submitFeedback = async ({ category, title, description, attachment 
 
 export const exportUserSettings = async () => responseData(api.get('/me/settings/export'));
 
-export const importUserSettings = async (payload) => responseData(api.post('/me/settings/import', payload));
+export const importUserSettings = async (payload, { signal } = {}) => responseData(api.post('/me/settings/import', payload, {
+  signal,
+  timeout: CUSTOM_SOURCE_REQUEST_TIMEOUT_MS
+}));
 
-export const addUserSource = async (payload) => responseData(api.post('/me/sources', payload));
+export const addUserSource = async (payload, { signal } = {}) => responseData(api.post('/me/sources', payload, {
+  signal,
+  timeout: CUSTOM_SOURCE_REQUEST_TIMEOUT_MS
+}));
 
-export const updateUserSource = async (sourceId, payload) => responseData(api.patch(`/me/sources/${sourceId}`, payload));
+export const updateUserSource = async (sourceId, payload, { signal } = {}) => responseData(api.patch(`/me/sources/${sourceId}`, payload, {
+  signal,
+  timeout: CUSTOM_SOURCE_REQUEST_TIMEOUT_MS
+}));
 
 export const deleteUserSource = async (sourceId) => responseData(api.delete(`/me/sources/${sourceId}`));
 

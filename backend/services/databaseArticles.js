@@ -120,6 +120,24 @@ function createArticleRepository({
     };
   }
 
+  function buildConfiguredSourceFilter(options = {}, alias = 'a') {
+    if (options.configuredSourcesOnly !== true) {
+      return null;
+    }
+
+    const sourceIds = [...new Set([
+      ...getRawConfiguredSourceIds(),
+      ...getConfiguredSourceGroupIds(),
+      ...getLegacyConfiguredSourceGroupIds()
+    ])];
+    return {
+      clause: sourceIds.length > 0
+        ? `(${alias}.owner_user_id IS NOT NULL OR ${alias}.source_id IN (${sourceIds.map(() => '?').join(', ')}))`
+        : `${alias}.owner_user_id IS NOT NULL`,
+      params: sourceIds
+    };
+  }
+
   function buildRetentionFilter(options = {}, alias = 'a') {
     if (!options.maxArticleAgeHours || !Number.isFinite(options.maxArticleAgeHours) || options.maxArticleAgeHours <= 0) {
       return null;
@@ -190,6 +208,7 @@ function createArticleRepository({
     const where = [];
     const searchQuery = buildSearchQuery(state.search);
     const scopeFilter = buildScopeFilter(options, 'a');
+    const configuredSourceFilter = buildConfiguredSourceFilter(options, 'a');
     const retentionFilter = buildRetentionFilter(options, 'a');
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options);
@@ -199,6 +218,7 @@ function createArticleRepository({
       where,
       params,
       scopeFilter,
+      configuredSourceFilter,
       publishedBeforeNowFilter,
       retentionFilter,
       excludedSourceFilter,
@@ -465,7 +485,8 @@ function createArticleRepository({
 
       const candidateRows = database.prepare(`
         SELECT id, source_id AS sourceId, source_name AS sourceName, title,
-               published_at AS publishedAt, updated_at AS updatedAt, created_at AS createdAt
+               canonical_url AS canonicalUrl, published_at AS publishedAt,
+               updated_at AS updatedAt, created_at AS createdAt
         FROM articles
         WHERE COALESCE(owner_user_id, '') = ?
           AND (${sourceClauses.join(' OR ')})
@@ -508,9 +529,11 @@ function createArticleRepository({
         return (titleRowsByAliasKey.get(info.aliasKey) || [])
           .filter((row) => {
             const rowTimestamp = Date.parse(row.publishedAt || '');
+            const rowCanonicalUrl = normalizeArticleUrl(row.canonicalUrl || '');
             return normalizeArticleTitle(row.title) === info.normalizedTitle
               && Number.isFinite(rowTimestamp)
-              && Math.abs(rowTimestamp - info.publishedTimestamp) <= TITLE_DEDUPE_WINDOW_MS;
+              && Math.abs(rowTimestamp - info.publishedTimestamp) <= TITLE_DEDUPE_WINDOW_MS
+              && (!info.canonicalUrl || !rowCanonicalUrl || rowCanonicalUrl === info.canonicalUrl);
           })
           .sort((left, right) => {
             const leftDiff = Math.abs(Date.parse(left.publishedAt || '') - info.publishedTimestamp);
@@ -544,6 +567,7 @@ function createArticleRepository({
           sourceId: article.rawSourceId || article.sourceId,
           sourceName: article.rawSource || article.source,
           title: article.title,
+          canonicalUrl: info.canonicalUrl,
           publishedAt: article.pubDate,
           updatedAt: article.updatedAt || new Date().toISOString(),
           createdAt: article.createdAt || new Date().toISOString()
@@ -2654,6 +2678,7 @@ function createArticleRepository({
 
   function countArticles(options = {}) {
     const scopeFilter = buildScopeFilter(options, 'articles');
+    const configuredSourceFilter = buildConfiguredSourceFilter(options, 'articles');
     const retentionFilter = buildRetentionFilter(options, 'articles');
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('articles');
     const excludedSourceFilter = getSourceExclusionClause(options.excludedSourceIds || [], options, 'articles');
@@ -2664,6 +2689,7 @@ function createArticleRepository({
       where,
       params,
       scopeFilter,
+      configuredSourceFilter,
       publishedBeforeNowFilter,
       retentionFilter,
       excludedSourceFilter,
@@ -2756,17 +2782,23 @@ function createArticleRepository({
       const removedArticleFilter = retainedGlobalSourceIds.length > 0
         ? `owner_user_id IS NULL AND source_id NOT IN (${retainedPlaceholders})`
         : 'owner_user_id IS NULL';
+      const removableArticleFilter = `${removedArticleFilter}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_read_later_articles
+          WHERE user_read_later_articles.article_id = articles.id
+        )`;
       const deleteSearchEntries = database.prepare(`
         DELETE FROM article_search
         WHERE article_id IN (
           SELECT id
           FROM articles
-          WHERE ${removedArticleFilter}
+          WHERE ${removableArticleFilter}
         )
       `);
       const deleteArticles = database.prepare(`
         DELETE FROM articles
-        WHERE ${removedArticleFilter}
+        WHERE ${removableArticleFilter}
       `);
       const customSourceIdsByUserId = new Map();
 
@@ -2815,6 +2847,7 @@ function createArticleRepository({
 
   function getSourceStats(configuredSources = [], options = {}) {
     const scopeFilter = buildScopeFilter(options, 'articles');
+    const configuredSourceFilter = buildConfiguredSourceFilter(options, 'articles');
     const readLaterFilter = buildReadLaterFilter(options, 'articles');
     const retentionFilter = buildRetentionFilter(options, 'articles');
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('articles');
@@ -2826,6 +2859,7 @@ function createArticleRepository({
       where,
       params,
       scopeFilter,
+      configuredSourceFilter,
       readLaterFilter,
       publishedBeforeNowFilter,
       retentionFilter,
@@ -2886,6 +2920,7 @@ function createArticleRepository({
     const where = [];
     const searchQuery = buildSearchQuery(state.search);
     const scopeFilter = buildScopeFilter(options, 'a');
+    const configuredSourceFilter = buildConfiguredSourceFilter(options, 'a');
     const readLaterFilter = buildReadLaterFilter(options, 'a');
     const retentionFilter = buildRetentionFilter(options, 'a');
     const publishedBeforeNowFilter = buildPublishedBeforeNowFilter('a');
@@ -2900,6 +2935,7 @@ function createArticleRepository({
       where,
       params,
       scopeFilter,
+      configuredSourceFilter,
       readLaterFilter,
       publishedBeforeNowFilter,
       retentionFilter,

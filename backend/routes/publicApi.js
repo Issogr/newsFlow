@@ -5,7 +5,7 @@ const newsService = require('../services/newsAggregator');
 const userService = require('../services/userService');
 const { buildRateLimitMessage, createError } = require('../utils/errorHandler');
 const { sanitizeQuery } = require('../utils/inputValidator');
-const { extractBearerToken, resolveOptionalExternalApiPrincipal } = require('../utils/auth');
+const { extractBearerToken, resolveAuthenticatedApiToken } = require('../utils/auth');
 const { parseNewsQuery } = require('../utils/newsQuery');
 const { buildUserContext } = require('../utils/userContext');
 const {
@@ -14,6 +14,8 @@ const {
 } = require('../config/publicApi');
 
 const router = express.Router();
+const INVALID_TOKEN_CACHE_MAX_ENTRIES = 1000;
+const invalidTokenCache = new Map();
 
 function getBearerTokenCandidate(req) {
   const authorization = String(req.get?.('authorization') || req.headers?.authorization || '').trim();
@@ -21,7 +23,57 @@ function getBearerTokenCandidate(req) {
 }
 
 function hashRateLimitToken(value = '') {
-  return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16);
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex');
+}
+
+function rememberInvalidToken(tokenHash, now = Date.now()) {
+  invalidTokenCache.set(tokenHash, now + (15 * 60 * 1000));
+  while (invalidTokenCache.size > INVALID_TOKEN_CACHE_MAX_ENTRIES) {
+    invalidTokenCache.delete(invalidTokenCache.keys().next().value);
+  }
+}
+
+function resolveExternalApiPrincipal(req, res, next) {
+  const bearerToken = getBearerTokenCandidate(req);
+  const tokenHash = bearerToken ? hashRateLimitToken(bearerToken) : '';
+  const cachedUntil = tokenHash ? invalidTokenCache.get(tokenHash) : null;
+
+  if (cachedUntil && cachedUntil > Date.now()) {
+    req.externalApiAuthError = createError(401, 'API token expired or invalid', 'UNAUTHORIZED');
+    next();
+    return;
+  }
+  if (cachedUntil) {
+    invalidTokenCache.delete(tokenHash);
+  }
+
+  try {
+    const resolved = resolveAuthenticatedApiToken({ headers: req.headers || {} });
+    req.externalApi = resolved ? {
+      authenticated: true,
+      token: resolved.token,
+      tokenInfo: resolved.tokenRecord,
+      user: resolved.user
+    } : {
+      authenticated: false,
+      token: null,
+      tokenInfo: null,
+      user: null
+    };
+    next();
+  } catch (error) {
+    if (tokenHash && error?.status === 401) {
+      rememberInvalidToken(tokenHash);
+      req.externalApiAuthError = error;
+      next();
+      return;
+    }
+    next(error);
+  }
+}
+
+function rejectInvalidExternalApiToken(req, res, next) {
+  next(req.externalApiAuthError);
 }
 
 function requirePublicApiModeEnabled(req, res, next) {
@@ -101,7 +153,7 @@ const bearerPublicNewsTokenRateLimit = rateLimit({
   ...publicNewsRateLimitDefaults,
   windowMs: 15 * 60 * 1000,
   max: 30,
-  skip: (req) => !getBearerTokenCandidate(req),
+  skip: (req) => !getBearerTokenCandidate(req) || Boolean(req.externalApi?.authenticated),
   keyGenerator: (req) => `bearer-token:${ipKeyGenerator(req.ip)}:${hashRateLimitToken(getBearerTokenCandidate(req))}`,
   message: buildRateLimitMessage('Too many public API token attempts. Please try again later.')
 });
@@ -110,8 +162,9 @@ router.get('/news', [
   requirePublicApiModeEnabled,
   preAuthPublicNewsRateLimit,
   bearerPublicNewsIpRateLimit,
+  resolveExternalApiPrincipal,
   bearerPublicNewsTokenRateLimit,
-  resolveOptionalExternalApiPrincipal,
+  rejectInvalidExternalApiToken,
   anonymousPublicNewsRateLimit,
   authenticatedPublicNewsRateLimit,
   sanitizeQuery(['search', 'beforePubDate', 'beforeId'])

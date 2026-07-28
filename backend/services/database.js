@@ -171,7 +171,13 @@ function closeDb() {
   lastWriteCheckAt = null;
 }
 
-function verifyWriteAccess() {
+function verifyWriteAccess(options = {}) {
+  const maxAgeMs = Number(options.maxAgeMs) || 0;
+  const lastCheckTimestamp = Date.parse(lastWriteCheckAt || '');
+  if (maxAgeMs > 0 && Number.isFinite(lastCheckTimestamp) && Date.now() - lastCheckTimestamp < maxAgeMs) {
+    return getWriteAccessStatus();
+  }
+
   const database = getDb();
   const probeValue = new Date().toISOString();
   const writeProbe = database.prepare(`

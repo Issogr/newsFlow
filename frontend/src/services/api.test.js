@@ -3,7 +3,7 @@ var mockApiConfig;
 var responseErrorHandler;
 
 import axios from 'axios';
-import { AUTH_EXPIRED_EVENT, fetchNews, fetchReadLaterNews, fetchReaderArticle, fetchThematicSummaries, isRequestCanceled, removeReadLaterArticles, saveReadLaterArticles, submitFeedback } from './api';
+import { addUserSource, AUTH_EXPIRED_EVENT, fetchNews, fetchReadLaterNews, fetchReaderArticle, fetchThematicSummaries, importUserSettings, isRequestCanceled, removeReadLaterArticles, saveReadLaterArticles, submitFeedback, updateUserSource } from './api';
 
 vi.mock('axios', () => {
   const axios = {
@@ -55,6 +55,28 @@ describe('api service', () => {
       params: { refresh: 'true' },
       signal: 'reader-signal',
       timeout: 30000
+    });
+  });
+
+  test('uses a bounded timeout and forwards cancellation for custom source requests', async () => {
+    mockApi.post.mockResolvedValue({ data: { success: true } });
+    mockApi.patch.mockResolvedValue({ data: { success: true } });
+
+    await addUserSource({ url: 'https://example.com/feed.xml' }, { signal: 'add-signal' });
+    await updateUserSource('source-1', { name: 'Feed' }, { signal: 'update-signal' });
+    await importUserSettings({ customSources: [] }, { signal: 'import-signal' });
+
+    expect(mockApi.post).toHaveBeenNthCalledWith(1, '/me/sources', { url: 'https://example.com/feed.xml' }, {
+      signal: 'add-signal',
+      timeout: 45000
+    });
+    expect(mockApi.patch).toHaveBeenCalledWith('/me/sources/source-1', { name: 'Feed' }, {
+      signal: 'update-signal',
+      timeout: 45000
+    });
+    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/me/settings/import', { customSources: [] }, {
+      signal: 'import-signal',
+      timeout: 45000
     });
   });
 

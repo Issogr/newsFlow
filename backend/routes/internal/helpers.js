@@ -17,6 +17,19 @@ function refreshUserSourceInBackground(userId, sourceId) {
   refreshUserSourcesInBackground(userId, { sourceIds: [sourceId], broadcast: true }, `custom source ${sourceId}`);
 }
 
+function getRequestAbortSignal(req, res) {
+  const controller = new globalThis.AbortController();
+  const abort = () => controller.abort();
+  req.once('aborted', abort);
+  res.once('close', () => {
+    req.removeListener('aborted', abort);
+    if (!res.writableEnded) {
+      abort();
+    }
+  });
+  return controller.signal;
+}
+
 function getSessionCookieOptions() {
   const ttlDays = parseIntegerEnv('SESSION_TTL_DAYS', 30, { min: 1 });
   const appBaseUrl = String(process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim();
@@ -164,6 +177,7 @@ function sendAudioResponse(req, res, audio) {
 
 module.exports = {
   clearSessionCookie,
+  getRequestAbortSignal,
   getRequestIds,
   getUserContext,
   refreshUserSourceInBackground,

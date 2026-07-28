@@ -2,12 +2,12 @@ const express = require('express');
 const userService = require('../../services/userService');
 const { requireAuthenticatedUser } = require('../../utils/auth');
 const { validateAndSanitizeParam } = require('../../utils/inputValidator');
-const { refreshUserSourceInBackground } = require('./helpers');
+const { getRequestAbortSignal, refreshUserSourceInBackground } = require('./helpers');
 
 const router = express.Router();
 
 router.post('/me/sources', requireAuthenticatedUser, async (req, res) => {
-  const source = await userService.addUserSource(req.user.id, req.body || {});
+  const source = await userService.addUserSource(req.user.id, req.body || {}, { signal: getRequestAbortSignal(req, res) });
   refreshUserSourceInBackground(req.user.id, source.id);
   res.status(201).json({ success: true, source });
 });
@@ -16,7 +16,7 @@ router.patch('/me/sources/:sourceId', [
   requireAuthenticatedUser,
   validateAndSanitizeParam('sourceId', 'Invalid source ID')
 ], async (req, res) => {
-  const source = await userService.updateUserSource(req.user.id, req.params.sourceId, req.body || {});
+  const source = await userService.updateUserSource(req.user.id, req.params.sourceId, req.body || {}, { signal: getRequestAbortSignal(req, res) });
   refreshUserSourceInBackground(req.user.id, source.id);
   res.json({ success: true, source });
 });

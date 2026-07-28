@@ -14,7 +14,6 @@ const {
 } = require('./aiClickbaitClassifier');
 const { createError } = require('../utils/errorHandler');
 const { parseIntegerEnv } = require('../utils/env');
-const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const {
   normalizeIncomingArticles,
   buildInsertedGroupsByOwner
@@ -122,7 +121,7 @@ function createEmptyRefreshPayload(lastRefreshAt = null) {
 }
 
 function normalizeSourceFetchUrl(url) {
-  return normalizeArticleUrl(url || '');
+  return String(url || '').trim().replace(/#.*$/u, '');
 }
 
 function getSourceFetchKey(source = {}) {
@@ -840,7 +839,7 @@ async function ingestSourceConfigs(sourceConfigs = [], options = {}, runtime = {
       .flatMap((result) => result.value);
     const normalizedArticles = normalizeIncomingArticles(fetchedArticles);
 
-    if (failWhenEmpty && normalizedArticles.length === 0 && database.countArticles() === 0) {
+    if (failWhenEmpty && normalizedArticles.length === 0 && database.countArticles({ configuredSourcesOnly: true }) === 0) {
       throw createError(503, 'Unable to connect to news feeds. Please try again later.', 'CONNECTION_ERROR');
     }
 

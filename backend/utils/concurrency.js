@@ -31,7 +31,51 @@ async function mapSettledWithConcurrency(items = [], concurrency = 1, mapper = a
   });
 }
 
+function createConcurrencyLimiter(concurrency = 1) {
+  const limit = Math.max(1, Math.floor(Number(concurrency) || 1));
+  const queue = [];
+  let activeCount = 0;
+
+  function runNext() {
+    while (activeCount < limit && queue.length > 0) {
+      const entry = queue.shift();
+      entry.signal?.removeEventListener('abort', entry.abort);
+      try {
+        entry.signal?.throwIfAborted();
+      } catch (error) {
+        entry.reject(error);
+        continue;
+      }
+      activeCount += 1;
+      Promise.resolve()
+        .then(entry.task)
+        .then(entry.resolve, entry.reject)
+        .finally(() => {
+          activeCount -= 1;
+          runNext();
+        });
+    }
+  }
+
+  return (task, options = {}) => new Promise((resolve, reject) => {
+    const entry = { task, signal: options.signal, resolve, reject };
+    if (entry.signal) {
+      entry.abort = () => {
+        const index = queue.indexOf(entry);
+        if (index >= 0) {
+          queue.splice(index, 1);
+          reject(entry.signal.reason);
+        }
+      };
+      entry.signal.addEventListener('abort', entry.abort, { once: true });
+    }
+    queue.push(entry);
+    runNext();
+  });
+}
+
 module.exports = {
+  createConcurrencyLimiter,
   mapWithConcurrency,
   mapSettledWithConcurrency
 };

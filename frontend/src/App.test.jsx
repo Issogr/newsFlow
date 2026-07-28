@@ -186,7 +186,7 @@ describe('App', () => {
   });
 
   test('falls back to the authentication screen when loading the session fails', async () => {
-    fetchCurrentUser.mockRejectedValue(new Error('Session expired'));
+    fetchCurrentUser.mockRejectedValue({ response: { status: 401 } });
 
     render(<App />);
 
@@ -210,6 +210,22 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('Sign in')).toBeInTheDocument();
     });
+  });
+
+  test('shows a retryable error instead of logout during a session service outage', async () => {
+    fetchCurrentUser
+      .mockRejectedValueOnce({ response: { status: 503 } })
+      .mockResolvedValueOnce(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION } }));
+
+    render(<App />);
+
+    expect(await screen.findByText('Unable to load your session')).toBeInTheDocument();
+    expect(screen.queryByText('Sign in')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
+    expect(fetchCurrentUser).toHaveBeenCalledTimes(2);
   });
 
   test('renders the password setup screen on setup routes', async () => {

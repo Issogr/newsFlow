@@ -187,12 +187,14 @@ describe('bff server', () => {
   let sessionStore;
   let lastBackendHeaders;
   let logoutShouldFail;
+  let backendReady;
 
   beforeEach(async () => {
     frontendDistDir = createFrontendDist();
     ({ tempDir: sessionDir, sessionDbPath } = createSessionDbPath());
     lastBackendHeaders = {};
     logoutShouldFail = false;
+    backendReady = true;
     const backendSessions = new Map();
     const usersById = new Map([
       ['admin-id', { id: 'admin-id', username: 'admin' }],
@@ -208,7 +210,13 @@ describe('bff server', () => {
     backendApp.use(express.json());
     backendApp.use((req, res, next) => {
       lastBackendHeaders = req.headers;
+      res.set('Access-Control-Allow-Origin', 'https://backend.example');
+      res.set('Access-Control-Allow-Credentials', 'true');
       next();
+    });
+
+    backendApp.head('/ready', (req, res) => {
+      res.sendStatus(backendReady ? 200 : 503);
     });
 
     backendApp.post('/internal-api/auth/login', (req, res) => {
@@ -246,6 +254,10 @@ describe('bff server', () => {
 
     backendApp.get('/internal-api/broken-stream', (req, res) => {
       req.socket.destroy();
+    });
+
+    backendApp.get('/internal-api/ping', (req, res) => {
+      res.json({ ok: true });
     });
 
     backendApp.get('/internal-api/delayed', (req, res) => {
@@ -327,6 +339,55 @@ describe('bff server', () => {
     expect(meResponse.body).toEqual({ user: { id: 'user-1', username: 'alice' } });
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
     expect(meResponse.headers['set-cookie']).toBeUndefined();
+    expect(meResponse.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  test('rejects explicit cross-origin authenticated GET requests', async () => {
+    const bffSessionCookie = await login(app);
+    lastBackendHeaders = {};
+
+    const response = await request(app)
+      .get('/api/me')
+      .set('Cookie', bffSessionCookie)
+      .set('Origin', 'https://evil.example')
+      .expect(403);
+
+    expectCsrfRejected(response);
+    expect(lastBackendHeaders).toEqual({});
+  });
+
+  test('strips private CORS headers after validating a same-origin GET', async () => {
+    const bffSessionCookie = await login(app);
+
+    const response = await request(app)
+      .get('/api/ping')
+      .set('Cookie', bffSessionCookie)
+      .set('Origin', SAME_ORIGIN)
+      .expect(200);
+
+    expect(response.body).toEqual({ ok: true });
+    expect(lastBackendHeaders.origin).toBeUndefined();
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
+    expect(response.headers['access-control-allow-credentials']).toBeUndefined();
+  });
+
+  test('keeps liveness separate from backend readiness', async () => {
+    const sessionCount = countRows(sessionDb, 'sessions');
+    await request(app).get('/health').expect(200, { status: 'ok' });
+    await request(app).get('/ready').expect(200, { status: 'ok' });
+    expect(countRows(sessionDb, 'sessions')).toBe(sessionCount);
+
+    backendReady = false;
+
+    await request(app).get('/ready').expect(503, { status: 'unavailable' });
+    await request(app).get('/health').expect(200, { status: 'ok' });
+  });
+
+  test('fails readiness when the session database is unavailable', async () => {
+    sessionDb.close();
+
+    await request(app).get('/ready').expect(503, { status: 'unavailable' });
+    await request(app).get('/health').expect(200, { status: 'ok' });
   });
 
   test('serves browser responses with security headers', async () => {
@@ -590,6 +651,8 @@ describe('bff server', () => {
 
     expect(response.body).toEqual({ ok: true });
     expect(response.headers['set-cookie']).toBeUndefined();
+    expect(response.headers['access-control-allow-origin']).toBe('https://backend.example');
+    expect(response.headers['access-control-allow-credentials']).toBe('true');
   });
 
   test('rebuilds forwarded headers on public API routes from trusted request values', async () => {
@@ -705,6 +768,7 @@ describe('bff server', () => {
 
     expect(response.body.path).toBe('/socket.io/ping');
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
   });
 
   test('rejects authenticated socket.io requests from another origin', async () => {

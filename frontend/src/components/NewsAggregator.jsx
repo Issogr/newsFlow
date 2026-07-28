@@ -162,6 +162,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const preferredLanguage = currentUser?.settings?.defaultLanguage;
   const needsSourceSetup = currentUser?.settings?.sourceSetupCompleted === false && !currentUser?.user?.isAdmin;
   const showNewsImages = currentUser?.settings?.showNewsImages !== false;
+  const feedbackEnabled = currentUser?.features?.feedback?.enabled === true;
   const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
   const t = useMemo(() => createTranslator(locale), [locale]);
   const scrollFrameRef = useRef(null);
@@ -884,15 +885,17 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                             }}
                             iconClassName="bg-sky-100 text-sky-700"
                           />
-                          <UserMenuItem
-                            icon={MessageSquare}
-                            label={t('feedbackMenuItem')}
-                            onClick={() => {
-                              setFeedbackOpen(true);
-                              setUserMenuOpen(false);
-                            }}
-                            iconClassName="bg-emerald-100 text-emerald-700"
-                          />
+                          {feedbackEnabled && (
+                            <UserMenuItem
+                              icon={MessageSquare}
+                              label={t('feedbackMenuItem')}
+                              onClick={() => {
+                                setFeedbackOpen(true);
+                                setUserMenuOpen(false);
+                              }}
+                              iconClassName="bg-emerald-100 text-emerald-700"
+                            />
+                          )}
                           <UserMenuItem
                             icon={LogOut}
                             label={t('logout')}
@@ -1031,7 +1034,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         />
       )}
 
-      {feedbackOpen && (
+      {feedbackEnabled && feedbackOpen && (
         <FeedbackModal
           t={t}
           feedbackLimits={currentUser?.limits}
