@@ -83,10 +83,6 @@ function getManualRefreshMeta(userContext = {}, referenceTime = Date.now()) {
   };
 }
 
-function canStartManualRefresh(userId, referenceTime = Date.now()) {
-  return !getManualRefreshAllowedAt(userId, referenceTime);
-}
-
 function isRecentlyActive(user, referenceTime = Date.now()) {
   if (!user?.lastActivityAt || !Number.isFinite(ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES) || ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES <= 0) {
     return false;
@@ -123,12 +119,8 @@ function getAssignedConfiguredSourcesForUsers(users = []) {
   return [...assignedSources.values()];
 }
 
-function getActiveUsers(referenceTime = Date.now()) {
-  return database.listUsers().filter((user) => isRecentlyActive(user, referenceTime));
-}
-
 function getActiveAssignedSourceConfigs(referenceTime = Date.now()) {
-  const activeUsers = getActiveUsers(referenceTime);
+  const activeUsers = database.listUsers().filter((user) => isRecentlyActive(user, referenceTime));
   const activeUserIds = new Set(activeUsers.map((user) => user.id));
   const assignedConfiguredSources = getAssignedConfiguredSourcesForUsers(activeUsers);
   const assignedUserSources = database.listAllActiveUserSources()
@@ -173,7 +165,7 @@ function startUserAssignedSourceRefresh(userContext = {}, options = {}) {
     return createEmptyRefreshPayload(getLastRefreshAt());
   }
 
-  if (manual && !canStartManualRefresh(userId)) {
+  if (manual && getManualRefreshAllowedAt(userId)) {
     return createEmptyRefreshPayload(getLastRefreshAt());
   }
 

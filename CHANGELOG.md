@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.5.15
+
 ## 3.5.14
 
 - isolated custom RSS fetches by exact feed URL, added an eight-source per-user limit, bounded aggregate RSS/image network concurrency, and aligned browser/BFF validation timeouts

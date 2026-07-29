@@ -287,11 +287,11 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }, [readThematicSummariesStorageKey]);
 
   useEffect(() => {
-    setStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize || 'medium');
+    setStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize);
   }, [currentUser?.settings?.readerTextSize]);
 
   useEffect(() => {
-    setStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth || 'default');
+    setStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth);
   }, [currentUser?.settings?.readerTextWidth]);
 
   useEffect(() => {

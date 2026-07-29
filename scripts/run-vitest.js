@@ -7,13 +7,10 @@ const { createRequire } = require('module');
 const projectRequire = createRequire(path.join(process.cwd(), 'package.json'));
 const vitestPackagePath = projectRequire.resolve('vitest/package.json');
 const vitestBinPath = path.join(path.dirname(vitestPackagePath), 'vitest.mjs');
-const userArgs = process.argv.slice(2);
 const normalizedArgs = [];
 const packageDirectoryName = path.basename(process.cwd());
 
-for (let index = 0; index < userArgs.length; index += 1) {
-  const arg = userArgs[index];
-
+for (const arg of process.argv.slice(2)) {
   if (arg === '--runTestsByPath' || arg === '--runInBand') {
     continue;
   }
