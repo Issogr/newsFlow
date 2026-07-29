@@ -8,6 +8,7 @@
 - added dependency-aware readiness probes and a retryable frontend session state so backend or database outages no longer appear as logout while containers remain healthy
 - exposed feedback only when Telegram delivery is configured, passed its documented Compose settings, and clarified which account data and attachments are sent
 - updated the default OpenRouter models for topic classification, story grouping, summaries, and podcast scripts
+- simplified mobile news cards with a white feed, title-first layout, compact original-link action, single-tap Reader opening, and swipe-safe gesture handling
 
 ## 3.5.13
 

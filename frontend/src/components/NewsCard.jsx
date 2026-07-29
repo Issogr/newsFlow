@@ -1,6 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import {
-  BookOpenText,
   Bookmark,
   BookmarkCheck,
   Clock3,
@@ -25,6 +24,8 @@ const GENERIC_NEWS_COVERS = [
   genericNewsCover3,
   genericNewsCover4,
 ];
+const READER_TOUCH_MOVE_TOLERANCE = 8;
+const READER_CLICK_SUPPRESSION_MS = 500;
 
 function getRandomGenericNewsCover() {
   return GENERIC_NEWS_COVERS[Math.floor(Math.random() * GENERIC_NEWS_COVERS.length)] || genericNewsCover;
@@ -169,9 +170,9 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   const { shareState, shareArticle } = useShareArticle();
   const fallbackImageAlt = t('genericNewsCoverAlt');
   const fallbackGroupIdRef = useRef(group?.id);
-  const lastTouchGestureRef = useRef({ area: '', timestamp: 0 });
+  const readerTouchStartRef = useRef(null);
+  const suppressReaderClickUntilRef = useRef(0);
   const lastReaderOpenAtRef = useRef(0);
-  const readerTriggerRef = useRef(null);
 
   useEffect(() => {
     if (fallbackGroupIdRef.current === group?.id) {
@@ -204,7 +205,6 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     }
 
     lastReaderOpenAtRef.current = now;
-    readerTriggerRef.current?.focus({ preventScroll: true });
     onOpenReader(group, group.items[0]?.id);
   };
 
@@ -216,76 +216,61 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     window.open(safeOriginalUrl, '_blank', 'noopener,noreferrer');
   };
 
-  const handleReaderTouchEnd = (area) => {
-    const now = Date.now();
-    const lastTouchGesture = lastTouchGestureRef.current;
-
-    if (lastTouchGesture.area === area && now - lastTouchGesture.timestamp < 320) {
-      lastTouchGestureRef.current = { area: '', timestamp: 0 };
-      openReader();
+  const handleReaderClick = () => {
+    if (Date.now() < suppressReaderClickUntilRef.current) {
       return;
     }
 
-    lastTouchGestureRef.current = { area, timestamp: now };
+    openReader();
   };
 
-  const interactionPropsByArea = {
-    image: {
-      onDoubleClick: openReader,
-      onTouchEnd: () => handleReaderTouchEnd('image')
-    },
-    title: {
-      onDoubleClick: openReader,
-      onTouchEnd: () => handleReaderTouchEnd('title')
+  const handleReaderTouchStart = (event) => {
+    if (event.touches.length !== 1) {
+      readerTouchStartRef.current = null;
+      return;
+    }
+
+    const touch = event.touches[0];
+    readerTouchStartRef.current = { x: touch.clientX, y: touch.clientY, moved: false };
+  };
+
+  const handleReaderTouchMove = (event) => {
+    const touchStart = readerTouchStartRef.current;
+    if (!touchStart) {
+      return;
+    }
+
+    if (event.touches.length !== 1) {
+      touchStart.moved = true;
+      return;
+    }
+
+    const touch = event.touches[0];
+    touchStart.moved ||= Math.hypot(touch.clientX - touchStart.x, touch.clientY - touchStart.y) > READER_TOUCH_MOVE_TOLERANCE;
+  };
+
+  const handleReaderTouchEnd = (event) => {
+    const touchStart = readerTouchStartRef.current;
+    const touch = event.changedTouches[0];
+    readerTouchStartRef.current = null;
+
+    if (!touchStart || event.changedTouches.length !== 1 || touchStart.moved || Math.hypot(touch.clientX - touchStart.x, touch.clientY - touchStart.y) > READER_TOUCH_MOVE_TOLERANCE) {
+      suppressReaderClickUntilRef.current = Date.now() + READER_CLICK_SUPPRESSION_MS;
     }
   };
 
-  const readerActionButtonClassName = 'inline-flex min-w-0 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white no-underline shadow-sm transition-colors hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2';
-  const originalActionButtonClassName = 'inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 no-underline transition-colors hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2';
-  const disabledActionButtonClassName = 'inline-flex min-w-0 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-400';
-  const openOriginalSourceUnavailableMessage = t('openOriginalSourceUnavailable');
+  const handleReaderTouchCancel = () => {
+    readerTouchStartRef.current = null;
+    suppressReaderClickUntilRef.current = Date.now() + READER_CLICK_SUPPRESSION_MS;
+  };
 
-  const actionButtons = (
-    <div className="mt-auto border-t border-slate-100 bg-slate-50/60 px-4 py-3.5 sm:px-5">
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          ref={readerTriggerRef}
-          type="button"
-          onClick={openReader}
-          className={readerActionButtonClassName}
-          aria-label={t('readHere')}
-          title={t('readHereHelp')}
-        >
-          <BookOpenText className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 text-center leading-tight sm:hidden">{t('readHereShort')}</span>
-          <span className="hidden min-w-0 text-center leading-tight sm:inline">{t('readHere')}</span>
-        </button>
-        <button
-          type="button"
-          onClick={openOriginalSource}
-          disabled={!safeOriginalUrl}
-          className={safeOriginalUrl
-            ? originalActionButtonClassName
-            : disabledActionButtonClassName}
-          aria-label={t('openOriginalSource')}
-          aria-describedby={!safeOriginalUrl ? `open-original-source-help-${group?.id}` : undefined}
-          title={safeOriginalUrl ? t('openOriginalSourceHelp') : openOriginalSourceUnavailableMessage}
-        >
-          <ExternalLink className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 text-center leading-tight sm:hidden">{t('openOriginalSourceShort')}</span>
-          <span className="hidden min-w-0 text-center leading-tight sm:inline">{t('openOriginalSource')}</span>
-        </button>
-      </div>
-      {!safeOriginalUrl ? (
-        <p
-          id={`open-original-source-help-${group?.id}`}
-          className="px-1 pt-2 text-xs text-slate-500"
-        >
-          {openOriginalSourceUnavailableMessage}
-        </p>
-      ) : null}
-    </div>
-  );
+  const readerInteractionProps = {
+    onClick: handleReaderClick,
+    onTouchStart: handleReaderTouchStart,
+    onTouchMove: handleReaderTouchMove,
+    onTouchEnd: handleReaderTouchEnd,
+    onTouchCancel: handleReaderTouchCancel
+  };
 
   const sourceIconItems = sourceEntries.slice(0, 2).map((source) => (
     <span key={source.id} title={source.name} aria-label={source.name} className="flex h-10 w-10 shrink-0 leading-none">
@@ -372,6 +357,16 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       />
       <button
         type="button"
+        onClick={openOriginalSource}
+        disabled={!safeOriginalUrl}
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        aria-label={t('openOriginalSource')}
+        title={safeOriginalUrl ? t('openOriginalSourceHelp') : t('openOriginalSourceUnavailable')}
+      >
+        <ExternalLink className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
         onClick={() => onToggleReadLater?.(group)}
         disabled={readLaterUpdating}
         className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70 ${group.readLater ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
@@ -394,7 +389,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   );
 
   return (
-    <article className="group relative flex h-full min-h-[20rem] w-full min-w-0 flex-col overflow-hidden rounded-none border-y border-slate-200 bg-white shadow-[0_12px_34px_-20px_rgba(15,23,42,0.45)] transition-[border-color,box-shadow] duration-200 ease-out hover:border-sky-200 hover:shadow-[0_20px_42px_-24px_rgba(14,165,233,0.42)] focus-within:ring-2 focus-within:ring-sky-300 sm:rounded-[1.75rem] sm:border">
+    <article className="group relative flex h-full min-h-[20rem] w-full min-w-0 flex-col overflow-hidden rounded-none border-0 border-slate-200 bg-white shadow-none transition-[border-color,box-shadow] duration-200 ease-out sm:rounded-[1.75rem] md:border md:shadow-[0_12px_34px_-20px_rgba(15,23,42,0.45)] md:hover:border-sky-200 md:hover:shadow-[0_20px_42px_-24px_rgba(14,165,233,0.42)]">
       <div className="flex min-w-0 items-center gap-3 px-4 pb-3 pt-5 sm:px-5">
         {sourceIconStack}
         <div className="min-w-0 flex-1">
@@ -415,10 +410,31 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         {shareControls}
       </div>
 
+      <div className="flex min-w-0 flex-col px-4 pb-4 pt-3 sm:px-5">
+        <h2 className="text-lg font-bold leading-6 tracking-[-0.01em] text-slate-900 sm:text-xl">
+          <button
+            type="button"
+            className="w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2"
+            title={t('readHereHelp')}
+            {...readerInteractionProps}
+          >
+            {group.title}
+          </button>
+        </h2>
+        {clickbaitBadge ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {clickbaitBadge}
+          </div>
+        ) : null}
+      </div>
+
       {imageUrl ? (
-        <div
-          className="relative aspect-video w-full overflow-hidden border-y border-slate-100 bg-slate-100"
-          {...interactionPropsByArea.image}
+        <button
+          type="button"
+          className="relative block aspect-video w-full cursor-pointer overflow-hidden border-y border-slate-100 bg-slate-100 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400"
+          aria-label={group.title}
+          title={t('readHereHelp')}
+          {...readerInteractionProps}
         >
           <img
             src={imageUrl}
@@ -439,7 +455,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
               {topicBadges}
             </div>
           ) : null}
-        </div>
+        </button>
       ) : null}
 
       {!imageUrl && topicBadges ? (
@@ -447,21 +463,6 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
           {topicBadges}
         </div>
       ) : null}
-
-      <div className="flex min-w-0 flex-1 flex-col px-4 pb-4 pt-3 sm:px-5">
-        <h2
-          className="text-lg font-bold leading-6 tracking-[-0.01em] text-slate-900 sm:text-xl"
-          {...interactionPropsByArea.title}
-        >
-          {group.title}
-        </h2>
-        {clickbaitBadge ? (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {clickbaitBadge}
-          </div>
-        ) : null}
-      </div>
-      {actionButtons}
     </article>
   );
 });

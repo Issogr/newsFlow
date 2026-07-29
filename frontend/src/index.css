@@ -36,6 +36,16 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
+@media (max-width: 767px) {
+  :root:not([data-theme='dark']) {
+    background-color: #ffffff;
+  }
+
+  :root:not([data-theme='dark']) body {
+    background: #ffffff;
+  }
+}
+
 :root[data-theme='dark'] body {
   background: radial-gradient(circle at top, #111827 0%, #020617 52%, #000000 100%);
   color: #e2e8f0;

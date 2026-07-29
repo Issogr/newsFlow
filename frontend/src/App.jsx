@@ -40,7 +40,7 @@ const LEGAL_POLICY_BY_PATH = {
   '/privacy-policy': 'privacy',
   '/cookie-policy': 'cookie'
 };
-const APP_LOADING_FALLBACK = <div className="App min-h-screen bg-slate-100" />;
+const APP_LOADING_FALLBACK = <div className="App min-h-screen bg-white md:bg-slate-100" />;
 
 function normalizeRoutePath(pathname = '/') {
   const path = String(pathname || '/');
