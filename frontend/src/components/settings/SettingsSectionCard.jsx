@@ -1,7 +1,6 @@
 const SettingsSectionCard = ({
   icon: Icon,
   title,
-  description,
   badge,
   children,
   iconToneClassName
@@ -13,7 +12,6 @@ const SettingsSectionCard = ({
           <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${iconToneClassName}`} aria-hidden="true" />
           <div className="min-w-0">
             <h3 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h3>
-            {description && <p className="mt-1 max-w-xl text-sm leading-6 text-slate-600">{description}</p>}
           </div>
         </div>
         {badge ? (

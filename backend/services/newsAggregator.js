@@ -221,7 +221,7 @@ async function ingestAllNews(options = {}) {
 
   refreshPromise = (async () => {
     try {
-      const databaseIsEmpty = database.countArticles() === 0;
+      const databaseIsEmpty = database.countArticles({ configuredSourcesOnly: true }) === 0;
       const sourceConfigs = databaseIsEmpty
         ? [
             ...newsSources,
@@ -279,7 +279,7 @@ async function refreshUserSources(userId, options = {}) {
 }
 
 function startSeedDataRefresh() {
-  if (database.countArticles() > 0) {
+  if (database.countArticles({ configuredSourcesOnly: true }) > 0) {
     return null;
   }
 

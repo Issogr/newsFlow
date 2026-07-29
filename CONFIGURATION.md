@@ -54,7 +54,8 @@ This file documents the environment variables and build arguments that can chang
 | `BACKEND_BASE_URL` | `http://backend:5000` | Backend upstream target used by the BFF proxy and session bridge. |
 | `FRONTEND_DIST_DIR` | `bff/public` | Directory served by the BFF for built frontend assets. Docker copies `frontend/dist` here. |
 | `BFF_SESSION_DB_PATH` | `bff/data/sessions.sqlite` | SQLite path for persisted BFF browser sessions. |
-| `BFF_UPSTREAM_TIMEOUT_MS` | `30000` | BFF timeout for backend axios/proxy traffic. Minimum `1000`. |
+| `BFF_UPSTREAM_TIMEOUT_MS` | `50000` | BFF timeout for backend axios/proxy traffic. Minimum `1000`; keep it above the browser custom-source timeout. |
+| `BFF_READINESS_TIMEOUT_MS` | `1000` | Deadline for the BFF readiness probe to verify backend readiness after checking BFF session-store writes. Minimum `100`. |
 | `SESSION_STORE_CLEAR_INTERVAL_MS` | `300000` | BFF expired-session cleanup interval. Minimum `1000`. |
 | `SESSION_TOUCH_RENEWAL_WINDOW_MS` | `86400000` | Window before expiry when BFF session touches renew persisted session storage. Minimum `1000`. |
 
@@ -86,7 +87,7 @@ The public API is read-only and cache-only. It must not trigger RSS refreshes, a
 | `SOURCE_FETCH_FRESHNESS_RETENTION_MS` | `max(SOURCE_FETCH_FRESHNESS_MS * 6, 3600000)` | Retention for source freshness records. Minimum `1000`. |
 | `SOURCE_FETCH_FAILURE_BACKOFF_MS` | `120000` | Initial per-source backoff after RSS fetch failures. Minimum `0`. |
 | `SOURCE_FETCH_FAILURE_MAX_BACKOFF_MS` | `1800000` | Maximum per-source RSS failure backoff. Minimum `1000`. |
-| `RSS_INGESTION_CONCURRENCY` | `8` | Max RSS sources processed concurrently during ingestion. Minimum `1`. |
+| `RSS_INGESTION_CONCURRENCY` | `8` | Max RSS sources processed concurrently per ingestion and process-wide RSS/article-image network requests. Minimum `1`. |
 | `MAX_ARTICLES_PER_SOURCE` | `25` | Max parsed RSS items processed per source. Minimum `1`. |
 | `RSS_MAX_RETRIES` | Code `4`; Compose `5` | RSS fetch retry attempts. Minimum `1`. |
 | `RSS_RETRY_DELAY` | Code `1500`; Compose `2000` | Base delay between RSS retries in ms. Minimum `0`. |
@@ -95,6 +96,7 @@ The public API is read-only and cache-only. It must not trigger RSS refreshes, a
 | `RSS_VALIDATION_TIMEOUT` | `8000` | Timeout for backend RSS validation. Minimum `1`. |
 | `RSS_INTERACTIVE_VALIDATION_TIMEOUT` | `8000` | Timeout for custom-RSS validation triggered by user interactions. Minimum `1`. |
 | `RSS_INTERACTIVE_VALIDATION_RETRIES` | `2` | Retry count for custom-RSS validation triggered by user interactions. Minimum `1`. |
+| `MAX_CUSTOM_SOURCES_PER_USER` | `8` | Maximum custom RSS sources retained for one user, including inactive sources. Minimum `1`, maximum `100`. |
 | `RSS_CACHE_TTL` | `60000` | In-memory RSS response cache TTL in ms. Minimum `0`. |
 | `RSS_CACHE_MAX_ENTRIES` | `200` | Max in-memory RSS response cache entries. Minimum `0`. |
 | `RSS_MAX_RESPONSE_BYTES` | `1048576` | Max RSS/XML response size in bytes. Minimum `1`. |
@@ -148,7 +150,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 
 | Variable | Default | Details |
 | --- | --- | --- |
-| `OPENROUTER_TOPIC_MODEL` | `qwen/qwen3.5-9b` | Model used for AI topic classification. |
+| `OPENROUTER_TOPIC_MODEL` | `mistralai/mistral-small-24b-instruct-2501` | Model used for AI topic classification. |
 | `AI_TOPIC_BATCH_SIZE` | `10` | Articles per topic-classification request. Strict integer, clamped to `1..50`. |
 | `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Concurrent topic-classification requests. Strict integer, clamped to `1..4`. |
 | `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles sent to AI per refresh. Strict integer, clamped to `1..1000`. |
@@ -171,7 +173,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 
 | Variable | Default | Details |
 | --- | --- | --- |
-| `OPENROUTER_STORY_GROUPING_MODEL` | `deepseek/deepseek-v4-flash` | Model used to decide whether articles describe the same story. |
+| `OPENROUTER_STORY_GROUPING_MODEL` | `qwen/qwen3.7-flash` | Model used to decide whether articles describe the same story. |
 | `AI_STORY_GROUPING_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one story-grouping request. Strict integer, valid `1000..120000`; invalid/out-of-range falls back. |
 | `AI_STORY_GROUPING_CONCURRENCY` | `1` | Concurrent story-grouping jobs during ingestion. Minimum `1`, maximum `4`. |
 | `AI_STORY_GROUPING_WINDOW_HOURS` | `24` | Candidate article age window for grouping. Minimum `1`, maximum `72`. |
@@ -183,7 +185,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 
 | Variable | Default | Details |
 | --- | --- | --- |
-| `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` | Model used for thematic summaries. |
+| `OPENROUTER_SUMMARY_MODEL` | `qwen/qwen3.7-flash` | Model used for thematic summaries. |
 | `AI_SUMMARY_REQUEST_TIMEOUT_MS` | `120000` | Timeout for thematic-summary requests and podcast-script requests. Strict integer, valid `1000..120000`; invalid/out-of-range falls back. |
 | `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for `08:00` and `20:00` summary and podcast slots. Invalid zones fall back to `Europe/Rome`. |
 | `THEMATIC_SUMMARY_CHECK_INTERVAL_MS` | `60000` | Scheduler interval for checking due summaries and podcasts. Minimum `1000`. |
@@ -208,7 +210,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 
 | Variable | Default | Details |
 | --- | --- | --- |
-| `OPENROUTER_PODCAST_SCRIPT_MODEL` | `deepseek/deepseek-v4-flash` | Model used for podcast script generation. |
+| `OPENROUTER_PODCAST_SCRIPT_MODEL` | `qwen/qwen3.7-flash` | Model used for podcast script generation. |
 | `AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS` | `42000` | Hard aggregate description/reader-text budget divided across selected podcast articles. Prompt instructions and bounded article metadata are additional. Minimum `10000`, maximum `240000`. |
 | `AI_PODCAST_PROMPT_MAX_ARTICLES` | `40` | Max deduped/source-balanced articles included in one podcast-script prompt. Minimum `1`, maximum `300`. |
 | `AI_PODCAST_LANGUAGES` | `en` | Comma-separated podcast locales. Supported values are `en` and `it`; invalid entries are ignored. |

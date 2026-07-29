@@ -38,6 +38,15 @@ function getTelegramConfig() {
   };
 }
 
+function isFeedbackConfigured() {
+  try {
+    getTelegramConfig();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function escapeHtml(value) {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -164,5 +173,6 @@ async function sendFeedback({ user, category, title, description, attachment = n
 }
 
 module.exports = {
+  isFeedbackConfigured,
   sendFeedback,
 };

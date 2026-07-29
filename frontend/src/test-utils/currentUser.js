@@ -11,7 +11,12 @@ const DEFAULT_SETTINGS = {
 };
 
 const DEFAULT_LIMITS = {
-  apiTokenTtlDays: 30
+  apiTokenTtlDays: 30,
+  customSourcesMaxCount: 8
+};
+
+const DEFAULT_FEATURES = {
+  feedback: { enabled: true }
 };
 
 export function createTestCurrentUser({
@@ -20,6 +25,7 @@ export function createTestCurrentUser({
   limits = {},
   customSources = [],
   apiToken = null,
+  features = DEFAULT_FEATURES,
   ...overrides
 } = {}) {
   return {
@@ -28,6 +34,7 @@ export function createTestCurrentUser({
     limits: { ...DEFAULT_LIMITS, ...limits },
     customSources,
     apiToken,
+    features,
     ...overrides
   };
 }

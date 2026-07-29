@@ -105,6 +105,23 @@ describe('database migrations', () => {
     expect(topicIndexNames).toContain('idx_article_topics_topic_article');
   });
 
+  test('refuses to start with case-insensitive duplicate usernames', () => {
+    const sqlite = new SqliteDatabase(dbPath);
+    sqlite.exec(`
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE
+      );
+      INSERT INTO users (id, username) VALUES ('user-1', 'admin');
+      INSERT INTO users (id, username) VALUES ('user-2', 'ADMIN');
+    `);
+    sqlite.close();
+
+    database = require('./database');
+
+    expect(() => database.getDb()).toThrow('case-insensitive duplicate username');
+  });
+
   test('migrates reader text width from schema version 41', () => {
     const sqlite = new SqliteDatabase(dbPath);
     sqlite.exec(`
@@ -935,7 +952,7 @@ describe('database queries and user data', () => {
     }));
   });
 
-  test('updates an existing grouped-source article when a sibling subfeed repeats the normalized title within a short time window', () => {
+  test('keeps same-title grouped-source articles separate when canonical URLs differ', () => {
     expect(groupedSource).toBeTruthy();
     expect(alternateGroupedSource).toBeTruthy();
 
@@ -971,19 +988,15 @@ describe('database queries and user data', () => {
     const articles = database.getArticles({}, { maxArticleAgeHours: 9999 });
 
     expect(firstResult).toMatchObject({ insertedCount: 1, updatedCount: 0 });
-    expect(secondResult).toMatchObject({ insertedCount: 0, updatedCount: 1, updatedIds: ['grouped-title-article-1'] });
-    expect(rawRows).toEqual([{ id: 'grouped-title-article-1', sourceId: alternateGroupedSource.id }]);
-    expect(articles).toHaveLength(1);
-    expect(articles[0]).toEqual(expect.objectContaining({
-      id: 'grouped-title-article-1',
-      sourceId: groupedSourceFamilyId,
-      source: groupedSourceFamilyName,
-      rawSourceId: alternateGroupedSource.id,
-      title: '  grouped title fallback story  '
-    }));
+    expect(secondResult).toMatchObject({ insertedCount: 1, updatedCount: 0, insertedIds: ['grouped-title-article-2'] });
+    expect(rawRows).toEqual([
+      { id: 'grouped-title-article-1', sourceId: groupedSource.id },
+      { id: 'grouped-title-article-2', sourceId: alternateGroupedSource.id }
+    ]);
+    expect(articles).toHaveLength(2);
   });
 
-  test('does not create a new AI topic candidate when title fallback dedupe reuses an existing article', () => {
+  test('does not create a new AI topic candidate when title fallback dedupe fills a missing canonical URL', () => {
     expect(groupedSource).toBeTruthy();
     expect(alternateGroupedSource).toBeTruthy();
 
@@ -997,7 +1010,7 @@ describe('database queries and user data', () => {
         title: 'Grouped AI fallback story',
         description: 'First version',
         content: 'First body',
-        url: 'https://example.com/grouped-ai-a',
+        url: '',
         language: 'it',
         pubDate: new Date(now).toISOString()
       }
@@ -2336,6 +2349,17 @@ describe('database queries and user data', () => {
         pubDate: now
       },
       {
+        id: 'saved-retired-global',
+        sourceId: 'retired-source',
+        source: 'Retired Source',
+        title: 'Keep saved retired article',
+        description: 'Saved retired source article',
+        content: 'Saved body',
+        url: 'https://example.com/saved-retired',
+        language: 'en',
+        pubDate: now
+      },
+      {
         id: 'private-article',
         sourceId: 'custom-1',
         source: 'Private Feed',
@@ -2348,11 +2372,20 @@ describe('database queries and user data', () => {
         pubDate: now
       }
     ]);
+    database.saveReadLaterArticles('user-1', ['saved-retired-global']);
+    database.upsertReaderCache('saved-retired-global', {
+      url: 'https://example.com/saved-retired',
+      title: 'Keep saved retired article',
+      contentText: 'Saved reader text'
+    });
 
     const cleanupResult = database.cleanupRemovedConfiguredSourceData();
 
     expect(cleanupResult).toEqual({ removedArticles: 1, updatedSettings: 1 });
-    expect(database.getArticles({}, { userId: 'user-1' }).map((article) => article.id)).toEqual(['private-article', 'kept-global']);
+    expect(database.getArticles({}, { userId: 'user-1', configuredSourcesOnly: true }).map((article) => article.id)).toEqual(['private-article', 'kept-global']);
+    expect(database.getReadLaterArticles('user-1').map((article) => article.id)).toEqual(['saved-retired-global']);
+    expect(database.isReadLaterArticle('user-1', 'saved-retired-global')).toBe(true);
+    expect(database.getReaderCache('saved-retired-global')).toEqual(expect.objectContaining({ contentText: 'Saved reader text' }));
     expect(database.getUserSettings('user-1')).toEqual(expect.objectContaining({
       excludedSourceIds: [primarySourceFamilyId, 'custom-1'],
       excludedSubSourceIds: groupedSource ? [groupedSource.id] : []

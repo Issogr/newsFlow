@@ -63,7 +63,8 @@ const useSettingsPanelState = ({ currentUser, availableSources, onUserUpdate }) 
   const savingActionsRef = useRef(0);
   currentUserRef.current = currentUser;
   const settingsLimits = {
-    apiTokenTtlDays: Number.isFinite(currentUser?.limits?.apiTokenTtlDays) ? currentUser.limits.apiTokenTtlDays : 30
+    apiTokenTtlDays: Number.isFinite(currentUser?.limits?.apiTokenTtlDays) ? currentUser.limits.apiTokenTtlDays : 30,
+    customSourcesMaxCount: Number.isFinite(currentUser?.limits?.customSourcesMaxCount) ? currentUser.limits.customSourcesMaxCount : 8
   };
 
   const excludedSourceCatalog = useMemo(() => {

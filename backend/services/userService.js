@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const database = require('./database');
 const rssParser = require('./rssParser');
+const { isFeedbackConfigured } = require('./feedbackService');
 const websocketService = require('./websocketService');
 const { createError } = require('../utils/errorHandler');
 const { mapWithConcurrency } = require('../utils/concurrency');
@@ -39,6 +40,8 @@ const AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS = parseIntegerEnv('AUTHENTICA
 const AUTHENTICATED_PUBLIC_USAGE_FLUSH_THRESHOLD = parseIntegerEnv('AUTHENTICATED_PUBLIC_USAGE_FLUSH_THRESHOLD', 50, { min: 1 });
 const RSS_INTERACTIVE_VALIDATION_TIMEOUT = parseIntegerEnv('RSS_INTERACTIVE_VALIDATION_TIMEOUT', 8000, { min: 1 });
 const RSS_INTERACTIVE_VALIDATION_RETRIES = parseIntegerEnv('RSS_INTERACTIVE_VALIDATION_RETRIES', 2, { min: 1 });
+const MAX_CUSTOM_SOURCES_PER_USER = parseIntegerEnv('MAX_CUSTOM_SOURCES_PER_USER', 8, { min: 1, max: 100 });
+const MAX_CUSTOM_SOURCE_URL_LENGTH = 2048;
 const SUPPORTED_LANGUAGES = new Set(['auto', 'it', 'en']);
 const SUPPORTED_THEME_MODES = new Set(['system', 'light', 'dark']);
 const SUPPORTED_READER_PANEL_POSITIONS = new Set(['left', 'center', 'right']);
@@ -345,7 +348,10 @@ function buildAuthResponse(user, sessionToken) {
 function getUserFeatures() {
   return {
     ...getPublicApiFeatures(),
-    ...getAiFeatures()
+    ...getAiFeatures(),
+    feedback: {
+      enabled: isFeedbackConfigured()
+    }
   };
 }
 
@@ -355,7 +361,8 @@ function getUserLimits() {
     feedbackDescriptionMaxLength: MAX_FEEDBACK_DESCRIPTION_LENGTH,
     feedbackImageMaxBytes: MAX_FEEDBACK_IMAGE_BYTES,
     feedbackVideoMaxBytes: MAX_FEEDBACK_VIDEO_BYTES,
-    apiTokenTtlDays: API_TOKEN_TTL_DAYS
+    apiTokenTtlDays: API_TOKEN_TTL_DAYS,
+    customSourcesMaxCount: MAX_CUSTOM_SOURCES_PER_USER
   };
 }
 
@@ -405,7 +412,7 @@ function normalizeUserSettingsPayload(payload = {}, currentSettings = {}, overri
     readerPanelPosition: normalizeReaderPanelPosition(payload.readerPanelPosition || currentSettings.readerPanelPosition),
     readerTextSize: normalizeReaderTextSize(payload.readerTextSize || currentSettings.readerTextSize),
     readerTextWidth: normalizeReaderTextWidth(payload.readerTextWidth || currentSettings.readerTextWidth),
-    lastSeenReleaseNotesVersion: Object.prototype.hasOwnProperty.call(payload, 'lastSeenReleaseNotesVersion')
+    lastSeenReleaseNotesVersion: Object.hasOwn(payload, 'lastSeenReleaseNotesVersion')
       ? normalizeReleaseNotesVersion(payload.lastSeenReleaseNotesVersion)
       : normalizeReleaseNotesVersion(currentSettings.lastSeenReleaseNotesVersion),
     sourceSetupCompleted: typeof payload.sourceSetupCompleted === 'boolean'
@@ -521,11 +528,18 @@ function createApiTokenLabel(label) {
   return String(label || '').trim().slice(0, 80);
 }
 
-function validateInteractiveFeedUrl(url) {
+function validateInteractiveFeedUrl(url, options = {}) {
   return rssParser.validateFeedUrl(url, {
     timeout: RSS_INTERACTIVE_VALIDATION_TIMEOUT,
-    maxRetries: RSS_INTERACTIVE_VALIDATION_RETRIES
+    maxRetries: RSS_INTERACTIVE_VALIDATION_RETRIES,
+    signal: options.signal
   });
+}
+
+function requireCustomSourceCapacity(userId) {
+  if (database.listUserSources(userId).length >= MAX_CUSTOM_SOURCES_PER_USER) {
+    throw createError(409, `A user can have at most ${MAX_CUSTOM_SOURCES_PER_USER} custom sources`, 'CUSTOM_SOURCE_LIMIT_REACHED');
+  }
 }
 
 function createUserApiToken(userId, options = {}) {
@@ -575,14 +589,15 @@ function updateUserSettings(userId, payload = {}) {
   return database.upsertUserSettings(userId, normalizeUserSettingsPayload(payload, currentSettings));
 }
 
-async function addUserSource(userId, payload = {}) {
+async function addUserSource(userId, payload = {}, options = {}) {
   const url = String(payload.url || '').trim();
 
-  if (!url) {
+  if (!url || url.length > MAX_CUSTOM_SOURCE_URL_LENGTH) {
     throw createError(400, 'RSS URL is required', 'INVALID_SOURCE_PAYLOAD');
   }
 
-  const preview = await previewUserSource({ url });
+  requireCustomSourceCapacity(userId);
+  const preview = await previewUserSource({ url }, options);
   const name = String(payload.name || preview.name || '').trim().slice(0, 80);
   const language = String(payload.language || preview.language || 'it').trim().toLowerCase().slice(0, 5) || 'it';
 
@@ -605,7 +620,11 @@ async function addUserSource(userId, payload = {}) {
   };
 
   try {
-    database.createUserSource(source);
+    options.signal?.throwIfAborted();
+    database.getDb().transaction(() => {
+      requireCustomSourceCapacity(userId);
+      database.createUserSource(source);
+    })();
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       throw createError(409, 'This RSS source already exists for the user', 'SOURCE_ALREADY_EXISTS', error);
@@ -616,18 +635,18 @@ async function addUserSource(userId, payload = {}) {
   return source;
 }
 
-async function updateUserSource(userId, sourceId, payload = {}) {
+async function updateUserSource(userId, sourceId, payload = {}, options = {}) {
   const existingSource = database.findUserSourceById(userId, sourceId);
   if (!existingSource) {
     throw createError(404, 'Source not found', 'RESOURCE_NOT_FOUND');
   }
 
   const url = String(payload.url || existingSource.url).trim();
-  if (!url) {
+  if (!url || url.length > MAX_CUSTOM_SOURCE_URL_LENGTH) {
     throw createError(400, 'RSS URL is required', 'INVALID_SOURCE_PAYLOAD');
   }
   const urlChanged = url !== existingSource.url;
-  const preview = urlChanged ? await previewUserSource({ url }) : null;
+  const preview = urlChanged ? await previewUserSource({ url }, options) : null;
 
   const nextSource = {
     name: String(payload.name || preview?.name || existingSource.name).trim().slice(0, 80),
@@ -644,6 +663,7 @@ async function updateUserSource(userId, sourceId, payload = {}) {
   }
 
   try {
+    options.signal?.throwIfAborted();
     database.updateUserSource(userId, sourceId, nextSource);
   } catch (error) {
     if (isUniqueConstraintError(error)) {
@@ -658,15 +678,15 @@ async function updateUserSource(userId, sourceId, payload = {}) {
   return database.findUserSourceById(userId, sourceId);
 }
 
-async function previewUserSource(payload = {}) {
+async function previewUserSource(payload = {}, options = {}) {
   const url = String(payload.url || '').trim();
 
-  if (!url) {
+  if (!url || url.length > MAX_CUSTOM_SOURCE_URL_LENGTH) {
     throw createError(400, 'RSS URL is required', 'INVALID_SOURCE_PAYLOAD');
   }
 
   try {
-    const preview = await validateInteractiveFeedUrl(url);
+    const preview = await validateInteractiveFeedUrl(url, options);
     return {
       name: preview.title || '',
       iconUrl: getProviderIconUrl(preview.siteUrl || url),
@@ -674,6 +694,7 @@ async function previewUserSource(payload = {}) {
       itemCount: preview.itemCount || 0
     };
   } catch (error) {
+    options.signal?.throwIfAborted();
     throw createError(400, 'RSS URL is not valid or cannot be parsed', 'INVALID_RSS_URL', error);
   }
 }
@@ -790,6 +811,7 @@ async function completePasswordSetup(payload = {}) {
     });
     database.updateUserPassword(tokenRecord.userId, nextPasswordHash, now);
     database.deleteSessionsByUserId(tokenRecord.userId);
+    database.revokeApiTokensByUserId(tokenRecord.userId, now);
     database.createUserSession({
       tokenHash: sessionTokenHash,
       userId: tokenRecord.userId,
@@ -944,22 +966,27 @@ function deleteUserAsAdmin(adminUserId, targetUserId) {
   };
 }
 
-async function importUserSettings(userId, payload = {}) {
+async function importUserSettings(userId, payload = {}, options = {}) {
   const importedSettings = payload.settings || {};
   const importedCustomSources = Array.isArray(payload.customSources) ? payload.customSources : [];
   const globalSourceIds = getConfiguredSourceGroupIds();
   const groupedSubSourceIds = getGroupedConfiguredSourceIds();
 
+  if (importedCustomSources.length > MAX_CUSTOM_SOURCES_PER_USER) {
+    throw createError(409, `A user can have at most ${MAX_CUSTOM_SOURCES_PER_USER} custom sources`, 'CUSTOM_SOURCE_LIMIT_REACHED');
+  }
+
   await mapWithConcurrency(importedCustomSources, 4, async (source) => {
     const name = String(source?.name || '').trim();
     const url = String(source?.url || '').trim();
-    if (!name || !url) {
+    if (!name || !url || url.length > MAX_CUSTOM_SOURCE_URL_LENGTH) {
       throw createError(400, 'Imported custom sources must include a name and RSS URL', 'INVALID_IMPORT_PAYLOAD');
     }
 
     try {
-      await validateInteractiveFeedUrl(url);
+      await validateInteractiveFeedUrl(url, options);
     } catch (error) {
+      options.signal?.throwIfAborted();
       throw createError(400, `Imported RSS URL is not valid: ${url}`, 'INVALID_RSS_URL', error);
     }
   });
@@ -995,6 +1022,7 @@ async function importUserSettings(userId, payload = {}) {
     excludedSubSourceIds
   });
 
+  options.signal?.throwIfAborted();
   return database.importUserState(
     userId,
     recreatedSources.map(({ isExcluded, ...source }) => source),

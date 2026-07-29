@@ -4,10 +4,10 @@ import ModalDialog from './ModalDialog';
 const DEFAULT_OVERLAY_CLASS_NAME = 'fixed inset-0 z-50 flex overflow-hidden bg-slate-950/35 backdrop-blur-sm sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pl-[calc(1rem+env(safe-area-inset-left))] sm:pr-[calc(1rem+env(safe-area-inset-right))] sm:pt-[calc(1.5rem+env(safe-area-inset-top))]';
 const DEFAULT_PANEL_CLASS_NAME = 'ml-auto flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] sm:h-full sm:max-w-2xl sm:rounded-[1.6rem] sm:border sm:border-slate-200';
 
-const SlideOverPanelFrame = ({ ariaLabelledBy, children, dismissOnEscape = true, onClose, overlayClassName = DEFAULT_OVERLAY_CLASS_NAME, restoreFocusRef }) => (
+const SlideOverPanelFrame = ({ ariaLabelledBy, children, dismissOnEscape = true, onClose, restoreFocusRef }) => (
     <ModalDialog
       ariaLabelledBy={ariaLabelledBy}
-      className={overlayClassName}
+      className={DEFAULT_OVERLAY_CLASS_NAME}
       dismissOnEscape={dismissOnEscape}
       onRequestClose={onClose}
       restoreFocusRef={restoreFocusRef}

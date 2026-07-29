@@ -55,7 +55,7 @@ const SKELETON_CARD_COUNT = 6;
 
 function NewsCardSkeleton({ showImage }) {
   return (
-    <article className="relative flex h-full min-h-[20rem] flex-col overflow-hidden rounded-none border-y border-slate-200 bg-white shadow-[0_12px_34px_-20px_rgba(15,23,42,0.35)] sm:rounded-[1.75rem] sm:border" aria-hidden="true">
+    <article className="relative flex h-full min-h-[20rem] flex-col overflow-hidden rounded-none border-0 border-slate-200 bg-white shadow-none sm:rounded-[1.75rem] md:border md:shadow-[0_12px_34px_-20px_rgba(15,23,42,0.35)]" aria-hidden="true">
       <div className="flex items-center gap-3 px-4 pb-3 pt-5 sm:px-5">
         <div className="h-12 w-12 shrink-0 rounded-full bg-sky-100" />
         <div className="flex-1 space-y-2">
@@ -65,10 +65,15 @@ function NewsCardSkeleton({ showImage }) {
         <div className="flex gap-2">
           <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white" />
           <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white" />
+          <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white" />
         </div>
       </div>
+      <div className="space-y-2.5 px-4 pb-4 pt-3 sm:px-5">
+        <div className="h-4 w-full rounded-full bg-slate-200" />
+        <div className="h-4 w-4/5 rounded-full bg-slate-200" />
+      </div>
       {showImage ? (
-        <div className="relative aspect-video w-full border-y border-slate-100 bg-slate-200">
+        <div className="relative aspect-video w-full grow border-y border-slate-100 bg-slate-200">
           <div className="absolute bottom-3 left-3 flex -space-x-1">
             <div className="h-8 w-8 rounded-full bg-sky-100 ring-2 ring-slate-900/10" />
             <div className="h-8 w-8 rounded-full bg-violet-100 ring-2 ring-slate-900/10" />
@@ -80,14 +85,6 @@ function NewsCardSkeleton({ showImage }) {
           <div className="h-8 w-8 rounded-full bg-violet-100 ring-2 ring-slate-900/10" />
         </div>
       )}
-      <div className="flex-1 space-y-2.5 px-4 pb-4 pt-3 sm:px-5">
-        <div className="h-4 w-full rounded-full bg-slate-200" />
-        <div className="h-4 w-4/5 rounded-full bg-slate-200" />
-      </div>
-      <div className="grid grid-cols-2 gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-3.5 sm:px-5">
-        <div className="h-10 rounded-xl bg-violet-200" />
-        <div className="h-10 rounded-xl border border-slate-200 bg-white" />
-      </div>
     </article>
   );
 }
@@ -162,6 +159,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   const preferredLanguage = currentUser?.settings?.defaultLanguage;
   const needsSourceSetup = currentUser?.settings?.sourceSetupCompleted === false && !currentUser?.user?.isAdmin;
   const showNewsImages = currentUser?.settings?.showNewsImages !== false;
+  const feedbackEnabled = currentUser?.features?.feedback?.enabled === true;
   const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
   const t = useMemo(() => createTranslator(locale), [locale]);
   const scrollFrameRef = useRef(null);
@@ -800,9 +798,9 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   };
 
   return (
-    <div className="min-h-screen overflow-x-clip bg-slate-100 text-slate-900">
+    <div className="min-h-screen overflow-x-clip bg-white text-slate-900 md:bg-slate-100">
       <header className={`sticky top-[env(safe-area-inset-top)] z-50 transition-[padding] duration-300 ${topNavCompact ? 'px-4 pt-2' : ''}`}>
-        <div className={`border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl transition-all duration-300 ${topNavCompact ? 'rounded-[1.6rem] border border-slate-200/80 bg-white/90 shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] 2xl:mx-auto 2xl:max-w-7xl' : ''}`}>
+        <div className={`bg-white/95 shadow-none backdrop-blur-xl transition-all duration-300 md:shadow-sm ${topNavCompact ? 'rounded-[1.6rem] border border-b-0 border-slate-200/80 bg-white/90 shadow-none md:border-b md:shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] 2xl:mx-auto 2xl:max-w-7xl' : 'md:border-b md:border-slate-200'}`}>
           <div className={`mx-auto flex max-w-7xl flex-col px-4 transition-all duration-300 lg:px-6 ${topNavCompact ? 'gap-2 py-2.5' : 'gap-4 py-5'}`}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
@@ -884,15 +882,17 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
                             }}
                             iconClassName="bg-sky-100 text-sky-700"
                           />
-                          <UserMenuItem
-                            icon={MessageSquare}
-                            label={t('feedbackMenuItem')}
-                            onClick={() => {
-                              setFeedbackOpen(true);
-                              setUserMenuOpen(false);
-                            }}
-                            iconClassName="bg-emerald-100 text-emerald-700"
-                          />
+                          {feedbackEnabled && (
+                            <UserMenuItem
+                              icon={MessageSquare}
+                              label={t('feedbackMenuItem')}
+                              onClick={() => {
+                                setFeedbackOpen(true);
+                                setUserMenuOpen(false);
+                              }}
+                              iconClassName="bg-emerald-100 text-emerald-700"
+                            />
+                          )}
                           <UserMenuItem
                             icon={LogOut}
                             label={t('logout')}
@@ -924,7 +924,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
 
         {loading && !loadingMore ? (
           <div
-            className="-mx-4 grid w-auto min-w-0 animate-pulse grid-cols-1 gap-2 sm:mx-0 sm:w-full sm:gap-4 md:grid-cols-2 xl:grid-cols-3"
+            className="-mx-4 grid w-auto min-w-0 animate-pulse grid-cols-1 gap-3 sm:mx-0 sm:w-full sm:gap-4 md:grid-cols-2 xl:grid-cols-3"
             role="status"
             aria-label={t('loadingMore')}
           >
@@ -956,7 +956,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
               </div>
             )}
 
-            <div className="-mx-4 grid w-auto min-w-0 grid-cols-1 gap-2 sm:mx-0 sm:w-full sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="-mx-4 grid w-auto min-w-0 grid-cols-1 gap-3 sm:mx-0 sm:w-full sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
               {visibleNews.map((group) => (
                 <div key={group.id || group.cursorId || group.items?.[0]?.id} className="feed-card-enter h-full">
                   <NewsCard
@@ -1031,7 +1031,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         />
       )}
 
-      {feedbackOpen && (
+      {feedbackEnabled && feedbackOpen && (
         <FeedbackModal
           t={t}
           feedbackLimits={currentUser?.limits}

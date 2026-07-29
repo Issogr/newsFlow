@@ -408,6 +408,7 @@ async function getNewsFeed(filters = {}, userContext = {}, runtime = {}) {
   const customSourceGroups = buildDomainSourceGroups(userSources);
   const queryOptions = {
     ...getQueryOptions(userContext),
+    configuredSourcesOnly: true,
     customSourceGroups,
     sourceMetadataCache: new Map()
   };

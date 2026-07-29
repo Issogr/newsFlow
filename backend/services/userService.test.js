@@ -137,6 +137,46 @@ describe('userService imports', () => {
     });
   });
 
+  test('enforces the custom source limit before import work and across concurrent adds', async () => {
+    const authPayload = await userService.registerUser({ username: 'source-limit-user', password: 'secret123' });
+    const userId = authPayload.user.id;
+    const now = new Date().toISOString();
+    Array.from({ length: 7 }, (_, index) => index).forEach((index) => {
+      database.createUserSource({
+        id: `source-${index}`,
+        userId,
+        name: `Source ${index}`,
+        url: `https://example.com/feed-${index}.xml`,
+        language: 'en',
+        isActive: true,
+        createdAt: now,
+        updatedAt: now
+      });
+    });
+    rssParser.validateFeedUrl.mockResolvedValue({ title: 'Feed', language: 'en', itemCount: 1 });
+
+    const addResults = await Promise.allSettled([
+      userService.addUserSource(userId, { url: 'https://example.com/feed-a.xml' }),
+      userService.addUserSource(userId, { url: 'https://example.com/feed-b.xml' })
+    ]);
+
+    expect(addResults.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(addResults.find((result) => result.status === 'rejected').reason).toMatchObject({
+      status: 409,
+      code: 'CUSTOM_SOURCE_LIMIT_REACHED'
+    });
+    expect(database.listUserSources(userId)).toHaveLength(8);
+
+    rssParser.validateFeedUrl.mockClear();
+    await expect(userService.importUserSettings(userId, {
+      customSources: Array.from({ length: 9 }, (_, index) => ({
+        name: `Imported ${index}`,
+        url: `https://example.com/imported-${index}.xml`
+      }))
+    })).rejects.toMatchObject({ status: 409, code: 'CUSTOM_SOURCE_LIMIT_REACHED' });
+    expect(rssParser.validateFeedUrl).not.toHaveBeenCalled();
+  });
+
   test('normalizes unsupported reader text widths to the default', async () => {
     const authPayload = await userService.registerUser({ username: 'width-user', password: 'secret123' });
 

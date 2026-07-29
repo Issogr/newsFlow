@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { setTimeout: wait } = require('node:timers/promises');
 const RSSParser = require('rss-parser');
 const logger = require('../utils/logger');
 const summarizeErrorMessage = require('../utils/summarizeError');
@@ -8,6 +9,7 @@ const { normalizePublicationDate } = require('../utils/publicationDate');
 const { fetchSafeTextUrl } = require('../utils/urlSafety');
 const { parseIntegerEnv } = require('../utils/env');
 const { redactUrlForLog } = require('../utils/logRedaction');
+const { createConcurrencyLimiter } = require('../utils/concurrency');
 
 const MAX_ARTICLES_PER_SOURCE = parseIntegerEnv('MAX_ARTICLES_PER_SOURCE', 25, { min: 1 });
 const RSS_MAX_RETRIES = parseIntegerEnv('RSS_MAX_RETRIES', 4, { min: 1 });
@@ -23,6 +25,7 @@ const ARTICLE_IMAGE_CACHE_MAX_ENTRIES = parseIntegerEnv('ARTICLE_IMAGE_CACHE_MAX
 const ARTICLE_IMAGE_FALLBACK_LIMIT = parseIntegerEnv('ARTICLE_IMAGE_FALLBACK_LIMIT', 4, { min: 0 });
 const RSS_MAX_RESPONSE_BYTES = parseIntegerEnv('RSS_MAX_RESPONSE_BYTES', 1048576, { min: 1 });
 const ARTICLE_IMAGE_MAX_RESPONSE_BYTES = parseIntegerEnv('ARTICLE_IMAGE_MAX_RESPONSE_BYTES', 524288, { min: 1 });
+const limitOutboundFetch = createConcurrencyLimiter(parseIntegerEnv('RSS_INGESTION_CONCURRENCY', 8, { min: 1 }));
 
 const RSS_REQUEST_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 NewsFlow/2.0',
@@ -83,9 +86,7 @@ function ensureCleanupInterval() {
     pruneResponseCache();
   }, 5 * 60 * 1000);
 
-  if (typeof cleanupHandle.unref === 'function') {
-    cleanupHandle.unref();
-  }
+  cleanupHandle.unref?.();
 
   return cleanupHandle;
 }
@@ -349,7 +350,7 @@ function isRetryableFetchError(error) {
   return status === 408 || status === 425 || status === 429 || status >= 500;
 }
 
-async function fetchArticleImage(url) {
+async function fetchArticleImage(url, options = {}) {
   if (!url) {
     return null;
   }
@@ -362,14 +363,15 @@ async function fetchArticleImage(url) {
   }
 
   try {
-    const response = await fetchSafeTextUrl(url, {
+    const response = await limitOutboundFetch(() => fetchSafeTextUrl(url, {
       timeout: ARTICLE_IMAGE_TIMEOUT,
       maxResponseBytes: ARTICLE_IMAGE_MAX_RESPONSE_BYTES,
+      signal: options.signal,
       headers: {
         'User-Agent': 'newsflow-image-fallback/1.0 (+https://localhost)',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       }
-    });
+    }), options);
     const imageUrl = extractImageFromArticleHtml(response.data, response.finalUrl || url);
 
     articleImageCache.set(url, {
@@ -380,6 +382,7 @@ async function fetchArticleImage(url) {
 
     return imageUrl;
   } catch (error) {
+    options.signal?.throwIfAborted();
     logger.debug(`Article image fallback failed for ${url}: ${summarizeErrorMessage(error)}`);
     articleImageCache.set(url, {
       data: null,
@@ -390,13 +393,13 @@ async function fetchArticleImage(url) {
   }
 }
 
-async function enrichArticlesWithImages(articles = []) {
+async function enrichArticlesWithImages(articles = [], options = {}) {
   const missingImageArticles = articles
     .filter((article) => article && !article.image && article.url)
     .slice(0, ARTICLE_IMAGE_FALLBACK_LIMIT);
 
   await Promise.allSettled(missingImageArticles.map(async (article) => {
-    article.image = await fetchArticleImage(article.url);
+    article.image = await fetchArticleImage(article.url, options);
   }));
 
   return articles;
@@ -420,11 +423,12 @@ async function fetchFeedXml(url, options = {}) {
 
   for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
     try {
-      const response = await fetchSafeTextUrl(url, {
+      const response = await limitOutboundFetch(() => fetchSafeTextUrl(url, {
         timeout,
         maxResponseBytes: RSS_MAX_RESPONSE_BYTES,
+        signal: options.signal,
         headers: RSS_REQUEST_HEADERS
-      });
+      }), options);
 
       responseCache.set(url, {
         data: response.data,
@@ -439,9 +443,9 @@ async function fetchFeedXml(url, options = {}) {
         break;
       }
 
-      const delay = RSS_RETRY_DELAY * attempt;
-      logger.warn(`Retry ${attempt}/${maxRetries} for ${redactUrlForLog(url, { redactAllQuery: true })} after ${delay}ms`);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      const retryDelay = RSS_RETRY_DELAY * attempt;
+      logger.warn(`Retry ${attempt}/${maxRetries} for ${redactUrlForLog(url, { redactAllQuery: true })} after ${retryDelay}ms`);
+      await wait(retryDelay, undefined, { signal: options.signal });
     }
   }
 
@@ -455,7 +459,7 @@ async function parseFeed(source, options = {}) {
   }
 
   try {
-    const xml = await fetchFeedXml(url);
+    const xml = await fetchFeedXml(url, options);
     const feed = await parser.parseString(xml);
     const items = Array.isArray(feed?.items) ? feed.items.slice(0, MAX_ARTICLES_PER_SOURCE) : [];
 
@@ -485,7 +489,7 @@ async function parseFeed(source, options = {}) {
       });
 
     if (options.imageFallback !== false) {
-      await enrichArticlesWithImages(normalizedItems);
+      await enrichArticlesWithImages(normalizedItems, options);
     }
 
     return normalizedItems;
@@ -505,7 +509,8 @@ module.exports = {
   validateFeedUrl: async (url, options = {}) => {
     const xml = await fetchFeedXml(url, {
       maxRetries: options.maxRetries || RSS_VALIDATION_MAX_RETRIES,
-      timeout: options.timeout || RSS_VALIDATION_TIMEOUT
+      timeout: options.timeout || RSS_VALIDATION_TIMEOUT,
+      signal: options.signal
     });
     const feed = await parser.parseString(xml);
     return {

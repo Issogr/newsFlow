@@ -67,6 +67,7 @@ describe('API auth and user flows', () => {
     }));
 
     jest.doMock('../services/feedbackService', () => ({
+      isFeedbackConfigured: jest.fn(() => true),
       sendFeedback: jest.fn().mockResolvedValue({ messageId: 1 })
     }));
 
@@ -136,7 +137,8 @@ describe('API auth and user flows', () => {
         feedbackDescriptionMaxLength: 2800,
         feedbackImageMaxBytes: 5242880,
         feedbackVideoMaxBytes: 12582912,
-        apiTokenTtlDays: 30
+        apiTokenTtlDays: 30,
+        customSourcesMaxCount: 8
       },
       customSources: []
     });
@@ -147,7 +149,8 @@ describe('API auth and user flows', () => {
       publicApi: {
         anonymousEnabled: true,
         authenticatedEnabled: true
-      }
+      },
+      feedback: { enabled: true }
     });
     expect(registerResponse.body.token).toBeUndefined();
     expect(getSessionCookie(registerResponse)).toContain('newsflow_session=');
@@ -293,6 +296,12 @@ describe('API auth and user flows', () => {
       .post('/internal-api/auth/register')
       .send({ username: 'legacy-member', password: 'secret123' })
       .expect(201);
+    const memberSessionCookie = getSessionCookie(memberResponse);
+    const apiTokenResponse = await request(app)
+      .post('/internal-api/me/api-token')
+      .set('Cookie', memberSessionCookie)
+      .send({})
+      .expect(201);
 
     database.updateUserPassword(memberResponse.body.user.id, null, new Date().toISOString());
 
@@ -318,6 +327,11 @@ describe('API auth and user flows', () => {
       .post('/internal-api/auth/login')
       .send({ username: 'legacy-member', password: 'renewed123' })
       .expect(200);
+
+    await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${apiTokenResponse.body.token}`)
+      .expect(401);
 
     await request(app)
       .post('/internal-api/auth/password-setup/complete')
@@ -428,7 +442,8 @@ describe('API auth and user flows', () => {
       feedbackDescriptionMaxLength: 2800,
       feedbackImageMaxBytes: 5242880,
       feedbackVideoMaxBytes: 12582912,
-      apiTokenTtlDays: 30
+      apiTokenTtlDays: 30,
+      customSourcesMaxCount: 8
     });
   });
 
@@ -472,7 +487,8 @@ describe('API auth and user flows', () => {
       publicApi: {
         anonymousEnabled: false,
         authenticatedEnabled: false
-      }
+      },
+      feedback: { enabled: true }
     });
     expect(registerResponse.body.apiToken).toBeNull();
 
@@ -680,6 +696,21 @@ describe('API auth and user flows', () => {
     expect(tokenRow.lastUsedAt).toEqual(expect.any(String));
   });
 
+  test('does not apply the invalid-token limit to valid API tokens', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'api-rate-user', password: 'secret123' })
+      .expect(201);
+    const tokenResult = userService.createUserApiToken(registerResponse.body.user.id);
+
+    for (let index = 0; index < 31; index += 1) {
+      await request(app)
+        .get('/api/public/news')
+        .set('Authorization', `Bearer ${tokenResult.token}`)
+        .expect(200);
+    }
+  });
+
   test('counts anonymous public API requests globally', async () => {
     await request(app)
       .get('/api/public/news')
@@ -748,7 +779,7 @@ describe('API auth and user flows', () => {
       .set('Authorization', 'Bearer invalid-public-token')
       .expect(429);
 
-    expect(lookupSpy).toHaveBeenCalledTimes(30);
+    expect(lookupSpy).toHaveBeenCalledTimes(1);
   });
 
   test('regenerates api tokens immediately and revokes the previous token row', async () => {

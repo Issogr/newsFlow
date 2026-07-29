@@ -174,11 +174,11 @@ describe('aiTopicClassifier', () => {
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection skipped: reason=missing_api_key'));
   });
 
-  test('defaults to qwen when the topic model env var is unset', () => {
+  test('defaults to Mistral Small when the topic model env var is unset', () => {
     delete process.env.OPENROUTER_TOPIC_MODEL;
 
     expect(aiTopicClassifier._getConfig()).toEqual(expect.objectContaining({
-      model: 'qwen/qwen3.5-9b'
+      model: 'mistralai/mistral-small-24b-instruct-2501'
     }));
   });
 

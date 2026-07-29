@@ -7,12 +7,11 @@ const ExternalPillLink = ({
   children,
   className = DEFAULT_EXTERNAL_PILL_LINK_CLASS_NAME,
   target,
-  rel,
 }) => (
   <a
     href={href}
     target={target}
-    rel={target === '_blank' ? (rel || 'noopener noreferrer') : rel}
+    rel={target === '_blank' ? 'noopener noreferrer' : undefined}
     className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${className}`}
   >
     <span>{children}</span>

@@ -125,7 +125,29 @@ function normalizeMaxResponseBytes(maxResponseBytes) {
     : MAX_RESPONSE_BYTES;
 }
 
-async function resolveSafeOutboundTarget(rawUrl) {
+function waitForAbortable(promise, signal) {
+  if (!signal) {
+    return promise;
+  }
+
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      }
+    );
+  });
+}
+
+async function resolveSafeOutboundTarget(rawUrl, options = {}) {
   let parsedUrl;
 
   try {
@@ -154,8 +176,12 @@ async function resolveSafeOutboundTarget(rawUrl) {
   let resolvedAddresses = [];
 
   try {
-    resolvedAddresses = await dns.lookup(hostname, { all: true, verbatim: true });
+    resolvedAddresses = await waitForAbortable(
+      dns.lookup(hostname, { all: true, verbatim: true }),
+      options.signal
+    );
   } catch {
+    options.signal?.throwIfAborted();
     throw createInvalidUrlError('Unable to resolve outbound host');
   }
 
@@ -266,6 +292,7 @@ function destroyResponseData(responseData) {
 }
 
 async function fetchSafeTextUrl(rawUrl, requestConfig = {}) {
+  requestConfig.signal?.throwIfAborted();
   const maxRedirects = Number.isFinite(requestConfig.maxRedirects)
     ? requestConfig.maxRedirects
     : MAX_REDIRECTS;
@@ -284,9 +311,10 @@ async function fetchSafeTextUrl(rawUrl, requestConfig = {}) {
     transformResponse: [(data) => data],
     validateStatus: () => true
   };
-  let currentTarget = await resolveSafeOutboundTarget(rawUrl);
+  let currentTarget = await resolveSafeOutboundTarget(rawUrl, requestConfig);
 
   for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
+    requestConfig.signal?.throwIfAborted();
     const response = await axios.get(currentTarget.url, {
       ...axiosConfig,
       lookup: createPinnedLookup(currentTarget)
@@ -300,7 +328,7 @@ async function fetchSafeTextUrl(rawUrl, requestConfig = {}) {
       }
 
       destroyResponseData(response.data);
-      currentTarget = await resolveSafeOutboundTarget(new URL(redirectLocation, currentTarget.url).toString());
+      currentTarget = await resolveSafeOutboundTarget(new URL(redirectLocation, currentTarget.url).toString(), requestConfig);
       continue;
     }
 

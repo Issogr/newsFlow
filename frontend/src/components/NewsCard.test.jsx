@@ -68,8 +68,10 @@ describe('NewsCard', () => {
     renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
     const originalSourceButton = screen.getByRole('button', { name: 'openOriginalSource' });
+    const readLaterButton = screen.getByRole('button', { name: 'saveReadLater' });
 
-    expect(originalSourceButton).toHaveClass('border-slate-300', 'bg-white', 'text-slate-700');
+    expect(originalSourceButton).toHaveClass('border-slate-200', 'bg-white', 'text-slate-600');
+    expect(originalSourceButton.nextElementSibling).toBe(readLaterButton);
     fireEvent.click(originalSourceButton);
 
     expect(window.open).toHaveBeenCalledWith('https://example.com/story', '_blank', 'noopener,noreferrer');
@@ -187,10 +189,7 @@ describe('NewsCard', () => {
       clickbaitHigh: 'High clickbait',
       aiClickbaitLabel: 'AI clickbait label',
       genericNewsCoverAlt: 'genericNewsCoverAlt',
-      readHereShort: 'readHereShort',
-      readHere: 'readHere',
       readHereHelp: 'readHereHelp',
-      openOriginalSourceShort: 'openOriginalSourceShort',
       openOriginalSource: 'openOriginalSource',
       openOriginalSourceHelp: 'openOriginalSourceHelp',
       openOriginalSourceUnavailable: 'openOriginalSourceUnavailable',
@@ -319,7 +318,7 @@ describe('NewsCard', () => {
 
     expect(screen.getByRole('button', { name: 'openOriginalSource' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'openOriginalSource' })).toHaveAttribute('title', 'openOriginalSourceUnavailable');
-    expect(screen.getByText('openOriginalSourceUnavailable')).toBeInTheDocument();
+    expect(screen.queryByText('openOriginalSourceUnavailable')).not.toBeInTheDocument();
   });
 
   test('shows a share status bubble when clipboard fallback is used', async () => {
@@ -338,7 +337,7 @@ describe('NewsCard', () => {
     expect(screen.getByText('shareCopiedMessage')).toBeInTheDocument();
   });
 
-  test('opens reader mode on title double click and reader button click', () => {
+  test('opens reader mode on a single title or image click without a separate reader button', () => {
     const onOpenReader = vi.fn();
 
     renderNewsCard({
@@ -346,18 +345,21 @@ describe('NewsCard', () => {
       onOpenReader
     });
 
-    fireEvent.doubleClick(screen.getByText('Headline'));
+    fireEvent.click(screen.getByText('Headline'));
 
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
+    expect(screen.getByText('Headline').compareDocumentPosition(screen.getByRole('img', { name: 'Headline' })) & globalThis.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Headline' }).parentElement).toHaveClass('aspect-video', 'grow');
 
     onOpenReader.mockClear();
     vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000);
-    fireEvent.click(screen.getByRole('button', { name: 'readHere' }));
+    fireEvent.click(screen.getByRole('img', { name: 'Headline' }));
 
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
+    expect(screen.getAllByTitle('readHereHelp')).toHaveLength(2);
   });
 
-  test('opens reader mode on image double tap but not single tap', () => {
+  test('opens reader mode after a stationary touch', () => {
     const onOpenReader = vi.fn();
 
     renderNewsCard({
@@ -367,11 +369,29 @@ describe('NewsCard', () => {
 
     const image = screen.getByRole('img', { name: 'Headline' });
 
-    fireEvent.touchEnd(image);
-    expect(onOpenReader).not.toHaveBeenCalled();
+    fireEvent.touchStart(image, { touches: [{ clientX: 20, clientY: 30 }] });
+    fireEvent.touchEnd(image, { changedTouches: [{ clientX: 20, clientY: 30 }] });
+    fireEvent.click(image);
 
-    fireEvent.touchEnd(image);
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
+  });
+
+  test('does not treat a swipe on the image as a reader click', () => {
+    const onOpenReader = vi.fn();
+
+    renderNewsCard({
+      cardGroup: createGroup({ items: [createItem({ image: 'https://example.com/image.jpg' })] }),
+      onOpenReader
+    });
+
+    const image = screen.getByRole('img', { name: 'Headline' });
+
+    fireEvent.touchStart(image, { touches: [{ clientX: 20, clientY: 30 }] });
+    fireEvent.touchMove(image, { touches: [{ clientX: 90, clientY: 35 }] });
+    fireEvent.touchEnd(image, { changedTouches: [{ clientX: 90, clientY: 35 }] });
+    fireEvent.click(image);
+
+    expect(onOpenReader).not.toHaveBeenCalled();
   });
 
 });

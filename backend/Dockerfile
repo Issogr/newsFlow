@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # Build stage
-FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS build
+FROM --platform=$BUILDPLATFORM node:24.16.0-bookworm-slim AS build
 
 ARG TARGETARCH
 
@@ -18,7 +18,7 @@ RUN --mount=type=cache,id=newsflow-backend-npm,target=/root/.npm,sharing=locked 
     npm_config_platform=linux npm_config_arch="$npm_arch" npm_config_libc=glibc npm ci --omit=dev --no-audit --no-fund
 
 # Production stage
-FROM node:24-bookworm-slim
+FROM node:24.16.0-bookworm-slim
 
 # Crea un utente non-root
 RUN apt-get update && \
@@ -52,7 +52,7 @@ USER nodeuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:5000/health || exit 1
+  CMD wget -qO- http://localhost:5000/ready || exit 1
 
 # Comando di avvio
 CMD ["node", "server.js"]

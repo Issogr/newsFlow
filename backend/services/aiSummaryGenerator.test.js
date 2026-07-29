@@ -117,7 +117,7 @@ describe('aiSummaryGenerator', () => {
 
   test.each([
     ['configured thematic summary model', 'summary-model', 'summary-model'],
-    ['default thematic summary model', undefined, 'deepseek/deepseek-v4-flash']
+    ['default thematic summary model', undefined, 'qwen/qwen3.7-flash']
   ])('uses the %s', (label, configuredModel, expectedModel) => {
     process.env = {
       ...originalEnv,

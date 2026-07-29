@@ -1,5 +1,16 @@
 const { mapSettledWithConcurrency } = require('../utils/concurrency');
+const { isAiToggleEnabled } = require('../config/aiFeatures');
+const { parseIntegerEnv } = require('../utils/env');
 const { createOpenRouterClient } = require('./openRouterClient');
+
+function getClassifierBatchConfig() {
+  return {
+    batchSize: parseIntegerEnv('AI_TOPIC_BATCH_SIZE', 10, { min: 1, max: 50, clamp: true, strict: true }),
+    batchConcurrency: parseIntegerEnv('AI_TOPIC_BATCH_CONCURRENCY', 1, { min: 1, max: 4, clamp: true, strict: true }),
+    maxArticlesPerRefresh: parseIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', 160, { min: 1, max: 1000, clamp: true, strict: true }),
+    deterministicSkipEnabled: isAiToggleEnabled('AI_TOPIC_DETERMINISTIC_SKIP_ENABLED')
+  };
+}
 
 function chunkItems(items = [], size = 1) {
   const chunks = [];
@@ -33,6 +44,20 @@ function resolveClassifierEntryId(entry = {}, allowedIds = new Set(), refToArtic
   const ref = getClassifierEntryRef(entry);
   const mappedId = refToArticleId?.get(ref);
   return mappedId && allowedIds.has(mappedId) ? mappedId : '';
+}
+
+function getClassifierEntries(payload, preferredKeys = []) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return [
+    ...preferredKeys.map((key) => payload?.[key]),
+    payload?.results,
+    payload?.classifications,
+    payload?.articles,
+    payload?.items
+  ].find(Array.isArray) || [];
 }
 
 function summarizeResponseShape(response = {}, options = {}) {
@@ -126,6 +151,8 @@ async function runBatchedClassifier({
 }
 
 module.exports = {
+  getClassifierBatchConfig,
+  getClassifierEntries,
   isTimeoutError,
   resolveClassifierEntryId,
   runBatchedClassifier,

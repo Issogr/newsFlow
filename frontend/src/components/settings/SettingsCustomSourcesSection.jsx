@@ -19,6 +19,7 @@ const SettingsCustomSourcesSection = ({
   saving,
   sourceError,
   customSources,
+  maxSourceCount,
   sourceForm,
   editingSourceId,
   editingSourceForm,
@@ -31,6 +32,7 @@ const SettingsCustomSourcesSection = ({
   onDeleteSource
 }) => {
   const addSourceDetailsRef = useRef(null);
+  const sourceLimitReached = Number.isFinite(maxSourceCount) && customSources.length >= maxSourceCount;
   const closeAddSourceForm = () => {
     if (addSourceDetailsRef.current) {
       addSourceDetailsRef.current.open = false;
@@ -57,9 +59,9 @@ const SettingsCustomSourcesSection = ({
       <div>
         <details ref={addSourceDetailsRef} className="group">
           <summary
-            aria-disabled={saving}
+            aria-disabled={saving || sourceLimitReached}
             onClick={(event) => {
-              if (saving) {
+              if (saving || sourceLimitReached) {
                 event.preventDefault();
               }
             }}
@@ -96,6 +98,9 @@ const SettingsCustomSourcesSection = ({
             </div>
           </form>
         </details>
+        {Number.isFinite(maxSourceCount) && (
+          <p className="mt-2 text-xs text-slate-500">{t('customSourceLimit', { count: maxSourceCount })}</p>
+        )}
         {sourceError ? (
           <InlineAlert as="p" className="mt-3">
             {getFriendlyApiErrorMessage(sourceError, t)}

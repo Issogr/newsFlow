@@ -154,6 +154,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
             saving={saving}
             sourceError={sourceError}
             customSources={customSources}
+            maxSourceCount={settingsLimits.customSourcesMaxCount}
             sourceForm={sourceForm}
             editingSourceId={editingSourceId}
             editingSourceForm={editingSourceForm}

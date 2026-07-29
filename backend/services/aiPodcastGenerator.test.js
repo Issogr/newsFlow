@@ -237,7 +237,7 @@ describe('aiPodcastGenerator', () => {
         OPENROUTER_PODCAST_SCRIPT_MODEL: undefined,
         OPENROUTER_PODCAST_AUDIO_MODEL: undefined
       },
-      scriptModel: 'deepseek/deepseek-v4-flash',
+      scriptModel: 'qwen/qwen3.7-flash',
       ttsModel: 'google/gemini-3.1-flash-tts-preview',
       enabled: true
     },
@@ -246,7 +246,7 @@ describe('aiPodcastGenerator', () => {
       env: {
         AI_PODCAST_GENERATION_ENABLED: 'false'
       },
-      scriptModel: 'deepseek/deepseek-v4-flash',
+      scriptModel: 'qwen/qwen3.7-flash',
       ttsModel: 'google/gemini-3.1-flash-tts-preview',
       enabled: false
     }

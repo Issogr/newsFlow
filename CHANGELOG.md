@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.5.14
+
+- isolated custom RSS fetches by exact feed URL, added an eight-source per-user limit, bounded aggregate RSS/image network concurrency, and aligned browser/BFF validation timeouts
+- prevented same-title articles with different canonical URLs from overwriting each other and preserved bookmarked articles and reader cache when a built-in source is retired
+- hardened account and API security by refusing ambiguous case-duplicate usernames, revoking API tokens on password reset, preserving valid-token rate limits, and rejecting cross-origin private GET responses at the BFF
+- added dependency-aware readiness probes and a retryable frontend session state so backend or database outages no longer appear as logout while containers remain healthy
+- exposed feedback only when Telegram delivery is configured, passed its documented Compose settings, and clarified which account data and attachments are sent
+- updated the default OpenRouter models for topic classification, story grouping, summaries, and podcast scripts
+- simplified mobile news cards with a white feed, title-first layout, adaptive cover images, compact original-link action, single-tap Reader opening, and swipe-safe gesture handling
+
 ## 3.5.13
 
 - replaced the Load more button with automatic pagination and staggered loading feedback after the user remains at the end of the feed for three seconds

@@ -17,7 +17,7 @@ const {
   sendJsonChatCompletion
 } = require('./openRouterClient');
 
-const DEFAULT_PODCAST_SCRIPT_MODEL = 'deepseek/deepseek-v4-flash';
+const DEFAULT_PODCAST_SCRIPT_MODEL = 'qwen/qwen3.7-flash';
 const DEFAULT_PODCAST_AUDIO_MODEL = 'google/gemini-3.1-flash-tts-preview';
 const DEFAULT_TTS_VOICE = 'Charon';
 const DEFAULT_TIMEOUT_MS = 120000;

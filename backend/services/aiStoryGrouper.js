@@ -12,7 +12,7 @@ const {
 const { truncateText } = require('./aiArticlePayload');
 const { normalizeArticleUrl } = require('../utils/articleIdentity');
 
-const DEFAULT_OPENROUTER_STORY_GROUPING_MODEL = 'deepseek/deepseek-v4-flash';
+const DEFAULT_OPENROUTER_STORY_GROUPING_MODEL = 'qwen/qwen3.7-flash';
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_AI_CANDIDATE_LIMIT = 8;
 const MIN_MATCH_CONFIDENCE = 0.82;

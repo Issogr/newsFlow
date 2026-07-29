@@ -108,7 +108,7 @@ const MobileBottomNav = ({
             tabIndex={backToTopVisible ? 0 : -1}
             aria-hidden={!backToTopVisible}
             aria-label={t('backToTop')}
-            className={`relative z-10 inline-flex h-[3.95rem] min-w-0 shrink-0 items-center justify-center overflow-hidden rounded-[1.6rem] border border-slate-200/80 bg-white/95 text-slate-700 shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] backdrop-blur-xl transition-[width,margin,transform,opacity] duration-500 ease-out hover:bg-white hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 ${
+            className={`relative z-10 inline-flex h-[3.95rem] min-w-0 shrink-0 items-center justify-center overflow-hidden rounded-[1.6rem] border border-slate-200/80 bg-white/95 text-slate-700 backdrop-blur-xl transition-[width,margin,transform,opacity] duration-500 ease-out hover:bg-white hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 ${
               backToTopVisible
                 ? 'mr-2 w-[3.95rem] translate-x-0 scale-100 opacity-100'
                 : 'pointer-events-none mr-0 w-0 -translate-x-3 scale-75 opacity-0'
@@ -126,7 +126,7 @@ const MobileBottomNav = ({
             aria-hidden={!visible}
             inert={visible ? undefined : true}
           >
-            <div className="overflow-hidden rounded-[1.6rem] border border-slate-200/80 bg-white/95 shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] backdrop-blur-xl">
+            <div className="overflow-hidden rounded-[1.6rem] border border-slate-200/80 bg-white/95 backdrop-blur-xl">
               <div className="relative h-[3.95rem] overflow-hidden">
                 <div
                   className={`absolute inset-0 grid ${onRefresh ? 'grid-cols-5' : 'grid-cols-4'} transition-all duration-300 ease-out ${

@@ -157,6 +157,7 @@ const policyContent = {
         title: '8. Recipients of data',
         paragraphs: [
           'Personal data may be processed by authorized internal personnel and, where necessary, by technical service providers acting as processors for hosting, maintenance, or security support.',
+          'When the optional feedback feature is configured, feedback text, username, account ID, and any attachment are sent to the operator configured Telegram destination.',
           'Data is not used for advertising, tracking, or profiling purposes.',
         ],
       },

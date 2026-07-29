@@ -3,6 +3,7 @@ const userService = require('../../services/userService');
 const { requireAuthenticatedUser } = require('../../utils/auth');
 const {
   refreshUserSourcesInBackground,
+  getRequestAbortSignal,
   requireAuthenticatedPublicApiFeature,
 } = require('./helpers');
 
@@ -38,7 +39,7 @@ router.get('/me/settings/export', requireAuthenticatedUser, async (req, res) => 
 });
 
 router.post('/me/settings/import', requireAuthenticatedUser, async (req, res) => {
-  const result = await userService.importUserSettings(req.user.id, req.body || {});
+  const result = await userService.importUserSettings(req.user.id, req.body || {}, { signal: getRequestAbortSignal(req, res) });
   refreshUserSourcesInBackground(req.user.id, { broadcast: true }, `imported sources for user ${req.user.id}`);
   res.json({ success: true, ...result });
 });

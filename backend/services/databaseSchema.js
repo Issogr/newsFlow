@@ -85,12 +85,10 @@ function createDatabaseSchema({ logger }) {
     `).all();
 
     if (duplicateRows.length > 0) {
-      logger.warn(`Skipped case-insensitive username index because ${duplicateRows.length} duplicate username group(s) already exist`);
-      return false;
+      throw new Error(`Database contains ${duplicateRows.length} case-insensitive duplicate username group(s); resolve them before starting News Flow`);
     }
 
     database.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (lower(username))');
-    return true;
   }
 
   function initializeSchema(database) {

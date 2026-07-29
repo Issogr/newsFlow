@@ -47,8 +47,8 @@ cd ../frontend && npm install
 Run in separate terminals:
 
 ```bash
-cd backend && npm run dev
-cd bff && npm start
+cd backend && APP_BASE_URL=http://localhost:5173 npm run dev
+cd bff && BACKEND_BASE_URL=http://localhost:5000 APP_BASE_URL=http://localhost:5173 npm start
 cd frontend && npm start
 ```
 
@@ -77,6 +77,7 @@ For HTTPS behind a reverse proxy:
 - Set `APP_BASE_URL=https://your-domain`.
 - Ensure the proxy forwards `X-Forwarded-Proto: https`.
 - Set BFF `TRUST_PROXY=true` only when the BFF is reachable only through a trusted proxy and you need forwarded client IP/header handling.
+- Replace the controller/contact placeholders in the legal pages with deployment-approved details before publishing the service.
 
 Published images:
 
@@ -146,11 +147,11 @@ Model overrides:
 
 | Variable | Default |
 | --- | --- |
-| `OPENROUTER_TOPIC_MODEL` | `qwen/qwen3.5-9b` |
+| `OPENROUTER_TOPIC_MODEL` | `mistralai/mistral-small-24b-instruct-2501` |
 | `OPENROUTER_CLICKBAIT_MODEL` | `OPENROUTER_TOPIC_MODEL` |
-| `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` |
-| `OPENROUTER_STORY_GROUPING_MODEL` | `deepseek/deepseek-v4-flash` |
-| `OPENROUTER_PODCAST_SCRIPT_MODEL` | `deepseek/deepseek-v4-flash` |
+| `OPENROUTER_SUMMARY_MODEL` | `qwen/qwen3.7-flash` |
+| `OPENROUTER_STORY_GROUPING_MODEL` | `qwen/qwen3.7-flash` |
+| `OPENROUTER_PODCAST_SCRIPT_MODEL` | `qwen/qwen3.7-flash` |
 | `OPENROUTER_PODCAST_AUDIO_MODEL` | `google/gemini-3.1-flash-tts-preview` |
 
 ### Feedback
@@ -163,7 +164,7 @@ Model overrides:
 
 ## Admin Setup
 
-The backend creates a reserved admin account on startup. If the admin password is missing, it logs a single-use setup link. To generate a fresh link manually from `backend/`:
+The backend creates a reserved admin account on startup. If its password is missing, startup logs only a warning; setup secrets are intentionally not written to logs. Generate a single-use link locally from `backend/`:
 
 ```bash
 node -e "const userService=require('./services/userService'); console.log(userService.ensureAdminBootstrap());"

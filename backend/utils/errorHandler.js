@@ -78,6 +78,10 @@ function buildRateLimitMessage(message) {
  * Middleware for centralized error handling
  */
 const errorMiddleware = (err, req, res, next) => {
+  if (req.aborted || res.destroyed) {
+    return;
+  }
+
   // Read error details or fall back to defaults
   const status = err.status || 500;
   const code = err.code || 'SERVER_ERROR';

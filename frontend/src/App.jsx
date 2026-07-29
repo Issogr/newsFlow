@@ -1,6 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CURRENT_CHANGELOG_ENTRY, getCurrentChangelog } from './config/changelog';
 import { createTranslator, resolvePreferredLocale } from './i18n';
+import AuthCard, { AUTH_PRIMARY_BUTTON_CLASS_NAME } from './components/AuthCard';
+import InlineAlert from './components/InlineAlert';
+import { getApiErrorStatus } from './utils/apiError';
 import {
   AUTH_EXPIRED_EVENT,
   fetchCurrentUser,
@@ -37,7 +40,7 @@ const LEGAL_POLICY_BY_PATH = {
   '/privacy-policy': 'privacy',
   '/cookie-policy': 'cookie'
 };
-const APP_LOADING_FALLBACK = <div className="App min-h-screen bg-slate-100" />;
+const APP_LOADING_FALLBACK = <div className="App min-h-screen bg-white md:bg-slate-100" />;
 
 function normalizeRoutePath(pathname = '/') {
   const path = String(pathname || '/');
@@ -64,6 +67,8 @@ function App() {
   const [authError, setAuthError] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [loadingSession, setLoadingSession] = useState(() => shouldLoadSessionForPath(window.location.pathname));
+  const [sessionLoadFailed, setSessionLoadFailed] = useState(false);
+  const [sessionLoadAttempt, setSessionLoadAttempt] = useState(0);
   const [releaseNotesState, setReleaseNotesState] = useState({
     noticeHiddenVersion: '',
     saving: false,
@@ -122,10 +127,12 @@ function App() {
 
     async function loadSession() {
       if (!shouldLoadSessionForPath(locationState.pathname)) {
+        setSessionLoadFailed(false);
         setLoadingSession(false);
         return;
       }
 
+      setSessionLoadFailed(false);
       setLoadingSession(true);
 
       try {
@@ -133,10 +140,11 @@ function App() {
         if (!ignore) {
           setAuthData(me);
         }
-      } catch {
+      } catch (error) {
         if (!ignore) {
           setAuthData(null);
           setAuthError(null);
+          setSessionLoadFailed(getApiErrorStatus(error) !== 401);
         }
       } finally {
         if (!ignore) {
@@ -150,12 +158,13 @@ function App() {
     return () => {
       ignore = true;
     };
-  }, [locationState.pathname]);
+  }, [locationState.pathname, sessionLoadAttempt]);
 
   useEffect(() => {
     const handleAuthExpired = () => {
       setAuthData(null);
       setAuthError(null);
+      setSessionLoadFailed(false);
       setLoadingSession(false);
     };
 
@@ -321,6 +330,25 @@ function App() {
             onComplete={handlePasswordSetupComplete}
           />
         </Suspense>
+      </div>
+    );
+  }
+
+  if (sessionLoadFailed) {
+    return (
+      <div className="App">
+        <AuthCard subtitle={t('sessionLoadErrorTitle')}>
+          <div className="space-y-4">
+            <InlineAlert>{t('sessionLoadErrorMessage')}</InlineAlert>
+            <button
+              type="button"
+              className={AUTH_PRIMARY_BUTTON_CLASS_NAME}
+              onClick={() => setSessionLoadAttempt((attempt) => attempt + 1)}
+            >
+              {t('retry')}
+            </button>
+          </div>
+        </AuthCard>
       </div>
     );
   }

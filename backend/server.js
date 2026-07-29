@@ -97,7 +97,6 @@ app.use('/api/public', publicApiRoutes);
 
 app.get('/health', (req, res) => {
   const wsStats = websocketService.getStatistics();
-  const dbStatus = database.getWriteAccessStatus();
 
   res.status(200).json({
     status: 'ok',
@@ -107,12 +106,17 @@ app.get('/health', (req, res) => {
     websocket: {
       active: wsStats.activeConnectionsCount,
       total: wsStats.totalConnections
-    },
-    database: {
-      writable: dbStatus.writable,
-      checkedAt: dbStatus.checkedAt
     }
   });
+});
+
+app.get('/ready', (req, res) => {
+  try {
+    const dbStatus = database.verifyWriteAccess({ maxAgeMs: 5000 });
+    res.status(200).json({ status: 'ok', database: dbStatus });
+  } catch {
+    res.status(503).json({ status: 'unavailable' });
+  }
 });
 
 app.use((req, res, next) => {

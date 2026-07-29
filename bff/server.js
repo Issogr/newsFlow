@@ -32,11 +32,13 @@ const {
   buildTrustedForwardedHeaders,
   copyBackendResponseHeaders,
   extractDeletedAdminUserId,
-  getRequestHeader
+  getRequestHeader,
+  stripBackendCorsResponseHeaders
 } = require('./lib/proxyHelpers');
 
 const DEFAULT_FRONTEND_DIST_DIR = path.join(__dirname, 'public');
-const UPSTREAM_TIMEOUT_MS = parseIntegerEnv('BFF_UPSTREAM_TIMEOUT_MS', 30000, { min: 1000 });
+const UPSTREAM_TIMEOUT_MS = parseIntegerEnv('BFF_UPSTREAM_TIMEOUT_MS', 50000, { min: 1000 });
+const READINESS_TIMEOUT_MS = parseIntegerEnv('BFF_READINESS_TIMEOUT_MS', 1000, { min: 100 });
 const BACKEND_PROXY_DEFAULTS = {
   changeOrigin: true,
   xfwd: false,
@@ -64,6 +66,19 @@ function getTrustProxySetting(value = process.env.TRUST_PROXY) {
 
   const entries = normalized.split(',').map((entry) => entry.trim()).filter(Boolean);
   return entries.length > 1 ? entries : normalized;
+}
+
+function verifySessionStoreWriteAccess(sessionDb) {
+  sessionDb.exec('BEGIN IMMEDIATE');
+  try {
+    sessionDb.prepare(`
+      INSERT INTO sessions (sid, sess, expire)
+      VALUES ('__readiness__', '{}', ?)
+      ON CONFLICT(sid) DO UPDATE SET expire = excluded.expire
+    `).run(new Date(Date.now() + 60000).toISOString());
+  } finally {
+    sessionDb.exec('ROLLBACK');
+  }
 }
 
 function appendQueryParams(url, params = {}) {
@@ -205,12 +220,12 @@ function createApp(options = {}) {
 
   function requireSameOriginRequest(options = {}) {
     return (req, res, next) => {
-      if (options.allowSafeMethods === true && SAFE_METHODS.has(String(req.method || '').toUpperCase())) {
-        next();
-        return;
-      }
+      const isSafeMethod = options.allowSafeMethods === true && SAFE_METHODS.has(String(req.method || '').toUpperCase());
 
-      if (hasSameOriginRequestHeaders(req, options)) {
+      if (hasSameOriginRequestHeaders(req, {
+        ...options,
+        allowMissingHeaders: options.allowMissingHeaders === true || isSafeMethod
+      })) {
         next();
         return;
       }
@@ -270,10 +285,13 @@ function createApp(options = {}) {
       error: handleProxyError,
     };
 
-    if (stripSetCookie || onProxyResponse) {
+    if (stripSetCookie || includeBackendSession || onProxyResponse) {
       on.proxyRes = (proxyRes, req, res) => {
         if (stripSetCookie) {
           delete proxyRes.headers['set-cookie'];
+        }
+        if (includeBackendSession) {
+          stripBackendCorsResponseHeaders(proxyRes.headers);
         }
 
         onProxyResponse?.(proxyRes, req, res);
@@ -361,6 +379,23 @@ function createApp(options = {}) {
     res.status(200).json({ status: 'ok' });
   });
 
+  app.get('/ready', async (req, res) => {
+    try {
+      verifySessionStoreWriteAccess(sessionDb);
+      const response = await globalThis.fetch(`${backendBaseUrl}/ready`, {
+        method: 'HEAD',
+        redirect: 'manual',
+        signal: globalThis.AbortSignal.timeout(READINESS_TIMEOUT_MS)
+      });
+      if (!response.ok) {
+        throw new Error('Backend is not ready');
+      }
+      res.status(200).json({ status: 'ok' });
+    } catch {
+      res.status(503).json({ status: 'unavailable' });
+    }
+  });
+
   app.use('/api/public', publicApiProxy);
 
   app.get(['/api', '/api/'], (req, res) => {
@@ -389,7 +424,7 @@ function createApp(options = {}) {
     sendBackendResponse(res, response);
   });
 
-  app.get('/api/me', async (req, res) => {
+  app.get('/api/me', requireSameOriginUnsafeRequest, async (req, res) => {
     const backendSessionCookie = getBackendSessionCookieFromRequest(req);
     const response = await requestInternalBackend(req, '/me', {
       backendSessionCookie,
