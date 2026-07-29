@@ -9,7 +9,7 @@ const {
   sendJsonChatCompletion
 } = require('./openRouterClient');
 
-const DEFAULT_OPENROUTER_SUMMARY_MODEL = 'deepseek/deepseek-v4-flash';
+const DEFAULT_OPENROUTER_SUMMARY_MODEL = 'qwen/qwen3.7-flash';
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_PROMPT_TEXT_BUDGET_CHARS = 30000;
 const MIN_SUMMARY_TEXT_LENGTH = 60;

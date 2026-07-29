@@ -150,7 +150,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 
 | Variable | Default | Details |
 | --- | --- | --- |
-| `OPENROUTER_TOPIC_MODEL` | `qwen/qwen3.5-9b` | Model used for AI topic classification. |
+| `OPENROUTER_TOPIC_MODEL` | `mistralai/mistral-small-24b-instruct-2501` | Model used for AI topic classification. |
 | `AI_TOPIC_BATCH_SIZE` | `10` | Articles per topic-classification request. Strict integer, clamped to `1..50`. |
 | `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Concurrent topic-classification requests. Strict integer, clamped to `1..4`. |
 | `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles sent to AI per refresh. Strict integer, clamped to `1..1000`. |
@@ -173,7 +173,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 
 | Variable | Default | Details |
 | --- | --- | --- |
-| `OPENROUTER_STORY_GROUPING_MODEL` | `deepseek/deepseek-v4-flash` | Model used to decide whether articles describe the same story. |
+| `OPENROUTER_STORY_GROUPING_MODEL` | `qwen/qwen3.7-flash` | Model used to decide whether articles describe the same story. |
 | `AI_STORY_GROUPING_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one story-grouping request. Strict integer, valid `1000..120000`; invalid/out-of-range falls back. |
 | `AI_STORY_GROUPING_CONCURRENCY` | `1` | Concurrent story-grouping jobs during ingestion. Minimum `1`, maximum `4`. |
 | `AI_STORY_GROUPING_WINDOW_HOURS` | `24` | Candidate article age window for grouping. Minimum `1`, maximum `72`. |
@@ -185,7 +185,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 
 | Variable | Default | Details |
 | --- | --- | --- |
-| `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` | Model used for thematic summaries. |
+| `OPENROUTER_SUMMARY_MODEL` | `qwen/qwen3.7-flash` | Model used for thematic summaries. |
 | `AI_SUMMARY_REQUEST_TIMEOUT_MS` | `120000` | Timeout for thematic-summary requests and podcast-script requests. Strict integer, valid `1000..120000`; invalid/out-of-range falls back. |
 | `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for `08:00` and `20:00` summary and podcast slots. Invalid zones fall back to `Europe/Rome`. |
 | `THEMATIC_SUMMARY_CHECK_INTERVAL_MS` | `60000` | Scheduler interval for checking due summaries and podcasts. Minimum `1000`. |
@@ -210,7 +210,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 
 | Variable | Default | Details |
 | --- | --- | --- |
-| `OPENROUTER_PODCAST_SCRIPT_MODEL` | `deepseek/deepseek-v4-flash` | Model used for podcast script generation. |
+| `OPENROUTER_PODCAST_SCRIPT_MODEL` | `qwen/qwen3.7-flash` | Model used for podcast script generation. |
 | `AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS` | `42000` | Hard aggregate description/reader-text budget divided across selected podcast articles. Prompt instructions and bounded article metadata are additional. Minimum `10000`, maximum `240000`. |
 | `AI_PODCAST_PROMPT_MAX_ARTICLES` | `40` | Max deduped/source-balanced articles included in one podcast-script prompt. Minimum `1`, maximum `300`. |
 | `AI_PODCAST_LANGUAGES` | `en` | Comma-separated podcast locales. Supported values are `en` and `it`; invalid entries are ignored. |

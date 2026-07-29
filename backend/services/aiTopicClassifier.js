@@ -19,7 +19,7 @@ const {
   summarizeResponseShape,
 } = require('./aiClassifierUtils');
 
-const DEFAULT_OPENROUTER_TOPIC_MODEL = 'qwen/qwen3.5-9b';
+const DEFAULT_OPENROUTER_TOPIC_MODEL = 'mistralai/mistral-small-24b-instruct-2501';
 const DEFAULT_TIMEOUT_MS = 30000;
 const TOPIC_GUIDANCE = [
   'Politica: government, elections, parties, institutions, protests, policy, public ceremonies.',

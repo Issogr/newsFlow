@@ -7,6 +7,7 @@
 - hardened account and API security by refusing ambiguous case-duplicate usernames, revoking API tokens on password reset, preserving valid-token rate limits, and rejecting cross-origin private GET responses at the BFF
 - added dependency-aware readiness probes and a retryable frontend session state so backend or database outages no longer appear as logout while containers remain healthy
 - exposed feedback only when Telegram delivery is configured, passed its documented Compose settings, and clarified which account data and attachments are sent
+- updated the default OpenRouter models for topic classification, story grouping, summaries, and podcast scripts
 
 ## 3.5.13
 

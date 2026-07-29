@@ -147,11 +147,11 @@ Model overrides:
 
 | Variable | Default |
 | --- | --- |
-| `OPENROUTER_TOPIC_MODEL` | `qwen/qwen3.5-9b` |
+| `OPENROUTER_TOPIC_MODEL` | `mistralai/mistral-small-24b-instruct-2501` |
 | `OPENROUTER_CLICKBAIT_MODEL` | `OPENROUTER_TOPIC_MODEL` |
-| `OPENROUTER_SUMMARY_MODEL` | `deepseek/deepseek-v4-flash` |
-| `OPENROUTER_STORY_GROUPING_MODEL` | `deepseek/deepseek-v4-flash` |
-| `OPENROUTER_PODCAST_SCRIPT_MODEL` | `deepseek/deepseek-v4-flash` |
+| `OPENROUTER_SUMMARY_MODEL` | `qwen/qwen3.7-flash` |
+| `OPENROUTER_STORY_GROUPING_MODEL` | `qwen/qwen3.7-flash` |
+| `OPENROUTER_PODCAST_SCRIPT_MODEL` | `qwen/qwen3.7-flash` |
 | `OPENROUTER_PODCAST_AUDIO_MODEL` | `google/gemini-3.1-flash-tts-preview` |
 
 ### Feedback

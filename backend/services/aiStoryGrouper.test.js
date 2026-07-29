@@ -141,11 +141,11 @@ describe('aiStoryGrouper', () => {
     ])).toEqual([]);
   });
 
-  test('defaults to DeepSeek flash when the story grouping model env var is unset', () => {
+  test('defaults to Qwen flash when the story grouping model env var is unset', () => {
     delete process.env.OPENROUTER_STORY_GROUPING_MODEL;
 
     expect(aiStoryGrouper._getConfig()).toEqual(expect.objectContaining({
-      model: 'deepseek/deepseek-v4-flash'
+      model: 'qwen/qwen3.7-flash'
     }));
   });
 
