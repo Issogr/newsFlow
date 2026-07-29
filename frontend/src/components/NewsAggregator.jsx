@@ -73,7 +73,7 @@ function NewsCardSkeleton({ showImage }) {
         <div className="h-4 w-4/5 rounded-full bg-slate-200" />
       </div>
       {showImage ? (
-        <div className="relative aspect-video w-full border-y border-slate-100 bg-slate-200">
+        <div className="relative aspect-video w-full grow border-y border-slate-100 bg-slate-200">
           <div className="absolute bottom-3 left-3 flex -space-x-1">
             <div className="h-8 w-8 rounded-full bg-sky-100 ring-2 ring-slate-900/10" />
             <div className="h-8 w-8 rounded-full bg-violet-100 ring-2 ring-slate-900/10" />

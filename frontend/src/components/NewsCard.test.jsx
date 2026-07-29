@@ -349,6 +349,7 @@ describe('NewsCard', () => {
 
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
     expect(screen.getByText('Headline').compareDocumentPosition(screen.getByRole('img', { name: 'Headline' })) & globalThis.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Headline' }).parentElement).toHaveClass('aspect-video', 'grow');
 
     onOpenReader.mockClear();
     vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000);

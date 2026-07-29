@@ -10,7 +10,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🛡️ Hardened account recovery, API-token limits, private browser requests, and service readiness.',
       '🔄 Added retryable session loading and limited feedback to configured deployments.',
       '🤖 Updated the default AI models for classification, story grouping, summaries, and podcast scripts.',
-      '👆 Simplified mobile cards with titles above images, a white feed, compact actions, and swipe-safe single-tap Reader opening.'
+      '👆 Simplified mobile cards with titles above adaptive cover images, a white feed, compact actions, and swipe-safe single-tap Reader opening.'
     ]
   },
   it: {
@@ -23,7 +23,7 @@ export const CURRENT_CHANGELOG_ENTRY = {
       '🛡️ Rafforzati recupero account, limiti token API, richieste browser private e controlli di disponibilita.',
       '🔄 Aggiunto il nuovo tentativo di caricamento sessione e mostrato il feedback solo quando la consegna e configurata.',
       '🤖 Aggiornati i modelli AI predefiniti per classificazione, raggruppamento delle storie, riepiloghi e script podcast.',
-      '👆 Semplificate le schede mobile con titoli sopra le immagini, sfondo bianco, azioni compatte e apertura Reader con un tocco che ignora gli scorrimenti.'
+      '👆 Semplificate le schede mobile con titoli sopra immagini di copertina adattive, sfondo bianco, azioni compatte e apertura Reader con un tocco che ignora gli scorrimenti.'
     ]
   }
 };

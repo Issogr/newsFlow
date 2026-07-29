@@ -431,7 +431,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       {imageUrl ? (
         <button
           type="button"
-          className="relative block aspect-video w-full cursor-pointer overflow-hidden border-y border-slate-100 bg-slate-100 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400"
+          className="relative block aspect-video w-full grow cursor-pointer overflow-hidden border-y border-slate-100 bg-slate-100 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400"
           aria-label={group.title}
           title={t('readHereHelp')}
           {...readerInteractionProps}
