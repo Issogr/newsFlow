@@ -122,7 +122,6 @@ globalThis.jest = {
   useFakeTimers: (...args) => vi.useFakeTimers(...args),
   useRealTimers: () => vi.useRealTimers(),
   advanceTimersByTime: (...args) => vi.advanceTimersByTime(...args),
-  setSystemTime: (...args) => vi.setSystemTime(...args),
   mock: registerMock,
   doMock: registerMock,
   resetModules() {

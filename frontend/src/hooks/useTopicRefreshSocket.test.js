@@ -54,11 +54,13 @@ describe('useTopicRefreshSocket', () => {
     expect(onSummariesRefresh).toHaveBeenCalledWith({ refresh: true, reason: 'summaries' });
   });
 
-  test('resubscribes current filters after socket reconnect', () => {
+  test('resubscribes current filters and refreshes summaries after socket reconnect', () => {
     const subscription = { search: 'markets', topics: ['Economy'] };
+    const onSummariesRefresh = vi.fn();
 
     const { rerender } = renderHook(({ nextSubscription }) => useTopicRefreshSocket({
       onTopicRefresh: vi.fn(),
+      onSummariesRefresh,
       subscription: nextSubscription
     }), {
       initialProps: { nextSubscription: subscription }
@@ -68,8 +70,10 @@ describe('useTopicRefreshSocket', () => {
     rerender({ nextSubscription: updatedSubscription });
 
     handlers.get('connect')();
+    handlers.get('connect')();
 
     expect(socket.emit).toHaveBeenLastCalledWith('subscribe:filters', updatedSubscription);
+    expect(onSummariesRefresh).toHaveBeenCalledTimes(1);
   });
 
   test('does not connect while disabled', () => {

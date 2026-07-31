@@ -12,6 +12,7 @@ const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/article
 
 const DEFAULT_SUMMARY_TIME_ZONE = 'Europe/Rome';
 const SUMMARY_GENERATION_HOURS = [8, 20];
+const SUMMARY_HISTORY_RETAIN_COUNT = 2;
 const PODCAST_HISTORY_RETAIN_COUNT = parseIntegerEnv('AI_PODCAST_HISTORY_RETAIN_COUNT', 2, { min: 1, max: 10 });
 const SUMMARY_CHECK_INTERVAL_MS = parseIntegerEnv('THEMATIC_SUMMARY_CHECK_INTERVAL_MS', 60 * 1000, { min: 1000 });
 const SUMMARY_MAX_ARTICLES_PER_TOPIC = parseIntegerEnv('AI_SUMMARY_MAX_ARTICLES_PER_TOPIC', 120, { min: 1, max: 300 });
@@ -357,7 +358,7 @@ function getPodcastAudioFailureCategory(error = {}) {
 }
 
 function isFailedSummaryRetryDue(summary = {}, referenceDate = new Date()) {
-  if (summary.status !== 'failed') {
+  if (summary.status !== 'failed' && !summary.failureCategory) {
     return true;
   }
 
@@ -996,9 +997,14 @@ async function prewarmReaderCacheForDueWindow(options = {}) {
 
 async function generateSummaryForTopic(topicConfig, window, options = {}) {
   const existingSummary = database.getThematicSummary(topicConfig.key, window.periodStart, window.periodEnd);
-  if (existingSummary?.status === 'failed' && options.force !== true && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
+  if ((existingSummary?.status === 'failed' || existingSummary?.failureCategory)
+    && options.force !== true
+    && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
     logger.debug(`Thematic summary retry skipped during cooldown: topic=${topicConfig.key}, windowEnd=${window.periodEnd}`);
-    return { summary: null, generatedNow: false };
+    return {
+      summary: TERMINAL_SUMMARY_STATUSES.has(existingSummary.status) ? existingSummary : null,
+      generatedNow: false
+    };
   }
 
   const articles = options.articleContext?.getArticlesForTopic
@@ -1076,6 +1082,19 @@ async function generateSummaryForTopic(topicConfig, window, options = {}) {
   } catch (error) {
     const failureCategory = getSummaryFailureCategory(error);
     logger.warn(`Thematic summary generation failed: topic=${topicConfig.key}, windowEnd=${window.periodEnd}, error=${error.message}`);
+    if (existingSummary?.status === 'completed') {
+      return {
+        summary: database.upsertThematicSummary({
+          ...existingSummary,
+          failureCategory,
+          retryCount: (existingSummary.retryCount || 0) + 1,
+          errorMessage: error.message,
+          generatedAt: basePayload.generatedAt
+        }),
+        generatedNow: false
+      };
+    }
+
     database.upsertThematicSummary({
       ...basePayload,
       summaryText: '',
@@ -1243,6 +1262,7 @@ async function runDueSummaries(options = {}) {
         pruneGeneratedSummaryHistory({
           periodEnd: summaryWindow.periodEnd,
           topicKeys: generatedTopicKeys,
+          thematicRetainCount: SUMMARY_HISTORY_RETAIN_COUNT,
           podcast: false
         });
       }
@@ -1320,7 +1340,10 @@ function getLatestSummaries(options = {}) {
   const canShowPodcasts = aiPodcastGenerator.isAiPodcastGenerationAvailable();
   const topicConfigs = canShowSummaries ? getSummaryTopics() : [];
   const latestDueWindow = getLatestDueWindow(options.referenceDate || new Date());
-  const latestSummaries = database.listLatestThematicSummaries(topicConfigs.map((topic) => topic.key));
+  const latestSummaries = database.listLatestThematicSummaries(
+    topicConfigs.map((topic) => topic.key),
+    SUMMARY_HISTORY_RETAIN_COUNT
+  );
   const latestTopicPeriodEnd = latestSummaries.reduce((latestPeriodEnd, summary) => {
     return !latestPeriodEnd || String(summary.periodEnd || '') > latestPeriodEnd
       ? String(summary.periodEnd || '')
@@ -1335,14 +1358,23 @@ function getLatestSummaries(options = {}) {
   const topicItems = topicConfigs
     .map((topic) => {
       const summary = latestByKey.get(topic.key);
+      const previousSummary = latestSummaries.find((candidate) => candidate.topicKey === topic.key && candidate.id !== summary?.id);
       return summary ? {
         ...summary,
         topicLabel: topic.label,
         summarySlot: getSummaryWindowSlot(summary),
-        isStale: summary.periodEnd !== latestDueWindow.periodEnd
+        isStale: summary.periodEnd !== latestDueWindow.periodEnd,
+        ...(previousSummary ? {
+          previousSummary: {
+            ...previousSummary,
+            topicLabel: topic.label,
+            summarySlot: getSummaryWindowSlot(previousSummary),
+            isStale: previousSummary.periodEnd !== latestDueWindow.periodEnd
+          }
+        } : {})
       } : null;
     })
-    .filter(Boolean);
+    .filter((summary) => summary && (summary.status !== 'empty' || summary.previousSummary?.status !== 'empty'));
   const latestPodcasts = canShowPodcasts ? getLatestPodcastSummariesBySlot(PODCAST_HISTORY_RETAIN_COUNT) : [];
 
   return {

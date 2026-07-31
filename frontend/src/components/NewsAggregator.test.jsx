@@ -526,6 +526,21 @@ describe('NewsAggregator', () => {
     expect(await screen.findByRole('button', { name: 'Open Science summary' })).toBeInTheDocument();
   });
 
+  test('keeps thematic stories when a refresh fails', async () => {
+    const socketHandlers = captureSocketHandlers();
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Top headline'));
+    fetchThematicSummaries
+      .mockResolvedValueOnce({ items: [createThematicSummary()] })
+      .mockRejectedValueOnce(new Error('Temporary network failure'));
+
+    await renderNewsAggregator();
+    expect(await screen.findByRole('button', { name: 'Open Technology summary' })).toBeInTheDocument();
+
+    await dispatchSocketHandler(socketHandlers.onSummariesRefresh, { refresh: true, reason: 'summaries' });
+
+    expect(screen.getByRole('button', { name: 'Open Technology summary' })).toBeInTheDocument();
+  });
+
   test('updates the open summary panel when refreshed summary data arrives', async () => {
     const socketHandlers = captureSocketHandlers();
     fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Top headline'));

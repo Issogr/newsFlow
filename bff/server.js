@@ -253,7 +253,7 @@ function createApp(options = {}) {
       signal: globalThis.AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     };
 
-    if (Object.prototype.hasOwnProperty.call(options, 'data')) {
+    if (Object.hasOwn(options, 'data')) {
       requestOptions.headers['content-type'] = 'application/json';
       requestOptions.body = JSON.stringify(options.data);
     }
@@ -514,14 +514,8 @@ function createApp(options = {}) {
 function createServer(options = {}) {
   const { app, isSameOriginSocketRequest, sessionDb, sessionSecret, sessionStore, socketProxy } = createApp(options);
   const server = http.createServer(app);
-  let closedResources = false;
 
   server.on('close', () => {
-    if (closedResources) {
-      return;
-    }
-
-    closedResources = true;
     sessionStore?.stopCleanupInterval?.();
     sessionDb?.close?.();
   });

@@ -252,6 +252,93 @@ describe('thematic summary podcast UI', () => {
     expect(screen.getByText('The second argument moves to software policy and regulation.')).toBeInTheDocument();
   });
 
+  test('switches between the current and previous thematic summary', () => {
+    renderSummaryPanel({
+      id: 'summary-technology-current',
+      topicKey: 'technology',
+      topicLabel: 'Technology',
+      summarySlot: 'lunch',
+      articleCount: 2,
+      summaryTextByLocale: { en: 'Current technology briefing [1].' },
+      sources: [{ index: 1, source: 'Current News', url: 'https://example.com/current' }],
+      previousSummary: {
+        id: 'summary-technology-previous',
+        topicKey: 'technology',
+        topicLabel: 'Technology',
+        summarySlot: 'morning',
+        articleCount: 1,
+        summaryTextByLocale: { en: 'Previous technology briefing [1].' },
+        sources: [{ index: 1, source: 'Previous News', url: 'https://example.com/previous' }]
+      }
+    });
+
+    const currentChip = screen.getByRole('button', { name: 'Current' });
+    const previousChip = screen.getByRole('button', { name: 'Previous' });
+    expect(screen.getByRole('group', { name: 'Summary version' })).toBeInTheDocument();
+    expect(currentChip).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/Current technology briefing/u)).toBeInTheDocument();
+    expect(screen.getByText('Lunch time')).toBeInTheDocument();
+
+    fireEvent.click(previousChip);
+
+    expect(previousChip).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/Previous technology briefing/u)).toBeInTheDocument();
+    expect(screen.getByText('Morning')).toBeInTheDocument();
+    expect(screen.getByText('1 article evaluated')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open source article: Previous News' })).toHaveAttribute('href', 'https://example.com/previous');
+    expect(screen.queryByText(/Current technology briefing/u)).not.toBeInTheDocument();
+
+    fireEvent.click(currentChip);
+
+    expect(currentChip).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/Current technology briefing/u)).toBeInTheDocument();
+  });
+
+  test('disables an empty current briefing and opens the available previous one', () => {
+    renderSummaryPanel({
+      id: 'summary-technology-current',
+      topicKey: 'technology',
+      topicLabel: 'Technology',
+      status: 'empty',
+      summaryTextByLocale: { en: 'No technology stories were available.' },
+      previousSummary: {
+        id: 'summary-technology-previous',
+        topicKey: 'technology',
+        topicLabel: 'Technology',
+        status: 'completed',
+        summaryTextByLocale: { en: 'Previous technology briefing.' }
+      }
+    });
+
+    expect(screen.getByRole('button', { name: 'Current' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Current' })).toHaveClass('text-slate-300');
+    expect(screen.getByRole('button', { name: 'Previous' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Previous technology briefing.')).toBeInTheDocument();
+    expect(screen.queryByText('No technology stories were available.')).not.toBeInTheDocument();
+  });
+
+  test('disables an empty previous briefing without showing it', () => {
+    renderSummaryPanel({
+      id: 'summary-technology-current',
+      topicKey: 'technology',
+      topicLabel: 'Technology',
+      status: 'completed',
+      summaryTextByLocale: { en: 'Current technology briefing.' },
+      previousSummary: {
+        id: 'summary-technology-previous',
+        topicKey: 'technology',
+        topicLabel: 'Technology',
+        status: 'empty',
+        summaryTextByLocale: { en: 'No previous technology stories were available.' }
+      }
+    });
+
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Previous' })).toHaveClass('text-slate-300');
+    expect(screen.getByText('Current technology briefing.')).toBeInTheDocument();
+    expect(screen.queryByText('No previous technology stories were available.')).not.toBeInTheDocument();
+  });
+
   test('shows text-shaped loading feedback while a thematic summary opens', () => {
     vi.useFakeTimers();
 

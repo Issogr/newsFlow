@@ -2448,7 +2448,7 @@ function createArticleRepository({
     return mapThematicSummaryRow(row);
   }
 
-  function listLatestThematicSummaries(topicKeys = []) {
+  function listLatestThematicSummaries(topicKeys = [], limitPerTopic = 1) {
     const normalizedTopicKeys = [...new Set((Array.isArray(topicKeys) ? topicKeys : [])
       .map((topicKey) => String(topicKey || '').trim())
       .filter(Boolean))];
@@ -2456,6 +2456,7 @@ function createArticleRepository({
       return [];
     }
 
+    const normalizedLimit = Math.max(1, Math.min(10, Number(limitPerTopic) || 1));
     const rows = getDb().prepare(`
       SELECT id, topic_key AS topicKey, topic_label AS topicLabel, topics_json AS topicsJson,
              period_start AS periodStart, period_end AS periodEnd, summary_text AS summaryText,
@@ -2463,17 +2464,18 @@ function createArticleRepository({
              sources_json AS sourcesJson, article_count AS articleCount, model, status,
              failure_category AS failureCategory, retry_count AS retryCount,
              error_message AS errorMessage, generated_at AS generatedAt
-      FROM thematic_summaries ts
-      WHERE topic_key IN (${normalizedTopicKeys.map(() => '?').join(', ')})
-        AND period_end = (
-          SELECT MAX(period_end)
-          FROM thematic_summaries latest
-          WHERE latest.topic_key = ts.topic_key
-            AND latest.status IN ('completed', 'empty')
-        )
-        AND status IN ('completed', 'empty')
+      FROM (
+        SELECT *, ROW_NUMBER() OVER (
+          PARTITION BY topic_key
+          ORDER BY period_end DESC, generated_at DESC
+        ) AS summary_rank
+        FROM thematic_summaries
+        WHERE topic_key IN (${normalizedTopicKeys.map(() => '?').join(', ')})
+          AND status IN ('completed', 'empty')
+      ) ranked
+      WHERE summary_rank <= ?
       ORDER BY period_end DESC, topic_key ASC
-    `).all(...normalizedTopicKeys);
+    `).all(...normalizedTopicKeys, normalizedLimit);
 
     return rows.map(mapThematicSummaryRow).filter(Boolean);
   }
@@ -2488,12 +2490,22 @@ function createArticleRepository({
       .map((topicKey) => String(topicKey || '').trim())
       .filter(Boolean))];
     const db = getDb();
+    const thematicRetainCount = Math.max(1, Number(options.thematicRetainCount) || 1);
     const thematicSummaries = topicKeys.length > 0
       ? db.prepare(`
         DELETE FROM thematic_summaries
         WHERE period_end < ?
           AND topic_key IN (${topicKeys.map(() => '?').join(', ')})
-      `).run(periodEnd, ...topicKeys).changes
+          AND id NOT IN (
+            SELECT retained.id
+            FROM thematic_summaries retained
+            WHERE retained.topic_key = thematic_summaries.topic_key
+              AND retained.period_end <= ?
+              AND retained.status IN ('completed', 'empty')
+            ORDER BY retained.period_end DESC, retained.generated_at DESC
+            LIMIT ?
+          )
+      `).run(periodEnd, ...topicKeys, periodEnd, thematicRetainCount).changes
       : 0;
     const podcastRetainCount = Math.max(1, Number(options.podcastRetainCount) || 1);
     const podcastSummaries = options.podcast === true

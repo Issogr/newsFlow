@@ -1,9 +1,8 @@
-import { PROJECT_GITHUB_URL } from '../config/projectLinks';
 import GitHubIcon from './icons/GitHubIcon';
 
 const ProjectGitHubLink = () => (
   <a
-    href={PROJECT_GITHUB_URL}
+    href="https://github.com/Issogr/newsFlow"
     target="_blank"
     rel="noopener noreferrer"
     aria-label="GitHub"

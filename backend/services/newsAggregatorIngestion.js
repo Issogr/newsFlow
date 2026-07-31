@@ -212,7 +212,7 @@ function isSourceFetchFailureBackoffActive(source = {}, referenceTime = Date.now
 }
 
 function cloneArticleForSource(article = {}, source = {}) {
-  const clonedArticle = {
+  return {
     ...article,
     id: rssParser._buildArticleId(source, {
       link: article.url,
@@ -228,8 +228,6 @@ function cloneArticleForSource(article = {}, source = {}) {
     sourceFeedUrl: normalizeSourceFetchUrl(source.url),
     sourceUpdatedAt: source.updatedAt || null
   };
-
-  return clonedArticle;
 }
 
 function buildSourceFetchTasks(sourceConfigs = []) {

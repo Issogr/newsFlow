@@ -1411,6 +1411,38 @@ describe('database queries and user data', () => {
     expect(database.getPodcastSummary(thirdStart, thirdEnd)).toEqual(expect.objectContaining({ id: 'third-podcast-summary' }));
   });
 
+  test('lists and retains the latest two thematic summary windows when requested', () => {
+    const windows = [
+      ['2025-05-20T05:00:00.000Z', '2025-05-20T17:00:00.000Z'],
+      ['2025-05-20T17:00:00.000Z', '2025-05-21T05:00:00.000Z'],
+      ['2025-05-21T05:00:00.000Z', '2025-05-21T17:00:00.000Z']
+    ];
+
+    windows.forEach(([periodStart, periodEnd], index) => {
+      database.upsertThematicSummary({
+        id: `technology-summary-${index + 1}`,
+        topicKey: 'technology',
+        topicLabel: 'Technology',
+        periodStart,
+        periodEnd,
+        summaryText: `Technology summary ${index + 1}`
+      });
+    });
+
+    expect(database.listLatestThematicSummaries(['technology'], 2).map((summary) => summary.id)).toEqual([
+      'technology-summary-3',
+      'technology-summary-2'
+    ]);
+    expect(database.pruneSummaryHistory({
+      periodEnd: windows[2][1],
+      topicKeys: ['technology'],
+      thematicRetainCount: 2
+    })).toEqual({ thematicSummaries: 1, podcastSummaries: 0 });
+    expect(database.getThematicSummary('technology', ...windows[0])).toBeNull();
+    expect(database.getThematicSummary('technology', ...windows[1])).toEqual(expect.objectContaining({ id: 'technology-summary-2' }));
+    expect(database.getThematicSummary('technology', ...windows[2])).toEqual(expect.objectContaining({ id: 'technology-summary-3' }));
+  });
+
   test('tracks AI topic processing and replaces fallback topics', () => {
     const now = new Date().toISOString();
 
