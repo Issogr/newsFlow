@@ -320,10 +320,17 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   const [readerTextWidth, setReaderTextWidth] = useState(() => getStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth));
   const [readySummaryId, setReadySummaryId] = useState('');
-  const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [locale, summary]);
-  const sourceByIndex = useMemo(() => new Map((summary?.sources || []).map((source) => [Number(source.index), source])), [summary?.sources]);
+  const [selectedPreviousSummaryId, setSelectedPreviousSummaryId] = useState('');
   const isPodcast = isPodcastSummary(summary);
-  const showSummaryOpeningSkeleton = showOpeningSkeleton && !isPodcast && readySummaryId !== summary?.id;
+  const previousSummary = !isPodcast && summary?.previousSummary?.id ? summary.previousSummary : null;
+  const currentSummaryAvailable = summary?.status !== 'empty';
+  const previousSummaryAvailable = Boolean(previousSummary && previousSummary.status !== 'empty');
+  const showingPreviousSummary = previousSummaryAvailable
+    && (!currentSummaryAvailable || previousSummary.id === selectedPreviousSummaryId);
+  const displayedSummary = showingPreviousSummary ? previousSummary : summary;
+  const localizedSummary = useMemo(() => getLocalizedThematicSummary(displayedSummary, locale), [displayedSummary, locale]);
+  const sourceByIndex = useMemo(() => new Map((displayedSummary?.sources || []).map((source) => [Number(source.index), source])), [displayedSummary?.sources]);
+  const showSummaryOpeningSkeleton = showOpeningSkeleton && !isPodcast && !showingPreviousSummary && readySummaryId !== summary?.id;
   const podcastSummaries = useMemo(() => getPodcastSummariesForPanel(summary, summaries), [summaries, summary]);
   const swipeSummaries = useMemo(() => getSwipeSummariesForPanel(summary, summaries), [summaries, summary]);
   const swipeSummaryIndex = useMemo(() => getSwipeSummaryIndex(summary, swipeSummaries), [summary, swipeSummaries]);
@@ -513,18 +520,42 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                   </div>
                 </div>
                 {!isPodcast && (
-                  <div className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                    <span className="inline-flex items-center gap-2">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      {getSummarySlotLabel(summary, t)}
-                      {Number(summary.articleCount) > 0 && (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span>{t('summaryArticleCount', { count: Number(summary.articleCount) })}</span>
-                        </>
-                      )}
-                    </span>
-                  </div>
+                  <>
+                    {previousSummary && (
+                      <div className="mt-4 inline-flex rounded-full border border-slate-200 bg-slate-100 p-1" role="group" aria-label={t('summaryVersionSelector')}>
+                        <button
+                          type="button"
+                          aria-pressed={currentSummaryAvailable && !showingPreviousSummary}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${!currentSummaryAvailable ? 'cursor-not-allowed text-slate-300' : (!showingPreviousSummary ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}`}
+                          disabled={!currentSummaryAvailable}
+                          onClick={() => setSelectedPreviousSummaryId('')}
+                        >
+                          {t('summaryVersionCurrent')}
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={showingPreviousSummary}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${!previousSummaryAvailable ? 'cursor-not-allowed text-slate-300' : (showingPreviousSummary ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}`}
+                          disabled={!previousSummaryAvailable}
+                          onClick={() => setSelectedPreviousSummaryId(previousSummary.id)}
+                        >
+                          {t('summaryVersionPrevious')}
+                        </button>
+                      </div>
+                    )}
+                    <div className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      <span className="inline-flex items-center gap-2">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        {getSummarySlotLabel(displayedSummary, t)}
+                        {Number(displayedSummary.articleCount) > 0 && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span>{t('summaryArticleCount', { count: Number(displayedSummary.articleCount) })}</span>
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </>
                 )}
               </div>
 
@@ -585,7 +616,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                 ) : (
                   <div className={`space-y-5 ${readerTextStyles.paragraph}`}>
                     {paragraphs.map((paragraph, index) => (
-                      <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex, t)}</p>
+                      <p key={`${displayedSummary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex, t)}</p>
                     ))}
                   </div>
                 )}

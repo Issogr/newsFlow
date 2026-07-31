@@ -2,6 +2,9 @@
 
 ## 3.5.15
 
+- retained the previous thematic AI summary for each topic, added Current/Previous chips, and disabled empty briefing versions instead of displaying them
+- kept the last successful AI summaries visible during temporary generation or refresh failures and refreshed them after socket reconnection
+
 ## 3.5.14
 
 - isolated custom RSS fetches by exact feed URL, added an eight-source per-user limit, bounded aggregate RSS/image network concurrency, and aligned browser/BFF validation timeouts

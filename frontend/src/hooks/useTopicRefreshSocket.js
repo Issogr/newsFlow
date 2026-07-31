@@ -50,8 +50,13 @@ const useTopicRefreshSocket = ({
         newsUpdateCallbackRef.current?.(payload);
       }
     };
+    let hasConnected = false;
     const handleConnect = () => {
       socket.emit('subscribe:filters', subscriptionRef.current || {});
+      if (hasConnected) {
+        summariesRefreshCallbackRef.current?.();
+      }
+      hasConnected = true;
     };
 
     socket.on('connect', handleConnect);

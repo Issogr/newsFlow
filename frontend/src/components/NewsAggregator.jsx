@@ -611,10 +611,8 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
         setReadThematicSummaryIds(readSummaryIds);
         setStoredReadThematicSummaryIds(readThematicSummariesStorageKey, readSummaryIds);
       }
-    } catch (requestError) {
-      if (!isRequestCanceled(requestError) && request.isLatest()) {
-        setThematicSummaries([]);
-      }
+    } catch {
+      // Keep the last successful snapshot during transient refresh failures.
     }
   }, [aiSummaryFeatureState, cancelSummaryRequest, needsSourceSetup, readThematicSummariesStorageKey, startSummaryRequest]);
 
