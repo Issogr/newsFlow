@@ -2,6 +2,7 @@
 
 ## 3.6.0
 
+- migrated frontend, BFF, backend, tests, and first-party tooling to strict TypeScript while preserving CommonJS service output and existing runtime behavior
 - made SQLite upgrades transactional and fail-fast, moved article FTS synchronization to native triggers, and consolidated podcast audio into its locale-specific table
 - simplified the BFF session and private-backend boundary by removing duplicate user-session indexing, unused service identity, and legacy private token carriers
 - centralized frontend locale and session updates while reusing the same custom-source persistence paths across Settings actions

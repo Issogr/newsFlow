@@ -14,10 +14,10 @@ backend/
 **/*.log
 **/.DS_Store
 frontend/dist
-bff/*.test.js
-frontend/src/**/*.test.js
-frontend/src/**/*.test.jsx
-frontend/src/setupTests.js
+bff/*.test.ts
+frontend/src/**/*.test.ts
+frontend/src/**/*.test.tsx
+frontend/src/setupTests.ts
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
