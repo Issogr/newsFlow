@@ -932,11 +932,6 @@ function createArticleRepository({
         published_at = excluded.published_at,
         updated_at = excluded.updated_at
     `);
-    const deleteSearchStmt = database.prepare('DELETE FROM article_search WHERE article_id = ?');
-    const insertSearchStmt = database.prepare(`
-      INSERT INTO article_search (article_id, title, description, content)
-      VALUES (?, ?, ?, ?)
-    `);
     const deleteArticleStmt = database.prepare('DELETE FROM articles WHERE id = ?');
     const articleFieldSelectSql = `
       SELECT id, source_id AS sourceId, source_name AS sourceName, owner_user_id AS ownerUserId,
@@ -994,7 +989,6 @@ function createArticleRepository({
 
         duplicateIds.forEach((duplicateId) => {
           transferDuplicateArticleReferences(database, duplicateId, persistedArticleId);
-          deleteSearchStmt.run(duplicateId);
           deleteArticleStmt.run(duplicateId);
           existingIdSet.delete(duplicateId);
         });
@@ -1035,16 +1029,6 @@ function createArticleRepository({
             article.createdAt || now,
             now
           );
-        }
-
-        const searchableFieldsChanged = shouldWriteArticle && (!previousArticleFields
-          || previousArticleFields.title !== values.title
-          || previousArticleFields.description !== values.description
-          || previousArticleFields.content !== values.content);
-
-        if (searchableFieldsChanged) {
-          deleteSearchStmt.run(persistedArticleId);
-          insertSearchStmt.run(persistedArticleId, article.title, article.description || '', article.content || '');
         }
 
         if (exists && shouldWriteArticle) {
@@ -1752,22 +1736,7 @@ function createArticleRepository({
       return 0;
     }
 
-    const database = getDb();
-    const deleteSearchEntries = database.prepare(`
-      DELETE FROM article_search
-      WHERE article_id IN (
-        SELECT id
-        FROM articles
-        WHERE id IN (${normalizedArticleIds.map(() => '?').join(', ')})
-          AND published_at < ?
-          AND NOT EXISTS (
-            SELECT 1
-            FROM user_read_later_articles
-            WHERE user_read_later_articles.article_id = articles.id
-          )
-      )
-    `);
-    const deleteArticles = database.prepare(`
+    const deleteArticles = getDb().prepare(`
       DELETE FROM articles
       WHERE id IN (${normalizedArticleIds.map(() => '?').join(', ')})
         AND published_at < ?
@@ -1778,12 +1747,7 @@ function createArticleRepository({
         )
     `);
 
-    const transaction = database.transaction((ids, threshold) => {
-      deleteSearchEntries.run(...ids, threshold);
-      return deleteArticles.run(...ids, threshold).changes;
-    });
-
-    return transaction(normalizedArticleIds, isoTimestamp);
+    return deleteArticles.run(...normalizedArticleIds, isoTimestamp).changes;
   }
 
   function removeReadLaterArticles(userId, articleIds = [], options = {}) {
@@ -2211,7 +2175,6 @@ function createArticleRepository({
     const localized = normalizeLocalizedSummaryFields(summary, 'scriptText', 'scriptTextByLocale');
     const generatedAt = String(summary.generatedAt || new Date().toISOString()).trim();
     const audioEntries = normalizePodcastAudioEntries(summary, generatedAt);
-    const primaryAudioEntry = audioEntries.find((entry) => entry.audioStatus === 'completed') || audioEntries[0] || null;
 
     return {
       id,
@@ -2226,15 +2189,6 @@ function createArticleRepository({
       sourcesJson: JSON.stringify(normalizeSummarySources(summary.sources || [])),
       articleCount: Math.max(0, Number(summary.articleCount) || 0),
       scriptModel: String(summary.scriptModel || summary.model || '').trim().slice(0, 120),
-      audioModel: primaryAudioEntry?.audioModel || String(summary.audioModel || summary.audio?.model || '').trim().slice(0, 120),
-      audioVoice: primaryAudioEntry?.audioVoice || String(summary.audioVoice || summary.audio?.voice || '').trim().slice(0, 120),
-      audioMimeType: primaryAudioEntry?.audioMimeType || String(summary.audioMimeType || summary.audio?.mimeType || '').trim().slice(0, 120),
-      audioBlob: primaryAudioEntry?.audioBlob || null,
-      audioStatus: primaryAudioEntry?.audioStatus || String(summary.audioStatus || 'not_available').trim().slice(0, 40),
-      audioErrorMessage: primaryAudioEntry?.audioErrorMessage || (summary.audioErrorMessage ? String(summary.audioErrorMessage).trim().slice(0, 1000) : null),
-      audioFailureCategory: primaryAudioEntry?.audioFailureCategory || String(summary.audioFailureCategory || '').trim().slice(0, 80),
-      audioRetryCount: primaryAudioEntry?.audioRetryCount ?? Math.max(0, Number(summary.audioRetryCount) || 0),
-      audioFailedAt: primaryAudioEntry?.audioFailedAt || (summary.audioFailedAt ? String(summary.audioFailedAt).trim() : null),
       status: String(summary.status || 'completed').trim().slice(0, 40),
       failureCategory: String(summary.failureCategory || '').trim().slice(0, 80),
       retryCount: Math.max(0, Number(summary.retryCount) || 0),
@@ -2276,17 +2230,15 @@ function createArticleRepository({
       audioByLocale,
       availableAudioLocales: completedAudioLocales,
       audioLocale: primaryAudioLocale || '',
-      audioModel: primaryAudio?.audioModel || row.audioModel,
-      audioVoice: primaryAudio?.audioVoice || row.audioVoice,
-      audioMimeType: primaryAudio?.audioMimeType || row.audioMimeType,
-      audioStatus: primaryAudio?.audioStatus || row.audioStatus,
-      audioErrorMessage: primaryAudio?.audioErrorMessage || row.audioErrorMessage,
-      audioFailureCategory: primaryAudio?.audioFailureCategory || row.audioFailureCategory || '',
-      audioRetryCount: primaryAudio?.audioRetryCount ?? row.audioRetryCount ?? 0,
-      audioFailedAt: primaryAudio?.audioFailedAt || row.audioFailedAt || null,
-      audioUrl: primaryAudio?.audioUrl || (row.audioStatus === 'completed'
-        ? `/api/podcast-summary/${encodeURIComponent(row.id)}/audio?v=${encodeURIComponent([row.generatedAt, row.audioModel, row.audioVoice].filter(Boolean).join(':'))}`
-        : ''),
+      audioModel: primaryAudio?.audioModel || '',
+      audioVoice: primaryAudio?.audioVoice || '',
+      audioMimeType: primaryAudio?.audioMimeType || '',
+      audioStatus: primaryAudio?.audioStatus || 'not_available',
+      audioErrorMessage: primaryAudio?.audioErrorMessage || null,
+      audioFailureCategory: primaryAudio?.audioFailureCategory || '',
+      audioRetryCount: primaryAudio?.audioRetryCount ?? 0,
+      audioFailedAt: primaryAudio?.audioFailedAt || null,
+      audioUrl: primaryAudio?.audioUrl || '',
       status: row.status,
       failureCategory: row.failureCategory || '',
       retryCount: row.retryCount || 0,
@@ -2532,15 +2484,14 @@ function createArticleRepository({
       return null;
     }
 
-    getDb().prepare(`
+    const database = getDb();
+    const upsertPodcast = database.prepare(`
       INSERT INTO podcast_summaries (
         id, period_start, period_end, title, script_text, title_en, script_text_en,
         title_it, script_text_it, sources_json, article_count, script_model,
-        audio_model, audio_voice, audio_mime_type, audio_blob, audio_status, audio_error_message,
-        audio_failure_category, audio_retry_count, audio_failed_at, status, failure_category, retry_count,
-        error_message, generated_at
+        status, failure_category, retry_count, error_message, generated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(period_start, period_end) DO UPDATE SET
         title = excluded.title,
         script_text = excluded.script_text,
@@ -2551,50 +2502,38 @@ function createArticleRepository({
         sources_json = excluded.sources_json,
         article_count = excluded.article_count,
         script_model = excluded.script_model,
-        audio_model = excluded.audio_model,
-        audio_voice = excluded.audio_voice,
-        audio_mime_type = excluded.audio_mime_type,
-        audio_blob = excluded.audio_blob,
-        audio_status = excluded.audio_status,
-        audio_error_message = excluded.audio_error_message,
-        audio_failure_category = excluded.audio_failure_category,
-        audio_retry_count = excluded.audio_retry_count,
-        audio_failed_at = excluded.audio_failed_at,
         status = excluded.status,
         failure_category = excluded.failure_category,
         retry_count = excluded.retry_count,
         error_message = excluded.error_message,
         generated_at = excluded.generated_at
-    `).run(
-      normalized.id,
-      normalized.periodStart,
-      normalized.periodEnd,
-      normalized.title,
-      normalized.scriptText,
-      normalized.titleEn,
-      normalized.scriptTextEn,
-      normalized.titleIt,
-      normalized.scriptTextIt,
-      normalized.sourcesJson,
-      normalized.articleCount,
-      normalized.scriptModel,
-      normalized.audioModel,
-      normalized.audioVoice,
-      normalized.audioMimeType,
-      normalized.audioBlob,
-      normalized.audioStatus,
-      normalized.audioErrorMessage,
-      normalized.audioFailureCategory,
-      normalized.audioRetryCount,
-      normalized.audioFailedAt,
-      normalized.status,
-      normalized.failureCategory,
-      normalized.retryCount,
-      normalized.errorMessage,
-      normalized.generatedAt
-    );
+      RETURNING id
+    `);
+    const transaction = database.transaction(() => {
+      const persistedPodcast = upsertPodcast.get(
+        normalized.id,
+        normalized.periodStart,
+        normalized.periodEnd,
+        normalized.title,
+        normalized.scriptText,
+        normalized.titleEn,
+        normalized.scriptTextEn,
+        normalized.titleIt,
+        normalized.scriptTextIt,
+        normalized.sourcesJson,
+        normalized.articleCount,
+        normalized.scriptModel,
+        normalized.status,
+        normalized.failureCategory,
+        normalized.retryCount,
+        normalized.errorMessage,
+        normalized.generatedAt
+      );
 
-    normalized.audioEntries.forEach((audioEntry) => upsertPodcastAudioRow(normalized.id, audioEntry));
+      normalized.audioEntries.forEach((audioEntry) => upsertPodcastAudioRow(persistedPodcast.id, audioEntry));
+    });
+
+    transaction();
 
     return getPodcastSummary(normalized.periodStart, normalized.periodEnd);
   }
@@ -2605,9 +2544,6 @@ function createArticleRepository({
              title_en AS titleEn, script_text_en AS scriptTextEn,
              title_it AS titleIt, script_text_it AS scriptTextIt,
              sources_json AS sourcesJson, article_count AS articleCount, script_model AS scriptModel,
-             audio_model AS audioModel, audio_voice AS audioVoice, audio_mime_type AS audioMimeType, audio_status AS audioStatus,
-             audio_error_message AS audioErrorMessage, audio_failure_category AS audioFailureCategory,
-             audio_retry_count AS audioRetryCount, audio_failed_at AS audioFailedAt,
              status, failure_category AS failureCategory, retry_count AS retryCount, error_message AS errorMessage,
              generated_at AS generatedAt
       FROM podcast_summaries
@@ -2625,9 +2561,6 @@ function createArticleRepository({
              title_en AS titleEn, script_text_en AS scriptTextEn,
              title_it AS titleIt, script_text_it AS scriptTextIt,
              sources_json AS sourcesJson, article_count AS articleCount, script_model AS scriptModel,
-             audio_model AS audioModel, audio_voice AS audioVoice, audio_mime_type AS audioMimeType, audio_status AS audioStatus,
-             audio_error_message AS audioErrorMessage, audio_failure_category AS audioFailureCategory,
-             audio_retry_count AS audioRetryCount, audio_failed_at AS audioFailedAt,
              status, failure_category AS failureCategory, retry_count AS retryCount, error_message AS errorMessage,
              generated_at AS generatedAt
       FROM podcast_summaries
@@ -2667,25 +2600,7 @@ function createArticleRepository({
       };
     }
 
-    if (normalizedLocale) {
-      return null;
-    }
-
-    const row = getDb().prepare(`
-      SELECT audio_blob AS audioBlob, audio_mime_type AS audioMimeType
-      FROM podcast_summaries
-      WHERE id = ? AND status = 'completed' AND audio_status = 'completed' AND audio_blob IS NOT NULL
-      LIMIT 1
-    `).get(normalizedPodcastId);
-
-    if (!row?.audioBlob) {
-      return null;
-    }
-
-    return {
-      data: row.audioBlob,
-      mimeType: row.audioMimeType || 'audio/mpeg'
-    };
+    return null;
   }
 
   function countArticles(options = {}) {
@@ -2720,21 +2635,7 @@ function createArticleRepository({
       return 0;
     }
 
-    const database = getDb();
-    const deleteSearchEntries = database.prepare(`
-      DELETE FROM article_search
-      WHERE article_id IN (
-        SELECT id
-        FROM articles
-          WHERE published_at < ?
-            AND NOT EXISTS (
-              SELECT 1
-              FROM user_read_later_articles
-              WHERE user_read_later_articles.article_id = articles.id
-            )
-        )
-    `);
-    const deleteArticles = database.prepare(`
+    return getDb().prepare(`
       DELETE FROM articles
       WHERE published_at < ?
         AND NOT EXISTS (
@@ -2742,14 +2643,7 @@ function createArticleRepository({
           FROM user_read_later_articles
           WHERE user_read_later_articles.article_id = articles.id
         )
-    `);
-
-    const transaction = database.transaction((threshold) => {
-      deleteSearchEntries.run(threshold);
-      return deleteArticles.run(threshold).changes;
-    });
-
-    return transaction(isoTimestamp);
+    `).run(isoTimestamp).changes;
   }
 
   function normalizeFuturePublicationDates(referenceTimestamp = new Date().toISOString()) {
@@ -2800,14 +2694,6 @@ function createArticleRepository({
           FROM user_read_later_articles
           WHERE user_read_later_articles.article_id = articles.id
         )`;
-      const deleteSearchEntries = database.prepare(`
-        DELETE FROM article_search
-        WHERE article_id IN (
-          SELECT id
-          FROM articles
-          WHERE ${removableArticleFilter}
-        )
-      `);
       const deleteArticles = database.prepare(`
         DELETE FROM articles
         WHERE ${removableArticleFilter}
@@ -2820,7 +2706,6 @@ function createArticleRepository({
         customSourceIdsByUserId.set(source.userId, sourceIds);
       });
 
-      deleteSearchEntries.run(...retainedGlobalSourceIds);
       const removedArticles = deleteArticles.run(...retainedGlobalSourceIds).changes;
 
       selectSettings.all().forEach((row) => {

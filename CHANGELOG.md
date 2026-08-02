@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.6.0
+
+- made SQLite upgrades transactional and fail-fast, moved article FTS synchronization to native triggers, and consolidated podcast audio into its locale-specific table
+- simplified the BFF session and private-backend boundary by removing duplicate user-session indexing, unused service identity, and legacy private token carriers
+- centralized frontend locale and session updates while reusing the same custom-source persistence paths across Settings actions
+
 ## 3.5.15
 
 - retained the previous thematic AI summary for each topic, added Current/Previous chips, and disabled empty briefing versions instead of displaying them

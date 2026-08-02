@@ -73,7 +73,7 @@ function groupSourcesByLanguage(sources = []) {
   });
 }
 
-const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }) => {
+const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, patchSession }) => {
   const allSelectableIds = useMemo(() => getSelectableIds(sources), [sources]);
   const initialSelectedIds = useMemo(() => getInitialSelectedIds(sources, currentSettings), [currentSettings, sources]);
   const sourceGroupsByLanguage = useMemo(() => groupSourcesByLanguage(sources), [sources]);
@@ -170,7 +170,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, onComplete }
         excludedSubSourceIds,
         sourceSetupCompleted: true
       });
-      onComplete(response.settings);
+      patchSession({ settings: response.settings });
     } catch (requestError) {
       setError(requestError);
     } finally {

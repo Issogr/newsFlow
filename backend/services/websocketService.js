@@ -144,10 +144,8 @@ function initialize(server) {
 
   io.use((socket, next) => {
     try {
-      const auth = socket.handshake?.auth || {};
       const { session, user } = resolveAuthenticatedSession({
         headers: socket.handshake?.headers || {},
-        authToken: auth.token,
         touchActivitySeconds: 60
       });
 
@@ -436,7 +434,6 @@ function broadcastNewsUpdate(newsGroups = []) {
     const payload = {
       count: matchingGroups.length,
       groupIds: matchingGroups.map((group) => group.id),
-      data: matchingGroups.slice(0, 10),
       timestamp: new Date().toISOString()
     };
 
@@ -461,7 +458,6 @@ function broadcastFeedRefresh(options = {}) {
   const payload = {
     count: 1,
     groupIds: [],
-    data: [],
     refresh: true,
     reason: options.reason || 'news',
     timestamp: new Date().toISOString()

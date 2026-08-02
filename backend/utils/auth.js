@@ -133,13 +133,10 @@ function createApiTokenExpiryDate() {
   return new Date(Date.now() + (API_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000)).toISOString();
 }
 
-function resolveAuthenticatedSession({ headers = {}, authToken = '', touchActivitySeconds = USER_ACTIVITY_TOUCH_INTERVAL_SECONDS } = {}) {
+function resolveAuthenticatedSession({ headers = {}, touchActivitySeconds = USER_ACTIVITY_TOUCH_INTERVAL_SECONDS } = {}) {
   purgeExpiredSessionsIfNeeded();
 
-  const sessionToken = String(authToken || '').trim()
-    || extractBearerToken(headers.authorization)
-    || extractSessionCookie(headers.cookie)
-    || String(headers['x-session-token'] || '').trim();
+  const sessionToken = extractSessionCookie(headers.cookie);
 
   if (!sessionToken) {
     throw createError(401, 'Authentication required', 'UNAUTHORIZED');
@@ -325,34 +322,9 @@ function resolveAuthenticatedApiToken({ headers = {} } = {}) {
   };
 }
 
-function resolveOptionalExternalApiPrincipal(req, res, next) {
-  try {
-    const resolved = resolveAuthenticatedApiToken({
-      headers: req.headers || {}
-    });
-
-    req.externalApi = resolved ? {
-      authenticated: true,
-      token: resolved.token,
-      tokenInfo: resolved.tokenRecord,
-      user: resolved.user
-    } : {
-      authenticated: false,
-      token: null,
-      tokenInfo: null,
-      user: null
-    };
-
-    next();
-  } catch (error) {
-    next(error);
-  }
-}
-
 module.exports = {
   requireAuthenticatedUser,
   requireAdminUser,
-  resolveOptionalExternalApiPrincipal,
   resolveAuthenticatedApiToken,
   resolveAuthenticatedSession,
   purgeExpiredSessionsIfNeeded,

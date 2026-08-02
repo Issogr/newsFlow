@@ -5,6 +5,7 @@ import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
 import { createDeferred, resolveDeferred } from '../test-utils/deferred';
 import { createTestCurrentUser } from '../test-utils/currentUser';
 import { createPodcastSummary } from '../test-utils/thematicSummaries';
+import { createTranslator } from '../i18n';
 
 vi.mock('../services/api', () => ({
   fetchNews: vi.fn(),
@@ -66,13 +67,17 @@ vi.mock('./ErrorMessage', () => ({
 
 async function renderNewsAggregator(overrides = {}) {
   let view;
+  const renderedUser = overrides.currentUser || currentUser;
+  const locale = overrides.locale || renderedUser.settings.defaultLanguage || 'en';
 
   await act(async () => {
     view = render(
       <NewsAggregator
-        currentUser={overrides.currentUser || currentUser}
+        currentUser={renderedUser}
+        locale={locale}
+        t={overrides.t || createTranslator(locale)}
         onLogout={overrides.onLogout || vi.fn()}
-        onUserUpdate={overrides.onUserUpdate || vi.fn()}
+        patchSession={overrides.patchSession || vi.fn()}
       />
     );
     await Promise.resolve();
@@ -667,7 +672,7 @@ describe('NewsAggregator', () => {
   });
 
   test('shows one-time source setup and excludes unselected sources and sub-feeds', async () => {
-    const onUserUpdate = vi.fn();
+    const patchSession = vi.fn();
     let socketOptions;
     const setupUser = {
       ...currentUser,
@@ -695,7 +700,7 @@ describe('NewsAggregator', () => {
       socketOptions = options;
     });
 
-    await renderNewsAggregator({ currentUser: setupUser, onUserUpdate });
+    await renderNewsAggregator({ currentUser: setupUser, patchSession });
 
     expect(screen.getByRole('heading', { name: 'Choose your news sources' })).toBeInTheDocument();
     expect(screen.getByText('This only updates your built-in RSS source selection. Your custom sources and account settings are preserved.')).toBeInTheDocument();
@@ -724,25 +729,25 @@ describe('NewsAggregator', () => {
       excludedSubSourceIds: ['ansa_mondo'],
       sourceSetupCompleted: true
     });
-    expect(onUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(patchSession).toHaveBeenCalledWith({
       settings: expect.objectContaining({
         sourceSetupCompleted: true,
         excludedSourceIds: ['repubblica.it', 'bbc.co.uk'],
         excludedSubSourceIds: ['ansa_mondo']
       })
-    }));
+    });
   });
 
   test('clears an active source filter when the source is removed', async () => {
     const source = { id: 'custom-source', name: 'Custom Feed', url: 'https://example.com/rss', language: 'en' };
     const userWithSource = createTestCurrentUser({ customSources: [source] });
-    const onUserUpdate = vi.fn();
+    const patchSession = vi.fn();
     const onLogout = vi.fn();
     const sourceResponse = createSingleGroupFeedResponse('group-1', 'Custom headline', {
       filters: { sources: [{ ...source, count: 1 }], sourceCatalog: [], topics: [] }
     });
     fetchNews.mockResolvedValue(sourceResponse);
-    const view = await renderNewsAggregator({ currentUser: userWithSource, onUserUpdate, onLogout });
+    const view = await renderNewsAggregator({ currentUser: userWithSource, patchSession, onLogout });
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Sources' })[0]);
     fireEvent.click(screen.getByRole('button', { name: /Custom Feed/ }));
@@ -756,8 +761,10 @@ describe('NewsAggregator', () => {
       view.rerender(
         <NewsAggregator
           currentUser={createTestCurrentUser({ customSources: [] })}
+          locale="en"
+          t={createTranslator('en')}
           onLogout={onLogout}
-          onUserUpdate={onUserUpdate}
+          patchSession={patchSession}
         />
       );
       await Promise.resolve();

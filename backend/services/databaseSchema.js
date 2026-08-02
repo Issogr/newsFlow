@@ -4,7 +4,8 @@ const { normalizeArticleUrl } = require('../utils/articleIdentity');
 const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
 
 function createDatabaseSchema({ logger }) {
-  const CURRENT_SCHEMA_VERSION = 42;
+  const CURRENT_SCHEMA_VERSION = 43;
+  const MIN_SUPPORTED_SCHEMA_VERSION = 15;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
   function getPodcastSummariesSchemaSql() {
@@ -22,15 +23,6 @@ function createDatabaseSchema({ logger }) {
         sources_json TEXT NOT NULL DEFAULT '[]',
         article_count INTEGER NOT NULL DEFAULT 0,
         script_model TEXT NOT NULL DEFAULT '',
-        audio_model TEXT NOT NULL DEFAULT '',
-        audio_voice TEXT NOT NULL DEFAULT '',
-        audio_mime_type TEXT NOT NULL DEFAULT '',
-        audio_blob BLOB,
-        audio_status TEXT NOT NULL DEFAULT 'not_available',
-        audio_error_message TEXT,
-        audio_failure_category TEXT NOT NULL DEFAULT '',
-        audio_retry_count INTEGER NOT NULL DEFAULT 0,
-        audio_failed_at TEXT,
         status TEXT NOT NULL DEFAULT 'completed',
         failure_category TEXT NOT NULL DEFAULT '',
         retry_count INTEGER NOT NULL DEFAULT 0,
@@ -44,7 +36,38 @@ function createDatabaseSchema({ logger }) {
     `;
   }
 
-  function getPodcastSummaryAudioSchemaSql() {
+  function getPodcastSummariesV31SchemaSql() {
+    return `
+      CREATE TABLE IF NOT EXISTS podcast_summaries (
+        id TEXT PRIMARY KEY,
+        period_start TEXT NOT NULL,
+        period_end TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        script_text TEXT NOT NULL DEFAULT '',
+        title_en TEXT NOT NULL DEFAULT '',
+        script_text_en TEXT NOT NULL DEFAULT '',
+        title_it TEXT NOT NULL DEFAULT '',
+        script_text_it TEXT NOT NULL DEFAULT '',
+        sources_json TEXT NOT NULL DEFAULT '[]',
+        article_count INTEGER NOT NULL DEFAULT 0,
+        script_model TEXT NOT NULL DEFAULT '',
+        audio_model TEXT NOT NULL DEFAULT '',
+        audio_mime_type TEXT NOT NULL DEFAULT '',
+        audio_blob BLOB,
+        audio_status TEXT NOT NULL DEFAULT 'not_available',
+        audio_error_message TEXT,
+        status TEXT NOT NULL DEFAULT 'completed',
+        error_message TEXT,
+        generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(period_start, period_end)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_podcast_summaries_period
+      ON podcast_summaries (period_end DESC);
+    `;
+  }
+
+  function getPodcastSummaryAudioV37SchemaSql() {
     return `
       CREATE TABLE IF NOT EXISTS podcast_summary_audio (
         podcast_id TEXT NOT NULL,
@@ -65,6 +88,31 @@ function createDatabaseSchema({ logger }) {
 
       CREATE INDEX IF NOT EXISTS idx_podcast_summary_audio_locale
       ON podcast_summary_audio (locale, audio_status);
+    `;
+  }
+
+  function getArticleSearchV43TriggersSql() {
+    return `
+      CREATE TRIGGER IF NOT EXISTS article_search_after_insert
+      AFTER INSERT ON articles
+      BEGIN
+        INSERT INTO article_search (article_id, title, description, content)
+        VALUES (NEW.id, NEW.title, NEW.description, NEW.content);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS article_search_after_update
+      AFTER UPDATE OF id, title, description, content ON articles
+      BEGIN
+        DELETE FROM article_search WHERE article_id = OLD.id;
+        INSERT INTO article_search (article_id, title, description, content)
+        VALUES (NEW.id, NEW.title, NEW.description, NEW.content);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS article_search_after_delete
+      AFTER DELETE ON articles
+      BEGIN
+        DELETE FROM article_search WHERE article_id = OLD.id;
+      END;
     `;
   }
 
@@ -89,6 +137,160 @@ function createDatabaseSchema({ logger }) {
     }
 
     database.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (lower(username))');
+  }
+
+  // Frozen version-15 baseline used only to complete legacy databases before applying versioned migrations.
+  function initializeLegacySchemaV15(database) {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS articles (
+        id TEXT PRIMARY KEY,
+        source_id TEXT NOT NULL,
+        source_name TEXT NOT NULL,
+        owner_user_id TEXT,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        content TEXT NOT NULL DEFAULT '',
+        url TEXT NOT NULL DEFAULT '',
+        canonical_url TEXT NOT NULL DEFAULT '',
+        image TEXT,
+        author TEXT,
+        language TEXT NOT NULL DEFAULT 'it',
+        published_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_articles_published_at ON articles (published_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_articles_source_id ON articles (source_id);
+      CREATE INDEX IF NOT EXISTS idx_articles_source_name ON articles (source_name);
+      CREATE INDEX IF NOT EXISTS idx_articles_owner_user_id ON articles (owner_user_id);
+      CREATE INDEX IF NOT EXISTS idx_articles_canonical_url ON articles (canonical_url);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_owner_source_canonical_url
+      ON articles (COALESCE(owner_user_id, ''), source_id, canonical_url)
+      WHERE canonical_url != '';
+
+      CREATE TABLE IF NOT EXISTS article_topics (
+        article_id TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (article_id, topic),
+        FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_article_topics_topic ON article_topics (topic);
+
+      CREATE TABLE IF NOT EXISTS ingestion_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        status TEXT NOT NULL,
+        fetched_count INTEGER NOT NULL DEFAULT 0,
+        inserted_count INTEGER NOT NULL DEFAULT 0,
+        updated_count INTEGER NOT NULL DEFAULT 0,
+        error_message TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS app_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT,
+        role TEXT NOT NULL DEFAULT 'user',
+        last_login_at TEXT,
+        last_activity_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        token_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expires_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions (user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions (expires_at);
+
+      CREATE TABLE IF NOT EXISTS password_setup_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        purpose TEXT NOT NULL,
+        created_by_user_id TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_password_setup_tokens_user_purpose
+      ON password_setup_tokens (user_id, purpose, used_at);
+      CREATE INDEX IF NOT EXISTS idx_password_setup_tokens_expires_at
+      ON password_setup_tokens (expires_at);
+
+      CREATE TABLE IF NOT EXISTS user_settings (
+        user_id TEXT PRIMARY KEY,
+        default_language TEXT NOT NULL DEFAULT 'auto',
+        theme_mode TEXT NOT NULL DEFAULT 'system',
+        article_retention_hours INTEGER NOT NULL DEFAULT 24,
+        recent_hours INTEGER NOT NULL DEFAULT 3,
+        auto_refresh_enabled INTEGER NOT NULL DEFAULT 1,
+        show_news_images INTEGER NOT NULL DEFAULT 1,
+        reader_panel_position TEXT NOT NULL DEFAULT 'right',
+        reader_text_size TEXT NOT NULL DEFAULT 'medium',
+        last_seen_release_notes_version TEXT NOT NULL DEFAULT '',
+        default_source_ids TEXT NOT NULL DEFAULT '[]',
+        excluded_sub_source_ids TEXT NOT NULL DEFAULT '[]',
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS user_sources (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        language TEXT NOT NULL DEFAULT 'it',
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        validated_at TEXT,
+        UNIQUE(user_id, url),
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_user_sources_user_id ON user_sources (user_id);
+
+      CREATE TABLE IF NOT EXISTS reader_cache (
+        article_id TEXT PRIMARY KEY,
+        url TEXT NOT NULL,
+        title TEXT NOT NULL,
+        site_name TEXT,
+        byline TEXT,
+        language TEXT,
+        excerpt TEXT,
+        content_text TEXT NOT NULL,
+        content_blocks TEXT,
+        minutes_to_read INTEGER NOT NULL DEFAULT 1,
+        fetched_at TEXT NOT NULL,
+        FOREIGN KEY (article_id) REFERENCES articles (id) ON DELETE CASCADE
+      );
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS article_search USING fts5(
+        article_id UNINDEXED,
+        title,
+        description,
+        content,
+        tokenize = 'unicode61 remove_diacritics 2'
+      );
+    `);
   }
 
   function initializeSchema(database) {
@@ -331,7 +533,7 @@ function createDatabaseSchema({ logger }) {
       ON thematic_summaries (topic_key, period_end DESC);
 
       ${getPodcastSummariesSchemaSql()}
-      ${getPodcastSummaryAudioSchemaSql()}
+      ${getPodcastSummaryAudioV37SchemaSql()}
 
       CREATE VIRTUAL TABLE IF NOT EXISTS article_search USING fts5(
         article_id UNINDEXED,
@@ -340,6 +542,8 @@ function createDatabaseSchema({ logger }) {
         content,
         tokenize = 'unicode61 remove_diacritics 2'
       );
+
+      ${getArticleSearchV43TriggersSql()}
     `);
 
     ensureCaseInsensitiveUsernameUniqueness(database);
@@ -356,6 +560,10 @@ function createDatabaseSchema({ logger }) {
   }
 
   function getCurrentSchemaVersion(database) {
+    if (!tableExists(database, 'app_meta')) {
+      return null;
+    }
+
     const row = database.prepare(`
       SELECT value
       FROM app_meta
@@ -373,6 +581,14 @@ function createDatabaseSchema({ logger }) {
     `).get(tableName);
 
     return Boolean(row);
+  }
+
+  function triggerExists(database, triggerName) {
+    return Boolean(database.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'trigger' AND name = ?
+    `).get(triggerName));
   }
 
   function getColumnNames(database, tableName) {
@@ -500,6 +716,10 @@ function createDatabaseSchema({ logger }) {
       return 41;
     }
 
+    if (podcastSummaryColumns.has('audio_blob') || !triggerExists(database, 'article_search_after_insert')) {
+      return 42;
+    }
+
     return CURRENT_SCHEMA_VERSION;
   }
 
@@ -511,7 +731,7 @@ function createDatabaseSchema({ logger }) {
     `).run(String(version));
   }
 
-  function migrateSchema(database, currentVersion) {
+  function migrateSchemaStep(database, currentVersion) {
     if (currentVersion === 15) {
       database.exec(`
         CREATE TABLE IF NOT EXISTS api_tokens (
@@ -541,7 +761,6 @@ function createDatabaseSchema({ logger }) {
       `).run();
 
       logger.info('Migrated DB schema from version 15 to 16');
-      migrateSchema(database, 16);
       return;
     }
 
@@ -556,7 +775,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 17);
       logger.info('Migrated DB schema from version 16 to 17');
-      migrateSchema(database, 17);
       return;
     }
 
@@ -578,7 +796,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 18);
       logger.info('Migrated DB schema from version 17 to 18');
-      migrateSchema(database, 18);
       return;
     }
 
@@ -604,7 +821,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 19);
       logger.info('Migrated DB schema from version 18 to 19');
-      migrateSchema(database, 19);
       return;
     }
 
@@ -634,7 +850,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 20);
       logger.info('Migrated DB schema from version 19 to 20');
-      migrateSchema(database, 20);
       return;
     }
 
@@ -667,7 +882,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 21);
       logger.info('Migrated DB schema from version 20 to 21');
-      migrateSchema(database, 21);
       return;
     }
 
@@ -682,7 +896,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 22);
       logger.info('Migrated DB schema from version 21 to 22');
-      migrateSchema(database, 22);
       return;
     }
 
@@ -711,7 +924,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 23);
       logger.info('Migrated DB schema from version 22 to 23');
-      migrateSchema(database, 23);
       return;
     }
 
@@ -731,12 +943,6 @@ function createDatabaseSchema({ logger }) {
         : 'default_source_ids';
 
       const transaction = database.transaction(() => {
-        const deleteArticleSearch = database.prepare(`
-          DELETE FROM article_search
-          WHERE article_id IN (
-            SELECT id FROM articles WHERE owner_user_id = ? AND source_id = ?
-          )
-        `);
         const deleteArticles = database.prepare(`
           DELETE FROM articles
           WHERE owner_user_id = ? AND source_id = ?
@@ -747,7 +953,6 @@ function createDatabaseSchema({ logger }) {
         `);
 
         duplicateUserSources.forEach((source) => {
-          deleteArticleSearch.run(source.userId, source.id);
           deleteArticles.run(source.userId, source.id);
           deleteUserSource.run(source.userId, source.id);
         });
@@ -765,7 +970,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 24);
       logger.info(`Migrated DB schema from version 23 to 24; reset source setup for ${DEFAULT_SOURCE_REVIEW_VERSION} and removed ${duplicateUserSources.length} duplicate custom sources`);
-      migrateSchema(database, 24);
       return;
     }
 
@@ -782,7 +986,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 25);
       logger.info('Migrated DB schema from version 24 to 25');
-      migrateSchema(database, 25);
       return;
     }
 
@@ -806,7 +1009,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 26);
       logger.info('Migrated DB schema from version 25 to 26');
-      migrateSchema(database, 26);
       return;
     }
 
@@ -840,7 +1042,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 27);
       logger.info('Migrated DB schema from version 26 to 27');
-      migrateSchema(database, 27);
       return;
     }
 
@@ -874,7 +1075,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 28);
       logger.info('Migrated DB schema from version 27 to 28');
-      migrateSchema(database, 28);
       return;
     }
 
@@ -896,7 +1096,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 29);
       logger.info('Migrated DB schema from version 28 to 29');
-      migrateSchema(database, 29);
       return;
     }
 
@@ -909,16 +1108,14 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 30);
       logger.info('Migrated DB schema from version 29 to 30');
-      migrateSchema(database, 30);
       return;
     }
 
     if (currentVersion === 30) {
-      database.exec(getPodcastSummariesSchemaSql());
+      database.exec(getPodcastSummariesV31SchemaSql());
 
       setCurrentSchemaVersion(database, 31);
       logger.info('Migrated DB schema from version 30 to 31');
-      migrateSchema(database, 31);
       return;
     }
 
@@ -930,7 +1127,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 32);
       logger.info('Migrated DB schema from version 31 to 32');
-      migrateSchema(database, 32);
       return;
     }
 
@@ -948,7 +1144,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 33);
       logger.info('Migrated DB schema from version 32 to 33');
-      migrateSchema(database, 33);
       return;
     }
 
@@ -963,7 +1158,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 34);
       logger.info('Migrated DB schema from version 33 to 34');
-      migrateSchema(database, 34);
       return;
     }
 
@@ -987,7 +1181,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 35);
       logger.info('Migrated DB schema from version 34 to 35');
-      migrateSchema(database, 35);
       return;
     }
 
@@ -1005,12 +1198,11 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 36);
       logger.info('Migrated DB schema from version 35 to 36');
-      migrateSchema(database, 36);
       return;
     }
 
     if (currentVersion === 36) {
-      database.exec(getPodcastSummaryAudioSchemaSql());
+      database.exec(getPodcastSummaryAudioV37SchemaSql());
       database.exec(`
         INSERT INTO podcast_summary_audio (
           podcast_id, locale, audio_model, audio_voice, audio_mime_type, audio_blob,
@@ -1027,7 +1219,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 37);
       logger.info('Migrated DB schema from version 36 to 37');
-      migrateSchema(database, 37);
       return;
     }
 
@@ -1047,7 +1238,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 38);
       logger.info('Migrated DB schema from version 37 to 38');
-      migrateSchema(database, 38);
       return;
     }
 
@@ -1081,7 +1271,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 39);
       logger.info('Migrated DB schema from version 38 to 39');
-      migrateSchema(database, 39);
       return;
     }
 
@@ -1093,7 +1282,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 40);
       logger.info('Migrated DB schema from version 39 to 40');
-      migrateSchema(database, 40);
       return;
     }
 
@@ -1105,7 +1293,6 @@ function createDatabaseSchema({ logger }) {
 
       setCurrentSchemaVersion(database, 41);
       logger.info('Migrated DB schema from version 40 to 41');
-      migrateSchema(database, 41);
       return;
     }
 
@@ -1120,39 +1307,139 @@ function createDatabaseSchema({ logger }) {
       return;
     }
 
+    if (currentVersion === 42) {
+      if (!tableExists(database, 'podcast_summaries')) {
+        database.exec(getPodcastSummariesSchemaSql());
+      }
+      database.exec(getPodcastSummaryAudioV37SchemaSql());
+
+      const podcastSummaryColumns = getColumnNames(database, 'podcast_summaries');
+      const legacyAudioColumns = [
+        'audio_model',
+        'audio_voice',
+        'audio_mime_type',
+        'audio_blob',
+        'audio_status',
+        'audio_error_message',
+        'audio_failure_category',
+        'audio_retry_count',
+        'audio_failed_at'
+      ];
+
+      if (legacyAudioColumns.every((column) => podcastSummaryColumns.has(column))) {
+        // V42 mirrored the first configured locale, which defaulted to English, when scripts were ambiguous.
+        database.exec(`
+          INSERT INTO podcast_summary_audio (
+            podcast_id, locale, audio_model, audio_voice, audio_mime_type, audio_blob,
+            audio_status, audio_error_message, audio_failure_category, audio_retry_count,
+            audio_failed_at, generated_at
+          )
+          SELECT id, CASE
+                   WHEN trim(script_text_en) != '' AND trim(script_text_it) = '' THEN 'en'
+                   WHEN trim(script_text_it) != '' AND trim(script_text_en) = '' THEN 'it'
+                   ELSE 'en'
+                 END,
+                 audio_model, audio_voice, audio_mime_type, audio_blob,
+                 audio_status, audio_error_message, audio_failure_category, audio_retry_count,
+                 audio_failed_at, generated_at
+          FROM podcast_summaries
+          WHERE (audio_status != 'not_available' OR audio_blob IS NOT NULL OR audio_error_message IS NOT NULL)
+            AND NOT EXISTS (
+              SELECT 1
+              FROM podcast_summary_audio
+              WHERE podcast_summary_audio.podcast_id = podcast_summaries.id
+            )
+        `);
+      }
+
+      legacyAudioColumns.forEach((column) => {
+        if (podcastSummaryColumns.has(column)) {
+          database.exec(`ALTER TABLE podcast_summaries DROP COLUMN ${column}`);
+        }
+      });
+
+      database.exec(`
+        CREATE INDEX IF NOT EXISTS idx_articles_owner_published_id
+        ON articles (owner_user_id, published_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_article_topics_topic_article
+        ON article_topics (topic, article_id);
+
+        ${getArticleSearchV43TriggersSql()}
+
+        DELETE FROM article_search;
+        INSERT INTO article_search (article_id, title, description, content)
+        SELECT id, title, description, content FROM articles;
+      `);
+
+      setCurrentSchemaVersion(database, 43);
+      logger.info('Migrated DB schema from version 42 to 43');
+      return;
+    }
+
     throw new Error(
       `Unsupported database schema version ${currentVersion}. Expected ${CURRENT_SCHEMA_VERSION}. Recreate the database file before starting this version of the app.`
     );
   }
 
-  function ensureSupportedSchema(database, options = {}) {
+  function assertSupportedSchemaVersion(currentVersion) {
+    if (
+      !Number.isInteger(currentVersion)
+      || currentVersion < MIN_SUPPORTED_SCHEMA_VERSION
+      || currentVersion > CURRENT_SCHEMA_VERSION
+    ) {
+      throw new Error(
+        `Unsupported database schema version ${currentVersion}. Expected ${CURRENT_SCHEMA_VERSION}. Recreate the database file before starting this version of the app.`
+      );
+    }
+  }
+
+  function migrateSchema(database, currentVersion) {
+    assertSupportedSchemaVersion(currentVersion);
+
+    for (let version = currentVersion; version < CURRENT_SCHEMA_VERSION; version += 1) {
+      database.transaction(() => {
+        migrateSchemaStep(database, version);
+        const nextVersion = getCurrentSchemaVersion(database);
+        if (nextVersion !== version + 1) {
+          throw new Error(`Database migration ${version} did not advance to version ${version + 1}`);
+        }
+      })();
+    }
+  }
+
+  function ensureSupportedSchema(database) {
     const currentVersion = getCurrentSchemaVersion(database);
 
-    if (currentVersion === null) {
-      if (options.legacySchemaVersion && options.legacySchemaVersion !== CURRENT_SCHEMA_VERSION) {
-        database.prepare(`
-          INSERT INTO app_meta (key, value)
-          VALUES ('migration_version', ?)
-          ON CONFLICT(key) DO UPDATE SET value = excluded.value
-        `).run(String(options.legacySchemaVersion));
-        migrateSchema(database, options.legacySchemaVersion);
+    if (currentVersion !== null) {
+      assertSupportedSchemaVersion(currentVersion);
+      if (currentVersion === CURRENT_SCHEMA_VERSION) {
         return;
       }
 
-      setCurrentSchemaVersion(database);
+      database.transaction(() => initializeLegacySchemaV15(database))();
+      migrateSchema(database, currentVersion);
+      return;
+    }
+
+    const legacySchemaVersion = inferLegacySchemaVersion(database);
+    if (legacySchemaVersion === null) {
+      database.transaction(() => {
+        initializeSchema(database);
+        setCurrentSchemaVersion(database);
+      })();
       logger.info(`Initialized DB schema version ${CURRENT_SCHEMA_VERSION}`);
       return;
     }
 
-    if (currentVersion !== CURRENT_SCHEMA_VERSION) {
-      migrateSchema(database, currentVersion);
-    }
+    database.transaction(() => {
+      initializeLegacySchemaV15(database);
+      setCurrentSchemaVersion(database, legacySchemaVersion);
+    })();
+    migrateSchema(database, legacySchemaVersion);
   }
 
   return {
-    initializeSchema,
-    ensureSupportedSchema,
-    inferLegacySchemaVersion
+    ensureSupportedSchema
   };
 }
 

@@ -26,7 +26,7 @@ const renderPanel = (overrides = {}) => {
     currentChangelogVersion: '3.5.11',
     onClose: vi.fn(),
     onOpenReleaseNotes: vi.fn(),
-    onUserUpdate: vi.fn(),
+    patchSession: vi.fn(),
     ...overrides
   };
 
@@ -69,7 +69,7 @@ describe('SettingsPanel', () => {
       language: 'en'
     };
     addUserSource.mockResolvedValue({ source });
-    const { onClose, onUserUpdate } = renderPanel();
+    const { onClose, patchSession } = renderPanel();
 
     fireEvent.click(document.querySelector('summary'));
     fireEvent.change(screen.getByLabelText('Feed URL'), { target: { value: source.url } });
@@ -78,7 +78,7 @@ describe('SettingsPanel', () => {
 
     await waitFor(() => {
       expect(addUserSource).toHaveBeenCalledWith({ url: source.url });
-      expect(onUserUpdate).toHaveBeenCalledWith(expect.objectContaining({ customSources: [source] }));
+      expect(patchSession).toHaveBeenCalledWith(expect.objectContaining({ customSources: [source] }));
       expect(onClose).toHaveBeenCalledTimes(1);
     });
   });
@@ -101,7 +101,7 @@ describe('SettingsPanel', () => {
   test('saves a draft from the close reminder', async () => {
     const nextSettings = { ...currentUser.settings, themeMode: 'dark' };
     updateUserSettings.mockResolvedValue({ settings: nextSettings });
-    const { onClose, onUserUpdate } = renderPanel();
+    const { onClose, patchSession } = renderPanel();
 
     fireEvent.change(screen.getByLabelText('Theme'), { target: { value: 'dark' } });
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
@@ -109,7 +109,7 @@ describe('SettingsPanel', () => {
 
     expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled();
     expect(updateUserSettings).toHaveBeenCalledWith({ themeMode: 'dark' });
-    expect(onUserUpdate).toHaveBeenCalledWith(expect.objectContaining({ settings: nextSettings }));
+    expect(patchSession).toHaveBeenCalledWith(expect.objectContaining({ settings: nextSettings }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

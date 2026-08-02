@@ -24,18 +24,32 @@ vi.mock('./services/api', () => ({
 }));
 
 vi.mock('./components/NewsAggregator', () => ({
-  default: ({ currentUser, onOpenReleaseNotes, onUserUpdate }) => (
+  default: ({ currentUser, locale, t, onOpenReleaseNotes, patchSession }) => (
     <div>
       <div>Authenticated app</div>
+      <div data-testid="active-locale">{locale}: {t('settings')}</div>
+      <div>Session fields: {currentUser.apiToken?.id || 'none'}, {currentUser.customSources.length} sources</div>
       <button type="button" onClick={onOpenReleaseNotes}>Open release notes</button>
       <button
         type="button"
-        onClick={() => onUserUpdate({
-          ...currentUser,
-          settings: { ...currentUser.settings, sourceSetupCompleted: true }
-        })}
+        onClick={() => patchSession({ settings: { ...currentUser.settings, sourceSetupCompleted: true } })}
       >
         Complete source setup
+      </button>
+      <button
+        type="button"
+        onClick={() => patchSession({ settings: { ...currentUser.settings, defaultLanguage: 'it' } })}
+      >
+        Switch locale
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          patchSession({ apiToken: { id: 'token-1' } });
+          patchSession({ customSources: [{ id: 'source-1' }] });
+        }}
+      >
+        Patch session fields
       </button>
     </div>
   )
@@ -52,6 +66,7 @@ describe('App', () => {
     document.body.style.overflow = '';
     document.documentElement.dataset.theme = '';
     document.documentElement.style.colorScheme = '';
+    document.documentElement.lang = '';
     window.history.replaceState({}, '', '/');
     window.matchMedia = vi.fn().mockImplementation(() => ({
       matches: false,
@@ -65,6 +80,7 @@ describe('App', () => {
     document.body.style.overflow = '';
     document.documentElement.dataset.theme = '';
     document.documentElement.style.colorScheme = '';
+    document.documentElement.lang = '';
   });
 
   test('renders the admin dashboard instead of the news home for admin sessions', async () => {
@@ -89,6 +105,37 @@ describe('App', () => {
       expect(document.documentElement.dataset.theme).toBe('dark');
       expect(document.documentElement.style.colorScheme).toBe('dark');
     });
+  });
+
+  test('owns locale side effects and updates translations after settings change', async () => {
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION } }));
+
+    render(<App />);
+
+    expect(await screen.findByTestId('active-locale')).toHaveTextContent('en: Settings');
+    await waitFor(() => {
+      expect(window.localStorage.getItem('newsflow-locale')).toBe('en');
+      expect(document.documentElement.lang).toBe('en');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Switch locale' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('active-locale')).toHaveTextContent('it: Impostazioni');
+      expect(window.localStorage.getItem('newsflow-locale')).toBe('it');
+      expect(document.documentElement.lang).toBe('it');
+    });
+  });
+
+  test('merges consecutive top-level session patches', async () => {
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_RELEASE_VERSION } }));
+
+    render(<App />);
+
+    expect(await screen.findByText('Session fields: none, 0 sources')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Patch session fields' }));
+
+    expect(await screen.findByText('Session fields: token-1, 1 sources')).toBeInTheDocument();
   });
 
   test('shows an update notice after login and persists the version only after the changelog modal is dismissed', async () => {

@@ -152,9 +152,13 @@ function getDb() {
   db.pragma('foreign_keys = ON');
   db.pragma('temp_store = MEMORY');
 
-  const legacySchemaVersion = dbSchema.inferLegacySchemaVersion(db);
-  dbSchema.initializeSchema(db);
-  dbSchema.ensureSupportedSchema(db, { legacySchemaVersion });
+  try {
+    dbSchema.ensureSupportedSchema(db);
+  } catch (error) {
+    db.close();
+    db = null;
+    throw error;
+  }
   logger.info(`SQLite database ready at ${DB_PATH}`);
 
   return db;

@@ -19,19 +19,15 @@ const {
   buildSessionMiddleware,
   createSessionStore,
   destroySession,
-  destroyStoredSessionsByUserId,
   getBackendSessionCookieFromRequest,
   loadUpgradeSession,
   normalizeSessionState,
-  persistSessionUserId,
-  saveExpressSession,
-  upsertStoredSessionUser
+  saveExpressSession
 } = require('./lib/sessionStore');
 const {
   applyProxyRequestHeaders,
   buildTrustedForwardedHeaders,
   copyBackendResponseHeaders,
-  extractDeletedAdminUserId,
   getRequestHeader,
   stripBackendCorsResponseHeaders
 } = require('./lib/proxyHelpers');
@@ -152,7 +148,6 @@ function createApp(options = {}) {
   function buildInternalHeaders(req) {
     return {
       'x-newsflow-proxy': internalProxyToken,
-      'x-newsflow-service': String(process.env.INTERNAL_SERVICE_NAME || 'bff').trim().toLowerCase() || 'bff',
       ...buildTrustedForwardedHeaders(req, { includeEmpty: true }),
     };
   }
@@ -333,9 +328,7 @@ function createApp(options = {}) {
       await promisify(req.session.regenerate).call(req.session);
       req.session.version = SESSION_SCHEMA_VERSION;
       req.session.backendSessionCookie = encryptBackendSessionCookie(backendSessionCookie);
-      req.session.userId = response.data?.user?.id || '';
       await saveExpressSession(req.session);
-      upsertStoredSessionUser(sessionDb, req.sessionID, req.session.userId);
     }
 
     sendBackendResponse(res, response);
@@ -358,12 +351,6 @@ function createApp(options = {}) {
     onProxyResponse: (proxyRes, req, res) => {
       if (proxyRes.statusCode === 401) {
         clearLocalSession(req, res).catch(() => {});
-        return;
-      }
-
-      const deletedUserId = extractDeletedAdminUserId(req, proxyRes.statusCode || 0);
-      if (deletedUserId) {
-        destroyStoredSessionsByUserId(sessionDb, deletedUserId);
       }
     },
   });
@@ -420,21 +407,6 @@ function createApp(options = {}) {
     const response = await requestInternalBackend(req, '/auth/password-setup/validate', {
       params: req.query,
     });
-
-    sendBackendResponse(res, response);
-  });
-
-  app.get('/api/me', requireSameOriginUnsafeRequest, async (req, res) => {
-    const backendSessionCookie = getBackendSessionCookieFromRequest(req);
-    const response = await requestInternalBackend(req, '/me', {
-      backendSessionCookie,
-    });
-
-    if (response.status === 401) {
-      await clearLocalSession(req, res);
-    } else {
-      await persistSessionUserId(req, response.data?.user?.id || '', sessionDb);
-    }
 
     sendBackendResponse(res, response);
   });

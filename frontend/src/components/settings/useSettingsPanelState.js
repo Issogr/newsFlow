@@ -45,7 +45,7 @@ const createSettingsPatch = (nextSettings, currentUser, dirtyKeys) => {
   }, {});
 };
 
-const useSettingsPanelState = ({ currentUser, availableSources, onUserUpdate }) => {
+const useSettingsPanelState = ({ currentUser, availableSources, patchSession }) => {
   const [settings, setSettings] = useState(() => getInitialSettings(currentUser));
   const [customSources, setCustomSources] = useState(currentUser.customSources || []);
   const [saving, setSaving] = useState(false);
@@ -116,21 +116,19 @@ const useSettingsPanelState = ({ currentUser, availableSources, onUserUpdate }) 
     dirtySettingKeysRef.current.clear();
     setSettings(nextSettings);
     setCustomSources(nextCustomSources);
-    onUserUpdate({
-      ...currentUserRef.current,
+    patchSession({
       settings: nextSettings,
       customSources: nextCustomSources
     });
-  }, [onUserUpdate]);
+  }, [patchSession]);
 
   const syncCustomSourcesState = useCallback((nextCustomSources, nextSettings = null) => {
     setCustomSources(nextCustomSources);
-    onUserUpdate({
-      ...currentUserRef.current,
+    patchSession({
       ...(nextSettings ? { settings: nextSettings } : {}),
       customSources: nextCustomSources
     });
-  }, [onUserUpdate]);
+  }, [patchSession]);
 
   const runSavingAction = useCallback(async (action, options = {}) => {
     savingActionsRef.current += 1;
@@ -218,6 +216,25 @@ const useSettingsPanelState = ({ currentUser, availableSources, onUserUpdate }) 
     || editingSourceForm.language !== (editingSource.language || 'it')
   );
 
+  const persistSourceAddition = useCallback(async (existingSources = customSources) => {
+    const response = await addUserSource(sourceForm);
+    const nextCustomSources = [response.source, ...existingSources];
+    setSourceForm(createInitialSourceForm());
+    syncCustomSourcesState(nextCustomSources);
+    return nextCustomSources;
+  }, [customSources, sourceForm, syncCustomSourcesState]);
+
+  const persistSourceUpdate = useCallback(async (sourceId, existingSources = customSources) => {
+    const response = await updateUserSource(sourceId, editingSourceForm);
+    const nextCustomSources = existingSources.map((source) => (
+      source.id === sourceId ? response.source : source
+    ));
+    setEditingSourceId('');
+    setEditingSourceForm(createInitialEditingSourceForm());
+    syncCustomSourcesState(nextCustomSources);
+    return nextCustomSources;
+  }, [customSources, editingSourceForm, syncCustomSourcesState]);
+
   const handleSave = useCallback(async () => {
     const dirtySettingKeys = [...dirtySettingKeysRef.current];
     const settingsPatch = createSettingsPatch(settings, currentUserRef.current, dirtySettingKeys);
@@ -232,20 +249,11 @@ const useSettingsPanelState = ({ currentUser, availableSources, onUserUpdate }) 
       let nextSettings = getInitialSettings(currentUserRef.current);
 
       if (hasSourceFormChanges) {
-        const response = await addUserSource(sourceForm);
-        nextCustomSources = [response.source, ...nextCustomSources];
-        setSourceForm(createInitialSourceForm());
-        syncCustomSourcesState(nextCustomSources);
+        nextCustomSources = await persistSourceAddition(nextCustomSources);
       }
 
       if (hasEditingSourceChanges) {
-        const response = await updateUserSource(editingSourceId, editingSourceForm);
-        nextCustomSources = nextCustomSources.map((source) => (
-          source.id === editingSourceId ? response.source : source
-        ));
-        setEditingSourceId('');
-        setEditingSourceForm(createInitialEditingSourceForm());
-        syncCustomSourcesState(nextCustomSources);
+        nextCustomSources = await persistSourceUpdate(editingSourceId, nextCustomSources);
       }
 
       if (Object.keys(settingsPatch).length > 0) {
@@ -270,31 +278,25 @@ const useSettingsPanelState = ({ currentUser, availableSources, onUserUpdate }) 
     setStoredReaderTextWidthPreference(nextSettings.readerTextWidth);
     syncPersistedUserState(nextSettings, result.nextCustomSources);
     return true;
-  }, [customSources, editingSourceForm, editingSourceId, hasEditingSourceChanges, hasSourceFormChanges, runSavingAction, settings, sourceForm, syncCustomSourcesState, syncPersistedUserState]);
+  }, [customSources, editingSourceId, hasEditingSourceChanges, hasSourceFormChanges, persistSourceAddition, persistSourceUpdate, runSavingAction, settings, syncPersistedUserState]);
 
   const handleCreateApiToken = useCallback(async () => {
     await runSavingAction(async () => {
       const response = await createApiToken();
       setApiToken(response.tokenInfo || null);
       setNewApiToken(response.token || '');
-      onUserUpdate({
-        ...currentUserRef.current,
-        apiToken: response.tokenInfo || null
-      });
+      patchSession({ apiToken: response.tokenInfo || null });
     });
-  }, [onUserUpdate, runSavingAction]);
+  }, [patchSession, runSavingAction]);
 
   const handleRevokeApiToken = useCallback(async () => {
     await runSavingAction(async () => {
       await revokeApiToken();
       setApiToken(null);
       setNewApiToken('');
-      onUserUpdate({
-        ...currentUserRef.current,
-        apiToken: null
-      });
+      patchSession({ apiToken: null });
     });
-  }, [onUserUpdate, runSavingAction]);
+  }, [patchSession, runSavingAction]);
 
   const handleExport = useCallback(async () => {
     await runSavingAction(async () => {
@@ -348,13 +350,10 @@ const useSettingsPanelState = ({ currentUser, availableSources, onUserUpdate }) 
     setSourceError(null);
 
     return runSavingAction(async () => {
-      const response = await addUserSource(sourceForm);
-      const nextCustomSources = [response.source, ...customSources];
-      setSourceForm(createInitialSourceForm());
-      syncCustomSourcesState(nextCustomSources);
+      await persistSourceAddition();
       return true;
     }, { globalError: false, onError: setSourceError });
-  }, [customSources, runSavingAction, sourceForm, syncCustomSourcesState]);
+  }, [persistSourceAddition, runSavingAction]);
 
   const startEditSource = useCallback((source) => {
     setEditingSourceId(source.id);
@@ -374,14 +373,9 @@ const useSettingsPanelState = ({ currentUser, availableSources, onUserUpdate }) 
     setSourceError(null);
 
     await runSavingAction(async () => {
-      const response = await updateUserSource(sourceId, editingSourceForm);
-      const nextCustomSources = customSources.map((source) => (
-        source.id === sourceId ? response.source : source
-      ));
-      syncCustomSourcesState(nextCustomSources);
-      cancelEditSource();
+      await persistSourceUpdate(sourceId);
     }, { globalError: false, onError: setSourceError });
-  }, [cancelEditSource, customSources, editingSourceForm, runSavingAction, syncCustomSourcesState]);
+  }, [persistSourceUpdate, runSavingAction]);
 
   const handleDeleteSource = useCallback(async (sourceId) => {
     await runSavingAction(async () => {

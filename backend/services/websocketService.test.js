@@ -71,19 +71,19 @@ describe('websocketService', () => {
     websocketService.initialize({});
   });
 
-  test('authenticates a socket and stores the user context', () => {
+  test('authenticates a socket from its backend session cookie and ignores auth payload tokens', () => {
     const socket = createSocket('socket-1', {
-      auth: { token: 'session-token' },
-      headers: {}
+      auth: { token: 'legacy-session-token' },
+      headers: { cookie: 'newsflow_session=cookie-token' }
     });
     const next = jest.fn();
 
     ioMock.middleware(socket, next);
 
-    expect(authMock.resolveAuthenticatedSession).toHaveBeenCalledWith(expect.objectContaining({
-      authToken: 'session-token',
+    expect(authMock.resolveAuthenticatedSession).toHaveBeenCalledWith({
+      headers: { cookie: 'newsflow_session=cookie-token' },
       touchActivitySeconds: 60
-    }));
+    });
     expect(socket.data).toMatchObject({
       userId: 'user-1',
       username: 'alice',
@@ -144,14 +144,18 @@ describe('websocketService', () => {
       }
     ]);
 
-    expect(socketOne.emit).toHaveBeenCalledWith('news:update', expect.objectContaining({
+    const socketOnePayload = socketOne.emit.mock.calls[0][1];
+    const socketTwoPayload = socketTwo.emit.mock.calls[0][1];
+    expect(socketOnePayload).toEqual({
       count: 1,
-      data: [expect.objectContaining({ id: 'group-1' })]
-    }));
-    expect(socketTwo.emit).toHaveBeenCalledWith('news:update', expect.objectContaining({
+      groupIds: ['group-1'],
+      timestamp: expect.any(String)
+    });
+    expect(socketTwoPayload).toEqual({
       count: 1,
-      data: [expect.objectContaining({ id: 'group-2' })]
-    }));
+      groupIds: ['group-2'],
+      timestamp: expect.any(String)
+    });
   });
 
   test('matches private custom-source updates against domain source filters', () => {
@@ -281,9 +285,9 @@ describe('websocketService', () => {
 
     expect(socket.emit).toHaveBeenCalledWith('news:update', expect.objectContaining({
       count: 1,
-      groupIds: ['group-1'],
-      data: [expect.objectContaining({ id: 'group-1' })]
+      groupIds: ['group-1']
     }));
+    expect(socket.emit.mock.calls[0][1]).not.toHaveProperty('data');
   });
 
   test('broadcasts feed refresh events only to targeted users', () => {
@@ -297,11 +301,13 @@ describe('websocketService', () => {
 
     websocketService.broadcastFeedRefresh({ userIds: ['user-1'], reason: 'topics' });
 
-    expect(socketOne.emit).toHaveBeenCalledWith('news:update', expect.objectContaining({
+    expect(socketOne.emit).toHaveBeenCalledWith('news:update', {
       count: 1,
+      groupIds: [],
       refresh: true,
-      reason: 'topics'
-    }));
+      reason: 'topics',
+      timestamp: expect.any(String)
+    });
     expect(socketTwo.emit).not.toHaveBeenCalled();
   });
 

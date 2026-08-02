@@ -67,7 +67,7 @@ describe('auth session cleanup throttling', () => {
 
       const resolved = auth.resolveAuthenticatedSession({
         headers: {
-          authorization: 'Bearer my-session-token'
+          cookie: 'newsflow_session=my-session-token'
         }
       });
 
@@ -101,13 +101,51 @@ describe('auth session cleanup throttling', () => {
 
       const resolved = auth.resolveAuthenticatedSession({
         headers: {
-          authorization: 'Bearer my-session-token'
+          cookie: 'newsflow_session=my-session-token'
         }
       });
 
       expect(resolved.session.expiresAt).toBe(freshExpiresAt);
       expect(databaseMock.refreshSessionExpiry).not.toHaveBeenCalled();
       expect(databaseMock.touchUserActivity).toHaveBeenCalledWith('user-1', expect.any(String), expect.any(Number));
+    });
+  });
+
+  test('authenticates private sessions only from the backend session cookie', () => {
+    jest.resetModules();
+
+    const databaseMock = {
+      findSessionByTokenHash: jest.fn(() => ({
+        tokenHash: 'hashed-token',
+        userId: 'user-1',
+        username: 'alice',
+        expiresAt: new Date(Date.now() + (7 * 24 * 60 * 60 * 1000)).toISOString()
+      })),
+      refreshSessionExpiry: jest.fn(),
+      touchUserActivity: jest.fn(),
+      purgeExpiredSessions: jest.fn(() => 0)
+    };
+
+    jest.doMock('../services/database', () => databaseMock);
+
+    jest.isolateModules(() => {
+      const auth = require('./auth');
+      const resolved = auth.resolveAuthenticatedSession({
+        headers: { cookie: 'other=value; newsflow_session=cookie-token' }
+      });
+
+      expect(resolved.user.username).toBe('alice');
+      expect(databaseMock.findSessionByTokenHash).toHaveBeenCalledWith(auth.hashSessionToken('cookie-token'));
+
+      [
+        { headers: { authorization: 'Bearer bearer-token' } },
+        { headers: { 'x-session-token': 'header-token' } },
+        { authToken: 'socket-token' }
+      ].forEach((options) => {
+        expect(() => auth.resolveAuthenticatedSession(options)).toThrow('Authentication required');
+      });
+
+      expect(databaseMock.findSessionByTokenHash).toHaveBeenCalledTimes(1);
     });
   });
 

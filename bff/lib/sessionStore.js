@@ -66,14 +66,6 @@ class ManagedSqliteStore extends session.Store {
 
   clearExpiredSessions() {
     this.db.prepare('DELETE FROM sessions WHERE expire <= ?').run(new Date().toISOString());
-    this.db.prepare(`
-      DELETE FROM session_users
-      WHERE NOT EXISTS (
-        SELECT 1
-        FROM sessions
-        WHERE sessions.sid = session_users.sid
-      )
-    `).run();
   }
 
   get(sid, callback = () => {}) {
@@ -114,7 +106,6 @@ class ManagedSqliteStore extends session.Store {
   destroy(sid, callback = () => {}) {
     try {
       this.db.prepare('DELETE FROM sessions WHERE sid = ?').run(sid);
-      this.db.prepare('DELETE FROM session_users WHERE sid = ?').run(sid);
       callback(null);
     } catch (error) {
       callback(error);
@@ -150,39 +141,11 @@ function createSessionStore(options = {}) {
 
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA synchronous = NORMAL');
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS session_users (
-      sid TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_session_users_user_id ON session_users (user_id);
-  `);
+  db.exec('DROP TABLE IF EXISTS session_users');
 
   const store = new ManagedSqliteStore(db);
 
   return { store, db };
-}
-
-function destroyStoredSessionsByUserId(sessionDb, userId) {
-  if (!sessionDb || !userId) {
-    return;
-  }
-
-  sessionDb.prepare('DELETE FROM sessions WHERE sid IN (SELECT sid FROM session_users WHERE user_id = ?)').run(userId);
-  sessionDb.prepare('DELETE FROM session_users WHERE user_id = ?').run(userId);
-}
-
-function upsertStoredSessionUser(sessionDb, sid, userId) {
-  if (!sessionDb || !sid || !userId) {
-    return;
-  }
-
-  sessionDb.prepare(`
-    INSERT INTO session_users (sid, user_id)
-    VALUES (?, ?)
-    ON CONFLICT(sid) DO UPDATE SET user_id = excluded.user_id
-  `).run(sid, userId);
 }
 
 function destroySession(req) {
@@ -284,28 +247,12 @@ function getBackendSessionCookieFromRequest(req) {
   return backendSessionCookie;
 }
 
-async function persistSessionUserId(req, userId, sessionDb = null) {
-  if (!req.session || !userId) {
-    return;
-  }
-
-  if (req.session.userId !== userId) {
-    req.session.userId = userId;
-    await saveExpressSession(req.session);
-  }
-
-  upsertStoredSessionUser(sessionDb, req.sessionID, userId);
-}
-
 module.exports = {
   buildSessionMiddleware,
   createSessionStore,
   destroySession,
-  destroyStoredSessionsByUserId,
   getBackendSessionCookieFromRequest,
   loadUpgradeSession,
   normalizeSessionState,
-  persistSessionUserId,
-  saveExpressSession,
-  upsertStoredSessionUser
+  saveExpressSession
 };

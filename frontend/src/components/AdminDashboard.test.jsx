@@ -79,7 +79,7 @@ describe('AdminDashboard', () => {
     }));
 
     try {
-      render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} onUserUpdate={vi.fn()} />);
+      render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} patchSession={vi.fn()} />);
 
       expect(fetchAdminUsers).toHaveBeenCalledTimes(1);
 
@@ -118,7 +118,7 @@ describe('AdminDashboard', () => {
       anonymousPublicApiRequests: 9
     }));
 
-    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} onUserUpdate={vi.fn()} />);
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} patchSession={vi.fn()} />);
 
     expect(await screen.findByText('Admin dashboard')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Switch to dark theme' })).toBeInTheDocument();
@@ -144,7 +144,7 @@ describe('AdminDashboard', () => {
       }
     });
 
-    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} onUserUpdate={vi.fn()} />);
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} patchSession={vi.fn()} />);
 
     expect(await screen.findByText('Admin requests are temporarily limited.')).toBeInTheDocument();
   });
@@ -162,7 +162,7 @@ describe('AdminDashboard', () => {
     });
     deleteAdminUser.mockResolvedValue({ success: true });
 
-    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} onUserUpdate={vi.fn()} />);
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} patchSession={vi.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: '🔑 Reset' }));
 
@@ -188,7 +188,7 @@ describe('AdminDashboard', () => {
       .mockRejectedValueOnce(new Error('Reload failed'));
     deleteAdminUser.mockResolvedValue({ success: true });
 
-    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} onUserUpdate={vi.fn()} />);
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} patchSession={vi.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
 
@@ -216,10 +216,10 @@ describe('AdminDashboard', () => {
           t={t}
           currentUser={userState}
           onLogout={vi.fn()}
-          onUserUpdate={(settings) => {
+          patchSession={(patch) => {
             setUserState((current) => ({
               ...current,
-              settings,
+              ...patch,
             }));
           }}
         />

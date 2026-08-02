@@ -2,7 +2,9 @@ import { act, renderHook } from '@testing-library/react';
 import useSettingsPanelState from './useSettingsPanelState';
 import {
   addUserSource,
+  createApiToken,
   deleteUserSource,
+  revokeApiToken,
   updateUserSource,
   updateUserSettings
 } from '../../services/api';
@@ -22,14 +24,14 @@ vi.mock('../../services/api', () => ({
 const baseCurrentUser = createTestCurrentUser({ user: { id: 'user-1', username: 'alice' } });
 
 const renderSettingsHook = (overrides = {}) => {
-  const onUserUpdate = overrides.onUserUpdate || vi.fn();
+  const patchSession = overrides.patchSession || vi.fn();
   const result = renderHook(() => useSettingsPanelState({
     currentUser: overrides.currentUser || baseCurrentUser,
     availableSources: overrides.availableSources || [],
-    onUserUpdate
+    patchSession
   }));
 
-  return { ...result, onUserUpdate };
+  return { ...result, patchSession };
 };
 
 describe('useSettingsPanelState', () => {
@@ -40,7 +42,7 @@ describe('useSettingsPanelState', () => {
   test('keeps a changed setting local until save', async () => {
     const nextSettings = { ...baseCurrentUser.settings, defaultLanguage: 'it' };
     updateUserSettings.mockResolvedValue({ settings: nextSettings });
-    const { result, onUserUpdate } = renderSettingsHook();
+    const { result, patchSession } = renderSettingsHook();
 
     act(() => {
       result.current.setSetting('defaultLanguage', 'it');
@@ -57,7 +59,7 @@ describe('useSettingsPanelState', () => {
     expect(updateUserSettings).toHaveBeenCalledWith({ defaultLanguage: 'it' });
     expect(result.current.settings).toEqual(nextSettings);
     expect(result.current.hasUnsavedChanges).toBe(false);
-    expect(onUserUpdate).toHaveBeenCalledWith(expect.objectContaining({ settings: nextSettings }));
+    expect(patchSession).toHaveBeenCalledWith(expect.objectContaining({ settings: nextSettings }));
   });
 
   test('persists reader text width locally after save', async () => {
@@ -113,11 +115,11 @@ describe('useSettingsPanelState', () => {
   });
 
   test('preserves a draft while merging newer parent settings', async () => {
-    const onUserUpdate = vi.fn();
+    const patchSession = vi.fn();
     const { result, rerender } = renderHook(({ currentUser }) => useSettingsPanelState({
       currentUser,
       availableSources: [],
-      onUserUpdate
+      patchSession
     }), { initialProps: { currentUser: baseCurrentUser } });
     act(() => {
       result.current.setSetting('themeMode', 'dark');
@@ -148,7 +150,7 @@ describe('useSettingsPanelState', () => {
       ...externallyUpdatedUser.settings,
       themeMode: 'dark'
     });
-    expect(onUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(patchSession).toHaveBeenCalledWith(expect.objectContaining({
       settings: expect.objectContaining({
         themeMode: 'dark',
         lastSeenReleaseNotesVersion: '3.5.11'
@@ -165,11 +167,11 @@ describe('useSettingsPanelState', () => {
       language: 'en'
     };
     addUserSource.mockImplementationOnce(() => new Promise((resolve) => { resolveAddSource = resolve; }));
-    const onUserUpdate = vi.fn();
+    const patchSession = vi.fn();
     const { result, rerender } = renderHook(({ currentUser }) => useSettingsPanelState({
       currentUser,
       availableSources: [],
-      onUserUpdate
+      patchSession
     }), { initialProps: { currentUser: baseCurrentUser } });
     let save;
 
@@ -195,7 +197,7 @@ describe('useSettingsPanelState', () => {
     });
 
     expect(result.current.settings.lastSeenReleaseNotesVersion).toBe('3.5.11');
-    expect(onUserUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(patchSession).toHaveBeenLastCalledWith(expect.objectContaining({
       settings: expect.objectContaining({ lastSeenReleaseNotesVersion: '3.5.11' }),
       customSources: [source]
     }));
@@ -297,6 +299,29 @@ describe('useSettingsPanelState', () => {
     expect(result.current.customSources).toEqual([]);
   });
 
+  test('adds a custom source immediately without replacing other session fields', async () => {
+    const source = {
+      id: 'source-1',
+      name: 'Example Feed',
+      url: 'https://example.com/rss',
+      language: 'en'
+    };
+    addUserSource.mockResolvedValue({ source });
+    const { result, patchSession } = renderSettingsHook();
+
+    act(() => {
+      result.current.setSourceForm({ url: source.url });
+    });
+
+    await act(async () => {
+      await result.current.handleAddSource({ preventDefault: vi.fn() });
+    });
+
+    expect(result.current.customSources).toEqual([source]);
+    expect(result.current.sourceForm).toEqual({ url: '' });
+    expect(patchSession).toHaveBeenLastCalledWith({ customSources: [source] });
+  });
+
   test('updates a custom source immediately', async () => {
     const currentUser = {
       ...baseCurrentUser,
@@ -314,7 +339,7 @@ describe('useSettingsPanelState', () => {
       language: 'it'
     };
     updateUserSource.mockResolvedValue({ source: updatedSource });
-    const { result, onUserUpdate } = renderSettingsHook({ currentUser });
+    const { result, patchSession } = renderSettingsHook({ currentUser });
 
     act(() => {
       result.current.setSetting('themeMode', 'dark');
@@ -333,7 +358,7 @@ describe('useSettingsPanelState', () => {
     expect(result.current.customSources).toEqual([updatedSource]);
     expect(result.current.settings.themeMode).toBe('dark');
     expect(result.current.hasUnsavedChanges).toBe(true);
-    expect(onUserUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ customSources: [updatedSource] }));
+    expect(patchSession).toHaveBeenLastCalledWith({ customSources: [updatedSource] });
   });
 
   test('cleans a deleted custom source from persisted exclusions', async () => {
@@ -351,7 +376,7 @@ describe('useSettingsPanelState', () => {
       }]
     };
     deleteUserSource.mockResolvedValue({ success: true });
-    const { result, onUserUpdate } = renderSettingsHook({ currentUser });
+    const { result, patchSession } = renderSettingsHook({ currentUser });
 
     await act(async () => {
       await result.current.handleDeleteSource('source-1');
@@ -359,9 +384,32 @@ describe('useSettingsPanelState', () => {
 
     expect(result.current.settings.excludedSourceIds).toEqual([]);
     expect(result.current.customSources).toEqual([]);
-    expect(onUserUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(patchSession).toHaveBeenLastCalledWith(expect.objectContaining({
       settings: expect.objectContaining({ excludedSourceIds: [] }),
       customSources: []
     }));
+  });
+
+  test('patches only API token session state when creating and revoking a token', async () => {
+    const tokenInfo = { id: 'token-1', expiresAt: '2026-09-01T00:00:00.000Z' };
+    createApiToken.mockResolvedValue({ token: 'raw-token', tokenInfo });
+    revokeApiToken.mockResolvedValue({ success: true });
+    const { result, patchSession } = renderSettingsHook();
+
+    await act(async () => {
+      await result.current.handleCreateApiToken();
+    });
+
+    expect(result.current.apiToken).toEqual(tokenInfo);
+    expect(result.current.newApiToken).toBe('raw-token');
+    expect(patchSession).toHaveBeenLastCalledWith({ apiToken: tokenInfo });
+
+    await act(async () => {
+      await result.current.handleRevokeApiToken();
+    });
+
+    expect(result.current.apiToken).toBeNull();
+    expect(result.current.newApiToken).toBe('');
+    expect(patchSession).toHaveBeenLastCalledWith({ apiToken: null });
   });
 });

@@ -40,7 +40,7 @@ const UnsavedSettingsDialog = ({ t, saving, onCancel, onDiscard, onSave }) => (
   </ModalDialog>
 );
 
-const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, onUserUpdate, restoreFocusRef }) => {
+const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, patchSession, restoreFocusRef }) => {
   const [confirmingClose, setConfirmingClose] = useState(false);
   const publicApiAuthenticatedEnabled = currentUser?.features?.publicApi?.authenticatedEnabled === true;
   const {
@@ -77,7 +77,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
   } = useSettingsPanelState({
     currentUser,
     availableSources,
-    onUserUpdate
+    patchSession
   });
 
   useEffect(() => {

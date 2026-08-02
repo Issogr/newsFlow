@@ -21,7 +21,7 @@ function formatDateTime(value) {
   return parsed.toLocaleString();
 }
 
-const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
+const AdminDashboard = ({ t, currentUser, onLogout, patchSession }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [themeSaving, setThemeSaving] = useState(false);
@@ -241,7 +241,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, onUserUpdate }) => {
     try {
       const response = await updateUserSettings({ themeMode: nextThemeMode });
       if (isMountedRef.current) {
-        onUserUpdate?.(response.settings);
+        patchSession({ settings: response.settings });
       }
     } catch (requestError) {
       if (isMountedRef.current) {

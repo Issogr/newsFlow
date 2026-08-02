@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CURRENT_CHANGELOG_ENTRY, getCurrentChangelog } from './config/changelog';
-import { createTranslator, resolvePreferredLocale } from './i18n';
+import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from './i18n';
 import AuthCard, { AUTH_PRIMARY_BUTTON_CLASS_NAME } from './components/AuthCard';
 import InlineAlert from './components/InlineAlert';
 import { getApiErrorStatus } from './utils/apiError';
@@ -205,6 +205,15 @@ function App() {
   }, [themeMode]);
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch {
+      // Keep the runtime locale even when browser storage is unavailable.
+    }
+    document.documentElement.lang = locale;
+  }, [locale]);
+
+  useEffect(() => {
     setReleaseNotesState({ noticeHiddenVersion: '', saving: false, modalOpen: false });
   }, [authData?.user?.id]);
 
@@ -254,10 +263,10 @@ function App() {
     setAuthError(null);
   }, []);
 
-  const handleUserSettingsUpdate = useCallback((settings) => {
+  const patchSession = useCallback((patch) => {
     setAuthData((current) => (current ? {
       ...current,
-      settings
+      ...patch
     } : current));
   }, []);
 
@@ -277,10 +286,7 @@ function App() {
 
     try {
       const response = await updateUserSettings({ lastSeenReleaseNotesVersion: version });
-      setAuthData((current) => (current ? {
-        ...current,
-        settings: response.settings
-      } : current));
+      patchSession({ settings: response.settings });
     } catch {
       // Keep the notice dismissed for this session; persistence retries on the next login.
     } finally {
@@ -289,7 +295,7 @@ function App() {
         saving: false
       }));
     }
-  }, [needsReleaseNotesAck]);
+  }, [needsReleaseNotesAck, patchSession]);
 
   const handleOpenReleaseNotes = useCallback((eventOrElement) => {
     releaseNotesOpenerRef.current = eventOrElement?.currentTarget || eventOrElement || document.activeElement;
@@ -377,13 +383,15 @@ function App() {
             t={t}
             currentUser={authData}
             onLogout={handleLogout}
-            onUserUpdate={handleUserSettingsUpdate}
+            patchSession={patchSession}
           />
         ) : (
           <NewsAggregator
             currentUser={authData}
+            locale={locale}
+            t={t}
             onLogout={handleLogout}
-            onUserUpdate={setAuthData}
+            patchSession={patchSession}
             currentChangelogVersion={releaseNotes.version}
             onOpenReleaseNotes={handleOpenReleaseNotes}
           />

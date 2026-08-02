@@ -25,7 +25,6 @@ This file documents the environment variables and build arguments that can chang
 | `NODE_ENV` | Backend, BFF | Docker images set `production`; otherwise unset/development behavior | Enables production security defaults, required secret checks, production logging defaults, and less detailed backend error output. Tests commonly set `test`. |
 | `PORT` | Backend, BFF | Backend `5000`; BFF `80` | HTTP listen port. BFF validates `1..65535`. |
 | `SESSION_TTL_DAYS` | Backend, BFF | `30` | Browser and backend auth session lifetime in days. Minimum `1`. |
-| `INTERNAL_SERVICE_NAME` | Backend, BFF | `bff` | Internal service identity sent by the BFF and checked by the backend for private traffic. Keep the same on both sides. |
 | `APP_BASE_URL` | Backend, BFF | Compose `http://localhost`; OpenRouter referer fallback `http://localhost` | Canonical public app URL. Used for setup links, secure-cookie decisions, same-origin checks, and OpenRouter referer metadata. Set to `https://your-domain` in HTTPS deployments. |
 | `FRONTEND_BASE_URL` | Backend, BFF | Backend setup-link fallback `http://localhost:3000` in one path | Legacy alias used when `APP_BASE_URL` is not set. Prefer `APP_BASE_URL`. |
 | `COOKIE_SECURE` | Backend, BFF | `auto` | Controls `Secure` on session cookies. `auto` uses secure cookies when `APP_BASE_URL` starts with `https://`; `true` always requires HTTPS; `false` disables secure cookies. |

@@ -22,13 +22,6 @@ function deleteOwnedArticles(database, ownerId, sourceId = '') {
     : 'owner_user_id = ?';
   const params = sourceScoped ? [ownerId, sourceId] : [ownerId];
 
-  database.prepare(`
-    DELETE FROM article_search
-    WHERE article_id IN (
-      SELECT id FROM articles WHERE ${ownerFilter}
-    )
-  `).run(...params);
-
   return database.prepare(`
     DELETE FROM articles
     WHERE ${ownerFilter}

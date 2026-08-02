@@ -62,10 +62,13 @@ describe('database migrations', () => {
     const articleIndexNames = sqlite.prepare('PRAGMA index_list(articles)').all().map((index) => index.name);
     const userIndexNames = sqlite.prepare('PRAGMA index_list(users)').all().map((index) => index.name);
     const topicIndexNames = sqlite.prepare('PRAGMA index_list(article_topics)').all().map((index) => index.name);
+    const articleSearchTriggerNames = sqlite.prepare(`
+      SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'article_search_%'
+    `).all().map((trigger) => trigger.name);
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('42');
+    expect(migrationVersion).toBe('43');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -98,11 +101,17 @@ describe('database migrations', () => {
     expect(readThematicSummaryColumns).toEqual(expect.arrayContaining(['user_id', 'summary_id', 'read_at']));
     expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['topic_key', 'period_start', 'period_end', 'summary_text', 'summary_text_en', 'summary_text_it', 'sources_json', 'failure_category', 'retry_count']));
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
-    expect(podcastSummaryColumns).toEqual(expect.arrayContaining(['period_start', 'period_end', 'script_text', 'title_en', 'script_text_en', 'title_it', 'script_text_it', 'audio_blob', 'audio_status', 'audio_voice', 'sources_json', 'failure_category', 'retry_count', 'audio_failure_category', 'audio_retry_count', 'audio_failed_at']));
+    expect(podcastSummaryColumns).toEqual(expect.arrayContaining(['period_start', 'period_end', 'script_text', 'title_en', 'script_text_en', 'title_it', 'script_text_it', 'sources_json', 'failure_category', 'retry_count']));
+    expect(podcastSummaryColumns).toEqual(expect.not.arrayContaining(['audio_blob', 'audio_status', 'audio_voice', 'audio_model', 'audio_mime_type', 'audio_error_message', 'audio_failure_category', 'audio_retry_count', 'audio_failed_at']));
     expect(podcastSummaryAudioColumns).toEqual(expect.arrayContaining(['podcast_id', 'locale', 'audio_blob', 'audio_status', 'audio_model', 'audio_voice', 'audio_retry_count', 'audio_failed_at']));
     expect(articleIndexNames).toContain('idx_articles_owner_published_id');
     expect(userIndexNames).toContain('idx_users_username_lower');
     expect(topicIndexNames).toContain('idx_article_topics_topic_article');
+    expect(articleSearchTriggerNames).toEqual(expect.arrayContaining([
+      'article_search_after_insert',
+      'article_search_after_update',
+      'article_search_after_delete'
+    ]));
   });
 
   test('refuses to start with case-insensitive duplicate usernames', () => {
@@ -146,7 +155,7 @@ describe('database migrations', () => {
     const width = migratedDb.prepare('SELECT reader_text_width AS readerTextWidth FROM user_settings WHERE user_id = ?').get('user-1')?.readerTextWidth;
     migratedDb.close();
 
-    expect(migrationVersion).toBe('42');
+    expect(migrationVersion).toBe('43');
     expect(width).toBe('default');
   });
 
@@ -200,7 +209,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('42');
+    expect(migratedVersion).toBe('43');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
@@ -213,7 +222,7 @@ describe('database migrations', () => {
     expect(userSourceColumns).toContain('icon_url');
   });
 
-  test('opens an existing database already on the current schema version', () => {
+  test('migrates an existing schema version 15 database', () => {
     const sqlite = new SqliteDatabase(dbPath);
 
     sqlite.exec(`
@@ -285,7 +294,7 @@ describe('database migrations', () => {
         used_at TEXT
       );
 
-       INSERT INTO app_meta (key, value) VALUES ('migration_version', '17');
+       INSERT INTO app_meta (key, value) VALUES ('migration_version', '15');
        INSERT INTO articles (id, source_id, source_name, title, canonical_url) VALUES ('article-1', 'ansa', 'ANSA', 'Headline', 'https://example.com/story');
        INSERT INTO article_topics (article_id, topic) VALUES ('article-1', 'economy');
     `);
@@ -321,7 +330,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('42');
+    expect(migratedVersion).toBe('43');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason', 'clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
@@ -420,6 +429,10 @@ describe('database migrations', () => {
       SET value = '23'
       WHERE key = 'migration_version'
     `).run();
+    sqlite.exec(`
+      DROP TABLE podcast_summary_audio;
+      DROP TABLE podcast_summaries;
+    `);
 
     database.closeDb();
     jest.resetModules();
@@ -435,7 +448,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article) => article.id);
 
-    expect(migratedVersion).toBe('42');
+    expect(migratedVersion).toBe('43');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -478,8 +491,17 @@ describe('database migrations', () => {
 
       CREATE TABLE podcast_summaries (
         id TEXT PRIMARY KEY,
-        period_start TEXT NOT NULL DEFAULT '',
-        period_end TEXT NOT NULL DEFAULT '',
+        period_start TEXT NOT NULL,
+        period_end TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        script_text TEXT NOT NULL DEFAULT '',
+        title_en TEXT NOT NULL DEFAULT '',
+        script_text_en TEXT NOT NULL DEFAULT '',
+        title_it TEXT NOT NULL DEFAULT '',
+        script_text_it TEXT NOT NULL DEFAULT '',
+        sources_json TEXT NOT NULL DEFAULT '[]',
+        article_count INTEGER NOT NULL DEFAULT 0,
+        script_model TEXT NOT NULL DEFAULT '',
         audio_model TEXT NOT NULL DEFAULT '',
         audio_voice TEXT NOT NULL DEFAULT '',
         audio_mime_type TEXT NOT NULL DEFAULT '',
@@ -489,7 +511,12 @@ describe('database migrations', () => {
         audio_failure_category TEXT NOT NULL DEFAULT '',
         audio_retry_count INTEGER NOT NULL DEFAULT 0,
         audio_failed_at TEXT,
-        generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        status TEXT NOT NULL DEFAULT 'completed',
+        failure_category TEXT NOT NULL DEFAULT '',
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        error_message TEXT,
+        generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(period_start, period_end)
       );
 
       INSERT INTO app_meta (key, value) VALUES ('migration_version', '35');
@@ -521,7 +548,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('42');
+    expect(migratedVersion).toBe('43');
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
     expect(row).toEqual({
       summaryText: 'English text [1]',
@@ -533,6 +560,8 @@ describe('database migrations', () => {
   test('migrates legacy podcast audio into per-locale audio rows', () => {
     const sqlite = new SqliteDatabase(dbPath);
     const legacyAudio = Buffer.from('legacy-italian-audio');
+    const parentMirrorAudio = Buffer.from('differing-parent-mirror');
+    const englishChildAudio = Buffer.from('authoritative-english-audio');
 
     sqlite.exec(`
       CREATE TABLE app_meta (
@@ -544,6 +573,15 @@ describe('database migrations', () => {
         id TEXT PRIMARY KEY,
         period_start TEXT NOT NULL DEFAULT '',
         period_end TEXT NOT NULL DEFAULT '',
+        title TEXT NOT NULL DEFAULT '',
+        script_text TEXT NOT NULL DEFAULT '',
+        title_en TEXT NOT NULL DEFAULT '',
+        script_text_en TEXT NOT NULL DEFAULT '',
+        title_it TEXT NOT NULL DEFAULT '',
+        script_text_it TEXT NOT NULL DEFAULT '',
+        sources_json TEXT NOT NULL DEFAULT '[]',
+        article_count INTEGER NOT NULL DEFAULT 0,
+        script_model TEXT NOT NULL DEFAULT '',
         audio_model TEXT NOT NULL DEFAULT '',
         audio_voice TEXT NOT NULL DEFAULT '',
         audio_mime_type TEXT NOT NULL DEFAULT '',
@@ -553,20 +591,93 @@ describe('database migrations', () => {
         audio_failure_category TEXT NOT NULL DEFAULT '',
         audio_retry_count INTEGER NOT NULL DEFAULT 0,
         audio_failed_at TEXT,
-        generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        status TEXT NOT NULL DEFAULT 'completed',
+        failure_category TEXT NOT NULL DEFAULT '',
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        error_message TEXT,
+        generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(period_start, period_end)
       );
 
-      INSERT INTO app_meta (key, value) VALUES ('migration_version', '36');
+      CREATE TABLE podcast_summary_audio (
+        podcast_id TEXT NOT NULL,
+        locale TEXT NOT NULL,
+        audio_model TEXT NOT NULL DEFAULT '',
+        audio_voice TEXT NOT NULL DEFAULT '',
+        audio_mime_type TEXT NOT NULL DEFAULT '',
+        audio_blob BLOB,
+        audio_status TEXT NOT NULL DEFAULT 'not_available',
+        audio_error_message TEXT,
+        audio_failure_category TEXT NOT NULL DEFAULT '',
+        audio_retry_count INTEGER NOT NULL DEFAULT 0,
+        audio_failed_at TEXT,
+        generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (podcast_id, locale),
+        FOREIGN KEY (podcast_id) REFERENCES podcast_summaries (id) ON DELETE CASCADE
+      );
+
+      INSERT INTO app_meta (key, value) VALUES ('migration_version', '42');
     `);
     sqlite.prepare(`
       INSERT INTO podcast_summaries (
-        id, audio_model, audio_voice, audio_mime_type, audio_blob, audio_status, generated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run('legacy-podcast', 'tts-model', 'Charon', 'audio/mpeg', legacyAudio, 'completed', '2026-05-21T13:05:00.000Z');
+        id, period_start, period_end, title, script_text, title_it, script_text_it,
+        audio_model, audio_voice, audio_mime_type, audio_blob, audio_status, generated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'legacy-podcast',
+      '2026-05-21T07:00:00.000Z',
+      '2026-05-21T13:00:00.000Z',
+      'Podcast news',
+      'Testo italiano',
+      'Podcast news',
+      'Testo italiano',
+      'tts-model',
+      'Charon',
+      'audio/mpeg',
+      legacyAudio,
+      'completed',
+      '2026-05-21T13:05:00.000Z'
+    );
+    sqlite.prepare(`
+      INSERT INTO podcast_summaries (
+        id, period_start, period_end, title, script_text, title_en, script_text_en,
+        audio_model, audio_voice, audio_mime_type, audio_blob, audio_status, generated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'english-child-podcast',
+      '2026-05-21T13:00:00.000Z',
+      '2026-05-21T19:00:00.000Z',
+      'English podcast',
+      'English script',
+      'English podcast',
+      'English script',
+      'parent-model',
+      'ParentVoice',
+      'audio/wav',
+      parentMirrorAudio,
+      'completed',
+      '2026-05-21T19:05:00.000Z'
+    );
+    sqlite.prepare(`
+      INSERT INTO podcast_summary_audio (
+        podcast_id, locale, audio_model, audio_voice, audio_mime_type, audio_blob, audio_status, generated_at
+      ) VALUES (?, 'en', ?, ?, ?, ?, 'completed', ?)
+    `).run(
+      'english-child-podcast',
+      'child-model',
+      'EnglishVoice',
+      'audio/mpeg',
+      englishChildAudio,
+      '2026-05-21T19:06:00.000Z'
+    );
     sqlite.close();
 
     database = require('./database');
     database.getDb();
+    const summary = database.getPodcastSummary('2026-05-21T07:00:00.000Z', '2026-05-21T13:00:00.000Z');
+    const audio = database.getPodcastSummaryAudio('legacy-podcast', 'it');
+    const existingSummary = database.getPodcastSummary('2026-05-21T13:00:00.000Z', '2026-05-21T19:00:00.000Z');
+    const existingAudio = database.getPodcastSummaryAudio('english-child-podcast', 'en');
 
     const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const migratedVersion = migratedDb.prepare(`
@@ -579,16 +690,137 @@ describe('database migrations', () => {
       FROM podcast_summary_audio
       WHERE podcast_id = 'legacy-podcast'
     `).get();
+    const existingChildRows = migratedDb.prepare(`
+      SELECT podcast_id AS podcastId, locale, audio_model AS audioModel,
+             audio_voice AS audioVoice, audio_blob AS audioBlob
+      FROM podcast_summary_audio
+      WHERE podcast_id = 'english-child-podcast'
+      ORDER BY locale
+    `).all();
+    const parentColumns = migratedDb.prepare('PRAGMA table_info(podcast_summaries)').all().map((column) => column.name);
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('42');
+    expect(migratedVersion).toBe('43');
     expect(audioRow).toEqual({
       podcastId: 'legacy-podcast',
       locale: 'it',
       audioBlob: legacyAudio,
       audioStatus: 'completed'
     });
+    expect(parentColumns).toEqual(expect.not.arrayContaining(['audio_blob', 'audio_status', 'audio_model', 'audio_voice']));
+    expect(summary).toEqual(expect.objectContaining({
+      id: 'legacy-podcast',
+      audioLocale: 'it',
+      audioStatus: 'completed',
+      audioVoice: 'Charon',
+      audioByLocale: expect.objectContaining({ it: expect.objectContaining({ audioStatus: 'completed' }) })
+    }));
+    expect(audio).toEqual({ data: legacyAudio, mimeType: 'audio/mpeg' });
+    expect(existingChildRows).toEqual([{
+      podcastId: 'english-child-podcast',
+      locale: 'en',
+      audioModel: 'child-model',
+      audioVoice: 'EnglishVoice',
+      audioBlob: englishChildAudio
+    }]);
+    expect(existingSummary).toEqual(expect.objectContaining({
+      id: 'english-child-podcast',
+      audioLocale: 'en',
+      audioModel: 'child-model',
+      audioVoice: 'EnglishVoice',
+      availableAudioLocales: ['en']
+    }));
+    expect(existingAudio).toEqual({ data: englishChildAudio, mimeType: 'audio/mpeg' });
+  });
+
+  test('rejects a future schema before creating current-schema objects', () => {
+    const sqlite = new SqliteDatabase(dbPath);
+    sqlite.exec(`
+      CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      INSERT INTO app_meta (key, value) VALUES ('migration_version', '99');
+    `);
+    sqlite.close();
+
+    database = require('./database');
+    expect(() => database.getDb()).toThrow('Unsupported database schema version 99');
+
+    const unchangedDb = new SqliteDatabase(dbPath, { readOnly: true });
+    const tableNames = unchangedDb.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((row) => row.name);
+    const migrationVersion = unchangedDb.prepare("SELECT value FROM app_meta WHERE key = 'migration_version'").get()?.value;
+    unchangedDb.close();
+
+    expect(tableNames).toEqual(['app_meta']);
+    expect(migrationVersion).toBe('99');
+  });
+
+  test('rolls back a failed schema transition and its version update', () => {
+    const sqlite = new SqliteDatabase(dbPath);
+    sqlite.exec(`
+      CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        role TEXT NOT NULL DEFAULT 'user'
+      );
+      INSERT INTO users (id, username) VALUES ('user-1', 'admin'), ('user-2', 'ADMIN');
+      INSERT INTO app_meta (key, value) VALUES ('migration_version', '29');
+    `);
+    sqlite.close();
+
+    database = require('./database');
+    expect(() => database.getDb()).toThrow('case-insensitive duplicate username');
+
+    const rolledBackDb = new SqliteDatabase(dbPath, { readOnly: true });
+    const migrationVersion = rolledBackDb.prepare("SELECT value FROM app_meta WHERE key = 'migration_version'").get()?.value;
+    const userColumns = rolledBackDb.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
+    rolledBackDb.close();
+
+    expect(migrationVersion).toBe('29');
+    expect(userColumns).toContain('role');
+  });
+
+  test('rebuilds article search and installs synchronization triggers during migration', () => {
+    database = require('./database');
+    const sqlite = database.getDb();
+    const now = new Date().toISOString();
+    database.upsertArticles([{
+      id: 'migration-search-article',
+      sourceId: primarySource.id,
+      source: primarySource.name,
+      title: 'Old indexed title',
+      description: '',
+      content: '',
+      url: 'https://example.com/migration-search',
+      language: 'en',
+      pubDate: now
+    }]);
+    sqlite.exec(`
+      DROP TRIGGER article_search_after_insert;
+      DROP TRIGGER article_search_after_update;
+      DROP TRIGGER article_search_after_delete;
+      DELETE FROM article_search;
+      INSERT INTO article_search (article_id, title, description, content)
+      VALUES ('stale-search-row', 'Stale only', '', '');
+      UPDATE articles SET title = 'Rebuilt indexed title' WHERE id = 'migration-search-article';
+      UPDATE app_meta SET value = '42' WHERE key = 'migration_version';
+    `);
+    database.closeDb();
+    jest.resetModules();
+    database = require('./database');
+    database.getDb();
+
+    const searchRows = database.getDb().prepare(`
+      SELECT article_id AS articleId FROM article_search ORDER BY article_id
+    `).all();
+    const triggerCount = database.getDb().prepare(`
+      SELECT COUNT(*) AS count FROM sqlite_master
+      WHERE type = 'trigger' AND name LIKE 'article_search_after_%'
+    `).get().count;
+
+    expect(searchRows).toEqual([{ articleId: 'migration-search-article' }]);
+    expect(triggerCount).toBe(3);
+    expect(database.getArticles({ search: 'rebuilt' }).map((article) => article.id)).toEqual(['migration-search-article']);
   });
 
   test('rejects databases on an older schema version', () => {
@@ -736,6 +968,40 @@ describe('database queries and user data', () => {
 
     const recentFiltered = database.getArticles({ recentHours: 1 }, { userId: 'user-1', maxArticleAgeHours: 24 });
     expect(recentFiltered.map((article) => article.id)).toEqual(['private-1', 'global-2', 'global-1']);
+  });
+
+  test('keeps article search synchronized through native insert, update, and delete triggers', () => {
+    const now = new Date().toISOString();
+    const sqlite = database.getDb();
+    sqlite.prepare(`
+      INSERT INTO articles (
+        id, source_id, source_name, title, description, content, url, canonical_url, language, published_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'trigger-search-article',
+      primarySource.id,
+      primarySource.name,
+      'Inserted searchable headline',
+      'Initial searchable description',
+      '',
+      'https://example.com/trigger-search',
+      'https://example.com/trigger-search',
+      'en',
+      now
+    );
+
+    expect(database.getArticles({ search: 'inserted' }).map((article) => article.id)).toEqual(['trigger-search-article']);
+
+    sqlite.prepare('UPDATE articles SET title = ?, description = ? WHERE id = ?').run(
+      'Updated searchable headline',
+      'Replacement text',
+      'trigger-search-article'
+    );
+    expect(database.getArticles({ search: 'inserted' })).toEqual([]);
+    expect(database.getArticles({ search: 'updated' }).map((article) => article.id)).toEqual(['trigger-search-article']);
+
+    sqlite.prepare('DELETE FROM articles WHERE id = ?').run('trigger-search-article');
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM article_search WHERE article_id = ?').get('trigger-search-article').count).toBe(0);
   });
 
   test('uses article ids for stable same-timestamp cursor pagination', () => {
@@ -1308,6 +1574,44 @@ describe('database queries and user data', () => {
       mimeType: 'audio/wav'
     }));
     expect(database.getPodcastSummaryAudio('podcast-summary-test', 'fr')).toBeNull();
+  });
+
+  test('writes child audio against the persisted parent id on period conflict', () => {
+    const periodStart = '2025-05-22T07:00:00.000Z';
+    const periodEnd = '2025-05-22T13:00:00.000Z';
+    database.upsertPodcastSummary({
+      id: 'persisted-podcast-id',
+      periodStart,
+      periodEnd,
+      title: 'Original podcast',
+      scriptText: 'Original script'
+    });
+
+    const summary = database.upsertPodcastSummary({
+      id: 'conflicting-podcast-id',
+      periodStart,
+      periodEnd,
+      title: 'Updated podcast',
+      scriptText: 'Updated script',
+      audioLocale: 'it',
+      audio: { data: Buffer.from('conflict-audio').toString('base64'), mimeType: 'audio/mpeg' },
+      audioStatus: 'completed'
+    });
+    const parentRows = database.getDb().prepare(`
+      SELECT id FROM podcast_summaries WHERE period_start = ? AND period_end = ?
+    `).all(periodStart, periodEnd);
+    const audioRows = database.getDb().prepare(`
+      SELECT podcast_id AS podcastId, locale FROM podcast_summary_audio
+      WHERE podcast_id IN (?, ?)
+    `).all('persisted-podcast-id', 'conflicting-podcast-id');
+
+    expect(summary).toEqual(expect.objectContaining({ id: 'persisted-podcast-id', audioStatus: 'completed', audioLocale: 'it' }));
+    expect(parentRows).toEqual([{ id: 'persisted-podcast-id' }]);
+    expect(audioRows).toEqual([{ podcastId: 'persisted-podcast-id', locale: 'it' }]);
+    expect(database.getPodcastSummaryAudio('persisted-podcast-id', 'it')).toEqual({
+      data: Buffer.from('conflict-audio'),
+      mimeType: 'audio/mpeg'
+    });
   });
 
   test('prunes old summary and podcast windows after replacements exist', () => {

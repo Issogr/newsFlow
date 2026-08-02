@@ -45,7 +45,7 @@ describe('SourceSetupWizard', () => {
         t={t}
         sources={[]}
         currentSettings={{}}
-        onComplete={vi.fn()}
+        patchSession={vi.fn()}
       />
     );
 
@@ -56,7 +56,7 @@ describe('SourceSetupWizard', () => {
         t={t}
         sources={sourceCatalog}
         currentSettings={{}}
-        onComplete={vi.fn()}
+        patchSession={vi.fn()}
       />
     );
 
@@ -80,7 +80,7 @@ describe('SourceSetupWizard', () => {
           excludedSourceIds: ['source-b'],
           excludedSubSourceIds: ['source-group-extra']
         }}
-        onComplete={vi.fn()}
+        patchSession={vi.fn()}
       />
     );
 

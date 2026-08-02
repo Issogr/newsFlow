@@ -174,7 +174,6 @@ describe('bff server', () => {
   const originalEnvValues = {
     BFF_SESSION_SECRET: process.env.BFF_SESSION_SECRET,
     INTERNAL_PROXY_TOKEN: process.env.INTERNAL_PROXY_TOKEN,
-    INTERNAL_SERVICE_NAME: process.env.INTERNAL_SERVICE_NAME,
     TRUST_PROXY: process.env.TRUST_PROXY,
   };
   let backendServer;
@@ -203,7 +202,6 @@ describe('bff server', () => {
 
     process.env.BFF_SESSION_SECRET = 'test-bff-secret';
     process.env.INTERNAL_PROXY_TOKEN = 'test-proxy-token';
-    process.env.INTERNAL_SERVICE_NAME = 'bff';
     process.env.TRUST_PROXY = 'true';
 
     const backendApp = express();
@@ -278,6 +276,7 @@ describe('bff server', () => {
         return;
       }
 
+      backendSessions.delete(`newsflow_session=backend-session-${targetUser.id}`);
       res.json({ success: true, user: targetUser });
     });
 
@@ -328,7 +327,6 @@ describe('bff server', () => {
     expect(bffSessionCookie).not.toContain('newsflow_session=');
     expect(bffSessionCookie).not.toContain('backend-session-user-1');
     expect(sessionDb.prepare('SELECT sess FROM sessions').get().sess).not.toContain('backend-session-user-1');
-    expect(lastBackendHeaders['x-newsflow-service']).toBe('bff');
     expect(lastBackendHeaders['x-newsflow-proxy']).toBe('test-proxy-token');
 
     const meResponse = await request(app)
@@ -595,7 +593,7 @@ describe('bff server', () => {
   test.each([
     '/api/admin/users/user-1',
     '/api/admin/users/user-1/'
-  ])('removes persisted BFF sessions for a deleted user after admin delete %s', async (deletePath) => {
+  ])('clears a revoked user session only after the backend rejects it for %s', async (deletePath) => {
     const aliceBffSessionCookie = await login(app);
     const adminBffSessionCookie = await login(app, { username: 'admin' });
 
@@ -607,41 +605,36 @@ describe('bff server', () => {
       .set('Origin', SAME_ORIGIN)
       .expect(200);
 
+    expect(countRows(sessionDb, 'sessions')).toBe(2);
+
+    const revokedResponse = await request(app)
+      .get('/api/me')
+      .set('Cookie', aliceBffSessionCookie)
+      .expect(401);
+
+    expect(getBffSessionCookie(revokedResponse)).toContain('Max-Age=0');
+    expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
     expect(countRows(sessionDb, 'sessions')).toBe(1);
 
+    lastBackendHeaders = {};
     await request(app)
       .get('/api/me')
       .set('Cookie', aliceBffSessionCookie)
       .expect(401);
 
-    expect(lastBackendHeaders.cookie).not.toBe('newsflow_session=backend-session-user-1');
+    expect(lastBackendHeaders).toEqual({});
   });
 
-  test('repairs the session user index for existing valid sessions', async () => {
-    const aliceBffSessionCookie = await login(app);
-
-    sessionDb.prepare('DELETE FROM session_users').run();
-    expect(countRows(sessionDb, 'session_users')).toBe(0);
-
-    await request(app)
-      .get('/api/me')
-      .set('Cookie', aliceBffSessionCookie)
-      .expect(200);
-
-    expect(countRows(sessionDb, 'session_users', ' WHERE user_id = ?', ['user-1'])).toBe(1);
-  });
-
-  test('removes stale session_users rows when expired sessions are cleaned', async () => {
+  test('stores only persisted sessions and removes them after expiry', async () => {
     await login(app);
 
     expect(countRows(sessionDb, 'sessions')).toBe(1);
-    expect(countRows(sessionDb, 'session_users')).toBe(1);
+    expect(sessionDb.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_users'").get()).toBeUndefined();
 
     sessionDb.prepare('UPDATE sessions SET expire = ?').run(new Date(Date.now() - 1000).toISOString());
     sessionStore.clearExpiredSessions();
 
     expect(countRows(sessionDb, 'sessions')).toBe(0);
-    expect(countRows(sessionDb, 'session_users')).toBe(0);
   });
 
   test('proxies public API routes without requiring a BFF session', async () => {

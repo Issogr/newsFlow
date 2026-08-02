@@ -18,7 +18,6 @@ services:
     environment:
       - SESSION_TTL_DAYS=${SESSION_TTL_DAYS:-30}
       - INTERNAL_PROXY_TOKEN=${INTERNAL_PROXY_TOKEN:?INTERNAL_PROXY_TOKEN must be set}
-      - INTERNAL_SERVICE_NAME=${INTERNAL_SERVICE_NAME:-bff}
       - ALLOWED_ORIGINS=http://localhost,http://localhost:80,http://127.0.0.1,http://127.0.0.1:80,@local-network
       - TRUST_PROXY=true
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
@@ -132,7 +131,6 @@ services:
       - SESSION_TTL_DAYS=${SESSION_TTL_DAYS:-30}
       - INTERNAL_PROXY_TOKEN=${INTERNAL_PROXY_TOKEN:?INTERNAL_PROXY_TOKEN must be set}
       - BFF_SESSION_SECRET=${BFF_SESSION_SECRET:?BFF_SESSION_SECRET must be set}
-      - INTERNAL_SERVICE_NAME=${INTERNAL_SERVICE_NAME:-bff}
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
       - TRUST_PROXY=${TRUST_PROXY:-false}
       - BFF_UPSTREAM_TIMEOUT_MS=${BFF_UPSTREAM_TIMEOUT_MS:-50000}

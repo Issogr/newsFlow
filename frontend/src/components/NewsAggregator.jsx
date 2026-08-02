@@ -17,7 +17,6 @@ import SettingsPanel from './SettingsPanel';
 import SourceSetupWizard from './SourceSetupWizard';
 import useLatestRequest from '../hooks/useLatestRequest';
 import useTopicRefreshSocket from '../hooks/useTopicRefreshSocket';
-import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from '../i18n';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import { setStoredReaderTextSizePreference, setStoredReaderTextWidthPreference } from '../utils/readerPreferences';
 import {
@@ -155,13 +154,10 @@ function filterThematicSummariesForFeatures(summaries = [], featureState = {}) {
   });
 }
 
-const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogVersion, onOpenReleaseNotes }) => {
-  const preferredLanguage = currentUser?.settings?.defaultLanguage;
+const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, currentChangelogVersion, onOpenReleaseNotes }) => {
   const needsSourceSetup = currentUser?.settings?.sourceSetupCompleted === false && !currentUser?.user?.isAdmin;
   const showNewsImages = currentUser?.settings?.showNewsImages !== false;
   const feedbackEnabled = currentUser?.features?.feedback?.enabled === true;
-  const [locale, setLocale] = useState(() => resolvePreferredLocale(preferredLanguage));
-  const t = useMemo(() => createTranslator(locale), [locale]);
   const scrollFrameRef = useRef(null);
   const mobileNavShowTimeoutRef = useRef(null);
   const mobileNavVisibleRef = useRef(true);
@@ -268,19 +264,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
   }), [activeFilters.sourceIds, activeFilters.topics, debouncedSearch, excludedSourceIds, excludedSubSourceIds]);
 
   useOnClickOutside(userMenuRef, () => setUserMenuOpen(false));
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
-    } catch {
-      // Keep the runtime locale even when browser storage is unavailable.
-    }
-    document.documentElement.lang = locale;
-  }, [locale]);
-
-  useEffect(() => {
-    setLocale(resolvePreferredLocale(preferredLanguage));
-  }, [preferredLanguage]);
 
   useEffect(() => {
     setReadThematicSummaryIds(getStoredReadThematicSummaryIds(readThematicSummariesStorageKey));
@@ -680,13 +663,6 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
     loadNews({ page: 1, append: false });
   }, [loadNews]);
 
-  const handleSourceSetupComplete = useCallback((settings) => {
-    onUserUpdate({
-      ...currentUser,
-      settings
-    });
-  }, [currentUser, onUserUpdate]);
-
   const toggleFilter = useCallback((type, value) => {
     setActiveFilters((current) => {
       const values = current[type] || [];
@@ -1024,7 +1000,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           currentChangelogVersion={currentChangelogVersion}
           onClose={() => setSettingsOpen(false)}
           onOpenReleaseNotes={onOpenReleaseNotes}
-          onUserUpdate={onUserUpdate}
+          patchSession={patchSession}
           restoreFocusRef={userMenuButtonRef}
         />
       )}
@@ -1043,7 +1019,7 @@ const NewsAggregator = ({ currentUser, onLogout, onUserUpdate, currentChangelogV
           t={t}
           sources={setupSourceCatalog}
           currentSettings={currentUser.settings}
-          onComplete={handleSourceSetupComplete}
+          patchSession={patchSession}
         />
       )}
 
