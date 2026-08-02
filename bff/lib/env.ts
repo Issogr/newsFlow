@@ -7,18 +7,17 @@ interface IntegerEnvOptions {
 
 export function parseIntegerEnv(name: string, fallbackValue: number, options: IntegerEnvOptions = {}): number {
   const parsed = parseInt(process.env[name] || String(fallbackValue), 10);
-  const fallback = Number(fallbackValue);
 
   if (!Number.isFinite(parsed)) {
-    return fallback;
+    return fallbackValue;
   }
 
   if (options.min !== undefined && Number.isFinite(options.min) && parsed < options.min) {
-    return fallback;
+    return fallbackValue;
   }
 
   if (options.max !== undefined && Number.isFinite(options.max) && parsed > options.max) {
-    return fallback;
+    return fallbackValue;
   }
 
   return parsed;

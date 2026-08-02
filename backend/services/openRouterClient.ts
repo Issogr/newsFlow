@@ -21,12 +21,12 @@ type OpenRouterSdkModule = { OpenRouter: typeof OpenRouterSdkClient };
 type OpenRouterSdkLoader = () => Promise<OpenRouterSdkModule>;
 type OpenRouterClient = InstanceType<typeof OpenRouterSdkClient>;
 
-let openRouterSdkLoader: OpenRouterSdkLoader = async () => await import('@openrouter/sdk');
+let openRouterSdkLoader: OpenRouterSdkLoader = () => import('@openrouter/sdk');
 let openRouterSdkPromise: Promise<OpenRouterSdkModule> | null = null;
 const failureBackoffByModel = new Map<string, { failureCount: number; openedAt: number; retryAt: number }>();
 
 function setOpenRouterSdkLoader(loader?: OpenRouterSdkLoader) {
-  openRouterSdkLoader = loader || (async () => await import('@openrouter/sdk'));
+  openRouterSdkLoader = loader || (() => import('@openrouter/sdk'));
   openRouterSdkPromise = null;
 }
 

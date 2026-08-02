@@ -184,7 +184,7 @@ export function createSessionStore(options: CreateSessionStoreOptions = {}): {
     }
 
     closed = true;
-    return closeDatabase();
+    closeDatabase();
   };
 
   db.exec('PRAGMA journal_mode = WAL');

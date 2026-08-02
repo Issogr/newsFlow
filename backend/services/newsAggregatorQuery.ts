@@ -139,12 +139,9 @@ function expandUserSources(userSources: SourceDefinition[] = []) {
     }));
 }
 
-function getAvailableSources(userContext: UserContext = {}, userSources: SourceDefinition[] | null = null) {
-  const resolvedUserSources = Array.isArray(userSources)
-    ? userSources
-    : (userContext.userId ? database.listUserSources(userContext.userId) : []);
+function getAvailableSources(userSources: SourceDefinition[] = []) {
   const availableSources = new Map<string, AvailableSource>(getConfiguredSourceGroups().map((group: SourceGroup) => [group.id, { ...group, subSources: [...group.subSources] }]));
-  const customGroups = buildDomainSourceGroups(resolvedUserSources);
+  const customGroups = buildDomainSourceGroups(userSources);
 
   customGroups.forEach((group: SourceGroup) => {
     const existingGroup = availableSources.get(group.id);
@@ -473,7 +470,7 @@ async function getNewsFeed(filters: FeedFilters = {}, userContext: UserContext =
     customSourceGroups,
     sourceMetadataCache: new Map()
   };
-  const availableSources = getAvailableSources(userContext, userSources);
+  const availableSources = getAvailableSources(userSources);
 
   const { page, pageSize } = getPagination(filters);
   const groupedPage = fetchGroupedNewsPage(filters, queryOptions, page, pageSize);
@@ -518,7 +515,7 @@ async function getReadLaterFeed(filters: FeedFilters = {}, userContext: UserCont
     customSourceGroups,
     sourceMetadataCache: new Map()
   };
-  const availableSources = getAvailableSources(userContext, userSources);
+  const availableSources = getAvailableSources(userSources);
 
   const { page, pageSize } = getPagination(filters);
   const includeFilters = filters.includeFilters !== false;

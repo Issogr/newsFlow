@@ -127,8 +127,6 @@ const BLOCKED_TOPICS = new Set([
   'rss'
 ]);
 
-const CANONICAL_TOPIC_SET = new Set(CANONICAL_TOPICS.map((topic) => cleanTopicValue(topic)));
-
 function cleanTopicValue(topic: unknown) {
   return String(topic || '')
     .normalize('NFD')
@@ -244,8 +242,7 @@ function normalizeTopic(topic: unknown): string | null {
 }
 
 function isCanonicalTopic(topic: unknown) {
-  const normalized = normalizeTopic(topic);
-  return Boolean(normalized && CANONICAL_TOPIC_SET.has(cleanTopicValue(normalized)));
+  return Boolean(normalizeTopic(topic));
 }
 
 function isMeaningfulTopic(topic: unknown) {

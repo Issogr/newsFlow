@@ -56,10 +56,7 @@ function createConcurrencyLimiter(concurrency = 1) {
 
   function runNext() {
     while (activeCount < limit && queue.length > 0) {
-      const entry = queue.shift();
-      if (!entry) {
-        continue;
-      }
+      const entry = queue.shift()!;
       if (entry.abort) {
         entry.signal?.removeEventListener('abort', entry.abort);
       }

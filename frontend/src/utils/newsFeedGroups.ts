@@ -1,5 +1,5 @@
 import { addTopicEntry } from './topicEntries';
-import type { FeedCursor, NewsArticle, NewsGroup, NewsSource, TopicEntry } from '../types';
+import type { ActiveFilters, FeedCursor, NewsArticle, NewsGroup, NewsSource, TopicEntry } from '../types';
 import type { FeedRequestOptions } from '../services/api';
 
 export function getGroupMergeKeys(group: Partial<NewsGroup> = {}) {
@@ -178,7 +178,7 @@ export function buildFeedRequestParams({
   search,
   signal,
 }: {
-  activeFilters: { sourceIds: string[]; topics: string[] };
+  activeFilters: ActiveFilters;
   append: boolean;
   cursor: FeedCursor | null;
   forceRefresh: boolean;

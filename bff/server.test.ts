@@ -3,7 +3,7 @@ import http = require('node:http');
 import os = require('node:os');
 import path = require('node:path');
 import type { AddressInfo } from 'node:net';
-import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 import cookieSignature = require('cookie-signature');
 import express = require('express');
 import type { Application } from 'express';
@@ -140,7 +140,7 @@ function getBffSessionCookie(response: request.Response): string {
   const setCookies = Array.isArray(setCookieHeader)
     ? setCookieHeader.filter((value): value is string => typeof value === 'string')
     : (typeof setCookieHeader === 'string' ? [setCookieHeader] : []);
-  const cookie = setCookies?.find((value) => value.startsWith('newsflow_bff_session='));
+  const cookie = setCookies.find((value) => value.startsWith('newsflow_bff_session='));
   expect(cookie).toContain('newsflow_bff_session=');
   if (!cookie) {
     throw new Error('Expected a BFF session cookie.');
@@ -201,13 +201,8 @@ function cleanupCreatedApp(created: Partial<CreatedApp> | undefined, tempDir?: s
   }
 }
 
-function countRows(
-  database: DatabaseSync,
-  tableName: string,
-  whereClause = '',
-  params: SQLInputValue[] = [],
-): number {
-  const row = database.prepare(`SELECT COUNT(*) as count FROM ${tableName}${whereClause}`).get(...params) as { count: number };
+function countSessions(database: DatabaseSync): number {
+  const row = database.prepare('SELECT COUNT(*) as count FROM sessions').get() as { count: number };
   return row.count;
 }
 
@@ -431,10 +426,10 @@ describe('bff server', () => {
   });
 
   test('keeps liveness separate from backend readiness', async () => {
-    const sessionCount = countRows(sessionDb, 'sessions');
+    const sessionCount = countSessions(sessionDb);
     await request(app).get('/health').expect(200, { status: 'ok' });
     await request(app).get('/ready').expect(200, { status: 'ok' });
-    expect(countRows(sessionDb, 'sessions')).toBe(sessionCount);
+    expect(countSessions(sessionDb)).toBe(sessionCount);
 
     backendReady = false;
 
@@ -662,7 +657,7 @@ describe('bff server', () => {
     const aliceBffSessionCookie = await login(app);
     const adminBffSessionCookie = await login(app, { username: 'admin' });
 
-    expect(countRows(sessionDb, 'sessions')).toBe(2);
+    expect(countSessions(sessionDb)).toBe(2);
 
     await request(app)
       .delete(deletePath)
@@ -670,7 +665,7 @@ describe('bff server', () => {
       .set('Origin', SAME_ORIGIN)
       .expect(200);
 
-    expect(countRows(sessionDb, 'sessions')).toBe(2);
+    expect(countSessions(sessionDb)).toBe(2);
 
     const revokedResponse = await request(app)
       .get('/api/me')
@@ -679,7 +674,7 @@ describe('bff server', () => {
 
     expect(getBffSessionCookie(revokedResponse)).toContain('Max-Age=0');
     expect(lastBackendHeaders.cookie).toBe('newsflow_session=backend-session-user-1');
-    expect(countRows(sessionDb, 'sessions')).toBe(1);
+    expect(countSessions(sessionDb)).toBe(1);
 
     lastBackendHeaders = {};
     await request(app)
@@ -693,13 +688,13 @@ describe('bff server', () => {
   test('stores only persisted sessions and removes them after expiry', async () => {
     await login(app);
 
-    expect(countRows(sessionDb, 'sessions')).toBe(1);
+    expect(countSessions(sessionDb)).toBe(1);
     expect(sessionDb.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_users'").get()).toBeUndefined();
 
     sessionDb.prepare('UPDATE sessions SET expire = ?').run(new Date(Date.now() - 1000).toISOString());
     sessionStore.clearExpiredSessions();
 
-    expect(countRows(sessionDb, 'sessions')).toBe(0);
+    expect(countSessions(sessionDb)).toBe(0);
   });
 
   test('proxies public API routes without requiring a BFF session', async () => {

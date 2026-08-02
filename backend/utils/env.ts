@@ -41,7 +41,7 @@ function parseIntegerEnv(name: string, fallbackValue: number, options: IntegerEn
 
 function parseBooleanEnv(name: string, fallbackValue = false, options: BooleanEnvOptions = {}) {
   const rawValue = process.env[name];
-  if (rawValue === undefined || rawValue === null || rawValue === '') {
+  if (rawValue === undefined || rawValue === '') {
     return Boolean(fallbackValue);
   }
 

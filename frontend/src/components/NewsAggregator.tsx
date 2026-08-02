@@ -196,7 +196,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
   const [activeView, setActiveView] = useState<'news' | 'readLater'>('news');
-  const [readerState, setReaderState] = useState<{ isOpen: boolean; group: NewsGroup | null; articleId?: string | null }>({ isOpen: false, group: null, articleId: null });
+  const [readerState, setReaderState] = useState<{ group: NewsGroup | null; articleId?: string | null }>({ group: null, articleId: null });
   const [thematicSummaries, setThematicSummaries] = useState<ThematicSummary[]>([]);
   const [selectedThematicSummary, setSelectedThematicSummary] = useState<ThematicSummary | null>(null);
   const [readThematicSummaryIds, setReadThematicSummaryIds] = useState(() => getStoredReadThematicSummaryIds(getReadThematicSummariesStorageKey(currentUser)));
@@ -246,13 +246,13 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
     return getCurrentThematicSummarySelection(selectedThematicSummary, visibleThematicSummaries);
   }, [selectedThematicSummary, visibleThematicSummaries]);
   const currentReaderGroup = useMemo(() => {
-    if (!readerState.isOpen || !readerState.group) {
+    if (!readerState.group) {
       return null;
     }
 
     const readerGroupKeys = getGroupMergeKeys(readerState.group);
     return news.find((group) => groupSharesAnyKey(group, readerGroupKeys)) || readerState.group;
-  }, [news, readerState.group, readerState.isOpen]);
+  }, [news, readerState.group]);
 
   useEffect(() => {
     if (selectedThematicSummary?.id && !displayedThematicSummary) {
@@ -696,11 +696,11 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
   }, []);
 
   const openReader = useCallback((group: NewsGroup, articleId?: string) => {
-    setReaderState({ isOpen: true, group, articleId });
+    setReaderState({ group, articleId });
   }, []);
 
   const closeReader = useCallback(() => {
-    setReaderState({ isOpen: false, group: null, articleId: null });
+    setReaderState({ group: null, articleId: null });
   }, []);
 
   const openThematicSummary = useCallback((summary: ThematicSummary) => {
@@ -985,7 +985,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
         )}
       </main>
 
-      {readerState.isOpen && currentReaderGroup && (
+      {currentReaderGroup && (
         <ReaderPanel
           group={currentReaderGroup}
           initialArticleId={readerState.articleId}
@@ -1056,7 +1056,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
         <ArrowUp className="h-5 w-5" aria-hidden="true" />
       </button>
 
-      {!readerState.isOpen && !displayedThematicSummary && !settingsOpen && !feedbackOpen && !needsSourceSetup ? (
+      {!currentReaderGroup && !displayedThematicSummary && !settingsOpen && !feedbackOpen && !needsSourceSetup ? (
         <MobileBottomNav
           {...filterSurfaceProps}
           activeView={activeView}

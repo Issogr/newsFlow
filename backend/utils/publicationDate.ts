@@ -10,11 +10,7 @@ function getCurrentPublicationDay(referenceDate: DateInput = new Date()) {
   return new Date(Date.UTC(
     reference.getUTCFullYear(),
     reference.getUTCMonth(),
-    reference.getUTCDate(),
-    0,
-    0,
-    0,
-    0
+    reference.getUTCDate()
   ));
 }
 
