@@ -80,7 +80,6 @@ describe('SettingsPanel', () => {
       .mockResolvedValueOnce({ source: sources[1] });
     const { patchSession } = renderPanel();
 
-    fireEvent.click(document.querySelector('summary')!);
     fireEvent.change(screen.getByLabelText('Website URL'), { target: { value: 'https://example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Find RSS feeds' }));
 
@@ -88,8 +87,9 @@ describe('SettingsPanel', () => {
     expect(discoverRssFeeds).toHaveBeenCalledWith('https://example.com', { signal: expect.any(AbortSignal) });
     expect(addUserSource).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByLabelText('Website URL'), { target: { value: 'https://updated.example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
     expect(discoveredFeed).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Website URL')).toHaveValue('');
     fireEvent.change(screen.getByLabelText('Website URL'), { target: { value: 'https://example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Find RSS feeds' }));
 
@@ -113,7 +113,6 @@ describe('SettingsPanel', () => {
     discoverRssFeeds.mockResolvedValue({ feeds: [] });
     renderPanel();
 
-    fireEvent.click(document.querySelector('summary')!);
     fireEvent.change(screen.getByLabelText('Website URL'), { target: { value: 'https://example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Find RSS feeds' }));
 

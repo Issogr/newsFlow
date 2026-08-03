@@ -5,8 +5,8 @@ import SettingsExclusionsSection from './SettingsExclusionsSection';
 
 const t = createTranslator('en');
 
-test('reveals the custom source form only after Add source is selected', () => {
-  const { container } = render(
+test('shows custom source discovery without an extra disclosure', () => {
+  render(
     <SettingsCustomSourcesSection
       t={t}
       saving={false}
@@ -23,15 +23,8 @@ test('reveals the custom source form only after Add source is selected', () => {
     />
   );
 
-  const summary = container.querySelector('summary');
-  const details = summary!.closest('details');
-  expect(details).not.toHaveAttribute('open');
-  expect(screen.getByLabelText('Website URL')).not.toBeVisible();
-
-  fireEvent.click(summary!);
-
-  expect(details).toHaveAttribute('open');
   expect(screen.getByLabelText('Website URL')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Add source' })).not.toBeInTheDocument();
   expect(screen.queryByPlaceholderText('https://example.com/feed.xml')).not.toBeInTheDocument();
 });
 

@@ -1,5 +1,5 @@
 import { useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
-import { Check, Pencil, Plus, Rss, Search, Trash2 } from 'lucide-react';
+import { Check, Pencil, Rss, Search, Trash2 } from 'lucide-react';
 import InlineAlert from '../InlineAlert';
 import SettingsSectionCard from './SettingsSectionCard';
 import SourceIcon from '../SourceIcon';
@@ -125,102 +125,92 @@ const SettingsCustomSourcesSection = ({
       iconToneClassName="text-emerald-600"
     >
       <div>
-        <details className="group">
-          <summary
-            aria-disabled={saving || sourceLimitReached}
-            onClick={(event) => {
-              if (saving || sourceLimitReached) {
-                event.preventDefault();
-              }
-            }}
-            className="inline-flex cursor-pointer list-none items-center justify-center gap-2 rounded-[1.25rem] bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 [&::-webkit-details-marker]:hidden"
-          >
-            <Plus className="h-4 w-4" />
-            {t('addSource')}
-          </summary>
-
-          <div className="mt-4 space-y-4">
-            <form onSubmit={handleDiscoverFeeds} className="space-y-3 rounded-[1.25rem] border border-sky-100 bg-sky-50 p-4">
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-700">{t('websiteUrl')}</span>
-                <input
-                  type="url"
-                  inputMode="url"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  placeholder="https://example.com"
-                  value={websiteUrl}
-                  onChange={(event) => {
-                    setWebsiteUrl(event.target.value);
-                    setDiscoveredFeeds(null);
-                    setSelectedFeedUrls([]);
-                    setDiscoveryError(null);
-                  }}
-                  disabled={saving || discoveringFeeds}
-                  className={fieldClassName}
-                  required
-                />
-              </label>
-              <p className="text-sm text-slate-500">{t('rssDiscoveryHelp')}</p>
-              <button type="submit" disabled={saving || discoveringFeeds || !websiteUrl.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-60">
+        <div className="space-y-4">
+          <form onSubmit={handleDiscoverFeeds} className="space-y-3">
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-slate-700">{t('websiteUrl')}</span>
+              <input
+                type="url"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                placeholder="https://example.com"
+                value={websiteUrl}
+                onChange={(event) => {
+                  setWebsiteUrl(event.target.value);
+                  setDiscoveredFeeds(null);
+                  setSelectedFeedUrls([]);
+                  setDiscoveryError(null);
+                }}
+                disabled={saving || discoveringFeeds || sourceLimitReached}
+                className={fieldClassName}
+                required
+              />
+            </label>
+            <p className="text-sm text-slate-500">{t('rssDiscoveryHelp')}</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" disabled={saving || discoveringFeeds || sourceLimitReached || !websiteUrl.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-60">
                 <Search className="h-4 w-4" aria-hidden="true" />
                 {discoveringFeeds ? t('findingRssFeeds') : t('findRssFeeds')}
               </button>
-            </form>
+              <button type="button" onClick={resetFeedDiscovery} disabled={saving || (!websiteUrl && discoveredFeeds === null && !discoveryError && !discoveringFeeds)} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60">
+                {t('clearSearch')}
+              </button>
+            </div>
+          </form>
 
-            {discoveryError ? (
-              <InlineAlert as="p">
-                {getFriendlyApiErrorMessage(discoveryError, t)}
-              </InlineAlert>
-            ) : null}
+          {discoveryError ? (
+            <InlineAlert as="p">
+              {getFriendlyApiErrorMessage(discoveryError, t)}
+            </InlineAlert>
+          ) : null}
 
-            {discoveryStatus ? (
-              <div aria-busy={discoveringFeeds}>
-                <p role="status" aria-live="polite" className="text-sm font-medium text-slate-700">
-                  {discoveryStatus}
-                </p>
-                {discoveredFeeds?.length ? (
-                  <div className="mt-2 grid gap-2">
-                    {discoveredFeeds.map((feed) => {
-                      const title = feed.title || t('rssFeedResult');
-                      const selected = selectedFeedUrls.includes(feed.url);
-                      const alreadyAdded = customSources.some((source) => source.url === feed.url);
-                      const selectionLimitReached = !selected && selectedFeedUrls.length >= remainingSourceSlots;
-                      return (
-                        <button
-                          key={feed.url}
-                          type="button"
-                          onClick={() => toggleDiscoveredFeed(feed.url)}
-                          disabled={saving || alreadyAdded || selectionLimitReached}
-                          aria-pressed={selected}
-                          aria-label={t(selected ? 'deselectRssFeed' : 'selectRssFeed', { title })}
-                          className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${selected ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'}`}
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-medium text-slate-800">{title}</span>
-                            <span className="mt-0.5 block break-all text-xs text-slate-500">{feed.url}</span>
-                            {alreadyAdded ? <span className="mt-1 block text-xs font-medium text-slate-500">{t('rssFeedAlreadyAdded')}</span> : null}
-                          </span>
-                          <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${selected ? 'bg-sky-600 text-white' : 'bg-slate-200 text-transparent'}`} aria-hidden="true">
-                            <Check className="h-3.5 w-3.5" />
-                          </span>
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      onClick={addSelectedFeeds}
-                      disabled={saving || selectedFeedUrls.length === 0}
-                      className="mt-1 inline-flex w-fit items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {saving ? t('addingSelectedFeeds') : t('addSelectedFeeds', { count: selectedFeedUrls.length })}
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </details>
+          {discoveryStatus ? (
+            <div aria-busy={discoveringFeeds}>
+              <p role="status" aria-live="polite" className="text-sm font-medium text-slate-700">
+                {discoveryStatus}
+              </p>
+              {discoveredFeeds?.length ? (
+                <div className="mt-2 grid gap-2">
+                  {discoveredFeeds.map((feed) => {
+                    const title = feed.title || t('rssFeedResult');
+                    const selected = selectedFeedUrls.includes(feed.url);
+                    const alreadyAdded = customSources.some((source) => source.url === feed.url);
+                    const selectionLimitReached = !selected && selectedFeedUrls.length >= remainingSourceSlots;
+                    return (
+                      <button
+                        key={feed.url}
+                        type="button"
+                        onClick={() => toggleDiscoveredFeed(feed.url)}
+                        disabled={saving || alreadyAdded || selectionLimitReached}
+                        aria-pressed={selected}
+                        aria-label={t(selected ? 'deselectRssFeed' : 'selectRssFeed', { title })}
+                        className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${selected ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'}`}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium text-slate-800">{title}</span>
+                          <span className="mt-0.5 block break-all text-xs text-slate-500">{feed.url}</span>
+                          {alreadyAdded ? <span className="mt-1 block text-xs font-medium text-slate-500">{t('rssFeedAlreadyAdded')}</span> : null}
+                        </span>
+                        <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${selected ? 'bg-sky-600 text-white' : 'bg-slate-200 text-transparent'}`} aria-hidden="true">
+                          <Check className="h-3.5 w-3.5" />
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={addSelectedFeeds}
+                    disabled={saving || selectedFeedUrls.length === 0}
+                    className="mt-1 inline-flex w-fit items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? t('addingSelectedFeeds') : t('addSelectedFeeds', { count: selectedFeedUrls.length })}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
         {Number.isFinite(maxSourceCount) && (
           <p className="mt-2 text-xs text-slate-500">{t('customSourceLimit', { count: maxSourceCount })}</p>
         )}
