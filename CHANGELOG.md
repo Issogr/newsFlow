@@ -9,6 +9,7 @@
 - simplified the BFF session and private-backend boundary by removing duplicate user-session indexing, unused service identity, and legacy private token carriers
 - centralized frontend locale and session updates while reusing the same custom-source persistence paths across Settings actions
 - placed the bundled deployment behind persisted automatic TLS ingress and isolated Caddy, BFF, and backend traffic across separate Docker networks
+- renamed the AI summary history controls to Today and Yesterday and improved their contrast and touch targets
 
 ## 3.5.15
 

@@ -530,11 +530,11 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                 {!isPodcast && (
                   <>
                     {previousSummary && (
-                      <div className="mt-4 inline-flex rounded-full border border-slate-200 bg-slate-100 p-1" role="group" aria-label={t('summaryVersionSelector')}>
+                      <div className="mt-4 inline-grid grid-cols-2 gap-1 rounded-xl border border-stone-200 bg-stone-50 p-1 shadow-inner shadow-stone-900/[0.03]" role="group" aria-label={t('summaryVersionSelector')}>
                         <button
                           type="button"
                           aria-pressed={currentSummaryAvailable && !showingPreviousSummary}
-                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${!currentSummaryAvailable ? 'cursor-not-allowed text-slate-300' : (!showingPreviousSummary ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}`}
+                          className={`h-10 min-w-24 rounded-lg px-4 text-sm font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${!currentSummaryAvailable ? 'cursor-not-allowed text-stone-300' : (!showingPreviousSummary ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-500 hover:bg-white hover:text-stone-900 hover:shadow-sm')}`}
                           disabled={!currentSummaryAvailable}
                           onClick={() => setSelectedPreviousSummaryId('')}
                         >
@@ -543,7 +543,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                         <button
                           type="button"
                           aria-pressed={showingPreviousSummary}
-                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${!previousSummaryAvailable ? 'cursor-not-allowed text-slate-300' : (showingPreviousSummary ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}`}
+                          className={`h-10 min-w-24 rounded-lg px-4 text-sm font-semibold transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${!previousSummaryAvailable ? 'cursor-not-allowed text-stone-300' : (showingPreviousSummary ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-500 hover:bg-white hover:text-stone-900 hover:shadow-sm')}`}
                           disabled={!previousSummaryAvailable}
                           onClick={() => setSelectedPreviousSummaryId(previousSummary.id)}
                         >

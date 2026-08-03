@@ -274,8 +274,8 @@ describe('thematic summary podcast UI', () => {
       }
     });
 
-    const currentChip = screen.getByRole('button', { name: 'Current' });
-    const previousChip = screen.getByRole('button', { name: 'Previous' });
+    const currentChip = screen.getByRole('button', { name: 'Today' });
+    const previousChip = screen.getByRole('button', { name: 'Yesterday' });
     expect(screen.getByRole('group', { name: 'Summary version' })).toBeInTheDocument();
     expect(currentChip).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText(/Current technology briefing/u)).toBeInTheDocument();
@@ -312,9 +312,9 @@ describe('thematic summary podcast UI', () => {
       }
     });
 
-    expect(screen.getByRole('button', { name: 'Current' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Current' })).toHaveClass('text-slate-300');
-    expect(screen.getByRole('button', { name: 'Previous' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Today' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Today' })).toHaveClass('text-stone-300');
+    expect(screen.getByRole('button', { name: 'Yesterday' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Previous technology briefing.')).toBeInTheDocument();
     expect(screen.queryByText('No technology stories were available.')).not.toBeInTheDocument();
   });
@@ -335,8 +335,8 @@ describe('thematic summary podcast UI', () => {
       }
     });
 
-    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Previous' })).toHaveClass('text-slate-300');
+    expect(screen.getByRole('button', { name: 'Yesterday' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Yesterday' })).toHaveClass('text-stone-300');
     expect(screen.getByText('Current technology briefing.')).toBeInTheDocument();
     expect(screen.queryByText('No previous technology stories were available.')).not.toBeInTheDocument();
   });
