@@ -71,7 +71,9 @@ function buildPrompt(topicConfig: TopicConfig, articles: NewsArticle[] = []) {
 }
 
 function getCompletionTokenBudget(articleCount: number) {
-  return Math.min(4000, 900 + (Math.max(1, articleCount) * 55));
+  // Two briefings (en+it) with citations need ~250 tokens each plus JSON
+  // overhead; the old 900-token base truncated output at low article counts.
+  return Math.min(4000, 1500 + (Math.max(1, articleCount) * 65));
 }
 
 function normalizeLocalizedSummary(payload: DynamicRecord = {}, locale: string) {
@@ -221,6 +223,7 @@ export = {
   isAiSummaryGenerationAvailable,
   _buildPrompt: buildPrompt,
   _getArticleTextLimit: getArticleTextLimit,
+  _getCompletionTokenBudget: getCompletionTokenBudget,
   _getConfig: getConfig,
   _normalizeGeneratedSummary: normalizeGeneratedSummary,
   _validateGeneratedSummary: validateGeneratedSummary

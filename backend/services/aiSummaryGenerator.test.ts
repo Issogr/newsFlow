@@ -70,6 +70,14 @@ describe('aiSummaryGenerator', () => {
     expect(aiSummaryGenerator._getArticleTextLimit(120)).toBe(250);
   });
 
+  test('keeps the completion token budget above observed bilingual output sizes', () => {
+    // Regression: 7 articles produced ~1500 output tokens and were truncated
+    // mid-JSON by the old 900 + 55/article budget.
+    expect(aiSummaryGenerator._getCompletionTokenBudget(1)).toBe(1565);
+    expect(aiSummaryGenerator._getCompletionTokenBudget(7)).toBe(1955);
+    expect(aiSummaryGenerator._getCompletionTokenBudget(120)).toBe(4000);
+  });
+
   test('removes promotional price-drop sentences from generated summaries', () => {
     const normalized = aiSummaryGenerator._normalizeGeneratedSummary({
       en: {
