@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { Check, Rss, Search } from 'lucide-react';
+import { Check, Search } from 'lucide-react';
 import InlineAlert from '../InlineAlert';
-import SettingsSectionCard from './SettingsSectionCard';
 import useLatestRequest from '../../hooks/useLatestRequest';
 import { discoverRssFeeds, isRequestCanceled } from '../../services/api';
 import { getFriendlyApiErrorMessage } from '../../utils/apiError';
@@ -95,12 +94,7 @@ const SettingsCustomSourcesSection = ({
   };
 
   return (
-    <SettingsSectionCard
-      icon={Rss}
-      title={t('customSources')}
-      badge={t('sourceCount', { count: customSources.length })}
-      iconToneClassName="text-emerald-600"
-    >
+    <section className="pb-1">
       <div>
         <div className="space-y-4">
           <form onSubmit={handleDiscoverFeeds} className="space-y-3">
@@ -197,8 +191,7 @@ const SettingsCustomSourcesSection = ({
           </InlineAlert>
         ) : null}
       </div>
-
-    </SettingsSectionCard>
+    </section>
   );
 };
 

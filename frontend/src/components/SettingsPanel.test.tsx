@@ -82,6 +82,7 @@ describe('SettingsPanel', () => {
     const { patchSession } = renderPanel({ view: 'feedNews' });
 
     expect(screen.getByRole('dialog', { name: 'Add Feed News' })).toBeInTheDocument();
+    expect(screen.queryByText('Custom sources')).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Website URL'), { target: { value: 'https://example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Find RSS feeds' }));
