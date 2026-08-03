@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import SettingsPanel from './SettingsPanel';
 import { createTranslator } from '../i18n';
-import { addUserSource as addUserSourceImplementation, updateUserSettings as updateUserSettingsImplementation } from '../services/api';
+import { addUserSource as addUserSourceImplementation, discoverRssFeeds as discoverRssFeedsImplementation, updateUserSettings as updateUserSettingsImplementation } from '../services/api';
 import { createTestCurrentUser } from '../test-utils/currentUser';
 import type { ComponentProps } from 'react';
 import type { UserSettings } from '../types';
@@ -10,14 +10,17 @@ vi.mock('../services/api', () => ({
   addUserSource: vi.fn(),
   createApiToken: vi.fn(),
   deleteUserSource: vi.fn(),
+  discoverRssFeeds: vi.fn(),
   exportUserSettings: vi.fn(),
   importUserSettings: vi.fn(),
+  isRequestCanceled: vi.fn(() => false),
   revokeApiToken: vi.fn(),
   updateUserSource: vi.fn(),
   updateUserSettings: vi.fn()
 }));
 
 const addUserSource = vi.mocked(addUserSourceImplementation);
+const discoverRssFeeds = vi.mocked(discoverRssFeedsImplementation);
 const updateUserSettings = vi.mocked(updateUserSettingsImplementation);
 
 const t = createTranslator('en');
@@ -66,26 +69,55 @@ describe('SettingsPanel', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  test('saves a pending custom source from the close reminder', async () => {
-    const source = {
-      id: 'source-1',
-      name: 'Example Feed',
-      url: 'https://example.com/feed.xml',
-      language: 'en'
-    };
-    addUserSource.mockResolvedValue({ source });
-    const { onClose, patchSession } = renderPanel();
+  test('selects and adds multiple feeds discovered from a website', async () => {
+    const sources = [
+      { id: 'source-1', name: 'Example Feed', url: 'https://example.com/feed.xml', language: 'en' },
+      { id: 'source-2', name: 'Example Atom', url: 'https://example.com/atom.xml', language: 'en' }
+    ];
+    discoverRssFeeds.mockResolvedValue({ feeds: sources.map(({ name: title, url }) => ({ title, url })) });
+    addUserSource
+      .mockResolvedValueOnce({ source: sources[0] })
+      .mockResolvedValueOnce({ source: sources[1] });
+    const { patchSession } = renderPanel();
 
     fireEvent.click(document.querySelector('summary')!);
-    fireEvent.change(screen.getByLabelText('Feed URL'), { target: { value: source.url } });
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Save' }));
+    fireEvent.change(screen.getByLabelText('Website URL'), { target: { value: 'https://example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Find RSS feeds' }));
 
+    const discoveredFeed = await screen.findByRole('button', { name: 'Select Example Feed' });
+    expect(discoverRssFeeds).toHaveBeenCalledWith('https://example.com', { signal: expect.any(AbortSignal) });
+    expect(addUserSource).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText('Website URL'), { target: { value: 'https://updated.example.com' } });
+    expect(discoveredFeed).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Website URL'), { target: { value: 'https://example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Find RSS feeds' }));
+
+    const refreshedFeed = await screen.findByRole('button', { name: 'Select Example Feed' });
+    const refreshedAtom = screen.getByRole('button', { name: 'Select Example Atom' });
+    fireEvent.click(refreshedFeed);
+    fireEvent.click(refreshedAtom);
+    expect(refreshedFeed).toHaveAttribute('aria-pressed', 'true');
+    expect(refreshedAtom).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add selected (2)' }));
     await waitFor(() => {
-      expect(addUserSource).toHaveBeenCalledWith({ url: source.url });
-      expect(patchSession).toHaveBeenCalledWith(expect.objectContaining({ customSources: [source] }));
-      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(addUserSource).toHaveBeenNthCalledWith(1, { url: sources[0].url });
+      expect(addUserSource).toHaveBeenNthCalledWith(2, { url: sources[1].url });
+      expect(patchSession).toHaveBeenLastCalledWith({ customSources: [sources[1], sources[0]] });
     });
+    expect(screen.queryByRole('button', { name: 'Deselect Example Feed' })).not.toBeInTheDocument();
+  });
+
+  test('reports when a website does not publish discoverable feeds', async () => {
+    discoverRssFeeds.mockResolvedValue({ feeds: [] });
+    renderPanel();
+
+    fireEvent.click(document.querySelector('summary')!);
+    fireEvent.change(screen.getByLabelText('Website URL'), { target: { value: 'https://example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Find RSS feeds' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('No RSS or Atom feeds were found on this website.');
   });
 
   test('returns focus to settings when saving from the reminder fails', async () => {

@@ -60,6 +60,11 @@ export interface NewsSource {
   [key: string]: unknown;
 }
 
+export interface DiscoveredFeed {
+  title?: string;
+  url: string;
+}
+
 export interface AvailableTopic {
   topic: string;
   count?: number;

@@ -15,6 +15,7 @@ describe('userService imports', () => {
     ({ tempDir } = setupTempNewsDb('news-user-service-test-'));
 
     jest.doMock('./rssParser', () => ({
+      discoverFeedUrls: jest.fn(),
       validateFeedUrl: jest.fn()
     }));
 
@@ -179,6 +180,37 @@ describe('userService imports', () => {
       }))
     })).rejects.toMatchObject({ status: 409, code: 'CUSTOM_SOURCE_LIMIT_REACHED' });
     expect(rssParser.validateFeedUrl).not.toHaveBeenCalled();
+  });
+
+  test('discovers feeds without persisting a custom source', async () => {
+    const signal = new AbortController().signal;
+    rssParser.discoverFeedUrls.mockResolvedValue([
+      { title: 'Example feed', url: 'https://example.com/feed.xml' }
+    ]);
+
+    await expect(userService.discoverUserSourceFeeds({ url: ' https://example.com ' }, { signal })).resolves.toEqual([
+      { title: 'Example feed', url: 'https://example.com/feed.xml' }
+    ]);
+    expect(rssParser.discoverFeedUrls).toHaveBeenCalledWith('https://example.com', { timeout: 8000, signal });
+    expect(database.listAllActiveUserSources()).toEqual([]);
+  });
+
+  test('validates discovery input and preserves outbound URL safety errors', async () => {
+    await expect(userService.discoverUserSourceFeeds({ url: 42 })).rejects.toMatchObject({
+      status: 400,
+      code: 'INVALID_SOURCE_PAYLOAD'
+    });
+    expect(rssParser.discoverFeedUrls).not.toHaveBeenCalled();
+
+    const forbiddenError = Object.assign(new Error('Blocked'), { status: 403, code: 'FORBIDDEN_URL' });
+    rssParser.discoverFeedUrls.mockRejectedValueOnce(forbiddenError);
+    await expect(userService.discoverUserSourceFeeds({ url: 'http://localhost' })).rejects.toBe(forbiddenError);
+
+    rssParser.discoverFeedUrls.mockRejectedValueOnce(new Error('Offline'));
+    await expect(userService.discoverUserSourceFeeds({ url: 'https://example.com' })).rejects.toMatchObject({
+      status: 400,
+      code: 'INVALID_WEBSITE_URL'
+    });
   });
 
   test('normalizes unsupported reader text widths to the default', async () => {

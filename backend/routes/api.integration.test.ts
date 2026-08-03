@@ -70,6 +70,7 @@ describe('API auth and user flows', () => {
     }));
 
     jest.doMock('../services/rssParser', () => ({
+      discoverFeedUrls: jest.fn(),
       validateFeedUrl: jest.fn()
     }));
 
@@ -901,6 +902,35 @@ describe('API auth and user flows', () => {
     expect(newsService.refreshUserSources).toHaveBeenCalledTimes(2);
     expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(1, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: true }));
     expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(2, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: true }));
+  });
+
+  test('discovers feeds for an authenticated user without saving or refreshing them', async () => {
+    rssParser.discoverFeedUrls.mockResolvedValue([
+      { title: 'Example feed', url: 'https://example.com/feed.xml' }
+    ]);
+
+    await request(app)
+      .post('/internal-api/me/sources/discover')
+      .send({ url: 'https://example.com' })
+      .expect(401);
+
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'source-discovery-user', password: 'secret123' })
+      .expect(201);
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    await request(app)
+      .post('/internal-api/me/sources/discover')
+      .set('Cookie', sessionCookie)
+      .send({ url: 'https://example.com' })
+      .expect(200, {
+        success: true,
+        feeds: [{ title: 'Example feed', url: 'https://example.com/feed.xml' }]
+      });
+
+    expect(database.listUserSources(registerResponse.body.user.id)).toEqual([]);
+    expect(newsService.refreshUserSources).not.toHaveBeenCalled();
   });
 
   test('keeps custom source creation successful when the immediate refresh fails', async () => {

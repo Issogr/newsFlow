@@ -14,7 +14,7 @@ var mockApiConfig: { baseURL?: string; withCredentials?: boolean; headers?: Reco
 var responseErrorHandler: (error: ApiErrorLike) => Promise<never>;
 
 import axios from 'axios';
-import { addUserSource, AUTH_EXPIRED_EVENT, fetchNews, fetchReadLaterNews, fetchReaderArticle, fetchThematicSummaries, importUserSettings, isRequestCanceled, removeReadLaterArticles, saveReadLaterArticles, submitFeedback, updateUserSource } from './api';
+import { addUserSource, AUTH_EXPIRED_EVENT, discoverRssFeeds, fetchNews, fetchReadLaterNews, fetchReaderArticle, fetchThematicSummaries, importUserSettings, isRequestCanceled, removeReadLaterArticles, saveReadLaterArticles, submitFeedback, updateUserSource } from './api';
 
 const asAbortSignal = (value: string) => value as unknown as AbortSignal;
 
@@ -91,6 +91,20 @@ describe('api service', () => {
     });
     expect(mockApi.post).toHaveBeenNthCalledWith(2, '/me/settings/import', { customSources: [] }, {
       signal: 'import-signal',
+      timeout: 45000
+    });
+  });
+
+  test('discovers RSS feeds through the authenticated BFF API', async () => {
+    mockApi.post.mockResolvedValue({
+      data: { feeds: [{ title: 'Example feed', url: 'https://example.com/feed.xml' }] }
+    });
+
+    await expect(discoverRssFeeds('https://example.com', { signal: asAbortSignal('discovery-signal') })).resolves.toEqual({
+      feeds: [{ title: 'Example feed', url: 'https://example.com/feed.xml' }]
+    });
+    expect(mockApi.post).toHaveBeenCalledWith('/me/sources/discover', { url: 'https://example.com' }, {
+      signal: 'discovery-signal',
       timeout: 45000
     });
   });

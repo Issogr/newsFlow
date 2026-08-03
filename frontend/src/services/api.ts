@@ -5,6 +5,7 @@ import type {
   ApiErrorLike,
   ApiTokenInfo,
   CurrentUser,
+  DiscoveredFeed,
   FeedResponse,
   NewsSource,
   ReaderResponse,
@@ -103,6 +104,11 @@ export const submitFeedback = async ({ category, title, description, attachment 
 export const exportUserSettings = async () => responseData<Record<string, unknown>>(api.get('/me/settings/export'));
 
 export const importUserSettings = async (payload: unknown, { signal }: RequestOptions = {}) => responseData<Required<Pick<SettingsResponse, 'settings'>> & { customSources: NewsSource[] }>(api.post('/me/settings/import', payload, {
+  signal,
+  timeout: CUSTOM_SOURCE_REQUEST_TIMEOUT_MS
+}));
+
+export const discoverRssFeeds = async (url: string, { signal }: RequestOptions = {}) => responseData<{ feeds: DiscoveredFeed[] }>(api.post('/me/sources/discover', { url }, {
   signal,
   timeout: CUSTOM_SOURCE_REQUEST_TIMEOUT_MS
 }));

@@ -7,6 +7,11 @@ const { getRequestAbortSignal, refreshUserSourceInBackground } = require('./help
 
 const router = express.Router();
 
+router.post('/me/sources/discover', requireAuthenticatedUser, async (req, res) => {
+  const feeds = await userService.discoverUserSourceFeeds(req.body || {}, { signal: getRequestAbortSignal(req, res) });
+  res.json({ success: true, feeds });
+});
+
 router.post('/me/sources', requireAuthenticatedUser, async (req, res) => {
   const source = await userService.addUserSource(req.user.id, req.body || {}, { signal: getRequestAbortSignal(req, res) });
   refreshUserSourceInBackground(req.user.id, source.id);

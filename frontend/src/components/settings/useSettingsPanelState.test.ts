@@ -9,7 +9,6 @@ import {
   updateUserSettings as updateUserSettingsImplementation
 } from '../../services/api';
 import { createTestCurrentUser } from '../../test-utils/currentUser';
-import type { FormEvent } from 'react';
 import type { CurrentUser, NewsSource, UserSettings } from '../../types';
 
 vi.mock('../../services/api', () => ({
@@ -31,7 +30,6 @@ const updateUserSource = vi.mocked(updateUserSourceImplementation);
 const updateUserSettings = vi.mocked(updateUserSettingsImplementation);
 
 const baseCurrentUser = createTestCurrentUser({ user: { id: 'user-1', username: 'alice' } });
-const createSubmitEvent = () => ({ preventDefault: vi.fn() }) as unknown as FormEvent<HTMLFormElement>;
 
 const renderSettingsHook = (overrides: { patchSession?: (patch: Partial<CurrentUser>) => void; currentUser?: CurrentUser; availableSources?: NewsSource[] } = {}) => {
   const patchSession = overrides.patchSession || vi.fn<(patch: Partial<CurrentUser>) => void>();
@@ -183,13 +181,9 @@ describe('useSettingsPanelState', () => {
       availableSources: [],
       patchSession
     }), { initialProps: { currentUser: baseCurrentUser } });
-    let save!: Promise<boolean>;
-
+    let save!: Promise<string[]>;
     act(() => {
-      result.current.setSourceForm({ url: source.url! });
-    });
-    act(() => {
-      save = result.current.handleSave();
+      save = result.current.handleAddDiscoveredSources([source.url!]);
     });
 
     const externallyUpdatedUser = {
@@ -207,10 +201,7 @@ describe('useSettingsPanelState', () => {
     });
 
     expect(result.current.settings.lastSeenReleaseNotesVersion).toBe('3.5.11');
-    expect(patchSession).toHaveBeenLastCalledWith(expect.objectContaining({
-      settings: expect.objectContaining({ lastSeenReleaseNotesVersion: '3.5.11' }),
-      customSources: [source]
-    }));
+    expect(patchSession).toHaveBeenLastCalledWith({ customSources: [source] });
   });
 
   test('persists positive source visibility through exclusion settings', async () => {
@@ -292,44 +283,31 @@ describe('useSettingsPanelState', () => {
     expect(result.current.settings).toEqual(nextSettings);
   });
 
-  test('surfaces source add failures near the custom source form', async () => {
-    const requestError = new Error('The request timed out. Please try again in a few seconds.');
-    addUserSource.mockRejectedValue(requestError);
-    const { result } = renderSettingsHook();
-
-    act(() => {
-      result.current.setSourceForm({ url: 'https://example.com/rss' });
-    });
-
-    await act(async () => {
-      await result.current.handleAddSource(createSubmitEvent());
-    });
-
-    expect(result.current.sourceError).toBe(requestError);
-    expect(result.current.customSources).toEqual([]);
-  });
-
-  test('adds a custom source immediately without replacing other session fields', async () => {
-    const source = {
+  test('keeps successful discovered feeds when a later selected feed fails', async () => {
+    const firstSource = {
       id: 'source-1',
-      name: 'Example Feed',
-      url: 'https://example.com/rss',
+      name: 'First feed',
+      url: 'https://example.com/first.xml',
       language: 'en'
     };
-    addUserSource.mockResolvedValue({ source });
+    const requestError = new Error('Second feed failed validation');
+    addUserSource
+      .mockResolvedValueOnce({ source: firstSource })
+      .mockRejectedValueOnce(requestError);
     const { result, patchSession } = renderSettingsHook();
-
-    act(() => {
-      result.current.setSourceForm({ url: source.url });
-    });
+    let addedUrls: string[] = [];
 
     await act(async () => {
-      await result.current.handleAddSource(createSubmitEvent());
+      addedUrls = await result.current.handleAddDiscoveredSources([
+        firstSource.url,
+        'https://example.com/second.xml'
+      ]);
     });
 
-    expect(result.current.customSources).toEqual([source]);
-    expect(result.current.sourceForm).toEqual({ url: '' });
-    expect(patchSession).toHaveBeenLastCalledWith({ customSources: [source] });
+    expect(addedUrls).toEqual([firstSource.url]);
+    expect(result.current.customSources).toEqual([firstSource]);
+    expect(result.current.sourceError).toBe(requestError);
+    expect(patchSession).toHaveBeenLastCalledWith({ customSources: [firstSource] });
   });
 
   test('updates a custom source immediately', async () => {

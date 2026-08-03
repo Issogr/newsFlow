@@ -6,19 +6,16 @@ import SettingsExclusionsSection from './SettingsExclusionsSection';
 const t = createTranslator('en');
 
 test('reveals the custom source form only after Add source is selected', () => {
-  const onSourceFormChange = vi.fn();
   const { container } = render(
     <SettingsCustomSourcesSection
       t={t}
       saving={false}
       sourceError={null}
       customSources={[]}
-      sourceForm={{ url: '' }}
       editingSourceId=""
       editingSourceForm={{ name: '', url: '', language: 'en' }}
-      onSourceFormChange={onSourceFormChange}
       onEditingSourceFormChange={vi.fn()}
-      onAddSource={vi.fn()}
+      onAddDiscoveredSources={vi.fn()}
       onStartEditSource={vi.fn()}
       onCancelEditSource={vi.fn()}
       onUpdateSource={vi.fn()}
@@ -29,18 +26,13 @@ test('reveals the custom source form only after Add source is selected', () => {
   const summary = container.querySelector('summary');
   const details = summary!.closest('details');
   expect(details).not.toHaveAttribute('open');
-  expect(screen.getByLabelText('Feed URL')).not.toBeVisible();
+  expect(screen.getByLabelText('Website URL')).not.toBeVisible();
 
   fireEvent.click(summary!);
 
   expect(details).toHaveAttribute('open');
-  expect(screen.getByLabelText('Feed URL')).toBeVisible();
-
-  fireEvent.change(screen.getByLabelText('Feed URL'), { target: { value: 'https://example.com/feed.xml' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-  expect(details).not.toHaveAttribute('open');
-  expect(summary).toHaveFocus();
-  expect(onSourceFormChange).toHaveBeenLastCalledWith({ url: '' });
+  expect(screen.getByLabelText('Website URL')).toBeVisible();
+  expect(screen.queryByPlaceholderText('https://example.com/feed.xml')).not.toBeInTheDocument();
 });
 
 test('reveals sub-feeds only when their visible parent is expanded', () => {

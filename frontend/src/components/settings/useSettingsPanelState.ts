@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import {
   addUserSource,
   createApiToken,
@@ -17,7 +17,6 @@ import {
 } from '../../utils/readerPreferences';
 import type { ApiTokenInfo, CurrentUser, NewsSource, UserSettings } from '../../types';
 
-const createInitialSourceForm = () => ({ url: '' });
 const createInitialEditingSourceForm = () => ({ name: '', url: '', language: 'it' });
 const getCurrentUserIdentity = (currentUser: CurrentUser) => currentUser?.user?.id || currentUser?.user?.username || currentUser?.id || '';
 const getInitialSettings = (currentUser: CurrentUser): UserSettings => ({
@@ -58,7 +57,6 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
   const [sourceError, setSourceError] = useState<unknown>(null);
   const [apiToken, setApiToken] = useState<ApiTokenInfo | null>(currentUser.apiToken || null);
   const [newApiToken, setNewApiToken] = useState('');
-  const [sourceForm, setSourceForm] = useState(createInitialSourceForm);
   const [editingSourceId, setEditingSourceId] = useState('');
   const [editingSourceForm, setEditingSourceForm] = useState(createInitialEditingSourceForm);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -91,7 +89,6 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
       setSettings(getInitialSettings(currentUser));
       setNewApiToken('');
       setSourceError(null);
-      setSourceForm(createInitialSourceForm());
       setEditingSourceId('');
       setEditingSourceForm(createInitialEditingSourceForm());
     } else {
@@ -214,20 +211,11 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
   }, [markSettingDirty, settings, subSourceIdsBySourceId]);
 
   const editingSource = customSources.find((source) => source.id === editingSourceId);
-  const hasSourceFormChanges = Boolean(sourceForm.url.trim());
   const hasEditingSourceChanges = Boolean(editingSource) && (
     editingSourceForm.name !== editingSource?.name
     || editingSourceForm.url !== editingSource?.url
     || editingSourceForm.language !== (editingSource?.language || 'it')
   );
-
-  const persistSourceAddition = useCallback(async (existingSources: NewsSource[] = customSources) => {
-    const response = await addUserSource(sourceForm);
-    const nextCustomSources = [response.source, ...existingSources];
-    setSourceForm(createInitialSourceForm());
-    syncCustomSourcesState(nextCustomSources);
-    return nextCustomSources;
-  }, [customSources, sourceForm, syncCustomSourcesState]);
 
   const persistSourceUpdate = useCallback(async (sourceId: string, existingSources: NewsSource[] = customSources) => {
     const response = await updateUserSource(sourceId, editingSourceForm);
@@ -243,7 +231,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
   const handleSave = useCallback(async () => {
     const dirtySettingKeys = [...dirtySettingKeysRef.current];
     const settingsPatch = createSettingsPatch(settings, currentUserRef.current, dirtySettingKeys);
-    if (Object.keys(settingsPatch).length === 0 && !hasSourceFormChanges && !hasEditingSourceChanges) {
+    if (Object.keys(settingsPatch).length === 0 && !hasEditingSourceChanges) {
       dirtySettingKeysRef.current.clear();
       return true;
     }
@@ -252,10 +240,6 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
     const result = await runSavingAction(async () => {
       let nextCustomSources = customSources;
       let nextSettings = getInitialSettings(currentUserRef.current);
-
-      if (hasSourceFormChanges) {
-        nextCustomSources = await persistSourceAddition(nextCustomSources);
-      }
 
       if (hasEditingSourceChanges) {
         nextCustomSources = await persistSourceUpdate(editingSourceId, nextCustomSources);
@@ -283,7 +267,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
     setStoredReaderTextWidthPreference(nextSettings.readerTextWidth);
     syncPersistedUserState(nextSettings, result.nextCustomSources);
     return true;
-  }, [customSources, editingSourceId, hasEditingSourceChanges, hasSourceFormChanges, persistSourceAddition, persistSourceUpdate, runSavingAction, settings, syncPersistedUserState]);
+  }, [customSources, editingSourceId, hasEditingSourceChanges, persistSourceUpdate, runSavingAction, settings, syncPersistedUserState]);
 
   const handleCreateApiToken = useCallback(async () => {
     await runSavingAction(async () => {
@@ -350,15 +334,27 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
     }
   }, [runSavingAction, syncPersistedUserState]);
 
-  const handleAddSource = useCallback(async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSourceError(null);
+  const handleAddDiscoveredSources = useCallback(async (urls: string[]) => {
+    const existingUrls = new Set(customSources.map((source) => source.url));
+    const pendingUrls = [...new Set(urls.map((url) => url.trim()).filter((url) => url && !existingUrls.has(url)))];
+    const addedUrls: string[] = [];
+    if (pendingUrls.length === 0) {
+      return addedUrls;
+    }
 
-    return runSavingAction(async () => {
-      await persistSourceAddition();
-      return true;
+    setSourceError(null);
+    await runSavingAction(async () => {
+      let nextCustomSources = customSources;
+      for (const url of pendingUrls) {
+        const response = await addUserSource({ url });
+        nextCustomSources = [response.source, ...nextCustomSources];
+        addedUrls.push(url);
+        syncCustomSourcesState(nextCustomSources);
+      }
     }, { globalError: false, onError: setSourceError });
-  }, [persistSourceAddition, runSavingAction]);
+
+    return addedUrls;
+  }, [customSources, runSavingAction, syncCustomSourcesState]);
 
   const startEditSource = useCallback((source: NewsSource) => {
     setEditingSourceId(source.id);
@@ -404,7 +400,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
     settings,
     currentUser,
     [...dirtySettingKeysRef.current]
-  )).length > 0 || hasSourceFormChanges || hasEditingSourceChanges;
+  )).length > 0 || hasEditingSourceChanges;
 
   return {
     saving,
@@ -415,13 +411,11 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
     apiToken,
     newApiToken,
     customSources,
-    sourceForm,
     editingSourceId,
     editingSourceForm,
     importInputRef,
     settingsLimits,
     excludedSourceCatalog,
-    setSourceForm,
     setEditingSourceForm,
     setSetting,
     toggleExcludedSource,
@@ -432,7 +426,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
     handleImport,
     handleCreateApiToken,
     handleRevokeApiToken,
-    handleAddSource,
+    handleAddDiscoveredSources,
     startEditSource,
     cancelEditSource,
     handleUpdateSource,

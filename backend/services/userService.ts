@@ -588,6 +588,28 @@ function validateInteractiveFeedUrl(url: string, options: AbortOptions = {}) {
   });
 }
 
+async function discoverUserSourceFeeds(payload: DynamicRecord = {}, options: AbortOptions = {}) {
+  const url = typeof payload.url === 'string' ? payload.url.trim() : '';
+  if (!url || url.length > MAX_CUSTOM_SOURCE_URL_LENGTH) {
+    throw createError(400, 'Website URL is required', 'INVALID_SOURCE_PAYLOAD');
+  }
+
+  try {
+    const feeds: DynamicRecord[] = await rssParser.discoverFeedUrls(url, {
+      timeout: RSS_INTERACTIVE_VALIDATION_TIMEOUT,
+      signal: options.signal
+    });
+    return feeds.filter((feed) => typeof feed.url === 'string' && feed.url.length <= MAX_CUSTOM_SOURCE_URL_LENGTH);
+  } catch (error) {
+    options.signal?.throwIfAborted();
+    if (['INVALID_URL', 'FORBIDDEN_URL', 'PAYLOAD_TOO_LARGE'].includes(String((error as AppError)?.code || ''))) {
+      throw error;
+    }
+
+    throw createError(400, 'Website URL is not valid or cannot be inspected', 'INVALID_WEBSITE_URL', error instanceof Error ? error : new Error(String(error)));
+  }
+}
+
 function requireCustomSourceCapacity(userId: string) {
   if (database.listUserSources(userId).length >= MAX_CUSTOM_SOURCES_PER_USER) {
     throw createError(409, `A user can have at most ${MAX_CUSTOM_SOURCES_PER_USER} custom sources`, 'CUSTOM_SOURCE_LIMIT_REACHED');
@@ -1108,6 +1130,7 @@ export = {
   getUserApiToken,
   createUserApiToken,
   revokeUserApiToken,
+  discoverUserSourceFeeds,
   addUserSource,
   updateUserSource,
   removeUserSource,

@@ -62,13 +62,11 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     apiToken,
     newApiToken,
     customSources,
-    sourceForm,
     editingSourceId,
     editingSourceForm,
     importInputRef,
     settingsLimits,
     excludedSourceCatalog,
-    setSourceForm,
     setEditingSourceForm,
     setSetting,
     toggleExcludedSource,
@@ -79,7 +77,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     handleImport,
     handleCreateApiToken,
     handleRevokeApiToken,
-    handleAddSource,
+    handleAddDiscoveredSources,
     startEditSource,
     cancelEditSource,
     handleUpdateSource,
@@ -165,12 +163,10 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
             sourceError={sourceError}
             customSources={customSources}
             maxSourceCount={settingsLimits.customSourcesMaxCount}
-            sourceForm={sourceForm}
             editingSourceId={editingSourceId}
             editingSourceForm={editingSourceForm}
-            onSourceFormChange={setSourceForm}
             onEditingSourceFormChange={setEditingSourceForm}
-            onAddSource={handleAddSource}
+            onAddDiscoveredSources={handleAddDiscoveredSources}
             onStartEditSource={startEditSource}
             onCancelEditSource={cancelEditSource}
             onUpdateSource={handleUpdateSource}

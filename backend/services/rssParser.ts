@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { setTimeout: wait } = require('node:timers/promises');
+const { JSDOM } = require('jsdom');
 const RSSParser = require('rss-parser');
 const logger = require('../utils/logger');
 const summarizeErrorMessage = require('../utils/summarizeError');
@@ -29,6 +30,11 @@ interface CacheEntry<T> {
   timestamp: number;
 }
 
+interface DiscoveredFeed {
+  title: string;
+  url: string;
+}
+
 const MAX_ARTICLES_PER_SOURCE = parseIntegerEnv('MAX_ARTICLES_PER_SOURCE', 25, { min: 1 });
 const RSS_MAX_RETRIES = parseIntegerEnv('RSS_MAX_RETRIES', 4, { min: 1 });
 const RSS_RETRY_DELAY = parseIntegerEnv('RSS_RETRY_DELAY', 1500, { min: 0 });
@@ -44,6 +50,23 @@ const ARTICLE_IMAGE_FALLBACK_LIMIT = parseIntegerEnv('ARTICLE_IMAGE_FALLBACK_LIM
 const RSS_MAX_RESPONSE_BYTES = parseIntegerEnv('RSS_MAX_RESPONSE_BYTES', 1048576, { min: 1 });
 const ARTICLE_IMAGE_MAX_RESPONSE_BYTES = parseIntegerEnv('ARTICLE_IMAGE_MAX_RESPONSE_BYTES', 524288, { min: 1 });
 const limitOutboundFetch = createConcurrencyLimiter(parseIntegerEnv('RSS_INGESTION_CONCURRENCY', 8, { min: 1 }));
+const limitDiscoveryFetch = createConcurrencyLimiter(2);
+const DISCOVERABLE_FEED_TYPES = new Set(['application/rss+xml', 'application/atom+xml', 'application/rdf+xml']);
+const MAX_DISCOVERED_FEEDS = 10;
+const MAX_DISCOVERED_FEED_URL_LENGTH = 2048;
+const FEED_DIRECTORY_HINT = /(?:^|[^a-z])(?:rss|atom|feeds?)(?:[^a-z]|$)/i;
+const DIRECT_FEED_URL_HINT = /\.(?:atom|rss|xml)$/i;
+const LE_MONDE_FALLBACK_FEEDS = [
+  ['Le Monde - En continu', '/rss/en_continu.xml'],
+  ['Le Monde - International', '/international/rss_full.xml'],
+  ['Le Monde - Planete', '/planete/rss_full.xml'],
+  ['Le Monde - Politique', '/politique/rss_full.xml'],
+  ['Le Monde - Societe', '/societe/rss_full.xml'],
+  ['Le Monde - Economie', '/economie/rss_full.xml'],
+  ['Le Monde - Idees', '/idees/rss_full.xml'],
+  ['Le Monde - Culture', '/culture/rss_full.xml'],
+  ['Le Monde - Sport', '/sport/rss_full.xml']
+] as const;
 
 const RSS_REQUEST_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 NewsFlow/2.0',
@@ -468,6 +491,132 @@ async function fetchFeedXml(url: string, options: RssOptions = {}) {
   throw lastError;
 }
 
+async function parseFeedPreview(xml: string, baseUrl: string) {
+  const feed = await parser.parseString(xml);
+  return {
+    title: sanitizeHtml(feed?.title || ''),
+    siteUrl: normalizeImageUrl(feed?.link || '', baseUrl) || '',
+    language: detectFeedLanguage(feed),
+    itemCount: Array.isArray(feed?.items) ? feed.items.length : 0
+  };
+}
+
+async function discoverFeedUrls(url: string, options: RssOptions = {}): Promise<DiscoveredFeed[]> {
+  const response = await limitDiscoveryFetch(() => fetchSafeTextUrl(url, {
+    timeout: options.timeout || RSS_VALIDATION_TIMEOUT,
+    maxResponseBytes: RSS_MAX_RESPONSE_BYTES,
+    signal: options.signal,
+    headers: RSS_REQUEST_HEADERS
+  }), options);
+  const finalUrl = response.finalUrl || url;
+
+  try {
+    const preview = await parseFeedPreview(response.data, finalUrl);
+    return [{ url: finalUrl, title: preview.title.slice(0, 160) }];
+  } catch {
+    // Website HTML is expected when the submitted URL is not already a feed.
+  }
+
+  const feeds = new Map<string, DiscoveredFeed>();
+  const inspectHtml = (html: string, pageUrl: string, { collectFeedAnchors = false, findDirectory = false } = {}) => {
+    const dom = new JSDOM(html, { url: pageUrl });
+    let directoryUrl = '';
+    const addFeed = (rawUrl: string, title: string) => {
+      try {
+        const candidateUrl = new URL(rawUrl, dom.window.document.baseURI);
+        const normalizedUrl = candidateUrl.toString();
+        if (
+          !['http:', 'https:'].includes(candidateUrl.protocol)
+          || candidateUrl.username
+          || candidateUrl.password
+          || normalizedUrl.length > MAX_DISCOVERED_FEED_URL_LENGTH
+        ) {
+          return;
+        }
+
+        if (!feeds.has(normalizedUrl)) {
+          feeds.set(normalizedUrl, {
+            url: normalizedUrl,
+            title: sanitizeHtml(title).slice(0, 160)
+          });
+        }
+      } catch {
+        // Ignore malformed declarations and continue inspecting the page.
+      }
+    };
+
+    try {
+      for (const link of dom.window.document.querySelectorAll('link[href]')) {
+        const rel = String(link.getAttribute('rel') || '').toLowerCase().split(/\s+/u);
+        const type = String(link.getAttribute('type') || '').toLowerCase().split(';', 1)[0].trim();
+        if (rel.includes('alternate') && DISCOVERABLE_FEED_TYPES.has(type)) {
+          addFeed(link.getAttribute('href') || '', link.getAttribute('title') || '');
+        }
+        if (feeds.size >= MAX_DISCOVERED_FEEDS) {
+          return directoryUrl;
+        }
+      }
+
+      for (const link of dom.window.document.querySelectorAll('a[href]')) {
+        const href = link.getAttribute('href') || '';
+        let candidateUrl: URL;
+        try {
+          candidateUrl = new URL(href, dom.window.document.baseURI);
+        } catch {
+          continue;
+        }
+
+        if (collectFeedAnchors && DIRECT_FEED_URL_HINT.test(candidateUrl.pathname)) {
+          addFeed(href, link.textContent || link.getAttribute('title') || '');
+        } else if (
+          findDirectory
+          && !directoryUrl
+          && candidateUrl.origin === new URL(pageUrl).origin
+          && FEED_DIRECTORY_HINT.test(`${href} ${link.textContent || ''}`)
+        ) {
+          directoryUrl = candidateUrl.toString();
+        }
+        if (feeds.size >= MAX_DISCOVERED_FEEDS) {
+          return directoryUrl;
+        }
+      }
+
+      return directoryUrl;
+    } finally {
+      dom.window.close();
+    }
+  };
+
+  const directoryUrl = inspectHtml(response.data, finalUrl, { findDirectory: true });
+  if (directoryUrl && feeds.size < MAX_DISCOVERED_FEEDS) {
+    try {
+      const directoryResponse = await limitDiscoveryFetch(() => fetchSafeTextUrl(directoryUrl, {
+        timeout: options.timeout || RSS_VALIDATION_TIMEOUT,
+        maxResponseBytes: RSS_MAX_RESPONSE_BYTES,
+        signal: options.signal,
+        headers: RSS_REQUEST_HEADERS
+      }), options);
+      inspectHtml(directoryResponse.data, directoryResponse.finalUrl || directoryUrl, { collectFeedAnchors: true });
+    } catch (error) {
+      options.signal?.throwIfAborted();
+      logger.debug(`RSS directory discovery failed for ${redactUrlForLog(directoryUrl, { redactAllQuery: true })}: ${summarizeErrorMessage(error)}`);
+    }
+  }
+
+  const finalHost = new URL(finalUrl).hostname.toLowerCase().replace(/^www\./, '');
+  if (finalHost === 'lemonde.fr' && feeds.has(new URL('/rss/une.xml', finalUrl).toString())) {
+    for (const [title, path] of LE_MONDE_FALLBACK_FEEDS) {
+      const feedUrl = new URL(path, finalUrl).toString();
+      feeds.set(feedUrl, { title, url: feedUrl });
+      if (feeds.size >= MAX_DISCOVERED_FEEDS) {
+        break;
+      }
+    }
+  }
+
+  return [...feeds.values()];
+}
+
 async function parseFeed(source: RssSource, options: RssOptions = {}) {
   const url = source.url || '';
   if (!url) {
@@ -520,6 +669,7 @@ async function parseFeed(source: RssSource, options: RssOptions = {}) {
 }
 
 export = {
+  discoverFeedUrls,
   parseFeed,
   shutdown,
   validateFeedUrl: async (url: string, options: RssOptions = {}) => {
@@ -528,13 +678,7 @@ export = {
       timeout: options.timeout || RSS_VALIDATION_TIMEOUT,
       signal: options.signal
     });
-    const feed = await parser.parseString(xml);
-    return {
-      title: sanitizeHtml(feed?.title || ''),
-      siteUrl: normalizeImageUrl(feed?.link || '', url) || '',
-      language: detectFeedLanguage(feed),
-      itemCount: Array.isArray(feed?.items) ? feed.items.length : 0
-    };
+    return parseFeedPreview(xml, url);
   },
   _buildArticleId: buildArticleId,
   _getImageUrl: getImageUrl,
