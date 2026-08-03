@@ -1,5 +1,5 @@
 import { useEffect, useState, type RefObject } from 'react';
-import { Settings } from 'lucide-react';
+import { Rss, Settings } from 'lucide-react';
 import ProjectGitHubLink from './ProjectGitHubLink';
 import SettingsAccessSection from './settings/SettingsAccessSection';
 import SettingsCustomSourcesSection from './settings/SettingsCustomSourcesSection';
@@ -41,7 +41,7 @@ const UnsavedSettingsDialog = ({ t, saving, onCancel, onDiscard, onSave }: { t: 
   </ModalDialog>
 );
 
-const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, patchSession, restoreFocusRef }: {
+const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, patchSession, restoreFocusRef, view = 'settings' }: {
   t: Translator;
   currentUser: CurrentUser;
   availableSources: NewsSource[];
@@ -50,8 +50,11 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
   onOpenReleaseNotes: () => void;
   patchSession: (patch: Partial<CurrentUser>) => void;
   restoreFocusRef?: RefObject<HTMLElement | null>;
+  view?: 'settings' | 'feedNews';
 }) => {
   const [confirmingClose, setConfirmingClose] = useState(false);
+  const isFeedNewsView = view === 'feedNews';
+  const panelTitleId = isFeedNewsView ? 'feed-news-panel-title' : 'settings-panel-title';
   const publicApiAuthenticatedEnabled = currentUser?.features?.publicApi?.authenticatedEnabled === true;
   const {
     saving,
@@ -62,6 +65,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     apiToken,
     newApiToken,
     customSources,
+    pendingDeletedSourceIds,
     editingSourceId,
     editingSourceForm,
     importInputRef,
@@ -80,7 +84,6 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
     handleAddDiscoveredSources,
     startEditSource,
     cancelEditSource,
-    handleUpdateSource,
     handleDeleteSource
   } = useSettingsPanelState({
     currentUser,
@@ -122,75 +125,81 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
   };
 
   return (
-    <SlideOverPanelFrame ariaLabelledBy="settings-panel-title" dismissOnEscape={!saving} onClose={handleRequestClose} restoreFocusRef={restoreFocusRef}>
+    <SlideOverPanelFrame ariaLabelledBy={panelTitleId} dismissOnEscape={!saving} onClose={handleRequestClose} restoreFocusRef={restoreFocusRef}>
       <SlideOverPanelHeader
         closeDisabled={saving}
         closeLabel={t('close')}
         eyebrow={currentUser.user.username}
-        icon={Settings}
+        icon={isFeedNewsView ? Rss : Settings}
         onClose={handleRequestClose}
-        title={t('settings')}
-        titleId="settings-panel-title"
+        title={t(isFeedNewsView ? 'addFeedNews' : 'settings')}
+        titleId={panelTitleId}
       />
 
       <SlideOverPanelBody>
         <div>
-          {Boolean(error) && (
+          {Boolean(error) && !isFeedNewsView && (
             <InlineAlert className="mb-6">
               {getFriendlyApiErrorMessage(error, t)}
             </InlineAlert>
           )}
 
-          <SettingsPreferencesSection
-            t={t}
-            saving={saving}
-            settings={settings}
-            onSettingChange={setSetting}
-          />
+          {isFeedNewsView ? (
+            <SettingsCustomSourcesSection
+              t={t}
+              saving={saving}
+              sourceError={sourceError}
+              customSources={customSources}
+              maxSourceCount={settingsLimits.customSourcesMaxCount}
+              onAddDiscoveredSources={handleAddDiscoveredSources}
+            />
+          ) : (
+            <>
+              <SettingsPreferencesSection
+                t={t}
+                saving={saving}
+                settings={settings}
+                onSettingChange={setSetting}
+              />
 
-          <SettingsExclusionsSection
-            t={t}
-            saving={saving}
-            settings={settings}
-            excludedSourceCatalog={excludedSourceCatalog}
-            onToggleSource={toggleExcludedSource}
-            onToggleSubFeed={toggleExcludedSubFeed}
-          />
+              <SettingsExclusionsSection
+                t={t}
+                saving={saving}
+                settings={settings}
+                excludedSourceCatalog={excludedSourceCatalog}
+                customSources={customSources}
+                pendingDeletedSourceIds={pendingDeletedSourceIds}
+                sourceError={sourceError}
+                editingSourceId={editingSourceId}
+                editingSourceForm={editingSourceForm}
+                onEditingSourceFormChange={setEditingSourceForm}
+                onToggleSource={toggleExcludedSource}
+                onToggleSubFeed={toggleExcludedSubFeed}
+                onStartEditSource={startEditSource}
+                onCancelEditSource={cancelEditSource}
+                onDeleteSource={handleDeleteSource}
+              />
 
-          <SettingsCustomSourcesSection
-            t={t}
-            saving={saving}
-            sourceError={sourceError}
-            customSources={customSources}
-            maxSourceCount={settingsLimits.customSourcesMaxCount}
-            editingSourceId={editingSourceId}
-            editingSourceForm={editingSourceForm}
-            onEditingSourceFormChange={setEditingSourceForm}
-            onAddDiscoveredSources={handleAddDiscoveredSources}
-            onStartEditSource={startEditSource}
-            onCancelEditSource={cancelEditSource}
-            onUpdateSource={handleUpdateSource}
-            onDeleteSource={handleDeleteSource}
-          />
-
-          <SettingsAccessSection
-            t={t}
-            saving={saving}
-            importInputRef={importInputRef}
-            showApiTokenControls={publicApiAuthenticatedEnabled}
-            apiToken={apiToken}
-            newApiToken={newApiToken}
-            settingsLimits={settingsLimits}
-            onExport={handleExport}
-            onImportClick={handleImportClick}
-            onImport={handleImport}
-            onCreateApiToken={handleCreateApiToken}
-            onRevokeApiToken={handleRevokeApiToken}
-          />
+              <SettingsAccessSection
+                t={t}
+                saving={saving}
+                importInputRef={importInputRef}
+                showApiTokenControls={publicApiAuthenticatedEnabled}
+                apiToken={apiToken}
+                newApiToken={newApiToken}
+                settingsLimits={settingsLimits}
+                onExport={handleExport}
+                onImportClick={handleImportClick}
+                onImport={handleImport}
+                onCreateApiToken={handleCreateApiToken}
+                onRevokeApiToken={handleRevokeApiToken}
+              />
+            </>
+          )}
         </div>
       </SlideOverPanelBody>
 
-      <SlideOverPanelFooter>
+      {!isFeedNewsView ? <SlideOverPanelFooter>
         <div className="flex items-center gap-2">
           <ProjectGitHubLink />
           <button
@@ -205,7 +214,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
         <button type="button" onClick={handleSaveAndClose} disabled={saving || !hasUnsavedChanges} className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
           {saving ? t('saving') : t('save')}
         </button>
-      </SlideOverPanelFooter>
+      </SlideOverPanelFooter> : null}
 
       {confirmingClose ? (
         <UnsavedSettingsDialog

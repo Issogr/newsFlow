@@ -69,7 +69,12 @@ vi.mock('./BrandMark', () => ({
   default: () => <div />
 }));
 vi.mock('./SettingsPanel', () => ({
-  default: () => null
+  default: ({ view, onClose }: { view?: string; onClose: () => void }) => (
+    <div data-testid="account-panel">
+      <span>{view}</span>
+      <button type="button" onClick={onClose}>Close account panel</button>
+    </div>
+  )
 }));
 vi.mock('./ErrorMessage', () => ({
   default: ({ error }: { error: unknown }) => <div>{error instanceof Error ? error.message : 'error'}</div>
@@ -279,6 +284,24 @@ describe('NewsAggregator', () => {
 
     expect(screen.queryByText('?')).not.toBeInTheDocument();
     expect(unnamedView.container.querySelector('button[aria-label="User"] .lucide-user')).toBeInTheDocument();
+  });
+
+  test('opens Add Feed News above Settings from the user menu', async () => {
+    fetchNews.mockResolvedValue(createFeedResponse([], { meta: { totalGroups: 0 } }));
+    await renderNewsAggregator();
+
+    fireEvent.click(screen.getByRole('button', { name: 'User' }));
+    const menuItems = screen.getAllByRole('menuitem');
+    expect(menuItems[0]).toHaveTextContent('Add Feed News');
+    expect(menuItems[1]).toHaveTextContent('Settings');
+
+    fireEvent.click(menuItems[0]);
+    expect(screen.getByTestId('account-panel')).toHaveTextContent('feedNews');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close account panel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'User' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }));
+    expect(screen.getByTestId('account-panel')).toHaveTextContent('settings');
   });
 
   test('syncs the account reader text width to local preferences', async () => {

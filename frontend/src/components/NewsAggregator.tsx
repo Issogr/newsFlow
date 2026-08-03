@@ -5,6 +5,7 @@ import {
   LogOut,
   MessageSquare,
   RefreshCw,
+  Rss,
   User,
 } from 'lucide-react';
 import { fetchNews, fetchReadLaterNews, fetchThematicSummaries, isRequestCanceled, markThematicSummariesRead, removeReadLaterArticles, saveReadLaterArticles } from '../services/api';
@@ -200,7 +201,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
   const [thematicSummaries, setThematicSummaries] = useState<ThematicSummary[]>([]);
   const [selectedThematicSummary, setSelectedThematicSummary] = useState<ThematicSummary | null>(null);
   const [readThematicSummaryIds, setReadThematicSummaryIds] = useState(() => getStoredReadThematicSummaryIds(getReadThematicSummariesStorageKey(currentUser)));
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [accountPanel, setAccountPanel] = useState<'feedNews' | 'settings' | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [pendingNewsGroupIds, setPendingNewsGroupIds] = useState<string[]>([]);
@@ -865,10 +866,19 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
                       <div className="space-y-3 p-3">
                         <div className="space-y-2 pt-1">
                           <UserMenuItem
+                            icon={Rss}
+                            label={t('addFeedNews')}
+                            onClick={() => {
+                              setAccountPanel('feedNews');
+                              setUserMenuOpen(false);
+                            }}
+                            iconClassName="bg-emerald-100 text-emerald-700"
+                          />
+                          <UserMenuItem
                             icon={Cog}
                             label={t('settings')}
                             onClick={() => {
-                              setSettingsOpen(true);
+                              setAccountPanel('settings');
                               setUserMenuOpen(false);
                             }}
                             iconClassName="bg-sky-100 text-sky-700"
@@ -1009,16 +1019,17 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
         />
       )}
 
-      {settingsOpen && (
+      {accountPanel && (
         <SettingsPanel
           t={t}
           currentUser={currentUser}
           availableSources={sourceCatalog}
           currentChangelogVersion={currentChangelogVersion}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => setAccountPanel(null)}
           onOpenReleaseNotes={onOpenReleaseNotes}
           patchSession={patchSession}
           restoreFocusRef={userMenuButtonRef}
+          view={accountPanel}
         />
       )}
 
@@ -1056,7 +1067,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
         <ArrowUp className="h-5 w-5" aria-hidden="true" />
       </button>
 
-      {!currentReaderGroup && !displayedThematicSummary && !settingsOpen && !feedbackOpen && !needsSourceSetup ? (
+      {!currentReaderGroup && !displayedThematicSummary && !accountPanel && !feedbackOpen && !needsSourceSetup ? (
         <MobileBottomNav
           {...filterSurfaceProps}
           activeView={activeView}

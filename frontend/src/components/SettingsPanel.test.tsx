@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import SettingsPanel from './SettingsPanel';
 import { createTranslator } from '../i18n';
-import { addUserSource as addUserSourceImplementation, discoverRssFeeds as discoverRssFeedsImplementation, updateUserSettings as updateUserSettingsImplementation } from '../services/api';
+import { addUserSource as addUserSourceImplementation, deleteUserSource as deleteUserSourceImplementation, discoverRssFeeds as discoverRssFeedsImplementation, updateUserSettings as updateUserSettingsImplementation } from '../services/api';
 import { createTestCurrentUser } from '../test-utils/currentUser';
 import type { ComponentProps } from 'react';
 import type { UserSettings } from '../types';
@@ -20,6 +20,7 @@ vi.mock('../services/api', () => ({
 }));
 
 const addUserSource = vi.mocked(addUserSourceImplementation);
+const deleteUserSource = vi.mocked(deleteUserSourceImplementation);
 const discoverRssFeeds = vi.mocked(discoverRssFeedsImplementation);
 const updateUserSettings = vi.mocked(updateUserSettingsImplementation);
 
@@ -78,7 +79,9 @@ describe('SettingsPanel', () => {
     addUserSource
       .mockResolvedValueOnce({ source: sources[0] })
       .mockResolvedValueOnce({ source: sources[1] });
-    const { patchSession } = renderPanel();
+    const { patchSession } = renderPanel({ view: 'feedNews' });
+
+    expect(screen.getByRole('dialog', { name: 'Add Feed News' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Website URL'), { target: { value: 'https://example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Find RSS feeds' }));
@@ -111,12 +114,46 @@ describe('SettingsPanel', () => {
 
   test('reports when a website does not publish discoverable feeds', async () => {
     discoverRssFeeds.mockResolvedValue({ feeds: [] });
-    renderPanel();
+    renderPanel({ view: 'feedNews' });
 
     fireEvent.change(screen.getByLabelText('Website URL'), { target: { value: 'https://example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Find RSS feeds' }));
 
     expect(await screen.findByRole('status')).toHaveTextContent('No RSS or Atom feeds were found on this website.');
+  });
+
+  test('keeps feed discovery out of Settings and manages custom sources with the source catalog', () => {
+    renderPanel({
+      currentUser: createTestCurrentUser({
+        customSources: [{ id: 'custom-1', name: 'Personal RSS', url: 'https://example.com/feed.xml', language: 'en' }]
+      }),
+      availableSources: [{ id: 'source-1', name: 'Built-in News' }]
+    });
+
+    expect(screen.queryByLabelText('Website URL')).not.toBeInTheDocument();
+    expect(screen.getByText('Manage News Sources')).toBeInTheDocument();
+    expect(screen.getByText('2 of 2')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Edit source' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Remove' })).toHaveLength(1);
+  });
+
+  test('uses the existing save or discard reminder for a staged custom source removal', () => {
+    const { onClose } = renderPanel({
+      currentUser: createTestCurrentUser({
+        customSources: [{ id: 'custom-1', name: 'Personal RSS', url: 'https://example.com/feed.xml', language: 'en' }]
+      })
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    expect(deleteUserSource).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.getByRole('alertdialog', { name: 'Unsaved changes' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(deleteUserSource).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   test('returns focus to settings when saving from the reminder fails', async () => {

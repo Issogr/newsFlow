@@ -310,7 +310,7 @@ describe('useSettingsPanelState', () => {
     expect(patchSession).toHaveBeenLastCalledWith({ customSources: [firstSource] });
   });
 
-  test('updates a custom source immediately', async () => {
+  test('keeps a custom source edit local until save', async () => {
     const currentUser = {
       ...baseCurrentUser,
       customSources: [{
@@ -327,6 +327,7 @@ describe('useSettingsPanelState', () => {
       language: 'it'
     };
     updateUserSource.mockResolvedValue({ source: updatedSource });
+    updateUserSettings.mockResolvedValue({ settings: { ...currentUser.settings, themeMode: 'dark' } });
     const { result, patchSession } = renderSettingsHook({ currentUser });
 
     act(() => {
@@ -339,17 +340,25 @@ describe('useSettingsPanelState', () => {
       });
     });
 
-    await act(async () => {
-      await result.current.handleUpdateSource(updatedSource.id);
-    });
-
-    expect(result.current.customSources).toEqual([updatedSource]);
+    expect(updateUserSource).not.toHaveBeenCalled();
+    expect(result.current.customSources).toEqual(currentUser.customSources);
     expect(result.current.settings.themeMode).toBe('dark');
     expect(result.current.hasUnsavedChanges).toBe(true);
-    expect(patchSession).toHaveBeenLastCalledWith({ customSources: [updatedSource] });
+
+    await act(async () => {
+      await result.current.handleSave();
+    });
+
+    expect(updateUserSource).toHaveBeenCalledWith(updatedSource.id, {
+      name: updatedSource.name,
+      url: updatedSource.url,
+      language: updatedSource.language
+    });
+    expect(result.current.customSources).toEqual([updatedSource]);
+    expect(patchSession).toHaveBeenLastCalledWith(expect.objectContaining({ customSources: [updatedSource] }));
   });
 
-  test('cleans a deleted custom source from persisted exclusions', async () => {
+  test('keeps a custom source deletion local until save', async () => {
     const currentUser = {
       ...baseCurrentUser,
       settings: {
@@ -364,14 +373,30 @@ describe('useSettingsPanelState', () => {
       }]
     };
     deleteUserSource.mockResolvedValue({ success: true });
+    updateUserSettings.mockResolvedValue({ settings: {
+      ...currentUser.settings,
+      excludedSourceIds: []
+    } });
     const { result, patchSession } = renderSettingsHook({ currentUser });
 
-    await act(async () => {
-      await result.current.handleDeleteSource('source-1');
+    act(() => {
+      result.current.handleDeleteSource('source-1');
     });
 
+    expect(deleteUserSource).not.toHaveBeenCalled();
     expect(result.current.settings.excludedSourceIds).toEqual([]);
+    expect(result.current.customSources).toEqual(currentUser.customSources);
+    expect(result.current.pendingDeletedSourceIds).toEqual(['source-1']);
+    expect(result.current.hasUnsavedChanges).toBe(true);
+    expect(patchSession).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.handleSave();
+    });
+
+    expect(deleteUserSource).toHaveBeenCalledWith('source-1');
     expect(result.current.customSources).toEqual([]);
+    expect(result.current.pendingDeletedSourceIds).toEqual([]);
     expect(patchSession).toHaveBeenLastCalledWith(expect.objectContaining({
       settings: expect.objectContaining({ excludedSourceIds: [] }),
       customSources: []

@@ -2,7 +2,7 @@
 
 ## 3.6.0
 
-- added RSS and Atom feed discovery from a website URL in Settings
+- added a dedicated Add Feed News window for RSS/Atom discovery and moved custom feed management into Settings with shared save/discard behavior
 - removed clickbait classification and labels, and consolidated AI summary and podcast generation into one daily `20:00` local-time window
 - migrated frontend, BFF, backend, tests, and first-party tooling to strict TypeScript while preserving CommonJS service output and existing runtime behavior
 - made SQLite upgrades transactional and fail-fast, moved article FTS synchronization to native triggers, and consolidated podcast audio into its locale-specific table

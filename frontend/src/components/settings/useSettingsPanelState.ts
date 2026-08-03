@@ -59,6 +59,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
   const [newApiToken, setNewApiToken] = useState('');
   const [editingSourceId, setEditingSourceId] = useState('');
   const [editingSourceForm, setEditingSourceForm] = useState(createInitialEditingSourceForm);
+  const [pendingDeletedSourceIds, setPendingDeletedSourceIds] = useState<string[]>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
   const userIdentityRef = useRef(getCurrentUserIdentity(currentUser));
   const currentUserRef = useRef(currentUser);
@@ -91,6 +92,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
       setSourceError(null);
       setEditingSourceId('');
       setEditingSourceForm(createInitialEditingSourceForm());
+      setPendingDeletedSourceIds([]);
     } else {
       setSettings((current) => {
         const persistedSettings = getInitialSettings(currentUser);
@@ -219,19 +221,15 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
 
   const persistSourceUpdate = useCallback(async (sourceId: string, existingSources: NewsSource[] = customSources) => {
     const response = await updateUserSource(sourceId, editingSourceForm);
-    const nextCustomSources = existingSources.map((source) => (
+    return existingSources.map((source) => (
       source.id === sourceId ? response.source : source
     ));
-    setEditingSourceId('');
-    setEditingSourceForm(createInitialEditingSourceForm());
-    syncCustomSourcesState(nextCustomSources);
-    return nextCustomSources;
-  }, [customSources, editingSourceForm, syncCustomSourcesState]);
+  }, [customSources, editingSourceForm]);
 
   const handleSave = useCallback(async () => {
     const dirtySettingKeys = [...dirtySettingKeysRef.current];
     const settingsPatch = createSettingsPatch(settings, currentUserRef.current, dirtySettingKeys);
-    if (Object.keys(settingsPatch).length === 0 && !hasEditingSourceChanges) {
+    if (Object.keys(settingsPatch).length === 0 && !hasEditingSourceChanges && pendingDeletedSourceIds.length === 0) {
       dirtySettingKeysRef.current.clear();
       return true;
     }
@@ -244,6 +242,11 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
       if (hasEditingSourceChanges) {
         nextCustomSources = await persistSourceUpdate(editingSourceId, nextCustomSources);
       }
+
+      for (const sourceId of pendingDeletedSourceIds) {
+        await deleteUserSource(sourceId);
+      }
+      nextCustomSources = nextCustomSources.filter((source) => !pendingDeletedSourceIds.includes(source.id));
 
       if (Object.keys(settingsPatch).length > 0) {
         const response = await updateUserSettings(settingsPatch);
@@ -265,9 +268,12 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
       : getInitialSettings(currentUserRef.current);
     setStoredReaderTextSizePreference(nextSettings.readerTextSize);
     setStoredReaderTextWidthPreference(nextSettings.readerTextWidth);
+    setEditingSourceId('');
+    setEditingSourceForm(createInitialEditingSourceForm());
+    setPendingDeletedSourceIds([]);
     syncPersistedUserState(nextSettings, result.nextCustomSources);
     return true;
-  }, [customSources, editingSourceId, hasEditingSourceChanges, persistSourceUpdate, runSavingAction, settings, syncPersistedUserState]);
+  }, [customSources, editingSourceId, hasEditingSourceChanges, pendingDeletedSourceIds, persistSourceUpdate, runSavingAction, settings, syncPersistedUserState]);
 
   const handleCreateApiToken = useCallback(async () => {
     await runSavingAction(async () => {
@@ -370,37 +376,27 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
     setEditingSourceForm(createInitialEditingSourceForm());
   }, []);
 
-  const handleUpdateSource = useCallback(async (sourceId: string) => {
-    setSourceError(null);
-
-    await runSavingAction(async () => {
-      await persistSourceUpdate(sourceId);
-    }, { globalError: false, onError: setSourceError });
-  }, [persistSourceUpdate, runSavingAction]);
-
-  const handleDeleteSource = useCallback(async (sourceId: string) => {
-    await runSavingAction(async () => {
-      await deleteUserSource(sourceId);
-      const nextCustomSources = customSources.filter((source) => source.id !== sourceId);
-      const nextSettings = {
-        ...settings,
-        excludedSourceIds: (settings.excludedSourceIds || []).filter((item) => item !== sourceId)
-      };
-      const persistedSettings = currentUserRef.current?.settings || {};
-      const nextPersistedSettings = {
-        ...persistedSettings,
-        excludedSourceIds: (persistedSettings.excludedSourceIds || []).filter((item) => item !== sourceId)
-      };
-      setSettings(nextSettings);
-      syncCustomSourcesState(nextCustomSources, nextPersistedSettings);
-    });
-  }, [customSources, runSavingAction, settings, syncCustomSourcesState]);
+  const handleDeleteSource = useCallback((sourceId: string) => {
+    const nextExcludedSourceIds = (settings.excludedSourceIds || []).filter((item) => item !== sourceId);
+    const nextExcludedSubSourceIds = (settings.excludedSubSourceIds || []).filter((item) => item !== sourceId);
+    markSettingDirty('excludedSourceIds', nextExcludedSourceIds);
+    markSettingDirty('excludedSubSourceIds', nextExcludedSubSourceIds);
+    setSettings((current) => ({
+      ...current,
+      excludedSourceIds: nextExcludedSourceIds,
+      excludedSubSourceIds: nextExcludedSubSourceIds
+    }));
+    setPendingDeletedSourceIds((current) => current.includes(sourceId) ? current : [...current, sourceId]);
+    if (editingSourceId === sourceId) {
+      cancelEditSource();
+    }
+  }, [cancelEditSource, editingSourceId, markSettingDirty, settings.excludedSourceIds, settings.excludedSubSourceIds]);
 
   const hasUnsavedChanges = Object.keys(createSettingsPatch(
     settings,
     currentUser,
     [...dirtySettingKeysRef.current]
-  )).length > 0 || hasEditingSourceChanges;
+  )).length > 0 || hasEditingSourceChanges || pendingDeletedSourceIds.length > 0;
 
   return {
     saving,
@@ -411,6 +407,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
     apiToken,
     newApiToken,
     customSources,
+    pendingDeletedSourceIds,
     editingSourceId,
     editingSourceForm,
     importInputRef,
@@ -429,7 +426,6 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
     handleAddDiscoveredSources,
     startEditSource,
     cancelEditSource,
-    handleUpdateSource,
     handleDeleteSource
   };
 };
