@@ -1,0 +1,24 @@
+import type { HTMLAttributes, ReactNode } from 'react';
+
+const TONE_CLASS_NAMES = {
+  error: 'border-red-200 bg-red-50 text-red-700',
+  warning: 'border-amber-200 bg-amber-50 text-amber-800'
+};
+
+interface InlineAlertProps extends HTMLAttributes<HTMLElement> {
+  as?: 'div' | 'p';
+  children: ReactNode;
+  tone?: keyof typeof TONE_CLASS_NAMES;
+}
+
+const InlineAlert = ({ as: Tag = 'div', children, className = '', tone = 'error', ...props }: InlineAlertProps) => (
+  <Tag
+    className={`rounded-2xl border px-4 py-3 text-sm ${TONE_CLASS_NAMES[tone] || TONE_CLASS_NAMES.error} ${className}`.trim()}
+    role={tone === 'error' ? 'alert' : undefined}
+    {...props}
+  >
+    {children}
+  </Tag>
+);
+
+export default InlineAlert;

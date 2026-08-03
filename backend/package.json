@@ -1,26 +1,28 @@
 {
   "name": "newsflow-backend",
-  "version": "3.5.15",
+  "version": "3.6.0",
   "description": "Backend for news aggregator app with real-time updates",
-  "main": "server.js",
+  "main": "dist/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "lint": "eslint .",
-    "test": "node ../scripts/run-vitest.js",
-    "test:coverage": "node ../scripts/run-vitest.js --coverage",
-    "test:watch": "node ../scripts/run-vitest.js --watch"
+    "start": "node --enable-source-maps dist/server.js",
+    "dev": "tsx watch server.ts",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p ../scripts/tsconfig.json",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config .",
+    "test": "NODE_OPTIONS=--import=tsx node ../scripts/run-vitest.ts",
+    "test:coverage": "NODE_OPTIONS=--import=tsx node ../scripts/run-vitest.ts --coverage",
+    "test:watch": "NODE_OPTIONS=--import=tsx node ../scripts/run-vitest.ts --watch"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
-    "@openrouter/sdk": "^0.12.35",
+    "@openrouter/sdk": "^1.2.5",
     "axios": "^1.16.1",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.4.1",
     "helmet": "^8.2.0",
     "html-entities": "^2.6.0",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "morgan": "^1.10.1",
     "multer": "^2.2.0",
     "rss-parser": "^3.13.0",
@@ -28,10 +30,18 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsdom": "^28.0.3",
+    "@types/morgan": "^1.9.10",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^24.13.3",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^10.4.0",
-    "nodemon": "^3.1.14",
     "supertest": "^7.2.2",
+    "tsx": "^4.23.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.65.0",
     "vitest": "^4.1.7"
   },
   "engines": {

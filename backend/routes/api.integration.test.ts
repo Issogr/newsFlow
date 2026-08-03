@@ -1,0 +1,1394 @@
+import type { Application, NextFunction, Request, Response } from 'express';
+import type { Response as SupertestResponse } from 'supertest';
+import type { Mock } from 'vitest';
+
+type RuntimeModule = ReturnType<typeof require>;
+type MockModule = Record<string, Mock>;
+
+const request = require('supertest') as typeof import('supertest');
+const { getCanonicalSourceId } = require('../utils/sourceCatalog');
+const { MAX_FEEDBACK_IMAGE_BYTES } = require('../utils/feedback');
+const { cleanupTempNewsDb, setupTempNewsDb } = require('../test-utils/tempNewsDb');
+
+const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
+const originalAnonymousPublicApiEnabled = process.env.PUBLIC_API_ANONYMOUS_ENABLED;
+const originalAuthenticatedPublicApiEnabled = process.env.PUBLIC_API_AUTHENTICATED_ENABLED;
+const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
+
+const expectedDisabledAiFeatures = {
+  topicDetectionEnabled: false,
+  storyGroupingEnabled: false,
+  thematicSummariesEnabled: false,
+  podcastsEnabled: false
+};
+
+function buildApiTestApp(): Application {
+  const express = require('express') as typeof import('express');
+  const apiRoutes = require('./api');
+  const publicApiRoutes = require('./publicApi');
+  const { createError, errorMiddleware } = require('../utils/errorHandler');
+
+  const app = express();
+  app.use(express.json());
+  app.use('/internal-api', apiRoutes);
+  app.use('/api/public', publicApiRoutes);
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    next(createError(404, `Resource not found: ${req.originalUrl}`, 'RESOURCE_NOT_FOUND'));
+  });
+  app.use(errorMiddleware);
+  return app;
+}
+
+function getSessionCookie(response: SupertestResponse): string {
+  const cookies = response.headers['set-cookie'] as string[] | undefined;
+  return cookies?.find((value) => value.startsWith('newsflow_session=')) || '';
+}
+
+describe('API auth and user flows', () => {
+  let tempDir: string;
+  let app: Application;
+  let database: RuntimeModule;
+  let newsService: MockModule;
+  let rssParser: MockModule;
+  let userService: RuntimeModule;
+  let feedbackService: MockModule;
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env.PUBLIC_API_ANONYMOUS_ENABLED = 'true';
+    process.env.PUBLIC_API_AUTHENTICATED_ENABLED = 'true';
+    delete process.env.OPENROUTER_API_KEY;
+    ({ tempDir } = setupTempNewsDb('news-api-test-'));
+
+    jest.doMock('../services/newsAggregator', () => ({
+      getNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
+      getReadLaterFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
+      saveReadLaterArticles: jest.fn().mockReturnValue({ success: true, readLater: true, articleIds: ['article-1'], savedCount: 1 }),
+      removeReadLaterArticles: jest.fn().mockReturnValue({ success: true, readLater: false, articleIds: ['article-1'], removedCount: 1, deletedExpiredArticleCount: 0 }),
+      getCachedNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
+      refreshUserSources: jest.fn().mockResolvedValue({ success: true })
+    }));
+
+    jest.doMock('../services/rssParser', () => ({
+      discoverFeedUrls: jest.fn(),
+      validateFeedUrl: jest.fn()
+    }));
+
+    jest.doMock('../services/feedbackService', () => ({
+      isFeedbackConfigured: jest.fn(() => true),
+      sendFeedback: jest.fn().mockResolvedValue({ messageId: 1 })
+    }));
+
+    jest.doMock('../services/thematicSummaryService', () => ({
+      getLatestSummaries: jest.fn(() => ({ items: [], topics: [] }))
+    }));
+
+    app = buildApiTestApp();
+    database = require('../services/database');
+    newsService = require('../services/newsAggregator') as MockModule;
+    rssParser = require('../services/rssParser') as MockModule;
+    userService = require('../services/userService');
+    feedbackService = require('../services/feedbackService') as MockModule;
+  });
+
+  afterEach(() => {
+    cleanupTempNewsDb({ tempDir }, database);
+    jest.clearAllMocks();
+  });
+
+  afterAll(() => {
+    if (originalAnonymousPublicApiEnabled === undefined) {
+      delete process.env.PUBLIC_API_ANONYMOUS_ENABLED;
+    } else {
+      process.env.PUBLIC_API_ANONYMOUS_ENABLED = originalAnonymousPublicApiEnabled;
+    }
+
+    if (originalAuthenticatedPublicApiEnabled === undefined) {
+      delete process.env.PUBLIC_API_AUTHENTICATED_ENABLED;
+    } else {
+      process.env.PUBLIC_API_AUTHENTICATED_ENABLED = originalAuthenticatedPublicApiEnabled;
+    }
+
+    if (originalOpenRouterApiKey === undefined) {
+      delete process.env.OPENROUTER_API_KEY;
+    } else {
+      process.env.OPENROUTER_API_KEY = originalOpenRouterApiKey;
+    }
+  });
+
+  test('registers and logs in a user with independent sessions', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'alice', password: 'secret123' })
+      .expect(201);
+
+    expect(registerResponse.body.user).toEqual({
+      id: expect.any(String),
+      username: 'alice',
+      isAdmin: false
+    });
+    expect(registerResponse.body).toMatchObject({
+      settings: {
+        defaultLanguage: 'auto',
+        showNewsImages: true,
+        compactNewsCards: false,
+        compactNewsCardsMode: 'off',
+        readerPanelPosition: 'right',
+        readerTextSize: 'medium',
+        readerTextWidth: 'default',
+        lastSeenReleaseNotesVersion: '',
+        excludedSourceIds: [],
+        excludedSubSourceIds: []
+      },
+      limits: {
+        feedbackTitleMaxLength: 120,
+        feedbackDescriptionMaxLength: 2800,
+        feedbackImageMaxBytes: 5242880,
+        feedbackVideoMaxBytes: 12582912,
+        apiTokenTtlDays: 30,
+        customSourcesMaxCount: 8
+      },
+      customSources: []
+    });
+    expect(registerResponse.body.settings).not.toHaveProperty('articleRetentionHours');
+    expect(registerResponse.body.settings).not.toHaveProperty('recentHours');
+    expect(registerResponse.body.features).toEqual({
+      ai: expectedDisabledAiFeatures,
+      publicApi: {
+        anonymousEnabled: true,
+        authenticatedEnabled: true
+      },
+      feedback: { enabled: true }
+    });
+    expect(registerResponse.body.token).toBeUndefined();
+    expect(getSessionCookie(registerResponse)).toContain('newsflow_session=');
+
+    const loginResponse = await request(app)
+      .post('/internal-api/auth/login')
+      .send({ username: 'alice', password: 'secret123' })
+      .expect(200);
+
+    expect(loginResponse.body.token).toBeUndefined();
+    expect(getSessionCookie(loginResponse)).toContain('newsflow_session=');
+  });
+
+  test('rate limits registration bursts by IP even with unique usernames', async () => {
+    for (let index = 0; index < 20; index += 1) {
+      await request(app)
+        .post('/internal-api/auth/register')
+        .send({ username: `burst-user-${index}`, password: 'secret123' })
+        .expect(201);
+    }
+
+    const response = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'burst-user-blocked', password: 'secret123' })
+      .expect(429);
+
+    expect(response.body.error).toEqual(expect.objectContaining({ code: 'RATE_LIMIT_EXCEEDED' }));
+  });
+
+  test('bootstraps the admin account and allows creating password setup links', async () => {
+    const bootstrap = userService.ensureAdminBootstrap();
+
+    expect(bootstrap.required).toBe(true);
+    expect(bootstrap.user).toMatchObject({ username: 'admin', isAdmin: true });
+
+    const validateResponse = await request(app)
+      .get('/internal-api/auth/password-setup/validate')
+      .query({ token: bootstrap.token })
+      .expect(200);
+
+    expect(validateResponse.body).toMatchObject({
+      username: 'admin',
+      isAdmin: true,
+      purpose: 'admin-bootstrap'
+    });
+
+    const adminSetupResponse = await request(app)
+      .post('/internal-api/auth/password-setup/complete')
+      .send({ token: bootstrap.token, password: 'secret123' })
+      .expect(200);
+    const adminSessionCookie = getSessionCookie(adminSetupResponse);
+
+    expect(adminSetupResponse.body.user).toMatchObject({
+      username: 'admin',
+      isAdmin: true
+    });
+
+    const memberResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'member-user', password: 'secret123' })
+      .expect(201);
+
+    const usersResponse = await request(app)
+      .get('/internal-api/admin/users')
+      .set('Cookie', adminSessionCookie)
+      .expect(200);
+
+    expect(usersResponse.body.summary).toEqual(expect.objectContaining({
+      totalUsers: 2,
+      onlineUsers: expect.any(Number),
+      activeUsers: 2,
+      onlineWindowMinutes: expect.any(Number)
+    }));
+    expect(usersResponse.body.users).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        username: 'admin',
+        isAdmin: true,
+        passwordConfigured: true,
+        lastLoginAt: expect.any(String),
+        lastActivityAt: expect.any(String),
+        isOnline: expect.any(Boolean)
+      }),
+      expect.objectContaining({
+        username: 'member-user',
+        isAdmin: false,
+        passwordConfigured: true,
+        lastLoginAt: expect.any(String),
+        lastActivityAt: expect.any(String),
+        isOnline: expect.any(Boolean)
+      })
+    ]));
+
+    const passwordLinkResponse = await request(app)
+      .post(`/internal-api/admin/users/${memberResponse.body.user.id}/password-setup-link`)
+      .set('Cookie', adminSessionCookie)
+      .expect(200);
+
+    expect(passwordLinkResponse.body).toMatchObject({
+      success: true,
+      user: {
+        id: memberResponse.body.user.id,
+        username: 'member-user',
+        isAdmin: false
+      },
+      setupLink: expect.stringContaining('/password/setup#token='),
+      expiresAt: expect.any(String)
+    });
+  });
+
+  test('rejects registration with a short password', async () => {
+    const response = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'short-pass-user', password: 'short' })
+      .expect(400);
+
+    expect(response.body.error).toMatchObject({
+      code: 'INVALID_PASSWORD',
+      message: 'Password must contain at least 8 characters'
+    });
+  });
+
+  test('rejects registration for the reserved admin username', async () => {
+    const response = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'admin', password: 'secret123' })
+      .expect(403);
+
+    expect(response.body.error).toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'This username is reserved'
+    });
+  });
+
+  test('completes a user password setup link generated by an admin', async () => {
+    const bootstrap = userService.ensureAdminBootstrap();
+    const adminSetupResponse = await request(app)
+      .post('/internal-api/auth/password-setup/complete')
+      .send({ token: bootstrap.token, password: 'secret123' })
+      .expect(200);
+    const adminSessionCookie = getSessionCookie(adminSetupResponse);
+
+    const memberResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'legacy-member', password: 'secret123' })
+      .expect(201);
+    const memberSessionCookie = getSessionCookie(memberResponse);
+    const apiTokenResponse = await request(app)
+      .post('/internal-api/me/api-token')
+      .set('Cookie', memberSessionCookie)
+      .send({})
+      .expect(201);
+
+    database.updateUserPassword(memberResponse.body.user.id, null, new Date().toISOString());
+
+    const resetLinkResponse = await request(app)
+      .post(`/internal-api/admin/users/${memberResponse.body.user.id}/password-setup-link`)
+      .set('Cookie', adminSessionCookie)
+      .expect(200);
+
+    const resetToken = new URL(resetLinkResponse.body.setupLink).hash.replace(/^#/, '').replace(/^token=/, '');
+
+    const completeResetResponse = await request(app)
+      .post('/internal-api/auth/password-setup/complete')
+      .send({ token: resetToken, password: 'renewed123' })
+      .expect(200);
+
+    expect(completeResetResponse.body.user).toMatchObject({
+      id: memberResponse.body.user.id,
+      username: 'legacy-member',
+      isAdmin: false
+    });
+
+    await request(app)
+      .post('/internal-api/auth/login')
+      .send({ username: 'legacy-member', password: 'renewed123' })
+      .expect(200);
+
+    await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${apiTokenResponse.body.token}`)
+      .expect(401);
+
+    await request(app)
+      .post('/internal-api/auth/password-setup/complete')
+      .send({ token: resetToken, password: 'another123' })
+      .expect(410);
+  });
+
+  test('allows an admin to delete a non-admin user', async () => {
+    const bootstrap = userService.ensureAdminBootstrap();
+    const adminSetupResponse = await request(app)
+      .post('/internal-api/auth/password-setup/complete')
+      .send({ token: bootstrap.token, password: 'secret123' })
+      .expect(200);
+    const adminSessionCookie = getSessionCookie(adminSetupResponse);
+
+    const memberResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'delete-me', password: 'secret123' })
+      .expect(201);
+
+    const deleteResponse = await request(app)
+      .delete(`/internal-api/admin/users/${memberResponse.body.user.id}`)
+      .set('Cookie', adminSessionCookie)
+      .expect(200);
+
+    expect(deleteResponse.body).toMatchObject({
+      success: true,
+      user: {
+        id: memberResponse.body.user.id,
+        username: 'delete-me',
+        isAdmin: false
+      }
+    });
+
+    const usersResponse = await request(app)
+      .get('/internal-api/admin/users')
+      .set('Cookie', adminSessionCookie)
+      .expect(200);
+
+    expect(usersResponse.body.users).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ username: 'delete-me' })
+    ]));
+
+    await request(app)
+      .post('/internal-api/auth/login')
+      .send({ username: 'delete-me', password: 'secret123' })
+      .expect(401);
+  });
+
+  test('updates settings and persists them for the authenticated user', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'settings-user', password: 'secret123' })
+      .expect(201);
+
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    const updateResponse = await request(app)
+      .patch('/internal-api/me/settings')
+      .set('Cookie', sessionCookie)
+      .send({
+        defaultLanguage: 'en',
+        themeMode: 'dark',
+        articleRetentionHours: 12,
+        recentHours: 999,
+        showNewsImages: false,
+        compactNewsCardsMode: 'desktop',
+        readerPanelPosition: 'left',
+        readerTextSize: 'large',
+        readerTextWidth: 'widest',
+        lastSeenReleaseNotesVersion: '3.2.3',
+        excludedSourceIds: [ansaSourceId],
+        excludedSubSourceIds: ['ansa_mondo']
+      })
+      .expect(200);
+
+    expect(updateResponse.body).toMatchObject({
+      success: true,
+      settings: {
+        defaultLanguage: 'en',
+        themeMode: 'dark',
+        showNewsImages: false,
+        compactNewsCards: true,
+        compactNewsCardsMode: 'desktop',
+        readerPanelPosition: 'left',
+        readerTextSize: 'large',
+        readerTextWidth: 'widest',
+        lastSeenReleaseNotesVersion: '3.2.3',
+        excludedSourceIds: [ansaSourceId],
+        excludedSubSourceIds: ['ansa_mondo']
+      }
+    });
+    expect(updateResponse.body.settings).not.toHaveProperty('articleRetentionHours');
+    expect(updateResponse.body.settings).not.toHaveProperty('recentHours');
+    expect(updateResponse.body.settings).toMatchObject({
+      userId: expect.any(String),
+      updatedAt: expect.any(String)
+    });
+
+    const currentUserResponse = await request(app)
+      .get('/internal-api/me')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(currentUserResponse.body.settings).toEqual(updateResponse.body.settings);
+    expect(currentUserResponse.body.limits).toEqual({
+      feedbackTitleMaxLength: 120,
+      feedbackDescriptionMaxLength: 2800,
+      feedbackImageMaxBytes: 5242880,
+      feedbackVideoMaxBytes: 12582912,
+      apiTokenTtlDays: 30,
+      customSourcesMaxCount: 8
+    });
+  });
+
+  test('passes manual refresh requests through to the authenticated news feed service', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'refresh-user', password: 'secret123' })
+      .expect(201);
+
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    await request(app)
+      .get('/internal-api/news')
+      .query({ refresh: 'true' })
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(newsService.getNewsFeed).toHaveBeenCalledWith(expect.objectContaining({
+      refresh: true
+    }), expect.objectContaining({
+      userId: registerResponse.body.user.id
+    }));
+  });
+
+  test('keeps public API modes disabled when the feature flags are off', async () => {
+    process.env.PUBLIC_API_ANONYMOUS_ENABLED = 'false';
+    process.env.PUBLIC_API_AUTHENTICATED_ENABLED = 'false';
+
+    await request(app)
+      .get('/api/public/news')
+      .expect(404);
+
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'disabled-api-user', password: 'secret123' })
+      .expect(201);
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    expect(registerResponse.body.features).toEqual({
+      ai: expectedDisabledAiFeatures,
+      publicApi: {
+        anonymousEnabled: false,
+        authenticatedEnabled: false
+      },
+      feedback: { enabled: true }
+    });
+    expect(registerResponse.body.apiToken).toBeNull();
+
+    const currentUserResponse = await request(app)
+      .get('/internal-api/me')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(currentUserResponse.body.features.publicApi).toEqual({
+      anonymousEnabled: false,
+      authenticatedEnabled: false
+    });
+    expect(currentUserResponse.body.features.ai).toEqual(expectedDisabledAiFeatures);
+    expect(currentUserResponse.body.apiToken).toBeNull();
+
+    await request(app)
+      .post('/internal-api/me/api-token')
+      .set('Cookie', sessionCookie)
+      .send({})
+      .expect(404);
+  });
+
+  test('allows token public API access while anonymous public API access is disabled', async () => {
+    process.env.PUBLIC_API_ANONYMOUS_ENABLED = 'false';
+    process.env.PUBLIC_API_AUTHENTICATED_ENABLED = 'true';
+
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'token-only-api-user', password: 'secret123' })
+      .expect(201);
+    const tokenResult = userService.createUserApiToken(registerResponse.body.user.id);
+
+    await request(app)
+      .get('/api/public/news')
+      .expect(404);
+
+    const response = await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${tokenResult.token}`)
+      .expect(200);
+
+    expect(response.body.access.mode).toBe('token');
+  });
+
+  test('allows anonymous public API access while token public API access is disabled', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'anonymous-only-api-user', password: 'secret123' })
+      .expect(201);
+    const tokenResult = userService.createUserApiToken(registerResponse.body.user.id);
+    const lookupSpy = jest.spyOn(database, 'findActiveApiTokenByHash');
+
+    process.env.PUBLIC_API_ANONYMOUS_ENABLED = 'true';
+    process.env.PUBLIC_API_AUTHENTICATED_ENABLED = 'false';
+
+    const anonymousResponse = await request(app)
+      .get('/api/public/news')
+      .expect(200);
+
+    expect(anonymousResponse.body.access.mode).toBe('anonymous');
+
+    await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${tokenResult.token}`)
+      .expect(404);
+
+    expect(lookupSpy).not.toHaveBeenCalled();
+  });
+
+  test('serves public cached news anonymously without user context', async () => {
+    const usageSpy = jest.spyOn(userService, 'recordPublicApiRequestUsage');
+    newsService.getCachedNewsFeed.mockResolvedValueOnce({
+      items: [],
+      meta: { hasMore: false },
+      filters: { sources: [], topics: [] }
+    });
+
+    const response = await request(app)
+      .get('/api/public/news')
+      .expect(200);
+
+    expect(newsService.getCachedNewsFeed).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
+      userId: null,
+      excludedSourceIds: [],
+      excludedSubSourceIds: []
+    }));
+    expect(newsService.getCachedNewsFeed.mock.calls[0][0]).toEqual(expect.objectContaining({
+      includeFilters: false
+    }));
+    expect(response.body.access).toEqual({
+      mode: 'anonymous',
+      cachedOnly: true
+    });
+    expect(usageSpy).toHaveBeenCalledWith({ authenticated: false, userId: null });
+  });
+
+  test('does not record public API usage when cached news lookup fails', async () => {
+    const usageSpy = jest.spyOn(userService, 'recordPublicApiRequestUsage');
+    newsService.getCachedNewsFeed.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await request(app)
+      .get('/api/public/news')
+      .expect(500);
+
+    expect(usageSpy).not.toHaveBeenCalled();
+  });
+
+  test('only includes public API filter metadata when explicitly requested', async () => {
+    newsService.getCachedNewsFeed.mockResolvedValueOnce({
+      items: [],
+      meta: { hasMore: false },
+      filters: { sources: [], topics: [] }
+    });
+
+    await request(app)
+      .get('/api/public/news')
+      .query({ includeFilters: 'true' })
+      .expect(200);
+
+    expect(newsService.getCachedNewsFeed.mock.calls[0][0]).toEqual(expect.objectContaining({
+      includeFilters: true
+    }));
+  });
+
+  test('normalizes unsafe public news pagination before querying cached news', async () => {
+    newsService.getCachedNewsFeed.mockResolvedValue({
+      items: [],
+      meta: { hasMore: false },
+      filters: null
+    });
+
+    await request(app)
+      .get('/api/public/news')
+      .query({ page: '1e309', pageSize: '1e309' })
+      .expect(200);
+
+    expect(newsService.getCachedNewsFeed.mock.calls[0][0]).toEqual(expect.objectContaining({
+      page: 1,
+      pageSize: 12
+    }));
+
+    await request(app)
+      .get('/api/public/news')
+      .query({ page: '999999', pageSize: '999999' })
+      .expect(200);
+
+    expect(newsService.getCachedNewsFeed.mock.calls[1][0]).toEqual(expect.objectContaining({
+      page: 20,
+      pageSize: 30
+    }));
+  });
+
+  test('serves public cached news with user-scoped context for valid API tokens', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'api-user', password: 'secret123' })
+      .expect(201);
+
+    const tokenResult = userService.createUserApiToken(registerResponse.body.user.id);
+    newsService.getCachedNewsFeed.mockResolvedValueOnce({
+      items: [],
+      meta: { hasMore: false },
+      filters: { sources: [], topics: [] }
+    });
+
+    const response = await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${tokenResult.token}`)
+      .expect(200);
+
+    expect(newsService.getCachedNewsFeed).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
+      userId: registerResponse.body.user.id,
+      excludedSourceIds: [],
+      excludedSubSourceIds: []
+    }));
+    expect(response.body.access).toEqual({
+      mode: 'token',
+      cachedOnly: true
+    });
+
+    expect(database.findUserById(registerResponse.body.user.id).publicApiRequestCount).toBe(0);
+    userService.flushAnonymousPublicApiUsage({ force: true });
+    require('../utils/auth').flushApiTokenUsage({ force: true });
+
+    const usageRow = database.getDb().prepare(`
+      SELECT public_api_request_count AS publicApiRequestCount,
+             public_api_last_used_at AS publicApiLastUsedAt
+      FROM users
+      WHERE id = ?
+    `).get(registerResponse.body.user.id);
+
+    expect(usageRow.publicApiRequestCount).toBe(1);
+    expect(usageRow.publicApiLastUsedAt).toEqual(expect.any(String));
+
+    const tokenRow = database.getDb().prepare(`
+      SELECT created_by_ip AS createdByIp,
+             last_used_ip AS lastUsedIp,
+             last_used_at AS lastUsedAt
+      FROM api_tokens
+      WHERE user_id = ?
+    `).get(registerResponse.body.user.id);
+
+    expect(tokenRow.createdByIp).toBeNull();
+    expect(tokenRow.lastUsedIp).toBeNull();
+    expect(tokenRow.lastUsedAt).toEqual(expect.any(String));
+  });
+
+  test('does not apply the invalid-token limit to valid API tokens', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'api-rate-user', password: 'secret123' })
+      .expect(201);
+    const tokenResult = userService.createUserApiToken(registerResponse.body.user.id);
+
+    for (let index = 0; index < 31; index += 1) {
+      await request(app)
+        .get('/api/public/news')
+        .set('Authorization', `Bearer ${tokenResult.token}`)
+        .expect(200);
+    }
+  });
+
+  test('counts anonymous public API requests globally', async () => {
+    await request(app)
+      .get('/api/public/news')
+      .expect(200);
+
+    await request(app)
+      .get('/api/public/news')
+      .expect(200);
+
+    userService.flushAnonymousPublicApiUsage({ force: true });
+
+    const count = database.getDb().prepare(`
+      SELECT value
+      FROM app_meta
+      WHERE key = 'anonymous_public_api_request_count'
+    `).get()?.value;
+
+    expect(Number(count)).toBe(2);
+  });
+
+  test('revokes api tokens immediately and records revocation in the database', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'revoke-user', password: 'secret123' })
+      .expect(201);
+
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    const createResponse = await request(app)
+      .post('/internal-api/me/api-token')
+      .set('Cookie', sessionCookie)
+      .send({})
+      .expect(201);
+
+    const apiToken = createResponse.body.token;
+    const userId = registerResponse.body.user.id;
+
+    expect(database.getDb().prepare('SELECT COUNT(*) AS count FROM api_tokens WHERE user_id = ?').get(userId).count).toBe(1);
+
+    await request(app)
+      .delete('/internal-api/me/api-token')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${apiToken}`)
+      .expect(401);
+
+    const revokedRow = database.getDb().prepare('SELECT revoked_at AS revokedAt FROM api_tokens WHERE user_id = ?').get(userId);
+    expect(revokedRow.revokedAt).toEqual(expect.any(String));
+  });
+
+  test('rate-limits repeated invalid public API token attempts before DB lookup', async () => {
+    const lookupSpy = jest.spyOn(database, 'findActiveApiTokenByHash');
+
+    for (let index = 0; index < 30; index += 1) {
+      await request(app)
+        .get('/api/public/news')
+        .set('Authorization', 'Bearer invalid-public-token')
+        .expect(401);
+    }
+
+    await request(app)
+      .get('/api/public/news')
+      .set('Authorization', 'Bearer invalid-public-token')
+      .expect(429);
+
+    expect(lookupSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('regenerates api tokens immediately and revokes the previous token row', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'regen-user', password: 'secret123' })
+      .expect(201);
+
+    const sessionCookie = getSessionCookie(registerResponse);
+    const userId = registerResponse.body.user.id;
+
+    const firstTokenResponse = await request(app)
+      .post('/internal-api/me/api-token')
+      .set('Cookie', sessionCookie)
+      .send({})
+      .expect(201);
+
+    const firstToken = firstTokenResponse.body.token;
+
+    const secondTokenResponse = await request(app)
+      .post('/internal-api/me/api-token')
+      .set('Cookie', sessionCookie)
+      .send({})
+      .expect(201);
+
+    const secondToken = secondTokenResponse.body.token;
+
+    expect(secondToken).not.toBe(firstToken);
+
+    await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${firstToken}`)
+      .expect(401);
+
+    await request(app)
+      .get('/api/public/news')
+      .set('Authorization', `Bearer ${secondToken}`)
+      .expect(200);
+
+    const tokenRows = database.getDb().prepare(`
+      SELECT token_prefix AS tokenPrefix, revoked_at AS revokedAt
+      FROM api_tokens
+      WHERE user_id = ?
+      ORDER BY datetime(created_at) ASC
+    `).all(userId);
+
+    expect(tokenRows).toHaveLength(2);
+    expect(tokenRows[0].tokenPrefix).toBe(firstToken.slice(0, 12));
+    expect(tokenRows[0].revokedAt).toEqual(expect.any(String));
+    expect(tokenRows[1].tokenPrefix).toBe(secondToken.slice(0, 12));
+    expect(tokenRows[1].revokedAt).toBeNull();
+  });
+
+  test('adds, updates, and removes a personal source after validation', async () => {
+    rssParser.validateFeedUrl
+      .mockResolvedValueOnce({ title: 'Example Feed', language: 'en', itemCount: 10 })
+      .mockResolvedValueOnce({ title: 'Updated Feed', language: 'it', itemCount: 4 });
+
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'source-user', password: 'secret123' })
+      .expect(201);
+
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    const addResponse = await request(app)
+      .post('/internal-api/me/sources')
+      .set('Cookie', sessionCookie)
+      .send({ url: 'https://example.com/feed.xml' })
+      .expect(201);
+
+    expect(addResponse.body).toMatchObject({
+      success: true,
+      source: {
+        id: expect.any(String),
+        name: 'Example Feed',
+        url: 'https://example.com/feed.xml',
+        language: 'en'
+      }
+    });
+
+    const sourceId = addResponse.body.source.id;
+
+    const updateResponse = await request(app)
+      .patch(`/internal-api/me/sources/${sourceId}`)
+      .set('Cookie', sessionCookie)
+      .send({ url: 'https://example.com/updated.xml' })
+      .expect(200);
+
+    expect(updateResponse.body).toMatchObject({
+      success: true,
+      source: {
+        id: sourceId,
+        name: 'Updated Feed',
+        url: 'https://example.com/updated.xml',
+        language: 'it'
+      }
+    });
+
+    await request(app)
+      .delete(`/internal-api/me/sources/${sourceId}`)
+      .set('Cookie', sessionCookie)
+      .expect(200, { success: true });
+
+    const currentUserResponse = await request(app)
+      .get('/internal-api/me')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(currentUserResponse.body.customSources).toEqual([]);
+    expect(rssParser.validateFeedUrl).toHaveBeenCalledTimes(2);
+    expect(newsService.refreshUserSources).toHaveBeenCalledTimes(2);
+    expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(1, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: true }));
+    expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(2, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: true }));
+  });
+
+  test('discovers feeds for an authenticated user without saving or refreshing them', async () => {
+    rssParser.discoverFeedUrls.mockResolvedValue([
+      { title: 'Example feed', url: 'https://example.com/feed.xml' }
+    ]);
+
+    await request(app)
+      .post('/internal-api/me/sources/discover')
+      .send({ url: 'https://example.com' })
+      .expect(401);
+
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'source-discovery-user', password: 'secret123' })
+      .expect(201);
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    await request(app)
+      .post('/internal-api/me/sources/discover')
+      .set('Cookie', sessionCookie)
+      .send({ url: 'https://example.com' })
+      .expect(200, {
+        success: true,
+        feeds: [{ title: 'Example feed', url: 'https://example.com/feed.xml' }]
+      });
+
+    expect(database.listUserSources(registerResponse.body.user.id)).toEqual([]);
+    expect(newsService.refreshUserSources).not.toHaveBeenCalled();
+  });
+
+  test('keeps custom source creation successful when the immediate refresh fails', async () => {
+    rssParser.validateFeedUrl.mockResolvedValue({ title: 'Slow Feed', language: 'en', itemCount: 10 });
+    newsService.refreshUserSources.mockRejectedValueOnce(new Error('refresh timed out'));
+
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'source-refresh-user', password: 'secret123' })
+      .expect(201);
+
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    const addResponse = await request(app)
+      .post('/internal-api/me/sources')
+      .set('Cookie', sessionCookie)
+      .send({ url: 'https://example.com/slow-feed.xml' })
+      .expect(201);
+
+    expect(addResponse.body).toMatchObject({
+      success: true,
+      source: {
+        name: 'Slow Feed',
+        url: 'https://example.com/slow-feed.xml'
+      }
+    });
+
+    const currentUserResponse = await request(app)
+      .get('/internal-api/me')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(currentUserResponse.body.customSources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: addResponse.body.source.id, name: 'Slow Feed' })
+    ]));
+    expect(newsService.refreshUserSources).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      sourceIds: [addResponse.body.source.id],
+      broadcast: true
+    }));
+  });
+
+  test.each([
+    {
+      name: 'screenshot',
+      username: 'feedback-user',
+      category: 'bug',
+      title: 'Reader overlap on mobile',
+      description: 'The reader panel overlaps the sticky header on a narrow mobile viewport.',
+      attachment: {
+        buffer: Buffer.from('fake-image-content'),
+        filename: 'reader-mobile.png',
+        contentType: 'image/png'
+      }
+    },
+    {
+      name: 'small video',
+      username: 'feedback-video-user',
+      category: 'feedback',
+      title: 'Animation feels abrupt',
+      description: 'Short clip showing the abrupt transition in the filter drawer.',
+      attachment: {
+        buffer: Buffer.from('fake-video-content'),
+        filename: 'filters-transition.mp4',
+        contentType: 'video/mp4'
+      }
+    }
+  ])('submits authenticated feedback with a $name attachment', async ({ username, category, title, description, attachment }) => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username, password: 'secret123' })
+      .expect(201);
+
+    const response = await request(app)
+      .post('/internal-api/me/feedback')
+      .set('Cookie', getSessionCookie(registerResponse))
+      .field('category', category)
+      .field('title', title)
+      .field('description', description)
+      .attach('attachment', attachment.buffer, {
+        filename: attachment.filename,
+        contentType: attachment.contentType
+      })
+      .expect(201);
+
+    expect(response.body).toEqual({ success: true });
+    expect(feedbackService.sendFeedback).toHaveBeenCalledWith(expect.objectContaining({
+      user: expect.objectContaining({
+        id: registerResponse.body.user.id,
+        username
+      }),
+      category,
+      title,
+      description,
+      attachment: expect.objectContaining({
+        originalname: attachment.filename,
+        mimetype: attachment.contentType,
+        size: attachment.buffer.length
+      })
+    }));
+  });
+
+  test('lists and toggles authenticated read-later articles', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'read-later-user', password: 'secret123' })
+      .expect(201);
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    await request(app)
+      .post('/internal-api/me/read-later')
+      .set('Cookie', sessionCookie)
+      .send({ articleIds: ['article-1'] })
+      .expect(201);
+
+    expect(newsService.saveReadLaterArticles).toHaveBeenCalledWith(expect.objectContaining({
+      userId: registerResponse.body.user.id
+    }), ['article-1']);
+
+    await request(app)
+      .get('/internal-api/read-later')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(newsService.getReadLaterFeed).toHaveBeenCalledWith(expect.objectContaining({
+      page: 1,
+      pageSize: 12
+    }), expect.objectContaining({
+      userId: registerResponse.body.user.id
+    }));
+
+    await request(app)
+      .post('/internal-api/me/read-later/remove')
+      .set('Cookie', sessionCookie)
+      .send({ articleIds: ['article-1'] })
+      .expect(200);
+
+    expect(newsService.removeReadLaterArticles).toHaveBeenCalledWith(expect.objectContaining({
+      userId: registerResponse.body.user.id
+    }), ['article-1']);
+  });
+
+  test('persists authenticated thematic summary read state', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'summary-read-user', password: 'secret123' })
+      .expect(201);
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    const markResponse = await request(app)
+      .post('/internal-api/me/thematic-summaries/read')
+      .set('Cookie', sessionCookie)
+      .send({ summaryIds: ['summary-technology', 'podcast-1', 'summary-technology'] })
+      .expect(201);
+
+    expect(markResponse.body.readSummaryIds).toHaveLength(2);
+    expect(markResponse.body.readSummaryIds).toEqual(expect.arrayContaining(['summary-technology', 'podcast-1']));
+
+    const summariesResponse = await request(app)
+      .get('/internal-api/thematic-summaries')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(summariesResponse.body.readSummaryIds).toEqual(expect.arrayContaining(['summary-technology', 'podcast-1']));
+  });
+
+  test('rejects feedback submission with an invalid category', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'feedback-invalid', password: 'secret123' })
+      .expect(201);
+
+    const response = await request(app)
+      .post('/internal-api/me/feedback')
+      .set('Cookie', getSessionCookie(registerResponse))
+      .field('category', 'question')
+      .field('title', 'Bad category')
+      .field('description', 'This should not be accepted.')
+      .expect(400);
+
+    expect(response.body.error).toMatchObject({
+      code: 'INVALID_FEEDBACK_PAYLOAD',
+      message: 'Please choose a valid feedback category.'
+    });
+    expect(feedbackService.sendFeedback).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    {
+      name: 'unsupported attachment type',
+      attachment: {
+        buffer: Buffer.from('not an image'),
+        filename: 'notes.txt',
+        contentType: 'text/plain'
+      },
+      expectedStatus: 400,
+      expectedMessage: 'Please attach an image or a small video.'
+    },
+    {
+      name: 'oversized image attachment',
+      attachment: {
+        buffer: Buffer.alloc(MAX_FEEDBACK_IMAGE_BYTES + 1),
+        filename: 'large-image.png',
+        contentType: 'image/png'
+      },
+      expectedStatus: 413,
+      expectedMessage: 'Images must be 5 MB or smaller.'
+    }
+  ])('rejects feedback submission with $name', async ({ attachment, expectedStatus, expectedMessage }) => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: `feedback-upload-${expectedStatus}`, password: 'secret123' })
+      .expect(201);
+
+    const response = await request(app)
+      .post('/internal-api/me/feedback')
+      .set('Cookie', getSessionCookie(registerResponse))
+      .field('category', 'bug')
+      .field('title', 'Attachment issue')
+      .field('description', 'This attachment should not be accepted.')
+      .attach('attachment', attachment.buffer, {
+        filename: attachment.filename,
+        contentType: attachment.contentType
+      })
+      .expect(expectedStatus);
+
+    expect(response.body.error).toMatchObject({
+      code: 'INVALID_FEEDBACK_IMAGE',
+      message: expectedMessage
+    });
+    expect(feedbackService.sendFeedback).not.toHaveBeenCalled();
+  });
+
+  test('rejects feedback submission with multiple attachments', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'feedback-multiple-attachments', password: 'secret123' })
+      .expect(201);
+
+    const response = await request(app)
+      .post('/internal-api/me/feedback')
+      .set('Cookie', getSessionCookie(registerResponse))
+      .field('category', 'bug')
+      .field('title', 'Too many attachments')
+      .field('description', 'Only one attachment should be accepted.')
+      .attach('attachment', Buffer.from('image-one'), { filename: 'one.png', contentType: 'image/png' })
+      .attach('attachment', Buffer.from('image-two'), { filename: 'two.png', contentType: 'image/png' })
+      .expect(400);
+
+    expect(response.body.error).toMatchObject({
+      code: 'INVALID_FEEDBACK_IMAGE',
+      message: 'Attach only one image or video.'
+    });
+    expect(feedbackService.sendFeedback).not.toHaveBeenCalled();
+  });
+
+  test('imports settings atomically and refreshes only the current user sources', async () => {
+    rssParser.validateFeedUrl
+      .mockResolvedValueOnce({ title: 'Existing Feed', language: 'en', itemCount: 1 })
+      .mockResolvedValueOnce({ title: 'Imported Feed', language: 'it', itemCount: 4 });
+
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'import-user', password: 'secret123' })
+      .expect(201);
+
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    await request(app)
+      .post('/internal-api/me/sources')
+      .set('Cookie', sessionCookie)
+      .send({ url: 'https://example.com/existing.xml' })
+      .expect(201);
+
+    const importResponse = await request(app)
+      .post('/internal-api/me/settings/import')
+      .set('Cookie', sessionCookie)
+      .send({
+        settings: {
+          defaultLanguage: 'en',
+          articleRetentionHours: 12,
+          recentHours: 2,
+          showNewsImages: false,
+          compactNewsCards: true,
+          compactNewsCardsMode: 'desktop',
+          readerPanelPosition: 'center',
+          readerTextSize: 'small',
+          readerTextWidth: 'wide',
+          lastSeenReleaseNotesVersion: '3.2.3',
+          excludedSourceIds: [ansaSourceId],
+          excludedSubSourceIds: []
+        },
+        customSources: [
+          {
+            name: 'Imported Feed',
+            url: 'https://example.com/imported.xml',
+            language: 'it',
+            isExcluded: true
+          }
+        ]
+      })
+      .expect(200);
+
+    expect(importResponse.body).toMatchObject({
+      success: true,
+        settings: expect.objectContaining({
+          defaultLanguage: 'en',
+          showNewsImages: false,
+          compactNewsCards: true,
+          compactNewsCardsMode: 'desktop',
+          readerPanelPosition: 'center',
+          readerTextSize: 'small',
+          readerTextWidth: 'wide',
+          lastSeenReleaseNotesVersion: '3.2.3',
+          excludedSourceIds: expect.arrayContaining([ansaSourceId])
+        }),
+      customSources: [
+        expect.objectContaining({
+          name: 'Imported Feed',
+          url: 'https://example.com/imported.xml',
+          language: 'it'
+        })
+      ]
+    });
+    expect(importResponse.body.settings).not.toHaveProperty('articleRetentionHours');
+    expect(importResponse.body.settings).not.toHaveProperty('recentHours');
+    expect(newsService.refreshUserSources).toHaveBeenLastCalledWith(expect.any(String), { broadcast: true });
+  });
+
+  test('returns from settings import without waiting for source refresh completion', async () => {
+    rssParser.validateFeedUrl.mockResolvedValue({ title: 'Imported Feed', language: 'it', itemCount: 4 });
+    newsService.refreshUserSources.mockImplementation(() => new Promise(() => {}));
+
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'nonblocking-import-user', password: 'secret123' })
+      .expect(201);
+
+    const importResponse = await request(app)
+      .post('/internal-api/me/settings/import')
+      .set('Cookie', getSessionCookie(registerResponse))
+      .send({
+        settings: { defaultLanguage: 'en' },
+        customSources: [
+          {
+            name: 'Imported Feed',
+            url: 'https://example.com/imported.xml',
+            language: 'it'
+          }
+        ]
+      })
+      .expect(200);
+
+    expect(importResponse.body).toMatchObject({ success: true });
+    expect(newsService.refreshUserSources).toHaveBeenCalledWith(expect.any(String), { broadcast: true });
+  });
+
+  test('logs out the current session and rejects it afterward', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'logout-user', password: 'secret123' })
+      .expect(201);
+
+    const sessionCookie = getSessionCookie(registerResponse);
+
+    await request(app)
+      .post('/internal-api/auth/logout')
+      .set('Cookie', sessionCookie)
+      .expect(200, { success: true });
+
+    const meResponse = await request(app)
+      .get('/internal-api/me')
+      .set('Cookie', sessionCookie)
+      .expect(401);
+
+    expect(meResponse.body.error.code).toBe('UNAUTHORIZED');
+  });
+
+  test('serves podcast audio with byte ranges for media players', async () => {
+    const registerResponse = await request(app)
+      .post('/internal-api/auth/register')
+      .send({ username: 'podcast-audio-user', password: 'secret123' })
+      .expect(201);
+    const sessionCookie = getSessionCookie(registerResponse);
+    const audioBytes = Buffer.from('0123456789');
+
+    database.upsertPodcastSummary({
+      id: 'podcast-audio-test',
+      periodStart: '2026-05-22T11:00:00.000Z',
+      periodEnd: '2026-05-22T17:00:00.000Z',
+      titleByLocale: { en: 'News podcast', it: 'Podcast news' },
+      scriptTextByLocale: { en: 'English script', it: 'Testo italiano' },
+      sources: [{ index: 1, articleId: 'article-1', title: 'Podcast article', source: 'BBC' }],
+      articleCount: 1,
+      model: 'summary-model',
+      audio: {
+        data: audioBytes.toString('base64'),
+        mimeType: 'audio/mpeg',
+        model: 'tts-model'
+      },
+      audioStatus: 'completed'
+    });
+
+    const fullResponse = await request(app)
+      .get('/internal-api/podcast-summary/podcast-audio-test/audio')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(fullResponse.headers['accept-ranges']).toBe('bytes');
+    expect(fullResponse.headers['cache-control']).toBe('private, max-age=86400, immutable');
+    expect(fullResponse.headers['content-length']).toBe(String(audioBytes.length));
+    expect(fullResponse.headers['content-type']).toContain('audio/mpeg');
+
+    const rangeResponse = await request(app)
+      .get('/internal-api/podcast-summary/podcast-audio-test/audio')
+      .set('Cookie', sessionCookie)
+      .set('Range', 'bytes=2-5')
+      .expect(206);
+
+    expect(rangeResponse.headers['accept-ranges']).toBe('bytes');
+    expect(rangeResponse.headers['content-range']).toBe('bytes 2-5/10');
+    expect(rangeResponse.headers['content-length']).toBe('4');
+
+    const invalidRangeResponse = await request(app)
+      .get('/internal-api/podcast-summary/podcast-audio-test/audio')
+      .set('Cookie', sessionCookie)
+      .set('Range', 'bytes=20-30')
+      .expect(416);
+
+    expect(invalidRangeResponse.headers['content-range']).toBe('bytes */10');
+
+    const wavBytes = Buffer.concat([
+      Buffer.from('RIFF'),
+      Buffer.from([36, 0, 0, 0]),
+      Buffer.from('WAVEfmt '),
+      Buffer.alloc(28)
+    ]);
+    database.upsertPodcastSummary({
+      id: 'podcast-wav-audio-test',
+      periodStart: '2026-05-22T17:00:00.000Z',
+      periodEnd: '2026-05-23T05:00:00.000Z',
+      titleByLocale: { en: 'News podcast', it: 'Podcast news' },
+      scriptTextByLocale: { en: 'English script', it: 'Testo italiano' },
+      sources: [{ index: 1, articleId: 'article-1', title: 'Podcast article', source: 'BBC' }],
+      articleCount: 1,
+      model: 'summary-model',
+      audio: {
+        data: wavBytes.toString('base64'),
+        mimeType: 'audio/mpeg',
+        model: 'tts-model'
+      },
+      audioStatus: 'completed'
+    });
+
+    const wavResponse = await request(app)
+      .get('/internal-api/podcast-summary/podcast-wav-audio-test/audio')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+
+    expect(wavResponse.headers['content-type']).toContain('audio/wav');
+  });
+});

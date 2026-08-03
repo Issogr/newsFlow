@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.6.0
+
+- added a dedicated Add Feed News window for RSS/Atom discovery and moved custom feed management into Settings with shared save/discard behavior
+- removed clickbait classification and labels, and consolidated AI summary and podcast generation into one daily `20:00` local-time window
+- migrated frontend, BFF, backend, tests, and first-party tooling to strict TypeScript while preserving CommonJS service output and existing runtime behavior
+- made SQLite upgrades transactional and fail-fast, moved article FTS synchronization to native triggers, and consolidated podcast audio into its locale-specific table
+- simplified the BFF session and private-backend boundary by removing duplicate user-session indexing, unused service identity, and legacy private token carriers
+- centralized frontend locale and session updates while reusing the same custom-source persistence paths across Settings actions
+- placed the bundled deployment behind persisted automatic TLS ingress and isolated Caddy, BFF, and backend traffic across separate Docker networks
+- renamed the AI summary history controls to Today and Yesterday and improved their contrast and touch targets
+- limited news card headlines to two lines with an ellipsis for longer titles
+
 ## 3.5.15
 
 - retained the previous thematic AI summary for each topic, added Current/Previous chips, and disabled empty briefing versions instead of displaying them

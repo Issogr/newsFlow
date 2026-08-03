@@ -1,0 +1,3 @@
+{$APP_BASE_URL:http://localhost} {
+	reverse_proxy bff:80
+}

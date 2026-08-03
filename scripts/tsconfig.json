@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "allowJs": false,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "paths": {
+      "vitest": ["../backend/node_modules/vitest/dist/index.d.ts"]
+    },
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2023",
+    "typeRoots": ["../backend/node_modules/@types"],
+    "types": ["node"]
+  },
+  "include": ["*.ts", "*.mts"]
+}

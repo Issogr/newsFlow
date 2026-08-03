@@ -34,6 +34,10 @@ jobs:
         working-directory: ${{ matrix.service }}
         run: npm run lint
 
+      - name: Type check
+        working-directory: ${{ matrix.service }}
+        run: npm run typecheck
+
       - name: Build frontend
         if: matrix.service == 'frontend'
         working-directory: ${{ matrix.service }}

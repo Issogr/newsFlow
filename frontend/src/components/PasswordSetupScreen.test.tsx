@@ -1,0 +1,76 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import PasswordSetupScreen from './PasswordSetupScreen';
+import { createTranslator } from '../i18n';
+import { completePasswordSetup as completePasswordSetupImplementation, validatePasswordSetupToken as validatePasswordSetupTokenImplementation } from '../services/api';
+
+vi.mock('../services/api', () => ({
+  validatePasswordSetupToken: vi.fn(),
+  completePasswordSetup: vi.fn()
+}));
+
+const completePasswordSetup = vi.mocked(completePasswordSetupImplementation);
+const validatePasswordSetupToken = vi.mocked(validatePasswordSetupTokenImplementation);
+
+describe('PasswordSetupScreen', () => {
+  const t = createTranslator('en');
+
+  test('validates the token and completes password setup', async () => {
+    const onComplete = vi.fn();
+
+    validatePasswordSetupToken.mockResolvedValue({
+      username: 'alice',
+      isAdmin: false,
+      purpose: 'password-setup',
+      expiresAt: '2026-03-27T12:00:00.000Z'
+    });
+    completePasswordSetup.mockResolvedValue({
+      user: { id: 'user-1', username: 'alice', isAdmin: false },
+      settings: {},
+      limits: {},
+      customSources: []
+    });
+
+    render(<PasswordSetupScreen t={t} token="setup-token" onComplete={onComplete} />);
+
+    expect(await screen.findByText('Account: alice')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'renewed123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save password' }));
+
+    await waitFor(() => {
+      expect(completePasswordSetup).toHaveBeenCalledWith({ token: 'setup-token', password: 'renewed123' });
+    });
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ user: expect.objectContaining({ username: 'alice' }) }));
+  });
+
+  test('blocks short passwords before submitting', async () => {
+    validatePasswordSetupToken.mockResolvedValue({
+      username: 'alice',
+      isAdmin: false,
+      purpose: 'password-setup',
+      expiresAt: '2026-03-27T12:00:00.000Z'
+    });
+
+    render(<PasswordSetupScreen t={t} token="setup-token" onComplete={vi.fn()} />);
+
+    expect(await screen.findByText('Account: alice')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'short' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save password' }));
+
+    expect(completePasswordSetup).not.toHaveBeenCalled();
+    expect(await screen.findByText('Password must be at least 8 characters long')).toBeInTheDocument();
+  });
+
+  test.each([
+    [{ newsFlowClientCode: 'network' }, 'Unable to reach the server. Check your internet connection.'],
+    [{ newsFlowClientCode: 'timeout' }, 'The request timed out. Please try again in a few seconds.']
+  ])('shows transient validation failures without blaming the setup link', async (requestError, message) => {
+    validatePasswordSetupToken.mockRejectedValue(requestError);
+
+    render(<PasswordSetupScreen t={t} token="setup-token" onComplete={vi.fn()} />);
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByText('This password setup link is invalid or expired.')).not.toBeInTheDocument();
+  });
+});

@@ -1,18 +1,20 @@
 {
   "name": "newsflow-bff",
-  "version": "3.5.15",
+  "version": "3.6.0",
   "description": "Browser-facing BFF for News Flow",
-  "main": "server.js",
+  "main": "dist/server.js",
   "scripts": {
-    "start": "node server.js",
-    "lint": "eslint .",
-    "test": "node ../scripts/run-vitest.js",
-    "test:coverage": "node ../scripts/run-vitest.js --coverage",
-    "test:watch": "node ../scripts/run-vitest.js --watch"
+    "start": "node --enable-source-maps dist/server.js",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config .",
+    "test": "NODE_OPTIONS=--import=tsx node ../scripts/run-vitest.ts",
+    "test:coverage": "NODE_OPTIONS=--import=tsx node ../scripts/run-vitest.ts --coverage",
+    "test:watch": "NODE_OPTIONS=--import=tsx node ../scripts/run-vitest.ts --watch"
   },
   "dependencies": {
     "compression": "^1.8.1",
-    "cookie": "^1.1.1",
+    "cookie": "^2.0.1",
     "cookie-signature": "^1.2.2",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
@@ -20,9 +22,18 @@
     "http-proxy-middleware": "^4.1.1"
   },
   "devDependencies": {
+    "@types/compression": "^1.8.1",
+    "@types/cookie-signature": "^1.1.2",
+    "@types/express": "^5.0.6",
+    "@types/express-session": "^1.19.0",
+    "@types/node": "^24.13.3",
+    "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^10.4.0",
     "supertest": "^7.2.2",
+    "tsx": "^4.23.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.65.0",
     "vitest": "^4.1.7"
   },
   "engines": {

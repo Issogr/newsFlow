@@ -1,15 +1,29 @@
-node_modules/
-coverage/
-logs/
-data/
+# Ignore everything, then include only backend build inputs.
+*
+!Dockerfile
+!package*.json
+!tsconfig*.json
+!server.ts
+!config/
+!config/**
+!routes/
+!routes/**
+!services/
+!services/**
+!utils/
+!utils/**
 
-*.log
-.env
-.env.*
+# Source directories contain test-only files that production builds do not need.
+**/*.test.*
+**/*.spec.*
+**/__tests__
+**/__snapshots__
 
-*.test.js
-eslint.config.js
-
-.git
-.gitignore
-README.md
+# Never send local credentials accidentally stored in an included directory.
+**/.env*
+**/.npmrc
+**/.netrc
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx

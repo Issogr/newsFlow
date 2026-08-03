@@ -72,11 +72,15 @@ Docker Compose needs two secrets:
 - `INTERNAL_PROXY_TOKEN`: shared by BFF and backend for private backend access.
 - `BFF_SESSION_SECRET`: signs BFF browser sessions. Keep it stable or users will be logged out.
 
-For HTTPS behind a reverse proxy:
+The bundled deployment puts Caddy in front of the BFF. Only Caddy publishes host ports; the BFF and backend communicate over separate private Docker networks.
+
+For automatic production HTTPS:
 
 - Set `APP_BASE_URL=https://your-domain`.
-- Ensure the proxy forwards `X-Forwarded-Proto: https`.
-- Set BFF `TRUST_PROXY=true` only when the BFF is reachable only through a trusted proxy and you need forwarded client IP/header handling.
+- Point the domain's DNS records to the deployment host.
+- Allow inbound TCP ports `80` and `443` and UDP port `443` through the host firewall.
+- Keep the `caddy-data` volume so certificates and account state survive restarts.
+- Do not publish the BFF or backend container ports; Compose fixes both services to one trusted proxy hop.
 - Replace the controller/contact placeholders in the legal pages with deployment-approved details before publishing the service.
 
 Published images:
@@ -96,7 +100,7 @@ Full configuration reference: [`CONFIGURATION.md`](CONFIGURATION.md).
 | `APP_BASE_URL` | `http://localhost` | Public app URL; controls setup links and secure-cookie decisions. |
 | `ALLOWED_ORIGINS` | empty | Backend CORS allowlist, for example `https://news.example`. |
 | `COOKIE_SECURE` | `auto` | Accepts `auto`, `true`, or `false`. |
-| `TRUST_PROXY` | backend auto in production, BFF `false` | Use only behind a trusted reverse proxy. |
+| `TRUST_PROXY` | Compose `1` | The bundled topology has exactly one trusted hop before each Node service. |
 | `SESSION_TTL_DAYS` | `30` | Browser/backend session lifetime. |
 
 ### Public API
@@ -130,7 +134,7 @@ AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed 
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | unset | Required for AI provider calls. |
 | `AI_TOPIC_DETECTION_ENABLED` | `true` | Adds AI topic metadata during ingestion. |
-| `AI_CLICKBAIT_DETECTION_ENABLED`, `AI_STORY_GROUPING_ENABLED`, `AI_SUMMARY_GENERATION_ENABLED`, `AI_PODCAST_GENERATION_ENABLED` | `false` | Enable individual optional AI jobs. |
+| `AI_STORY_GROUPING_ENABLED`, `AI_SUMMARY_GENERATION_ENABLED`, `AI_PODCAST_GENERATION_ENABLED` | `false` | Enable individual optional AI jobs. |
 | `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips provider calls for articles the local classifier can topic with high confidence. |
 | `AI_SUMMARY_PROMPT_MAX_ARTICLES` | `60` | Max selected articles included in one thematic-summary prompt after dedupe/source balancing. |
 | `AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS` | `5000` | Debounces summary checks triggered by topic-classification completion. |
@@ -138,7 +142,7 @@ AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed 
 | `AI_SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS` | `300000` | Cooldown before retrying failed reader prewarm attempts. |
 | `AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES` | `2` | Additional retries for invalid summary or podcast-script output. |
 | `AI_SUMMARY_PENDING_TOPIC_GRACE_MS` | `900000` | Grace period after a summary slot for pending topic classification. |
-| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | Time zone for `08:00` and `20:00` summary/podcast slots. |
+| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | Time zone for the daily `20:00` summary/podcast slot. |
 | `AI_PODCAST_LANGUAGES` | `en` | Comma-separated locales: `en`, `it`. |
 | `AI_PODCAST_PROMPT_MAX_ARTICLES` | `40` | Max selected articles included in one podcast-script prompt after dedupe/source balancing. |
 | `AI_PODCAST_BACKGROUND_AUDIO_ENABLED` | `true` | Saves podcast scripts first and generates TTS audio in the background when enabled. |
@@ -148,7 +152,6 @@ Model overrides:
 | Variable | Default |
 | --- | --- |
 | `OPENROUTER_TOPIC_MODEL` | `mistralai/mistral-small-24b-instruct-2501` |
-| `OPENROUTER_CLICKBAIT_MODEL` | `OPENROUTER_TOPIC_MODEL` |
 | `OPENROUTER_SUMMARY_MODEL` | `qwen/qwen3.7-flash` |
 | `OPENROUTER_STORY_GROUPING_MODEL` | `qwen/qwen3.7-flash` |
 | `OPENROUTER_PODCAST_SCRIPT_MODEL` | `qwen/qwen3.7-flash` |

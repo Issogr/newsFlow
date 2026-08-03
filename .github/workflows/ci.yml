@@ -83,21 +83,23 @@ jobs:
 
       - name: Start Compose stack
         env:
-          APP_BASE_URL: http://127.0.0.1
+          APP_BASE_URL: https://localhost
           OPENROUTER_API_KEY: ''
           PUBLIC_API_ANONYMOUS_ENABLED: 'true'
         run: docker compose up --build --wait -d
 
       - name: Smoke test Compose stack
         run: |
-          curl -fsS http://127.0.0.1/health >/tmp/newsflow-compose-health.json
-          curl -fsS http://127.0.0.1/api/public/news >/tmp/newsflow-compose-public-news.json
-          curl -fsS -H 'Content-Type: application/json' \
-            -H 'Origin: http://127.0.0.1' \
+          if docker compose port backend 5000 >/dev/null 2>&1; then exit 1; fi
+          if docker compose port bff 80 >/dev/null 2>&1; then exit 1; fi
+          curl -kfsS https://localhost/health >/tmp/newsflow-compose-health.json
+          curl -kfsS https://localhost/api/public/news >/tmp/newsflow-compose-public-news.json
+          curl -kfsS -H 'Content-Type: application/json' \
+            -H 'Origin: https://localhost' \
             -c /tmp/newsflow-compose-cookies.txt \
             -d '{"username":"ci-compose-user","password":"secret123"}' \
-            http://127.0.0.1/api/auth/register >/tmp/newsflow-compose-register.json
-          curl -fsS -b /tmp/newsflow-compose-cookies.txt http://127.0.0.1/api/me >/tmp/newsflow-compose-me.json
+            https://localhost/api/auth/register >/tmp/newsflow-compose-register.json
+          curl -kfsS -b /tmp/newsflow-compose-cookies.txt https://localhost/api/me >/tmp/newsflow-compose-me.json
 
       - name: Stop Compose stack
         if: always()
