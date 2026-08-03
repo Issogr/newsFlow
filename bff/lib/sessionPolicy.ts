@@ -91,7 +91,7 @@ function getCookieSecureSetting(): boolean | 'auto' {
   return 'auto';
 }
 
-function getBaseSessionCookieOptions(): cookie.SerializeOptions {
+function getBaseSessionCookieOptions(): Pick<cookie.SetCookie, 'httpOnly' | 'sameSite' | 'path'> {
   return {
     httpOnly: true,
     sameSite: 'strict',
@@ -108,7 +108,9 @@ export function getSessionCookieOptions(): session.CookieOptions {
 }
 
 export function clearBffSessionCookie(res: Response): void {
-  res.append('Set-Cookie', cookie.serialize(BFF_SESSION_COOKIE_NAME, '', {
+  res.append('Set-Cookie', cookie.stringifySetCookie({
+    name: BFF_SESSION_COOKIE_NAME,
+    value: '',
     ...getBaseSessionCookieOptions(),
     maxAge: 0,
   }));

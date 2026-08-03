@@ -263,7 +263,7 @@ export function loadUpgradeSession(
   sessionStore: ManagedSqliteStore,
   secret: string,
 ): Promise<session.SessionData | null> {
-  const cookies = typeof req.headers.cookie === 'string' ? cookie.parse(req.headers.cookie) : {};
+  const cookies = typeof req.headers.cookie === 'string' ? cookie.parseCookie(req.headers.cookie) : {};
   const sessionId = unsignSessionId(cookies[BFF_SESSION_COOKIE_NAME], secret);
 
   if (!sessionId) {

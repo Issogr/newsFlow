@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "compression": "^1.8.1",
-    "cookie": "^1.1.1",
+    "cookie": "^2.0.1",
     "cookie-signature": "^1.2.2",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
