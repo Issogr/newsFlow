@@ -7,7 +7,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['server.ts', 'lib/**/*.ts'],
-      reporter: ['text', 'lcov'],
+      reporter: ['text'],
       thresholds: {
         branches: 55,
         functions: 70,

@@ -9,7 +9,7 @@ export default defineConfig({
       provider: 'v8',
       include: ['server.ts', 'config/**/*.ts', 'routes/**/*.ts', 'services/**/*.ts', 'utils/**/*.ts'],
       exclude: ['**/*.test.ts', 'test-utils/**'],
-      reporter: ['text', 'lcov'],
+      reporter: ['text'],
       thresholds: {
         branches: 40,
         functions: 60,

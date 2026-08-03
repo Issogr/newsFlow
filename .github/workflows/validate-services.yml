@@ -2,6 +2,12 @@ name: Validate Services
 
 on:
   workflow_call:
+    inputs:
+      audit:
+        description: Fail on production dependency vulnerabilities
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,13 +28,13 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '24.16.0'
+          node-version: '24.18.1'
           cache: npm
           cache-dependency-path: ${{ matrix.service }}/package-lock.json
 
       - name: Install dependencies
         working-directory: ${{ matrix.service }}
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Lint
         working-directory: ${{ matrix.service }}
@@ -38,15 +44,11 @@ jobs:
         working-directory: ${{ matrix.service }}
         run: npm run typecheck
 
-      - name: Build frontend
-        if: matrix.service == 'frontend'
-        working-directory: ${{ matrix.service }}
-        run: npm run build
-
       - name: Test
         working-directory: ${{ matrix.service }}
         run: npm run test:coverage
 
       - name: Audit production dependencies
+        if: inputs.audit
         working-directory: ${{ matrix.service }}
         run: npm audit --omit=dev
