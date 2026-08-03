@@ -391,7 +391,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         <h2 className="text-lg font-bold leading-6 tracking-[-0.01em] text-slate-900 sm:text-xl">
           <button
             type="button"
-            className="w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2"
+            className="line-clamp-2 w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2"
             title={t('readHereHelp')}
             {...readerInteractionProps}
           >

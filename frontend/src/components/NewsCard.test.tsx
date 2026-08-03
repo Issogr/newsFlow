@@ -66,6 +66,12 @@ describe('NewsCard', () => {
     vi.restoreAllMocks();
   });
 
+  test('clamps the headline to two lines', () => {
+    renderNewsCard();
+
+    expect(screen.getByText('Headline', { selector: 'button' })).toHaveClass('line-clamp-2');
+  });
+
   test('opens a safe external url in a new tab', () => {
     window.open = vi.fn();
 
