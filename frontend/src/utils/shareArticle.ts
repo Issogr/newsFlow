@@ -1,4 +1,4 @@
-export type ShareResult = 'shared' | 'copied' | 'failed' | 'opened' | null;
+type ShareResult = 'shared' | 'copied' | 'failed' | 'opened' | null;
 
 export async function shareArticleUrl({ url, title = '' }: { url: string; title?: string }): Promise<ShareResult> {
   if (!url) {

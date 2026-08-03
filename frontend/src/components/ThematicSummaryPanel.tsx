@@ -487,10 +487,6 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
     </h2>
   );
 
-  if (!summary) {
-    return null;
-  }
-
   return (
     <FullscreenPanelFrame
       closeLabel={closeLabel}

@@ -141,16 +141,12 @@ const dbSchema = createDatabaseSchema({
   logger
 });
 
-function ensureDatabaseDirectory() {
-  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-}
-
 function getDb() {
   if (db) {
     return db;
   }
 
-  ensureDatabaseDirectory();
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   const database = new Database(DB_PATH);
   db = database;
   database.pragma('journal_mode = WAL');

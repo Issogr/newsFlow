@@ -33,7 +33,6 @@ interface ProviderConfig extends DynamicRecord {
   apiKey: string;
   baseUrl: string;
   enabled: boolean;
-  httpReferer: string;
   model: string;
   timeoutMs: number;
 }

@@ -1,15 +1,11 @@
 const { parseBooleanEnv } = require('../utils/env');
 
-function hasOpenRouterApiKey() {
-  return Boolean(String(process.env.OPENROUTER_API_KEY || '').trim());
-}
-
 function isAiToggleEnabled(envName: string, fallback = true) {
   return parseBooleanEnv(envName, fallback, { invalidFallback: false });
 }
 
 function isOpenRouterFeatureEnabled(envName: string) {
-  return isAiToggleEnabled(envName) && hasOpenRouterApiKey();
+  return isAiToggleEnabled(envName) && Boolean(String(process.env.OPENROUTER_API_KEY || '').trim());
 }
 
 function getAiFeatures() {

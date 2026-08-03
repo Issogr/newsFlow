@@ -6,7 +6,6 @@ import type { AddressInfo } from 'node:net';
 import type { DatabaseSync } from 'node:sqlite';
 import cookieSignature = require('cookie-signature');
 import express = require('express');
-import type { Application } from 'express';
 import request = require('supertest');
 import type { App as TestTarget } from 'supertest/types';
 process.env.BFF_UPSTREAM_TIMEOUT_MS = '1000';
@@ -35,7 +34,6 @@ interface UpgradeOptions {
 
 interface UpgradeResponse {
   statusCode: number | undefined;
-  headers: http.IncomingHttpHeaders;
   upgraded: boolean;
 }
 
@@ -107,11 +105,11 @@ function requestUpgrade(
 
     req.on('upgrade', (res, socket) => {
       socket.destroy();
-      resolve({ statusCode: res.statusCode, headers: res.headers, upgraded: true });
+      resolve({ statusCode: res.statusCode, upgraded: true });
     });
     req.on('response', (res) => {
       res.resume();
-      res.on('end', () => resolve({ statusCode: res.statusCode, headers: res.headers, upgraded: false }));
+      res.on('end', () => resolve({ statusCode: res.statusCode, upgraded: false }));
     });
     req.on('error', reject);
     req.end();
@@ -236,7 +234,7 @@ describe('bff server', () => {
   let frontendDistDir: string;
   let sessionDir: string;
   let sessionDbPath: string;
-  let app: Application;
+  let app: CreatedApp['app'];
   let sessionDb: CreatedApp['sessionDb'];
   let sessionStore: CreatedApp['sessionStore'];
   let lastBackendHeaders: http.IncomingHttpHeaders;

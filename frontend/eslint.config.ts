@@ -32,7 +32,4 @@ export default tseslint.config(
       'react-hooks/exhaustive-deps': 'error',
     },
   },
-  {
-    files: ['src/**/*.test.{ts,tsx}', 'src/setupTests.ts'],
-  },
 );

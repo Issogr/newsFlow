@@ -15,10 +15,6 @@ const getSourceSelectionIds = (source: NewsSource): string[] => (
     : [source.id]
 );
 
-const getSelectableIds = (sources: NewsSource[] = []) => {
-  return sources.flatMap(getSourceSelectionIds);
-};
-
 const getInitialSelectedIds = (sources: NewsSource[] = [], currentSettings: UserSettings = {}) => {
   const excludedSourceIds = currentSettings.excludedSourceIds || [];
   const excludedSubSourceIds = currentSettings.excludedSubSourceIds || [];
@@ -81,7 +77,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, patchSession
   currentSettings?: UserSettings;
   patchSession: (patch: { settings: UserSettings }) => void;
 }) => {
-  const allSelectableIds = useMemo(() => getSelectableIds(sources), [sources]);
+  const allSelectableIds = useMemo(() => sources.flatMap(getSourceSelectionIds), [sources]);
   const initialSelectedIds = useMemo(() => getInitialSelectedIds(sources, currentSettings), [currentSettings, sources]);
   const sourceGroupsByLanguage = useMemo(() => groupSourcesByLanguage(sources), [sources]);
   const isExistingSourceReview = currentSettings.sourceSetupCompleted === false

@@ -77,7 +77,7 @@ function getGroupItemCount(group: NewsGroup) {
 }
 
 function getSourceSummary(group: NewsGroup, sourceEntries: SourceEntry[]) {
-  if (!Array.isArray(sourceEntries) || sourceEntries.length === 0) {
+  if (sourceEntries.length === 0) {
     return '';
   }
 

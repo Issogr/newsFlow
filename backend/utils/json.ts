@@ -1,5 +1,4 @@
 function parseJsonValue<T>(value: unknown, fallback: T): T;
-function parseJsonValue(value: unknown): unknown;
 function parseJsonValue<T>(value: unknown, fallback: T | null = null): T | unknown {
   if (!value) {
     return fallback;

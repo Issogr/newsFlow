@@ -1,8 +1,5 @@
-import type { ReactNode } from 'react';
-
 export type Locale = 'en' | 'it';
-export type TranslationParam = string | number | boolean | null | undefined;
-export type TranslationParams = Record<string, TranslationParam>;
+export type TranslationParams = Record<string, string | number | boolean | null | undefined>;
 export type Translator = (key: string, params?: TranslationParams) => string;
 export type TranslationDictionary = Record<string, string | ((params: TranslationParams) => string)>;
 
@@ -246,7 +243,3 @@ export interface ChangelogContent {
 }
 
 export type ReleaseNotes = ChangelogContent & { version: string };
-
-export interface ChildrenProps {
-  children: ReactNode;
-}

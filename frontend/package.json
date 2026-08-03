@@ -13,7 +13,7 @@
     "start": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc",
     "preview": "vite preview",
     "test": "node ../scripts/run-vitest.ts",
     "test:coverage": "node ../scripts/run-vitest.ts --coverage"

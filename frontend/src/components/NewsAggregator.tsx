@@ -617,7 +617,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
 
   useTopicRefreshSocket({
     onTopicRefresh: handleTopicRefresh,
-    onSummariesRefresh: () => loadThematicSummaries(),
+    onSummariesRefresh: loadThematicSummaries,
     onNewsUpdate: handleNewsUpdate,
     subscription: socketSubscription,
     enabled: !needsSourceSetup

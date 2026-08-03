@@ -1,5 +1,3 @@
-import type { Request } from 'express';
-
 export type DynamicRecord = Record<string, unknown>;
 export type UnknownRecord = DynamicRecord;
 export type DateInput = Date | string | number;
@@ -125,10 +123,6 @@ export interface UserSettings {
   themeMode?: string;
   updatedAt?: string;
   [key: string]: unknown;
-}
-
-export interface AuthenticatedRequest extends Request {
-  user: AuthUser;
 }
 
 declare global {

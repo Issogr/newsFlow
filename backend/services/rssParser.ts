@@ -97,7 +97,7 @@ function pruneResponseCache(now = Date.now()) {
 
 function ensureCleanupInterval() {
   if (cleanupHandle) {
-    return cleanupHandle;
+    return;
   }
 
   cleanupHandle = setInterval(() => {
@@ -105,8 +105,6 @@ function ensureCleanupInterval() {
   }, 5 * 60 * 1000);
 
   cleanupHandle.unref?.();
-
-  return cleanupHandle;
 }
 
 function shutdown() {
@@ -421,8 +419,6 @@ async function enrichArticlesWithImages(articles: DynamicRecord[] = [], options:
   await Promise.allSettled(missingImageArticles.map(async (article) => {
     article.image = await fetchArticleImage(String(article.url), options);
   }));
-
-  return articles;
 }
 
 async function fetchFeedXml(url: string, options: RssOptions = {}) {

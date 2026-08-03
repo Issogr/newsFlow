@@ -7,7 +7,7 @@
     "start": "node --enable-source-maps dist/server.js",
     "dev": "tsx watch server.ts",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ../scripts/tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json && tsc -p ../scripts/tsconfig.json",
     "lint": "eslint --flag unstable_native_nodejs_ts_config .",
     "test": "NODE_OPTIONS=--import=tsx node ../scripts/run-vitest.ts",
     "test:coverage": "NODE_OPTIONS=--import=tsx node ../scripts/run-vitest.ts --coverage",

@@ -36,7 +36,7 @@ function resolveAppliedTheme(themeMode: unknown, mediaQuery: MediaQueryList | nu
 }
 
 const PASSWORD_SETUP_PATHS = new Set(['/password/setup', '/admin/setup']);
-const API_DOCS_PATHS = new Set(['/api/docs']);
+const API_DOCS_PATH = '/api/docs';
 const LEGAL_POLICY_BY_PATH: Record<string, 'privacy' | 'cookie'> = {
   '/privacy-policy': 'privacy',
   '/cookie-policy': 'cookie'
@@ -58,7 +58,7 @@ function getCurrentLocationState() {
 function shouldLoadSessionForPath(pathname: string) {
   const normalizedPathname = normalizeRoutePath(pathname);
   return !PASSWORD_SETUP_PATHS.has(normalizedPathname)
-    && !API_DOCS_PATHS.has(normalizedPathname)
+    && normalizedPathname !== API_DOCS_PATH
     && !LEGAL_POLICY_BY_PATH[normalizedPathname];
 }
 
@@ -91,7 +91,7 @@ function App() {
     return new URLSearchParams(hash).get('token') || '';
   })();
   const isPasswordSetupRoute = PASSWORD_SETUP_PATHS.has(locationState.pathname);
-  const isApiDocsRoute = API_DOCS_PATHS.has(locationState.pathname);
+  const isApiDocsRoute = locationState.pathname === API_DOCS_PATH;
   const legalPolicy = LEGAL_POLICY_BY_PATH[locationState.pathname] || '';
   const sourceSetupPending = authData?.settings?.sourceSetupCompleted === false && !authData?.user?.isAdmin;
   const needsReleaseNotesAck = authData?.settings?.lastSeenReleaseNotesVersion !== releaseNotes.version;

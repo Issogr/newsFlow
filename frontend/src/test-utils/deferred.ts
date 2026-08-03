@@ -1,6 +1,6 @@
 import { act } from '@testing-library/react';
 
-export interface Deferred<T> {
+interface Deferred<T> {
   promise: Promise<T>;
   resolve: (value: T | PromiseLike<T>) => void;
 }

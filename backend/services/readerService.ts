@@ -36,7 +36,6 @@ const READER_MAX_RESPONSE_BYTES = parseIntegerEnv('READER_MAX_RESPONSE_BYTES', 2
 const READER_EXTRACTION_CONCURRENCY = parseIntegerEnv('READER_EXTRACTION_CONCURRENCY', 3, { min: 1 });
 const READER_EXTRACTION_MAX_PENDING = parseIntegerEnv('READER_EXTRACTION_MAX_PENDING', 60, { min: READER_EXTRACTION_CONCURRENCY });
 const READER_EXTRACTION_MAX_PENDING_PER_USER = parseIntegerEnv('READER_EXTRACTION_MAX_PENDING_PER_USER', 20, { min: 1 });
-const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'PRE']);
 const CONTAINER_TAGS = new Set(['ARTICLE', 'SECTION', 'DIV', 'MAIN']);
 const readerExtractionPromises = new Map<string, Promise<DynamicRecord>>();
 const readerFallbackCache = new Map<string, { expiresAt: number; payload: DynamicRecord }>();
@@ -228,11 +227,9 @@ function extractBlocksFromElement(element: Element | null, blocks: ReaderBlock[]
       return;
     }
 
-    if (!BLOCK_TAGS.has(tagName)) {
-      const fallbackBlock = createTextBlock('paragraph', extractTextFromNode(childElement));
-      if (fallbackBlock) {
-        blocks.push(fallbackBlock);
-      }
+    const fallbackBlock = createTextBlock('paragraph', extractTextFromNode(childElement));
+    if (fallbackBlock) {
+      blocks.push(fallbackBlock);
     }
   });
 
