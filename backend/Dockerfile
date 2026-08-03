@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # Build stage
-FROM --platform=$BUILDPLATFORM node:24.16.0-bookworm-slim AS build
+FROM --platform=$BUILDPLATFORM node:24.18.1-bookworm-slim AS build
 
 ARG TARGETARCH
 
@@ -27,13 +27,10 @@ COPY utils ./utils
 RUN npm run build && npm prune --omit=dev
 
 # Production stage
-FROM node:24.16.0-bookworm-slim
+FROM node:24.18.1-bookworm-slim
 
 # Crea un utente non-root
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates wget && \
-    rm -rf /var/lib/apt/lists/* && \
-    groupadd --gid 1001 nodejs && \
+RUN groupadd --gid 1001 nodejs && \
     useradd --uid 1001 --gid nodejs --home-dir /usr/src/app --shell /usr/sbin/nologin --no-create-home nodeuser
 
 # Imposta la directory di lavoro
@@ -62,7 +59,7 @@ USER nodeuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:5000/ready || exit 1
+  CMD node -e "fetch('http://127.0.0.1:5000/ready').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 # Comando di avvio
 CMD ["node", "--enable-source-maps", "dist/server.js"]

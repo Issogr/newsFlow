@@ -1,6 +1,6 @@
 services:
   init-permissions:
-    image: alpine:3.20
+    image: alpine:3.24
     user: "0:0"
     network_mode: none
     command: >
@@ -14,7 +14,7 @@ services:
     restart: "no"
 
   ingress:
-    image: caddy:2.10.2-alpine
+    image: caddy:2.11.4-alpine
     container_name: newsflow-ingress
     ports:
       - "80:80"

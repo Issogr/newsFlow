@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM --platform=$BUILDPLATFORM node:24.16.0-bookworm-slim AS frontend-build
+FROM --platform=$BUILDPLATFORM node:24.18.1-bookworm-slim AS frontend-build
 
 WORKDIR /app/frontend
 
@@ -11,7 +11,7 @@ RUN --mount=type=cache,id=newsflow-frontend-npm,target=/root/.npm,sharing=locked
 COPY frontend/ ./
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM node:24.16.0-bookworm-slim AS bff-build
+FROM --platform=$BUILDPLATFORM node:24.18.1-bookworm-slim AS bff-build
 
 WORKDIR /app/bff
 
@@ -24,15 +24,11 @@ COPY bff/server.ts ./
 COPY bff/lib ./lib
 RUN npm run build && npm prune --omit=dev
 
-FROM node:24.16.0-bookworm-slim
+FROM node:24.18.1-bookworm-slim
 
 WORKDIR /app/bff
 ENV NODE_ENV=production
 ENV PORT=80
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates wget && \
-    rm -rf /var/lib/apt/lists/*
 
 COPY --from=bff-build /app/bff/node_modules ./node_modules
 COPY bff/package*.json ./
@@ -45,6 +41,6 @@ USER node
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget -qO- http://127.0.0.1/ready || exit 1
+  CMD node -e "fetch('http://127.0.0.1/ready').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 CMD ["node", "--enable-source-maps", "dist/server.js"]
