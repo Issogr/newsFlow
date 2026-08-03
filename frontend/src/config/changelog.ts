@@ -6,13 +6,19 @@ export const CURRENT_CHANGELOG_ENTRY: { version: string } & Record<Locale, Chang
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
-    items: []
+    items: [
+      '🧹 Removed clickbait classification and labels.',
+      '🌙 AI summaries and podcasts now run once daily at 20:00.'
+    ]
   },
   it: {
     eyebrow: 'Ultimo aggiornamento',
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
-    items: []
+    items: [
+      '🧹 Rimosse la classificazione e le etichette clickbait.',
+      '🌙 Sintesi AI e podcast ora vengono generati una volta al giorno alle 20:00.'
+    ]
   }
 };
 

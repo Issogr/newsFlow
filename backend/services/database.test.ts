@@ -88,12 +88,12 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('43');
+    expect(migrationVersion).toBe('44');
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
     expect(articleColumns).toEqual(expect.arrayContaining(['story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason']));
-    expect(articleColumns).toEqual(expect.arrayContaining(['clickbait_label', 'clickbait_score', 'clickbait_source', 'clickbait_confidence', 'clickbait_model', 'clickbait_reason_code', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
+    expect(articleColumns).toEqual(expect.not.arrayContaining(['clickbait_label', 'clickbait_score', 'clickbait_source', 'clickbait_confidence', 'clickbait_model', 'clickbait_reason_code', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(topicColumns).toEqual(expect.arrayContaining(['article_id', 'topic', 'source', 'confidence', 'evidence', 'reason_code', 'created_at']));
     expect(topicColumns).not.toContain('is_ai_generated');
     expect(settingsColumns).toContain('excluded_sub_source_ids');
@@ -175,8 +175,40 @@ describe('database migrations', () => {
     const width = migratedDb.prepare('SELECT reader_text_width AS readerTextWidth FROM user_settings WHERE user_id = ?').get('user-1')?.readerTextWidth;
     migratedDb.close();
 
-    expect(migrationVersion).toBe('43');
+    expect(migrationVersion).toBe('44');
     expect(width).toBe('default');
+  });
+
+  test('drops clickbait columns from schema version 43', () => {
+    database = require('./database');
+    const sqlite = database.getDb();
+    sqlite.exec(`
+      ALTER TABLE articles ADD COLUMN clickbait_label TEXT NOT NULL DEFAULT '';
+      ALTER TABLE articles ADD COLUMN clickbait_score INTEGER;
+      ALTER TABLE articles ADD COLUMN clickbait_source TEXT NOT NULL DEFAULT '';
+      ALTER TABLE articles ADD COLUMN clickbait_confidence REAL;
+      ALTER TABLE articles ADD COLUMN clickbait_model TEXT NOT NULL DEFAULT '';
+      ALTER TABLE articles ADD COLUMN clickbait_reason_code TEXT;
+      ALTER TABLE articles ADD COLUMN ai_clickbait_processed_at TEXT;
+      ALTER TABLE articles ADD COLUMN ai_clickbait_status TEXT;
+      CREATE INDEX idx_articles_ai_clickbait_processed_at ON articles (ai_clickbait_processed_at);
+      UPDATE app_meta SET value = '43' WHERE key = 'migration_version';
+    `);
+    database.closeDb();
+    jest.resetModules();
+
+    database = require('./database');
+    database.getDb();
+
+    const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
+    const migrationVersion = migratedDb.prepare("SELECT value FROM app_meta WHERE key = 'migration_version'").get()?.value;
+    const articleColumns = migratedDb.prepare('PRAGMA table_info(articles)').all().map((column: { name: string }) => column.name);
+    const articleIndexes = migratedDb.prepare('PRAGMA index_list(articles)').all().map((index: { name: string }) => index.name);
+    migratedDb.close();
+
+    expect(migrationVersion).toBe('44');
+    expect(articleColumns).toEqual(expect.not.arrayContaining(['clickbait_label', 'clickbait_score', 'clickbait_source', 'clickbait_confidence', 'clickbait_model', 'clickbait_reason_code', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
+    expect(articleIndexes).not.toContain('idx_articles_ai_clickbait_processed_at');
   });
 
   test('migrates an unversioned legacy database instead of marking it current', () => {
@@ -229,7 +261,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('43');
+    expect(migratedVersion).toBe('44');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
@@ -237,7 +269,8 @@ describe('database migrations', () => {
     expect(settingsColumns).not.toContain('recent_hours');
     expect(settingsColumns).not.toContain('default_source_ids');
     expect(userColumns).toEqual(expect.arrayContaining(['public_api_request_count', 'public_api_last_used_at']));
-    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason', 'clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
+    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason']));
+    expect(articleColumns).toEqual(expect.not.arrayContaining(['clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(apiTokenColumns).toContain('token_hash');
     expect(userSourceColumns).toContain('icon_url');
   });
@@ -350,8 +383,9 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('43');
-    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason', 'clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
+    expect(migratedVersion).toBe('44');
+    expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason']));
+    expect(articleColumns).toEqual(expect.not.arrayContaining(['clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
     expect(settingsColumns).toContain('show_news_images');
     expect(settingsColumns).toContain('compact_news_cards');
@@ -468,7 +502,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source: Identified) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article: Identified) => article.id);
 
-    expect(migratedVersion).toBe('43');
+    expect(migratedVersion).toBe('44');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source: Identified) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -568,7 +602,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('43');
+    expect(migratedVersion).toBe('44');
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
     expect(row).toEqual({
       summaryText: 'English text [1]',
@@ -721,7 +755,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('43');
+    expect(migratedVersion).toBe('44');
     expect(audioRow).toEqual({
       podcastId: 'legacy-podcast',
       locale: 'it',
@@ -1813,56 +1847,6 @@ describe('database queries and user data', () => {
       confidence: 0.91,
       evidence: ['AI topic'],
       reasonCode: 'ai_confident_evidence'
-    }));
-  });
-
-  test('tracks clickbait processing and exposes stored labels on articles', () => {
-    const now = new Date().toISOString();
-
-    database.upsertArticles([
-      {
-        id: 'clickbait-article',
-        sourceId: primarySource.id,
-        source: primarySource.name,
-        title: 'You will not believe this update',
-        description: 'Existing description',
-        content: '',
-        url: 'https://example.com/clickbait-article',
-        language: 'en',
-        pubDate: now
-      }
-    ]);
-
-    expect(database.getArticleIdsPendingAiClickbaitProcessing(['clickbait-article'])).toEqual(['clickbait-article']);
-    expect(database.updateArticleClickbaitClassifications([
-      { articleId: 'clickbait-article', classification: { label: 'high', score: 87, source: 'ai', confidence: 0.92, reasonCode: 'ai_clickbait_label' } }
-    ], 'clickbait-model')).toBe(1);
-
-    const articles = database.getArticles({}, { maxArticleAgeHours: 9999 });
-    const clickbaitState = database.getDb().prepare(`
-      SELECT ai_clickbait_processed_at AS processedAt, ai_clickbait_status AS status
-      FROM articles
-      WHERE id = ?
-    `).get('clickbait-article');
-
-    expect(database.getArticleIdsPendingAiClickbaitProcessing(['clickbait-article'])).toEqual([]);
-    expect(articles[0]).toEqual(expect.objectContaining({
-      id: 'clickbait-article',
-      clickbaitLabel: 'high',
-      clickbaitScore: 87,
-      clickbaitSource: 'ai',
-      clickbaitConfidence: 0.92,
-      clickbaitModel: 'clickbait-model'
-    }));
-    expect(clickbaitState).toEqual({ processedAt: expect.any(String), status: 'completed' });
-
-    expect(database.updateArticleClickbaitClassifications([
-      { articleId: 'clickbait-article', classification: { label: 'high', score: 87, source: 'local', confidence: 0.92, reasonCode: 'local_clear_high' } }
-    ], 'clickbait-model')).toBe(1);
-    expect(database.getArticles({}, { maxArticleAgeHours: 9999 })[0]).toEqual(expect.objectContaining({
-      clickbaitSource: 'local',
-      clickbaitModel: '',
-      clickbaitReasonCode: 'local_clear_high'
     }));
   });
 

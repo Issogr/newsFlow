@@ -137,16 +137,15 @@ The public API is read-only and cache-only. It must not trigger RSS refreshes, a
 
 ## AI Provider And Feature Switches
 
-AI features run only in the backend, and provider-backed work requires `OPENROUTER_API_KEY`. Raw backend feature switches default to `true`; Docker Compose defaults only topic detection to `true` and the other four switches to `false`.
+AI features run only in the backend, and provider-backed work requires `OPENROUTER_API_KEY`. Raw backend feature switches default to `true`; Docker Compose defaults only topic detection to `true` and the other three switches to `false`.
 
 | Variable | Default | Details |
 | --- | --- | --- |
-| `OPENROUTER_API_KEY` | unset | Server-side OpenRouter API key used for topic detection, clickbait detection, story grouping, summaries, podcast scripts, and TTS. |
+| `OPENROUTER_API_KEY` | unset | Server-side OpenRouter API key used for topic detection, story grouping, summaries, podcast scripts, and TTS. |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL. Trailing slashes are removed. |
 | `OPENROUTER_FAILURE_BACKOFF_MS` | `60000` | Initial model-specific pause after transient provider, network, rate-limit, or authentication failures. Minimum `1000`, maximum `3600000`. |
 | `OPENROUTER_FAILURE_MAX_BACKOFF_MS` | `900000` | Maximum model-specific provider pause after repeated failures. Minimum `1000`, maximum `86400000`. Successful requests clear the backoff. |
 | `AI_TOPIC_DETECTION_ENABLED` | Code and Compose: `true` | Enables AI topic classification when the API key is present. Invalid values disable it. |
-| `AI_CLICKBAIT_DETECTION_ENABLED` | Code: `true`; Compose: `false` | Enables clickbait labels when the API key is present. Invalid values disable it. |
 | `AI_STORY_GROUPING_ENABLED` | Code: `true`; Compose: `false` | Enables AI-assisted story grouping when the API key is present. Invalid values disable it. |
 | `AI_SUMMARY_GENERATION_ENABLED` | Code: `true`; Compose: `false` | Enables thematic summaries when the API key is present and controls summary UI visibility. Invalid values disable it. |
 | `AI_PODCAST_GENERATION_ENABLED` | Code: `true`; Compose: `false` | Enables podcast script and audio generation when the API key is present and controls podcast UI visibility. Invalid values disable it. |
@@ -162,17 +161,6 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 | `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one topic-classification request. Strict integer, clamped to `1000..120000`. |
 | `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips OpenRouter classification for articles with high-confidence local topic matches. Invalid values disable it. |
 | `AI_TOPIC_DEBUG_LOG_ARTICLES` | `false` | Enables verbose topic debug logging only when set to `true`. Invalid values disable it. |
-
-## AI Clickbait Detection
-
-| Variable | Default | Details |
-| --- | --- | --- |
-| `OPENROUTER_CLICKBAIT_MODEL` | `OPENROUTER_TOPIC_MODEL` | Optional model override for ambiguous clickbait labels. When unset, clickbait detection uses the topic model. |
-| `AI_CLICKBAIT_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one clickbait-classification request. Strict integer, clamped to `1000..120000`. |
-| `AI_TOPIC_BATCH_SIZE` | `10` | Also controls articles per clickbait-classification request. |
-| `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Also controls concurrent clickbait-classification requests. |
-| `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Also limits newly inserted articles evaluated for clickbait per refresh. |
-| `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Also skips OpenRouter clickbait classification when local headline signals are high confidence. |
 
 ## AI Story Grouping
 
@@ -192,7 +180,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 | --- | --- | --- |
 | `OPENROUTER_SUMMARY_MODEL` | `qwen/qwen3.7-flash` | Model used for thematic summaries. |
 | `AI_SUMMARY_REQUEST_TIMEOUT_MS` | `120000` | Timeout for thematic-summary requests and podcast-script requests. Strict integer, valid `1000..120000`; invalid/out-of-range falls back. |
-| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for `08:00` and `20:00` summary and podcast slots. Invalid zones fall back to `Europe/Rome`. |
+| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for the daily `20:00` summary and podcast slot. Invalid zones fall back to `Europe/Rome`. |
 | `THEMATIC_SUMMARY_CHECK_INTERVAL_MS` | `60000` | Scheduler interval for checking due summaries and podcasts. Minimum `1000`. |
 | `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in topic-tagged articles queried before deduplication and prompt selection. Minimum `1`, maximum `300`. |
 | `AI_SUMMARY_PROMPT_MAX_ARTICLES` | `60` | Max deduped/source-balanced articles included in one thematic-summary prompt. Minimum `1`, maximum `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC`. |

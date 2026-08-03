@@ -67,22 +67,14 @@ describe('thematicSummaryService', () => {
     thematicSummaryService.stopScheduler();
   });
 
-  test('builds the 08:00 window from the previous 20:00 slot', () => {
-    const window = thematicSummaryService._getLatestDueWindow(new Date('2026-05-21T06:05:00.000Z'));
-
-    expect(window).toEqual({
-      periodStart: '2026-05-20T18:00:00.000Z',
-      periodEnd: '2026-05-21T06:00:00.000Z'
-    });
-  });
-
-  test('uses the same 08:00 and 20:00 schedule for summaries and podcasts', () => {
+  test('builds one daily 20:00 window before and after the current slot', () => {
     expect(thematicSummaryService._getLatestDueWindow(new Date('2026-05-21T11:10:00.000Z'))).toEqual({
-      periodStart: '2026-05-20T18:00:00.000Z',
-      periodEnd: '2026-05-21T06:00:00.000Z'
+      periodStart: '2026-05-19T18:00:00.000Z',
+      periodEnd: '2026-05-20T18:00:00.000Z'
     });
+
     expect(thematicSummaryService._getLatestDueWindow(new Date('2026-05-21T18:01:00.000Z'))).toEqual({
-      periodStart: '2026-05-21T06:00:00.000Z',
+      periodStart: '2026-05-20T18:00:00.000Z',
       periodEnd: '2026-05-21T18:00:00.000Z'
     });
   });
@@ -90,8 +82,8 @@ describe('thematicSummaryService', () => {
   test('defaults summary scheduling to Europe/Rome instead of the container UTC clock', () => {
     expect(thematicSummaryService._getSummaryTimeZone()).toBe('Europe/Rome');
     expect(thematicSummaryService._getLatestDueWindow(new Date('2026-01-21T07:05:00.000Z'))).toEqual({
-      periodStart: '2026-01-20T19:00:00.000Z',
-      periodEnd: '2026-01-21T07:00:00.000Z'
+      periodStart: '2026-01-19T19:00:00.000Z',
+      periodEnd: '2026-01-20T19:00:00.000Z'
     });
   });
 
@@ -120,11 +112,11 @@ describe('thematicSummaryService', () => {
   test('builds the next due window for reader prewarm', () => {
     expect(thematicSummaryService._getNextDueWindow(new Date('2026-05-21T05:30:00.000Z'))).toEqual({
       periodStart: '2026-05-20T18:00:00.000Z',
-      periodEnd: '2026-05-21T06:00:00.000Z'
+      periodEnd: '2026-05-21T18:00:00.000Z'
     });
     expect(thematicSummaryService._getNextDueWindow(new Date('2026-05-21T18:00:00.000Z'))).toEqual({
       periodStart: '2026-05-21T18:00:00.000Z',
-      periodEnd: '2026-05-22T06:00:00.000Z'
+      periodEnd: '2026-05-22T18:00:00.000Z'
     });
   });
 });
@@ -432,7 +424,7 @@ describe('thematic summary reader prewarm', () => {
       },
       readerServiceMock
     });
-    const firstReferenceDate = new Date('2026-05-21T05:45:00.000Z');
+    const firstReferenceDate = new Date('2026-05-21T17:45:00.000Z');
     const window = service._getNextDueWindow(firstReferenceDate);
 
     await expect(service.prewarmReaderCacheForDueWindow({
@@ -440,7 +432,7 @@ describe('thematic summary reader prewarm', () => {
       window
     })).resolves.toMatchObject({ attemptedCount: 1, cachedCount: 1 });
     await expect(service.prewarmReaderCacheForDueWindow({
-      referenceDate: new Date('2026-05-21T05:50:00.000Z'),
+      referenceDate: new Date('2026-05-21T17:50:00.000Z'),
       window
     })).resolves.toMatchObject({ attemptedCount: 0 });
 
@@ -486,7 +478,7 @@ describe('thematic summary reader prewarm', () => {
       },
       readerServiceMock
     });
-    const firstReferenceDate = new Date('2026-05-21T05:45:00.000Z');
+    const firstReferenceDate = new Date('2026-05-21T17:45:00.000Z');
     const window = service._getNextDueWindow(firstReferenceDate);
 
     await expect(service.prewarmReaderCacheForDueWindow({
@@ -494,11 +486,11 @@ describe('thematic summary reader prewarm', () => {
       window
     })).resolves.toMatchObject({ attemptedCount: 1, cachedCount: 0 });
     await expect(service.prewarmReaderCacheForDueWindow({
-      referenceDate: new Date('2026-05-21T05:50:00.000Z'),
+      referenceDate: new Date('2026-05-21T17:50:00.000Z'),
       window
     })).resolves.toMatchObject({ attemptedCount: 0 });
     await expect(service.prewarmReaderCacheForDueWindow({
-      referenceDate: new Date('2026-05-21T05:56:00.000Z'),
+      referenceDate: new Date('2026-05-21T17:56:00.000Z'),
       window
     })).resolves.toMatchObject({ attemptedCount: 1, cachedCount: 1 });
 
@@ -537,9 +529,9 @@ describe('thematic summary reader prewarm', () => {
       },
       readerServiceMock
     });
-    const firstReference = new Date('2026-05-21T05:45:00.000Z');
-    const secondReference = new Date('2026-05-21T11:45:00.000Z');
-    const thirdReference = new Date('2026-05-21T18:45:00.000Z');
+    const firstReference = new Date('2026-05-21T17:45:00.000Z');
+    const secondReference = new Date('2026-05-21T18:45:00.000Z');
+    const thirdReference = new Date('2026-05-22T18:45:00.000Z');
 
     await service.prewarmReaderCacheForDueWindow({
       force: true,
@@ -590,7 +582,7 @@ describe('thematic summary reader prewarm', () => {
       },
       readerServiceMock
     });
-    const referenceDate = new Date('2026-05-21T05:45:00.000Z');
+    const referenceDate = new Date('2026-05-21T17:45:00.000Z');
 
     await expect(service.prewarmReaderCacheForDueWindow({
       referenceDate,
@@ -624,7 +616,7 @@ describe('thematic summary reader prewarm', () => {
       }),
       readerServiceMock
     });
-    const referenceDate = new Date('2026-05-21T05:45:00.000Z');
+    const referenceDate = new Date('2026-05-21T17:45:00.000Z');
 
     await expect(service.prewarmReaderCacheForDueWindow({
       referenceDate,
@@ -816,14 +808,14 @@ describe('thematic summary generation retries', () => {
     expect(websocketServiceMock.broadcastFeedRefresh).not.toHaveBeenCalled();
   });
 
-  test('uses the same morning and evening windows for topic summaries and podcasts', async () => {
+  test('uses the same daily 20:00 window for topic summaries and podcasts', async () => {
     const existingSummary = {
       status: 'completed',
       periodStart: '2026-05-20T17:00:00.000Z',
       periodEnd: '2026-05-21T05:00:00.000Z'
     };
     const existingPodcastSummary = {
-      id: 'podcast-morning',
+      id: 'podcast-daily',
       status: 'completed',
       periodStart: '2026-05-20T17:00:00.000Z',
       periodEnd: '2026-05-21T05:00:00.000Z'
@@ -842,8 +834,8 @@ describe('thematic summary generation retries', () => {
     const { service } = loadServiceWithMocks({ databaseMock, env: OPENROUTER_TEST_ENV, aiSummaryGeneratorMock });
     await service.generateDueSummaries({ referenceDate: new Date('2026-05-21T11:10:00.000Z') });
 
-    expect(databaseMock.getThematicSummary).toHaveBeenCalledWith('technology', '2026-05-20T18:00:00.000Z', '2026-05-21T06:00:00.000Z');
-    expect(databaseMock.getPodcastSummary).toHaveBeenCalledWith('2026-05-20T18:00:00.000Z', '2026-05-21T06:00:00.000Z');
+    expect(databaseMock.getThematicSummary).toHaveBeenCalledWith('technology', '2026-05-19T18:00:00.000Z', '2026-05-20T18:00:00.000Z');
+    expect(databaseMock.getPodcastSummary).toHaveBeenCalledWith('2026-05-19T18:00:00.000Z', '2026-05-20T18:00:00.000Z');
     expect(databaseMock.pruneSummaryHistory).not.toHaveBeenCalled();
   });
 

@@ -13,7 +13,7 @@ const { isPromotionalDealArticle } = require('../utils/promotionalContent');
 const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
 
 const DEFAULT_SUMMARY_TIME_ZONE = 'Europe/Rome';
-const SUMMARY_GENERATION_HOURS = [8, 20];
+const SUMMARY_GENERATION_HOURS = [20];
 const SUMMARY_HISTORY_RETAIN_COUNT = 2;
 const PODCAST_HISTORY_RETAIN_COUNT = parseIntegerEnv('AI_PODCAST_HISTORY_RETAIN_COUNT', 2, { min: 1, max: 10 });
 const SUMMARY_CHECK_INTERVAL_MS = parseIntegerEnv('THEMATIC_SUMMARY_CHECK_INTERVAL_MS', 60 * 1000, { min: 1000 });
@@ -317,7 +317,9 @@ function getLatestDueWindow(referenceDate: DateInput = new Date(), generationHou
 
   const yesterday = addCalendarDays(localToday, -1);
   const periodEnd = createZonedSlotDate(yesterday, generationHours[generationHours.length - 1], SUMMARY_TIME_ZONE);
-  const periodStart = createZonedSlotDate(yesterday, generationHours[generationHours.length - 2], SUMMARY_TIME_ZONE);
+  const previousSlotDay = generationHours.length === 1 ? addCalendarDays(yesterday, -1) : yesterday;
+  const previousSlotHour = generationHours.length === 1 ? generationHours[0] : generationHours[generationHours.length - 2];
+  const periodStart = createZonedSlotDate(previousSlotDay, previousSlotHour, SUMMARY_TIME_ZONE);
 
   return {
     periodStart: periodStart.toISOString(),

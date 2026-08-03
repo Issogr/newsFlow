@@ -7,7 +7,7 @@ import type SqliteDatabase from './sqliteDatabase';
 import type { SourceDefinition } from '../utils/types';
 
 function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
-  const CURRENT_SCHEMA_VERSION = 43;
+  const CURRENT_SCHEMA_VERSION = 44;
   const MIN_SUPPORTED_SCHEMA_VERSION = 15;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
@@ -321,14 +321,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         ai_story_group_match_ids TEXT NOT NULL DEFAULT '[]',
         ai_story_group_confidence REAL,
         ai_story_group_reason TEXT,
-        clickbait_label TEXT NOT NULL DEFAULT '',
-        clickbait_score INTEGER,
-        clickbait_source TEXT NOT NULL DEFAULT '',
-        clickbait_confidence REAL,
-        clickbait_model TEXT NOT NULL DEFAULT '',
-        clickbait_reason_code TEXT,
-        ai_clickbait_processed_at TEXT,
-        ai_clickbait_status TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -557,9 +549,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
     if (getColumnNames(database, 'articles').has('story_group_id')) {
       database.exec('CREATE INDEX IF NOT EXISTS idx_articles_story_group_id ON articles (story_group_id)');
     }
-    if (getColumnNames(database, 'articles').has('ai_clickbait_processed_at')) {
-      database.exec('CREATE INDEX IF NOT EXISTS idx_articles_ai_clickbait_processed_at ON articles (ai_clickbait_processed_at)');
-    }
   }
 
   function getCurrentSchemaVersion(database: SqliteDatabase) {
@@ -701,10 +690,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
 
     if (!tableExists(database, 'user_read_thematic_summaries')) {
       return 37;
-    }
-
-    if (!articleColumns.has('clickbait_label') || !articleColumns.has('ai_clickbait_processed_at')) {
-      return 38;
     }
 
     if (tableExists(database, 'user_settings') && userSettingsColumns.has('article_retention_hours')) {
@@ -1376,6 +1361,29 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
 
       setCurrentSchemaVersion(database, 43);
       logger.info('Migrated DB schema from version 42 to 43');
+      return;
+    }
+
+    if (currentVersion === 43) {
+      const articleColumns = getColumnNames(database, 'articles');
+      database.exec('DROP INDEX IF EXISTS idx_articles_ai_clickbait_processed_at');
+      [
+        'clickbait_label',
+        'clickbait_score',
+        'clickbait_source',
+        'clickbait_confidence',
+        'clickbait_model',
+        'clickbait_reason_code',
+        'ai_clickbait_processed_at',
+        'ai_clickbait_status'
+      ].forEach((column) => {
+        if (articleColumns.has(column)) {
+          database.exec(`ALTER TABLE articles DROP COLUMN ${column}`);
+        }
+      });
+
+      setCurrentSchemaVersion(database, 44);
+      logger.info('Migrated DB schema from version 43 to 44');
       return;
     }
 

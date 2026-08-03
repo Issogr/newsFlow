@@ -16,7 +16,6 @@ function getAiFeatures() {
   return {
     ai: {
       topicDetectionEnabled: isOpenRouterFeatureEnabled('AI_TOPIC_DETECTION_ENABLED'),
-      clickbaitDetectionEnabled: isOpenRouterFeatureEnabled('AI_CLICKBAIT_DETECTION_ENABLED'),
       storyGroupingEnabled: isOpenRouterFeatureEnabled('AI_STORY_GROUPING_ENABLED'),
       thematicSummariesEnabled: isOpenRouterFeatureEnabled('AI_SUMMARY_GENERATION_ENABLED'),
       podcastsEnabled: isOpenRouterFeatureEnabled('AI_PODCAST_GENERATION_ENABLED')

@@ -140,29 +140,6 @@ function getPublishedAt(group: NewsGroup, locale: Locale) {
   };
 }
 
-const CLICKBAIT_BADGE_CLASS_NAMES = {
-  low: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  medium: 'border-amber-200 bg-amber-50 text-amber-800',
-  high: 'border-rose-200 bg-rose-50 text-rose-700'
-};
-
-type ClickbaitLabel = 'low' | 'medium' | 'high';
-
-function normalizeClickbaitLabel(label: unknown = ''): ClickbaitLabel | '' {
-  const normalized = String(label || '').trim().toLowerCase();
-  return ['low', 'medium', 'high'].includes(normalized) ? normalized as ClickbaitLabel : '';
-}
-
-function getClickbaitLabelText(label: ClickbaitLabel | '', t: Translator) {
-  const labels = {
-    low: t('clickbaitLow'),
-    medium: t('clickbaitMedium'),
-    high: t('clickbaitHigh')
-  };
-
-  return label ? labels[label] : '';
-}
-
 const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onToggleReadLater, readLaterUpdating = false }: {
   group: NewsGroup;
   showImages?: boolean;
@@ -312,20 +289,6 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   )) : null;
   const sourceSummary = getSourceSummary(group, sourceEntries);
   const publishedAt = getPublishedAt(group, locale);
-  const clickbaitLabel = normalizeClickbaitLabel(group?.clickbaitLabel || group?.items?.[0]?.clickbaitLabel);
-  const clickbaitText = getClickbaitLabelText(clickbaitLabel, t);
-  const clickbaitSource = String(group?.clickbaitSource || group?.items?.[0]?.clickbaitSource || '').toLowerCase();
-  const clickbaitBadge = clickbaitText && clickbaitLabel ? (
-    <span
-      className={clickbaitSource === 'ai' ? 'inline-flex rounded-full p-px' : ''}
-      style={clickbaitSource === 'ai' ? AI_ACCENT_GRADIENT_STYLE : undefined}
-      title={clickbaitSource === 'ai' ? t('aiClickbaitLabel') : clickbaitText}
-    >
-      <span className={`inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${CLICKBAIT_BADGE_CLASS_NAMES[clickbaitLabel]}`}>
-        {clickbaitText}
-      </span>
-    </span>
-  ) : null;
   const topicBadges = topicEntries.length > 0 ? (
     <div className="flex w-fit -space-x-1 text-xs font-medium text-slate-600">
       {topicEntries.map(({ topic, source }) => {
@@ -435,11 +398,6 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
             {group.title}
           </button>
         </h2>
-        {clickbaitBadge ? (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {clickbaitBadge}
-          </div>
-        ) : null}
       </div>
 
       {imageUrl ? (

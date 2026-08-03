@@ -183,11 +183,6 @@ function createGroupFromItems(items: Article[] = []): NewsGroup | null {
     title: primaryItem.title,
     description: primaryItem.description,
     pubDate: primaryItem.pubDate,
-    clickbaitLabel: primaryItem.clickbaitLabel || '',
-    clickbaitScore: Number.isFinite(Number(primaryItem.clickbaitScore)) ? Number(primaryItem.clickbaitScore) : null,
-    clickbaitSource: primaryItem.clickbaitSource || '',
-    clickbaitConfidence: Number.isFinite(Number(primaryItem.clickbaitConfidence)) ? Number(primaryItem.clickbaitConfidence) : null,
-    clickbaitModel: primaryItem.clickbaitModel || '',
     topics: topicDetails.map((entry) => entry.topic),
     topicDetails,
     url: primaryItem.url

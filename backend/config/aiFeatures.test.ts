@@ -1,7 +1,6 @@
 const AI_FEATURE_ENV_NAMES = [
   'OPENROUTER_API_KEY',
   'AI_TOPIC_DETECTION_ENABLED',
-  'AI_CLICKBAIT_DETECTION_ENABLED',
   'AI_STORY_GROUPING_ENABLED',
   'AI_SUMMARY_GENERATION_ENABLED',
   'AI_PODCAST_GENERATION_ENABLED'
@@ -35,7 +34,6 @@ describe('aiFeatures config', () => {
     expect(getAiFeatures()).toEqual({
       ai: {
         topicDetectionEnabled: true,
-        clickbaitDetectionEnabled: true,
         storyGroupingEnabled: true,
         thematicSummariesEnabled: true,
         podcastsEnabled: true
@@ -51,7 +49,6 @@ describe('aiFeatures config', () => {
     expect(getAiFeatures()).toEqual({
       ai: {
         topicDetectionEnabled: false,
-        clickbaitDetectionEnabled: false,
         storyGroupingEnabled: false,
         thematicSummariesEnabled: false,
         podcastsEnabled: false
@@ -62,7 +59,6 @@ describe('aiFeatures config', () => {
   test('allows each AI feature to be disabled independently with false', () => {
     process.env.OPENROUTER_API_KEY = 'test-key';
     process.env.AI_TOPIC_DETECTION_ENABLED = 'false';
-    process.env.AI_CLICKBAIT_DETECTION_ENABLED = 'false';
     process.env.AI_STORY_GROUPING_ENABLED = 'false';
     process.env.AI_SUMMARY_GENERATION_ENABLED = 'false';
     process.env.AI_PODCAST_GENERATION_ENABLED = 'false';
@@ -72,7 +68,6 @@ describe('aiFeatures config', () => {
     expect(getAiFeatures()).toEqual({
       ai: {
         topicDetectionEnabled: false,
-        clickbaitDetectionEnabled: false,
         storyGroupingEnabled: false,
         thematicSummariesEnabled: false,
         podcastsEnabled: false
@@ -83,20 +78,17 @@ describe('aiFeatures config', () => {
   test('treats explicit true as enabled when OpenRouter is configured', () => {
     process.env.OPENROUTER_API_KEY = 'test-key';
     process.env.AI_TOPIC_DETECTION_ENABLED = 'true';
-    process.env.AI_CLICKBAIT_DETECTION_ENABLED = 'true';
     process.env.AI_STORY_GROUPING_ENABLED = 'true';
 
     const { getAiFeatures } = require('./aiFeatures');
 
     expect(getAiFeatures().ai.topicDetectionEnabled).toBe(true);
-    expect(getAiFeatures().ai.clickbaitDetectionEnabled).toBe(true);
     expect(getAiFeatures().ai.storyGroupingEnabled).toBe(true);
   });
 
   test('does not accept auto or legacy true-like or false-like toggle values', () => {
     process.env.OPENROUTER_API_KEY = 'test-key';
     process.env.AI_TOPIC_DETECTION_ENABLED = 'auto';
-    process.env.AI_CLICKBAIT_DETECTION_ENABLED = 'maybe';
     process.env.AI_STORY_GROUPING_ENABLED = '1';
     process.env.AI_SUMMARY_GENERATION_ENABLED = 'yes';
     process.env.AI_PODCAST_GENERATION_ENABLED = '0';
@@ -106,7 +98,6 @@ describe('aiFeatures config', () => {
     expect(getAiFeatures()).toEqual({
       ai: {
         topicDetectionEnabled: false,
-        clickbaitDetectionEnabled: false,
         storyGroupingEnabled: false,
         thematicSummariesEnabled: false,
         podcastsEnabled: false

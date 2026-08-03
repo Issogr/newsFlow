@@ -134,7 +134,7 @@ AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed 
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | unset | Required for AI provider calls. |
 | `AI_TOPIC_DETECTION_ENABLED` | `true` | Adds AI topic metadata during ingestion. |
-| `AI_CLICKBAIT_DETECTION_ENABLED`, `AI_STORY_GROUPING_ENABLED`, `AI_SUMMARY_GENERATION_ENABLED`, `AI_PODCAST_GENERATION_ENABLED` | `false` | Enable individual optional AI jobs. |
+| `AI_STORY_GROUPING_ENABLED`, `AI_SUMMARY_GENERATION_ENABLED`, `AI_PODCAST_GENERATION_ENABLED` | `false` | Enable individual optional AI jobs. |
 | `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips provider calls for articles the local classifier can topic with high confidence. |
 | `AI_SUMMARY_PROMPT_MAX_ARTICLES` | `60` | Max selected articles included in one thematic-summary prompt after dedupe/source balancing. |
 | `AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS` | `5000` | Debounces summary checks triggered by topic-classification completion. |
@@ -142,7 +142,7 @@ AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed 
 | `AI_SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS` | `300000` | Cooldown before retrying failed reader prewarm attempts. |
 | `AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES` | `2` | Additional retries for invalid summary or podcast-script output. |
 | `AI_SUMMARY_PENDING_TOPIC_GRACE_MS` | `900000` | Grace period after a summary slot for pending topic classification. |
-| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | Time zone for `08:00` and `20:00` summary/podcast slots. |
+| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | Time zone for the daily `20:00` summary/podcast slot. |
 | `AI_PODCAST_LANGUAGES` | `en` | Comma-separated locales: `en`, `it`. |
 | `AI_PODCAST_PROMPT_MAX_ARTICLES` | `40` | Max selected articles included in one podcast-script prompt after dedupe/source balancing. |
 | `AI_PODCAST_BACKGROUND_AUDIO_ENABLED` | `true` | Saves podcast scripts first and generates TTS audio in the background when enabled. |
@@ -152,7 +152,6 @@ Model overrides:
 | Variable | Default |
 | --- | --- |
 | `OPENROUTER_TOPIC_MODEL` | `mistralai/mistral-small-24b-instruct-2501` |
-| `OPENROUTER_CLICKBAIT_MODEL` | `OPENROUTER_TOPIC_MODEL` |
 | `OPENROUTER_SUMMARY_MODEL` | `qwen/qwen3.7-flash` |
 | `OPENROUTER_STORY_GROUPING_MODEL` | `qwen/qwen3.7-flash` |
 | `OPENROUTER_PODCAST_SCRIPT_MODEL` | `qwen/qwen3.7-flash` |

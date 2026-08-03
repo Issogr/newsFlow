@@ -8,10 +8,6 @@ const {
   classifyTopicDetailsForArticlesWithStatus,
   isAiTopicDetectionAvailable
 } = require('./aiTopicClassifier');
-const {
-  classifyClickbaitForArticlesWithStatus,
-  isAiClickbaitDetectionAvailable
-} = require('./aiClickbaitClassifier');
 const { createError } = require('../utils/errorHandler');
 const { parseIntegerEnv } = require('../utils/env');
 const {
@@ -105,7 +101,6 @@ const AI_STORY_GROUPING_RETRY_LIMIT = parseIntegerEnv('AI_STORY_GROUPING_RETRY_L
 const EXISTING_STORY_GROUP_MERGE_MIN_CONFIDENCE = 0.9;
 const SUMMARY_POST_TOPIC_DEBOUNCE_MS = parseIntegerEnv('AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS', 5000, { min: 0, max: 60000 });
 const pendingAiTopicProcessingIds = new Set<string>();
-const pendingAiClickbaitProcessingIds = new Set<string>();
 const pendingAiStoryGroupingIds = new Set<string>();
 const sourceFetchTimestamps = new Map<string, number>();
 const sourceFetchResults = new Map<string, SourceFetchResult>();
@@ -459,53 +454,6 @@ async function processAiTopicsForPendingArticles(articles: IngestionArticle[] = 
   }
 }
 
-async function processAiClickbaitForPendingArticles(articles: IngestionArticle[] = []) {
-  if (!Array.isArray(articles) || articles.length === 0) {
-    return;
-  }
-
-  const articleIds = articles.map((article) => article.id).filter(Boolean);
-
-  try {
-    const classification = await classifyClickbaitForArticlesWithStatus(articles);
-    const classificationsByArticleId: Map<string, DynamicRecord> = classification.classificationsByArticleId || new Map();
-    const attemptedArticleIds: string[] = Array.isArray(classification.attemptedArticleIds)
-      ? classification.attemptedArticleIds
-      : articleIds;
-    const failedArticleIds = new Set<string>(classification.failedArticleIds || []);
-    const cappedArticleIds = new Set<string>(classification.cappedArticleIds || []);
-    const classifiedIds: string[] = [];
-    const clickbaitEntries: DynamicRecord[] = [];
-
-    classificationsByArticleId.forEach((clickbait: DynamicRecord, articleId: string) => {
-      if (clickbait?.label) {
-        classifiedIds.push(articleId);
-        clickbaitEntries.push({ articleId, classification: clickbait });
-      }
-    });
-
-    if (clickbaitEntries.length > 0) {
-      database.updateArticleClickbaitClassifications(clickbaitEntries, classification.model || '');
-      websocketService.broadcastFeedRefresh({
-        userIds: getRefreshUserIdsForArticles(articles, classifiedIds),
-        reason: 'clickbait'
-      });
-    }
-
-    database.markArticlesAiClickbaitProcessing(
-      attemptedArticleIds.filter((articleId) => !classifiedIds.includes(articleId) && !failedArticleIds.has(articleId)),
-      'no_label'
-    );
-    database.markArticlesAiClickbaitProcessing([...failedArticleIds], 'failed');
-    database.markArticlesAiClickbaitProcessing([...cappedArticleIds], 'deferred');
-  } catch (error) {
-    logger.warn(`Background AI clickbait processing failed: ${(error as AppError).message}`);
-    database.markArticlesAiClickbaitProcessing(articleIds, 'failed');
-  } finally {
-    articleIds.forEach((articleId) => pendingAiClickbaitProcessingIds.delete(articleId));
-  }
-}
-
 function scheduleThematicSummariesAfterTopicProcessing(articles: IngestionArticle[] = [], classifiedArticleIds: string[] = []) {
   if (!Array.isArray(classifiedArticleIds) || classifiedArticleIds.length === 0) {
     return;
@@ -559,37 +507,6 @@ function scheduleAiTopicsForPendingArticles(normalizedArticles: IngestionArticle
 
   setTimeout(() => {
     processAiTopicsForPendingArticles(pendingArticles, options);
-  }, 0);
-
-  return true;
-}
-
-function scheduleAiClickbaitForPendingArticles(normalizedArticles: IngestionArticle[] = []) {
-  if (!Array.isArray(normalizedArticles) || normalizedArticles.length === 0 || !isAiClickbaitDetectionAvailable()) {
-    return false;
-  }
-
-  const pendingArticleIds = database.getArticleIdsPendingAiClickbaitProcessing(normalizedArticles.map((article) => article.id));
-  if (pendingArticleIds.length === 0) {
-    return false;
-  }
-
-  const pendingArticleIdSet = new Set(pendingArticleIds);
-  const pendingArticles = normalizedArticles.filter((article) => {
-    if (!pendingArticleIdSet.has(article.id) || pendingAiClickbaitProcessingIds.has(article.id)) {
-      return false;
-    }
-
-    pendingAiClickbaitProcessingIds.add(article.id);
-    return true;
-  });
-
-  if (pendingArticles.length === 0) {
-    return false;
-  }
-
-  setTimeout(() => {
-    processAiClickbaitForPendingArticles(pendingArticles);
   }, 0);
 
   return true;
@@ -791,7 +708,6 @@ function scheduleAiStoryGroupingForPendingArticles(normalizedArticles: Ingestion
 
 function resetRuntimeStateForTests() {
   pendingAiTopicProcessingIds.clear();
-  pendingAiClickbaitProcessingIds.clear();
   pendingAiStoryGroupingIds.clear();
   sourceFetchTimestamps.clear();
   sourceFetchResults.clear();
@@ -837,7 +753,6 @@ async function persistNormalizedArticles(normalizedArticles: IngestionArticle[] 
   const upsertResult = database.upsertArticles(currentArticles);
   const storyGroupingOptions = { retryAnchorArticleIds: upsertResult.insertedIds || [] };
   mergeNormalizedArticleTopics(currentArticles);
-  scheduleAiClickbaitForPendingArticles(currentArticles);
   const scheduledTopicProcessing = scheduleAiTopicsForPendingArticles(currentArticles, {
     onComplete: () => scheduleAiStoryGroupingForPendingArticles(currentArticles, storyGroupingOptions)
   });

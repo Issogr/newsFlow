@@ -12,13 +12,10 @@ jest.mock('./database', () => ({
   cleanupRemovedConfiguredSourceData: jest.fn(() => ({ removedArticles: 0, updatedSettings: 0 })),
   upsertArticles: jest.fn(() => ({ insertedIds: [], insertedCount: 0, updatedCount: 0 })),
   getArticleIdsPendingAiTopicProcessing: jest.fn(() => []),
-  getArticleIdsPendingAiClickbaitProcessing: jest.fn(() => []),
   getArticleIdsPendingAiStoryGrouping: jest.fn(() => []),
   getArticleIdsForAiStoryGroupingRetry: jest.fn(() => []),
   markArticlesAiTopicProcessing: jest.fn(() => 0),
-  markArticlesAiClickbaitProcessing: jest.fn(() => 0),
   markArticlesAiStoryGrouping: jest.fn(() => 0),
-  updateArticleClickbaitClassifications: jest.fn(() => 0),
   assignArticlesToStoryGroup: jest.fn(() => 0),
   getArticleIdsForStoryGroups: jest.fn(() => []),
   getAiStoryGroupingCandidateSet: jest.fn(() => ({ target: null, candidates: [] })),
@@ -59,17 +56,6 @@ jest.mock('./aiTopicClassifier', () => ({
   isAiTopicDetectionAvailable: jest.fn(() => true)
 }));
 
-jest.mock('./aiClickbaitClassifier', () => ({
-  classifyClickbaitForArticlesWithStatus: jest.fn(async () => ({
-    classificationsByArticleId: new Map(),
-    attemptedArticleIds: [],
-    failedArticleIds: [],
-    cappedArticleIds: [],
-    model: 'test-clickbait-model'
-  })),
-  isAiClickbaitDetectionAvailable: jest.fn(() => false)
-}));
-
 jest.mock('./aiStoryGrouper', () => ({
   buildStoryGroupId: jest.fn((articleIds = []) => `ai-story-${articleIds.filter(Boolean).sort().join('-')}`),
   getCandidateSignature: jest.fn((_target = {}, candidates = []) => candidates.map((candidate: { id: string }) => candidate.id).filter(Boolean).sort()),
@@ -89,7 +75,6 @@ const rssParser = require('./rssParser');
 const database = require('./database');
 const websocketService = require('./websocketService');
 const aiTopicClassifier = require('./aiTopicClassifier');
-const aiClickbaitClassifier = require('./aiClickbaitClassifier');
 const aiStoryGrouper = require('./aiStoryGrouper');
 const thematicSummaryService = require('./thematicSummaryService');
 const newsAggregator = require('./newsAggregator');
@@ -145,7 +130,6 @@ describe('newsAggregator service flows', () => {
     database.normalizeFuturePublicationDates.mockReturnValue(0);
     database.cleanupRemovedConfiguredSourceData.mockReturnValue({ removedArticles: 0, updatedSettings: 0 });
     database.getArticleIdsPendingAiTopicProcessing.mockReturnValue([]);
-    database.getArticleIdsPendingAiClickbaitProcessing.mockReturnValue([]);
     database.getArticleIdsPendingAiStoryGrouping.mockReturnValue([]);
     database.getArticleIdsForAiStoryGroupingRetry.mockReturnValue([]);
     database.getArticles.mockReturnValue([]);
@@ -165,7 +149,6 @@ describe('newsAggregator service flows', () => {
     });
     database.upsertArticles.mockReturnValue({ insertedIds: [], insertedCount: 0, updatedCount: 0 });
     aiTopicClassifier.isAiTopicDetectionAvailable.mockReturnValue(true);
-    aiClickbaitClassifier.isAiClickbaitDetectionAvailable.mockReturnValue(false);
     aiStoryGrouper.findSimilarStoriesForArticle.mockResolvedValue({ matches: [], model: 'test-story-model' });
     aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(false);
     thematicSummaryService.generateDueSummaries.mockResolvedValue({ items: [] });
@@ -174,13 +157,6 @@ describe('newsAggregator service flows', () => {
       attemptedArticleIds: [],
       failedArticleIds: [],
       cappedArticleIds: []
-    });
-    aiClickbaitClassifier.classifyClickbaitForArticlesWithStatus.mockResolvedValue({
-      classificationsByArticleId: new Map(),
-      attemptedArticleIds: [],
-      failedArticleIds: [],
-      cappedArticleIds: [],
-      model: 'test-clickbait-model'
     });
     rssParser._buildArticleId.mockImplementation((source: { id: string }, item: { link?: string; title?: string }, canonicalUrl = '') => `${source.id}:${canonicalUrl || item.link || item.title}`);
     rssParser.parseFeed.mockResolvedValue([]);
@@ -867,35 +843,6 @@ describe('newsAggregator service flows', () => {
     ]);
     expect(websocketService.broadcastFeedRefresh).toHaveBeenCalledWith({ userIds: [], reason: 'topics' });
     expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'completed');
-  });
-
-  test('ingestAllNews schedules clickbait labels after cached article persistence', async () => {
-    rssParser.parseFeed.mockResolvedValue([
-      { id: 'inserted-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'You will not believe this market update', description: 'A teaser headline', pubDate: recentIso({ hoursAgo: 2 }), url: 'https://example.com/clickbait' }
-    ]);
-    database.upsertArticles.mockReturnValue({ insertedIds: ['inserted-1'], insertedCount: 1, updatedCount: 0 });
-    database.getArticleIdsPendingAiClickbaitProcessing.mockReturnValue(['inserted-1']);
-    aiClickbaitClassifier.isAiClickbaitDetectionAvailable.mockReturnValue(true);
-    aiClickbaitClassifier.classifyClickbaitForArticlesWithStatus.mockResolvedValue({
-      classificationsByArticleId: new Map([
-        ['inserted-1', { label: 'high', score: 88, source: 'ai', confidence: 0.91, reasonCode: 'ai_clickbait_label' }]
-      ]),
-      attemptedArticleIds: ['inserted-1'],
-      failedArticleIds: [],
-      cappedArticleIds: [],
-      model: 'clickbait-model'
-    });
-
-    await newsAggregator.ingestAllNews({ broadcast: true });
-    await flushBackgroundAiProcessing();
-
-    expect(aiClickbaitClassifier.classifyClickbaitForArticlesWithStatus).toHaveBeenCalledWith([
-      expect.objectContaining({ id: 'inserted-1', title: 'You will not believe this market update' })
-    ]);
-    expect(database.updateArticleClickbaitClassifications).toHaveBeenCalledWith([
-      { articleId: 'inserted-1', classification: { label: 'high', score: 88, source: 'ai', confidence: 0.91, reasonCode: 'ai_clickbait_label' } }
-    ], 'clickbait-model');
-    expect(websocketService.broadcastFeedRefresh).toHaveBeenCalledWith({ userIds: [], reason: 'clickbait' });
   });
 
   test('does not schedule the same pending AI article twice while processing is already in flight', async () => {

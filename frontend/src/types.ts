@@ -31,11 +31,6 @@ export interface NewsArticle {
   aiStoryGroupStatus?: string;
   topics?: string[];
   topicDetails?: TopicEntry[];
-  clickbaitLabel?: string;
-  clickbaitScore?: number | null;
-  clickbaitSource?: string;
-  clickbaitConfidence?: number | null;
-  clickbaitModel?: string;
   [key: string]: unknown;
 }
 
