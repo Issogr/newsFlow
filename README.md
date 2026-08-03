@@ -72,11 +72,15 @@ Docker Compose needs two secrets:
 - `INTERNAL_PROXY_TOKEN`: shared by BFF and backend for private backend access.
 - `BFF_SESSION_SECRET`: signs BFF browser sessions. Keep it stable or users will be logged out.
 
-For HTTPS behind a reverse proxy:
+The bundled deployment puts Caddy in front of the BFF. Only Caddy publishes host ports; the BFF and backend communicate over separate private Docker networks.
+
+For automatic production HTTPS:
 
 - Set `APP_BASE_URL=https://your-domain`.
-- Ensure the proxy forwards `X-Forwarded-Proto: https`.
-- Set BFF `TRUST_PROXY=true` only when the BFF is reachable only through a trusted proxy and you need forwarded client IP/header handling.
+- Point the domain's DNS records to the deployment host.
+- Allow inbound TCP ports `80` and `443` and UDP port `443` through the host firewall.
+- Keep the `caddy-data` volume so certificates and account state survive restarts.
+- Do not publish the BFF or backend container ports; Compose fixes both services to one trusted proxy hop.
 - Replace the controller/contact placeholders in the legal pages with deployment-approved details before publishing the service.
 
 Published images:
@@ -96,7 +100,7 @@ Full configuration reference: [`CONFIGURATION.md`](CONFIGURATION.md).
 | `APP_BASE_URL` | `http://localhost` | Public app URL; controls setup links and secure-cookie decisions. |
 | `ALLOWED_ORIGINS` | empty | Backend CORS allowlist, for example `https://news.example`. |
 | `COOKIE_SECURE` | `auto` | Accepts `auto`, `true`, or `false`. |
-| `TRUST_PROXY` | backend auto in production, BFF `false` | Use only behind a trusted reverse proxy. |
+| `TRUST_PROXY` | Compose `1` | The bundled topology has exactly one trusted hop before each Node service. |
 | `SESSION_TTL_DAYS` | `30` | Browser/backend session lifetime. |
 
 ### Public API

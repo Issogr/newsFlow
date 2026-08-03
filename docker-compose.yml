@@ -2,6 +2,7 @@ services:
   init-permissions:
     image: alpine:3.20
     user: "0:0"
+    network_mode: none
     command: >
       sh -c "mkdir -p /mnt/backend-data /mnt/bff-data &&
       chown -R 1001:1001 /mnt/backend-data &&
@@ -12,15 +13,47 @@ services:
       - bff-data:/mnt/bff-data:rw
     restart: "no"
 
+  ingress:
+    image: caddy:2.10.2-alpine
+    container_name: newsflow-ingress
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      bff:
+        condition: service_healthy
+    networks:
+      - ingress-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   backend:
     build: ./backend
     container_name: newsflow-backend
     environment:
       - SESSION_TTL_DAYS=${SESSION_TTL_DAYS:-30}
       - INTERNAL_PROXY_TOKEN=${INTERNAL_PROXY_TOKEN:?INTERNAL_PROXY_TOKEN must be set}
-      - ALLOWED_ORIGINS=http://localhost,http://localhost:80,http://127.0.0.1,http://127.0.0.1:80,@local-network
-      - TRUST_PROXY=true
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-${APP_BASE_URL:-http://localhost}}
+      - TRUST_PROXY=1
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
+      - COOKIE_SECURE=${COOKIE_SECURE:-auto}
       - PUBLIC_API_ANONYMOUS_ENABLED=${PUBLIC_API_ANONYMOUS_ENABLED:-false}
       - PUBLIC_API_AUTHENTICATED_ENABLED=${PUBLIC_API_AUTHENTICATED_ENABLED:-false}
       # Performance tuning variables
@@ -104,7 +137,7 @@ services:
       init-permissions:
         condition: service_completed_successfully
     networks:
-      - app-network
+      - backend-network
     deploy:
       resources:
         limits:
@@ -125,14 +158,13 @@ services:
       context: .
       dockerfile: bff/Dockerfile
     container_name: newsflow-bff
-    ports:
-      - "80:80"
     environment:
       - SESSION_TTL_DAYS=${SESSION_TTL_DAYS:-30}
       - INTERNAL_PROXY_TOKEN=${INTERNAL_PROXY_TOKEN:?INTERNAL_PROXY_TOKEN must be set}
       - BFF_SESSION_SECRET=${BFF_SESSION_SECRET:?BFF_SESSION_SECRET must be set}
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
-      - TRUST_PROXY=${TRUST_PROXY:-false}
+      - COOKIE_SECURE=${COOKIE_SECURE:-auto}
+      - TRUST_PROXY=1
       - BFF_UPSTREAM_TIMEOUT_MS=${BFF_UPSTREAM_TIMEOUT_MS:-50000}
       - BFF_READINESS_TIMEOUT_MS=${BFF_READINESS_TIMEOUT_MS:-1000}
     depends_on:
@@ -143,7 +175,8 @@ services:
     volumes:
       - bff-data:/app/bff/data
     networks:
-      - app-network
+      - ingress-network
+      - backend-network
     deploy:
       resources:
         limits:
@@ -160,8 +193,12 @@ services:
         max-file: "3"
 
 networks:
-  app-network:
+  ingress-network:
+    driver: bridge
+  backend-network:
     driver: bridge
 
 volumes:
   bff-data:
+  caddy-data:
+  caddy-config:

@@ -6,7 +6,7 @@ This file documents the environment variables and build arguments that can chang
 
 - Boolean feature flags for AI accept only `true` or `false`. Missing values default to the documented default. Invalid values disable the AI feature.
 - Public API booleans accept `true` or `false`. Missing or invalid values fall back to the documented default.
-- `COOKIE_SECURE` accepts only `auto`, `true`, or `false`. Invalid values behave as insecure/disabled.
+- `COOKIE_SECURE` accepts only `auto`, `true`, or `false`. In production, the BFF rejects invalid values while the backend treats them as disabled.
 - Most numeric values are integers. If a value is outside the documented range, the code usually falls back to the default unless the notes say it is clamped.
 - Durations ending in `_MS` are milliseconds unless the variable name says otherwise.
 - Docker Compose sets some explicit defaults that differ from raw code defaults; those differences are called out where they matter.
@@ -23,12 +23,12 @@ This file documents the environment variables and build arguments that can chang
 | Variable | Scope | Default | Details |
 | --- | --- | --- | --- |
 | `NODE_ENV` | Backend, BFF | Docker images set `production`; otherwise unset/development behavior | Enables production security defaults, required secret checks, production logging defaults, and less detailed backend error output. Tests commonly set `test`. |
-| `PORT` | Backend, BFF | Backend `5000`; BFF `80` | HTTP listen port. BFF validates `1..65535`. |
+| `PORT` | Backend, BFF | Backend `5000`; BFF `80` | Internal HTTP listen port. Compose publishes only Caddy ports `80` and `443`. BFF validates `1..65535`. |
 | `SESSION_TTL_DAYS` | Backend, BFF | `30` | Browser and backend auth session lifetime in days. Minimum `1`. |
 | `APP_BASE_URL` | Backend, BFF | Compose `http://localhost`; OpenRouter referer fallback `http://localhost` | Canonical public app URL. Used for setup links, secure-cookie decisions, same-origin checks, and OpenRouter referer metadata. Set to `https://your-domain` in HTTPS deployments. |
 | `FRONTEND_BASE_URL` | Backend, BFF | Backend setup-link fallback `http://localhost:3000` in one path | Legacy alias used when `APP_BASE_URL` is not set. Prefer `APP_BASE_URL`. |
 | `COOKIE_SECURE` | Backend, BFF | `auto` | Controls `Secure` on session cookies. `auto` uses secure cookies when `APP_BASE_URL` starts with `https://`; `true` always requires HTTPS; `false` disables secure cookies. |
-| `TRUST_PROXY` | Backend, BFF | Backend: `1` in production and `false` otherwise; BFF: `false`; Compose backend: `true` | Controls Express trust-proxy behavior. BFF accepts `true`, `false`, a hop count like `1`, or a comma-separated proxy list. Use only behind trusted proxies. |
+| `TRUST_PROXY` | Backend, BFF | Backend: `1` in production and `false` otherwise; BFF: `false`; Compose: `1` for both | Controls Express trust-proxy behavior. The bundled topology has one Caddy hop before the BFF and one BFF hop before the backend. BFF accepts `true`, `false`, a hop count like `1`, or a comma-separated proxy list outside Compose. |
 
 ## Backend Core
 
@@ -36,7 +36,7 @@ This file documents the environment variables and build arguments that can chang
 | --- | --- | --- |
 | `NEWS_DB_PATH` | `backend/data/news.db`; Compose `/usr/src/app/data/news.db` | SQLite database path for articles, users, settings, summaries, podcasts, sessions, and public API data. |
 | `ADMIN_USERNAME` | `admin` | Reserved admin account username. Backend auth lowercases it; user-service display/bootstrap handling trims to 40 chars. |
-| `ALLOWED_ORIGINS` | Development `*`; production `http://localhost,http://localhost:80,http://127.0.0.1,http://127.0.0.1:80,http://frontend,@local-network`; Compose omits `http://frontend` | Comma-separated backend CORS and Socket.IO origin allowlist. Supports exact origins, `*`, wildcard patterns, and `@local-network`. |
+| `ALLOWED_ORIGINS` | Development `*`; production `http://localhost,http://localhost:80,http://127.0.0.1,http://127.0.0.1:80,http://frontend`; Compose `APP_BASE_URL` | Comma-separated backend CORS and Socket.IO origin allowlist. Supports exact origins, `*`, wildcard patterns, and `@local-network`. Compose defaults to only the canonical public app origin. |
 | `SERVER_TIMEOUT` | `60000` | Backend HTTP server timeout in ms. Minimum `1000`. |
 | `LOG_LEVEL` | `info` in production, `debug` otherwise | Winston log level such as `debug`, `info`, `warn`, or `error`. |
 | `SESSION_PURGE_INTERVAL_MS` | `300000` | Interval for backend expired auth/session cleanup. Minimum `1000`. |
@@ -57,6 +57,12 @@ This file documents the environment variables and build arguments that can chang
 | `BFF_READINESS_TIMEOUT_MS` | `1000` | Deadline for the BFF readiness probe to verify backend readiness after checking BFF session-store writes. Minimum `100`. |
 | `SESSION_STORE_CLEAR_INTERVAL_MS` | `300000` | BFF expired-session cleanup interval. Minimum `1000`. |
 | `SESSION_TOUCH_RENEWAL_WINDOW_MS` | `86400000` | Window before expiry when BFF session touches renew persisted session storage. Minimum `1000`. |
+
+## Bundled TLS Ingress
+
+Docker Compose runs Caddy as the only host-facing service. Caddy sanitizes `X-Forwarded-For`, `X-Forwarded-Host`, and `X-Forwarded-Proto`, then proxies HTTP, WebSocket, and static frontend requests to the BFF. The BFF and backend have no published host ports.
+
+`APP_BASE_URL=https://your-domain` enables Caddy's automatic certificate management. The domain must resolve to the host and ports `80` and `443` must be reachable. Named volumes `caddy-data` and `caddy-config` preserve certificate and Caddy runtime state.
 
 ## Public API
 
@@ -256,4 +262,4 @@ Feedback attachments are limited by code, not env: images up to 5 MB, videos up 
 | `TARGETARCH` | Backend and BFF Docker builds | BuildKit-provided when available; otherwise Node `process.arch` | Selects native dependency architecture during `npm ci`; maps `amd64` to `x64`. |
 | `BUILDPLATFORM` | Docker builds | Docker/BuildKit automatic | Used by Dockerfiles in `FROM --platform=$BUILDPLATFORM` for dependency build stages. |
 
-Docker Compose also applies fixed runtime defaults for the bundled deployment, including backend `NODE_ENV=production`, backend `PORT=5000`, BFF `PORT=80`, backend `TRUST_PROXY=true`, backend `LOG_LEVEL=info`, and container database paths. Edit `docker-compose.yml` only when those fixed deployment defaults need to change.
+Docker Compose also applies fixed runtime defaults for the bundled deployment, including backend `NODE_ENV=production`, backend `PORT=5000`, BFF `PORT=80`, `TRUST_PROXY=1` for the BFF and backend, backend `LOG_LEVEL=info`, and container database paths. Caddy alone publishes host ports `80` and `443`; the BFF bridges the isolated ingress and backend networks. Edit `docker-compose.yml` only when those fixed deployment defaults need to change.

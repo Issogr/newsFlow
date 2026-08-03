@@ -6,6 +6,7 @@
 - made SQLite upgrades transactional and fail-fast, moved article FTS synchronization to native triggers, and consolidated podcast audio into its locale-specific table
 - simplified the BFF session and private-backend boundary by removing duplicate user-session indexing, unused service identity, and legacy private token carriers
 - centralized frontend locale and session updates while reusing the same custom-source persistence paths across Settings actions
+- placed the bundled deployment behind persisted automatic TLS ingress and isolated Caddy, BFF, and backend traffic across separate Docker networks
 
 ## 3.5.15
 
