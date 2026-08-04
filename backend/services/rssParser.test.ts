@@ -100,6 +100,21 @@ describe('rssParser article ids', () => {
     expect(axios.get).toHaveBeenCalledTimes(1);
   });
 
+  test('discovers feeds from website HTML larger than the RSS response limit', async () => {
+    dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    axios.get.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: Readable.from([`<html><head>
+        <link rel="alternate" type="application/rss+xml" title="Large site feed" href="/feed.xml">
+      </head><body>${'x'.repeat(1048576)}</body></html>`])
+    });
+
+    await expect(rssParser.discoverFeedUrls('https://example.com')).resolves.toEqual([
+      { title: 'Large site feed', url: 'https://example.com/feed.xml' }
+    ]);
+  });
+
   test('discovers feeds from a linked same-origin RSS directory', async () => {
     dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
     axios.get

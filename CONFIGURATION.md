@@ -105,6 +105,7 @@ The public API is read-only and cache-only. It must not trigger RSS refreshes, a
 | `RSS_CACHE_TTL` | `60000` | In-memory RSS response cache TTL in ms. Minimum `0`. |
 | `RSS_CACHE_MAX_ENTRIES` | `200` | Max in-memory RSS response cache entries. Minimum `0`. |
 | `RSS_MAX_RESPONSE_BYTES` | `1048576` | Max RSS/XML response size in bytes. Minimum `1`. |
+| `RSS_DISCOVERY_MAX_RESPONSE_BYTES` | `6291456` | Max website HTML or RSS-directory response size during feed discovery. Minimum `1`. |
 | `FILTER_STATS_CACHE_TTL_MS` | `10000` | Feed filter-stat cache TTL. Minimum `0`, maximum `300000`. |
 | `FILTER_STATS_CACHE_MAX_ENTRIES` | `200` | Feed filter-stat cache entries. Minimum `1`, maximum `5000`. |
 

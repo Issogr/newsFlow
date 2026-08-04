@@ -3,6 +3,7 @@
 ## 3.6.1
 
 - limited article titles to two lines on mobile as well as desktop
+- separated website RSS-discovery HTML limits from feed ingestion limits so larger pages return discovery results instead of size errors
 
 ## 3.6.0
 

@@ -7,7 +7,8 @@ export const CURRENT_CHANGELOG_ENTRY: { version: string } & Record<Locale, Chang
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '📱 Article titles now stay limited to two lines on mobile as well as desktop.'
+      '📱 Article titles now stay limited to two lines on mobile as well as desktop.',
+      '🔎 RSS discovery can now inspect larger website pages without weakening feed size limits.'
     ]
   },
   it: {
@@ -15,7 +16,8 @@ export const CURRENT_CHANGELOG_ENTRY: { version: string } & Record<Locale, Chang
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '📱 I titoli degli articoli ora restano limitati a due righe anche su mobile, come su desktop.'
+      '📱 I titoli degli articoli ora restano limitati a due righe anche su mobile, come su desktop.',
+      '🔎 La ricerca RSS ora puo analizzare pagine web piu grandi senza aumentare i limiti dei feed.'
     ]
   }
 };

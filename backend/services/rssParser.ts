@@ -48,6 +48,7 @@ const ARTICLE_IMAGE_CACHE_TTL = parseIntegerEnv('ARTICLE_IMAGE_CACHE_TTL', 6 * 6
 const ARTICLE_IMAGE_CACHE_MAX_ENTRIES = parseIntegerEnv('ARTICLE_IMAGE_CACHE_MAX_ENTRIES', 500, { min: 0 });
 const ARTICLE_IMAGE_FALLBACK_LIMIT = parseIntegerEnv('ARTICLE_IMAGE_FALLBACK_LIMIT', 4, { min: 0 });
 const RSS_MAX_RESPONSE_BYTES = parseIntegerEnv('RSS_MAX_RESPONSE_BYTES', 1048576, { min: 1 });
+const RSS_DISCOVERY_MAX_RESPONSE_BYTES = parseIntegerEnv('RSS_DISCOVERY_MAX_RESPONSE_BYTES', 6291456, { min: 1 });
 const ARTICLE_IMAGE_MAX_RESPONSE_BYTES = parseIntegerEnv('ARTICLE_IMAGE_MAX_RESPONSE_BYTES', 524288, { min: 1 });
 const limitOutboundFetch = createConcurrencyLimiter(parseIntegerEnv('RSS_INGESTION_CONCURRENCY', 8, { min: 1 }));
 const limitDiscoveryFetch = createConcurrencyLimiter(2);
@@ -504,7 +505,7 @@ async function parseFeedPreview(xml: string, baseUrl: string) {
 async function discoverFeedUrls(url: string, options: RssOptions = {}): Promise<DiscoveredFeed[]> {
   const response = await limitDiscoveryFetch(() => fetchSafeTextUrl(url, {
     timeout: options.timeout || RSS_VALIDATION_TIMEOUT,
-    maxResponseBytes: RSS_MAX_RESPONSE_BYTES,
+    maxResponseBytes: RSS_DISCOVERY_MAX_RESPONSE_BYTES,
     signal: options.signal,
     headers: RSS_REQUEST_HEADERS
   }), options);
@@ -592,7 +593,7 @@ async function discoverFeedUrls(url: string, options: RssOptions = {}): Promise<
     try {
       const directoryResponse = await limitDiscoveryFetch(() => fetchSafeTextUrl(directoryUrl, {
         timeout: options.timeout || RSS_VALIDATION_TIMEOUT,
-        maxResponseBytes: RSS_MAX_RESPONSE_BYTES,
+        maxResponseBytes: RSS_DISCOVERY_MAX_RESPONSE_BYTES,
         signal: options.signal,
         headers: RSS_REQUEST_HEADERS
       }), options);
