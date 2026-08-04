@@ -96,8 +96,11 @@ describe('urlSafety', () => {
     });
   });
 
-  test('pins outbound requests to the validated DNS result', async () => {
-    dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+  test('pins outbound requests to a validated IPv4 result when available', async () => {
+    dns.lookup.mockResolvedValue([
+      { address: '2606:2800:220:1:248:1893:25c8:1946', family: 6 },
+      { address: '93.184.216.34', family: 4 }
+    ]);
     axios.get.mockResolvedValue({ status: 200, data: 'ok', headers: {} });
 
     await fetchSafeTextUrl('https://example.com/feed');

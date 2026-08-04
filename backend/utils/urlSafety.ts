@@ -218,7 +218,7 @@ async function resolveSafeOutboundTarget(rawUrl: unknown, options: { signal?: Ab
     throw createForbiddenUrlError();
   }
 
-  const [{ address, family }] = resolvedAddresses;
+  const { address, family } = resolvedAddresses.find((entry) => entry.family === 4) || resolvedAddresses[0];
 
   return {
     url: parsedUrl.toString(),

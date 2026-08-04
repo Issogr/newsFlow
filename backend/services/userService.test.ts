@@ -208,8 +208,8 @@ describe('userService imports', () => {
 
     rssParser.discoverFeedUrls.mockRejectedValueOnce(new Error('Offline'));
     await expect(userService.discoverUserSourceFeeds({ url: 'https://example.com' })).rejects.toMatchObject({
-      status: 400,
-      code: 'INVALID_WEBSITE_URL'
+      status: 502,
+      code: 'CONNECTION_ERROR'
     });
   });
 

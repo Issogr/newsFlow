@@ -4,6 +4,7 @@
 
 - limited article titles to two lines on mobile as well as desktop
 - separated website RSS-discovery HTML limits from feed ingestion limits so larger pages return discovery results instead of size errors
+- preferred validated IPv4 routes for mixed-address feed sites and stopped reporting website connection failures as invalid URLs
 
 ## 3.6.0
 
