@@ -6,13 +6,17 @@ export const CURRENT_CHANGELOG_ENTRY: { version: string } & Record<Locale, Chang
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
-    items: []
+    items: [
+      '📱 Article titles now stay limited to two lines on mobile as well as desktop.'
+    ]
   },
   it: {
     eyebrow: 'Ultimo aggiornamento',
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
-    items: []
+    items: [
+      '📱 I titoli degli articoli ora restano limitati a due righe anche su mobile, come su desktop.'
+    ]
   }
 };
 

@@ -69,7 +69,7 @@ describe('NewsCard', () => {
   test('clamps the headline to two lines', () => {
     renderNewsCard();
 
-    expect(screen.getByText('Headline', { selector: 'button' })).toHaveClass('line-clamp-2');
+    expect(screen.getByText('Headline', { selector: 'span' })).toHaveClass('line-clamp-2');
   });
 
   test('opens a safe external url in a new tab', () => {

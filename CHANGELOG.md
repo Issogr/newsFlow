@@ -2,6 +2,8 @@
 
 ## 3.6.1
 
+- limited article titles to two lines on mobile as well as desktop
+
 ## 3.6.0
 
 - added a dedicated Add Feed News window for RSS/Atom discovery and moved custom feed management into Settings with shared save/discard behavior
