@@ -606,7 +606,7 @@ async function discoverUserSourceFeeds(payload: DynamicRecord = {}, options: Abo
       throw error;
     }
 
-    throw createError(400, 'Website URL is not valid or cannot be inspected', 'INVALID_WEBSITE_URL', error instanceof Error ? error : new Error(String(error)));
+    throw createError(502, 'Unable to inspect this website. Please try again later.', 'CONNECTION_ERROR', error instanceof Error ? error : new Error(String(error)));
   }
 }
 

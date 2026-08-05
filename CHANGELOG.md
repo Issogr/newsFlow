@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.6.1
+
+- limited article titles to two lines on mobile as well as desktop
+- separated website RSS-discovery HTML limits from feed ingestion limits so larger pages return discovery results instead of size errors
+- preferred validated IPv4 routes for mixed-address feed sites and stopped reporting website connection failures as invalid URLs
+
 ## 3.6.0
 
 - added a dedicated Add Feed News window for RSS/Atom discovery and moved custom feed management into Settings with shared save/discard behavior
