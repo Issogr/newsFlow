@@ -39,14 +39,11 @@ jobs:
 
       - name: Smoke test Compose stack
         run: |
-          backend_port="$(docker compose port backend 5000 2>/dev/null || true)"
-          bff_port="$(docker compose port bff 80 2>/dev/null || true)"
-          if [ -n "$backend_port" ]; then
-            echo "Backend port is unexpectedly published: $backend_port"
-            exit 1
-          fi
-          if [ -n "$bff_port" ]; then
-            echo "BFF port is unexpectedly published: $bff_port"
+          published_ports="$(docker inspect \
+            --format '{{range $port, $bindings := .NetworkSettings.Ports}}{{if $bindings}}{{$.Name}}: {{$port}} -> {{json $bindings}}{{end}}{{end}}' \
+            "$(docker compose ps -q backend)" "$(docker compose ps -q bff)")"
+          if [ -n "$published_ports" ]; then
+            echo "Internal ports are unexpectedly published: $published_ports"
             exit 1
           fi
           curl -kfsS https://localhost/health >/tmp/newsflow-compose-health.json
