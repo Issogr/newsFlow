@@ -4,7 +4,48 @@ describe('aiSummaryGenerator', () => {
   const originalEnv = process.env;
 
   afterEach(() => {
+    aiSummaryGenerator._setOpenRouterSdkLoader();
     process.env = originalEnv;
+  });
+
+  test('requires both locales through structured output', async () => {
+    process.env = {
+      ...originalEnv,
+      OPENROUTER_API_KEY: 'test-key',
+      OPENROUTER_SUMMARY_MODEL: 'test-summary-model'
+    };
+    const sendMock = jest.fn().mockResolvedValue({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            en: { paragraphs: ['English summary text with enough detail and a valid source citation for this test [1].'] },
+            it: { paragraphs: ['Testo italiano del riepilogo con dettagli sufficienti e una citazione valida per questo test [1].'] }
+          })
+        }
+      }]
+    });
+    aiSummaryGenerator._setOpenRouterSdkLoader(async () => ({
+      OpenRouter: jest.fn(() => ({ chat: { send: sendMock } }))
+    }));
+
+    await aiSummaryGenerator.generateSummaryForArticles({ key: 'science', label: 'Science' }, [{
+      id: 'article-1',
+      title: 'Science update',
+      description: 'A useful science article.',
+      source: 'BBC'
+    }]);
+
+    expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
+      chatRequest: expect.objectContaining({
+        responseFormat: expect.objectContaining({
+          type: 'json_schema',
+          jsonSchema: expect.objectContaining({
+            strict: true,
+            schema: expect.objectContaining({ required: ['en', 'it'] })
+          })
+        })
+      })
+    }), expect.any(Object));
   });
 
   test('uses cached reader text in the summary prompt when available', () => {
