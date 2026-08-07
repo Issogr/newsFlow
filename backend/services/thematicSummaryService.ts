@@ -489,8 +489,7 @@ function isFailedSummaryRetryDue(summary: SummaryRecord = {}, referenceDate: Dat
     return true;
   }
 
-  if (summary.failureCategory && NON_RETRYABLE_SUMMARY_FAILURE_CATEGORIES.has(summary.failureCategory)
-    && Math.max(0, Number(summary.retryCount || 0) - 1) >= SUMMARY_INVALID_OUTPUT_MAX_RETRIES) {
+  if (hasExhaustedInvalidOutputRetries(summary)) {
     return false;
   }
 
@@ -504,6 +503,12 @@ function isFailedSummaryRetryDue(summary: SummaryRecord = {}, referenceDate: Dat
   }
 
   return toDate(referenceDate).getTime() - generatedAtTime >= SUMMARY_FAILED_RETRY_COOLDOWN_MS;
+}
+
+function hasExhaustedInvalidOutputRetries(summary: SummaryRecord = {}) {
+  return Boolean(summary.failureCategory
+    && NON_RETRYABLE_SUMMARY_FAILURE_CATEGORIES.has(summary.failureCategory)
+    && Math.max(0, Number(summary.retryCount || 0) - 1) >= SUMMARY_INVALID_OUTPUT_MAX_RETRIES);
 }
 
 function shouldWaitForPendingTopicProcessing(window: Partial<SummaryWindow> = {}, options: SummaryOptions = {}) {
@@ -794,6 +799,11 @@ function hasSameArticleSelection(summary: SummaryRecord = {}, selectedArticles: 
 
   return storedArticleIds.length === currentArticleIds.length
     && storedArticleIds.every((articleId, index) => articleId === currentArticleIds[index]);
+}
+
+function hasExpandedArticleSelection(summary: SummaryRecord = {}, selectedArticles: SummaryArticle[] = []) {
+  // ponytail: count growth avoids retention reshuffles; persist selection revisions if capped late arrivals must regenerate.
+  return selectedArticles.length > getSummarySourceArticleIds(summary).length;
 }
 
 function getPodcastScriptTextByLocale(summary: SummaryRecord = {}): Record<string, string> {
@@ -1127,12 +1137,23 @@ async function prewarmReaderCacheForDueWindow(options: SummaryOptions = {}) {
 
 async function generateSummaryForTopic(topicConfig: SummaryTopic, window: SummaryWindow, options: SummaryOptions = {}) {
   const existingSummary = database.getThematicSummary(topicConfig.key, window.periodStart, window.periodEnd);
+  const failedRetryDue = isFailedSummaryRetryDue(existingSummary || {}, options.referenceDate || new Date());
+  const exhaustedInvalidOutputRetries = hasExhaustedInvalidOutputRetries(existingSummary || {});
+  const canRetryExhaustedInvalidOutput = exhaustedInvalidOutputRetries && existingSummary?.status === 'failed';
   if ((existingSummary?.status === 'failed' || existingSummary?.failureCategory)
     && options.force !== true
-    && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
+    && !failedRetryDue
+    && !canRetryExhaustedInvalidOutput) {
     logger.debug(`Thematic summary retry skipped during cooldown: topic=${topicConfig.key}, windowEnd=${window.periodEnd}`);
     return {
       summary: TERMINAL_SUMMARY_STATUSES.has(existingSummary.status) ? existingSummary : null,
+      generatedNow: false
+    };
+  }
+
+  if (shouldWaitForPendingTopicProcessing(window, options)) {
+    return {
+      summary: TERMINAL_SUMMARY_STATUSES.has(existingSummary?.status) ? existingSummary : null,
       generatedNow: false
     };
   }
@@ -1142,6 +1163,11 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
     : getArticlesForSummaryTopic(topicConfig, window);
   const selectedArticles = getSelectedSummaryArticles(topicConfig, window, options.articleContext, articles);
 
+  if (canRetryExhaustedInvalidOutput && options.force !== true && !hasExpandedArticleSelection(existingSummary, selectedArticles)) {
+    logger.debug(`Thematic summary retry skipped after invalid output limit: topic=${topicConfig.key}, windowEnd=${window.periodEnd}`);
+    return { summary: null, generatedNow: false };
+  }
+
   if (existingSummary?.status === 'completed' && options.force !== true) {
     if (hasSameArticleSelection(existingSummary, selectedArticles)) {
       return { summary: existingSummary, generatedNow: false };
@@ -1149,15 +1175,14 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
     if (selectedArticles.length === 0) {
       return { summary: existingSummary, generatedNow: false };
     }
+    if (!hasExpandedArticleSelection(existingSummary, selectedArticles)) {
+      return { summary: existingSummary, generatedNow: false };
+    }
 
-    logger.info(`Thematic summary stale article set detected: topic=${topicConfig.key}, windowEnd=${window.periodEnd}, previous=${getSummarySourceArticleIds(existingSummary).length}, current=${selectedArticles.length}`);
+    logger.info(`Thematic summary new articles detected: topic=${topicConfig.key}, windowEnd=${window.periodEnd}, previous=${getSummarySourceArticleIds(existingSummary).length}, current=${selectedArticles.length}`);
   }
 
   if (articles.length === 0) {
-    if (shouldWaitForPendingTopicProcessing(window, options)) {
-      return { summary: null, generatedNow: false };
-    }
-
     if (existingSummary?.status === 'empty' && options.force !== true) {
       return { summary: existingSummary, generatedNow: false };
     }
@@ -1252,12 +1277,12 @@ async function generatePodcastForWindow(window: SummaryWindow, options: SummaryO
     return { summary: null, generatedNow: false };
   }
 
+  if (shouldWaitForPendingTopicProcessing(window, options)) {
+    return { summary: null, generatedNow: false };
+  }
+
   const articles = sortArticlesForPodcast(getCandidateArticlesForWindow(window, options.articleContext));
   if (articles.length === 0) {
-    if (shouldWaitForPendingTopicProcessing(window, options)) {
-      return { summary: null, generatedNow: false };
-    }
-
     if (existingSummary?.status === 'empty' && options.force !== true) {
       return { summary: existingSummary, generatedNow: false };
     }

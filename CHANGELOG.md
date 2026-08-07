@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.6.2
+
+- stabilized daily AI summaries by enforcing bilingual output, waiting for topic classification, and preventing article retention from repeatedly rewriting completed briefings
+
 ## 3.6.1
 
 - limited article titles to two lines on mobile as well as desktop

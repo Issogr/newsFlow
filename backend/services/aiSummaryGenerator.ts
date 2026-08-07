@@ -6,7 +6,8 @@ const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
-  sendJsonChatCompletion
+  sendJsonChatCompletion,
+  setOpenRouterSdkLoader
 } = require('./openRouterClient');
 import type { AppError, DynamicRecord, NewsArticle } from '../utils/types';
 
@@ -26,6 +27,19 @@ const DEFAULT_OPENROUTER_SUMMARY_MODEL = 'qwen/qwen3.7-flash';
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_PROMPT_TEXT_BUDGET_CHARS = 30000;
 const MIN_SUMMARY_TEXT_LENGTH = 60;
+const LOCALIZED_SUMMARY_SCHEMA = {
+  type: 'object',
+  properties: {
+    paragraphs: {
+      type: 'array',
+      items: { type: 'string' },
+      minItems: 1,
+      maxItems: 4
+    }
+  },
+  required: ['paragraphs'],
+  additionalProperties: false
+};
 
 function getConfig() {
   return getOpenRouterConfig({
@@ -58,7 +72,7 @@ function buildPrompt(topicConfig: TopicConfig, articles: NewsArticle[] = []) {
     'Generate the briefing in both supported languages: English and Italian.',
     'Return minified JSON only. Do not use markdown fences or prose outside JSON.',
     'Return this exact shape: {"en":{"paragraphs":["paragraph with [1] citations"]},"it":{"paragraphs":["paragrafo con citazioni [1]"]}}.',
-    'Use two to four paragraphs per language. Start a new paragraph whenever the subject, argument, or subtopic changes. Keep each briefing easy to scan but written as prose.',
+    'Use one to four paragraphs per language. Start a new paragraph whenever the subject, argument, or subtopic changes. Keep each briefing easy to scan but written as prose.',
     '',
     JSON.stringify({
       topic: topicConfig.label || topicConfig.key,
@@ -188,7 +202,23 @@ async function generateSummaryForArticles(topicConfig: TopicConfig, articles: Ne
       }
     ],
     temperature: 0.25,
-    maxTokens: tokenBudget
+    maxTokens: tokenBudget,
+    responseFormat: {
+      type: 'json_schema',
+      jsonSchema: {
+        name: 'thematic_summary',
+        strict: true,
+        schema: {
+          type: 'object',
+          properties: {
+            en: LOCALIZED_SUMMARY_SCHEMA,
+            it: LOCALIZED_SUMMARY_SCHEMA
+          },
+          required: ['en', 'it'],
+          additionalProperties: false
+        }
+      }
+    }
   }, {
     timeoutMs: config.timeoutMs,
     metrics: {
@@ -226,5 +256,6 @@ export = {
   _getCompletionTokenBudget: getCompletionTokenBudget,
   _getConfig: getConfig,
   _normalizeGeneratedSummary: normalizeGeneratedSummary,
+  _setOpenRouterSdkLoader: setOpenRouterSdkLoader,
   _validateGeneratedSummary: validateGeneratedSummary
 };
