@@ -289,7 +289,6 @@ function normalizeIncomingArticles(articles: Article[] = []): Article[] {
   const dedupedArticles = new Map<string, Article>();
 
   articles.forEach((article) => {
-    const baseTopics = topicNormalizer.extractTopics(article, article.rawTopics);
     const topicDetails = topicNormalizer.extractTopicDetails(article, article.rawTopics);
     const canonicalSourceId = getCanonicalSourceId(article.sourceId, article.source);
     const canonicalSourceName = getCanonicalSourceName(article.sourceId, article.source);
@@ -301,7 +300,7 @@ function normalizeIncomingArticles(articles: Article[] = []): Article[] {
       sourceId: canonicalSourceId,
       source: canonicalSourceName,
       subSource: getSourceVariantLabel(article.sourceId, article.source),
-      topics: baseTopics,
+      topics: topicDetails.map(({ topic }: { topic: string }) => topic),
       topicDetails
     } as Article;
     const dedupeKey = buildIncomingArticleDeduplicationKey(normalizedArticle);

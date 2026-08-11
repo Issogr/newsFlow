@@ -263,47 +263,8 @@ function isMeaningfulTopic(topic: unknown) {
   return true;
 }
 
-function removeDuplicates(topics: unknown): string[] {
-  if (!Array.isArray(topics)) {
-    return [];
-  }
-
-  const seen = new Set<string>();
-  const result: string[] = [];
-
-  topics.forEach((topic) => {
-    const normalized = normalizeTopic(topic);
-    if (!normalized) {
-      return;
-    }
-
-    const key = normalized.toLowerCase();
-    if (seen.has(key)) {
-      return;
-    }
-
-    seen.add(key);
-    result.push(normalized);
-  });
-
-  return result;
-}
-
-function limitTopics(topics: unknown, maxTopics = 3) {
-  return removeDuplicates(topics).slice(0, maxTopics);
-}
-
-function inferTopicsFromText(article: Partial<NewsArticle> = {}) {
-  return classifyTopicsFromText(article).map((entry) => entry.topic);
-}
-
 function extractTopics(article: Partial<NewsArticle> = {}, rawTopics: unknown[] = []) {
-  const normalizedRawTopics = Array.isArray(rawTopics)
-    ? rawTopics.map((topic) => normalizeTopic(topic)).filter((topic): topic is string => Boolean(topic))
-    : [];
-
-  const inferredTopics = inferTopicsFromText(article);
-  return limitTopics([...normalizedRawTopics, ...inferredTopics], 4);
+  return extractTopicDetails(article, rawTopics).map(({ topic }) => topic);
 }
 
 function extractTopicDetails(article: Partial<NewsArticle> = {}, rawTopics: unknown[] = []) {

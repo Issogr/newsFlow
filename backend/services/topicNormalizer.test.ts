@@ -96,4 +96,12 @@ describe('topicNormalizer canonical taxonomy', () => {
       evidence: expect.arrayContaining(['ferite', 'pistola'])
     }));
   });
+
+  test('keeps topic names aligned with deduplicated, limited details', () => {
+    const rawTopics = ['politics', 'Politica', 'markets', 'science', 'sport'];
+    const topics = topicNormalizer.extractTopicDetails({}, rawTopics).map(({ topic }: { topic: string }) => topic);
+
+    expect(topicNormalizer.extractTopics({}, rawTopics)).toEqual(topics);
+    expect(topics).toEqual(['Politica', 'Economia', 'Scienza', 'Sport']);
+  });
 });

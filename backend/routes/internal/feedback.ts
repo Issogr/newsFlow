@@ -65,33 +65,32 @@ function validateFeedbackAttachment(file: Express.Multer.File | null | undefined
 
 const handleFeedbackUpload: RequestHandler = (req, res, next) => {
   feedbackUpload.single('attachment')(req, res, (error) => {
-    if (!error) {
-      try {
-        validateFeedbackAttachment(req.file || null);
-        next();
-        return;
-      } catch (validationError) {
-        next(validationError);
+    if (error) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        next(createError(413, 'Attachments must be 12 MB or smaller.', 'INVALID_FEEDBACK_IMAGE'));
         return;
       }
-    }
 
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      next(createError(413, 'Attachments must be 12 MB or smaller.', 'INVALID_FEEDBACK_IMAGE'));
+      if (error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE') {
+        next(createError(400, 'Attach only one image or video.', 'INVALID_FEEDBACK_IMAGE'));
+        return;
+      }
+
+      if (error.status && error.code) {
+        next(error);
+        return;
+      }
+
+      next(createError(400, 'Unable to process the uploaded attachment.', 'INVALID_FEEDBACK_IMAGE', error));
       return;
     }
 
-    if (error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE') {
-      next(createError(400, 'Attach only one image or video.', 'INVALID_FEEDBACK_IMAGE'));
-      return;
+    try {
+      validateFeedbackAttachment(req.file || null);
+      next();
+    } catch (validationError) {
+      next(validationError);
     }
-
-    if (error.status && error.code) {
-      next(error);
-      return;
-    }
-
-    next(createError(400, 'Unable to process the uploaded attachment.', 'INVALID_FEEDBACK_IMAGE', error));
   });
 };
 

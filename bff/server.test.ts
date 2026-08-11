@@ -119,9 +119,11 @@ function requestUpgrade(
 function createFrontendDist(): string {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'newsflow-bff-frontend-'));
   fs.mkdirSync(path.join(tempDir, 'assets'), { recursive: true });
+  fs.mkdirSync(path.join(tempDir, 'api'), { recursive: true });
   fs.writeFileSync(path.join(tempDir, 'index.html'), '<!doctype html><html><body>News Flow</body></html>');
   fs.writeFileSync(path.join(tempDir, 'assets', 'app-test.js'), 'window.__newsFlowTest = true;');
   fs.writeFileSync(path.join(tempDir, 'icon.svg'), '<svg xmlns="http://www.w3.org/2000/svg" />');
+  fs.writeFileSync(path.join(tempDir, 'api', 'me'), 'static api shadow');
   return tempDir;
 }
 
@@ -241,8 +243,11 @@ describe('bff server', () => {
   let logoutShouldFail: boolean;
   let backendReady: boolean;
 
-  beforeEach(async () => {
+  beforeAll(() => {
     frontendDistDir = createFrontendDist();
+  });
+
+  beforeEach(async () => {
     ({ tempDir: sessionDir, sessionDbPath } = createSessionDbPath());
     lastBackendHeaders = {};
     logoutShouldFail = false;
@@ -368,10 +373,13 @@ describe('bff server', () => {
   afterEach(async () => {
     await close(backendServer);
     cleanupCreatedApp({ sessionStore, sessionDb }, sessionDir);
-    fs.rmSync(frontendDistDir, { recursive: true, force: true });
     Object.entries(originalEnvValues).forEach(([name, value]) => {
       restoreEnvValue(name, value);
     });
+  });
+
+  afterAll(() => {
+    fs.rmSync(frontendDistDir, { recursive: true, force: true });
   });
 
   test('creates a persisted BFF session on login and uses it for proxied app requests', async () => {
@@ -637,9 +645,6 @@ describe('bff server', () => {
   });
 
   test('does not let static files shadow protected API routes', async () => {
-    fs.mkdirSync(path.join(frontendDistDir, 'api'), { recursive: true });
-    fs.writeFileSync(path.join(frontendDistDir, 'api', 'me'), 'static api shadow');
-
     const response = await request(app)
       .get('/api/me')
       .expect(401);
