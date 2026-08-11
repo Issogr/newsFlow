@@ -14,7 +14,7 @@ const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/article
 
 const DEFAULT_SUMMARY_TIME_ZONE = 'Europe/Rome';
 const SUMMARY_GENERATION_HOURS = [20];
-const SUMMARY_HISTORY_RETAIN_COUNT = 2;
+const SUMMARY_HISTORY_RETAIN_COUNT = 1;
 const PODCAST_HISTORY_RETAIN_COUNT = parseIntegerEnv('AI_PODCAST_HISTORY_RETAIN_COUNT', 2, { min: 1, max: 10 });
 const SUMMARY_CHECK_INTERVAL_MS = parseIntegerEnv('THEMATIC_SUMMARY_CHECK_INTERVAL_MS', 60 * 1000, { min: 1000 });
 const SUMMARY_MAX_ARTICLES_PER_TOPIC = parseIntegerEnv('AI_SUMMARY_MAX_ARTICLES_PER_TOPIC', 120, { min: 1, max: 300 });
@@ -111,7 +111,6 @@ interface SummaryRecord extends DynamicRecord {
   model?: string;
   periodEnd?: string;
   periodStart?: string;
-  previousSummary?: SummaryRecord;
   retryCount?: number;
   scriptText?: string;
   sources?: SummarySource[];
@@ -1515,23 +1514,14 @@ function getLatestSummaries(options: SummaryOptions = {}) {
   const topicItems = topicConfigs
     .map((topic) => {
       const summary = latestByKey.get(topic.key);
-      const previousSummary = latestSummaries.find((candidate: SummaryRecord) => candidate.topicKey === topic.key && candidate.id !== summary?.id);
       return summary ? {
         ...summary,
         topicLabel: topic.label,
         summarySlot: getSummaryWindowSlot(summary),
-        isStale: summary.periodEnd !== latestDueWindow.periodEnd,
-        ...(previousSummary ? {
-          previousSummary: {
-            ...previousSummary,
-            topicLabel: topic.label,
-            summarySlot: getSummaryWindowSlot(previousSummary),
-            isStale: previousSummary.periodEnd !== latestDueWindow.periodEnd
-          }
-        } : {})
+        isStale: summary.periodEnd !== latestDueWindow.periodEnd
       } : null;
     })
-    .filter((summary: SummaryRecord | null) => summary && (summary.status !== 'empty' || summary.previousSummary?.status !== 'empty'));
+    .filter((summary: SummaryRecord | null) => summary && summary.status !== 'empty');
   const latestPodcasts = canShowPodcasts ? getLatestPodcastSummariesBySlot(PODCAST_HISTORY_RETAIN_COUNT) : [];
 
   return {

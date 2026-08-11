@@ -156,7 +156,6 @@ export interface ThematicSummary extends ThematicSummaryAudio {
   status?: string;
   audioByLocale?: Record<string, ThematicSummaryAudio>;
   sources?: Array<{ index?: number; source?: string; title?: string; url?: string; [key: string]: unknown }>;
-  previousSummary?: ThematicSummary | null;
   [key: string]: unknown;
 }
 

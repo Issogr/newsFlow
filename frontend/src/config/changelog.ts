@@ -6,13 +6,17 @@ export const CURRENT_CHANGELOG_ENTRY: { version: string } & Record<Locale, Chang
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
-    items: []
+    items: [
+      '📰 AI topic summaries now show only the latest briefing; the Yesterday history view has been removed.'
+    ]
   },
   it: {
     eyebrow: 'Ultimo aggiornamento',
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
-    items: []
+    items: [
+      '📰 Le sintesi AI per topic ora mostrano solo il briefing piu recente; la vista Ieri e stata rimossa.'
+    ]
   }
 };
 

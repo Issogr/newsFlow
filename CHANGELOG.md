@@ -2,6 +2,8 @@
 
 ## 3.6.3
 
+- removed Yesterday AI summary history so topic briefings now show only the latest generated summary
+
 ## 3.6.2
 
 - stabilized daily AI summaries by enforcing bilingual output, waiting for topic classification, and preventing article retention from repeatedly rewriting completed briefings
