@@ -271,7 +271,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       />
     </span>
   ));
-  const sourceIconStack = sourceEntries.length > 0 ? (aiGroupedStory ? (
+  const sourceIconStack = sourceEntries.length > 1 ? (aiGroupedStory ? (
     <div
       className="inline-flex rounded-full p-0.5 shadow-sm"
       style={AI_ACCENT_GRADIENT_STYLE}
@@ -286,7 +286,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     <div className="flex -space-x-2 rounded-full bg-white p-1 shadow-sm ring-1 ring-sky-200" aria-label={t('sources')}>
       {sourceIconItems}
     </div>
-  )) : null;
+  )) : (sourceIconItems[0] || null);
   const sourceSummary = getSourceSummary(group, sourceEntries);
   const publishedAt = getPublishedAt(group, locale);
   const topicBadges = topicEntries.length > 0 ? (
