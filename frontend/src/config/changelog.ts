@@ -7,7 +7,8 @@ export const CURRENT_CHANGELOG_ENTRY: { version: string } & Record<Locale, Chang
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '📰 AI topic summaries now show only the latest briefing; the Yesterday history view has been removed.'
+      '📰 AI topic summaries now show only the latest briefing; the Yesterday history view has been removed.',
+      '🗞️ News cards now use consistent rounded borders, subtle shadows, and mobile spacing for a minimal card layout.'
     ]
   },
   it: {
@@ -15,7 +16,8 @@ export const CURRENT_CHANGELOG_ENTRY: { version: string } & Record<Locale, Chang
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '📰 Le sintesi AI per topic ora mostrano solo il briefing piu recente; la vista Ieri e stata rimossa.'
+      '📰 Le sintesi AI per topic ora mostrano solo il briefing piu recente; la vista Ieri e stata rimossa.',
+      '🗞️ Le news card ora usano bordi arrotondati, ombre leggere e spaziatura mobile coerente per un layout minimale.'
     ]
   }
 };

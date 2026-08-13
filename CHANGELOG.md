@@ -3,6 +3,7 @@
 ## 3.6.3
 
 - removed Yesterday AI summary history so topic briefings now show only the latest generated summary
+- restyled news cards with consistent rounded borders, subtle shadows, and mobile spacing for a minimal card layout
 
 ## 3.6.2
 
