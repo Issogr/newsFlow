@@ -17,6 +17,7 @@ const {
 } = require('./newsAggregatorIngestion');
 const websocketService = require('./websocketService');
 const { parseIntegerEnv } = require('../utils/env');
+const { getArticleRetentionHours } = require('../config/articleRetention');
 const thematicSummaryService = require('./thematicSummaryService');
 import type { AppError, DynamicRecord, SourceDefinition } from '../utils/types';
 
@@ -37,7 +38,7 @@ interface ActiveUser extends DynamicRecord {
 }
 
 const SCRAPE_INTERVAL_MS = parseIntegerEnv('SCRAPE_INTERVAL_MS', 900000, { min: 1000 });
-const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24, { min: 0 });
+const ARTICLE_RETENTION_HOURS = getArticleRetentionHours();
 const MANUAL_REFRESH_COOLDOWN_MS = parseIntegerEnv('MANUAL_REFRESH_COOLDOWN_MS', 5 * 60 * 1000, { min: 0 });
 const ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES = parseIntegerEnv(
   'SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES',

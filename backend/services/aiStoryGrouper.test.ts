@@ -2,6 +2,7 @@ import type { Mock } from 'vitest';
 
 describe('aiStoryGrouper', () => {
   let aiStoryGrouper: ReturnType<typeof require>;
+  let openRouterClient: ReturnType<typeof require>;
   let sendMock: Mock;
 
   beforeEach(() => {
@@ -22,8 +23,9 @@ describe('aiStoryGrouper', () => {
         }
       ]
     }));
+    openRouterClient = require('./openRouterClient');
     aiStoryGrouper = require('./aiStoryGrouper');
-    aiStoryGrouper._setOpenRouterSdkLoader(async () => ({
+    openRouterClient.setOpenRouterSdkLoader(async () => ({
       OpenRouter: jest.fn(() => ({
         chat: { send: sendMock }
       }))

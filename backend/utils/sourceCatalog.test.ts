@@ -1,5 +1,6 @@
 const {
   extractRegistrableDomain,
+  getCanonicalSourceMetadata,
   getCanonicalSourceId,
   getCanonicalSourceName,
   getConfiguredSourceGroups,
@@ -30,6 +31,23 @@ describe('sourceCatalog domain grouping', () => {
   });
 
   test('canonicalizes configured source ids and legacy aliases to the domain group', () => {
+    expect(getCanonicalSourceMetadata('bbc_world', 'BBC News - World')).toEqual({
+      sourceId: 'bbci.co.uk',
+      sourceName: 'BBC News',
+      sourceIconUrl: 'https://www.bbc.co.uk/favicon.ico',
+      subSource: 'World'
+    });
+    expect(getCanonicalSourceMetadata('ansa', 'Legacy ANSA')).toMatchObject({
+      sourceId: 'ansa.it',
+      sourceName: 'ANSA',
+      subSource: null
+    });
+    expect(getCanonicalSourceMetadata('custom', 'Custom')).toEqual({
+      sourceId: 'custom',
+      sourceName: 'Custom',
+      sourceIconUrl: '',
+      subSource: null
+    });
     expect(getCanonicalSourceId('bbc_home', 'BBC News - Home')).toBe('bbci.co.uk');
     expect(getCanonicalSourceName('bbc_home', 'BBC News - Home')).toBe('BBC News');
     expect(getSourceVariantLabel('bbc_world', 'BBC News - World')).toBe('World');

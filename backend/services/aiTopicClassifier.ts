@@ -7,8 +7,7 @@ const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
-  sendJsonChatCompletion,
-  setOpenRouterSdkLoader
+  sendJsonChatCompletion
 } = require('./openRouterClient');
 const { truncateText } = require('./aiArticlePayload');
 const {
@@ -370,6 +369,5 @@ export = {
   isAiTopicDetectionAvailable,
   _getConfig: getConfig,
   _getCompletionTokenBudget: getCompletionTokenBudget,
-  _normalizeClassifierDetails: normalizeClassifierDetails,
-  _setOpenRouterSdkLoader: setOpenRouterSdkLoader
+  _normalizeClassifierDetails: normalizeClassifierDetails
 };

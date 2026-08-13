@@ -22,7 +22,7 @@ describe('aiTopicClassifier', () => {
         send: chatSend
       }
     }));
-    aiTopicClassifier._setOpenRouterSdkLoader(async () => ({ OpenRouter: OpenRouterMock }));
+    openRouterClient.setOpenRouterSdkLoader(async () => ({ OpenRouter: OpenRouterMock }));
     process.env = {
       ...originalEnv,
       OPENROUTER_API_KEY: 'test-key',
@@ -36,7 +36,7 @@ describe('aiTopicClassifier', () => {
   });
 
   afterEach(() => {
-    aiTopicClassifier._setOpenRouterSdkLoader();
+    openRouterClient.setOpenRouterSdkLoader();
     openRouterClient._resetFailureBackoff();
     process.env = originalEnv;
   });

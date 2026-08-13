@@ -89,7 +89,7 @@ export interface UserSettings {
   [key: string]: unknown;
 }
 
-export interface UserIdentity {
+interface UserIdentity {
   id?: string;
   username: string;
   isAdmin: boolean;
@@ -173,7 +173,7 @@ export interface FeedMeta {
   [key: string]: unknown;
 }
 
-export interface FeedFilters {
+interface FeedFilters {
   sources?: NewsSource[];
   topics?: AvailableTopic[];
   sourceCatalog?: NewsSource[];

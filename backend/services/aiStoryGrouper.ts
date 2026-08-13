@@ -6,8 +6,7 @@ const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
-  sendJsonChatCompletion,
-  setOpenRouterSdkLoader
+  sendJsonChatCompletion
 } = require('./openRouterClient');
 const { truncateText } = require('./aiArticlePayload');
 const { normalizeArticleUrl } = require('../utils/articleIdentity');
@@ -225,6 +224,5 @@ export = {
   isAiStoryGroupingAvailable,
   buildStoryGroupId,
   getCandidateSignature,
-  _getConfig: getConfig,
-  _setOpenRouterSdkLoader: setOpenRouterSdkLoader
+  _getConfig: getConfig
 };

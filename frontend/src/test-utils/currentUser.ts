@@ -1,4 +1,4 @@
-import type { ApiTokenInfo, CurrentUser, NewsSource, UserIdentity, UserSettings } from '../types';
+import type { ApiTokenInfo, CurrentUser, NewsSource, UserSettings } from '../types';
 
 const DEFAULT_SETTINGS: UserSettings = {
   defaultLanguage: 'en',
@@ -22,7 +22,7 @@ const DEFAULT_FEATURES = {
 };
 
 type CurrentUserOverrides = {
-  user?: Partial<UserIdentity>;
+  user?: Partial<CurrentUser['user']>;
   settings?: Partial<UserSettings>;
   limits?: NonNullable<CurrentUser['limits']>;
   features?: CurrentUser['features'];

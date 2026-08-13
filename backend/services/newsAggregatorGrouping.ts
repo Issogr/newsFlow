@@ -1,9 +1,7 @@
 const crypto = require('crypto');
 const topicNormalizer = require('./topicNormalizer');
 const {
-  getCanonicalSourceId,
-  getCanonicalSourceName,
-  getSourceVariantLabel
+  getCanonicalSourceMetadata
 } = require('../utils/sourceCatalog');
 const { normalizeArticleUrl } = require('../utils/articleIdentity');
 import type { DynamicRecord, NewsArticle } from '../utils/types';
@@ -290,16 +288,15 @@ function normalizeIncomingArticles(articles: Article[] = []): Article[] {
 
   articles.forEach((article) => {
     const topicDetails = topicNormalizer.extractTopicDetails(article, article.rawTopics);
-    const canonicalSourceId = getCanonicalSourceId(article.sourceId, article.source);
-    const canonicalSourceName = getCanonicalSourceName(article.sourceId, article.source);
+    const sourceMetadata = getCanonicalSourceMetadata(article.sourceId, article.source);
     const normalizedArticle = {
       ...article,
       rawSourceId: article.sourceId,
       rawSource: article.source,
       canonicalUrl: normalizeArticleUrl(article.canonicalUrl || article.url || ''),
-      sourceId: canonicalSourceId,
-      source: canonicalSourceName,
-      subSource: getSourceVariantLabel(article.sourceId, article.source),
+      sourceId: sourceMetadata.sourceId,
+      source: sourceMetadata.sourceName,
+      subSource: sourceMetadata.subSource,
       topics: topicDetails.map(({ topic }: { topic: string }) => topic),
       topicDetails
     } as Article;

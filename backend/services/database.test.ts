@@ -6,6 +6,7 @@ const {
   getCanonicalSourceName,
   getConfiguredSourceGroups
 } = require('../utils/sourceCatalog');
+import type SqliteDatabaseConnection = require('./sqliteDatabase');
 
 type RuntimeModule = ReturnType<typeof require>;
 
@@ -25,6 +26,14 @@ interface TestSourceGroup {
 
 interface Identified {
   id: string;
+}
+
+function getColumnNames(database: SqliteDatabaseConnection, tableName: string): string[] {
+  return database.prepare<{ name: string }>(`PRAGMA table_info(${tableName})`).all().map((column) => column.name);
+}
+
+function getMigrationVersion(database: SqliteDatabaseConnection): string | undefined {
+  return database.prepare<{ value: string }>("SELECT value FROM app_meta WHERE key = 'migration_version'").get()?.value;
 }
 
 const sourceGroups = getConfiguredSourceGroups();
@@ -62,23 +71,19 @@ describe('database migrations', () => {
     database.getDb();
 
     const sqlite = new SqliteDatabase(dbPath, { readOnly: true });
-    const migrationVersion = sqlite.prepare(`
-      SELECT value
-      FROM app_meta
-      WHERE key = 'migration_version'
-    `).get()?.value;
-    const topicColumns = sqlite.prepare('PRAGMA table_info(article_topics)').all().map((column: { name: string }) => column.name);
-    const settingsColumns = sqlite.prepare('PRAGMA table_info(user_settings)').all().map((column: { name: string }) => column.name);
-    const articleColumns = sqlite.prepare('PRAGMA table_info(articles)').all().map((column: { name: string }) => column.name);
-    const userColumns = sqlite.prepare('PRAGMA table_info(users)').all().map((column: { name: string }) => column.name);
-    const userSourceColumns = sqlite.prepare('PRAGMA table_info(user_sources)').all().map((column: { name: string }) => column.name);
-    const passwordSetupTokenColumns = sqlite.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column: { name: string }) => column.name);
-    const apiTokenColumns = sqlite.prepare('PRAGMA table_info(api_tokens)').all().map((column: { name: string }) => column.name);
-    const readLaterColumns = sqlite.prepare('PRAGMA table_info(user_read_later_articles)').all().map((column: { name: string }) => column.name);
-    const thematicSummaryColumns = sqlite.prepare('PRAGMA table_info(thematic_summaries)').all().map((column: { name: string }) => column.name);
-    const podcastSummaryColumns = sqlite.prepare('PRAGMA table_info(podcast_summaries)').all().map((column: { name: string }) => column.name);
-    const podcastSummaryAudioColumns = sqlite.prepare('PRAGMA table_info(podcast_summary_audio)').all().map((column: { name: string }) => column.name);
-    const readThematicSummaryColumns = sqlite.prepare('PRAGMA table_info(user_read_thematic_summaries)').all().map((column: { name: string }) => column.name);
+    const migrationVersion = getMigrationVersion(sqlite);
+    const topicColumns = getColumnNames(sqlite, 'article_topics');
+    const settingsColumns = getColumnNames(sqlite, 'user_settings');
+    const articleColumns = getColumnNames(sqlite, 'articles');
+    const userColumns = getColumnNames(sqlite, 'users');
+    const userSourceColumns = getColumnNames(sqlite, 'user_sources');
+    const passwordSetupTokenColumns = getColumnNames(sqlite, 'password_setup_tokens');
+    const apiTokenColumns = getColumnNames(sqlite, 'api_tokens');
+    const readLaterColumns = getColumnNames(sqlite, 'user_read_later_articles');
+    const thematicSummaryColumns = getColumnNames(sqlite, 'thematic_summaries');
+    const podcastSummaryColumns = getColumnNames(sqlite, 'podcast_summaries');
+    const podcastSummaryAudioColumns = getColumnNames(sqlite, 'podcast_summary_audio');
+    const readThematicSummaryColumns = getColumnNames(sqlite, 'user_read_thematic_summaries');
     const articleIndexNames = sqlite.prepare('PRAGMA index_list(articles)').all().map((index: { name: string }) => index.name);
     const userIndexNames = sqlite.prepare('PRAGMA index_list(users)').all().map((index: { name: string }) => index.name);
     const topicIndexNames = sqlite.prepare('PRAGMA index_list(article_topics)').all().map((index: { name: string }) => index.name);
@@ -171,7 +176,7 @@ describe('database migrations', () => {
     database.getDb();
 
     const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
-    const migrationVersion = migratedDb.prepare("SELECT value FROM app_meta WHERE key = 'migration_version'").get()?.value;
+    const migrationVersion = getMigrationVersion(migratedDb);
     const width = migratedDb.prepare('SELECT reader_text_width AS readerTextWidth FROM user_settings WHERE user_id = ?').get('user-1')?.readerTextWidth;
     migratedDb.close();
 
@@ -201,8 +206,8 @@ describe('database migrations', () => {
     database.getDb();
 
     const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
-    const migrationVersion = migratedDb.prepare("SELECT value FROM app_meta WHERE key = 'migration_version'").get()?.value;
-    const articleColumns = migratedDb.prepare('PRAGMA table_info(articles)').all().map((column: { name: string }) => column.name);
+    const migrationVersion = getMigrationVersion(migratedDb);
+    const articleColumns = getColumnNames(migratedDb, 'articles');
     const articleIndexes = migratedDb.prepare('PRAGMA index_list(articles)').all().map((index: { name: string }) => index.name);
     migratedDb.close();
 
@@ -248,16 +253,12 @@ describe('database migrations', () => {
     database.getDb();
 
     const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
-    const migratedVersion = migratedDb.prepare(`
-      SELECT value
-      FROM app_meta
-      WHERE key = 'migration_version'
-    `).get()?.value;
-    const settingsColumns = migratedDb.prepare('PRAGMA table_info(user_settings)').all().map((column: { name: string }) => column.name);
-    const userColumns = migratedDb.prepare('PRAGMA table_info(users)').all().map((column: { name: string }) => column.name);
-    const articleColumns = migratedDb.prepare('PRAGMA table_info(articles)').all().map((column: { name: string }) => column.name);
-    const apiTokenColumns = migratedDb.prepare('PRAGMA table_info(api_tokens)').all().map((column: { name: string }) => column.name);
-    const userSourceColumns = migratedDb.prepare('PRAGMA table_info(user_sources)').all().map((column: { name: string }) => column.name);
+    const migratedVersion = getMigrationVersion(migratedDb);
+    const settingsColumns = getColumnNames(migratedDb, 'user_settings');
+    const userColumns = getColumnNames(migratedDb, 'users');
+    const articleColumns = getColumnNames(migratedDb, 'articles');
+    const apiTokenColumns = getColumnNames(migratedDb, 'api_tokens');
+    const userSourceColumns = getColumnNames(migratedDb, 'user_sources');
 
     migratedDb.close();
 
@@ -366,18 +367,14 @@ describe('database migrations', () => {
       SELECT id, canonical_url AS canonicalUrl
       FROM articles
     `).all();
-    const migratedVersion = migratedDb.prepare(`
-      SELECT value
-      FROM app_meta
-      WHERE key = 'migration_version'
-    `).get()?.value;
-    const settingsColumns = migratedDb.prepare('PRAGMA table_info(user_settings)').all().map((column: { name: string }) => column.name);
-    const userColumns = migratedDb.prepare('PRAGMA table_info(users)').all().map((column: { name: string }) => column.name);
-    const articleColumns = migratedDb.prepare('PRAGMA table_info(articles)').all().map((column: { name: string }) => column.name);
+    const migratedVersion = getMigrationVersion(migratedDb);
+    const settingsColumns = getColumnNames(migratedDb, 'user_settings');
+    const userColumns = getColumnNames(migratedDb, 'users');
+    const articleColumns = getColumnNames(migratedDb, 'articles');
     const articleAiState = migratedDb.prepare('SELECT ai_topics_processed_at AS processedAt, ai_topics_status AS status FROM articles WHERE id = ?').get('article-1');
-    const passwordSetupTokenColumns = migratedDb.prepare('PRAGMA table_info(password_setup_tokens)').all().map((column: { name: string }) => column.name);
-    const apiTokenColumns = migratedDb.prepare('PRAGMA table_info(api_tokens)').all().map((column: { name: string }) => column.name);
-    const userSourceColumns = migratedDb.prepare('PRAGMA table_info(user_sources)').all().map((column: { name: string }) => column.name);
+    const passwordSetupTokenColumns = getColumnNames(migratedDb, 'password_setup_tokens');
+    const apiTokenColumns = getColumnNames(migratedDb, 'api_tokens');
+    const userSourceColumns = getColumnNames(migratedDb, 'user_sources');
 
     migratedDb.close();
 
@@ -493,11 +490,7 @@ describe('database migrations', () => {
     database = require('./database');
     database.getDb();
 
-    const migratedVersion = database.getDb().prepare(`
-      SELECT value
-      FROM app_meta
-      WHERE key = 'migration_version'
-    `).get()?.value;
+    const migratedVersion = getMigrationVersion(database.getDb());
     const settings = database.getUserSettings('user-1');
     const sourceIds = database.listUserSources('user-1').map((source: Identified) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article: Identified) => article.id);
@@ -588,12 +581,8 @@ describe('database migrations', () => {
     database.getDb();
 
     const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
-    const migratedVersion = migratedDb.prepare(`
-      SELECT value
-      FROM app_meta
-      WHERE key = 'migration_version'
-    `).get()?.value;
-    const thematicSummaryColumns = migratedDb.prepare('PRAGMA table_info(thematic_summaries)').all().map((column: { name: string }) => column.name);
+    const migratedVersion = getMigrationVersion(migratedDb);
+    const thematicSummaryColumns = getColumnNames(migratedDb, 'thematic_summaries');
     const row = migratedDb.prepare(`
       SELECT summary_text AS summaryText, summary_text_en AS summaryTextEn, summary_text_it AS summaryTextIt
       FROM thematic_summaries
@@ -734,11 +723,7 @@ describe('database migrations', () => {
     const existingAudio = database.getPodcastSummaryAudio('english-child-podcast', 'en');
 
     const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
-    const migratedVersion = migratedDb.prepare(`
-      SELECT value
-      FROM app_meta
-      WHERE key = 'migration_version'
-    `).get()?.value;
+    const migratedVersion = getMigrationVersion(migratedDb);
     const audioRow = migratedDb.prepare(`
       SELECT podcast_id AS podcastId, locale, audio_blob AS audioBlob, audio_status AS audioStatus
       FROM podcast_summary_audio
@@ -751,7 +736,7 @@ describe('database migrations', () => {
       WHERE podcast_id = 'english-child-podcast'
       ORDER BY locale
     `).all();
-    const parentColumns = migratedDb.prepare('PRAGMA table_info(podcast_summaries)').all().map((column: { name: string }) => column.name);
+    const parentColumns = getColumnNames(migratedDb, 'podcast_summaries');
 
     migratedDb.close();
 
@@ -801,7 +786,7 @@ describe('database migrations', () => {
 
     const unchangedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const tableNames = unchangedDb.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((row: { name: string }) => row.name);
-    const migrationVersion = unchangedDb.prepare("SELECT value FROM app_meta WHERE key = 'migration_version'").get()?.value;
+    const migrationVersion = getMigrationVersion(unchangedDb);
     unchangedDb.close();
 
     expect(tableNames).toEqual(['app_meta']);
@@ -826,8 +811,8 @@ describe('database migrations', () => {
     expect(() => database.getDb()).toThrow('case-insensitive duplicate username');
 
     const rolledBackDb = new SqliteDatabase(dbPath, { readOnly: true });
-    const migrationVersion = rolledBackDb.prepare("SELECT value FROM app_meta WHERE key = 'migration_version'").get()?.value;
-    const userColumns = rolledBackDb.prepare('PRAGMA table_info(users)').all().map((column: { name: string }) => column.name);
+    const migrationVersion = getMigrationVersion(rolledBackDb);
+    const userColumns = getColumnNames(rolledBackDb, 'users');
     rolledBackDb.close();
 
     expect(migrationVersion).toBe('29');

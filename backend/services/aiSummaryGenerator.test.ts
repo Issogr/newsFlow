@@ -1,10 +1,11 @@
 const aiSummaryGenerator = require('./aiSummaryGenerator');
+const { setOpenRouterSdkLoader } = require('./openRouterClient');
 
 describe('aiSummaryGenerator', () => {
   const originalEnv = process.env;
 
   afterEach(() => {
-    aiSummaryGenerator._setOpenRouterSdkLoader();
+    setOpenRouterSdkLoader();
     process.env = originalEnv;
   });
 
@@ -24,7 +25,7 @@ describe('aiSummaryGenerator', () => {
         }
       }]
     });
-    aiSummaryGenerator._setOpenRouterSdkLoader(async () => ({
+    setOpenRouterSdkLoader(async () => ({
       OpenRouter: jest.fn(() => ({ chat: { send: sendMock } }))
     }));
 

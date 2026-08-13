@@ -195,42 +195,49 @@ function resolveConfiguredSource(sourceId: string, sourceName: string) {
     || null;
 }
 
-function resolveConfiguredSourceGroup(sourceId: string, sourceName: string) {
+function resolveConfiguredSourceContext(sourceId: string, sourceName: string) {
   const configuredSource = resolveConfiguredSource(sourceId, sourceName);
-  if (configuredSource) {
-    const groupId = groupIdAliasMap.get(configuredSource.id) || extractRegistrableDomain(configuredSource.url) || configuredSource.id;
-    return configuredSourceGroups.get(groupId) || null;
-  }
+  const groupId = configuredSource
+    ? groupIdAliasMap.get(configuredSource.id) || extractRegistrableDomain(configuredSource.url) || configuredSource.id
+    : groupIdAliasMap.get(sourceId) || sourceId;
 
-  const directGroupId = groupIdAliasMap.get(sourceId) || sourceId;
-  return configuredSourceGroups.get(directGroupId) || null;
+  return {
+    configuredSource,
+    sourceGroup: configuredSourceGroups.get(groupId) || null
+  };
+}
+
+function getCanonicalSourceMetadata(sourceId: string, sourceName: string) {
+  const { configuredSource, sourceGroup } = resolveConfiguredSourceContext(sourceId, sourceName);
+
+  return {
+    sourceId: sourceGroup?.id || sourceId,
+    sourceName: sourceGroup?.name || sourceName,
+    sourceIconUrl: sourceGroup?.iconUrl || '',
+    subSource: sourceGroup && configuredSource && sourceGroup.subSources.length > 1
+      ? (sourceGroup.subSources.find((subSource) => subSource.id === configuredSource.id)?.label || null)
+      : null
+  };
 }
 
 function getCanonicalSourceId(sourceId: string, sourceName: string) {
-  return resolveConfiguredSourceGroup(sourceId, sourceName)?.id || sourceId;
+  return getCanonicalSourceMetadata(sourceId, sourceName).sourceId;
 }
 
 function getCanonicalSourceName(sourceId: string, sourceName: string) {
-  return resolveConfiguredSourceGroup(sourceId, sourceName)?.name || sourceName;
+  return getCanonicalSourceMetadata(sourceId, sourceName).sourceName;
 }
 
 function getCanonicalSourceIconUrl(sourceId: string, sourceName: string) {
-  return resolveConfiguredSourceGroup(sourceId, sourceName)?.iconUrl || '';
+  return getCanonicalSourceMetadata(sourceId, sourceName).sourceIconUrl;
 }
 
 function getSourceVariantLabel(sourceId: string, sourceName: string) {
-  const sourceGroup = resolveConfiguredSourceGroup(sourceId, sourceName);
-  const configuredSource = resolveConfiguredSource(sourceId, sourceName);
-
-  if (!sourceGroup || !configuredSource || sourceGroup.subSources.length <= 1) {
-    return null;
-  }
-
-  return sourceGroup.subSources.find((subSource) => subSource.id === configuredSource.id)?.label || null;
+  return getCanonicalSourceMetadata(sourceId, sourceName).subSource;
 }
 
 function getSourceAliases(sourceId: string, sourceName: string) {
-  const sourceGroup = resolveConfiguredSourceGroup(sourceId, sourceName);
+  const { sourceGroup } = resolveConfiguredSourceContext(sourceId, sourceName);
 
   if (!sourceGroup) {
     return {
@@ -263,6 +270,7 @@ export = {
   buildDomainSourceGroups,
   extractRegistrableDomain,
   getConfiguredSourceGroups,
+  getCanonicalSourceMetadata,
   getCanonicalSourceId,
   getCanonicalSourceName,
   getCanonicalSourceIconUrl,

@@ -6,8 +6,7 @@ const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
-  sendJsonChatCompletion,
-  setOpenRouterSdkLoader
+  sendJsonChatCompletion
 } = require('./openRouterClient');
 import type { AppError, DynamicRecord, NewsArticle } from '../utils/types';
 
@@ -256,6 +255,5 @@ export = {
   _getCompletionTokenBudget: getCompletionTokenBudget,
   _getConfig: getConfig,
   _normalizeGeneratedSummary: normalizeGeneratedSummary,
-  _setOpenRouterSdkLoader: setOpenRouterSdkLoader,
   _validateGeneratedSummary: validateGeneratedSummary
 };

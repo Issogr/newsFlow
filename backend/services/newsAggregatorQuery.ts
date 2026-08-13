@@ -4,6 +4,7 @@ const { buildDomainSourceGroups, getConfiguredSourceGroups } = require('../utils
 const { MAX_NEWS_PAGE } = require('../utils/newsQuery');
 const { TITLE_GROUP_WINDOW_MS, groupSimilarNews } = require('./newsAggregatorGrouping');
 const { parseIntegerEnv } = require('../utils/env');
+const { getArticleRetentionHours } = require('../config/articleRetention');
 import type { DynamicRecord, NewsArticle, SourceDefinition, SourceGroup } from '../utils/types';
 
 type FeedArticle = NewsArticle & DynamicRecord;
@@ -66,7 +67,7 @@ interface FeedRuntime extends DynamicRecord {
   isUserRefreshPending?: () => boolean;
 }
 
-const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24);
+const ARTICLE_RETENTION_HOURS = getArticleRetentionHours({ allowNegative: true });
 const GROUP_PAGINATION_ARTICLE_BATCH_SIZE = 250;
 const READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE = 250;
 const FILTER_STATS_CACHE_TTL_MS = parseIntegerEnv('FILTER_STATS_CACHE_TTL_MS', 10 * 1000, { min: 0, max: 5 * 60 * 1000 });
