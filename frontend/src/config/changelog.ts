@@ -1,13 +1,14 @@
 import type { ChangelogContent, Locale } from '../types';
 
 export const CURRENT_CHANGELOG_ENTRY: { version: string } & Record<Locale, ChangelogContent> = {
-  version: '3.6.2',
+  version: '3.6.3',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '📰 Daily AI summaries now enforce bilingual output, wait for topic classification, and remain stable when older articles expire.'
+      '📰 AI topic summaries now show only the latest briefing; the Yesterday history view has been removed.',
+      '🗞️ News cards now use consistent rounded borders, subtle shadows, mobile spacing, and unwrapped logos for single-source stories.'
     ]
   },
   it: {
@@ -15,7 +16,8 @@ export const CURRENT_CHANGELOG_ENTRY: { version: string } & Record<Locale, Chang
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '📰 I riepiloghi AI giornalieri ora garantiscono l\'output bilingue, attendono la classificazione dei topic e restano stabili quando gli articoli meno recenti scadono.'
+      '📰 Le sintesi AI per topic ora mostrano solo il briefing piu recente; la vista Ieri e stata rimossa.',
+      '🗞️ Le news card ora usano bordi arrotondati, ombre leggere, spaziatura mobile coerente e loghi senza contenitore per le storie con una sola fonte.'
     ]
   }
 };

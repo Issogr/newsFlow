@@ -57,7 +57,7 @@ const SKELETON_CARD_COUNT = 6;
 
 function NewsCardSkeleton({ showImage }: { showImage: boolean }) {
   return (
-    <article className="relative flex h-full min-h-[20rem] flex-col overflow-hidden rounded-none border-0 border-slate-200 bg-white shadow-none sm:rounded-[1.75rem] md:border md:shadow-[0_12px_34px_-20px_rgba(15,23,42,0.35)]" aria-hidden="true">
+    <article className="relative flex h-full min-h-[20rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-[1.75rem]" aria-hidden="true">
       <div className="flex items-center gap-3 px-4 pb-3 pt-5 sm:px-5">
         <div className="h-12 w-12 shrink-0 rounded-full bg-sky-100" />
         <div className="flex-1 space-y-2">
@@ -925,7 +925,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
 
         {loading && !loadingMore ? (
           <div
-            className="-mx-4 grid w-auto min-w-0 animate-pulse grid-cols-1 gap-3 sm:mx-0 sm:w-full sm:gap-4 md:grid-cols-2 xl:grid-cols-3"
+            className="grid w-full min-w-0 animate-pulse grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3"
             role="status"
             aria-label={t('loadingMore')}
           >
@@ -957,7 +957,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
               </div>
             )}
 
-            <div className="-mx-4 grid w-auto min-w-0 grid-cols-1 gap-3 sm:mx-0 sm:w-full sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
               {visibleNews.map((group) => (
                 <div key={group.id || group.cursorId || group.items?.[0]?.id} className="feed-card-enter h-full">
                   <NewsCard

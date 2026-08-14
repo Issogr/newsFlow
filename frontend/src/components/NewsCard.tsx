@@ -271,7 +271,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       />
     </span>
   ));
-  const sourceIconStack = sourceEntries.length > 0 ? (aiGroupedStory ? (
+  const sourceIconStack = sourceEntries.length > 1 ? (aiGroupedStory ? (
     <div
       className="inline-flex rounded-full p-0.5 shadow-sm"
       style={AI_ACCENT_GRADIENT_STYLE}
@@ -286,7 +286,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     <div className="flex -space-x-2 rounded-full bg-white p-1 shadow-sm ring-1 ring-sky-200" aria-label={t('sources')}>
       {sourceIconItems}
     </div>
-  )) : null;
+  )) : (sourceIconItems[0] || null);
   const sourceSummary = getSourceSummary(group, sourceEntries);
   const publishedAt = getPublishedAt(group, locale);
   const topicBadges = topicEntries.length > 0 ? (
@@ -366,7 +366,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   );
 
   return (
-    <article className="group relative flex h-full min-h-[20rem] w-full min-w-0 flex-col overflow-hidden rounded-none border-0 border-slate-200 bg-white shadow-none transition-[border-color,box-shadow] duration-200 ease-out sm:rounded-[1.75rem] md:border md:shadow-[0_12px_34px_-20px_rgba(15,23,42,0.45)] md:hover:border-sky-200 md:hover:shadow-[0_20px_42px_-24px_rgba(14,165,233,0.42)]">
+    <article className="group relative flex h-full min-h-[20rem] w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-[1.75rem]">
       <div className="flex min-w-0 items-center gap-3 px-4 pb-3 pt-5 sm:px-5">
         {sourceIconStack}
         <div className="min-w-0 flex-1">

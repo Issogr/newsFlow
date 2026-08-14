@@ -10,15 +10,12 @@ const createDatabaseSchema = require('./databaseSchema');
 const createUserStateRepository = require('./databaseUserState');
 const {
   buildDomainSourceGroups,
-  getCanonicalSourceIconUrl,
-  getCanonicalSourceId,
-  getCanonicalSourceName,
+  getCanonicalSourceMetadata,
   getConfiguredSourceGroupIds,
   getLegacyConfiguredSourceGroupIds,
   getGroupedConfiguredSourceIds,
   getRawConfiguredSourceIds,
-  getSourceAliases,
-  getSourceVariantLabel
+  getSourceAliases
 } = require('../utils/sourceCatalog');
 const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
 import type { SourceGroup } from '../utils/types';
@@ -86,18 +83,10 @@ function getResolvedSourceAliases(sourceId: string, sourceName: string, userId: 
 }
 
 function getResolvedSourceMetadata(sourceId: string, sourceName: string, userId: string | null, customSourceGroups: Map<string, SourceGroup> | null = null) {
-  const configuredSourceId = getCanonicalSourceId(sourceId, sourceName);
-  const configuredSourceName = getCanonicalSourceName(sourceId, sourceName);
-  const configuredSourceIconUrl = getCanonicalSourceIconUrl(sourceId, sourceName);
-  const configuredSubSource = getSourceVariantLabel(sourceId, sourceName);
+  const configuredMetadata = getCanonicalSourceMetadata(sourceId, sourceName);
 
-  if (configuredSourceId !== sourceId || configuredSourceName !== sourceName || configuredSubSource) {
-    return {
-      sourceId: configuredSourceId,
-      sourceName: configuredSourceName,
-      sourceIconUrl: configuredSourceIconUrl,
-      subSource: configuredSubSource
-    };
+  if (configuredMetadata.sourceId !== sourceId || configuredMetadata.sourceName !== sourceName || configuredMetadata.subSource) {
+    return configuredMetadata;
   }
 
   const customSourceGroup = resolveCustomSourceGroup(sourceId, sourceName, userId, customSourceGroups);
@@ -181,7 +170,10 @@ function verifyWriteAccess(options: { maxAgeMs?: number } = {}) {
   const maxAgeMs = Number(options.maxAgeMs) || 0;
   const lastCheckTimestamp = Date.parse(lastWriteCheckAt || '');
   if (maxAgeMs > 0 && Number.isFinite(lastCheckTimestamp) && Date.now() - lastCheckTimestamp < maxAgeMs) {
-    return getWriteAccessStatus();
+    return {
+      writable: Boolean(lastWriteCheckAt),
+      checkedAt: lastWriteCheckAt
+    };
   }
 
   const database = getDb();
@@ -211,13 +203,6 @@ function verifyWriteAccess(options: { maxAgeMs?: number } = {}) {
   };
 }
 
-function getWriteAccessStatus() {
-  return {
-    writable: Boolean(lastWriteCheckAt),
-    checkedAt: lastWriteCheckAt
-  };
-}
-
 export = {
   getDb,
   closeDb,
@@ -225,6 +210,5 @@ export = {
   ...readerCacheRepository,
   ...authRepository,
   ...userStateRepository,
-  verifyWriteAccess,
-  getWriteAccessStatus
+  verifyWriteAccess
 };

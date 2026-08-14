@@ -219,6 +219,13 @@ describe('NewsCard', () => {
     expect(screen.queryByText('Source B')).not.toBeInTheDocument();
   });
 
+  test('renders a single source icon without the aggregation container', () => {
+    renderNewsCard();
+
+    expect(screen.getByLabelText('Source A')).toBeInTheDocument();
+    expect(screen.queryByLabelText('sources')).not.toBeInTheDocument();
+  });
+
   test('limits combined story source circles and keeps overflow in the summary text', () => {
     renderNewsCard({
       cardGroup: createGroup({

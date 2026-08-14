@@ -40,7 +40,6 @@ export interface CreateSessionStoreOptions {
 
 interface SessionAwareRequest extends IncomingMessage {
   session?: session.SessionData | (session.Session & Partial<session.SessionData>);
-  sessionID?: string;
   [BACKEND_SESSION_COOKIE_CACHE]?: {
     encryptedCookie: string;
     backendSessionCookie: string;
@@ -189,7 +188,6 @@ export function createSessionStore(options: CreateSessionStoreOptions = {}): {
 
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA synchronous = NORMAL');
-  db.exec('DROP TABLE IF EXISTS session_users');
 
   const store = new ManagedSqliteStore(db);
 
@@ -262,29 +260,28 @@ export function loadUpgradeSession(
   req: SessionAwareRequest,
   sessionStore: ManagedSqliteStore,
   secret: string,
-): Promise<session.SessionData | null> {
+): Promise<void> {
   const cookies = typeof req.headers.cookie === 'string' ? cookie.parseCookie(req.headers.cookie) : {};
   const sessionId = unsignSessionId(cookies[BFF_SESSION_COOKIE_NAME], secret);
 
   if (!sessionId) {
-    return Promise.resolve(null);
+    return Promise.resolve();
   }
 
-  return new Promise((resolve) => {
+  return new Promise<void>((resolve) => {
     sessionStore.get(sessionId, (error, sessionData) => {
       if (error || !sessionData || !isValidSessionPayload(sessionData)) {
         if (sessionData) {
-          sessionStore.destroy(sessionId, () => resolve(null));
+          sessionStore.destroy(sessionId, () => resolve());
           return;
         }
 
-        resolve(null);
+        resolve();
         return;
       }
 
       req.session = sessionData;
-      req.sessionID = sessionId;
-      sessionStore.touch(sessionId, sessionData, () => resolve(sessionData));
+      sessionStore.touch(sessionId, sessionData, () => resolve());
     });
   });
 }

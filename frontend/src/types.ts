@@ -89,7 +89,7 @@ export interface UserSettings {
   [key: string]: unknown;
 }
 
-export interface UserIdentity {
+interface UserIdentity {
   id?: string;
   username: string;
   isAdmin: boolean;
@@ -156,7 +156,6 @@ export interface ThematicSummary extends ThematicSummaryAudio {
   status?: string;
   audioByLocale?: Record<string, ThematicSummaryAudio>;
   sources?: Array<{ index?: number; source?: string; title?: string; url?: string; [key: string]: unknown }>;
-  previousSummary?: ThematicSummary | null;
   [key: string]: unknown;
 }
 
@@ -174,7 +173,7 @@ export interface FeedMeta {
   [key: string]: unknown;
 }
 
-export interface FeedFilters {
+interface FeedFilters {
   sources?: NewsSource[];
   topics?: AvailableTopic[];
   sourceCatalog?: NewsSource[];

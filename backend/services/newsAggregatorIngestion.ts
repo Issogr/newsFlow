@@ -10,6 +10,7 @@ const {
 } = require('./aiTopicClassifier');
 const { createError } = require('../utils/errorHandler');
 const { parseIntegerEnv } = require('../utils/env');
+const { getArticleRetentionHours } = require('../config/articleRetention');
 const {
   normalizeIncomingArticles,
   buildInsertedGroupsByOwner
@@ -83,7 +84,7 @@ interface IngestionRuntime extends DynamicRecord {
   setLastRefreshAt?: (value: string) => void;
 }
 
-const ARTICLE_RETENTION_HOURS = parseIntegerEnv('ARTICLE_RETENTION_HOURS', 24, { min: 0 });
+const ARTICLE_RETENTION_HOURS = getArticleRetentionHours();
 const RSS_INGESTION_CONCURRENCY = parseIntegerEnv('RSS_INGESTION_CONCURRENCY', 8, { min: 1 });
 const SOURCE_FETCH_FRESHNESS_MS = parseIntegerEnv('SOURCE_FETCH_FRESHNESS_MS', 5 * 60 * 1000, { min: 0 });
 const SOURCE_FETCH_FRESHNESS_MAX_ENTRIES = parseIntegerEnv('SOURCE_FETCH_FRESHNESS_MAX_ENTRIES', 1000, { min: 1 });

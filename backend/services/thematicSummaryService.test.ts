@@ -230,7 +230,7 @@ function loadServiceWithMocks({
 }
 
 describe('thematic summary listing', () => {
-  test('adds generic slots and the previous briefing to latest topic summaries', () => {
+  test('adds generic slots to the latest topic summaries', () => {
     const databaseMock = {
       listLatestThematicSummaries: jest.fn(() => [
         {
@@ -238,13 +238,6 @@ describe('thematic summary listing', () => {
           topicKey: 'technology',
           periodStart: '2026-05-21T05:00:00.000Z',
           periodEnd: '2026-05-21T17:00:00.000Z',
-          status: 'completed'
-        },
-        {
-          id: 'summary-technology-previous',
-          topicKey: 'technology',
-          periodStart: '2026-05-20T17:00:00.000Z',
-          periodEnd: '2026-05-21T05:00:00.000Z',
           status: 'completed'
         }
       ]),
@@ -264,12 +257,7 @@ describe('thematic summary listing', () => {
         id: 'summary-technology',
         topicKey: 'technology',
         topicLabel: 'Technology',
-        summarySlot: 'evening',
-        previousSummary: expect.objectContaining({
-          id: 'summary-technology-previous',
-          topicLabel: 'Technology',
-          summarySlot: 'morning'
-        })
+        summarySlot: 'evening'
       })
     ]);
     expect(databaseMock.listLatestThematicSummaries).toHaveBeenCalledWith([
@@ -279,7 +267,7 @@ describe('thematic summary listing', () => {
       'sport',
       'entertainment',
       'science'
-    ], 2);
+    ], 1);
   });
 
   test('keeps latest topic summaries on one coherent window', () => {
@@ -322,7 +310,7 @@ describe('thematic summary listing', () => {
     expect(items).toHaveLength(1);
   });
 
-  test('hides topics when both retained briefings are empty', () => {
+  test('hides topics when the latest briefing is empty', () => {
     const databaseMock = {
       listLatestThematicSummaries: jest.fn(() => [
         {
@@ -330,13 +318,6 @@ describe('thematic summary listing', () => {
           topicKey: 'technology',
           periodStart: '2026-05-21T06:00:00.000Z',
           periodEnd: '2026-05-21T18:00:00.000Z',
-          status: 'empty'
-        },
-        {
-          id: 'summary-technology-previous',
-          topicKey: 'technology',
-          periodStart: '2026-05-20T18:00:00.000Z',
-          periodEnd: '2026-05-21T06:00:00.000Z',
           status: 'empty'
         }
       ]),
@@ -767,7 +748,7 @@ describe('thematic summary generation retries', () => {
     expect(databaseMock.pruneSummaryHistory).toHaveBeenCalledWith({
       periodEnd: summaryWindow.periodEnd,
       topicKeys: ['technology'],
-      thematicRetainCount: 2,
+      thematicRetainCount: 1,
       podcast: false
     });
     expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'summaries' });
@@ -941,7 +922,7 @@ describe('thematic summary generation retries', () => {
     expect(databaseMock.pruneSummaryHistory).toHaveBeenCalledWith({
       periodEnd: summaryWindow.periodEnd,
       topicKeys: ['technology'],
-      thematicRetainCount: 2,
+      thematicRetainCount: 1,
       podcast: false
     });
     expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'summaries' });
@@ -1025,7 +1006,7 @@ describe('thematic summary generation retries', () => {
     expect(databaseMock.pruneSummaryHistory).toHaveBeenCalledWith({
       periodEnd: summaryWindow.periodEnd,
       topicKeys: ['technology'],
-      thematicRetainCount: 2,
+      thematicRetainCount: 1,
       podcast: false
     });
     expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'summaries' });

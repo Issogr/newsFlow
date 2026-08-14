@@ -254,7 +254,7 @@ describe('thematic summary podcast UI', () => {
     expect(screen.getByText('The second argument moves to software policy and regulation.')).toBeInTheDocument();
   });
 
-  test('switches between the current and previous thematic summary', () => {
+  test('ignores previous thematic summary payloads', () => {
     renderSummaryPanel({
       id: 'summary-technology-current',
       topicKey: 'technology',
@@ -274,71 +274,11 @@ describe('thematic summary podcast UI', () => {
       }
     });
 
-    const currentChip = screen.getByRole('button', { name: 'Today' });
-    const previousChip = screen.getByRole('button', { name: 'Yesterday' });
-    expect(screen.getByRole('group', { name: 'Summary version' })).toBeInTheDocument();
-    expect(currentChip).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText(/Current technology briefing/u)).toBeInTheDocument();
     expect(screen.getByText('Lunch time')).toBeInTheDocument();
-
-    fireEvent.click(previousChip);
-
-    expect(previousChip).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/Previous technology briefing/u)).toBeInTheDocument();
-    expect(screen.getByText('Morning')).toBeInTheDocument();
-    expect(screen.getByText('1 article evaluated')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open source article: Previous News' })).toHaveAttribute('href', 'https://example.com/previous');
-    expect(screen.queryByText(/Current technology briefing/u)).not.toBeInTheDocument();
-
-    fireEvent.click(currentChip);
-
-    expect(currentChip).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/Current technology briefing/u)).toBeInTheDocument();
-  });
-
-  test('disables an empty current briefing and opens the available previous one', () => {
-    renderSummaryPanel({
-      id: 'summary-technology-current',
-      topicKey: 'technology',
-      topicLabel: 'Technology',
-      status: 'empty',
-      summaryTextByLocale: { en: 'No technology stories were available.' },
-      previousSummary: {
-        id: 'summary-technology-previous',
-        topicKey: 'technology',
-        topicLabel: 'Technology',
-        status: 'completed',
-        summaryTextByLocale: { en: 'Previous technology briefing.' }
-      }
-    });
-
-    expect(screen.getByRole('button', { name: 'Today' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Today' })).toHaveClass('text-stone-300');
-    expect(screen.getByRole('button', { name: 'Yesterday' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('Previous technology briefing.')).toBeInTheDocument();
-    expect(screen.queryByText('No technology stories were available.')).not.toBeInTheDocument();
-  });
-
-  test('disables an empty previous briefing without showing it', () => {
-    renderSummaryPanel({
-      id: 'summary-technology-current',
-      topicKey: 'technology',
-      topicLabel: 'Technology',
-      status: 'completed',
-      summaryTextByLocale: { en: 'Current technology briefing.' },
-      previousSummary: {
-        id: 'summary-technology-previous',
-        topicKey: 'technology',
-        topicLabel: 'Technology',
-        status: 'empty',
-        summaryTextByLocale: { en: 'No previous technology stories were available.' }
-      }
-    });
-
-    expect(screen.getByRole('button', { name: 'Yesterday' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Yesterday' })).toHaveClass('text-stone-300');
-    expect(screen.getByText('Current technology briefing.')).toBeInTheDocument();
-    expect(screen.queryByText('No previous technology stories were available.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Previous technology briefing/u)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Today' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Yesterday' })).not.toBeInTheDocument();
   });
 
   test('shows text-shaped loading feedback while a thematic summary opens', () => {

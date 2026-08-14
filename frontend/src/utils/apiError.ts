@@ -21,7 +21,7 @@ export function isApiTimeoutError(error: unknown) {
   return apiError.newsFlowClientCode === 'timeout' || apiError.code === 'ECONNABORTED';
 }
 
-export function isApiNetworkError(error: unknown) {
+function isApiNetworkError(error: unknown) {
   const apiError = asApiError(error);
   return apiError.newsFlowClientCode === 'network' || apiError.message === 'Network Error';
 }

@@ -573,7 +573,7 @@ export function createServer(options: CreateAppOptions = {}): http.Server {
     }
 
     loadUpgradeSession(req, sessionStore, sessionSecret)
-      .catch(() => null)
+      .catch(() => {})
       .finally(() => {
         if (!getBackendSessionCookieFromRequest(req)) {
           socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');

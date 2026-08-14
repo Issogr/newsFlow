@@ -44,6 +44,13 @@ function getSessionCookie(response: SupertestResponse): string {
   return cookies?.find((value) => value.startsWith('newsflow_session=')) || '';
 }
 
+function registerTestUser(app: Application, username: string) {
+  return request(app)
+    .post('/internal-api/auth/register')
+    .send({ username, password: 'secret123' })
+    .expect(201);
+}
+
 describe('API auth and user flows', () => {
   let tempDir: string;
   let app: Application;
@@ -117,10 +124,7 @@ describe('API auth and user flows', () => {
   });
 
   test('registers and logs in a user with independent sessions', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'alice', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'alice');
 
     expect(registerResponse.body.user).toEqual({
       id: expect.any(String),
@@ -174,10 +178,7 @@ describe('API auth and user flows', () => {
 
   test('rate limits registration bursts by IP even with unique usernames', async () => {
     for (let index = 0; index < 20; index += 1) {
-      await request(app)
-        .post('/internal-api/auth/register')
-        .send({ username: `burst-user-${index}`, password: 'secret123' })
-        .expect(201);
+      await registerTestUser(app, `burst-user-${index}`);
     }
 
     const response = await request(app)
@@ -216,10 +217,7 @@ describe('API auth and user flows', () => {
       isAdmin: true
     });
 
-    const memberResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'member-user', password: 'secret123' })
-      .expect(201);
+    const memberResponse = await registerTestUser(app, 'member-user');
 
     const usersResponse = await request(app)
       .get('/internal-api/admin/users')
@@ -300,10 +298,7 @@ describe('API auth and user flows', () => {
       .expect(200);
     const adminSessionCookie = getSessionCookie(adminSetupResponse);
 
-    const memberResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'legacy-member', password: 'secret123' })
-      .expect(201);
+    const memberResponse = await registerTestUser(app, 'legacy-member');
     const memberSessionCookie = getSessionCookie(memberResponse);
     const apiTokenResponse = await request(app)
       .post('/internal-api/me/api-token')
@@ -355,10 +350,7 @@ describe('API auth and user flows', () => {
       .expect(200);
     const adminSessionCookie = getSessionCookie(adminSetupResponse);
 
-    const memberResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'delete-me', password: 'secret123' })
-      .expect(201);
+    const memberResponse = await registerTestUser(app, 'delete-me');
 
     const deleteResponse = await request(app)
       .delete(`/internal-api/admin/users/${memberResponse.body.user.id}`)
@@ -390,10 +382,7 @@ describe('API auth and user flows', () => {
   });
 
   test('updates settings and persists them for the authenticated user', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'settings-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'settings-user');
 
     const sessionCookie = getSessionCookie(registerResponse);
 
@@ -456,10 +445,7 @@ describe('API auth and user flows', () => {
   });
 
   test('passes manual refresh requests through to the authenticated news feed service', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'refresh-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'refresh-user');
 
     const sessionCookie = getSessionCookie(registerResponse);
 
@@ -484,10 +470,7 @@ describe('API auth and user flows', () => {
       .get('/api/public/news')
       .expect(404);
 
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'disabled-api-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'disabled-api-user');
     const sessionCookie = getSessionCookie(registerResponse);
 
     expect(registerResponse.body.features).toEqual({
@@ -523,10 +506,7 @@ describe('API auth and user flows', () => {
     process.env.PUBLIC_API_ANONYMOUS_ENABLED = 'false';
     process.env.PUBLIC_API_AUTHENTICATED_ENABLED = 'true';
 
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'token-only-api-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'token-only-api-user');
     const tokenResult = userService.createUserApiToken(registerResponse.body.user.id);
 
     await request(app)
@@ -542,10 +522,7 @@ describe('API auth and user flows', () => {
   });
 
   test('allows anonymous public API access while token public API access is disabled', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'anonymous-only-api-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'anonymous-only-api-user');
     const tokenResult = userService.createUserApiToken(registerResponse.body.user.id);
     const lookupSpy = jest.spyOn(database, 'findActiveApiTokenByHash');
 
@@ -650,10 +627,7 @@ describe('API auth and user flows', () => {
   });
 
   test('serves public cached news with user-scoped context for valid API tokens', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'api-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'api-user');
 
     const tokenResult = userService.createUserApiToken(registerResponse.body.user.id);
     newsService.getCachedNewsFeed.mockResolvedValueOnce({
@@ -705,10 +679,7 @@ describe('API auth and user flows', () => {
   });
 
   test('does not apply the invalid-token limit to valid API tokens', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'api-rate-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'api-rate-user');
     const tokenResult = userService.createUserApiToken(registerResponse.body.user.id);
 
     for (let index = 0; index < 31; index += 1) {
@@ -740,10 +711,7 @@ describe('API auth and user flows', () => {
   });
 
   test('revokes api tokens immediately and records revocation in the database', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'revoke-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'revoke-user');
 
     const sessionCookie = getSessionCookie(registerResponse);
 
@@ -791,10 +759,7 @@ describe('API auth and user flows', () => {
   });
 
   test('regenerates api tokens immediately and revokes the previous token row', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'regen-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'regen-user');
 
     const sessionCookie = getSessionCookie(registerResponse);
     const userId = registerResponse.body.user.id;
@@ -846,10 +811,7 @@ describe('API auth and user flows', () => {
       .mockResolvedValueOnce({ title: 'Example Feed', language: 'en', itemCount: 10 })
       .mockResolvedValueOnce({ title: 'Updated Feed', language: 'it', itemCount: 4 });
 
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'source-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'source-user');
 
     const sessionCookie = getSessionCookie(registerResponse);
 
@@ -914,10 +876,7 @@ describe('API auth and user flows', () => {
       .send({ url: 'https://example.com' })
       .expect(401);
 
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'source-discovery-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'source-discovery-user');
     const sessionCookie = getSessionCookie(registerResponse);
 
     await request(app)
@@ -937,10 +896,7 @@ describe('API auth and user flows', () => {
     rssParser.validateFeedUrl.mockResolvedValue({ title: 'Slow Feed', language: 'en', itemCount: 10 });
     newsService.refreshUserSources.mockRejectedValueOnce(new Error('refresh timed out'));
 
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'source-refresh-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'source-refresh-user');
 
     const sessionCookie = getSessionCookie(registerResponse);
 
@@ -998,10 +954,7 @@ describe('API auth and user flows', () => {
       }
     }
   ])('submits authenticated feedback with a $name attachment', async ({ username, category, title, description, attachment }) => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username, password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, username);
 
     const response = await request(app)
       .post('/internal-api/me/feedback')
@@ -1033,10 +986,7 @@ describe('API auth and user flows', () => {
   });
 
   test('lists and toggles authenticated read-later articles', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'read-later-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'read-later-user');
     const sessionCookie = getSessionCookie(registerResponse);
 
     await request(app)
@@ -1073,10 +1023,7 @@ describe('API auth and user flows', () => {
   });
 
   test('persists authenticated thematic summary read state', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'summary-read-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'summary-read-user');
     const sessionCookie = getSessionCookie(registerResponse);
 
     const markResponse = await request(app)
@@ -1097,10 +1044,7 @@ describe('API auth and user flows', () => {
   });
 
   test('rejects feedback submission with an invalid category', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'feedback-invalid', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'feedback-invalid');
 
     const response = await request(app)
       .post('/internal-api/me/feedback')
@@ -1139,10 +1083,7 @@ describe('API auth and user flows', () => {
       expectedMessage: 'Images must be 5 MB or smaller.'
     }
   ])('rejects feedback submission with $name', async ({ attachment, expectedStatus, expectedMessage }) => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: `feedback-upload-${expectedStatus}`, password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, `feedback-upload-${expectedStatus}`);
 
     const response = await request(app)
       .post('/internal-api/me/feedback')
@@ -1164,10 +1105,7 @@ describe('API auth and user flows', () => {
   });
 
   test('rejects feedback submission with multiple attachments', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'feedback-multiple-attachments', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'feedback-multiple-attachments');
 
     const response = await request(app)
       .post('/internal-api/me/feedback')
@@ -1191,10 +1129,7 @@ describe('API auth and user flows', () => {
       .mockResolvedValueOnce({ title: 'Existing Feed', language: 'en', itemCount: 1 })
       .mockResolvedValueOnce({ title: 'Imported Feed', language: 'it', itemCount: 4 });
 
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'import-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'import-user');
 
     const sessionCookie = getSessionCookie(registerResponse);
 
@@ -1263,10 +1198,7 @@ describe('API auth and user flows', () => {
     rssParser.validateFeedUrl.mockResolvedValue({ title: 'Imported Feed', language: 'it', itemCount: 4 });
     newsService.refreshUserSources.mockImplementation(() => new Promise(() => {}));
 
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'nonblocking-import-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'nonblocking-import-user');
 
     const importResponse = await request(app)
       .post('/internal-api/me/settings/import')
@@ -1288,10 +1220,7 @@ describe('API auth and user flows', () => {
   });
 
   test('logs out the current session and rejects it afterward', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'logout-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'logout-user');
 
     const sessionCookie = getSessionCookie(registerResponse);
 
@@ -1309,10 +1238,7 @@ describe('API auth and user flows', () => {
   });
 
   test('serves podcast audio with byte ranges for media players', async () => {
-    const registerResponse = await request(app)
-      .post('/internal-api/auth/register')
-      .send({ username: 'podcast-audio-user', password: 'secret123' })
-      .expect(201);
+    const registerResponse = await registerTestUser(app, 'podcast-audio-user');
     const sessionCookie = getSessionCookie(registerResponse);
     const audioBytes = Buffer.from('0123456789');
 
