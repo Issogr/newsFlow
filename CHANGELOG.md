@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.6.4
+
 ## 3.6.3
 
 - removed Yesterday AI summary history so topic briefings now show only the latest generated summary
