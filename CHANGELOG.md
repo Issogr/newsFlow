@@ -2,6 +2,8 @@
 
 ## 3.6.4
 
+- kept news cards equal-height within desktop rows while allowing each mobile card to follow its own content height
+
 ## 3.6.3
 
 - removed Yesterday AI summary history so topic briefings now show only the latest generated summary
