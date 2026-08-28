@@ -752,7 +752,9 @@ async function persistNormalizedArticles(normalizedArticles: IngestionArticle[] 
       && (!article.sourceUpdatedAt || currentSource?.updatedAt === article.sourceUpdatedAt);
   });
   const upsertResult = database.upsertArticles(currentArticles);
-  const storyGroupingOptions = { retryAnchorArticleIds: upsertResult.insertedIds || [] };
+  const storyGroupingOptions = {
+    retryAnchorArticleIds: [...new Set([...(upsertResult.insertedIds || []), ...(upsertResult.updatedIds || [])])]
+  };
   mergeNormalizedArticleTopics(currentArticles);
   const scheduledTopicProcessing = scheduleAiTopicsForPendingArticles(currentArticles, {
     onComplete: () => scheduleAiStoryGroupingForPendingArticles(currentArticles, storyGroupingOptions)

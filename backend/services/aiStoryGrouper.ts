@@ -32,11 +32,11 @@ function getConfig() {
 }
 
 function tokenizeStoryText(article: Partial<NewsArticle> = {}) {
-  return new Set(`${article.title || ''} ${article.description || ''}`
+  return new Set(`${article.title || ''} ${article.description || article.content || ''}`
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/gu, '')
-    .replace(/[^a-z0-9\s]/gu, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/u)
     .map((token) => token.trim())
     .filter((token) => token.length > 2 && !STORY_GROUP_TOKEN_STOP_WORDS.has(token)));

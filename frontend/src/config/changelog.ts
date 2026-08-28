@@ -7,7 +7,8 @@ export const CURRENT_CHANGELOG_ENTRY: { version: string } & Record<Locale, Chang
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
-      '📱 News cards keep equal heights across desktop rows while sizing independently to their content on mobile.'
+      '📱 News cards keep equal heights across desktop rows while sizing independently to their content on mobile.',
+      '🗞️ Similar stories now regroup reliably after article updates and background AI processing.'
     ]
   },
   it: {
@@ -15,7 +16,8 @@ export const CURRENT_CHANGELOG_ENTRY: { version: string } & Record<Locale, Chang
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
-      '📱 Le news card mantengono la stessa altezza nelle righe desktop, mentre su mobile si adattano in modo indipendente ai propri contenuti.'
+      '📱 Le news card mantengono la stessa altezza nelle righe desktop, mentre su mobile si adattano in modo indipendente ai propri contenuti.',
+      '🗞️ Le notizie simili ora vengono raggruppate correttamente dopo gli aggiornamenti degli articoli e l\'elaborazione AI in background.'
     ]
   }
 };

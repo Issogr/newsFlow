@@ -40,6 +40,7 @@ describe('rssParser article ids', () => {
             <item>
               <title>Story</title>
               <link>https://example.com/story</link>
+              <description>Story summary from the RSS description.</description>
               <pubDate>Fri, 01 May 2026 10:00:00 GMT</pubDate>
             </item>
           </channel>
@@ -47,11 +48,13 @@ describe('rssParser article ids', () => {
       `])
     });
 
-    await expect(rssParser.parseFeed(
+    const articles = await rssParser.parseFeed(
       { id: 'example', name: 'Example', url: 'https://example.com/feed' },
       { imageFallback: false, throwOnError: true }
-    )).resolves.toHaveLength(1);
+    );
 
+    expect(articles).toHaveLength(1);
+    expect(articles[0].description).toBe('Story summary from the RSS description.');
     expect(axios.get.mock.calls[0][1].headers).toMatchObject({
       'User-Agent': expect.stringContaining('Mozilla/5.0'),
       Accept: expect.stringContaining('application/rss+xml'),

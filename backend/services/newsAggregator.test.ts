@@ -1321,6 +1321,22 @@ describe('newsAggregator service flows', () => {
     expect(database.mergeTopicsForArticles).toHaveBeenCalledWith([]);
   });
 
+  test('uses updated articles as story-grouping retry anchors', async () => {
+    rssParser.parseFeed.mockResolvedValue([
+      { id: 'existing-1', sourceId: 'ansa_mondo', source: 'ANSA - Mondo', title: 'Updated story', description: 'Updated details', pubDate: recentIso({ hoursAgo: 2 }), url: 'https://example.com/existing' }
+    ]);
+    database.upsertArticles.mockReturnValue({ insertedIds: [], updatedIds: ['existing-1'], insertedCount: 0, updatedCount: 1 });
+    database.getArticleIdsPendingAiStoryGrouping.mockReturnValue(['existing-1']);
+    database.getAiStoryGroupingCandidateSet.mockReturnValue({ target: { id: 'existing-1' }, candidates: [] });
+    aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(true);
+
+    await newsAggregator.ingestAllNews({ broadcast: true });
+    await flushBackgroundAiProcessing();
+
+    expect(database.getArticleIdsForAiStoryGroupingRetry).toHaveBeenCalledWith(['existing-1'], expect.any(Object));
+    expect(database.getAiStoryGroupingCandidateSet).toHaveBeenCalledWith('existing-1', expect.any(Object));
+  });
+
   test('ingestAllNews fetches a shared custom RSS URL once and fans out articles per owning user source', async () => {
     const sharedUrl = 'https://example.com/shared.xml';
     database.listUsers.mockReturnValue([

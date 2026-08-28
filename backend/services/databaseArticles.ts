@@ -1039,6 +1039,19 @@ function createArticleRepository({
       || row.pubDate !== values.pubDate;
   }
 
+  function storyGroupingFieldsChanged(row: Row | null | undefined, values: Row) {
+    if (!row) {
+      return false;
+    }
+
+    return (row.ownerUserId || null) !== (values.ownerUserId || null)
+      || row.title !== values.title
+      || row.description !== values.description
+      || row.content !== values.content
+      || row.canonicalUrl !== values.canonicalUrl
+      || row.pubDate !== values.pubDate;
+  }
+
   function upsertArticles(articles: Article[] = []) {
     if (!Array.isArray(articles) || articles.length === 0) {
       return {
@@ -1083,6 +1096,17 @@ function createArticleRepository({
         language = excluded.language,
         published_at = excluded.published_at,
         updated_at = excluded.updated_at
+    `);
+    const resetStoryGroupingStmt = database.prepare(`
+      UPDATE articles
+      SET story_group_id = NULL,
+          ai_story_group_processed_at = NULL,
+          ai_story_group_status = NULL,
+          ai_story_group_model = NULL,
+          ai_story_group_match_ids = '[]',
+          ai_story_group_confidence = NULL,
+          ai_story_group_reason = NULL
+      WHERE id = ?
     `);
     const deleteArticleStmt = database.prepare('DELETE FROM articles WHERE id = ?');
     const articleFieldSelectSql = `
@@ -1181,6 +1205,10 @@ function createArticleRepository({
             article.createdAt || now,
             now
           );
+
+          if (exists && storyGroupingFieldsChanged(previousArticleFields, values)) {
+            resetStoryGroupingStmt.run(persistedArticleId);
+          }
         }
 
         if (exists && shouldWriteArticle) {

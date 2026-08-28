@@ -112,6 +112,20 @@ describe('aiStoryGrouper', () => {
     expect(sendMock).toHaveBeenCalledTimes(1);
   });
 
+  test('keeps non-Latin and content-only candidates available to the model', async () => {
+    await aiStoryGrouper.findSimilarStoriesForArticle({
+      id: 'target-1',
+      title: 'Правительство сделало заявление',
+      content: 'Президент подписал климатический закон в Москве.'
+    }, [{
+      id: 'candidate-1',
+      title: 'Историческое решение',
+      content: 'В Москве президент подписал новый климатический закон.'
+    }]);
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
   test('allows weaker lexical evidence when canonical topics overlap', async () => {
     await aiStoryGrouper.findSimilarStoriesForArticle({
       id: 'target-1',

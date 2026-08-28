@@ -217,6 +217,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
   const visibleNewsCountRef = useRef(0);
   const preservedNewsCountRef = useRef(0);
   const activeListLoadingRequestIdRef = useRef<number | null>(null);
+  const pendingListRefreshRef = useRef(false);
   const excludedSourceIds = useMemo(() => currentUser?.settings?.excludedSourceIds || [], [currentUser?.settings?.excludedSourceIds]);
   const excludedSubSourceIds = useMemo(() => currentUser?.settings?.excludedSubSourceIds || [], [currentUser?.settings?.excludedSubSourceIds]);
   const sourceReloadSignature = useMemo(() => {
@@ -508,6 +509,17 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
       if (tracksListLoading && activeListLoadingRequestIdRef.current === request.id) {
         activeListLoadingRequestIdRef.current = null;
         setLoading(false);
+
+        if (pendingListRefreshRef.current) {
+          pendingListRefreshRef.current = false;
+          const hasVisibleNews = Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current) > 0;
+          void loadNewsRequest({
+            page: 1,
+            append: false,
+            silent: hasVisibleNews,
+            minimumItemCount: hasVisibleNews ? Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current) : 0
+          });
+        }
       } else if (!tracksListLoading && request.isLatest()) {
         setBusyState(false);
       }
@@ -565,6 +577,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
     }
 
     if (activeListLoadingRequestIdRef.current !== null) {
+      pendingListRefreshRef.current = true;
       return;
     }
 
