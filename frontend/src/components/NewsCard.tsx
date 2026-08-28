@@ -366,7 +366,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   );
 
   return (
-    <article className="group relative flex h-full min-h-[20rem] w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-[1.75rem]">
+    <article className="group relative flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-[1.75rem] md:h-full md:min-h-[20rem]">
       <div className="flex min-w-0 items-center gap-3 px-4 pb-3 pt-5 sm:px-5">
         {sourceIconStack}
         <div className="min-w-0 flex-1">
@@ -403,7 +403,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       {imageUrl ? (
         <button
           type="button"
-          className="relative block aspect-video w-full grow cursor-pointer overflow-hidden border-y border-slate-100 bg-slate-100 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400"
+          className="relative block aspect-video w-full cursor-pointer overflow-hidden border-y border-slate-100 bg-slate-100 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400 md:grow"
           aria-label={group.title}
           title={t('readHereHelp')}
           {...readerInteractionProps}

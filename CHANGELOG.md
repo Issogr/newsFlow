@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.6.4
+
+- kept news cards equal-height within desktop rows while allowing each mobile card to follow its own content height
+- fixed similar-story aggregation for updated articles, RSS summaries, non-Latin text, and grouping updates that finish during an active feed load
+
 ## 3.6.3
 
 - removed Yesterday AI summary history so topic briefings now show only the latest generated summary

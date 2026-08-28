@@ -1209,6 +1209,32 @@ describe('database queries and user data', () => {
     expect(secondUpdatedAt).toBe(firstUpdatedAt);
   });
 
+  test('requeues story grouping when an existing article text changes', () => {
+    const pubDate = new Date().toISOString();
+    const article = {
+      id: 'updated-story',
+      sourceId: primarySource.id,
+      source: primarySource.name,
+      title: 'Initial story',
+      description: 'Initial description',
+      content: 'Initial body',
+      url: 'https://example.com/updated-story',
+      language: 'en',
+      pubDate
+    };
+
+    database.upsertArticles([article]);
+    database.assignArticlesToStoryGroup([article.id], 'ai-story-old', 'test-model');
+    database.upsertArticles([{ ...article, description: 'A different event replaced the original description' }]);
+
+    expect(database.getArticleById(article.id, { maxArticleAgeHours: null })).toEqual(expect.objectContaining({
+      storyGroupId: null,
+      aiStoryGroupProcessedAt: null,
+      aiStoryGroupStatus: null
+    }));
+    expect(database.getArticleIdsPendingAiStoryGrouping([article.id])).toEqual([article.id]);
+  });
+
   test('updates an existing grouped-source article when a sibling subfeed repeats the canonical URL', () => {
     expect(groupedSource).toBeTruthy();
     expect(alternateGroupedSource).toBeTruthy();

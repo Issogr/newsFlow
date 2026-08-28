@@ -57,7 +57,7 @@ const SKELETON_CARD_COUNT = 6;
 
 function NewsCardSkeleton({ showImage }: { showImage: boolean }) {
   return (
-    <article className="relative flex h-full min-h-[20rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-[1.75rem]" aria-hidden="true">
+    <article className="relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-[1.75rem] md:h-full md:min-h-[20rem]" aria-hidden="true">
       <div className="flex items-center gap-3 px-4 pb-3 pt-5 sm:px-5">
         <div className="h-12 w-12 shrink-0 rounded-full bg-sky-100" />
         <div className="flex-1 space-y-2">
@@ -75,7 +75,7 @@ function NewsCardSkeleton({ showImage }: { showImage: boolean }) {
         <div className="h-4 w-4/5 rounded-full bg-slate-200" />
       </div>
       {showImage ? (
-        <div className="relative aspect-video w-full grow border-y border-slate-100 bg-slate-200">
+        <div className="relative aspect-video w-full border-y border-slate-100 bg-slate-200 md:grow">
           <div className="absolute bottom-3 left-3 flex -space-x-1">
             <div className="h-8 w-8 rounded-full bg-sky-100 ring-2 ring-slate-900/10" />
             <div className="h-8 w-8 rounded-full bg-violet-100 ring-2 ring-slate-900/10" />
@@ -217,6 +217,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
   const visibleNewsCountRef = useRef(0);
   const preservedNewsCountRef = useRef(0);
   const activeListLoadingRequestIdRef = useRef<number | null>(null);
+  const pendingListRefreshRef = useRef(false);
   const excludedSourceIds = useMemo(() => currentUser?.settings?.excludedSourceIds || [], [currentUser?.settings?.excludedSourceIds]);
   const excludedSubSourceIds = useMemo(() => currentUser?.settings?.excludedSubSourceIds || [], [currentUser?.settings?.excludedSubSourceIds]);
   const sourceReloadSignature = useMemo(() => {
@@ -508,6 +509,17 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
       if (tracksListLoading && activeListLoadingRequestIdRef.current === request.id) {
         activeListLoadingRequestIdRef.current = null;
         setLoading(false);
+
+        if (pendingListRefreshRef.current) {
+          pendingListRefreshRef.current = false;
+          const hasVisibleNews = Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current) > 0;
+          void loadNewsRequest({
+            page: 1,
+            append: false,
+            silent: hasVisibleNews,
+            minimumItemCount: hasVisibleNews ? Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current) : 0
+          });
+        }
       } else if (!tracksListLoading && request.isLatest()) {
         setBusyState(false);
       }
@@ -565,6 +577,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
     }
 
     if (activeListLoadingRequestIdRef.current !== null) {
+      pendingListRefreshRef.current = true;
       return;
     }
 
@@ -959,7 +972,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
 
             <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
               {visibleNews.map((group) => (
-                <div key={group.id || group.cursorId || group.items?.[0]?.id} className="feed-card-enter h-full">
+                <div key={group.id || group.cursorId || group.items?.[0]?.id} className="feed-card-enter md:h-full">
                   <NewsCard
                     group={group}
                     showImages={showNewsImages}

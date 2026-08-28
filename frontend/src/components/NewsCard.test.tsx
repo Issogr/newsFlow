@@ -337,7 +337,13 @@ describe('NewsCard', () => {
 
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
     expect(screen.getByText('Headline').compareDocumentPosition(screen.getByRole('img', { name: 'Headline' })) & globalThis.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Headline' }).parentElement).toHaveClass('aspect-video', 'grow');
+    const imageButton = screen.getByRole('img', { name: 'Headline' }).parentElement;
+    const card = imageButton?.closest('article');
+    expect(imageButton).toHaveClass('aspect-video', 'md:grow');
+    expect(imageButton).not.toHaveClass('grow');
+    expect(card).toHaveClass('md:h-full', 'md:min-h-[20rem]');
+    expect(card).not.toHaveClass('h-full');
+    expect(card).not.toHaveClass('min-h-[20rem]');
 
     onOpenReader.mockClear();
     vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000);

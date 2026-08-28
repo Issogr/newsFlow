@@ -893,7 +893,7 @@ describe('NewsAggregator', () => {
     }));
   });
 
-  test('does not let silent topic refresh cancel the initial feed load', async () => {
+  test('runs a queued story refresh after the initial feed load', async () => {
     const socketHandlers = captureSocketHandlers();
     const initialRequest = createDeferred<FeedResponse>();
     let initialRequestAborted = false;
@@ -903,19 +903,19 @@ describe('NewsAggregator', () => {
         initialRequestAborted = true;
       });
       return initialRequest.promise;
-    });
+    }).mockResolvedValueOnce(createSingleGroupFeedResponse('group-1', 'Grouped headline'));
 
     await renderNewsAggregator();
 
-    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'stories' });
 
     expect(fetchNews).toHaveBeenCalledTimes(1);
     expect(initialRequestAborted).toBe(false);
 
     await resolveDeferred(initialRequest, createSingleGroupFeedResponse('group-1', 'Initial headline'));
 
-    expect(await screen.findByText('Initial headline')).toBeInTheDocument();
-    expect(screen.queryByText('Unexpected silent headline')).not.toBeInTheDocument();
+    expect(await screen.findByText('Grouped headline')).toBeInTheDocument();
+    expect(fetchNews).toHaveBeenCalledTimes(2);
   });
 
   test('replaces stale fallback topics after a silent AI topic reload', async () => {
@@ -1024,7 +1024,8 @@ describe('NewsAggregator', () => {
           manualRequestAborted = true;
         });
         return manualRefreshRequest.promise;
-      });
+      })
+      .mockResolvedValueOnce(createSingleGroupFeedResponse('group-1', 'Topic refresh headline'));
 
     await renderNewsAggregator();
     expect(await screen.findByText('Current headline')).toBeInTheDocument();
@@ -1043,7 +1044,8 @@ describe('NewsAggregator', () => {
 
     await resolveDeferred(manualRefreshRequest, createSingleGroupFeedResponse('group-1', 'Manual refresh headline'));
 
-    expect(await screen.findByText('Manual refresh headline')).toBeInTheDocument();
+    expect(await screen.findByText('Topic refresh headline')).toBeInTheDocument();
+    expect(fetchNews).toHaveBeenCalledTimes(3);
     await waitFor(() => {
       expect(getDesktopRefreshButton()).toBeEnabled();
     });

@@ -637,7 +637,7 @@ async function parseFeed(source: RssSource, options: RssOptions = {}) {
         return {
           id: buildArticleId(source, item, canonicalUrl),
           title: sanitizeHtml(item.title),
-          description: sanitizeHtml(item.description || ''),
+          description: sanitizeHtml(item.description || item.contentSnippet || ''),
           content: sanitizeHtml(item.contentEncoded || item.content || ''),
           pubDate: normalizePublicationDate(item.pubDate || item.dcdate || item.isoDate),
           source: source.name,
