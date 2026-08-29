@@ -72,7 +72,7 @@ describe('NewsCard', () => {
     expect(screen.getByText('Headline', { selector: 'span' })).toHaveClass('line-clamp-2');
   });
 
-  test('keeps source metadata and actions on one row at every breakpoint', () => {
+  test('uses single-row responsive header classes', () => {
     renderNewsCard();
 
     const sourceRow = screen.getByText('Source A').parentElement?.parentElement;
