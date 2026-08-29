@@ -16,6 +16,7 @@ interface SocketMock {
 interface IoMock {
   middleware: Handler | null;
   connectionHandler: Handler | null;
+  close: Mock;
   use: Mock;
   on: Mock;
 }
@@ -51,6 +52,7 @@ describe('websocketService', () => {
     ioMock = {
       middleware: null,
       connectionHandler: null,
+      close: jest.fn((callback?: () => void) => callback?.()),
       use: jest.fn((handler: Handler) => {
         ioMock.middleware = handler;
       }),
@@ -85,6 +87,12 @@ describe('websocketService', () => {
     jest.doMock('../utils/networkConfig', () => ({
       getAllowedOrigins: jest.fn(() => ['http://localhost:3000']),
       isOriginAllowed: jest.fn(() => true)
+    }));
+    jest.doMock('../utils/browserSecurity', () => ({
+      hasSameOriginRequestHeaders: jest.fn((request) => {
+        const origin = request.headers?.origin;
+        return !origin || origin === 'http://localhost:3000';
+      })
     }));
     jest.doMock('./database', () => databaseMock);
     jest.doMock('../utils/auth', () => authMock);
@@ -130,13 +138,30 @@ describe('websocketService', () => {
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'WebSocket auth failed: Authentication required' }));
   });
 
-  test('rejects websocket handshakes that do not come through the trusted proxy', () => {
+  test('accepts same-origin websocket handshakes directly', () => {
     const allowRequest = socketFactory.mock.calls[0][1].allowRequest;
     const callback = jest.fn();
 
     allowRequest({ headers: { origin: 'http://localhost:3000' } }, callback);
 
+    expect(callback).toHaveBeenCalledWith(null, true);
+  });
+
+  test('rejects cross-origin websocket handshakes', () => {
+    const allowRequest = socketFactory.mock.calls[0][1].allowRequest;
+    const callback = jest.fn();
+
+    allowRequest({ headers: { origin: 'https://evil.example' } }, callback);
+
     expect(callback).toHaveBeenCalledWith('Origin not allowed', false);
+  });
+
+  test('closes Socket.IO during shutdown', () => {
+    const callback = jest.fn();
+
+    websocketService.shutdown(callback);
+
+    expect(ioMock.close).toHaveBeenCalledWith(callback);
   });
 
   test('broadcasts news only to matching sockets', () => {

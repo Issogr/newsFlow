@@ -44,12 +44,12 @@ const passwordSetupRateLimit = rateLimit({
 
 router.post('/auth/register', [registrationIpRateLimit, authRateLimit, sanitizeBody(['username'])], async (req: Request, res: Response) => {
   const result = await userService.registerUser(req.body || {});
-  sendAuthResult(res, result, 201);
+  sendAuthResult(req, res, result, 201);
 });
 
 router.post('/auth/login', [authRateLimit, sanitizeBody(['username'])], async (req: Request, res: Response) => {
   const result = await userService.loginUser(req.body || {});
-  sendAuthResult(res, result);
+  sendAuthResult(req, res, result);
 });
 
 router.get('/auth/password-setup/validate', [passwordSetupRateLimit, sanitizeQuery('token')], async (req: Request, res: Response) => {
@@ -59,12 +59,12 @@ router.get('/auth/password-setup/validate', [passwordSetupRateLimit, sanitizeQue
 
 router.post('/auth/password-setup/complete', passwordSetupRateLimit, async (req, res) => {
   const result = await userService.completePasswordSetup(req.body || {});
-  sendAuthResult(res, result);
+  sendAuthResult(req, res, result);
 });
 
 router.post('/auth/logout', requireAuthenticatedUser, async (req, res) => {
   userService.logoutUser(req.user.sessionToken);
-  clearSessionCookie(res);
+  clearSessionCookie(req, res);
   res.json({ success: true });
 });
 

@@ -1,12 +1,12 @@
 const newsService = require('../../services/newsAggregator');
 const userService = require('../../services/userService');
 const { isAuthenticatedPublicApiEnabled } = require('../../config/publicApi');
-const { SESSION_COOKIE_NAME } = require('../../utils/auth');
+const { extractSessionCookie } = require('../../utils/auth');
 const { createError } = require('../../utils/errorHandler');
-const { parseIntegerEnv } = require('../../utils/env');
 const { buildUserContext } = require('../../utils/userContext');
+const { clearSessionCookie, setSessionCookie } = require('../../utils/sessionCookie');
 const logger = require('../../utils/logger');
-import type { CookieOptions, NextFunction, Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import type { UnknownRecord } from '../../utils/types';
 
 function refreshUserSourcesInBackground(userId: string, options: UnknownRecord = {}, label = 'user sources') {
@@ -32,33 +32,12 @@ function getRequestAbortSignal(req: Request, res: Response) {
   return controller.signal;
 }
 
-function getSessionCookieOptions(): CookieOptions {
-  const ttlDays = parseIntegerEnv('SESSION_TTL_DAYS', 30, { min: 1 });
-  const appBaseUrl = String(process.env.APP_BASE_URL || process.env.FRONTEND_BASE_URL || '').trim();
-  const cookieSecureValue = String(process.env.COOKIE_SECURE || 'auto').trim().toLowerCase();
-  const secure = cookieSecureValue === 'true'
-    || (cookieSecureValue === 'auto' && appBaseUrl.startsWith('https://'));
-
-  return {
-    httpOnly: true,
-    sameSite: 'strict',
-    secure,
-    path: '/',
-    maxAge: ttlDays * 24 * 60 * 60 * 1000,
-  };
-}
-
-function setSessionCookie(res: Response, sessionToken: string) {
-  res.cookie(SESSION_COOKIE_NAME, sessionToken, getSessionCookieOptions());
-}
-
-function clearSessionCookie(res: Response) {
-  const { maxAge, ...cookieOptions } = getSessionCookieOptions();
-  res.clearCookie(SESSION_COOKIE_NAME, cookieOptions);
-}
-
-function sendAuthResult(res: Response, result: { token: string; [key: string]: unknown }, status = 200) {
-  setSessionCookie(res, result.token);
+function sendAuthResult(req: Request, res: Response, result: { token: string; [key: string]: unknown }, status = 200) {
+  const previousSessionToken = extractSessionCookie(req.headers.cookie);
+  if (previousSessionToken && previousSessionToken !== result.token) {
+    userService.logoutUser(previousSessionToken);
+  }
+  setSessionCookie(req, res, result.token);
   const { token, ...safeResult } = result;
   res.status(status).json(safeResult);
 }

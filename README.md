@@ -20,27 +20,24 @@ News Flow is a self-hosted RSS news hub with grouped stories, clean reader mode,
 - Read articles in a cleaned in-app reader.
 - Save read-later articles outside normal retention.
 - Use optional OpenRouter AI jobs for topic detection, story grouping, thematic summaries, and podcast briefings.
-- Keep browser traffic behind the BFF on `/api/*`; the backend private API stays on `/internal-api/*`.
+- Keep browser traffic same-origin on `/api/*`; Caddy is the only public service.
 
 ## Quick Start
 
 ```bash
-export INTERNAL_PROXY_TOKEN="$(openssl rand -hex 32)"
-export BFF_SESSION_SECRET="$(openssl rand -hex 32)"
-docker compose up --build -d
+docker compose up --build -d --remove-orphans
 ```
 
 Open `http://localhost`.
 
-Runtime target for all packages is Node.js `24.16.0`.
+Runtime target for all packages is Node.js `24.20.0`.
 
 ## Local Development
 
-There is no root `package.json`; install and run each app separately.
+There is no root `package.json`; install and run the backend and frontend separately.
 
 ```bash
 cd backend && npm install
-cd ../bff && npm install
 cd ../frontend && npm install
 ```
 
@@ -48,7 +45,6 @@ Run in separate terminals:
 
 ```bash
 cd backend && APP_BASE_URL=http://localhost:5173 npm run dev
-cd bff && BACKEND_BASE_URL=http://localhost:5000 APP_BASE_URL=http://localhost:5173 npm start
 cd frontend && npm start
 ```
 
@@ -56,23 +52,16 @@ Useful checks:
 
 ```bash
 cd backend && npm run lint && npm test
-cd bff && npm run lint && npm test
 cd frontend && npm run lint && npm test && npm run build
 ```
 
 Local data defaults:
 
-- Backend database: `backend/data/news.db`
-- BFF sessions: `bff/data/sessions.sqlite`
+- Application database: `backend/data/news.db`
 
 ## Deployment
 
-Docker Compose needs two secrets:
-
-- `INTERNAL_PROXY_TOKEN`: shared by BFF and backend for private backend access.
-- `BFF_SESSION_SECRET`: signs BFF browser sessions. Keep it stable or users will be logged out.
-
-The bundled deployment puts Caddy in front of the BFF. Only Caddy publishes host ports; the BFF and backend communicate over separate private Docker networks.
+The bundled deployment puts Caddy in front of the application. Only Caddy publishes host ports; the application serves the API, Socket.IO, and built React frontend on a private Docker network.
 
 For automatic production HTTPS:
 
@@ -80,27 +69,28 @@ For automatic production HTTPS:
 - Point the domain's DNS records to the deployment host.
 - Allow inbound TCP ports `80` and `443` and UDP port `443` through the host firewall.
 - Keep the `caddy-data` volume so certificates and account state survive restarts.
-- Do not publish the BFF or backend container ports; Compose fixes both services to one trusted proxy hop.
+- Do not publish the application container port; Compose fixes the service to one trusted Caddy hop.
 - Replace the controller/contact placeholders in the legal pages with deployment-approved details before publishing the service.
 
 Published images:
 
-- `ghcr.io/issogr/newsflow-backend:<release-tag>`
-- `ghcr.io/issogr/newsflow-bff:<release-tag>`
+- `ghcr.io/issogr/newsflow:<release-tag>` (includes the built frontend)
+
+When using the image outside the bundled Compose stack, set both `APP_BASE_URL` and `ALLOWED_ORIGINS` to the public origin. Existing deployments can remove the retired `bff-data` volume after upgrading.
 
 ## Configuration
 Full configuration reference: [`CONFIGURATION.md`](CONFIGURATION.md).
+
+Docker Compose forwards values from an optional root `.env` file to the application.
 
 ### Required And Security
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `INTERNAL_PROXY_TOKEN` | required in Compose | Must match between BFF and backend. |
-| `BFF_SESSION_SECRET` | required in Compose | Use a stable random value in production. |
 | `APP_BASE_URL` | `http://localhost` | Public app URL; controls setup links and secure-cookie decisions. |
-| `ALLOWED_ORIGINS` | empty | Backend CORS allowlist, for example `https://news.example`. |
+| `ALLOWED_ORIGINS` | local origins; Compose `APP_BASE_URL` | Public API and Socket.IO allowlist, for example `https://news.example`. |
 | `COOKIE_SECURE` | `auto` | Accepts `auto`, `true`, or `false`. |
-| `TRUST_PROXY` | Compose `1` | The bundled topology has exactly one trusted hop before each Node service. |
+| `TRUST_PROXY` | Compose `1` | The bundled topology has exactly one trusted Caddy hop. |
 | `SESSION_TTL_DAYS` | `30` | Browser/backend session lifetime. |
 
 ### Public API
@@ -118,7 +108,6 @@ Public API docs are available at `/api/docs`.
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `NEWS_DB_PATH` | `backend/data/news.db` | Backend SQLite path. |
-| `BFF_SESSION_DB_PATH` | `bff/data/sessions.sqlite` | BFF session SQLite path. |
 | `SCRAPE_INTERVAL_MS` | `900000` | Scheduled ingestion interval. |
 | `SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES` | `ONLINE_ACTIVITY_WINDOW_MINUTES` or `5` | Scheduled ingestion refreshes sources assigned to recently active users. |
 | `MANUAL_REFRESH_COOLDOWN_MS` | `300000` | Per-user manual refresh cooldown. |
@@ -175,9 +164,8 @@ node -e "const userService=require('./services/userService'); console.log(userSe
 
 ## Repository Layout
 
-- `backend/`: Express, Socket.IO, SQLite, ingestion, auth, reader extraction, public API, and AI jobs.
-- `bff/`: browser-facing security boundary, session bridge, static frontend host, and proxy layer.
-- `frontend/`: Vite React app. Browser API calls go through `/api/*` on the BFF.
+- `backend/`: Express, Socket.IO, SQLite, browser security, static frontend hosting, ingestion, auth, reader extraction, public API, and AI jobs.
+- `frontend/`: Vite React app. Browser API calls use same-origin `/api/*` routes.
 
 ## License
 

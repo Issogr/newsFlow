@@ -1,33 +1,43 @@
 # syntax=docker/dockerfile:1.7
 
-# Build stage
-FROM --platform=$BUILDPLATFORM node:24.18.1-bookworm-slim AS build
+FROM --platform=$BUILDPLATFORM node:24.20.0-bookworm-slim AS frontend-build
+
+WORKDIR /app/frontend
+
+COPY frontend/package*.json ./
+RUN --mount=type=cache,id=newsflow-frontend-npm,target=/root/.npm,sharing=locked \
+    npm ci --no-audit --no-fund
+
+COPY frontend/ ./
+RUN npm run build
+
+FROM --platform=$BUILDPLATFORM node:24.20.0-bookworm-slim AS backend-build
 
 ARG TARGETARCH
 
 # Imposta la directory di lavoro
-WORKDIR /app
+WORKDIR /app/backend
 
 # Copia i file di configurazione delle dipendenze
-COPY package*.json ./
+COPY backend/package*.json ./
 
 # Installa le dipendenze e compila TypeScript per la piattaforma target senza emulare npm sotto QEMU
 RUN --mount=type=cache,id=newsflow-backend-npm,target=/root/.npm,sharing=locked \
     npm_arch="${TARGETARCH:-$(node -p 'process.arch')}" && \
     if [ "$npm_arch" = "amd64" ]; then npm_arch="x64"; fi && \
-    npm_config_platform=linux npm_config_arch="$npm_arch" npm_config_libc=glibc npm ci --no-audit --no-fund
+    npm_config_os=linux npm_config_cpu="$npm_arch" npm_config_libc=glibc npm ci --no-audit --no-fund
 
-COPY tsconfig*.json ./
-COPY server.ts ./
-COPY config ./config
-COPY routes ./routes
-COPY services ./services
-COPY utils ./utils
+COPY backend/tsconfig*.json ./
+COPY backend/app.ts backend/server.ts ./
+COPY backend/config ./config
+COPY backend/routes ./routes
+COPY backend/services ./services
+COPY backend/utils ./utils
 
 RUN npm run build && npm prune --omit=dev
 
 # Production stage
-FROM node:24.18.1-bookworm-slim
+FROM node:24.20.0-bookworm-slim
 
 # Crea un utente non-root
 RUN groupadd --gid 1001 nodejs && \
@@ -37,11 +47,12 @@ RUN groupadd --gid 1001 nodejs && \
 WORKDIR /usr/src/app
 
 # Copia i node_modules dalla fase di build
-COPY --from=build /app/node_modules ./node_modules
+COPY --from=backend-build /app/backend/node_modules ./node_modules
 
 # Copia solo gli artefatti e i metadati necessari in produzione
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/package*.json ./
+COPY --from=backend-build /app/backend/dist ./dist
+COPY --from=backend-build /app/backend/package*.json ./
+COPY --from=frontend-build /app/frontend/dist ./public
 
 # Crea la directory dati e imposta i permessi
 RUN mkdir -p data && \

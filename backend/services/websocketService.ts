@@ -1,6 +1,6 @@
 const logger = require('../utils/logger');
 const { getAllowedOrigins, isOriginAllowed } = require('../utils/networkConfig');
-const { hasTrustedInternalService } = require('../utils/internalRequestGate');
+const { hasSameOriginRequestHeaders } = require('../utils/browserSecurity');
 const { parseIntegerEnv } = require('../utils/env');
 const { buildDomainSourceGroups } = require('../utils/sourceCatalog');
 const database = require('./database');
@@ -67,6 +67,7 @@ interface SocketLike {
 }
 
 interface SocketServerLike {
+  close?: (callback?: () => void) => void;
   on: (event: 'connection', listener: (socket: SocketLike) => void) => void;
   use: (listener: (socket: SocketLike, next: (error?: Error) => void) => void) => void;
 }
@@ -237,7 +238,7 @@ function initialize(server: HttpServer) {
     pingInterval: parseIntegerEnv('WS_PING_INTERVAL', 25000, { min: 1000 }),
     transports: ['websocket', 'polling'],
     allowRequest: (req: { headers: IncomingHttpHeaders }, callback: (error: string | null, allowed: boolean) => void) => {
-      if (!hasTrustedInternalService(req.headers)) {
+      if (!hasSameOriginRequestHeaders(req, { allowMissingHeaders: true })) {
         callback('Origin not allowed', false);
         return;
       }
@@ -591,11 +592,22 @@ function getStatistics() {
   };
 }
 
+function shutdown(callback: () => void = () => {}) {
+  const socketServer = io;
+  io = null;
+  if (!socketServer?.close) {
+    callback();
+    return;
+  }
+  socketServer.close(callback);
+}
+
 module.exports = {
   initialize,
   disconnectUserSockets,
   disconnectSessionSockets,
   broadcastNewsUpdate,
   broadcastFeedRefresh,
-  getStatistics
+  getStatistics,
+  shutdown
 };

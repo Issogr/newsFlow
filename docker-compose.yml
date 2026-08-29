@@ -4,13 +4,11 @@ services:
     user: "0:0"
     network_mode: none
     command: >
-      sh -c "mkdir -p /mnt/backend-data /mnt/bff-data &&
+      sh -c "mkdir -p /mnt/backend-data &&
       chown -R 1001:1001 /mnt/backend-data &&
-      chown -R 1000:1000 /mnt/bff-data &&
-      chmod -R u+rwX,g+rwX /mnt/backend-data /mnt/bff-data"
+      chmod -R u+rwX,g+rwX /mnt/backend-data"
     volumes:
       - ./backend/data:/mnt/backend-data:rw,z
-      - bff-data:/mnt/bff-data:rw
     restart: "no"
 
   ingress:
@@ -27,10 +25,10 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
-      bff:
+      newsflow:
         condition: service_healthy
     networks:
-      - ingress-network
+      - app-network
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
       interval: 30s
@@ -44,97 +42,32 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  backend:
-    build: ./backend
-    container_name: newsflow-backend
+  newsflow:
+    image: newsflow
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    container_name: newsflow
     environment:
-      - SESSION_TTL_DAYS=${SESSION_TTL_DAYS:-30}
-      - INTERNAL_PROXY_TOKEN=${INTERNAL_PROXY_TOKEN:?INTERNAL_PROXY_TOKEN must be set}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-${APP_BASE_URL:-http://localhost}}
-      - TRUST_PROXY=1
-      - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
-      - COOKIE_SECURE=${COOKIE_SECURE:-auto}
-      - PUBLIC_API_ANONYMOUS_ENABLED=${PUBLIC_API_ANONYMOUS_ENABLED:-false}
-      - PUBLIC_API_AUTHENTICATED_ENABLED=${PUBLIC_API_AUTHENTICATED_ENABLED:-false}
-      # Performance tuning variables
-      - RSS_MAX_RETRIES=5           # Retry attempts for DNS-related issues
-      - RSS_RETRY_DELAY=2000        # Initial retry delay in ms
-      - MAX_CUSTOM_SOURCES_PER_USER=${MAX_CUSTOM_SOURCES_PER_USER:-8}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
-      - OPENROUTER_FAILURE_BACKOFF_MS=${OPENROUTER_FAILURE_BACKOFF_MS:-60000}
-      - OPENROUTER_FAILURE_MAX_BACKOFF_MS=${OPENROUTER_FAILURE_MAX_BACKOFF_MS:-900000}
-      - OPENROUTER_TOPIC_MODEL=${OPENROUTER_TOPIC_MODEL:-mistralai/mistral-small-24b-instruct-2501}
-      - AI_TOPIC_DETECTION_ENABLED=${AI_TOPIC_DETECTION_ENABLED:-true}
-      - AI_TOPIC_BATCH_SIZE=${AI_TOPIC_BATCH_SIZE:-10}
-      - AI_TOPIC_BATCH_CONCURRENCY=${AI_TOPIC_BATCH_CONCURRENCY:-1}
-      - AI_TOPIC_MAX_ARTICLES_PER_REFRESH=${AI_TOPIC_MAX_ARTICLES_PER_REFRESH:-160}
-      - AI_TOPIC_REQUEST_TIMEOUT_MS=${AI_TOPIC_REQUEST_TIMEOUT_MS:-30000}
-      - AI_TOPIC_DETERMINISTIC_SKIP_ENABLED=${AI_TOPIC_DETERMINISTIC_SKIP_ENABLED:-true}
-      - AI_TOPIC_DEBUG_LOG_ARTICLES=${AI_TOPIC_DEBUG_LOG_ARTICLES:-false}
-      - OPENROUTER_SUMMARY_MODEL=${OPENROUTER_SUMMARY_MODEL:-qwen/qwen3.7-flash}
-      - OPENROUTER_PODCAST_SCRIPT_MODEL=${OPENROUTER_PODCAST_SCRIPT_MODEL:-qwen/qwen3.7-flash}
-      - OPENROUTER_STORY_GROUPING_MODEL=${OPENROUTER_STORY_GROUPING_MODEL:-qwen/qwen3.7-flash}
-      - OPENROUTER_PODCAST_AUDIO_MODEL=${OPENROUTER_PODCAST_AUDIO_MODEL:-google/gemini-3.1-flash-tts-preview}
-      - AI_STORY_GROUPING_ENABLED=${AI_STORY_GROUPING_ENABLED:-false}
-      - AI_STORY_GROUPING_CONCURRENCY=${AI_STORY_GROUPING_CONCURRENCY:-1}
-      - AI_STORY_GROUPING_REQUEST_TIMEOUT_MS=${AI_STORY_GROUPING_REQUEST_TIMEOUT_MS:-120000}
-      - AI_STORY_GROUPING_WINDOW_HOURS=${AI_STORY_GROUPING_WINDOW_HOURS:-24}
-      - AI_STORY_GROUPING_CANDIDATE_LIMIT=${AI_STORY_GROUPING_CANDIDATE_LIMIT:-64}
-      - AI_STORY_GROUPING_AI_CANDIDATE_LIMIT=${AI_STORY_GROUPING_AI_CANDIDATE_LIMIT:-8}
-      - AI_STORY_GROUPING_RETRY_LIMIT=${AI_STORY_GROUPING_RETRY_LIMIT:-12}
-      - AI_SUMMARY_GENERATION_ENABLED=${AI_SUMMARY_GENERATION_ENABLED:-false}
-      - AI_PODCAST_GENERATION_ENABLED=${AI_PODCAST_GENERATION_ENABLED:-false}
-      - AI_SUMMARY_TIME_ZONE=${AI_SUMMARY_TIME_ZONE:-Europe/Rome}
-      - AI_SUMMARY_MAX_ARTICLES_PER_TOPIC=${AI_SUMMARY_MAX_ARTICLES_PER_TOPIC:-120}
-      - AI_SUMMARY_PROMPT_MAX_ARTICLES=${AI_SUMMARY_PROMPT_MAX_ARTICLES:-60}
-      - AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS=${AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS:-30000}
-      - AI_SUMMARY_GENERATION_CONCURRENCY=${AI_SUMMARY_GENERATION_CONCURRENCY:-2}
-      - AI_SUMMARY_REQUEST_TIMEOUT_MS=${AI_SUMMARY_REQUEST_TIMEOUT_MS:-120000}
-      - AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES=${AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES:-2}
-      - AI_SUMMARY_PENDING_TOPIC_GRACE_MS=${AI_SUMMARY_PENDING_TOPIC_GRACE_MS:-900000}
-      - AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS=${AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS:-5000}
-      - AI_SUMMARY_READER_PREWARM_ENABLED=${AI_SUMMARY_READER_PREWARM_ENABLED:-true}
-      - AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE=${AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE:-30}
-      - AI_SUMMARY_READER_PREWARM_CONCURRENCY=${AI_SUMMARY_READER_PREWARM_CONCURRENCY:-2}
-      - AI_SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS=${AI_SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS:-300000}
-      - AI_SUMMARY_READER_TEXT_MAX_CHARS=${AI_SUMMARY_READER_TEXT_MAX_CHARS:-3000}
-      - AI_SUMMARY_READER_TEXT_MIN_CHARS=${AI_SUMMARY_READER_TEXT_MIN_CHARS:-250}
-      - AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS=${AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS:-600000}
-      - AI_PODCAST_LANGUAGES=${AI_PODCAST_LANGUAGES:-en}
-      - AI_PODCAST_PROMPT_MAX_ARTICLES=${AI_PODCAST_PROMPT_MAX_ARTICLES:-40}
-      - AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS=${AI_PODCAST_PROMPT_TEXT_BUDGET_CHARS:-42000}
-      - AI_PODCAST_HISTORY_RETAIN_COUNT=${AI_PODCAST_HISTORY_RETAIN_COUNT:-2}
-      - AI_PODCAST_BACKGROUND_AUDIO_ENABLED=${AI_PODCAST_BACKGROUND_AUDIO_ENABLED:-true}
-      - AI_PODCAST_TTS_TIMEOUT_MS=${AI_PODCAST_TTS_TIMEOUT_MS:-120000}
-      - AI_PODCAST_TTS_TOTAL_TIMEOUT_MS=${AI_PODCAST_TTS_TOTAL_TIMEOUT_MS:-600000}
-      - AI_PODCAST_TTS_FORMAT=${AI_PODCAST_TTS_FORMAT:-mp3}
-      - AI_PODCAST_TTS_VOICE=${AI_PODCAST_TTS_VOICE:-Charon}
-      - AI_PODCAST_TTS_MAX_INPUT_BYTES=${AI_PODCAST_TTS_MAX_INPUT_BYTES:-}
-      - AI_PODCAST_TTS_MIN_AUDIO_BYTES=${AI_PODCAST_TTS_MIN_AUDIO_BYTES:-1024}
-      - AI_PODCAST_TTS_MAX_AUDIO_BYTES=${AI_PODCAST_TTS_MAX_AUDIO_BYTES:-25165824}
-      - AI_PODCAST_TTS_CHUNK_MAX_BYTES=${AI_PODCAST_TTS_CHUNK_MAX_BYTES:-}
-      - AI_PODCAST_TTS_MAX_CHUNKS=${AI_PODCAST_TTS_MAX_CHUNKS:-12}
-      - AI_PODCAST_TTS_CHUNK_SILENCE_MS=${AI_PODCAST_TTS_CHUNK_SILENCE_MS:-60}
-      - AI_PODCAST_TTS_CHUNK_MAX_RETRIES=${AI_PODCAST_TTS_CHUNK_MAX_RETRIES:-2}
-      - AI_PODCAST_TTS_CHUNK_RETRY_DELAY_MS=${AI_PODCAST_TTS_CHUNK_RETRY_DELAY_MS:-500}
-      - AI_PODCAST_TTS_RETRY_COOLDOWN_MS=${AI_PODCAST_TTS_RETRY_COOLDOWN_MS:-600000}
-      - AI_PODCAST_TTS_MAX_RETRIES=${AI_PODCAST_TTS_MAX_RETRIES:-4}
-      - SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES=${SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES:-5}
-      - SOURCE_FETCH_FAILURE_BACKOFF_MS=${SOURCE_FETCH_FAILURE_BACKOFF_MS:-120000}
-      - SOURCE_FETCH_FAILURE_MAX_BACKOFF_MS=${SOURCE_FETCH_FAILURE_MAX_BACKOFF_MS:-1800000}
-      - TELEGRAM_API_BASE_URL=${TELEGRAM_API_BASE_URL:-https://api.telegram.org}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
-      - TELEGRAM_MESSAGE_THREAD_ID=${TELEGRAM_MESSAGE_THREAD_ID:-}
-      - FEEDBACK_DELIVERY_TIMEOUT_MS=${FEEDBACK_DELIVERY_TIMEOUT_MS:-25000}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-${APP_BASE_URL:-http://localhost}}
+      TRUST_PROXY: "1"
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost}
+      RSS_MAX_RETRIES: "5"
+      RSS_RETRY_DELAY: "2000"
+      AI_STORY_GROUPING_ENABLED: ${AI_STORY_GROUPING_ENABLED:-false}
+      AI_SUMMARY_GENERATION_ENABLED: ${AI_SUMMARY_GENERATION_ENABLED:-false}
+      AI_PODCAST_GENERATION_ENABLED: ${AI_PODCAST_GENERATION_ENABLED:-false}
+      SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES: ${SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES:-5}
     volumes:
       - ./backend/data:/usr/src/app/data:rw,z
     depends_on:
       init-permissions:
         condition: service_completed_successfully
     networks:
-      - backend-network
+      - app-network
     deploy:
       resources:
         limits:
@@ -150,52 +83,10 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  bff:
-    build:
-      context: .
-      dockerfile: bff/Dockerfile
-    container_name: newsflow-bff
-    environment:
-      - SESSION_TTL_DAYS=${SESSION_TTL_DAYS:-30}
-      - INTERNAL_PROXY_TOKEN=${INTERNAL_PROXY_TOKEN:?INTERNAL_PROXY_TOKEN must be set}
-      - BFF_SESSION_SECRET=${BFF_SESSION_SECRET:?BFF_SESSION_SECRET must be set}
-      - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
-      - COOKIE_SECURE=${COOKIE_SECURE:-auto}
-      - TRUST_PROXY=1
-      - BFF_UPSTREAM_TIMEOUT_MS=${BFF_UPSTREAM_TIMEOUT_MS:-50000}
-      - BFF_READINESS_TIMEOUT_MS=${BFF_READINESS_TIMEOUT_MS:-1000}
-    depends_on:
-      init-permissions:
-        condition: service_completed_successfully
-      backend:
-        condition: service_healthy
-    volumes:
-      - bff-data:/app/bff/data
-    networks:
-      - ingress-network
-      - backend-network
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.3'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
 networks:
-  ingress-network:
-    driver: bridge
-  backend-network:
+  app-network:
     driver: bridge
 
 volumes:
-  bff-data:
   caddy-data:
   caddy-config:

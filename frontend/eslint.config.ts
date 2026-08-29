@@ -6,7 +6,7 @@ export default tseslint.config(
     ignores: ['dist/**', 'coverage/**'],
   },
   {
-    files: ['src/**/*.{ts,tsx}', 'vite.config.ts', 'eslint.config.ts'],
+    files: ['src/**/*.{ts,tsx}', 'vite.config.mts', 'eslint.config.ts'],
     languageOptions: {
       parser: tseslint.parser,
       ecmaVersion: 'latest',

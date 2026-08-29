@@ -1,4 +1,4 @@
-const DEFAULT_PROD_ORIGINS = ['http://localhost', 'http://localhost:80', 'http://127.0.0.1', 'http://127.0.0.1:80', 'http://frontend'];
+const DEFAULT_PROD_ORIGINS = ['http://localhost', 'http://localhost:80', 'http://127.0.0.1', 'http://127.0.0.1:80'];
 
 function isPrivateIpv4Hostname(hostname: string) {
   const ipv4Pattern = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
@@ -25,7 +25,6 @@ function isLocalNetworkOrigin(origin: string) {
     const hostname = parsedOrigin.hostname.toLowerCase();
 
     return hostname === 'localhost'
-      || hostname === 'frontend'
       || hostname === '::1'
       || hostname.endsWith('.local')
       || isPrivateIpv4Hostname(hostname);

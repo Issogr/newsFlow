@@ -3,9 +3,10 @@ const { promisify } = require('util');
 const database = require('../services/database');
 const { createError } = require('./errorHandler');
 const { parseIntegerEnv } = require('./env');
+const { clearSessionCookie, SESSION_COOKIE_NAME, setSessionCookie } = require('./sessionCookie');
 import type { IncomingHttpHeaders } from 'node:http';
 import type { RequestHandler } from 'express';
-import type { ApiTokenRecord, AuthUser, SessionRecord } from './types';
+import type { ApiTokenRecord, AppError, AuthUser, SessionRecord } from './types';
 
 const SESSION_TTL_DAYS = parseIntegerEnv('SESSION_TTL_DAYS', 30, { min: 1 });
 const API_TOKEN_TTL_DAYS = 30;
@@ -15,7 +16,6 @@ const USER_ACTIVITY_TOUCH_INTERVAL_SECONDS = parseIntegerEnv('USER_ACTIVITY_TOUC
 const SESSION_REFRESH_WINDOW_MS = parseIntegerEnv('SESSION_REFRESH_WINDOW_MS', 24 * 60 * 60 * 1000, { min: 0 });
 const API_TOKEN_USAGE_FLUSH_INTERVAL_MS = parseIntegerEnv('API_TOKEN_USAGE_FLUSH_INTERVAL_MS', 5000, { min: 1000 });
 const API_TOKEN_USAGE_FLUSH_THRESHOLD = parseIntegerEnv('API_TOKEN_USAGE_FLUSH_THRESHOLD', 50, { min: 1 });
-const SESSION_COOKIE_NAME = 'newsflow_session';
 const scryptAsync = promisify(crypto.scrypt);
 
 let lastSessionPurgeAt = 0;
@@ -142,7 +142,7 @@ function resolveAuthenticatedSession({
 }: {
   headers?: IncomingHttpHeaders;
   touchActivitySeconds?: number;
-} = {}): { sessionToken: string; session: SessionRecord; user: AuthUser } {
+} = {}): { sessionRefreshed: boolean; sessionToken: string; session: SessionRecord; user: AuthUser } {
   purgeExpiredSessionsIfNeeded();
 
   const sessionToken = extractSessionCookie(headers.cookie);
@@ -170,6 +170,7 @@ function resolveAuthenticatedSession({
   database.touchUserActivity(user.id, new Date().toISOString(), touchActivitySeconds);
 
   return {
+    sessionRefreshed: refreshedExpiresAt !== session.expiresAt,
     sessionToken,
     session: {
       ...session,
@@ -282,13 +283,20 @@ function stopApiTokenUsageFlushTimer() {
 
 const requireAuthenticatedUser: RequestHandler = (req, res, next) => {
   try {
-    req.user = resolveAuthenticatedSession({
+    const resolved = resolveAuthenticatedSession({
       headers: req.headers || {},
       touchActivitySeconds: USER_ACTIVITY_TOUCH_INTERVAL_SECONDS
-    }).user;
+    });
+    req.user = resolved.user;
+    if (resolved.sessionRefreshed) {
+      setSessionCookie(req, res, resolved.sessionToken);
+    }
 
     return next();
   } catch (error) {
+    if ((error as AppError).status === 401) {
+      clearSessionCookie(req, res);
+    }
     return next(error);
   }
 };

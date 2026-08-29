@@ -2,18 +2,18 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-const bffOrigin = process.env.VITE_BFF_ORIGIN || 'http://localhost:80';
+const backendOrigin = process.env.VITE_BACKEND_ORIGIN || 'http://localhost:5000';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
       '/api': {
-        target: bffOrigin,
+        target: backendOrigin,
         changeOrigin: true
       },
       '/socket.io': {
-        target: bffOrigin,
+        target: backendOrigin,
         changeOrigin: true,
         ws: true
       }
