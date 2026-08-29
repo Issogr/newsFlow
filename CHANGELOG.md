@@ -1,5 +1,7 @@
 # Changelog
 
+## 3.7.0
+
 ## 3.6.4
 
 - kept news cards equal-height within desktop rows while allowing each mobile card to follow its own content height
