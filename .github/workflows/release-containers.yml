@@ -2,46 +2,21 @@ name: Release Containers
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: containers-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  release-gate:
-    name: Validate release ref
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Verify tag, versions, and main ancestry
-        run: |
-          if [[ ! "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "Invalid release tag: $GITHUB_REF_NAME"
-            exit 1
-          fi
-          version="${GITHUB_REF_NAME#v}"
-          for package in backend frontend; do
-            package_version="$(node -p "require('./${package}/package.json').version")"
-            lock_version="$(node -p "require('./${package}/package-lock.json').version")"
-            if [ "$package_version" != "$version" ] || [ "$lock_version" != "$version" ]; then
-              echo "$package metadata does not match release version $version"
-              exit 1
-            fi
-          done
-          git fetch origin main
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "Tag $GITHUB_REF_NAME does not point to a commit on main. Refusing to publish."
-            exit 1
-          fi
-
   validate:
-    needs: release-gate
     uses: ./.github/workflows/validate-services.yml
     with:
       audit: true
@@ -67,27 +42,26 @@ jobs:
       - name: Prepare image name
         id: prep
         env:
-          REF_NAME: ${{ github.ref_name }}
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
         run: |
           owner=$(printf '%s' "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
           repo=$(printf '%s' "$REPO_NAME" | tr '[:upper:]' '[:lower:]')
           echo "image=ghcr.io/${owner}/${repo}" >> "$GITHUB_OUTPUT"
-          echo "version=$REF_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ steps.prep.outputs.image }}
+          flavor: latest=false
           tags: |
-            type=raw,value=${{ steps.prep.outputs.version }}
+            type=sha,prefix=,format=long
+            type=ref,event=tag
           labels: |
             org.opencontainers.image.title=${{ github.event.repository.name }}
-            org.opencontainers.image.description=Release image for News Flow in ${{ github.repository }}
+            org.opencontainers.image.description=Application image for News Flow in ${{ github.repository }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.version=${{ steps.prep.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
 
       - name: Log in to GitHub Container Registry

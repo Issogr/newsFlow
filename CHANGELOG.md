@@ -9,6 +9,7 @@
 - clarified news-card headers by keeping source details and actions on one aligned row on mobile and desktop
 - updated Node.js LTS, npm dependencies, CI actions, and frontend development tooling to current secure releases
 - renamed the combined application image to `ghcr.io/issogr/newsflow` and the bundled Compose service to `newsflow`
+- decoupled the in-app release version from container tags so `main` publishes immutable commit-SHA images while optional `v*` tags remain available
 
 ## 3.6.4
 
