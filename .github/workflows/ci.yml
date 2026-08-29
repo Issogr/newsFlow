@@ -52,7 +52,7 @@ jobs:
           curl -kfsS -b /tmp/newsflow-compose-cookies.txt https://localhost/api/me >/tmp/newsflow-compose-me.json
           curl -kfsS -H 'Accept-Encoding: gzip' -D /tmp/newsflow-compose-headers.txt \
             https://localhost/ >/tmp/newsflow-compose-index.html
-          grep -Eiq '^content-encoding: gzip\r?$' /tmp/newsflow-compose-headers.txt
+          grep -Eiq '^content-encoding: gzip[[:space:]]*$' /tmp/newsflow-compose-headers.txt
           test "$(curl --http1.1 -ksS -o /dev/null -w '%{http_code}' \
             -H 'Origin: https://evil.example' -H 'Content-Type: application/json' \
             -b /tmp/newsflow-compose-cookies.txt -d '{}' \
