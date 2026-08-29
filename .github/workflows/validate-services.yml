@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [backend, bff, frontend]
+        service: [backend, frontend]
 
     steps:
       - name: Checkout repository
@@ -43,6 +43,10 @@ jobs:
       - name: Type check
         working-directory: ${{ matrix.service }}
         run: npm run typecheck
+
+      - name: Build
+        working-directory: ${{ matrix.service }}
+        run: npm run build
 
       - name: Test
         working-directory: ${{ matrix.service }}

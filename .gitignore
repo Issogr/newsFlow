@@ -1,7 +1,6 @@
 backend/logs/
 backend/data/
 backend/dist/
-bff/dist/
 bff/data/
 frontend/build/
 frontend/dist/

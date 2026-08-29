@@ -13,10 +13,6 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-env:
-  INTERNAL_PROXY_TOKEN: ci-internal-proxy-token-at-least-32-chars
-  BFF_SESSION_SECRET: ci-bff-session-secret-at-least-32-chars
-
 jobs:
   validate:
     uses: ./.github/workflows/validate-services.yml
@@ -41,7 +37,7 @@ jobs:
         run: |
           published_ports="$(docker inspect \
             --format '{{range $port, $bindings := .NetworkSettings.Ports}}{{if $bindings}}{{$.Name}}: {{$port}} -> {{json $bindings}}{{end}}{{end}}' \
-            "$(docker compose ps -q backend)" "$(docker compose ps -q bff)")"
+            "$(docker compose ps -q backend)")"
           if [ -n "$published_ports" ]; then
             echo "Internal ports are unexpectedly published: $published_ports"
             exit 1
@@ -54,6 +50,12 @@ jobs:
             -d '{"username":"ci-compose-user","password":"secret123"}' \
             https://localhost/api/auth/register >/tmp/newsflow-compose-register.json
           curl -kfsS -b /tmp/newsflow-compose-cookies.txt https://localhost/api/me >/tmp/newsflow-compose-me.json
+          curl -kfsS -H 'Accept-Encoding: gzip' -D /tmp/newsflow-compose-headers.txt \
+            https://localhost/ >/tmp/newsflow-compose-index.html
+          grep -Eiq '^content-encoding: gzip\r?$' /tmp/newsflow-compose-headers.txt
+          curl -kfsS -H 'Origin: https://evil.example' -H 'Content-Type: application/json' \
+            -b /tmp/newsflow-compose-cookies.txt -d '{}' \
+            https://localhost/api/auth/logout >/dev/null && exit 1 || test "$?" -eq 22
 
       - name: Stop Compose stack
         if: always()

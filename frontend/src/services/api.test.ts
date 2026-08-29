@@ -95,7 +95,7 @@ describe('api service', () => {
     });
   });
 
-  test('discovers RSS feeds through the authenticated BFF API', async () => {
+  test('discovers RSS feeds through the authenticated API', async () => {
     mockApi.post.mockResolvedValue({
       data: { feeds: [{ title: 'Example feed', url: 'https://example.com/feed.xml' }] }
     });
@@ -121,7 +121,7 @@ describe('api service', () => {
     }));
   });
 
-  test('targets the browser-facing BFF API namespace', () => {
+  test('targets the browser-facing API namespace', () => {
     expect(mockApiConfig).toEqual(expect.objectContaining({
       baseURL: '/api',
       withCredentials: true

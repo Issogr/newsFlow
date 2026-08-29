@@ -7,7 +7,7 @@ export default defineConfig({
     setupFiles: ['../scripts/vitest-jest-compat.mts'],
     coverage: {
       provider: 'v8',
-      include: ['server.ts', 'config/**/*.ts', 'routes/**/*.ts', 'services/**/*.ts', 'utils/**/*.ts'],
+      include: ['app.ts', 'server.ts', 'config/**/*.ts', 'routes/**/*.ts', 'services/**/*.ts', 'utils/**/*.ts'],
       exclude: ['**/*.test.ts', 'test-utils/**'],
       reporter: ['text'],
       thresholds: {

@@ -2,6 +2,10 @@
 
 ## 3.7.0
 
+- consolidated the BFF into the backend so one Node service now owns secure same-origin sessions, APIs, Socket.IO, and static frontend hosting behind Caddy
+- removed the BFF image, proxy secret, encrypted session bridge, second session database, and their obsolete tests and deployment configuration
+- existing deployments require users to sign in once after upgrading because the retired BFF browser sessions are intentionally not migrated
+
 ## 3.6.4
 
 - kept news cards equal-height within desktop rows while allowing each mobile card to follow its own content height

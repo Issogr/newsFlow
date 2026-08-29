@@ -4,13 +4,11 @@ services:
     user: "0:0"
     network_mode: none
     command: >
-      sh -c "mkdir -p /mnt/backend-data /mnt/bff-data &&
+      sh -c "mkdir -p /mnt/backend-data &&
       chown -R 1001:1001 /mnt/backend-data &&
-      chown -R 1000:1000 /mnt/bff-data &&
-      chmod -R u+rwX,g+rwX /mnt/backend-data /mnt/bff-data"
+      chmod -R u+rwX,g+rwX /mnt/backend-data"
     volumes:
       - ./backend/data:/mnt/backend-data:rw,z
-      - bff-data:/mnt/bff-data:rw
     restart: "no"
 
   ingress:
@@ -27,10 +25,10 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
-      bff:
+      backend:
         condition: service_healthy
     networks:
-      - ingress-network
+      - app-network
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
       interval: 30s
@@ -45,11 +43,12 @@ services:
         max-file: "3"
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: newsflow-backend
     environment:
       - SESSION_TTL_DAYS=${SESSION_TTL_DAYS:-30}
-      - INTERNAL_PROXY_TOKEN=${INTERNAL_PROXY_TOKEN:?INTERNAL_PROXY_TOKEN must be set}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-${APP_BASE_URL:-http://localhost}}
       - TRUST_PROXY=1
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
@@ -134,7 +133,7 @@ services:
       init-permissions:
         condition: service_completed_successfully
     networks:
-      - backend-network
+      - app-network
     deploy:
       resources:
         limits:
@@ -150,52 +149,10 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  bff:
-    build:
-      context: .
-      dockerfile: bff/Dockerfile
-    container_name: newsflow-bff
-    environment:
-      - SESSION_TTL_DAYS=${SESSION_TTL_DAYS:-30}
-      - INTERNAL_PROXY_TOKEN=${INTERNAL_PROXY_TOKEN:?INTERNAL_PROXY_TOKEN must be set}
-      - BFF_SESSION_SECRET=${BFF_SESSION_SECRET:?BFF_SESSION_SECRET must be set}
-      - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
-      - COOKIE_SECURE=${COOKIE_SECURE:-auto}
-      - TRUST_PROXY=1
-      - BFF_UPSTREAM_TIMEOUT_MS=${BFF_UPSTREAM_TIMEOUT_MS:-50000}
-      - BFF_READINESS_TIMEOUT_MS=${BFF_READINESS_TIMEOUT_MS:-1000}
-    depends_on:
-      init-permissions:
-        condition: service_completed_successfully
-      backend:
-        condition: service_healthy
-    volumes:
-      - bff-data:/app/bff/data
-    networks:
-      - ingress-network
-      - backend-network
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.3'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
 networks:
-  ingress-network:
-    driver: bridge
-  backend-network:
+  app-network:
     driver: bridge
 
 volumes:
-  bff-data:
   caddy-data:
   caddy-config:

@@ -6,6 +6,6 @@
     "rootDir": ".",
     "sourceMap": true
   },
-  "include": ["server.ts", "config/**/*.ts", "routes/**/*.ts", "services/**/*.ts", "utils/**/*.ts"],
+  "include": ["app.ts", "server.ts", "config/**/*.ts", "routes/**/*.ts", "services/**/*.ts", "utils/**/*.ts"],
   "exclude": ["**/*.test.ts", "dist", "node_modules", "test-utils"]
 }

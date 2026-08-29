@@ -1,12 +1,19 @@
-# Ignore everything, then include only BFF and frontend build inputs.
+# Ignore everything, then include only backend and frontend build inputs.
 *
-!bff/
-!bff/Dockerfile
-!bff/package*.json
-!bff/tsconfig*.json
-!bff/server.ts
-!bff/lib/
-!bff/lib/**
+!backend/
+!backend/Dockerfile
+!backend/package*.json
+!backend/tsconfig*.json
+!backend/app.ts
+!backend/server.ts
+!backend/config/
+!backend/config/**
+!backend/routes/
+!backend/routes/**
+!backend/services/
+!backend/services/**
+!backend/utils/
+!backend/utils/**
 !frontend/
 !frontend/package*.json
 !frontend/index.html
@@ -16,6 +23,18 @@
 !frontend/public/**
 !frontend/src/
 !frontend/src/**
+
+# Keep local installs, data, logs, coverage, and prior builds out of the context.
+backend/node_modules
+backend/data
+backend/dist
+backend/logs
+backend/coverage
+frontend/node_modules
+frontend/dist
+frontend/build
+frontend/.vite
+frontend/coverage
 
 # Source trees contain test-only files that production builds do not need.
 **/*.test.*
