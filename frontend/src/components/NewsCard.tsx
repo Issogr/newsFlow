@@ -264,10 +264,10 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   };
 
   const sourceIconItems = sourceEntries.slice(0, 2).map((source) => (
-    <span key={source.id} title={source.name} aria-label={source.name} className="flex h-10 w-10 shrink-0 leading-none">
+    <span key={source.id} title={source.name} aria-label={source.name} className="flex h-9 w-9 shrink-0 leading-none sm:h-10 sm:w-10">
       <SourceIcon
         source={source}
-        className="h-10 w-10 shadow-md outline outline-2 outline-white"
+        className="h-9 w-9 shadow-md outline outline-2 outline-white sm:h-10 sm:w-10"
       />
     </span>
   ));
@@ -326,7 +326,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     </div>
   ) : null;
   const shareControls = (
-    <div className="relative ml-auto flex items-center justify-end gap-2">
+    <div className="relative ml-auto flex items-center justify-end gap-1.5 sm:gap-2">
       <ShareStatusBubble
         shareState={shareState}
         t={t}
@@ -367,22 +367,24 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
 
   return (
     <article className="group relative flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-[1.75rem] md:h-full md:min-h-[20rem]">
-      <div className="flex min-w-0 items-center gap-3 px-4 pb-3 pt-5 sm:px-5">
-        {sourceIconStack}
-        <div className="min-w-0 flex-1">
-          {sourceSummary ? (
-            <p className="truncate text-sm font-bold text-slate-950">{sourceSummary}</p>
-          ) : null}
-          {publishedAt ? (
-            <time
-              dateTime={publishedAt.iso}
-              aria-label={t('publishedAt', { date: publishedAt.label })}
-              className="mt-1 inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-slate-500"
-            >
-              <Clock3 className="h-3.5 w-3.5 shrink-0 text-sky-600" aria-hidden="true" />
-              <span className="truncate">{publishedAt.label}</span>
-            </time>
-          ) : null}
+      <div className="flex min-w-0 items-center gap-2 px-4 pb-3 pt-5 sm:gap-3 sm:px-5">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+          {sourceIconStack}
+          <div className="min-w-0 flex-1">
+            {sourceSummary ? (
+              <p className="truncate text-sm font-bold text-slate-950">{sourceSummary}</p>
+            ) : null}
+            {publishedAt ? (
+              <time
+                dateTime={publishedAt.iso}
+                aria-label={t('publishedAt', { date: publishedAt.label })}
+                className="mt-1 inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-slate-500"
+              >
+                <Clock3 className="h-3.5 w-3.5 shrink-0 text-sky-600" aria-hidden="true" />
+                <span className="truncate">{publishedAt.label}</span>
+              </time>
+            ) : null}
+          </div>
         </div>
         {shareControls}
       </div>

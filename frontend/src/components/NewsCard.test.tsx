@@ -72,6 +72,18 @@ describe('NewsCard', () => {
     expect(screen.getByText('Headline', { selector: 'span' })).toHaveClass('line-clamp-2');
   });
 
+  test('keeps source metadata and actions on one row at every breakpoint', () => {
+    renderNewsCard();
+
+    const sourceRow = screen.getByText('Source A').parentElement?.parentElement;
+    const actions = screen.getByRole('button', { name: 'shareArticle' }).parentElement;
+
+    expect(sourceRow).toHaveClass('min-w-0', 'flex-1');
+    expect(sourceRow?.parentElement).toHaveClass('items-center', 'gap-2', 'sm:gap-3');
+    expect(sourceRow?.parentElement).not.toHaveClass('flex-col');
+    expect(actions).toHaveClass('ml-auto', 'gap-1.5', 'sm:gap-2');
+  });
+
   test('opens a safe external url in a new tab', () => {
     window.open = vi.fn();
 
@@ -211,8 +223,8 @@ describe('NewsCard', () => {
 
     expect(screen.getByLabelText('Source A')).toBeInTheDocument();
     expect(screen.getByLabelText('Source B')).toBeInTheDocument();
-    expect(screen.getByLabelText('Source A')).toHaveClass('flex', 'h-10', 'w-10', 'leading-none');
-    expect(screen.getByLabelText('Source A').querySelector('img')!.parentElement).toHaveClass('h-10', 'w-10', 'outline-2');
+    expect(screen.getByLabelText('Source A')).toHaveClass('flex', 'h-9', 'w-9', 'sm:h-10', 'sm:w-10', 'leading-none');
+    expect(screen.getByLabelText('Source A').querySelector('img')!.parentElement).toHaveClass('h-9', 'w-9', 'sm:h-10', 'sm:w-10', 'outline-2');
     expect(screen.getByLabelText('Source A').querySelector('img')!.parentElement).not.toHaveClass('border-2');
     expect(screen.getByLabelText('sources')).toHaveClass('rounded-full');
     expect(screen.getByText('Source A +1')).toBeInTheDocument();

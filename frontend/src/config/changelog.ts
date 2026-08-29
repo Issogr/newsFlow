@@ -6,13 +6,13 @@ export const CURRENT_CHANGELOG_ENTRY: { version: string } & Record<Locale, Chang
     eyebrow: 'Latest update',
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
-    items: []
+    items: ['📰 Clearer news-card headers keep sources, dates, and actions together on one line on mobile and desktop.']
   },
   it: {
     eyebrow: 'Ultimo aggiornamento',
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
-    items: []
+    items: ['📰 Le intestazioni piu chiare mantengono fonti, date e azioni insieme su una riga su mobile e desktop.']
   }
 };
 

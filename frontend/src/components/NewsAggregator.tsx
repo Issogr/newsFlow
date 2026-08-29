@@ -57,14 +57,16 @@ const SKELETON_CARD_COUNT = 6;
 
 function NewsCardSkeleton({ showImage }: { showImage: boolean }) {
   return (
-    <article className="relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-[1.75rem] md:h-full md:min-h-[20rem]" aria-hidden="true">
-      <div className="flex items-center gap-3 px-4 pb-3 pt-5 sm:px-5">
-        <div className="h-12 w-12 shrink-0 rounded-full bg-sky-100" />
-        <div className="flex-1 space-y-2">
-          <div className="h-3.5 w-2/5 rounded-full bg-slate-200" />
-          <div className="h-3 w-3/5 rounded-full bg-slate-100" />
+    <article className="relative flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-[1.75rem] md:h-full md:min-h-[20rem]" aria-hidden="true">
+      <div className="flex min-w-0 items-center gap-2 px-4 pb-3 pt-5 sm:gap-3 sm:px-5">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+          <div className="h-9 w-9 shrink-0 rounded-full bg-sky-100 sm:h-10 sm:w-10" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3.5 w-2/5 rounded-full bg-slate-200" />
+            <div className="h-3 w-3/5 rounded-full bg-slate-100" />
+          </div>
         </div>
-        <div className="flex gap-2">
+        <div className="ml-auto flex gap-1.5 sm:gap-2">
           <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white" />
           <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white" />
           <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white" />
