@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM --platform=$BUILDPLATFORM node:24.18.1-bookworm-slim AS frontend-build
+FROM --platform=$BUILDPLATFORM node:24.20.0-bookworm-slim AS frontend-build
 
 WORKDIR /app/frontend
 
@@ -11,7 +11,7 @@ RUN --mount=type=cache,id=newsflow-frontend-npm,target=/root/.npm,sharing=locked
 COPY frontend/ ./
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM node:24.18.1-bookworm-slim AS backend-build
+FROM --platform=$BUILDPLATFORM node:24.20.0-bookworm-slim AS backend-build
 
 ARG TARGETARCH
 
@@ -25,7 +25,7 @@ COPY backend/package*.json ./
 RUN --mount=type=cache,id=newsflow-backend-npm,target=/root/.npm,sharing=locked \
     npm_arch="${TARGETARCH:-$(node -p 'process.arch')}" && \
     if [ "$npm_arch" = "amd64" ]; then npm_arch="x64"; fi && \
-    npm_config_platform=linux npm_config_arch="$npm_arch" npm_config_libc=glibc npm ci --no-audit --no-fund
+    npm_config_os=linux npm_config_cpu="$npm_arch" npm_config_libc=glibc npm ci --no-audit --no-fund
 
 COPY backend/tsconfig*.json ./
 COPY backend/app.ts backend/server.ts ./
@@ -37,7 +37,7 @@ COPY backend/utils ./utils
 RUN npm run build && npm prune --omit=dev
 
 # Production stage
-FROM node:24.18.1-bookworm-slim
+FROM node:24.20.0-bookworm-slim
 
 # Crea un utente non-root
 RUN groupadd --gid 1001 nodejs && \

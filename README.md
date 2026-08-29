@@ -30,7 +30,7 @@ docker compose up --build -d --remove-orphans
 
 Open `http://localhost`.
 
-Runtime target for all packages is Node.js `24.18.1`.
+Runtime target for all packages is Node.js `24.20.0`.
 
 ## Local Development
 
