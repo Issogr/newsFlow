@@ -37,7 +37,7 @@ jobs:
         run: |
           published_ports="$(docker inspect \
             --format '{{range $port, $bindings := .NetworkSettings.Ports}}{{if $bindings}}{{$.Name}}: {{$port}} -> {{json $bindings}}{{end}}{{end}}' \
-            "$(docker compose ps -q backend)")"
+            "$(docker compose ps -q newsflow)")"
           if [ -n "$published_ports" ]; then
             echo "Internal ports are unexpectedly published: $published_ports"
             exit 1

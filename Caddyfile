@@ -1,4 +1,4 @@
 {$APP_BASE_URL:http://localhost} {
 	encode zstd gzip
-	reverse_proxy backend:5000
+	reverse_proxy newsflow:5000
 }

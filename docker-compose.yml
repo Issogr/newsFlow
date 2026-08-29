@@ -25,7 +25,7 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
-      backend:
+      newsflow:
         condition: service_healthy
     networks:
       - app-network
@@ -42,14 +42,15 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  backend:
+  newsflow:
+    image: newsflow
     build:
       context: .
       dockerfile: backend/Dockerfile
     env_file:
       - path: .env
         required: false
-    container_name: newsflow-backend
+    container_name: newsflow
     environment:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-${APP_BASE_URL:-http://localhost}}
       TRUST_PROXY: "1"

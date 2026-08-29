@@ -61,7 +61,7 @@ Local data defaults:
 
 ## Deployment
 
-The bundled deployment puts Caddy in front of the application. Only Caddy publishes host ports; the backend serves the API, Socket.IO, and built React application on a private Docker network.
+The bundled deployment puts Caddy in front of the application. Only Caddy publishes host ports; the application serves the API, Socket.IO, and built React frontend on a private Docker network.
 
 For automatic production HTTPS:
 
@@ -69,19 +69,19 @@ For automatic production HTTPS:
 - Point the domain's DNS records to the deployment host.
 - Allow inbound TCP ports `80` and `443` and UDP port `443` through the host firewall.
 - Keep the `caddy-data` volume so certificates and account state survive restarts.
-- Do not publish the backend container port; Compose fixes the service to one trusted Caddy hop.
+- Do not publish the application container port; Compose fixes the service to one trusted Caddy hop.
 - Replace the controller/contact placeholders in the legal pages with deployment-approved details before publishing the service.
 
 Published images:
 
-- `ghcr.io/issogr/newsflow-backend:<release-tag>` (includes the built frontend)
+- `ghcr.io/issogr/newsflow:<release-tag>` (includes the built frontend)
 
 When using the image outside the bundled Compose stack, set both `APP_BASE_URL` and `ALLOWED_ORIGINS` to the public origin. Existing deployments can remove the retired `bff-data` volume after upgrading.
 
 ## Configuration
 Full configuration reference: [`CONFIGURATION.md`](CONFIGURATION.md).
 
-Docker Compose forwards values from an optional root `.env` file to the backend.
+Docker Compose forwards values from an optional root `.env` file to the application.
 
 ### Required And Security
 
