@@ -81,6 +81,8 @@ When using the image outside the bundled Compose stack, set both `APP_BASE_URL` 
 ## Configuration
 Full configuration reference: [`CONFIGURATION.md`](CONFIGURATION.md).
 
+Docker Compose forwards values from an optional root `.env` file to the backend.
+
 ### Required And Security
 
 | Variable | Default | Notes |

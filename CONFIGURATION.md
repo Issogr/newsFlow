@@ -10,6 +10,7 @@ This file documents the environment variables and build arguments that can chang
 - Most numeric values are integers. If a value is outside the documented range, the code usually falls back to the default unless the notes say it is clamped.
 - Durations ending in `_MS` are milliseconds unless the variable name says otherwise.
 - Docker Compose sets some explicit defaults that differ from raw code defaults; those differences are called out where they matter.
+- Docker Compose forwards values from an optional root `.env` file to the backend; its small explicit environment block contains only topology settings and defaults that intentionally differ from the backend.
 
 ## Runtime And Security
 

@@ -18,7 +18,7 @@
 !frontend/package*.json
 !frontend/index.html
 !frontend/tsconfig.json
-!frontend/vite.config.ts
+!frontend/vite.config.mts
 !frontend/public/
 !frontend/public/**
 !frontend/src/
