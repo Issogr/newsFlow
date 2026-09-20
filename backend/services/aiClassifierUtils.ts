@@ -1,9 +1,6 @@
-const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const { isAiToggleEnabled } = require('../config/aiFeatures');
 const { parseIntegerEnv } = require('../utils/env');
-const { createOpenRouterClient } = require('./openRouterClient');
-import type winston from 'winston';
-import type { DynamicRecord, NewsArticle } from '../utils/types';
+import type { DynamicRecord } from '../utils/types';
 
 function getClassifierBatchConfig() {
   return {
@@ -12,14 +9,6 @@ function getClassifierBatchConfig() {
     maxArticlesPerRefresh: parseIntegerEnv('AI_TOPIC_MAX_ARTICLES_PER_REFRESH', 160, { min: 1, max: 1000, clamp: true, strict: true }),
     deterministicSkipEnabled: isAiToggleEnabled('AI_TOPIC_DETERMINISTIC_SKIP_ENABLED')
   };
-}
-
-function chunkItems<T>(items: T[] = [], size = 1) {
-  const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
 }
 
 function isTimeoutError(error: unknown) {
@@ -81,109 +70,10 @@ function summarizeResponseShape(response: DynamicRecord = {}, options: { include
   return `${baseSummary}, reasoningChars=${reasoningChars}, refusalChars=${refusalChars}`;
 }
 
-interface ClassifierConfig extends DynamicRecord {
-  apiKey?: string;
-  batchConcurrency: number;
-  batchSize: number;
-  enabled: boolean;
-  maxArticlesPerRefresh: number;
-  model: string;
-}
-
-interface ClassifierSplitResult extends DynamicRecord {
-  aiArticles: NewsArticle[];
-}
-
-interface RunBatchedClassifierOptions {
-  articles?: NewsArticle[];
-  config: ClassifierConfig;
-  featureName: string;
-  splitArticles: (articles: NewsArticle[], config: ClassifierConfig) => ClassifierSplitResult;
-  deterministicResultKey: string;
-  classifyBatch: (articles: NewsArticle[], config: ClassifierConfig, context: DynamicRecord) => Promise<Map<string, unknown>>;
-  summarizeBatchError: (error: unknown) => string;
-  logger: winston.Logger;
-}
-
-async function runBatchedClassifier({
-  articles = [],
-  config,
-  featureName,
-  splitArticles,
-  deterministicResultKey,
-  classifyBatch,
-  summarizeBatchError,
-  logger
-}: RunBatchedClassifierOptions) {
-  if (!Array.isArray(articles) || articles.length === 0) {
-    return {
-      resultByArticleId: new Map(),
-      attemptedArticleIds: [],
-      failedArticleIds: [],
-      cappedArticleIds: []
-    };
-  }
-
-  if (!config.enabled) {
-    logger.info(`AI ${featureName} detection skipped: reason=${config.apiKey ? 'disabled' : 'missing_api_key'}, articles=${articles.length}`);
-    return {
-      resultByArticleId: new Map(),
-      attemptedArticleIds: [],
-      failedArticleIds: [],
-      cappedArticleIds: articles.map((article) => article?.id).filter(Boolean)
-    };
-  }
-
-  const startedAt = Date.now();
-  const limitedArticles = articles.slice(0, config.maxArticlesPerRefresh);
-  const cappedArticleIds = articles.slice(config.maxArticlesPerRefresh).map((article) => article?.id).filter(Boolean);
-  if (articles.length > limitedArticles.length) {
-    logger.warn(`AI ${featureName} detection capped at ${limitedArticles.length}/${articles.length} new articles for this refresh`);
-  }
-
-  const splitResult = splitArticles(limitedArticles, config);
-  const aiArticles = splitResult.aiArticles;
-  const deterministicResult = splitResult[deterministicResultKey];
-  const deterministicResultsByArticleId = deterministicResult instanceof Map ? deterministicResult : new Map<string, unknown>();
-  const batches = chunkItems(aiArticles, config.batchSize);
-  const openRouter = batches.length > 0 ? await createOpenRouterClient(config) : null;
-  logger.info(`AI ${featureName} detection started: model=${config.model}, articles=${limitedArticles.length}, deterministic=${deterministicResultsByArticleId.size}, aiArticles=${aiArticles.length}, batches=${batches.length}`);
-
-  const batchResults: PromiseSettledResult<Map<string, unknown>>[] = await mapSettledWithConcurrency(batches, config.batchConcurrency, (batch: NewsArticle[], batchIndex: number) => classifyBatch(batch, config, {
-    batchIndex,
-    batchCount: batches.length,
-    openRouter
-  }));
-  const resultByArticleId = new Map<string, unknown>(deterministicResultsByArticleId);
-  const failedArticleIds: string[] = [];
-
-  batchResults.forEach((batchResult: PromiseSettledResult<Map<string, unknown>>, index: number) => {
-    if (batchResult?.status === 'rejected') {
-      logger.warn(`AI ${featureName} batch failed: ${summarizeBatchError(batchResult.reason)}`);
-      failedArticleIds.push(...(batches[index] || []).map((article) => article.id).filter(Boolean));
-      return;
-    }
-
-    batchResult.value.forEach((classification: unknown, articleId: string) => {
-      resultByArticleId.set(articleId, classification);
-    });
-  });
-
-  logger.info(`AI ${featureName} detection completed: model=${config.model}, requested=${limitedArticles.length}, deterministic=${deterministicResultsByArticleId.size}, aiRequested=${aiArticles.length}, classified=${resultByArticleId.size}, durationMs=${Date.now() - startedAt}`);
-
-  return {
-    resultByArticleId,
-    attemptedArticleIds: limitedArticles.map((article) => article?.id).filter(Boolean),
-    failedArticleIds,
-    cappedArticleIds
-  };
-}
-
 export = {
   getClassifierBatchConfig,
   getClassifierEntries,
   isTimeoutError,
   resolveClassifierEntryId,
-  runBatchedClassifier,
   summarizeResponseShape,
 };

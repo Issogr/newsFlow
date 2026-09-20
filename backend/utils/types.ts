@@ -109,8 +109,6 @@ export interface NewsQuery {
 }
 
 export interface UserSettings {
-  compactNewsCards?: boolean;
-  compactNewsCardsMode?: string;
   defaultLanguage?: string;
   excludedSourceIds?: string[];
   excludedSubSourceIds?: string[];

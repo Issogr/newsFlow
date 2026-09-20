@@ -7,7 +7,6 @@ const { buildArticlePayload, getArticleTextLimit: getSharedArticleTextLimit, tru
 const {
   assertOpenRouterRequestAllowed,
   clearOpenRouterFailure,
-  createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
   getRetryAfterMs,
@@ -1125,9 +1124,8 @@ async function generatePodcastScript(window: DynamicRecord = {}, articles: NewsA
   }
 
   const startedAt = Date.now();
-  const openRouter = await createOpenRouterClient(config);
   const tokenBudget = getCompletionTokenBudget(articles.length);
-  const response = await sendJsonChatCompletion(openRouter, {
+  const response = await sendJsonChatCompletion(config, {
     model: config.model,
     messages: [
       {
@@ -1140,7 +1138,7 @@ async function generatePodcastScript(window: DynamicRecord = {}, articles: NewsA
       }
     ],
     temperature: 0.35,
-    maxTokens: tokenBudget
+    max_tokens: tokenBudget
   }, {
     timeoutMs: config.timeoutMs,
     metrics: {

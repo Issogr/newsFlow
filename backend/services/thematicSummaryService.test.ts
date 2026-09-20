@@ -109,6 +109,17 @@ describe('thematicSummaryService', () => {
     })).toBe(false);
   });
 
+  test('keeps daily boundaries at local 20:00 across daylight-saving changes', () => {
+    expect(thematicSummaryService._getLatestDueWindow('2026-03-29T18:00:00.000Z')).toEqual({
+      periodStart: '2026-03-28T19:00:00.000Z',
+      periodEnd: '2026-03-29T18:00:00.000Z'
+    });
+    expect(thematicSummaryService._getNextDueWindow('2026-10-24T18:00:00.000Z')).toEqual({
+      periodStart: '2026-10-24T18:00:00.000Z',
+      periodEnd: '2026-10-25T19:00:00.000Z'
+    });
+  });
+
   test('builds the next due window for reader prewarm', () => {
     expect(thematicSummaryService._getNextDueWindow(new Date('2026-05-21T05:30:00.000Z'))).toEqual({
       periodStart: '2026-05-20T18:00:00.000Z',

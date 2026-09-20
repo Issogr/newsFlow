@@ -9,34 +9,13 @@ const {
   logAiRequestMetric
 } = require('../utils/aiMetrics');
 import type { AppError, DynamicRecord } from '../utils/types';
-import type { OpenRouter as OpenRouterSdkClient } from '@openrouter/sdk' with { 'resolution-mode': 'import' };
-import type { ChatRequest as OpenRouterChatRequest } from '@openrouter/sdk/models' with { 'resolution-mode': 'import' };
 
 const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_TIMEOUT_MS = 120000;
 const DEFAULT_FAILURE_BACKOFF_MS = 60 * 1000;
 const DEFAULT_FAILURE_MAX_BACKOFF_MS = 15 * 60 * 1000;
 
-type OpenRouterSdkModule = { OpenRouter: typeof OpenRouterSdkClient };
-type OpenRouterSdkLoader = () => Promise<OpenRouterSdkModule>;
-type OpenRouterClient = InstanceType<typeof OpenRouterSdkClient>;
-
-let openRouterSdkLoader: OpenRouterSdkLoader = () => import('@openrouter/sdk');
-let openRouterSdkPromise: Promise<OpenRouterSdkModule> | null = null;
 const failureBackoffByModel = new Map<string, { failureCount: number; openedAt: number; retryAt: number }>();
-
-function setOpenRouterSdkLoader(loader?: OpenRouterSdkLoader) {
-  openRouterSdkLoader = loader || (() => import('@openrouter/sdk'));
-  openRouterSdkPromise = null;
-}
-
-async function loadOpenRouterSdk() {
-  if (!openRouterSdkPromise) {
-    openRouterSdkPromise = openRouterSdkLoader();
-  }
-
-  return openRouterSdkPromise;
-}
 
 interface OpenRouterConfigOptions {
   enabledEnvName: string;
@@ -104,10 +83,15 @@ interface ChatResponse extends DynamicRecord {
   usage?: DynamicRecord;
 }
 
-type ChatRequest = Omit<OpenRouterChatRequest, 'reasoning' | 'stream'> & DynamicRecord & {
-  reasoning?: NonNullable<OpenRouterChatRequest['reasoning']> & DynamicRecord;
+interface ChatRequest extends DynamicRecord {
+  model: string;
+  messages: Array<{ role: string; content: string }>;
+  max_tokens?: number;
+  max_completion_tokens?: number;
+  reasoning?: DynamicRecord;
+  response_format?: DynamicRecord;
   stream?: false;
-};
+}
 
 interface CompletionOptions extends DynamicRecord {
   metrics?: DynamicRecord;
@@ -137,17 +121,6 @@ function getOpenRouterConfig({
     baseUrl: String(process.env.OPENROUTER_BASE_URL || DEFAULT_OPENROUTER_BASE_URL).trim().replace(/\/+$/u, ''),
     timeoutMs: parseIntegerEnv(timeoutEnvName, defaultTimeoutMs, { min: 1000, max: 120000, clamp: clampTimeout, strict: true })
   };
-}
-
-async function createOpenRouterClient(config: OpenRouterConfig): Promise<OpenRouterClient> {
-  const { OpenRouter } = await loadOpenRouterSdk();
-  return new OpenRouter({
-    apiKey: config.apiKey,
-    serverURL: config.baseUrl,
-    timeoutMs: config.timeoutMs,
-    httpReferer: String(process.env.APP_BASE_URL || 'http://localhost'),
-    appTitle: 'News Flow'
-  });
 }
 
 function getErrorStatus(error: OpenRouterErrorRecord = {}) {
@@ -312,40 +285,54 @@ function parseJsonContent(content: unknown): unknown {
   }
 }
 
-async function sendChatCompletion(openRouter: OpenRouterClient, chatRequest: ChatRequest, options: CompletionOptions = {}) {
-  const completionPromise = openRouter.chat.send({ chatRequest }, {
-    retries: { strategy: 'none' },
-    timeoutMs: options.timeoutMs
+async function sendChatCompletion(config: OpenRouterConfig, chatRequest: ChatRequest, options: CompletionOptions) {
+  const response = await fetch(`${config.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': String(process.env.APP_BASE_URL || 'http://localhost'),
+      'X-Title': 'News Flow'
+    },
+    body: JSON.stringify(chatRequest),
+    signal: AbortSignal.timeout(options.timeoutMs ?? config.timeoutMs)
   });
-
-  // The SDK's APIPromise owns a secondary unwrapped promise; attach a catch so
-  // expected request failures do not also surface as global unhandled rejections.
-  if (completionPromise && typeof completionPromise.catch === 'function') {
-    completionPromise.catch(() => {});
+  const payload = await response.json().catch((error: unknown) => {
+    if (error instanceof SyntaxError) return null;
+    throw error;
+  }) as ChatResponse | null;
+  if (!response.ok) {
+    throw Object.assign(new Error(String(payload?.error?.message || `OpenRouter request failed (${response.status})`)), {
+      statusCode: response.status,
+      headers: response.headers,
+      error: payload?.error
+    });
   }
-
-  return completionPromise;
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('OpenRouter returned invalid JSON');
+  }
+  return payload;
 }
 
 function buildJsonChatRequest(request: ChatRequest): ChatRequest {
-  const maxTokens = request.maxTokens ?? request.maxCompletionTokens;
+  const maxTokens = request.max_tokens ?? request.max_completion_tokens;
 
   return {
     ...request,
-    maxTokens,
-    maxCompletionTokens: request.maxCompletionTokens ?? maxTokens,
+    max_tokens: maxTokens,
+    max_completion_tokens: request.max_completion_tokens ?? maxTokens,
     reasoning: {
       enabled: false,
       effort: 'none',
-      maxTokens: 0,
+      max_tokens: 0,
       ...(request.reasoning || {})
     },
-    responseFormat: request.responseFormat || { type: 'json_object' },
+    response_format: request.response_format || { type: 'json_object' },
     stream: request.stream ?? false
   };
 }
 
-async function sendJsonChatCompletion(openRouter: OpenRouterClient, chatRequest: ChatRequest, options: CompletionOptions = {}) {
+async function sendJsonChatCompletion(config: OpenRouterConfig, chatRequest: ChatRequest, options: CompletionOptions = {}) {
   const request = buildJsonChatRequest(chatRequest);
   assertOpenRouterRequestAllowed(request.model || options.metrics?.model);
   const startedAt = Date.now();
@@ -361,7 +348,7 @@ async function sendJsonChatCompletion(openRouter: OpenRouterClient, chatRequest:
   };
 
   try {
-    const response = await sendChatCompletion(openRouter, request, options) as ChatResponse;
+    const response = await sendChatCompletion(config, request, options);
     const outputChars = getChatOutputCharCount(response);
     const usage = extractUsage(response);
     const finishReason = getFinishReason(response);
@@ -414,7 +401,6 @@ async function sendJsonChatCompletion(openRouter: OpenRouterClient, chatRequest:
 export = {
   assertOpenRouterRequestAllowed,
   clearOpenRouterFailure,
-  createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
   getRetryAfterMs,
@@ -422,6 +408,5 @@ export = {
   parseJsonContent,
   recordOpenRouterFailure,
   sendJsonChatCompletion,
-  setOpenRouterSdkLoader,
   _resetFailureBackoff: () => failureBackoffByModel.clear()
 };

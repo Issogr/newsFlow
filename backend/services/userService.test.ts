@@ -64,8 +64,6 @@ describe('userService imports', () => {
         defaultLanguage: 'it',
         themeMode: 'dark',
         showNewsImages: false,
-        compactNewsCards: true,
-        compactNewsCardsMode: 'everywhere',
         readerPanelPosition: 'left',
         readerTextSize: 'large',
         readerTextWidth: 'widest',
@@ -115,14 +113,14 @@ describe('userService imports', () => {
     expect(exportedSettings.settings).toMatchObject({
       themeMode: 'dark',
       showNewsImages: false,
-      compactNewsCards: true,
-      compactNewsCardsMode: 'desktop',
       readerTextSize: 'small',
       readerTextWidth: 'wide'
     });
     expect(exportedSettings.version).toBe(10);
     expect(exportedSettings.settings).not.toHaveProperty('articleRetentionHours');
     expect(exportedSettings.settings).not.toHaveProperty('recentHours');
+    expect(exportedSettings.settings).not.toHaveProperty('compactNewsCards');
+    expect(exportedSettings.settings).not.toHaveProperty('compactNewsCardsMode');
 
     const importedState = await userService.importUserSettings(targetAuthPayload.user.id, exportedSettings);
 
@@ -135,8 +133,6 @@ describe('userService imports', () => {
     expect(database.getUserSettings(targetAuthPayload.user.id)).toMatchObject({
       themeMode: 'dark',
       showNewsImages: false,
-      compactNewsCards: true,
-      compactNewsCardsMode: 'desktop',
       readerTextSize: 'small',
       readerTextWidth: 'wide'
     });

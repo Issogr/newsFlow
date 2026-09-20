@@ -13,7 +13,6 @@ const { isPromotionalDealArticle } = require('../utils/promotionalContent');
 const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
 
 const DEFAULT_SUMMARY_TIME_ZONE = 'Europe/Rome';
-const SUMMARY_GENERATION_HOURS = [20];
 const SUMMARY_HISTORY_RETAIN_COUNT = 1;
 const PODCAST_HISTORY_RETAIN_COUNT = parseIntegerEnv('AI_PODCAST_HISTORY_RETAIN_COUNT', 2, { min: 1, max: 10 });
 const SUMMARY_CHECK_INTERVAL_MS = parseIntegerEnv('THEMATIC_SUMMARY_CHECK_INTERVAL_MS', 60 * 1000, { min: 1000 });
@@ -127,12 +126,8 @@ interface SummaryOptions extends DynamicRecord {
   broadcast?: boolean;
   canGenerateSummaries?: boolean;
   force?: boolean;
-  podcastArticleContext?: SummaryArticleContext;
-  podcastWindow?: SummaryWindow;
   referenceDate?: DateInput;
   startPodcastAudioGeneration?: boolean;
-  summaryArticleContext?: SummaryArticleContext;
-  summaryWindow?: SummaryWindow;
   window?: SummaryWindow;
 }
 
@@ -281,77 +276,31 @@ function addCalendarDays({ year, month, day }: Pick<LocalDateParts, 'year' | 'mo
   };
 }
 
-function createZonedSlotDate(localDate: Pick<LocalDateParts, 'year' | 'month' | 'day'>, hour: number, timeZone = SUMMARY_TIME_ZONE) {
-  return zonedDateTimeToUtc({
-    year: localDate.year,
-    month: localDate.month,
-    day: localDate.day,
-    hour,
-    minute: 0,
-    second: 0
-  }, timeZone);
+function createZonedSlotDate(localDate: Pick<LocalDateParts, 'year' | 'month' | 'day'>) {
+  return zonedDateTimeToUtc({ ...localDate, hour: 20, minute: 0, second: 0 });
 }
 
 function toDate(referenceDate: DateInput) {
   return referenceDate instanceof Date ? new Date(referenceDate.getTime()) : new Date(referenceDate);
 }
 
-function getLatestDueWindow(referenceDate: DateInput = new Date(), generationHours: number[] = SUMMARY_GENERATION_HOURS): SummaryWindow {
-  const reference = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
-  const localToday = getTimeZoneParts(reference, SUMMARY_TIME_ZONE);
-  const todaySlots = generationHours.map((hour) => createZonedSlotDate(localToday, hour, SUMMARY_TIME_ZONE));
-  const dueSlotIndex = todaySlots.findLastIndex((slotDate) => slotDate.getTime() <= reference.getTime());
-
-  if (dueSlotIndex >= 0) {
-    const periodEnd = todaySlots[dueSlotIndex];
-    const periodStart = dueSlotIndex === 0
-      ? createZonedSlotDate(addCalendarDays(localToday, -1), generationHours[generationHours.length - 1], SUMMARY_TIME_ZONE)
-      : todaySlots[dueSlotIndex - 1];
-
-    return {
-      periodStart: periodStart.toISOString(),
-      periodEnd: periodEnd.toISOString()
-    };
-  }
-
-  const yesterday = addCalendarDays(localToday, -1);
-  const periodEnd = createZonedSlotDate(yesterday, generationHours[generationHours.length - 1], SUMMARY_TIME_ZONE);
-  const previousSlotDay = generationHours.length === 1 ? addCalendarDays(yesterday, -1) : yesterday;
-  const previousSlotHour = generationHours.length === 1 ? generationHours[0] : generationHours[generationHours.length - 2];
-  const periodStart = createZonedSlotDate(previousSlotDay, previousSlotHour, SUMMARY_TIME_ZONE);
-
+function getDailyWindow(referenceDate: DateInput, next: boolean): SummaryWindow {
+  const reference = toDate(referenceDate);
+  const localToday = getTimeZoneParts(reference);
+  const todayIsDue = createZonedSlotDate(localToday).getTime() <= reference.getTime();
+  const endDay = addCalendarDays(localToday, (todayIsDue ? 0 : -1) + (next ? 1 : 0));
   return {
-    periodStart: periodStart.toISOString(),
-    periodEnd: periodEnd.toISOString()
+    periodStart: createZonedSlotDate(addCalendarDays(endDay, -1)).toISOString(),
+    periodEnd: createZonedSlotDate(endDay).toISOString()
   };
 }
 
-function getNextDueWindow(referenceDate: DateInput = new Date(), generationHours: number[] = SUMMARY_GENERATION_HOURS): SummaryWindow {
-  const reference = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
-  const localToday = getTimeZoneParts(reference, SUMMARY_TIME_ZONE);
-  const todaySlots = generationHours.map((hour) => createZonedSlotDate(localToday, hour, SUMMARY_TIME_ZONE));
-  const nextSlotIndex = todaySlots.findIndex((slotDate) => slotDate.getTime() > reference.getTime());
+function getLatestDueWindow(referenceDate: DateInput = new Date()): SummaryWindow {
+  return getDailyWindow(referenceDate, false);
+}
 
-  if (nextSlotIndex >= 0) {
-    const periodEnd = todaySlots[nextSlotIndex];
-    const periodStart = nextSlotIndex === 0
-      ? createZonedSlotDate(addCalendarDays(localToday, -1), generationHours[generationHours.length - 1], SUMMARY_TIME_ZONE)
-      : todaySlots[nextSlotIndex - 1];
-
-    return {
-      periodStart: periodStart.toISOString(),
-      periodEnd: periodEnd.toISOString()
-    };
-  }
-
-  const tomorrow = addCalendarDays(localToday, 1);
-  const periodStart = createZonedSlotDate(localToday, generationHours[generationHours.length - 1], SUMMARY_TIME_ZONE);
-  const periodEnd = createZonedSlotDate(tomorrow, generationHours[0], SUMMARY_TIME_ZONE);
-
-  return {
-    periodStart: periodStart.toISOString(),
-    periodEnd: periodEnd.toISOString()
-  };
+function getNextDueWindow(referenceDate: DateInput = new Date()): SummaryWindow {
+  return getDailyWindow(referenceDate, true);
 }
 
 function getPodcastWindowSlot(summary: SummaryRecord = {}) {
@@ -1361,13 +1310,8 @@ async function generatePodcastForWindow(window: SummaryWindow, options: SummaryO
 
 async function runDueSummaries(options: SummaryOptions = {}): Promise<DueSummaryResult> {
     const referenceDate = options.referenceDate || new Date();
-    const summaryWindow = options.summaryWindow || options.window || getLatestDueWindow(referenceDate);
-    const podcastWindow = options.podcastWindow || options.window || getLatestDueWindow(referenceDate);
-    const summaryArticleContext = options.summaryArticleContext || options.articleContext || createSummaryArticleContext(summaryWindow);
-    const podcastArticleContext = options.podcastArticleContext
-      || (summaryWindow.periodStart === podcastWindow.periodStart && summaryWindow.periodEnd === podcastWindow.periodEnd
-        ? summaryArticleContext
-        : createSummaryArticleContext(podcastWindow));
+    const window = options.window || getLatestDueWindow(referenceDate);
+    const articleContext = options.articleContext || createSummaryArticleContext(window);
     const summaries: SummaryRecord[] = [];
     let generatedCount = 0;
     const generatedTopicKeys: string[] = [];
@@ -1378,13 +1322,13 @@ async function runDueSummaries(options: SummaryOptions = {}): Promise<DueSummary
     const topicResults = canGenerateSummaries
       ? await mapSettledWithConcurrency(SUMMARY_TOPICS, SUMMARY_GENERATION_CONCURRENCY, async (topicConfig: SummaryTopic) => ({
         topicConfig,
-        result: await generateSummaryForTopic(topicConfig, summaryWindow, { ...options, canGenerateSummaries, articleContext: summaryArticleContext })
+        result: await generateSummaryForTopic(topicConfig, window, { ...options, canGenerateSummaries, articleContext })
       }))
       : [];
 
     for (const topicResult of topicResults) {
       if (topicResult.status === 'rejected') {
-        logger.warn(`Thematic summary topic task failed: windowEnd=${summaryWindow.periodEnd}, error=${topicResult.reason?.message || topicResult.reason}`);
+        logger.warn(`Thematic summary topic task failed: windowEnd=${window.periodEnd}, error=${topicResult.reason?.message || topicResult.reason}`);
         continue;
       }
 
@@ -1401,7 +1345,7 @@ async function runDueSummaries(options: SummaryOptions = {}): Promise<DueSummary
     }
 
     if (canGeneratePodcast) {
-      const podcastResult = await generatePodcastForWindow(podcastWindow, { ...options, articleContext: podcastArticleContext });
+      const podcastResult = await generatePodcastForWindow(window, { ...options, articleContext });
       if (TERMINAL_PODCAST_STATUSES.has(podcastResult.summary?.status)) {
         summaries.unshift(podcastResult.summary);
       }
@@ -1416,7 +1360,7 @@ async function runDueSummaries(options: SummaryOptions = {}): Promise<DueSummary
     if (generatedCount > 0) {
       if (generatedTopicKeys.length > 0) {
         pruneGeneratedSummaryHistory({
-          periodEnd: summaryWindow.periodEnd,
+          periodEnd: window.periodEnd,
           topicKeys: generatedTopicKeys,
           thematicRetainCount: SUMMARY_HISTORY_RETAIN_COUNT,
           podcast: false
@@ -1424,28 +1368,27 @@ async function runDueSummaries(options: SummaryOptions = {}): Promise<DueSummary
       }
       if (generatedPodcast) {
         pruneGeneratedSummaryHistory({
-          periodEnd: podcastWindow.periodEnd,
+          periodEnd: window.periodEnd,
           topicKeys: [],
           podcast: true,
           podcastRetainCount: PODCAST_HISTORY_RETAIN_COUNT
         });
       }
-      logger.info(`Thematic summaries ready: summaryWindowEnd=${summaryWindow.periodEnd}, podcastWindowEnd=${podcastWindow.periodEnd}, count=${generatedCount}`);
+      logger.info(`Thematic summaries ready: windowEnd=${window.periodEnd}, count=${generatedCount}`);
       broadcastSummariesRefresh(options);
     }
 
     return {
-      window: summaryWindow,
-      podcastWindow,
+      window,
+      podcastWindow: window,
       items: summaries
     };
 }
 
 function getGenerationOptionsKey(options: SummaryOptions = {}) {
   const referenceDate = options.referenceDate || new Date();
-  const summaryWindow = options.summaryWindow || options.window || getLatestDueWindow(referenceDate);
-  const podcastWindow = options.podcastWindow || options.window || getLatestDueWindow(referenceDate);
-  return [summaryWindow.periodStart, summaryWindow.periodEnd, podcastWindow.periodStart, podcastWindow.periodEnd].join('|');
+  const window = options.window || getLatestDueWindow(referenceDate);
+  return [window.periodStart, window.periodEnd].join('|');
 }
 
 function mergeGenerationOptions(current: SummaryOptions | null, incoming: SummaryOptions = {}): SummaryOptions {

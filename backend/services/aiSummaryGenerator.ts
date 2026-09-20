@@ -2,7 +2,6 @@ const logger = require('../utils/logger');
 const { removePromotionalSentences } = require('../utils/promotionalContent');
 const { buildArticlePayload, getArticleTextLimit: getSharedArticleTextLimit } = require('./aiArticlePayload');
 const {
-  createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
@@ -186,9 +185,8 @@ async function generateSummaryForArticles(topicConfig: TopicConfig, articles: Ne
   }
 
   const startedAt = Date.now();
-  const openRouter = await createOpenRouterClient(config);
   const tokenBudget = getCompletionTokenBudget(articles.length);
-  const response = await sendJsonChatCompletion(openRouter, {
+  const response = await sendJsonChatCompletion(config, {
     model: config.model,
     messages: [
       {
@@ -201,10 +199,10 @@ async function generateSummaryForArticles(topicConfig: TopicConfig, articles: Ne
       }
     ],
     temperature: 0.25,
-    maxTokens: tokenBudget,
-    responseFormat: {
+    max_tokens: tokenBudget,
+    response_format: {
       type: 'json_schema',
-      jsonSchema: {
+      json_schema: {
         name: 'thematic_summary',
         strict: true,
         schema: {

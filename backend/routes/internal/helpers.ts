@@ -64,40 +64,6 @@ function requireAuthenticatedPublicApiFeature(req: Request, res: Response, next:
   next(createError(404, 'Public API token access is disabled.', 'PUBLIC_API_DISABLED'));
 }
 
-function parseSingleByteRange(rangeHeader: string | undefined = '', size = 0) {
-  const match = String(rangeHeader || '').match(/^bytes=(\d*)-(\d*)$/u);
-  if (!match || size <= 0) {
-    return null;
-  }
-
-  let start = match[1] ? Number(match[1]) : null;
-  let end = match[2] ? Number(match[2]) : null;
-
-  if (start === null && end === null) {
-    return null;
-  }
-
-  if (start === null) {
-    const suffixLength = end;
-    if (suffixLength === null || !Number.isFinite(suffixLength) || suffixLength <= 0) {
-      return null;
-    }
-    start = Math.max(0, size - suffixLength);
-    end = size - 1;
-  } else {
-    if (!Number.isFinite(start) || start < 0) {
-      return null;
-    }
-    end = end !== null && Number.isFinite(end) ? Math.min(end, size - 1) : size - 1;
-  }
-
-  if (!Number.isFinite(end) || start >= size || end < start) {
-    return null;
-  }
-
-  return { start, end };
-}
-
 function sniffAudioMimeType(audioBuffer: unknown, fallbackMimeType = 'audio/mpeg') {
   if (!Buffer.isBuffer(audioBuffer) || audioBuffer.length < 4) {
     return fallbackMimeType;
@@ -142,7 +108,11 @@ function sendAudioResponse(req: Request, res: Response, audio: { data: Buffer | 
     return;
   }
 
-  const range = parseSingleByteRange(req.headers.range, audioSize);
+  const ranges = /^bytes=(\d*)-(\d*)$/u.test(req.headers.range) ? req.range(audioSize) : undefined;
+  const suffixLength = Number(req.headers.range.match(/^bytes=-(\d+)$/u)?.[1]);
+  const range = audioSize > 0 && Number.isFinite(suffixLength) && suffixLength >= audioSize
+    ? { start: 0, end: audioSize - 1 }
+    : Array.isArray(ranges) && ranges.type === 'bytes' && ranges.length === 1 ? ranges[0] : null;
   if (!range) {
     res.set('Content-Range', `bytes */${audioSize}`);
     res.status(416).end();

@@ -46,8 +46,6 @@ interface PasswordSetupTokenRecord extends DynamicRecord {
 }
 
 interface ResolvedUserSettings extends UserSettings {
-  compactNewsCards: boolean;
-  compactNewsCardsMode: string;
   defaultLanguage: string;
   excludedSourceIds: string[];
   excludedSubSourceIds: string[];
@@ -82,7 +80,6 @@ const SUPPORTED_THEME_MODES = new Set(['system', 'light', 'dark']);
 const SUPPORTED_READER_PANEL_POSITIONS = new Set(['left', 'center', 'right']);
 const SUPPORTED_READER_TEXT_SIZES = new Set(['small', 'medium', 'large']);
 const SUPPORTED_READER_TEXT_WIDTHS = new Set(['default', 'wide', 'widest']);
-const SUPPORTED_COMPACT_NEWS_CARD_MODES = new Set(['off', 'mobile', 'desktop', 'everywhere']);
 
 let pendingAnonymousPublicApiRequests = 0;
 let lastAnonymousPublicApiUsageFlushAt = Date.now();
@@ -346,8 +343,6 @@ function getDefaultSettings(overrides: Partial<ResolvedUserSettings> = {}): Reso
     defaultLanguage: 'auto',
     themeMode: 'system',
     showNewsImages: true,
-    compactNewsCards: false,
-    compactNewsCardsMode: 'off',
     readerPanelPosition: 'right',
     readerTextSize: 'medium',
     readerTextWidth: 'default',
@@ -356,11 +351,6 @@ function getDefaultSettings(overrides: Partial<ResolvedUserSettings> = {}): Reso
     excludedSourceIds: [],
     excludedSubSourceIds: []
   };
-}
-
-function normalizeCompactNewsCardsMode(value: unknown, fallback = 'off') {
-  const normalizedFallback = SUPPORTED_COMPACT_NEWS_CARD_MODES.has(fallback) ? fallback : 'off';
-  return normalizeEnumValue(value, SUPPORTED_COMPACT_NEWS_CARD_MODES, normalizedFallback);
 }
 
 function getUserSettings(userId: string): ResolvedUserSettings {
@@ -438,29 +428,11 @@ function normalizeUserSettingsPayload(
   overrides: DynamicRecord = {}
 ): ResolvedUserSettings {
   return {
-    compactNewsCardsMode: normalizeCompactNewsCardsMode(
-      payload.compactNewsCardsMode,
-      currentSettings.compactNewsCardsMode || (currentSettings.compactNewsCards === true ? 'everywhere' : 'off')
-    ),
     defaultLanguage: normalizeLanguage(payload.defaultLanguage || currentSettings.defaultLanguage),
     themeMode: normalizeThemeMode(payload.themeMode || currentSettings.themeMode),
     showNewsImages: typeof payload.showNewsImages === 'boolean'
       ? payload.showNewsImages
       : currentSettings.showNewsImages !== false,
-    compactNewsCards: (() => {
-      if (typeof payload.compactNewsCardsMode === 'string') {
-        return normalizeCompactNewsCardsMode(payload.compactNewsCardsMode) !== 'off';
-      }
-
-      if (typeof payload.compactNewsCards === 'boolean') {
-        return payload.compactNewsCards;
-      }
-
-      return normalizeCompactNewsCardsMode(
-        currentSettings.compactNewsCardsMode,
-        currentSettings.compactNewsCards === true ? 'everywhere' : 'off'
-      ) !== 'off';
-    })(),
     readerPanelPosition: normalizeReaderPanelPosition(payload.readerPanelPosition || currentSettings.readerPanelPosition),
     readerTextSize: normalizeReaderTextSize(payload.readerTextSize || currentSettings.readerTextSize),
     readerTextWidth: normalizeReaderTextWidth(payload.readerTextWidth || currentSettings.readerTextWidth),
@@ -801,8 +773,6 @@ function exportUserSettings(userId: string) {
       defaultLanguage: settings.defaultLanguage,
       themeMode: settings.themeMode || 'system',
       showNewsImages: settings.showNewsImages !== false,
-      compactNewsCards: settings.compactNewsCards === true,
-      compactNewsCardsMode: normalizeCompactNewsCardsMode(settings.compactNewsCardsMode, settings.compactNewsCards === true ? 'everywhere' : 'off'),
       readerPanelPosition: settings.readerPanelPosition || 'right',
       readerTextSize: settings.readerTextSize || 'medium',
       readerTextWidth: settings.readerTextWidth || 'default',

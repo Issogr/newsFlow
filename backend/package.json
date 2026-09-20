@@ -9,17 +9,15 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json && tsc -p ../scripts/tsconfig.json",
     "lint": "eslint --flag unstable_native_nodejs_ts_config .",
-    "test": "NODE_OPTIONS=--import=tsx node ../scripts/run-vitest.ts",
-    "test:coverage": "NODE_OPTIONS=--import=tsx node ../scripts/run-vitest.ts --coverage",
-    "test:watch": "NODE_OPTIONS=--import=tsx node ../scripts/run-vitest.ts --watch"
+    "test": "NODE_OPTIONS='--import=tsx --no-experimental-webstorage' vitest run",
+    "test:coverage": "npm test -- --coverage",
+    "test:watch": "NODE_OPTIONS='--import=tsx --no-experimental-webstorage' vitest --watch"
   },
   "allowScripts": {
-    "@openrouter/sdk@1.2.83": true,
     "esbuild@0.28.2": true
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
-    "@openrouter/sdk": "^1.2.83",
     "axios": "^1.20.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",

@@ -358,7 +358,7 @@ describe('websocketService', () => {
     expect(socketTwo.emit).not.toHaveBeenCalled();
   });
 
-  test('tracks failed emits during feed refresh broadcasts', () => {
+  test('logs failed emits during feed refresh broadcasts', () => {
     const failingSocket = createSocket('socket-2', { auth: { token: 'token-2' }, headers: {} });
     failingSocket.emit.mockImplementation(() => {
       throw new Error('socket emit failed');
@@ -368,9 +368,7 @@ describe('websocketService', () => {
 
     websocketService.broadcastFeedRefresh();
 
-    const statistics = websocketService.getStatistics();
-    expect(statistics.activeConnectionsCount).toBe(1);
-    expect(statistics.failedBroadcasts).toBe(1);
+    expect(require('../utils/logger').warn).toHaveBeenCalledWith(expect.stringContaining('socket emit failed'));
   });
 
   test('disconnects active sockets for a deleted user immediately', () => {
@@ -387,7 +385,9 @@ describe('websocketService', () => {
     expect(disconnected).toBe(1);
     expect(socketOne.disconnect).toHaveBeenCalledWith(true);
     expect(socketTwo.disconnect).not.toHaveBeenCalled();
-    expect(websocketService.getStatistics().activeConnectionsCount).toBe(1);
+    websocketService.broadcastFeedRefresh();
+    expect(socketOne.emit).not.toHaveBeenCalled();
+    expect(socketTwo.emit).toHaveBeenCalled();
   });
 
   test('disconnects only sockets authenticated by a revoked session', () => {

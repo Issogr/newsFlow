@@ -2,7 +2,6 @@ const crypto = require('crypto');
 const logger = require('../utils/logger');
 const { parseIntegerEnv } = require('../utils/env');
 const {
-  createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
@@ -170,8 +169,7 @@ async function findSimilarStoriesForArticle(target: NewsArticle, candidates: New
   }
 
   const startedAt = Date.now();
-  const openRouter = await createOpenRouterClient(config);
-  const response = await sendJsonChatCompletion(openRouter, {
+  const response = await sendJsonChatCompletion(config, {
     model: config.model,
     messages: [
       {
@@ -184,7 +182,7 @@ async function findSimilarStoriesForArticle(target: NewsArticle, candidates: New
       }
     ],
     temperature: 0,
-    maxTokens: 900
+    max_tokens: 900
   }, {
     timeoutMs: config.timeoutMs,
     metrics: {

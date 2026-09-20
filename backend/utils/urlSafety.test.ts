@@ -11,6 +11,7 @@ jest.mock('axios', () => ({
 const dns = require('dns').promises;
 const axios = require('axios');
 const { fetchSafeTextUrl } = require('./urlSafety');
+const { Readable } = require('node:stream');
 
 describe('urlSafety', () => {
   beforeEach(() => {
@@ -125,5 +126,23 @@ describe('urlSafety', () => {
       status: 413,
       code: 'PAYLOAD_TOO_LARGE'
     });
+  });
+
+  test('reads streamed text, destroys oversized streams, and rejects premature closes', async () => {
+    dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    const stream = Readable.from([Buffer.from('hello '), Buffer.from('world')]);
+    axios.get.mockResolvedValue({ status: 200, data: stream, headers: {} });
+    await expect(fetchSafeTextUrl('https://example.com/feed')).resolves.toMatchObject({ data: 'hello world' });
+
+    const oversized = Readable.from([Buffer.alloc(32)]);
+    axios.get.mockResolvedValue({ status: 200, data: oversized, headers: {} });
+    await expect(fetchSafeTextUrl('https://example.com/feed', { maxResponseBytes: 16 }))
+      .rejects.toMatchObject({ status: 413, code: 'PAYLOAD_TOO_LARGE' });
+    expect(oversized.destroyed).toBe(true);
+
+    const aborted = new Readable({ read() { this.destroy(); } });
+    axios.get.mockResolvedValue({ status: 200, data: aborted, headers: {} });
+    await expect(fetchSafeTextUrl('https://example.com/feed'))
+      .rejects.toMatchObject({ status: 502, code: 'CONNECTION_ERROR' });
   });
 });

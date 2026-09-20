@@ -1,11 +1,12 @@
 const aiSummaryGenerator = require('./aiSummaryGenerator');
-const { setOpenRouterSdkLoader } = require('./openRouterClient');
+import type { Mock } from 'vitest';
 
 describe('aiSummaryGenerator', () => {
   const originalEnv = process.env;
+  let fetchMock: Mock | undefined;
 
   afterEach(() => {
-    setOpenRouterSdkLoader();
+    fetchMock?.mockRestore();
     process.env = originalEnv;
   });
 
@@ -25,9 +26,9 @@ describe('aiSummaryGenerator', () => {
         }
       }]
     });
-    setOpenRouterSdkLoader(async () => ({
-      OpenRouter: jest.fn(() => ({ chat: { send: sendMock } }))
-    }));
+    fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => (
+      Response.json(await sendMock(JSON.parse(String(options?.body))))
+    ));
 
     await aiSummaryGenerator.generateSummaryForArticles({ key: 'science', label: 'Science' }, [{
       id: 'article-1',
@@ -37,16 +38,14 @@ describe('aiSummaryGenerator', () => {
     }]);
 
     expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
-      chatRequest: expect.objectContaining({
-        responseFormat: expect.objectContaining({
-          type: 'json_schema',
-          jsonSchema: expect.objectContaining({
-            strict: true,
-            schema: expect.objectContaining({ required: ['en', 'it'] })
-          })
+      response_format: expect.objectContaining({
+        type: 'json_schema',
+        json_schema: expect.objectContaining({
+          strict: true,
+          schema: expect.objectContaining({ required: ['en', 'it'] })
         })
       })
-    }), expect.any(Object));
+    }));
   });
 
   test('uses cached reader text in the summary prompt when available', () => {

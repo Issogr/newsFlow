@@ -1,9 +1,9 @@
 const logger = require('../utils/logger');
+const { mapSettledWithConcurrency } = require('../utils/concurrency');
 const { isAiToggleEnabled } = require('../config/aiFeatures');
 import topicNormalizer = require('./topicNormalizer');
 import classifierUtils = require('./aiClassifierUtils');
 const {
-  createOpenRouterClient,
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
@@ -15,7 +15,6 @@ const {
   getClassifierEntries,
   isTimeoutError,
   resolveClassifierEntryId,
-  runBatchedClassifier,
   summarizeResponseShape,
 } = classifierUtils;
 import type { DynamicRecord, NewsArticle } from '../utils/types';
@@ -39,7 +38,6 @@ const TOPIC_GUIDANCE = [
 interface ClassifierContext extends DynamicRecord {
   batchCount?: number;
   batchIndex?: number;
-  openRouter?: unknown;
 }
 
 function isAiArticleDebugLoggingEnabled() {
@@ -299,9 +297,8 @@ async function classifyBatch(batch: NewsArticle[], config: DynamicRecord, contex
 
   const startedAt = Date.now();
   logBatchArticlesForDebug(batch, config, context.batchIndex || 0, context.batchCount || 0);
-  const openRouter = context.openRouter || await createOpenRouterClient(config);
   const tokenBudget = getCompletionTokenBudget(batch.length);
-  const response = await sendJsonChatCompletion(openRouter, {
+  const response = await sendJsonChatCompletion(config, {
     model: config.model,
     messages: [
       {
@@ -314,7 +311,7 @@ async function classifyBatch(batch: NewsArticle[], config: DynamicRecord, contex
       }
     ],
     temperature: 0,
-    maxTokens: tokenBudget
+    max_tokens: tokenBudget
   }, {
     timeoutMs: config.timeoutMs,
     metrics: {
@@ -341,22 +338,52 @@ async function classifyBatch(batch: NewsArticle[], config: DynamicRecord, contex
 
 async function classifyTopicDetailsForArticlesWithStatus(articles: NewsArticle[] = []) {
   const config = getConfig();
-  const status = await runBatchedClassifier({
-    articles,
-    config,
-    featureName: 'topic',
-    splitArticles: splitDeterministicAndAiArticles,
-    deterministicResultKey: 'deterministicTopicsByArticleId',
-    classifyBatch,
-    summarizeBatchError: summarizeAiError,
-    logger
+  const topicsByArticleId = new Map<string, DynamicRecord[]>();
+  if (!Array.isArray(articles) || articles.length === 0 || !config.enabled) {
+    if (articles?.length && !config.enabled) {
+      logger.info(`AI topic detection skipped: reason=${config.apiKey ? 'disabled' : 'missing_api_key'}, articles=${articles.length}`);
+    }
+    return {
+      topicsByArticleId,
+      attemptedArticleIds: [],
+      failedArticleIds: [],
+      cappedArticleIds: Array.isArray(articles) ? articles.map((article) => article?.id).filter(Boolean) : []
+    };
+  }
+
+  const startedAt = Date.now();
+  const limitedArticles = articles.slice(0, config.maxArticlesPerRefresh);
+  const cappedArticleIds = articles.slice(config.maxArticlesPerRefresh).map((article) => article?.id).filter(Boolean);
+  if (cappedArticleIds.length) {
+    logger.warn(`AI topic detection capped at ${limitedArticles.length}/${articles.length} new articles for this refresh`);
+  }
+  const { aiArticles, deterministicTopicsByArticleId } = splitDeterministicAndAiArticles(limitedArticles, config);
+  deterministicTopicsByArticleId.forEach((topics, id) => topicsByArticleId.set(id, topics));
+  const batches: NewsArticle[][] = [];
+  for (let index = 0; index < aiArticles.length; index += config.batchSize) {
+    batches.push(aiArticles.slice(index, index + config.batchSize));
+  }
+  logger.info(`AI topic detection started: model=${config.model}, articles=${limitedArticles.length}, deterministic=${deterministicTopicsByArticleId.size}, aiArticles=${aiArticles.length}, batches=${batches.length}`);
+  const batchResults: PromiseSettledResult<Map<string, DynamicRecord[]>>[] = await mapSettledWithConcurrency(batches, config.batchConcurrency, (batch: NewsArticle[], batchIndex: number) => classifyBatch(batch, config, {
+    batchIndex,
+    batchCount: batches.length
+  }));
+  const failedArticleIds: string[] = [];
+  batchResults.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      logger.warn(`AI topic batch failed: ${summarizeAiError(result.reason)}`);
+      failedArticleIds.push(...batches[index].map((article) => article.id).filter(Boolean));
+    } else {
+      result.value.forEach((topics, id) => topicsByArticleId.set(id, topics));
+    }
   });
+  logger.info(`AI topic detection completed: model=${config.model}, requested=${limitedArticles.length}, deterministic=${deterministicTopicsByArticleId.size}, aiRequested=${aiArticles.length}, classified=${topicsByArticleId.size}, durationMs=${Date.now() - startedAt}`);
 
   return {
-    topicsByArticleId: status.resultByArticleId,
-    attemptedArticleIds: status.attemptedArticleIds,
-    failedArticleIds: status.failedArticleIds,
-    cappedArticleIds: status.cappedArticleIds
+    topicsByArticleId,
+    attemptedArticleIds: limitedArticles.map((article) => article.id).filter(Boolean),
+    failedArticleIds,
+    cappedArticleIds
   };
 }
 

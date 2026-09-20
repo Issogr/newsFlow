@@ -2,8 +2,8 @@ import type { Mock } from 'vitest';
 
 describe('aiStoryGrouper', () => {
   let aiStoryGrouper: ReturnType<typeof require>;
-  let openRouterClient: ReturnType<typeof require>;
   let sendMock: Mock;
+  let fetchMock: Mock;
 
   beforeEach(() => {
     jest.resetModules();
@@ -23,16 +23,14 @@ describe('aiStoryGrouper', () => {
         }
       ]
     }));
-    openRouterClient = require('./openRouterClient');
     aiStoryGrouper = require('./aiStoryGrouper');
-    openRouterClient.setOpenRouterSdkLoader(async () => ({
-      OpenRouter: jest.fn(() => ({
-        chat: { send: sendMock }
-      }))
-    }));
+    fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => (
+      Response.json(await sendMock(JSON.parse(String(options?.body))))
+    ));
   });
 
   afterEach(() => {
+    fetchMock.mockRestore();
     delete process.env.OPENROUTER_API_KEY;
     delete process.env.OPENROUTER_STORY_GROUPING_MODEL;
     delete process.env.AI_STORY_GROUPING_REQUEST_TIMEOUT_MS;
@@ -66,12 +64,10 @@ describe('aiStoryGrouper', () => {
     ]);
 
     expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
-      chatRequest: expect.objectContaining({
-        model: 'test-story-grouping-model',
-        responseFormat: { type: 'json_object' }
-      })
-    }), expect.any(Object));
-    const userPrompt = sendMock.mock.calls[0][0].chatRequest.messages[1].content;
+      model: 'test-story-grouping-model',
+      response_format: { type: 'json_object' }
+    }));
+    const userPrompt = sendMock.mock.calls[0][0].messages[1].content;
     const promptPayload = JSON.parse(userPrompt.split('\n').pop());
     expect(Object.keys(promptPayload.target).sort()).toEqual(['description', 'id', 'publishedAt', 'title', 'topics']);
     expect(Object.keys(promptPayload.candidates[0]).sort()).toEqual(['description', 'id', 'publishedAt', 'title', 'topics']);

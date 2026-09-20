@@ -2,6 +2,10 @@
 
 ## 3.7.0
 
+- replaced custom podcast playback controls with native browser audio controls while keeping skip buttons and localized playback errors
+- simplified fresh SQLite initialization through the existing migration chain, reused article projections, and removed unused compact-card settings and WebSocket statistics
+- replaced the OpenRouter chat SDK with native fetch, specialized topic batching and daily summary scheduling, and reused native stream consumption and Express range parsing
+- removed the custom Vitest launcher and redundant shared ESLint configuration factory
 - consolidated the BFF into the backend so one Node service now owns secure same-origin sessions, APIs, Socket.IO, and static frontend hosting behind Caddy
 - removed the BFF image, proxy secret, encrypted session bridge, second session database, and their obsolete tests and deployment configuration
 - existing deployments require users to sign in once after upgrading because the retired BFF browser sessions are intentionally not migrated

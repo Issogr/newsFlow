@@ -2231,8 +2231,6 @@ describe('database queries and user data', () => {
     expect(settings).toMatchObject({
       userId: 'user-1',
       defaultLanguage: 'en',
-      compactNewsCards: true,
-      compactNewsCardsMode: 'everywhere',
       readerPanelPosition: 'left',
       readerTextSize: 'large',
       readerTextWidth: 'widest',

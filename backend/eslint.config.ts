@@ -1,8 +1,7 @@
-const { createNodeEslintConfig } = require('../scripts/eslintNodeBase.ts');
 const tseslint: typeof import('typescript-eslint') = require('typescript-eslint');
 
 module.exports = [
-  ...createNodeEslintConfig({ ignores: ['dist/**', 'logs/**'] }),
+  { ignores: ['coverage/**', 'data/**', 'node_modules/**', 'dist/**', 'logs/**'] },
   ...tseslint.configs.recommended,
   {
     rules: {

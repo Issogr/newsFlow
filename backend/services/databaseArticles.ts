@@ -6,6 +6,19 @@ import type SqliteDatabase from './sqliteDatabase';
 const { getCurrentPublicationDay, normalizePublicationDate } = publicationDate;
 const { parseJsonArray } = json;
 
+const ARTICLE_SELECT_COLUMNS = `
+  a.id, a.source_id AS sourceId, a.source_name AS source,
+  a.title, a.description, a.content, a.url, a.canonical_url AS canonicalUrl,
+  a.image, a.author, a.language, a.owner_user_id AS ownerUserId, a.published_at AS pubDate,
+  a.story_group_id AS storyGroupId,
+  a.ai_story_group_processed_at AS aiStoryGroupProcessedAt,
+  a.ai_story_group_status AS aiStoryGroupStatus,
+  a.ai_story_group_model AS aiStoryGroupModel,
+  a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
+  a.ai_story_group_confidence AS aiStoryGroupConfidence,
+  a.ai_story_group_reason AS aiStoryGroupReason
+`;
+
 type Article = NewsArticle & DynamicRecord;
 type Row = DynamicRecord;
 type FilterClause = { clause: string; params: unknown[] };
@@ -477,27 +490,7 @@ function createArticleRepository({
     }
 
     const sql = `
-      SELECT
-        a.id,
-        a.source_id AS sourceId,
-        a.source_name AS source,
-        a.title,
-        a.description,
-        a.content,
-        a.url,
-        a.canonical_url AS canonicalUrl,
-        a.image,
-        a.author,
-        a.language,
-        a.owner_user_id AS ownerUserId,
-        a.published_at AS pubDate,
-        a.story_group_id AS storyGroupId,
-        a.ai_story_group_processed_at AS aiStoryGroupProcessedAt,
-        a.ai_story_group_status AS aiStoryGroupStatus,
-        a.ai_story_group_model AS aiStoryGroupModel,
-        a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
-        a.ai_story_group_confidence AS aiStoryGroupConfidence,
-        a.ai_story_group_reason AS aiStoryGroupReason
+      SELECT ${ARTICLE_SELECT_COLUMNS}
       FROM articles a
       ${joins.join('\n')}
       ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
@@ -1688,27 +1681,7 @@ function createArticleRepository({
       );
 
       return getDb().prepare<ArticleRow>(`
-        SELECT
-          a.id,
-          a.source_id AS sourceId,
-          a.source_name AS source,
-          a.owner_user_id AS ownerUserId,
-          a.title,
-          a.description,
-          a.content,
-          a.url,
-          a.canonical_url AS canonicalUrl,
-          a.image,
-          a.author,
-          a.language,
-          a.published_at AS pubDate,
-          a.story_group_id AS storyGroupId,
-          a.ai_story_group_processed_at AS aiStoryGroupProcessedAt,
-          a.ai_story_group_status AS aiStoryGroupStatus,
-          a.ai_story_group_model AS aiStoryGroupModel,
-          a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
-          a.ai_story_group_confidence AS aiStoryGroupConfidence,
-          a.ai_story_group_reason AS aiStoryGroupReason
+        SELECT ${ARTICLE_SELECT_COLUMNS}
         FROM articles a
         WHERE ${where.join(' AND ')}
       `).all(...params);
@@ -1889,27 +1862,7 @@ function createArticleRepository({
     }
 
     const rows = getDb().prepare<ArticleRow>(`
-      SELECT
-        a.id,
-        a.source_id AS sourceId,
-        a.source_name AS source,
-        a.title,
-        a.description,
-        a.content,
-        a.url,
-        a.canonical_url AS canonicalUrl,
-        a.image,
-        a.author,
-        a.language,
-        a.owner_user_id AS ownerUserId,
-        a.published_at AS pubDate,
-        a.story_group_id AS storyGroupId,
-        a.ai_story_group_processed_at AS aiStoryGroupProcessedAt,
-        a.ai_story_group_status AS aiStoryGroupStatus,
-        a.ai_story_group_model AS aiStoryGroupModel,
-        a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
-        a.ai_story_group_confidence AS aiStoryGroupConfidence,
-        a.ai_story_group_reason AS aiStoryGroupReason,
+      SELECT ${ARTICLE_SELECT_COLUMNS},
         rl.saved_at AS readLaterSavedAt
       FROM articles a
       ${joins.join('\n')}
@@ -1957,27 +1910,7 @@ function createArticleRepository({
     ` : '';
 
     const rows = getDb().prepare<ArticleRow>(`
-      SELECT DISTINCT
-        a.id,
-        a.source_id AS sourceId,
-        a.source_name AS source,
-        a.title,
-        a.description,
-        a.content,
-        a.url,
-        a.canonical_url AS canonicalUrl,
-        a.image,
-        a.author,
-        a.language,
-        a.owner_user_id AS ownerUserId,
-        a.published_at AS pubDate,
-        a.story_group_id AS storyGroupId,
-        a.ai_story_group_processed_at AS aiStoryGroupProcessedAt,
-        a.ai_story_group_status AS aiStoryGroupStatus,
-        a.ai_story_group_model AS aiStoryGroupModel,
-        a.ai_story_group_match_ids AS aiStoryGroupMatchIds,
-        a.ai_story_group_confidence AS aiStoryGroupConfidence,
-        a.ai_story_group_reason AS aiStoryGroupReason
+      SELECT DISTINCT ${ARTICLE_SELECT_COLUMNS}
       FROM articles a
       JOIN article_topics at ON at.article_id = a.id
       WHERE a.owner_user_id IS NULL

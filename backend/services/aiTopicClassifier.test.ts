@@ -11,18 +11,15 @@ const { extractAssistantContent, parseJsonContent } = openRouterClient;
 describe('aiTopicClassifier', () => {
   const originalEnv = process.env;
   let chatSend: Mock;
-  let OpenRouterMock: Mock;
+  let fetchMock: Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
     openRouterClient._resetFailureBackoff();
     chatSend = jest.fn();
-    OpenRouterMock = jest.fn(() => ({
-      chat: {
-        send: chatSend
-      }
-    }));
-    openRouterClient.setOpenRouterSdkLoader(async () => ({ OpenRouter: OpenRouterMock }));
+    fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => (
+      Response.json(await chatSend(JSON.parse(String(options?.body)), options))
+    ));
     process.env = {
       ...originalEnv,
       OPENROUTER_API_KEY: 'test-key',
@@ -36,7 +33,7 @@ describe('aiTopicClassifier', () => {
   });
 
   afterEach(() => {
-    openRouterClient.setOpenRouterSdkLoader();
+    fetchMock.mockRestore();
     openRouterClient._resetFailureBackoff();
     process.env = originalEnv;
   });
@@ -63,31 +60,26 @@ describe('aiTopicClassifier', () => {
       }
     ]);
 
-    const clientOptions = OpenRouterMock.mock.calls[0][0];
-    const requestBody = chatSend.mock.calls[0][0].chatRequest;
+    const requestBody = chatSend.mock.calls[0][0];
     const requestOptions = chatSend.mock.calls[0][1];
     const prompt = requestBody.messages[1].content;
     const promptPayload = JSON.parse(prompt.split('\n').at(-1));
 
     expect(status.topicsByArticleId.get('article-1').map((entry: { topic: string }) => entry.topic)).toEqual(['Tecnologia']);
     expect(requestBody.model).toBe('topic-classifier-model');
-    expect(requestBody.responseFormat).toEqual({ type: 'json_object' });
+    expect(requestBody.response_format).toEqual({ type: 'json_object' });
     expect(requestBody.reasoning).toEqual({
       enabled: false,
       effort: 'none',
-      maxTokens: 0,
+      max_tokens: 0,
     });
-    expect(requestBody.maxCompletionTokens).toBe(440);
-    expect(requestOptions).toEqual({
-      retries: { strategy: 'none' },
-      timeoutMs: 30000
-    });
-    expect(clientOptions).toEqual(expect.objectContaining({
-      apiKey: 'test-key',
-      serverURL: 'https://openrouter.ai/api/v1',
-      timeoutMs: 30000,
-      httpReferer: expect.any(String),
-      appTitle: 'News Flow'
+    expect(requestBody.max_completion_tokens).toBe(440);
+    expect(requestOptions.signal).toBeInstanceOf(AbortSignal);
+    expect(fetchMock.mock.calls[0][0]).toBe('https://openrouter.ai/api/v1/chat/completions');
+    expect(requestOptions.headers).toEqual(expect.objectContaining({
+      Authorization: 'Bearer test-key',
+      'HTTP-Referer': expect.any(String),
+      'X-Title': 'News Flow'
     }));
     expect(prompt).toContain('AI chips arrive');
     expect(prompt).toContain('air/compressed-air weapons');
@@ -186,16 +178,13 @@ describe('aiTopicClassifier', () => {
   test('logs AI timeouts as fallback warnings without throwing', async () => {
     const timeoutError = new Error('The operation was aborted due to timeout');
     timeoutError.name = 'TimeoutError';
-    const sdkPromise = Promise.reject(timeoutError);
-    const catchSpy = jest.spyOn(sdkPromise, 'catch');
-    chatSend.mockReturnValue(sdkPromise);
+    chatSend.mockRejectedValue(timeoutError);
 
     const result = await aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus([
       { id: 'article-1', title: 'Market rally' }
     ]);
 
     expect(result.topicsByArticleId.size).toBe(0);
-    expect(catchSpy).toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith('AI topic batch failed: OpenRouter request timed out; keeping local fallback topics');
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('AI topic detection completed'));
   });
@@ -274,7 +263,7 @@ describe('aiTopicClassifier', () => {
     expect(result.get('article-1').map((entry: { topic: string }) => entry.topic)).toEqual(['Cronaca']);
   });
 
-  test('accepts common model response, SDK content, and invalid JSON variants safely', () => {
+  test('accepts common model response, content, and invalid JSON variants safely', () => {
     const result = aiTopicClassifier._normalizeClassifierDetails({
       results: [
         { articleId: 'article-1', category: 'Technology' },

@@ -6,6 +6,7 @@ const { parseIntegerEnv } = require('./env');
 import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 import type { LookupAddress, LookupOptions } from 'node:dns';
 import type { AppError } from './types';
+import type { Readable } from 'node:stream';
 
 const MAX_REDIRECTS = parseIntegerEnv('OUTBOUND_MAX_REDIRECTS', 5, { min: 0 });
 const MAX_RESPONSE_BYTES = parseIntegerEnv('OUTBOUND_MAX_RESPONSE_BYTES', 2097152, { min: 1 });
@@ -162,16 +163,6 @@ interface SafeRequestConfig extends Omit<AxiosRequestConfig, 'signal'> {
   signal?: AbortSignal;
 }
 
-interface ReadableResponse {
-  destroy(error?: Error): void;
-  off(event: 'data', listener: (chunk: string | Uint8Array) => void): void;
-  off(event: 'end' | 'aborted', listener: () => void): void;
-  off(event: 'error', listener: (error: unknown) => void): void;
-  on(event: 'data', listener: (chunk: string | Uint8Array) => void): void;
-  on(event: 'end' | 'aborted', listener: () => void): void;
-  on(event: 'error', listener: (error: unknown) => void): void;
-}
-
 async function resolveSafeOutboundTarget(rawUrl: unknown, options: { signal?: AbortSignal } = {}): Promise<SafeOutboundTarget> {
   let parsedUrl: URL;
 
@@ -246,8 +237,8 @@ function createPinnedLookup(target: SafeOutboundTarget) {
   };
 }
 
-function isReadableResponse(value: unknown): value is ReadableResponse {
-  return Boolean(value && typeof value === 'object' && 'on' in value && typeof value.on === 'function');
+function isReadableResponse(value: unknown): value is Readable {
+  return Boolean(value && typeof value === 'object' && Symbol.asyncIterator in value && 'destroy' in value);
 }
 
 async function readResponseText(responseData: unknown, maxResponseBytes: number): Promise<string> {
@@ -271,52 +262,24 @@ async function readResponseText(responseData: unknown, maxResponseBytes: number)
     return '';
   }
 
-  return new Promise<string>((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let totalLength = 0;
-    let settled = false;
-
-    const cleanup = () => {
-      responseData.off('data', onData);
-      responseData.off('end', onEnd);
-      responseData.off('error', onError);
-      responseData.off('aborted', onAborted);
-    };
-
-    const finish = <T>(handler: (value: T) => void, value: T) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      cleanup();
-      handler(value);
-    };
-
-    const onData = (chunk: string | Uint8Array) => {
+  const chunks: Buffer[] = [];
+  let totalLength = 0;
+  try {
+    for await (const chunk of responseData) {
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       totalLength += buffer.length;
-
       if (totalLength > maxResponseBytes) {
-        if (typeof responseData.destroy === 'function') {
-          responseData.destroy(createOversizedResponseError(maxResponseBytes));
-        }
-        finish(reject, createOversizedResponseError(maxResponseBytes));
-        return;
+        throw createOversizedResponseError(maxResponseBytes);
       }
-
       chunks.push(buffer);
-    };
-
-    const onEnd = () => finish(resolve, Buffer.concat(chunks).toString('utf8'));
-    const onError = (error: unknown) => finish(reject, error);
-    const onAborted = () => finish(reject, createError(502, 'Outbound response was aborted', 'CONNECTION_ERROR'));
-
-    responseData.on('data', onData);
-    responseData.on('end', onEnd);
-    responseData.on('error', onError);
-    responseData.on('aborted', onAborted);
-  });
+    }
+  } catch (error) {
+    if ((error as AppError).code === 'ERR_STREAM_PREMATURE_CLOSE') {
+      throw createError(502, 'Outbound response was aborted', 'CONNECTION_ERROR');
+    }
+    throw error;
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 function destroyResponseData(responseData: unknown) {

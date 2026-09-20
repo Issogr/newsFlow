@@ -15,8 +15,8 @@
     "lint": "eslint .",
     "typecheck": "tsc",
     "preview": "vite preview",
-    "test": "node ../scripts/run-vitest.ts",
-    "test:coverage": "node ../scripts/run-vitest.ts --coverage"
+    "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run",
+    "test:coverage": "npm test -- --coverage"
   },
   "engines": {
     "node": "^24.0.0"

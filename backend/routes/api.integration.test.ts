@@ -135,8 +135,6 @@ describe('API auth and user flows', () => {
       settings: {
         defaultLanguage: 'auto',
         showNewsImages: true,
-        compactNewsCards: false,
-        compactNewsCardsMode: 'off',
         readerPanelPosition: 'right',
         readerTextSize: 'medium',
         readerTextWidth: 'default',
@@ -411,8 +409,6 @@ describe('API auth and user flows', () => {
         defaultLanguage: 'en',
         themeMode: 'dark',
         showNewsImages: false,
-        compactNewsCards: true,
-        compactNewsCardsMode: 'desktop',
         readerPanelPosition: 'left',
         readerTextSize: 'large',
         readerTextWidth: 'widest',
@@ -423,6 +419,8 @@ describe('API auth and user flows', () => {
     });
     expect(updateResponse.body.settings).not.toHaveProperty('articleRetentionHours');
     expect(updateResponse.body.settings).not.toHaveProperty('recentHours');
+    expect(updateResponse.body.settings).not.toHaveProperty('compactNewsCards');
+    expect(updateResponse.body.settings).not.toHaveProperty('compactNewsCardsMode');
     expect(updateResponse.body.settings).toMatchObject({
       userId: expect.any(String),
       updatedAt: expect.any(String)
@@ -1173,8 +1171,6 @@ describe('API auth and user flows', () => {
         settings: expect.objectContaining({
           defaultLanguage: 'en',
           showNewsImages: false,
-          compactNewsCards: true,
-          compactNewsCardsMode: 'desktop',
           readerPanelPosition: 'center',
           readerTextSize: 'small',
           readerTextWidth: 'wide',
@@ -1191,6 +1187,8 @@ describe('API auth and user flows', () => {
     });
     expect(importResponse.body.settings).not.toHaveProperty('articleRetentionHours');
     expect(importResponse.body.settings).not.toHaveProperty('recentHours');
+    expect(importResponse.body.settings).not.toHaveProperty('compactNewsCards');
+    expect(importResponse.body.settings).not.toHaveProperty('compactNewsCardsMode');
     expect(newsService.refreshUserSources).toHaveBeenLastCalledWith(expect.any(String), { broadcast: true });
   });
 
@@ -1278,6 +1276,27 @@ describe('API auth and user flows', () => {
     expect(rangeResponse.headers['accept-ranges']).toBe('bytes');
     expect(rangeResponse.headers['content-range']).toBe('bytes 2-5/10');
     expect(rangeResponse.headers['content-length']).toBe('4');
+
+    for (const [range, expected] of [
+      ['bytes=-4', 'bytes 6-9/10'],
+      ['bytes=-20', 'bytes 0-9/10'],
+      ['bytes=2-', 'bytes 2-9/10'],
+      ['bytes=2-20', 'bytes 2-9/10']
+    ]) {
+      const response = await request(app)
+        .get('/api/podcast-summary/podcast-audio-test/audio')
+        .set('Cookie', sessionCookie)
+        .set('Range', range)
+        .expect(206);
+      expect(response.headers['content-range']).toBe(expected);
+    }
+    for (const range of ['bytes=-0', 'bytes=-', 'bytes=0-1,3-4', 'items=0-2', 'bytes=5-2']) {
+      await request(app)
+        .get('/api/podcast-summary/podcast-audio-test/audio')
+        .set('Cookie', sessionCookie)
+        .set('Range', range)
+        .expect(416);
+    }
 
     const invalidRangeResponse = await request(app)
       .get('/api/podcast-summary/podcast-audio-test/audio')

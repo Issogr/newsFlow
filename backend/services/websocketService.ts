@@ -112,15 +112,7 @@ interface FeedRefreshOptions extends DynamicRecord {
 }
 
 let io: SocketServerLike | null = null;
-let websocketStartTime = Date.now();
-
 const activeConnections = new Map<string, SocketLike>();
-const statistics = {
-  totalConnections: 0,
-  activeConnectionsCount: 0,
-  newsUpdatesSent: 0,
-  failedBroadcasts: 0
-};
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
 function removeActiveSocket(socket: SocketLike) {
@@ -129,9 +121,7 @@ function removeActiveSocket(socket: SocketLike) {
     socket.data.sessionExpiryTimer = null;
   }
 
-  if (socket?.id && activeConnections.delete(socket.id)) {
-    statistics.activeConnectionsCount = Math.max(0, statistics.activeConnectionsCount - 1);
-  }
+  activeConnections.delete(socket.id);
 }
 
 function disconnectSocket(socket: SocketLike) {
@@ -266,8 +256,6 @@ function initialize(server: HttpServer) {
   });
 
   socketServer.on('connection', (socket) => {
-    statistics.totalConnections += 1;
-    statistics.activeConnectionsCount += 1;
     activeConnections.set(socket.id, socket);
     Object.assign(socket.data, buildSocketFilters());
     scheduleSessionExpiryCheck(socket);
@@ -282,7 +270,6 @@ function initialize(server: HttpServer) {
     });
   });
 
-  websocketStartTime = Date.now();
   logger.info('WebSocket service initialized');
 
   return socketServer;
@@ -399,7 +386,6 @@ function emitToSocket(socket: SocketLike, event: string, payload: unknown) {
     socket.emit(event, payload);
     return true;
   } catch (error) {
-    statistics.failedBroadcasts += 1;
     logger.warn(`WebSocket emit failed for ${event}: ${(error as AppError).message}`);
     return false;
   }
@@ -550,7 +536,6 @@ function broadcastNewsUpdate(newsGroups: NewsGroup[] = []) {
     });
   });
 
-  statistics.newsUpdatesSent += 1;
   logger.info(`Broadcast news update to ${recipients} clients`);
 }
 
@@ -580,16 +565,7 @@ function broadcastFeedRefresh(options: FeedRefreshOptions = {}) {
     }
   });
 
-  statistics.newsUpdatesSent += 1;
   logger.info(`Broadcast feed refresh to ${recipients} clients: reason=${payload.reason}`);
-}
-
-function getStatistics() {
-  return {
-    ...statistics,
-    uptime: Math.floor((Date.now() - websocketStartTime) / 1000),
-    timestamp: new Date().toISOString()
-  };
 }
 
 function shutdown(callback: () => void = () => {}) {
@@ -608,6 +584,5 @@ module.exports = {
   disconnectSessionSockets,
   broadcastNewsUpdate,
   broadcastFeedRefresh,
-  getStatistics,
   shutdown
 };

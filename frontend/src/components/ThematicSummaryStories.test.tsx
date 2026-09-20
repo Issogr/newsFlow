@@ -128,7 +128,7 @@ describe('thematic summary podcast UI', () => {
     expect(screen.queryAllByTestId('thematic-summary-new-dot')).toHaveLength(0);
   });
 
-  test('renders custom podcast audio controls without script text and starts playback', async () => {
+  test('renders native podcast controls with bounded skipping and localized errors', () => {
     renderPodcastPanel({
       generatedAt: '2026-05-21T06:15:00.000Z',
       audioByLocale: {
@@ -149,19 +149,28 @@ describe('thematic summary podcast UI', () => {
     expect(screen.queryByText('Audio briefing')).not.toBeInTheDocument();
     expect(screen.queryByText('Podcast del mattino')).not.toBeInTheDocument();
     const audio = document.querySelector('audio');
-    Object.defineProperty(audio, 'duration', { configurable: true, value: 2 });
+    Object.defineProperty(audio, 'duration', { configurable: true, value: 40 });
     fireEvent.loadedMetadata(audio!);
 
     expect(screen.queryByText('Testo podcast italiano')).not.toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText('0:00 / 0:02')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Play podcast audio' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Seek podcast audio')).toBeInTheDocument();
+    expect(audio).toHaveAttribute('controls');
     expect(audio?.getAttribute('src')).toBe('/api/podcast-summary/podcast-1/audio?locale=en');
     expect(audio?.getAttribute('preload')).toBe('metadata');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Play podcast audio' }));
-
-    await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: t('podcastAudioForward') }));
+    expect(audio?.currentTime).toBe(30);
+    fireEvent.click(screen.getByRole('button', { name: t('podcastAudioForward') }));
+    expect(audio?.currentTime).toBe(40);
+    fireEvent.click(screen.getByRole('button', { name: t('podcastAudioBack') }));
+    expect(audio?.currentTime).toBe(25);
+    audio!.currentTime = 5;
+    fireEvent.click(screen.getByRole('button', { name: t('podcastAudioBack') }));
+    expect(audio?.currentTime).toBe(0);
+    fireEvent.error(audio!);
+    expect(screen.getByRole('alert')).toHaveTextContent(t('podcastAudioLoadFailed'));
+    expect(screen.getByRole('button', { name: t('podcastAudioForward') })).toBeDisabled();
+    fireEvent.loadStart(audio!);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   test('shows available podcast audio language when current locale audio is missing', () => {
