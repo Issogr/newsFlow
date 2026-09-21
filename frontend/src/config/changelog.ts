@@ -2,8 +2,8 @@ import type { ChangelogContent, Locale } from '../types';
 
 // Finalize one ID/date per announcement, after collecting all commits in the batch.
 export const CURRENT_CHANGELOG_ENTRY: { id: string; date: string } & Record<Locale, ChangelogContent> = {
-  id: 'unreleased',
-  date: '',
+  id: '2026-09-21-01',
+  date: '2026-09-21',
   en: {
     eyebrow: 'Latest update',
     title: 'What is new',

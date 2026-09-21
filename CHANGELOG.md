@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026-09-21-01
 
 - refreshed the app with a consistent minimal visual system: flatter surfaces, shared controls, calmer navigation, clearer source/headline hierarchy, and labeled topic summaries across light and dark themes, while preserving source logos, topic colors, AI rings, and reading features
 - switched to manually published `latest` images and dated GitHub releases so multiple commits can ship as one announced update
