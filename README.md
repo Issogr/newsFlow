@@ -87,12 +87,29 @@ Updates are batches of commits, not package versions. CI runs on pushes and pull
 1. Collect changes from as many commits as needed under `## Unreleased` in `CHANGELOG.md`. Keep the matching English/Italian user-facing notes in `frontend/src/config/changelog.ts`; draft metadata is `id: 'unreleased', date: ''`.
 2. When the batch is ready, choose a date and a unique announcement ID, for example `date: '2026-09-21'` and `id: '2026-09-21-01'`. Use `02`, `03`, etc. for additional updates on the same day. Rename the first changelog heading to `## 2026-09-21-01`.
 3. Check the release notes locally with `node scripts/release-notes.mts`, then commit and push the complete batch to `main` when ready.
-4. Run **Publish Update** on `main`. It validates both packages, audits production dependencies, rejects unfinished or reused announcements, publishes only the `:latest` image tag, then creates a GitHub Release tagged `update-2026-09-21-01` with that changelog section as its body. GitHub subscribers can follow **Watch → Custom → Releases**.
+4. Run **Publish Update** on `main`. It validates both packages, audits production dependencies, runs the Compose smoke check, rejects unfinished or reused announcements, publishes the `:latest` image tag to GHCR and the optional private registry, then creates a GitHub Release tagged `update-2026-09-21-01` with that changelog section as its body. GitHub subscribers can follow **Watch → Custom → Releases**.
 5. For the next batch, add a new `Unreleased` section above the published history and reset the app metadata to the draft values while editing the new notes. Do not reuse a published announcement ID. Package versions do not need bumping.
 
 The app displays a localized release date and tracks each user's acknowledgement by announcement ID. Draft notes are available from **Settings → What's new** without showing an update notice or recording an acknowledgement. The existing `lastSeenReleaseNotesVersion` settings field stores the ID for compatibility with current databases and settings exports.
 
 The app includes the latest announcement; full history remains in `CHANGELOG.md` and GitHub Releases. Users who skip multiple releases see the newest announcement after their installation updates and they reload the app. A workflow retry after the image upload can finish creating the release while its tag is still absent; once the release tag exists, use a new announcement for further changes.
+
+### Additional Private Registry
+
+To also publish to a private registry, configure these repository secrets under **Settings → Secrets and variables → Actions → Secrets**:
+
+| Secret | Value |
+| --- | --- |
+| `PRIVATE_REGISTRY_ENDPOINT` | Registry hostname with an optional port, e.g. `registry.example.com:5000`; no scheme, path, or trailing slash. |
+| `PRIVATE_REGISTRY_USERNAME` | Registry login username. |
+| `PRIVATE_REGISTRY_PASSWORD` | Registry password or access token with push permission. |
+
+When the endpoint is set, **Publish Update** uses the same build to push `linux/amd64` and `linux/arm64` images to both:
+
+- `ghcr.io/issogr/newsflow:latest`
+- `<PRIVATE_REGISTRY_ENDPOINT>/issogr/newsflow:latest`
+
+The image path follows the lowercase GitHub `<owner>/<repository>` name. The registry must be reachable over HTTPS from the GitHub-hosted runner, and the account must have push access to that image path. The GitHub Release is created after both pushes succeed. Leaving `PRIVATE_REGISTRY_ENDPOINT` unset publishes only to GHCR.
 
 ## Configuration
 Full configuration reference: [`CONFIGURATION.md`](CONFIGURATION.md).

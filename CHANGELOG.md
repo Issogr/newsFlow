@@ -21,6 +21,7 @@
 - updated the backend's transitive `qs` dependency to 6.16.0 to resolve the query-parsing advisories reported by the weekly production dependency audit
 - refreshed compatible backend and frontend dependencies, including React 19.3, Vite 8.3, jsdom 30.1, Lucide icons, request logging/uploads, and lint/type tooling
 - upgraded Vitest and its V8 coverage provider to 5.0.1 in both packages and aligned backend jsdom typings with version 30
+- added optional private-registry publishing alongside GHCR from the same multi-platform build, configured through Actions secrets
 
 ## 3.7.0
 

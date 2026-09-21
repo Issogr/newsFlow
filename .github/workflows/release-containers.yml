@@ -25,6 +25,8 @@ jobs:
     name: Publish application image
     runs-on: ubuntu-latest
     needs: [validate, compose-smoke]
+    env:
+      PRIVATE_REGISTRY_ENDPOINT: ${{ secrets.PRIVATE_REGISTRY_ENDPOINT }}
     permissions:
       contents: write
       packages: write
@@ -67,13 +69,15 @@ jobs:
         run: |
           owner=$(printf '%s' "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
           repo=$(printf '%s' "$REPO_NAME" | tr '[:upper:]' '[:lower:]')
-          echo "image=ghcr.io/${owner}/${repo}" >> "$GITHUB_OUTPUT"
+          echo "image=${owner}/${repo}" >> "$GITHUB_OUTPUT"
 
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ steps.prep.outputs.image }}
+          images: |
+            ghcr.io/${{ steps.prep.outputs.image }}
+            name=${{ env.PRIVATE_REGISTRY_ENDPOINT }}/${{ steps.prep.outputs.image }},enable=${{ env.PRIVATE_REGISTRY_ENDPOINT != '' }}
           flavor: latest=false
           tags: |
             type=raw,value=latest
@@ -89,6 +93,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to private registry
+        if: env.PRIVATE_REGISTRY_ENDPOINT != ''
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.PRIVATE_REGISTRY_ENDPOINT }}
+          username: ${{ secrets.PRIVATE_REGISTRY_USERNAME }}
+          password: ${{ secrets.PRIVATE_REGISTRY_PASSWORD }}
 
       - name: Build and push image
         uses: docker/build-push-action@v7
