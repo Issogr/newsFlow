@@ -15,6 +15,7 @@
   "include": [
     "app.ts",
     "server.ts",
+    "*.test.ts",
     "config/**/*.ts",
     "routes/**/*.ts",
     "services/**/*.ts",

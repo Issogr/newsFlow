@@ -225,7 +225,8 @@ describe('browser application boundary', () => {
 
   test('authenticates direct same-origin Socket.IO polling and WebSocket connections', async () => {
     const server = http.createServer(app);
-    const io = (await import('./services/websocketService')).default.initialize(server);
+    const websocketService = (await import('./services/websocketService')).default;
+    websocketService.initialize(server);
     let websocketClient: Socket | null = null;
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     const address = server.address();
@@ -307,7 +308,7 @@ describe('browser application boundary', () => {
       expect(rejected.status).toBe(403);
     } finally {
       websocketClient?.disconnect();
-      await new Promise<void>((resolve) => io.close(resolve));
+      await new Promise<void>((resolve) => websocketService.shutdown(resolve));
     }
   });
 });

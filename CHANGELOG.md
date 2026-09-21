@@ -16,6 +16,11 @@
 - removed the Jest compatibility loader through native backend imports and Vitest mocks, replaced frontend Axios with fetch and backend Winston with console logging, and reused native IP-range checks, grouping, and deferred promises
 - consolidated migration bookkeeping and duplicate-article updates, removed one-use summary caches and helper injection, and deleted unused frontend browser targets
 - simplified backend environment and error helper imports, removed duplicate inherited type fields, and flattened redundant auth-test scopes
+- fixed order-dependent news aggregator mocks, removed redundant mock resets, and included backend application-boundary tests in TypeScript validation
+- shared the Compose smoke check between CI and publishing, required it before image uploads, and added execution deadlines and failure diagnostics before cleanup
+- updated the backend's transitive `qs` dependency to 6.16.0 to resolve the query-parsing advisories reported by the weekly production dependency audit
+- refreshed compatible backend and frontend dependencies, including React 19.3, Vite 8.3, jsdom 30.1, Lucide icons, request logging/uploads, and lint/type tooling
+- upgraded Vitest and its V8 coverage provider to 5.0.1 in both packages and aligned backend jsdom typings with version 30
 
 ## 3.7.0
 

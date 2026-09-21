@@ -18,46 +18,5 @@ jobs:
     uses: ./.github/workflows/validate-services.yml
 
   compose-smoke:
-    name: Docker Compose Smoke
-    runs-on: ubuntu-latest
     needs: validate
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Start Compose stack
-        env:
-          APP_BASE_URL: https://localhost
-          OPENROUTER_API_KEY: ''
-          PUBLIC_API_ANONYMOUS_ENABLED: 'true'
-        run: docker compose up --build --wait -d
-
-      - name: Smoke test Compose stack
-        run: |
-          published_ports="$(docker inspect \
-            --format '{{range $port, $bindings := .NetworkSettings.Ports}}{{if $bindings}}{{$.Name}}: {{$port}} -> {{json $bindings}}{{end}}{{end}}' \
-            "$(docker compose ps -q newsflow)")"
-          if [ -n "$published_ports" ]; then
-            echo "Internal ports are unexpectedly published: $published_ports"
-            exit 1
-          fi
-          curl -kfsS https://localhost/health >/tmp/newsflow-compose-health.json
-          curl -kfsS https://localhost/api/public/news >/tmp/newsflow-compose-public-news.json
-          curl -kfsS -H 'Content-Type: application/json' \
-            -H 'Origin: https://localhost' \
-            -c /tmp/newsflow-compose-cookies.txt \
-            -d '{"username":"ci-compose-user","password":"secret123"}' \
-            https://localhost/api/auth/register >/tmp/newsflow-compose-register.json
-          curl -kfsS -b /tmp/newsflow-compose-cookies.txt https://localhost/api/me >/tmp/newsflow-compose-me.json
-          curl -kfsS -H 'Accept-Encoding: gzip' -D /tmp/newsflow-compose-headers.txt \
-            https://localhost/ >/tmp/newsflow-compose-index.html
-          grep -Eiq '^content-encoding: gzip[[:space:]]*$' /tmp/newsflow-compose-headers.txt
-          test "$(curl --http1.1 -ksS -o /dev/null -w '%{http_code}' \
-            -H 'Origin: https://evil.example' -H 'Content-Type: application/json' \
-            -b /tmp/newsflow-compose-cookies.txt -d '{}' \
-            https://localhost/api/auth/logout)" -eq 403
-
-      - name: Stop Compose stack
-        if: always()
-        run: docker compose down -v
+    uses: ./.github/workflows/compose-smoke.yml

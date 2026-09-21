@@ -28,11 +28,15 @@ declare module 'supertest' {
       body: ApiResponseBody;
       headers: Record<string, string | string[] | undefined>;
       status: number;
+      text: string;
+      type: string;
     }
 
     interface Test extends PromiseLike<Response> {
       attach(field: string, file: Buffer, options: { filename: string; contentType: string }): this;
       expect(status: number, body?: unknown): this;
+      expect(field: string, value: string | RegExp): this;
+      expect(body: RegExp): this;
       field(name: string, value: string): this;
       query(value: Record<string, string>): this;
       send(value: unknown): this;

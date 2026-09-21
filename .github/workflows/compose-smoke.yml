@@ -1,0 +1,63 @@
+name: Compose Smoke
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  compose-smoke:
+    name: Docker Compose Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      APP_BASE_URL: https://localhost
+      OPENROUTER_API_KEY: ''
+      PUBLIC_API_ANONYMOUS_ENABLED: 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Start Compose stack
+        timeout-minutes: 15
+        run: docker compose up --build --wait --wait-timeout 180 -d
+
+      - name: Smoke test Compose stack
+        timeout-minutes: 2
+        run: |
+          published_ports="$(docker inspect \
+            --format '{{range $port, $bindings := .NetworkSettings.Ports}}{{if $bindings}}{{$.Name}}: {{$port}} -> {{json $bindings}}{{end}}{{end}}' \
+            "$(docker compose ps -q newsflow)")"
+          if [ -n "$published_ports" ]; then
+            echo "Internal ports are unexpectedly published: $published_ports"
+            exit 1
+          fi
+          curl --max-time 15 -kfsS https://localhost/health >/tmp/newsflow-compose-health.json
+          curl --max-time 15 -kfsS https://localhost/api/public/news >/tmp/newsflow-compose-public-news.json
+          curl --max-time 15 -kfsS -H 'Content-Type: application/json' \
+            -H 'Origin: https://localhost' \
+            -c /tmp/newsflow-compose-cookies.txt \
+            -d '{"username":"ci-compose-user","password":"secret123"}' \
+            https://localhost/api/auth/register >/tmp/newsflow-compose-register.json
+          curl --max-time 15 -kfsS -b /tmp/newsflow-compose-cookies.txt https://localhost/api/me >/tmp/newsflow-compose-me.json
+          curl --max-time 15 -kfsS -H 'Accept-Encoding: gzip' -D /tmp/newsflow-compose-headers.txt \
+            https://localhost/ >/tmp/newsflow-compose-index.html
+          grep -Eiq '^content-encoding: gzip[[:space:]]*$' /tmp/newsflow-compose-headers.txt
+          test "$(curl --max-time 15 --http1.1 -ksS -o /dev/null -w '%{http_code}' \
+            -H 'Origin: https://evil.example' -H 'Content-Type: application/json' \
+            -b /tmp/newsflow-compose-cookies.txt -d '{}' \
+            https://localhost/api/auth/logout)" -eq 403
+
+      - name: Collect Compose diagnostics
+        if: failure()
+        timeout-minutes: 1
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color --tail 200
+
+      - name: Stop Compose stack
+        if: always()
+        timeout-minutes: 2
+        run: docker compose down -v --timeout 10

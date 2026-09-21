@@ -108,43 +108,16 @@ function recentIso({ hoursAgo = 0, minutesAgo = 0 } = {}) {
 
 describe('newsAggregator service flows', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     newsAggregator._resetImmediateRefreshState();
     _resetRuntimeStateForTests();
-    database.countArticles.mockReturnValue(1);
-    database.deleteArticlesOlderThan.mockReturnValue(0);
-    database.normalizeFuturePublicationDates.mockReturnValue(0);
-    database.cleanupRemovedConfiguredSourceData.mockReturnValue({ removedArticles: 0, updatedSettings: 0 });
-    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue([]);
-    database.getArticleIdsPendingAiStoryGrouping.mockReturnValue([]);
-    database.getArticleIdsForAiStoryGroupingRetry.mockReturnValue([]);
-    database.getArticles.mockReturnValue([]);
-    database.getArticleById.mockImplementation((articleId: string) => ({ id: articleId }));
-    database.getLatestIngestionRun.mockReturnValue(null);
-    database.getSourceStats.mockReturnValue([]);
-    database.getTopicStatsByFilters.mockReturnValue([]);
-    database.getUserSettings.mockReturnValue({ excludedSourceIds: [], excludedSubSourceIds: [] });
     database.listUsers.mockReturnValue([{ id: 'user-1', lastActivityAt: new Date().toISOString() }]);
-    database.listUserSources.mockReturnValue([]);
-    database.listAllActiveUserSources.mockReturnValue([]);
     database.findUserSourceById.mockImplementation((userId: string, sourceId: string) => {
       return [
         ...database.listUserSources(userId),
         ...database.listAllActiveUserSources()
       ].find((source) => source.userId === userId && source.id === sourceId) || null;
     });
-    database.upsertArticles.mockReturnValue({ insertedIds: [], insertedCount: 0, updatedCount: 0 });
-    aiTopicClassifier.isAiTopicDetectionAvailable.mockReturnValue(true);
-    aiStoryGrouper.findSimilarStoriesForArticle.mockResolvedValue({ matches: [], model: 'test-story-model' });
-    aiStoryGrouper.isAiStoryGroupingAvailable.mockReturnValue(false);
-    thematicSummaryService.generateDueSummaries.mockResolvedValue({ items: [] });
-    aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockResolvedValue({
-      topicsByArticleId: new Map(),
-      attemptedArticleIds: [],
-      failedArticleIds: [],
-      cappedArticleIds: []
-    });
-    rssParser._buildArticleId.mockImplementation((source: { id: string }, item: { link?: string; title?: string }, canonicalUrl = '') => `${source.id}:${canonicalUrl || item.link || item.title}`);
     rssParser.parseFeed.mockResolvedValue([]);
   });
 
