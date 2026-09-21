@@ -1,202 +1,183 @@
 # News Flow
 
-<p align="center">
-  <img src="frontend/public/logo.svg" alt="News Flow logo" width="108" />
-</p>
+<img src="frontend/public/logo.svg" alt="News Flow logo" width="96" />
 
-<p align="center">
-  <img src="https://img.shields.io/badge/status-active-0f766e" alt="Project status: active" />
-  <img src="https://img.shields.io/badge/license-GPL--3.0-1d4ed8" alt="License: GPL-3.0" />
-</p>
+**Choose your sources. Follow the story. Read at your own pace.**
 
-News Flow is a self-hosted RSS news hub with grouped stories, clean reader mode, per-user sources, and optional AI-powered topics, summaries, and story grouping.
+News Flow is a self-hosted RSS reader that brings articles from different publishers into one place, groups overlapping coverage into story cards, and offers a clean in-app reading view.
 
-## Features
+Use it for your own reading or share an installation with multiple accounts. Each reader chooses their sources, adds personal RSS feeds, saves articles for later, and keeps their own reading preferences. Optional [OpenRouter](https://openrouter.ai/) features add AI topic detection, story grouping, and daily thematic summaries.
 
-- Group overlapping RSS articles into story cards.
-- Search cached news server-side.
-- Use account-based access with persistent settings import and export.
-- Add personal RSS feeds and source exclusions.
-- Read articles in a cleaned in-app reader.
-- Save read-later articles outside normal retention.
-- Use optional OpenRouter AI jobs for topic detection, story grouping, and thematic summaries.
-- Keep browser traffic same-origin on `/api/*`; Caddy is the only public service.
+## Run with Docker
 
-## Quick Start
+Docker Compose is the quickest way to run the complete app. It builds the frontend and backend and starts Caddy as the public entry point, so Node.js and npm are not needed on your host. From the repository root:
 
 ```bash
-docker compose up --build -d --remove-orphans
+docker compose up --build -d
 ```
 
-Open `http://localhost`.
+Open [http://localhost](http://localhost), create an account, and choose your sources. An OpenRouter API key is not required for the RSS reader.
 
-Runtime target for all packages is Node.js `24.20.0`.
+Compose reads an optional root `.env` file for configuration. After changing it, run `docker compose up -d` to apply the new values. See [Deploy with HTTPS](#deploy-with-https) when using a domain instead of localhost.
 
-## Local Development
+## Run with npm
 
-There is no root `package.json`; install and run the backend and frontend separately.
+Use npm for local development. Requires Node.js 24; Docker and CI currently pin `24.20.0`. The Express backend and Vite React frontend have separate packages, with no root `package.json`.
+
+In one terminal, from the repository root:
 
 ```bash
-cd backend && npm install
-cd ../frontend && npm install
+npm --prefix backend ci
+APP_BASE_URL=http://localhost:5173 npm --prefix backend run dev
 ```
 
-Run in separate terminals:
+In a second terminal, also from the repository root:
 
 ```bash
-cd backend && APP_BASE_URL=http://localhost:5173 npm run dev
-cd frontend && npm start
+npm --prefix frontend ci
+npm --prefix frontend start
 ```
 
-Useful checks:
+Open [http://localhost:5173](http://localhost:5173). Vite forwards `/api` and `/socket.io` to the backend on port `5000`. If you change the frontend origin, use the same value for `APP_BASE_URL`.
+
+For npm runs, pass configuration through the backend process environment; the root `.env` file is loaded by Compose, not automatically by the npm scripts.
+
+## Make the feed yours
+
+Choose built-in sources during account setup, then use **Settings** to change source selections or add personal RSS feeds. Each account can keep up to eight custom feeds by default. Settings and custom sources can be exported and imported.
+
+Filter the feed by source, topic, or time, and search the articles already cached on your server. Related coverage appears together in a story card so you can compare publishers without working through a separate card for every article.
+
+Feed reads use cached data. A manual refresh queues source updates in the background and has a five-minute cooldown by default. Scheduled ingestion runs every 15 minutes for sources assigned to recently active users.
+
+## Read and save articles
+
+Choose **Read here** to open the cleaned reader view or **Open original** to visit the publisher. Reader extraction depends on the source page; the original link remains available when an article cannot be extracted.
+
+Save articles to **Read later** to keep them beyond the normal retention window, which defaults to 24 hours. The interface supports English and Italian, light and dark themes, and adjustable reader text size and width.
+
+## Optional AI features
+
+AI jobs run in the backend through OpenRouter. For a Compose installation, add the features you want to the root `.env` file:
+
+```dotenv
+OPENROUTER_API_KEY=your-openrouter-api-key
+AI_TOPIC_DETECTION_ENABLED=true
+AI_STORY_GROUPING_ENABLED=true
+AI_SUMMARY_GENERATION_ENABLED=true
+```
+
+Topic detection classifies incoming articles; story grouping uses article metadata to connect coverage of the same event. Both run after ingestion, outside feed requests.
+
+Thematic summaries use built-in sources and are shared across users. They provide English and Italian briefings with links to their source articles, scheduled for `20:00` in `AI_SUMMARY_TIME_ZONE` (`Europe/Rome` by default). Generation can use cached reader excerpts and includes a second AI pass to check claims against those excerpts.
+
+Compose enables only the topic-detection switch by default; story grouping and summaries are opt-in. Raw backend runs default all three switches to enabled. Provider calls always require a key. Model choices, text budgets, and scheduling controls are documented in [CONFIGURATION.md](CONFIGURATION.md#ai-provider-and-feature-switches).
+
+## Set up the admin account
+
+The backend reserves an `admin` account on startup. Setup links are deliberately omitted from logs. To generate a single-use link in a running Compose installation:
 
 ```bash
-cd backend && npm run lint && npm test
-cd frontend && npm run lint && npm test && npm run build
+docker compose exec newsflow node -e "console.log(require('./dist/services/userService').default.ensureAdminBootstrap().setupLink)"
 ```
 
-Local data defaults:
+For local development, run these commands from `backend/`:
 
-- Application database: `backend/data/news.db`
+```bash
+npm run build
+APP_BASE_URL=http://localhost:5173 node -e "console.log(require('./dist/services/userService').default.ensureAdminBootstrap().setupLink)"
+```
 
-## Deployment
+Open the printed link to set the password. It expires after 30 minutes by default. Once the admin password is configured, the command returns `null` instead of creating another bootstrap link. Use the same `NEWS_DB_PATH` as the running backend if you have overridden it.
 
-The bundled deployment puts Caddy in front of the application. Only Caddy publishes host ports; the application serves the API, Socket.IO, and built React frontend on a private Docker network.
+## Storage and privacy
 
-For automatic production HTTPS:
+Accounts, settings, cached articles, reader content, saved-article references, and summaries are stored in SQLite. Both local runs and the bundled Compose setup persist the database at `backend/data/news.db` on the host; Compose mounts that directory at `/usr/src/app/data` inside the container. Keep `backend/data/` when rebuilding or upgrading, and back it up while the app is stopped or with a SQLite-aware backup tool. Settings exports are not full database backups.
 
-- Set `APP_BASE_URL=https://your-domain`.
-- Point the domain's DNS records to the deployment host.
-- Allow inbound TCP ports `80` and `443` and UDP port `443` through the host firewall.
-- Keep the `caddy-data` volume so certificates and account state survive restarts.
-- Do not publish the application container port; Compose fixes the service to one trusted Caddy hop.
-- Replace the controller/contact placeholders in the legal pages with deployment-approved details before publishing the service.
+Browser authentication uses first-party session cookies. Passwords and session/API tokens are hashed in the database. The OpenRouter key stays on the backend. When AI features are enabled, article metadata and, for summaries, selected text excerpts are sent to OpenRouter and its model providers; see their [privacy policy](https://openrouter.ai/privacy).
 
-Published images:
+Self-hosting still involves external requests: the backend fetches RSS feeds and reader pages, and the browser can load publisher images and source icons. If Telegram feedback is configured, submitted feedback, account identifiers, and attachments are forwarded to the operator's Telegram destination.
 
-- `ghcr.io/issogr/newsflow:latest` (includes the built frontend)
+## Deploy with HTTPS
 
-The bundled Compose file builds your local checkout. To use the published image instead, set the `newsflow` service's `image` to `ghcr.io/issogr/newsflow:latest` and remove its `build` block. Pull the image and recreate the service when upgrading; the `latest` tag does not update running containers automatically. Each image retains its source commit in the `org.opencontainers.image.revision` label, and can be pinned by digest.
+The bundled stack exposes only Caddy on host ports `80` and `443`. Caddy forwards the frontend, API, and Socket.IO traffic to the application over a private Docker network.
 
-When using the image outside the bundled Compose stack, set both `APP_BASE_URL` and `ALLOWED_ORIGINS` to the public origin. Existing deployments can remove the retired `bff-data` volume after upgrading.
+Set the public origin in the root `.env` file:
 
-## Publishing An Update
+```dotenv
+APP_BASE_URL=https://news.example.com
+```
 
-Updates are batches of commits, not package versions. CI runs on pushes and pull requests. **Publish Update** runs automatically on pushes to `main` whose tip commit has the exact title `Prepared update YYYY-MM-DD-NN`, matching the finalized changelog ID.
+Point the domain's DNS records to the host and allow inbound TCP `80`/`443` and UDP `443`. Run `docker compose up -d`; Caddy manages HTTPS certificates automatically. Preserve the `caddy-data` and `caddy-config` volumes across upgrades. The bundled topology uses exactly one trusted proxy hop, so keep the application container's port unpublished.
 
-1. Collect changes from as many commits as needed under `## Unreleased` in `CHANGELOG.md`. Keep the matching English/Italian user-facing notes in `frontend/src/config/changelog.ts`; draft metadata is `id: 'unreleased', date: ''`.
-2. When the batch is ready, choose a date and a unique announcement ID, for example `date: '2026-09-21'` and `id: '2026-09-21-01'`. Use `02`, `03`, etc. for additional updates on the same day. Rename the first changelog heading to `## 2026-09-21-01`.
-3. Check the release notes locally with `node --test scripts/release-notes.test.mts` and `node scripts/release-notes.mts`. Create the release commit with the exact title `Prepared update 2026-09-21-01`.
-4. Push or merge the batch to `main` through the repository's approved process, preserving that title on the tip commit. This authorizes publication: **Publish Update** validates both packages, audits production dependencies, runs the Compose smoke check, rejects unfinished, mismatched, or reused announcement IDs, publishes the `:latest` image tag to GHCR and the optional private registry, then creates a GitHub Release tagged `update-2026-09-21-01` with that changelog section as its body. GitHub subscribers can follow **Watch → Custom → Releases**.
-5. For the next batch, add a new `Unreleased` section above the published history and reset the app metadata to the draft values while editing the new notes. Do not reuse a published announcement ID. Package versions do not need bumping.
+When running the image outside this stack, set both `APP_BASE_URL` and `ALLOWED_ORIGINS` to the public origin and configure proxy trust for your topology. Replace the controller/contact placeholders in the [legal pages](frontend/src/components/LegalPolicyPage.tsx) before publishing the service.
 
-Only the pushed tip commit's first line controls publication; a release title in an earlier commit or in the message body does not trigger a release. A commit body is allowed, but additional text on the title line is rejected. Ordinary commits run CI without publishing, and no manual workflow dispatch is needed.
+### Use the published image
 
-The app displays a localized release date and tracks each user's acknowledgement by announcement ID. Draft notes are available from **Settings → What's new** without showing an update notice or recording an acknowledgement. The existing `lastSeenReleaseNotesVersion` settings field stores the ID for compatibility with current databases and settings exports.
+The published image, `ghcr.io/issogr/newsflow:latest`, includes the built frontend and supports `linux/amd64` and `linux/arm64`. To use it, change the `newsflow` service's `image` in `docker-compose.yml` and remove its `build` block. Then install or update with:
 
-The app includes the latest announcement; full history remains in `CHANGELOG.md` and GitHub Releases. Users who skip multiple releases see the newest announcement after their installation updates and they reload the app. A workflow retry after the image upload can finish creating the release while its tag is still absent; once the release tag exists, use a new announcement for further changes.
+```bash
+docker compose pull newsflow
+docker compose up -d
+```
 
-### Additional Private Registry
+The `latest` tag does not update running containers automatically. Images can be pinned by digest and retain their source commit in the `org.opencontainers.image.revision` label.
 
-To also publish to a private registry, configure these repository secrets under **Settings → Secrets and variables → Actions → Secrets**:
+## Public API and configuration
+
+External integrations can use `GET /api/public/news` when enabled by the operator. It is read-only and cache-only: requests never trigger RSS refreshes, reader extraction, or AI work. API documentation is available at `/api/docs` on your running installation.
+
+- Set `PUBLIC_API_AUTHENTICATED_ENABLED=true` to enable dedicated API tokens and their controls in **Settings**. Tokens are shown once at creation, expire after 30 days, and can be revoked.
+- Set `PUBLIC_API_ANONYMOUS_ENABLED=true` to allow access without a token. Both access modes are disabled by default.
+
+For all environment variables, defaults, and limits—including ingestion, retention, reader extraction, AI models, authentication, and Telegram feedback—see [CONFIGURATION.md](CONFIGURATION.md).
+
+## Development and updates
+
+`backend/` contains the Express + Socket.IO server, SQLite persistence, ingestion, authentication, reader extraction, and AI jobs. `frontend/` contains the Vite React app, whose browser requests use same-origin `/api/*` routes.
+
+After installing both packages, run checks from the repository root:
+
+```bash
+npm --prefix backend run typecheck
+npm --prefix backend run lint
+npm --prefix backend test
+npm --prefix backend run build
+npm --prefix frontend run typecheck
+npm --prefix frontend run lint
+npm --prefix frontend test
+npm --prefix frontend run build
+```
+
+The app shows the latest announcement under **Settings → What's new**. Full history is in [CHANGELOG.md](CHANGELOG.md) and [GitHub Releases](https://github.com/issogr/newsflow/releases). To follow published updates, choose **Watch → Custom → Releases** on GitHub.
+
+<details>
+<summary>Maintainers: publishing an update</summary>
+
+Updates are batches of commits, not package versions. The [Publish Update workflow](.github/workflows/release-containers.yml) publishes on pushes to `main` whose tip commit has the exact title `Prepared update YYYY-MM-DD-NN`, matching the finalized changelog ID.
+
+1. Collect changes under `## Unreleased` in `CHANGELOG.md`. Keep matching English/Italian notes in `frontend/src/config/changelog.ts` with `id: 'unreleased', date: ''`. Draft notes do not trigger acknowledgement prompts and block publication.
+2. When ready to release, use the release date and next unused announcement ID, for example `2026-09-21-01`. Rename the top changelog heading and set matching app `id`/`date` values; use `02`, `03`, etc. for further updates that day. Published IDs are immutable.
+3. Run `node --test scripts/release-notes.test.mts` and `node scripts/release-notes.mts`. Create the release commit with the exact title `Prepared update 2026-09-21-01`.
+4. Push or merge through the repository's approved process, preserving that title on the tip commit of `main`. This triggers validation, production dependency audits, a Compose smoke check, image publication as `:latest`, and a GitHub Release tagged `update-2026-09-21-01` using the top changelog section.
+5. Start the next batch with a new `Unreleased` section and reset the app metadata to draft values. Package versions do not need bumping.
+
+Only the tip commit's first line controls publication. Earlier release commits or a release title in the body do not trigger it; extra text on the title line is rejected. Ordinary commits run CI without publishing, and no manual workflow dispatch is needed. A retry can finish creating the release after image upload while the release tag is absent; once that tag exists, use a new announcement for further changes.
+
+The app tracks acknowledgement by announcement ID in the legacy `lastSeenReleaseNotesVersion` field. Users who skip updates see the newest announcement after updating and reloading.
+
+To publish the same multi-platform image to an additional private registry, configure repository Actions secrets:
 
 | Secret | Value |
 | --- | --- |
-| `PRIVATE_REGISTRY_ENDPOINT` | Registry hostname with an optional port, e.g. `registry.example.com:5000`; no scheme, path, or trailing slash. |
+| `PRIVATE_REGISTRY_ENDPOINT` | Registry hostname with optional port, such as `registry.example.com:5000`; no scheme, path, or trailing slash. |
 | `PRIVATE_REGISTRY_USERNAME` | Registry login username. |
-| `PRIVATE_REGISTRY_PASSWORD` | Registry password or access token with push permission. |
+| `PRIVATE_REGISTRY_PASSWORD` | Password or access token with push permission. |
 
-When the endpoint is set, **Publish Update** uses the same build to push `linux/amd64` and `linux/arm64` images to both:
+When configured, the workflow pushes to both `ghcr.io/issogr/newsflow:latest` and `<PRIVATE_REGISTRY_ENDPOINT>/issogr/newsflow:latest`. The image path follows the lowercase GitHub `<owner>/<repository>` name. The private registry must be reachable over HTTPS from the GitHub-hosted runner; the GitHub Release is created after both pushes succeed. Leaving the endpoint unset publishes only to GHCR.
 
-- `ghcr.io/issogr/newsflow:latest`
-- `<PRIVATE_REGISTRY_ENDPOINT>/issogr/newsflow:latest`
-
-The image path follows the lowercase GitHub `<owner>/<repository>` name. The registry must be reachable over HTTPS from the GitHub-hosted runner, and the account must have push access to that image path. The GitHub Release is created after both pushes succeed. Leaving `PRIVATE_REGISTRY_ENDPOINT` unset publishes only to GHCR.
-
-## Configuration
-Full configuration reference: [`CONFIGURATION.md`](CONFIGURATION.md).
-
-Docker Compose forwards values from an optional root `.env` file to the application.
-
-### Required And Security
-
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `APP_BASE_URL` | `http://localhost` | Public app URL; controls setup links and secure-cookie decisions. |
-| `ALLOWED_ORIGINS` | local origins; Compose `APP_BASE_URL` | Public API and Socket.IO allowlist, for example `https://news.example`. |
-| `COOKIE_SECURE` | `auto` | Accepts `auto`, `true`, or `false`. |
-| `TRUST_PROXY` | Compose `1` | The bundled topology has exactly one trusted Caddy hop. |
-| `SESSION_TTL_DAYS` | `30` | Browser/backend session lifetime. |
-
-### Public API
-
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `PUBLIC_API_ANONYMOUS_ENABLED` | `false` | Enables `GET /api/public/news` without a token only when set to `true`. |
-| `PUBLIC_API_AUTHENTICATED_ENABLED` | `false` | Enables API-token access and Settings token controls only when set to `true`. |
-
-The public API is read-only and cache-only. It must not trigger RSS refreshes or article extraction.
-Public API docs are available at `/api/docs`.
-
-### Feed And Storage
-
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `NEWS_DB_PATH` | `backend/data/news.db` | Backend SQLite path. |
-| `SCRAPE_INTERVAL_MS` | `900000` | Scheduled ingestion interval. |
-| `SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES` | `ONLINE_ACTIVITY_WINDOW_MINUTES` or `5` | Scheduled ingestion refreshes sources assigned to recently active users. |
-| `MANUAL_REFRESH_COOLDOWN_MS` | `300000` | Per-user manual refresh cooldown. |
-| `SOURCE_FETCH_FRESHNESS_MS` | `300000` | Skips repeated source fetches across refresh paths. |
-| `ARTICLE_RETENTION_HOURS` | `24` | Article and reader-cache retention. |
-| `MAX_ARTICLES_PER_SOURCE` | `25` | Max parsed items per RSS feed. |
-
-### AI
-
-AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed jobs. Defaults below are for Docker Compose; see [CONFIGURATION.md](CONFIGURATION.md) for raw backend defaults and tuning.
-
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `OPENROUTER_API_KEY` | unset | Required for AI provider calls. |
-| `AI_TOPIC_DETECTION_ENABLED` | `true` | Adds AI topic metadata during ingestion. |
-| `AI_STORY_GROUPING_ENABLED`, `AI_SUMMARY_GENERATION_ENABLED` | `false` | Enable individual optional AI jobs. |
-| `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips provider calls for articles the local classifier can topic with high confidence. |
-| `AI_SUMMARY_PROMPT_MAX_ARTICLES` | `24` | Max selected articles included in one thematic-summary prompt after dedupe/source balancing. |
-| `AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS` | `5000` | Debounces summary checks triggered by topic-classification completion. |
-| `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarms reader text before summary windows when summaries are enabled. |
-| `AI_SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS` | `300000` | Cooldown before retrying failed reader prewarm attempts. |
-| `AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES` | `2` | Additional retries for invalid summary output. |
-| `AI_SUMMARY_PENDING_TOPIC_GRACE_MS` | `900000` | Grace period after a summary slot for pending topic classification. |
-| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | Time zone for the daily `20:00` summary slot. |
-
-Model overrides:
-
-| Variable | Default |
-| --- | --- |
-| `OPENROUTER_TOPIC_MODEL` | `mistralai/mistral-small-24b-instruct-2501` |
-| `OPENROUTER_SUMMARY_MODEL` | `qwen/qwen3.7-flash` |
-| `OPENROUTER_STORY_GROUPING_MODEL` | `qwen/qwen3.7-flash` |
-
-### Feedback
-
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `TELEGRAM_BOT_TOKEN` | unset | Enables feedback forwarding to Telegram. |
-| `TELEGRAM_CHAT_ID` | unset | Target chat or channel id. |
-| `TELEGRAM_MESSAGE_THREAD_ID` | unset | Optional forum topic id. |
-
-## Admin Setup
-
-The backend creates a reserved admin account on startup. If its password is missing, startup logs only a warning; setup secrets are intentionally not written to logs. After `npm run build`, generate a single-use link locally from `backend/`:
-
-```bash
-node -e "const userService=require('./dist/services/userService').default; console.log(userService.ensureAdminBootstrap());"
-```
-
-## Repository Layout
-
-- `backend/`: Express, Socket.IO, SQLite, browser security, static frontend hosting, ingestion, auth, reader extraction, public API, and AI jobs.
-- `frontend/`: Vite React app. Browser API calls use same-origin `/api/*` routes.
+</details>
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0. See `LICENSE` for the full text.
+News Flow is licensed under the [MIT License](LICENSE).

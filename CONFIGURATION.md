@@ -4,13 +4,14 @@ This file documents the environment variables and build arguments that can chang
 
 ## How Values Are Parsed
 
-- Boolean feature flags for AI accept only `true` or `false`. Missing values default to the documented default. Invalid values disable the AI feature.
-- Public API booleans accept `true` or `false`. Missing or invalid values fall back to the documented default.
+- Boolean feature flags for AI accept `true` or `false`, ignoring case and surrounding whitespace. Missing or empty values use the documented default. Invalid values disable the AI feature.
+- Public API booleans use the same normalization. Missing, empty, or invalid values fall back to the documented default.
 - `COOKIE_SECURE` accepts only `auto`, `true`, or `false`. Production startup rejects invalid values.
-- Most numeric values are integers. If a value is outside the documented range, the code usually falls back to the default unless the notes say it is clamped.
+- Most numeric settings use base-10 `parseInt`, so `2.9` becomes `2` and `1500ms` becomes `1500`. Missing, empty, invalid, or out-of-range values fall back to the documented default unless the notes say the value is clamped.
+- AI topic batch settings and topic/story/summary request timeouts use `Number` parsing instead: fractions are rounded down before range checks, and trailing text is rejected. Unset or non-finite values use the default. Empty or whitespace-only strings become `0`, which selects the minimum for clamped topic settings and the default for story/summary timeouts.
 - Durations ending in `_MS` are milliseconds unless the variable name says otherwise.
 - Docker Compose sets some explicit defaults that differ from raw code defaults; those differences are called out where they matter.
-- Docker Compose forwards values from an optional root `.env` file to the backend; its small explicit environment block contains only topology settings and defaults that intentionally differ from the backend.
+- Docker Compose forwards values from an optional root `.env` file to the backend. Explicit service `environment` entries take precedence; see [Docker And Build-Time Values](#docker-and-build-time-values) for fixed overrides. npm scripts do not automatically load the root `.env` file; provide values through the backend process environment.
 
 ## Runtime And Security
 
@@ -20,15 +21,15 @@ This file documents the environment variables and build arguments that can chang
 | `PORT` | Backend | `5000` | Internal HTTP listen port. Compose publishes only Caddy ports `80` and `443`. |
 | `SESSION_TTL_DAYS` | Backend | `30` | Browser auth session lifetime in days. Minimum `1`. |
 | `APP_BASE_URL` | Backend | Compose `http://localhost`; OpenRouter referer fallback `http://localhost` | Canonical public app URL. Used for setup links, secure-cookie decisions, same-origin checks, and OpenRouter referer metadata. Set to `https://your-domain` in HTTPS deployments. |
-| `FRONTEND_BASE_URL` | Backend | Backend setup-link fallback `http://localhost:3000` in one path | Legacy alias used when `APP_BASE_URL` is not set. Prefer `APP_BASE_URL`. |
-| `COOKIE_SECURE` | Backend | `auto` | Controls `Secure` on session cookies. `auto` uses HTTPS from `APP_BASE_URL` or a trusted request; `true` always requires HTTPS; `false` disables secure cookies. |
-| `TRUST_PROXY` | Backend | `false`; Compose `1` | Controls Express trust-proxy behavior. The bundled topology has one Caddy hop. Accepts `true`, `false`, a hop count like `1`, or a comma-separated proxy list. |
+| `FRONTEND_BASE_URL` | Backend | unset | Legacy fallback when `APP_BASE_URL` is not set, used for setup links, same-origin checks, and secure-cookie decisions. If neither URL is set, setup links fall back to `http://localhost:3000`. Prefer `APP_BASE_URL`. |
+| `COOKIE_SECURE` | Backend | `auto` | Controls `Secure` on session cookies. `auto` uses HTTPS from `APP_BASE_URL` (or `FRONTEND_BASE_URL`) or a trusted request; `true` always requires HTTPS; `false` disables secure cookies. |
+| `TRUST_PROXY` | Backend | `false`; Compose fixed at `1` | Controls Express trust-proxy behavior. `true` maps to one trusted hop, not unlimited proxy trust. Also accepts `false`, a numeric hop count, or a comma-separated proxy list. The bundled topology has one Caddy hop. |
 
 ## Backend Core
 
 | Variable | Default | Details |
 | --- | --- | --- |
-| `NEWS_DB_PATH` | `backend/data/news.db`; Compose `/usr/src/app/data/news.db` | SQLite database path for articles, users, settings, summaries, sessions, and public API data. |
+| `NEWS_DB_PATH` | `backend/data/news.db`; Docker `/usr/src/app/data/news.db` | SQLite database path for articles, users, settings, summaries, sessions, and public API data. Compose persists `/usr/src/app/data` in the host's `backend/data/` directory. |
 | `ADMIN_USERNAME` | `admin` | Reserved admin account username. Backend auth lowercases it; user-service display/bootstrap handling trims to 40 chars. |
 | `ALLOWED_ORIGINS` | Development `*`; production localhost origins; Compose `APP_BASE_URL` | Comma-separated public API and Socket.IO origin allowlist. Private browser APIs additionally require the exact same origin as `APP_BASE_URL`. Supports exact origins, `*`, wildcard patterns, and `@local-network`. |
 | `SERVER_TIMEOUT` | `60000` | Backend HTTP server timeout in ms. Minimum `1000`. |
@@ -77,8 +78,8 @@ The public API is read-only and cache-only. It must not trigger RSS refreshes, a
 | `SOURCE_FETCH_FAILURE_MAX_BACKOFF_MS` | `1800000` | Maximum per-source RSS failure backoff. Minimum `1000`. |
 | `RSS_INGESTION_CONCURRENCY` | `8` | Max RSS sources processed concurrently per ingestion and process-wide RSS/article-image network requests. Minimum `1`. |
 | `MAX_ARTICLES_PER_SOURCE` | `25` | Max parsed RSS items processed per source. Minimum `1`. |
-| `RSS_MAX_RETRIES` | Code `4`; Compose `5` | RSS fetch retry attempts. Minimum `1`. |
-| `RSS_RETRY_DELAY` | Code `1500`; Compose `2000` | Base delay between RSS retries in ms. Minimum `0`. |
+| `RSS_MAX_RETRIES` | Code `4`; Compose fixed at `5` | RSS fetch retry attempts. Minimum `1`. |
+| `RSS_RETRY_DELAY` | Code `1500`; Compose fixed at `2000` | Base delay between RSS retries in ms. Minimum `0`. |
 | `RSS_TIMEOUT` | `15000` | RSS request timeout in ms. Minimum `1`. |
 | `RSS_VALIDATION_MAX_RETRIES` | `2` | Retry count for backend RSS validation. Minimum `1`. |
 | `RSS_VALIDATION_TIMEOUT` | `8000` | Timeout for backend RSS validation. Minimum `1`. |
@@ -138,10 +139,10 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 | Variable | Default | Details |
 | --- | --- | --- |
 | `OPENROUTER_TOPIC_MODEL` | `mistralai/mistral-small-24b-instruct-2501` | Model used for AI topic classification. |
-| `AI_TOPIC_BATCH_SIZE` | `10` | Articles per topic-classification request. Strict integer, clamped to `1..50`. |
-| `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Concurrent topic-classification requests. Strict integer, clamped to `1..4`. |
-| `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles sent to AI per refresh. Strict integer, clamped to `1..1000`. |
-| `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one topic-classification request. Strict integer, clamped to `1000..120000`. |
+| `AI_TOPIC_BATCH_SIZE` | `10` | Articles per topic-classification request. `Number` parsing, rounded down and clamped to `1..50`. |
+| `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Concurrent topic-classification requests. `Number` parsing, rounded down and clamped to `1..4`. |
+| `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles sent to AI per refresh. `Number` parsing, rounded down and clamped to `1..1000`. |
+| `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one topic-classification request. `Number` parsing, rounded down and clamped to `1000..120000`. |
 | `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips OpenRouter classification for articles with high-confidence local topic matches. Invalid values disable it. |
 | `AI_TOPIC_DEBUG_LOG_ARTICLES` | `false` | Enables verbose topic debug logging only when set to `true`. Invalid values disable it. |
 
@@ -150,7 +151,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 | Variable | Default | Details |
 | --- | --- | --- |
 | `OPENROUTER_STORY_GROUPING_MODEL` | `qwen/qwen3.7-flash` | Model used to decide whether articles describe the same story. |
-| `AI_STORY_GROUPING_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one story-grouping request. Strict integer, valid `1000..120000`; invalid/out-of-range falls back. |
+| `AI_STORY_GROUPING_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one story-grouping request. `Number` parsing, rounded down; valid `1000..120000`. Invalid/out-of-range values fall back to the default. |
 | `AI_STORY_GROUPING_CONCURRENCY` | `1` | Concurrent story-grouping jobs during ingestion. Minimum `1`, maximum `4`. |
 | `AI_STORY_GROUPING_WINDOW_HOURS` | `24` | Candidate article age window for grouping. Minimum `1`, maximum `72`. |
 | `AI_STORY_GROUPING_CANDIDATE_LIMIT` | `64` | Candidate articles considered before AI filtering. Minimum `8`, maximum `100`. |
@@ -168,7 +169,7 @@ To check the configured model against a small fixed evidence set, run `npm run e
 | Variable | Default | Details |
 | --- | --- | --- |
 | `OPENROUTER_SUMMARY_MODEL` | `qwen/qwen3.7-flash` | Model used for thematic summaries. |
-| `AI_SUMMARY_REQUEST_TIMEOUT_MS` | `120000` | Timeout for thematic-summary requests. Strict integer, valid `1000..120000`; invalid/out-of-range falls back. |
+| `AI_SUMMARY_REQUEST_TIMEOUT_MS` | `120000` | Timeout for each thematic-summary request. `Number` parsing, rounded down; valid `1000..120000`. Invalid/out-of-range values fall back to the default. |
 | `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for the daily `20:00` summary slot. Invalid zones fall back to `Europe/Rome`. |
 | `THEMATIC_SUMMARY_CHECK_INTERVAL_MS` | `60000` | Scheduler interval for checking due summaries. Minimum `1000`. |
 | `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in topic-tagged articles queried before deduplication and prompt selection. Minimum `1`, maximum `300`. |
@@ -211,4 +212,8 @@ Feedback attachments are limited by code, not env: images up to 5 MB, videos up 
 | `TARGETARCH` | Backend Docker build | BuildKit-provided when available; otherwise Node `process.arch` | Selects native dependency architecture during `npm ci`; maps `amd64` to `x64`. |
 | `BUILDPLATFORM` | Docker builds | Docker/BuildKit automatic | Used by Dockerfiles in `FROM --platform=$BUILDPLATFORM` for dependency build stages. |
 
-Docker Compose also applies fixed runtime defaults for the bundled deployment, including backend `NODE_ENV=production`, backend `PORT=5000`, `TRUST_PROXY=1`, backend `LOG_LEVEL=info`, and the container database path. Caddy alone publishes host ports `80` and `443`. Edit `docker-compose.yml` only when those fixed deployment defaults need to change.
+The bundled Compose service hardcodes `TRUST_PROXY=1`, `RSS_MAX_RETRIES=5`, and `RSS_RETRY_DELAY=2000`. These explicit `environment` entries override values in `.env`; changing them requires editing or overriding the Compose service configuration. Other explicit entries, such as `APP_BASE_URL` and the AI feature switches, interpolate configurable values with defaults.
+
+`NODE_ENV=production` and `PORT=5000` are Docker image defaults. `LOG_LEVEL=info` in production and `/usr/src/app/data/news.db` are backend defaults. All four can be overridden through `.env`, but the bundled Caddy upstream and application health check expect port `5000`, and only `/usr/src/app/data` is mounted for persistent application data. Caddy alone publishes host ports `80` and `443`.
+
+After changing `.env`, run `docker compose up -d` to recreate affected services with the new values.
