@@ -94,7 +94,6 @@ async function renderNewsAggregator(overrides: Partial<NewsAggregatorProps> = {}
         t={overrides.t || createTranslator(locale)}
         onLogout={overrides.onLogout || vi.fn()}
         patchSession={overrides.patchSession || vi.fn()}
-        onOpenReleaseNotes={overrides.onOpenReleaseNotes || vi.fn()}
       />
     );
     await Promise.resolve();
@@ -472,7 +471,7 @@ describe('NewsAggregator', () => {
     });
 
     expect(markThematicSummariesRead).toHaveBeenCalledWith(['summary-technology']);
-    expect(screen.getByText('Ora di pranzo')).toBeInTheDocument();
+    expect(screen.queryByText('Ora di pranzo')).not.toBeInTheDocument();
     expect(screen.getByText('1 articolo valutato')).toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'Caricamento sintesi IA...' })).toBeInTheDocument();
     expect(screen.queryByText('I chip AI sono avanzati rapidamente nella finestra [1].')).not.toBeInTheDocument();
@@ -775,7 +774,6 @@ describe('NewsAggregator', () => {
           t={createTranslator('en')}
           onLogout={onLogout}
           patchSession={patchSession}
-          onOpenReleaseNotes={vi.fn()}
         />
       );
       await Promise.resolve();

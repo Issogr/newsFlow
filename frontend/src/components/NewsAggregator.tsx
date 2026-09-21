@@ -131,13 +131,12 @@ function getCurrentThematicSummarySelection(selectedSummary: ThematicSummary | n
   return summaries.find((summary) => summary?.topicKey === selectedSummary.topicKey) || null;
 }
 
-const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpenReleaseNotes }: {
+const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
   currentUser: CurrentUser;
   locale: Locale;
   t: Translator;
   onLogout: () => void;
   patchSession: (patch: Partial<CurrentUser>) => void;
-  onOpenReleaseNotes: () => void;
 }) => {
   const needsSourceSetup = currentUser?.settings?.sourceSetupCompleted === false && !currentUser?.user?.isAdmin;
   const showNewsImages = currentUser?.settings?.showNewsImages !== false;
@@ -996,7 +995,6 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
           currentUser={currentUser}
           availableSources={sourceCatalog}
           onClose={() => setAccountPanel(null)}
-          onOpenReleaseNotes={onOpenReleaseNotes}
           patchSession={patchSession}
           restoreFocusRef={userMenuButtonRef}
           view={accountPanel}

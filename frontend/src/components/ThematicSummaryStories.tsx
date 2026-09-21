@@ -20,7 +20,7 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
   const readSummaryIdSet = new Set(readSummaryIds);
 
   return (
-    <section className="mb-6 border-b border-slate-200 pb-5" aria-label={t('thematicSummariesTitle')}>
+    <section className="mb-6" aria-label={t('thematicSummariesTitle')}>
       <div className="mx-auto flex w-max max-w-full gap-4 overflow-x-auto px-1 py-1">
         {summaries.map((summary) => {
           const localizedSummary = getLocalizedThematicSummary(summary, locale);

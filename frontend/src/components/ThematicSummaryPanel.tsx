@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
-import { ExternalLink, Newspaper, Sparkles } from 'lucide-react';
+import { Clock3, ExternalLink, Newspaper } from 'lucide-react';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { getTopicPresentation } from '../topicPresentation';
 import { getLocalizedThematicSummary, getThematicSummaryPresentationKey } from '../utils/thematicSummaryLocale';
@@ -14,56 +14,12 @@ import type { CurrentUser, Locale, ThematicSummary, Translator } from '../types'
 
 type SummarySource = NonNullable<ThematicSummary['sources']>[number];
 
-const SUMMARY_SLOTS = new Set(['morning', 'lunch', 'evening']);
-const SUMMARY_SLOT_LABEL_KEYS: Record<string, string> = {
-  morning: 'summarySlotMorning',
-  lunch: 'summarySlotLunch',
-  evening: 'summarySlotEvening'
-};
+const metadataChipClassName = 'inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600';
 const MOBILE_SUMMARY_SWIPE_QUERY = '(max-width: 767px)';
 const SUMMARY_SWIPE_MIN_DISTANCE = 60;
 const SUMMARY_SWIPE_AXIS_RATIO = 1.35;
 const SUMMARY_SWIPE_FEEDBACK_MAX_OFFSET = 72;
 const SUMMARY_OPENING_SKELETON_MS = 500;
-
-function getFallbackSummarySlot(summary: Partial<ThematicSummary> = {}) {
-  const date = new Date(summary.periodEnd || '');
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
-  const hourPart = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Europe/Rome',
-    hour: '2-digit',
-    hourCycle: 'h23'
-  }).formatToParts(date).find((part) => part.type === 'hour');
-  const hour = Number(hourPart?.value);
-  if (!Number.isFinite(hour)) {
-    return '';
-  }
-
-  if (hour < 10) {
-    return 'morning';
-  }
-  if (hour < 16) {
-    return 'lunch';
-  }
-
-  return 'evening';
-}
-
-function getSummarySlot(summary: Partial<ThematicSummary> = {}) {
-  const slot = String(summary.summarySlot || '').toLowerCase();
-  if (SUMMARY_SLOTS.has(slot)) {
-    return slot;
-  }
-
-  return getFallbackSummarySlot(summary);
-}
-
-function getSummarySlotLabel(summary: Partial<ThematicSummary> = {}, t: Translator) {
-  return t(SUMMARY_SLOT_LABEL_KEYS[getSummarySlot(summary)] || 'summarySlotRecent');
-}
 
 function splitLongParagraph(paragraph = '', maxParagraphChars = 520) {
   const normalizedParagraph = String(paragraph || '').replace(/\s+/g, ' ').trim();
@@ -397,32 +353,28 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
               style={swipeFeedbackStyle}
             >
               <div className="border-b border-slate-200 pb-6 md:pb-7">
-                <div className="flex items-start gap-3">
+                <div className="flex items-center gap-3">
                   <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${primaryPresentation.iconBadgeClassName}`}>
                     <PrimaryIcon className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-stone-500">{t('thematicSummary')}</p>
-                    <h2 className="mt-1 text-pretty text-2xl font-semibold leading-tight tracking-tight text-stone-900 md:text-[2rem] md:leading-[1.15]">
+                    <h2 className="text-pretty text-2xl font-semibold leading-tight tracking-tight text-stone-900 md:text-[2rem] md:leading-[1.15]">
                       {localizedSummary.displayTopicLabel}
                     </h2>
                   </div>
                 </div>
-                <div className="mt-4 text-xs font-medium text-slate-500">
-                  <span className="inline-flex items-center gap-2">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {getSummarySlotLabel(summary, t)}
-                    {Number(summary.articleCount) > 0 && (
-                      <>
-                        <span aria-hidden="true">·</span>
-                        <span>{t('summaryArticleCount', { count: Number(summary.articleCount) })}</span>
-                      </>
-                    )}
-                  </span>
+                <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3">
                   {generatedAt && (
-                    <time dateTime={summary.generatedAt} className="mt-2 block font-normal normal-case tracking-normal text-slate-500">
-                      {generatedAt}
-                    </time>
+                    <span className={metadataChipClassName}>
+                      <Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <time dateTime={summary.generatedAt}>{generatedAt}</time>
+                    </span>
+                  )}
+                  {Number(summary.articleCount) > 0 && (
+                    <span className={metadataChipClassName}>
+                      <Newspaper className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      {t('summaryArticleCount', { count: Number(summary.articleCount) })}
+                    </span>
                   )}
                 </div>
               </div>

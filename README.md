@@ -149,7 +149,7 @@ npm --prefix frontend test
 npm --prefix frontend run build
 ```
 
-The app shows a localized release announcement under **Settings → What's new**, with a link to its full changelog on [GitHub Releases](https://github.com/issogr/newsflow/releases). Earlier manually maintained notes remain in [CHANGELOG.md](CHANGELOG.md). To follow published updates, choose **Watch → Custom → Releases** on GitHub.
+**Settings → What's new** opens the installed release's changelog on [GitHub Releases](https://github.com/issogr/newsflow/releases) directly in a new tab. Earlier manually maintained notes remain in [CHANGELOG.md](CHANGELOG.md). To follow published updates, choose **Watch → Custom → Releases** on GitHub.
 
 <details>
 <summary>Maintainers: publishing an update</summary>
@@ -162,7 +162,7 @@ Every push to `main` starts the [Publish Update workflow](.github/workflows/rele
 
 Publication is serialized. Before building the image, a run checks that its commit is still the tip of `main`; superseded runs skip publication. Retrying an already published commit is a no-op. If image upload succeeded but GitHub Release creation failed, rerun the failed workflow to finish publication. A previous release on divergent history or a conflicting tag stops publication rather than moving the baseline silently.
 
-CI writes `frontend/src/config/release.json` in its checkout before building the image. The app uses that commit SHA, release date, and GitHub URL for its English/Italian announcement and acknowledgement tracking. The existing `lastSeenReleaseNotesVersion` field stores the 40-character SHA; older saved announcement IDs remain compatible. Local source builds use the committed `unreleased` metadata and do not show update prompts. No bot commits or manual changelog finalization are needed; GitHub Releases is the generated history.
+CI writes `frontend/src/config/release.json` in its checkout before building the image. Settings uses its GitHub URL to link to that release's changelog; local source builds use the committed release-history URL. No bot commits or manual changelog finalization are needed; GitHub Releases is the generated history.
 
 Test the generator with `node --test scripts/release-notes.test.mts`. For an offline preview, run `node scripts/release-notes.mts --base <previous-release-tag> --ref HEAD` using a tag available in your checkout; omit `--base` to preview a first release. `--help` lists options. Previewing does not write files or contact GitHub.
 

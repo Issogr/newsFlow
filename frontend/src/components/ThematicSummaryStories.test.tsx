@@ -121,7 +121,7 @@ describe('thematic summary UI', () => {
       }
     });
 
-    expect(screen.getByText('Lunch time')).toBeInTheDocument();
+    expect(screen.queryByText('Lunch time')).not.toBeInTheDocument();
     expect(screen.getByText('The first argument covers chip supply and infrastructure.')).toBeInTheDocument();
     expect(screen.getByText('The second argument moves to software policy and regulation.')).toBeInTheDocument();
   });
@@ -147,7 +147,7 @@ describe('thematic summary UI', () => {
     });
 
     expect(screen.getByText(/Current technology briefing/u)).toBeInTheDocument();
-    expect(screen.getByText('Lunch time')).toBeInTheDocument();
+    expect(screen.queryByText('Lunch time')).not.toBeInTheDocument();
     expect(screen.queryByText(/Previous technology briefing/u)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Today' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Yesterday' })).not.toBeInTheDocument();
@@ -157,6 +157,8 @@ describe('thematic summary UI', () => {
     const translated = createTranslator(locale);
     const summary = createTopicSummary('science', {
       isStale: true,
+      summarySlot: 'evening',
+      articleCount: 2,
       periodStart: '2026-09-20T18:00:00.000Z',
       periodEnd: '2026-09-21T18:00:00.000Z',
       generatedAt: '2026-09-21T18:05:00.000Z',
@@ -169,6 +171,8 @@ describe('thematic summary UI', () => {
     expect(timestamps[0]).toHaveTextContent(new Intl.DateTimeFormat(locale, {
       dateStyle: 'medium', timeStyle: 'short'
     }).format(new Date(summary.generatedAt!)));
+    expect(screen.getByText(translated('summaryArticleCount', { count: 2 }))).toBeInTheDocument();
+    expect(screen.queryByText(locale === 'en' ? 'Evening' : 'Sera')).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 

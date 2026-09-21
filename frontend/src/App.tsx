@@ -1,5 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type SyntheticEvent } from 'react';
-import { CURRENT_CHANGELOG_ENTRY, getCurrentChangelog } from './config/changelog';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from './i18n';
 import AuthCard, { AUTH_PRIMARY_BUTTON_CLASS_NAME } from './components/AuthCard';
 import InlineAlert from './components/InlineAlert';
@@ -9,8 +8,7 @@ import {
   fetchCurrentUser,
   loginUser,
   logoutUser,
-  registerUser,
-  updateUserSettings
+  registerUser
 } from './services/api';
 import type { CurrentUser } from './types';
 
@@ -20,8 +18,6 @@ const AuthScreen = lazy(() => import('./components/AuthScreen'));
 const LegalPolicyPage = lazy(() => import('./components/LegalPolicyPage'));
 const NewsAggregator = lazy(() => import('./components/NewsAggregator'));
 const PasswordSetupScreen = lazy(() => import('./components/PasswordSetupScreen'));
-const ReleaseNotesModal = lazy(() => import('./components/ReleaseNotesModal'));
-const ReleaseUpdateNotice = lazy(() => import('./components/ReleaseUpdateNotice'));
 
 function resolveAppliedTheme(themeMode: unknown, mediaQuery: MediaQueryList | null) {
   if (themeMode === 'dark') {
@@ -70,17 +66,10 @@ function App() {
   const [loadingSession, setLoadingSession] = useState<boolean>(() => shouldLoadSessionForPath(window.location.pathname));
   const [sessionLoadFailed, setSessionLoadFailed] = useState<boolean>(false);
   const [sessionLoadAttempt, setSessionLoadAttempt] = useState(0);
-  const [releaseNotesState, setReleaseNotesState] = useState({
-    noticeHiddenId: '',
-    saving: false,
-    modalOpen: false
-  });
-  const releaseNotesOpenerRef = useRef<HTMLElement>(null);
 
   const locale = resolvePreferredLocale(authData?.settings?.defaultLanguage);
   const themeMode = authData?.settings?.themeMode || 'system';
   const t = useMemo(() => createTranslator(locale), [locale]);
-  const releaseNotes = useMemo(() => getCurrentChangelog(locale), [locale]);
   const setupToken = (() => {
     const searchToken = new URLSearchParams(locationState.search).get('token') || '';
     if (searchToken) {
@@ -93,24 +82,6 @@ function App() {
   const isPasswordSetupRoute = PASSWORD_SETUP_PATHS.has(locationState.pathname);
   const isApiDocsRoute = locationState.pathname === API_DOCS_PATH;
   const legalPolicy = LEGAL_POLICY_BY_PATH[locationState.pathname] || '';
-  const sourceSetupPending = authData?.settings?.sourceSetupCompleted === false && !authData?.user?.isAdmin;
-  const needsReleaseNotesAck = Boolean(releaseNotes.date && authData?.settings?.lastSeenReleaseNotesVersion !== releaseNotes.id);
-  const shouldShowReleaseNotesModal = Boolean(
-    authData
-    && !authData?.user?.isAdmin
-    && releaseNotes.id
-    && releaseNotesState.modalOpen
-    && !sourceSetupPending
-  );
-  const shouldShowReleaseNotice = Boolean(
-    authData
-    && !authData?.user?.isAdmin
-    && releaseNotes.id
-    && needsReleaseNotesAck
-    && releaseNotesState.noticeHiddenId !== releaseNotes.id
-    && !releaseNotesState.modalOpen
-    && !sourceSetupPending
-  );
 
   useEffect(() => {
     const syncLocationState = () => {
@@ -214,10 +185,6 @@ function App() {
     document.documentElement.lang = locale;
   }, [locale]);
 
-  useEffect(() => {
-    setReleaseNotesState({ noticeHiddenId: '', saving: false, modalOpen: false });
-  }, [authData?.user?.id]);
-
   const handleAuthSuccess = useCallback((payload: CurrentUser) => {
     setAuthData({
       user: payload.user,
@@ -270,43 +237,6 @@ function App() {
       ...patch
     } : current));
   }, []);
-
-  const acknowledgeCurrentReleaseNotes = useCallback(async () => {
-    const id = CURRENT_CHANGELOG_ENTRY.id;
-
-    setReleaseNotesState((current) => ({
-      ...current,
-      noticeHiddenId: id,
-      modalOpen: false,
-      saving: needsReleaseNotesAck
-    }));
-
-    if (!needsReleaseNotesAck) {
-      return;
-    }
-
-    try {
-      const response = await updateUserSettings({ lastSeenReleaseNotesVersion: id });
-      patchSession({ settings: response.settings });
-    } catch {
-      // Keep the notice dismissed for this session; persistence retries on the next login.
-    } finally {
-      setReleaseNotesState((current) => ({
-        ...current,
-        saving: false
-      }));
-    }
-  }, [needsReleaseNotesAck, patchSession]);
-
-  const handleOpenReleaseNotes = useCallback((eventOrElement?: Event | SyntheticEvent | HTMLElement | null) => {
-    const target = eventOrElement instanceof HTMLElement ? eventOrElement : eventOrElement?.currentTarget;
-    releaseNotesOpenerRef.current = target instanceof HTMLElement ? target : document.activeElement as HTMLElement | null;
-    setReleaseNotesState((current) => ({
-      ...current,
-      modalOpen: true,
-      noticeHiddenId: releaseNotes.id
-    }));
-  }, [releaseNotes.id]);
 
   if (loadingSession) {
     return APP_LOADING_FALLBACK;
@@ -394,31 +324,9 @@ function App() {
             t={t}
             onLogout={handleLogout}
             patchSession={patchSession}
-            onOpenReleaseNotes={handleOpenReleaseNotes}
           />
         )}
       </Suspense>
-      {shouldShowReleaseNotice && (
-        <Suspense fallback={null}>
-          <ReleaseUpdateNotice
-            t={t}
-            releaseNotes={releaseNotes}
-            onOpen={handleOpenReleaseNotes}
-            onDismiss={acknowledgeCurrentReleaseNotes}
-          />
-        </Suspense>
-      )}
-      {shouldShowReleaseNotesModal && (
-        <Suspense fallback={null}>
-          <ReleaseNotesModal
-            t={t}
-            releaseNotes={releaseNotes}
-            saving={releaseNotesState.saving}
-            onDismiss={acknowledgeCurrentReleaseNotes}
-            restoreFocusRef={releaseNotesOpenerRef}
-          />
-        </Suspense>
-      )}
     </div>
   );
 }

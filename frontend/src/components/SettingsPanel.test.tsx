@@ -3,6 +3,7 @@ import SettingsPanel from './SettingsPanel';
 import { createTranslator } from '../i18n';
 import { addUserSource as addUserSourceImplementation, deleteUserSource as deleteUserSourceImplementation, discoverRssFeeds as discoverRssFeedsImplementation, updateUserSettings as updateUserSettingsImplementation } from '../services/api';
 import { createTestCurrentUser } from '../test-utils/currentUser';
+import releaseMetadata from '../config/release.json';
 import type { ComponentProps } from 'react';
 import type { UserSettings } from '../types';
 
@@ -26,6 +27,7 @@ const updateUserSettings = vi.mocked(updateUserSettingsImplementation);
 
 const t = createTranslator('en');
 const currentUser = createTestCurrentUser();
+const originalReleaseUrl = releaseMetadata.url;
 
 const renderPanel = (overrides: Partial<ComponentProps<typeof SettingsPanel>> = {}) => {
   const props: ComponentProps<typeof SettingsPanel> = {
@@ -33,7 +35,6 @@ const renderPanel = (overrides: Partial<ComponentProps<typeof SettingsPanel>> = 
     currentUser,
     availableSources: [],
     onClose: vi.fn(),
-    onOpenReleaseNotes: vi.fn(),
     patchSession: vi.fn(),
     ...overrides
   };
@@ -47,10 +48,21 @@ describe('SettingsPanel', () => {
     window.localStorage.clear();
   });
 
-  test('opens release notes from the version-free Settings link', () => {
-    const { onOpenReleaseNotes } = renderPanel();
-    fireEvent.click(screen.getByRole('button', { name: 'What’s new' }));
-    expect(onOpenReleaseNotes).toHaveBeenCalledTimes(1);
+  afterEach(() => {
+    releaseMetadata.url = originalReleaseUrl;
+  });
+
+  test.each([
+    ['en', `https://github.com/issogr/newsflow/releases/tag/update-${'a'.repeat(40)}`],
+    ['it', 'https://github.com/issogr/newsflow/releases']
+  ] as const)('links directly to the release changelog in a new tab (%s)', (locale, url) => {
+    releaseMetadata.url = url;
+    renderPanel({ t: createTranslator(locale) });
+    const link = screen.getByRole('link', { name: locale === 'en' ? 'What’s new' : 'Novità' });
+    expect(link).toHaveAttribute('href', url);
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(updateUserSettings).not.toHaveBeenCalled();
   });
 
   test('offers save, discard, or continued editing when closing a draft', () => {

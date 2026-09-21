@@ -1,6 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
-import { CURRENT_CHANGELOG_ENTRY } from './config/changelog';
 import { createTestCurrentUser } from './test-utils/currentUser';
 import {
   AUTH_EXPIRED_EVENT,
@@ -11,9 +10,9 @@ import {
 } from './services/api';
 import type { CurrentUser, Locale, Translator } from './types';
 
-const CURRENT_CHANGELOG_ID = 'a'.repeat(40);
-const CURRENT_CHANGELOG_URL = `https://github.com/issogr/newsflow/releases/tag/update-${CURRENT_CHANGELOG_ID}`;
-const originalChangelogMetadata = { id: CURRENT_CHANGELOG_ENTRY.id, date: CURRENT_CHANGELOG_ENTRY.date, url: CURRENT_CHANGELOG_ENTRY.url };
+vi.mock('./config/release.json', () => ({
+  default: { id: 'a'.repeat(40), date: '2026-09-21', url: 'https://github.com/issogr/newsflow/releases' }
+}));
 
 vi.mock('./services/api', () => ({
   AUTH_EXPIRED_EVENT: 'newsflow:auth-expired',
@@ -32,18 +31,11 @@ const updateUserSettings = vi.mocked(updateUserSettingsImplementation);
 const validatePasswordSetupToken = vi.mocked(validatePasswordSetupTokenImplementation);
 
 vi.mock('./components/NewsAggregator', () => ({
-  default: ({ currentUser, locale, t, onOpenReleaseNotes, patchSession }: { currentUser: CurrentUser; locale: Locale; t: Translator; onOpenReleaseNotes: () => void; patchSession: (patch: Record<string, unknown>) => void }) => (
+  default: ({ currentUser, locale, t, patchSession }: { currentUser: CurrentUser; locale: Locale; t: Translator; patchSession: (patch: Record<string, unknown>) => void }) => (
     <div>
       <div>Authenticated app</div>
       <div data-testid="active-locale">{locale}: {t('settings')}</div>
       <div>Session fields: {currentUser.apiToken?.id || 'none'}, {currentUser.customSources?.length || 0} sources</div>
-      <button type="button" onClick={onOpenReleaseNotes}>Open release notes</button>
-      <button
-        type="button"
-        onClick={() => patchSession({ settings: { ...currentUser.settings, sourceSetupCompleted: true } })}
-      >
-        Complete source setup
-      </button>
       <button
         type="button"
         onClick={() => patchSession({ settings: { ...currentUser.settings, defaultLanguage: 'it' } })}
@@ -69,8 +61,6 @@ vi.mock('./components/AdminDashboard', () => ({
 
 describe('App', () => {
   beforeEach(() => {
-    Object.assign(CURRENT_CHANGELOG_ENTRY, { id: CURRENT_CHANGELOG_ID, date: '2026-09-21', url: CURRENT_CHANGELOG_URL });
-    vi.useRealTimers();
     window.localStorage.clear();
     document.body.style.overflow = '';
     document.documentElement.dataset.theme = '';
@@ -85,8 +75,6 @@ describe('App', () => {
   });
 
   afterEach(() => {
-    Object.assign(CURRENT_CHANGELOG_ENTRY, originalChangelogMetadata);
-    vi.useRealTimers();
     document.body.style.overflow = '';
     document.documentElement.dataset.theme = '';
     document.documentElement.style.colorScheme = '';
@@ -95,7 +83,7 @@ describe('App', () => {
 
   test('renders the admin dashboard instead of the news home for admin sessions', async () => {
     fetchCurrentUser.mockResolvedValue({
-      ...createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: '3.2.5' } }),
+      ...createTestCurrentUser(),
       user: { username: 'admin', isAdmin: true }
     });
 
@@ -106,7 +94,7 @@ describe('App', () => {
   });
 
   test('applies the selected dark theme to the document root after session load', async () => {
-    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { themeMode: 'dark', lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID } }));
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { themeMode: 'dark' } }));
 
     render(<App />);
 
@@ -118,7 +106,7 @@ describe('App', () => {
   });
 
   test('owns locale side effects and updates translations after settings change', async () => {
-    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID } }));
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser());
 
     render(<App />);
 
@@ -138,7 +126,7 @@ describe('App', () => {
   });
 
   test('merges consecutive top-level session patches', async () => {
-    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID } }));
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser());
 
     render(<App />);
 
@@ -148,137 +136,15 @@ describe('App', () => {
     expect(await screen.findByText('Session fields: token-1, 1 sources')).toBeInTheDocument();
   });
 
-  test.each(['', '3.7.0', '2026-09-21-01'])('announces the new ID after acknowledgement %j and saves it after reading', async (lastSeenReleaseNotesVersion) => {
-    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion } }));
-    updateUserSettings.mockResolvedValue({
-      success: true,
-      settings: createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID } }).settings
-    });
-
-    render(<App />);
-
-    expect(await screen.findByText('Update released')).toBeInTheDocument();
-    expect(screen.getByText('September 21, 2026')).toHaveAttribute('datetime', '2026-09-21');
-    expect(screen.queryByText(CURRENT_CHANGELOG_ID)).not.toBeInTheDocument();
-    expect(document.body.style.overflow).toBe('');
-    expect(screen.queryByText('What is new')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Update released'));
-
-    expect(await screen.findByText('What is new')).toBeInTheDocument();
-    expect(screen.getByRole('dialog', { name: 'What is new' })).toHaveAttribute('aria-modal', 'true');
-    expect(screen.getByRole('link', { name: 'Read full changelog on GitHub' })).toHaveAttribute('href', CURRENT_CHANGELOG_URL);
-    expect(document.body.style.overflow).toBe('hidden');
-    expect(updateUserSettings).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
-
-    await waitFor(() => {
-      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID });
-      expect(document.body.style.overflow).toBe('');
-    });
-  });
-
-  test.each([
-    {
-      name: 'auto-dismisses after 30 seconds',
-      useFakeTimers: true,
-      dismiss: async () => {
-        await act(async () => {
-          vi.advanceTimersByTime(30000);
-        });
-      }
-    },
-    {
-      name: 'dismisses with the close button',
-      useFakeTimers: false,
-      dismiss: async () => {
-        await act(async () => {
-          fireEvent.click(screen.getByRole('button', { name: 'Close update notice' }));
-        });
-      }
-    }
-  ])('$name and persists the current changelog ID', async ({ useFakeTimers, dismiss }) => {
-    if (useFakeTimers) {
-      vi.useFakeTimers();
-    }
-    fetchCurrentUser.mockResolvedValue(createTestCurrentUser());
-    updateUserSettings.mockResolvedValue({
-      success: true,
-      settings: createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID } }).settings
-    });
-
-    render(<App />);
-
-    expect(await screen.findByText('Update released')).toBeInTheDocument();
-
-    await dismiss();
-
-    await waitFor(() => {
-      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID });
-    });
-
-    expect(screen.queryByText('Update released')).not.toBeInTheDocument();
-  });
-
-  test('reopens release notes manually from the authenticated app', async () => {
-    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID } }));
-
-    render(<App />);
-
-    expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
-    expect(screen.queryByText('Update released')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open release notes' }));
-
-    expect(await screen.findByText('What is new')).toBeInTheDocument();
-  });
-
-  test('links local builds to release history without announcing or acknowledging an unpublished update', async () => {
-    Object.assign(CURRENT_CHANGELOG_ENTRY, { id: 'unreleased', date: '', url: 'https://github.com/issogr/newsflow/releases' });
+  test('does not show release announcements or write acknowledgements after login', async () => {
     fetchCurrentUser.mockResolvedValue(createTestCurrentUser());
 
     render(<App />);
 
     expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
     expect(screen.queryByText('Update released')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Open release notes' }));
-    expect(await screen.findByText('Unreleased')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Read full changelog on GitHub' })).toHaveAttribute('href', 'https://github.com/issogr/newsflow/releases');
-    fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
-
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(updateUserSettings).not.toHaveBeenCalled();
-  });
-
-  test('localizes the update date without changing its acknowledgement ID', async () => {
-    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { defaultLanguage: 'it' } }));
-    updateUserSettings.mockResolvedValue({
-      settings: createTestCurrentUser({ settings: { defaultLanguage: 'it', lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID } }).settings
-    });
-
-    render(<App />);
-
-    expect(await screen.findByText('21 settembre 2026')).toHaveAttribute('datetime', '2026-09-21');
-    fireEvent.click(screen.getByText('Aggiornamento disponibile'));
-    expect(await screen.findByRole('link', { name: 'Leggi il changelog completo su GitHub' })).toHaveAttribute('href', CURRENT_CHANGELOG_URL);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Ho capito' })[0]);
-    await waitFor(() => {
-      expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID });
-    });
-  });
-
-  test('defers release prompts until mandatory source setup is complete', async () => {
-    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { sourceSetupCompleted: false } }));
-
-    render(<App />);
-
-    expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
-    expect(screen.queryByText('Update released')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Complete source setup' }));
-
-    expect(await screen.findByText('Update released')).toBeInTheDocument();
   });
 
   test('falls back to the authentication screen when loading the session fails', async () => {
@@ -293,7 +159,7 @@ describe('App', () => {
   });
 
   test('returns to the authentication screen immediately after an auth-expired event', async () => {
-    fetchCurrentUser.mockResolvedValue(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID } }));
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser());
 
     render(<App />);
 
@@ -311,7 +177,7 @@ describe('App', () => {
   test('shows a retryable error instead of logout during a session service outage', async () => {
     fetchCurrentUser
       .mockRejectedValueOnce({ response: { status: 503 } })
-      .mockResolvedValueOnce(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID } }));
+      .mockResolvedValueOnce(createTestCurrentUser());
 
     render(<App />);
 
@@ -380,7 +246,7 @@ describe('App', () => {
     expect(screen.queryByText('Sign in')).not.toBeInTheDocument();
 
     await act(async () => {
-      resolveSession(createTestCurrentUser({ settings: { lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID } }));
+      resolveSession(createTestCurrentUser());
     });
 
     expect(await screen.findByText('Authenticated app')).toBeInTheDocument();

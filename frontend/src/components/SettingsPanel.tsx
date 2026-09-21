@@ -10,6 +10,7 @@ import InlineAlert from './InlineAlert';
 import ModalDialog from './ModalDialog';
 import SlideOverPanelFrame, { SlideOverPanelBody, SlideOverPanelFooter, SlideOverPanelHeader } from './SlideOverPanelFrame';
 import { getFriendlyApiErrorMessage } from '../utils/apiError';
+import releaseMetadata from '../config/release.json';
 import type { CurrentUser, NewsSource, Translator } from '../types';
 
 const UnsavedSettingsDialog = ({ t, saving, onCancel, onDiscard, onSave }: { t: Translator; saving: boolean; onCancel: () => void; onDiscard: () => void; onSave: () => void }) => (
@@ -41,12 +42,11 @@ const UnsavedSettingsDialog = ({ t, saving, onCancel, onDiscard, onSave }: { t: 
   </ModalDialog>
 );
 
-const SettingsPanel = ({ t, currentUser, availableSources, onClose, onOpenReleaseNotes, patchSession, restoreFocusRef, view = 'settings' }: {
+const SettingsPanel = ({ t, currentUser, availableSources, onClose, patchSession, restoreFocusRef, view = 'settings' }: {
   t: Translator;
   currentUser: CurrentUser;
   availableSources: NewsSource[];
   onClose: () => void;
-  onOpenReleaseNotes: () => void;
   patchSession: (patch: Partial<CurrentUser>) => void;
   restoreFocusRef?: RefObject<HTMLElement | null>;
   view?: 'settings' | 'feedNews';
@@ -201,14 +201,14 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onOpenReleas
       {!isFeedNewsView ? <SlideOverPanelFooter>
         <div className="flex items-center gap-2">
           <ProjectGitHubLink />
-          <button
-            type="button"
-            onClick={onOpenReleaseNotes}
-            disabled={saving}
-            className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900 disabled:opacity-50"
+          <a
+            href={releaseMetadata.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
           >
             {t('changelogTitle')}
-          </button>
+          </a>
         </div>
         <button type="button" onClick={handleSaveAndClose} disabled={saving || !hasUnsavedChanges} className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
           {saving ? t('saving') : t('save')}

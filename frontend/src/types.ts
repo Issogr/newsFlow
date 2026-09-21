@@ -230,11 +230,3 @@ export interface ApiErrorLike {
   };
   [key: string]: unknown;
 }
-
-export interface ChangelogContent {
-  eyebrow: string;
-  title: string;
-  intro: string;
-}
-
-export type ReleaseNotes = ChangelogContent & { id: string; date: string; dateLabel: string; url: string };
