@@ -19,6 +19,6 @@ function getProviderIconUrl(value: unknown = '') {
   }
 }
 
-export = {
+export default {
   getProviderIconUrl
 };

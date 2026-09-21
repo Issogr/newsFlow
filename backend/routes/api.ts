@@ -1,12 +1,12 @@
-import express = require('express');
-const adminRoutes = require('./internal/admin');
-const authRoutes = require('./internal/auth');
-const feedbackRoutes = require('./internal/feedback');
-const meRoutes = require('./internal/me');
-const newsRoutes = require('./internal/news');
-const readerRoutes = require('./internal/reader');
-const sourceRoutes = require('./internal/sources');
-const summaryRoutes = require('./internal/summaries');
+import express from 'express';
+import adminRoutes from './internal/admin';
+import authRoutes from './internal/auth';
+import feedbackRoutes from './internal/feedback';
+import meRoutes from './internal/me';
+import newsRoutes from './internal/news';
+import readerRoutes from './internal/reader';
+import sourceRoutes from './internal/sources';
+import summaryRoutes from './internal/summaries';
 
 const router = express.Router();
 
@@ -19,4 +19,4 @@ router.use(newsRoutes);
 router.use(summaryRoutes);
 router.use(readerRoutes);
 
-export = router;
+export default router;

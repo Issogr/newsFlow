@@ -7,9 +7,6 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "noEmit": true,
-    "paths": {
-      "vitest": ["../backend/node_modules/vitest/dist/index.d.ts"]
-    },
     "skipLibCheck": true,
     "strict": true,
     "target": "ES2023",

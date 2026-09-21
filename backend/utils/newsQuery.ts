@@ -1,4 +1,4 @@
-const { createError } = require('./errorHandler');
+import { createError } from './errorHandler';
 import type { NewsQuery } from './types';
 
 const MAX_NEWS_PAGE = 20;
@@ -74,7 +74,7 @@ function parseNewsQuery(query: Record<string, unknown> = {}): NewsQuery {
   };
 }
 
-export = {
+export default {
   MAX_NEWS_PAGE,
   MAX_RECENT_HOURS,
   MAX_SOURCE_FILTERS,

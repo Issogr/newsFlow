@@ -1,11 +1,11 @@
-const createMockLogger = require('../test-utils/mockLogger');
-import type { Mock } from 'vitest';
+import createMockLogger from '../test-utils/mockLogger';
+import { vi as jest, type Mock } from 'vitest';
 
-jest.mock('../utils/logger', createMockLogger);
+jest.doMock('../utils/logger', () => ({ default: createMockLogger() }));
 
-const logger = require('../utils/logger');
-const aiTopicClassifier = require('./aiTopicClassifier');
-const openRouterClient = require('./openRouterClient');
+const logger: ReturnType<typeof require> = (await import('../utils/logger')).default;
+const aiTopicClassifier: ReturnType<typeof require> = (await import('./aiTopicClassifier')).default;
+const openRouterClient = (await import('./openRouterClient')).default;
 const { extractAssistantContent, parseJsonContent } = openRouterClient;
 
 describe('aiTopicClassifier', () => {

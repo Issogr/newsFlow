@@ -1,25 +1,20 @@
-const fs = require('fs');
-const path = require('path');
-const Database = require('./sqliteDatabase');
-const logger = require('../utils/logger');
-const topicNormalizer = require('./topicNormalizer');
-const createArticleRepository = require('./databaseArticles');
-const createAuthRepository = require('./databaseAuth');
-const createReaderCacheRepository = require('./databaseReaderCache');
-const createDatabaseSchema = require('./databaseSchema');
-const createUserStateRepository = require('./databaseUserState');
+import fs from 'node:fs';
+import path from 'node:path';
+import Database from './sqliteDatabase';
+import logger from '../utils/logger';
+import createArticleRepository from './databaseArticles';
+import createAuthRepository from './databaseAuth';
+import createReaderCacheRepository from './databaseReaderCache';
+import createDatabaseSchema from './databaseSchema';
+import createUserStateRepository from './databaseUserState';
+import sourceCatalog from '../utils/sourceCatalog';
 const {
   buildDomainSourceGroups,
   getCanonicalSourceMetadata,
-  getConfiguredSourceGroupIds,
-  getLegacyConfiguredSourceGroupIds,
-  getGroupedConfiguredSourceIds,
-  getRawConfiguredSourceIds,
   getSourceAliases
-} = require('../utils/sourceCatalog');
-const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
+} = sourceCatalog;
 import type { SourceGroup } from '../utils/types';
-import SqliteDatabase = require('./sqliteDatabase');
+import type SqliteDatabase from './sqliteDatabase';
 
 const PACKAGE_ROOT = path.basename(path.dirname(__dirname)) === 'dist'
   ? path.resolve(__dirname, '../..')
@@ -40,7 +35,7 @@ function chunkValues<T>(values: T[] = [], size = 200) {
   return chunks;
 }
 
-function getCustomSourceGroups(userId: string | null, customSourceGroups: Map<string, SourceGroup> | null = null) {
+function getCustomSourceGroups(userId: string | null, customSourceGroups: Map<string, SourceGroup> | null = null): Map<string, SourceGroup> {
   if (customSourceGroups instanceof Map) {
     return customSourceGroups;
   }
@@ -52,7 +47,7 @@ function getCustomSourceGroups(userId: string | null, customSourceGroups: Map<st
   return buildDomainSourceGroups(userStateRepository.listUserSources(userId));
 }
 
-function resolveCustomSourceGroup(sourceId: string, sourceName: string, userId: string | null, customSourceGroups: Map<string, SourceGroup> | null = null) {
+function resolveCustomSourceGroup(sourceId: string, sourceName: string | null, userId: string | null, customSourceGroups: Map<string, SourceGroup> | null = null) {
   if (!userId) {
     return null;
   }
@@ -60,7 +55,7 @@ function resolveCustomSourceGroup(sourceId: string, sourceName: string, userId: 
   const resolvedCustomSourceGroups = getCustomSourceGroups(userId, customSourceGroups);
 
   for (const group of resolvedCustomSourceGroups.values()) {
-    if (group.id === sourceId || group.memberIds.has(sourceId) || group.memberNames.has(sourceName)) {
+    if (group.id === sourceId || group.memberIds.has(sourceId) || group.memberNames.has(sourceName || '')) {
       return group;
     }
   }
@@ -68,8 +63,8 @@ function resolveCustomSourceGroup(sourceId: string, sourceName: string, userId: 
   return null;
 }
 
-function getResolvedSourceAliases(sourceId: string, sourceName: string, userId: string | null, customSourceGroups: Map<string, SourceGroup> | null = null) {
-  const configuredAliases = getSourceAliases(sourceId, sourceName);
+function getResolvedSourceAliases(sourceId: string, sourceName: string | null, userId: string | null, customSourceGroups: Map<string, SourceGroup> | null = null) {
+  const configuredAliases = getSourceAliases(sourceId, sourceName || '');
   const customSourceGroup = resolveCustomSourceGroup(sourceId, sourceName, userId, customSourceGroups);
 
   if (!customSourceGroup) {
@@ -112,23 +107,14 @@ function getResolvedSourceMetadata(sourceId: string, sourceName: string, userId:
 const articleRepository = createArticleRepository({
   getDb,
   chunkValues,
-  topicNormalizer,
-  normalizeArticleUrl,
-  normalizeIdentityText,
   getResolvedSourceAliases,
-  getResolvedSourceMetadata,
-  getRawConfiguredSourceIds,
-  getConfiguredSourceGroupIds,
-  getLegacyConfiguredSourceGroupIds,
-  getGroupedConfiguredSourceIds
+  getResolvedSourceMetadata
 });
 
 const authRepository = createAuthRepository({ getDb });
 const readerCacheRepository = createReaderCacheRepository({ getDb, chunkValues });
 const userStateRepository = createUserStateRepository({ getDb });
-const dbSchema = createDatabaseSchema({
-  logger
-});
+const dbSchema = createDatabaseSchema({ logger });
 
 function getDb() {
   if (db) {
@@ -203,7 +189,7 @@ function verifyWriteAccess(options: { maxAgeMs?: number } = {}) {
   };
 }
 
-export = {
+export default {
   getDb,
   closeDb,
   ...articleRepository,

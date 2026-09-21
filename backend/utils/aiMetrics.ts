@@ -1,6 +1,7 @@
-const logger = require('./logger');
-const { redactSecretsForLog } = require('./logRedaction');
-const summarizeErrorMessage = require('./summarizeError');
+import logger from './logger';
+import logRedaction from './logRedaction';
+import summarizeErrorMessage from './summarizeError';
+const { redactSecretsForLog } = logRedaction;
 import type { DynamicRecord } from './types';
 
 interface AiMessage extends DynamicRecord {
@@ -130,12 +131,12 @@ function logAiRequestMetric(metric: DynamicRecord = {}, level = 'info') {
   } : metric;
   const sanitizedMetric = Object.fromEntries(Object.entries(safeMetric)
     .filter(([, value]) => value !== undefined && value !== null && value !== ''));
-  const logLevel = typeof logger[level] === 'function' ? level : 'info';
+  const logLevel = ['debug', 'info', 'warn', 'error'].includes(level) ? level : 'info';
 
   logger.log(logLevel, 'AI request metric', sanitizedMetric);
 }
 
-export = {
+export default {
   estimateTokenCountFromChars,
   extractUsage,
   getChatOutputCharCount,

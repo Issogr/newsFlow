@@ -1,16 +1,22 @@
-const crypto = require('crypto');
-const { setTimeout: wait } = require('node:timers/promises');
-const { JSDOM } = require('jsdom');
-const RSSParser = require('rss-parser');
-const logger = require('../utils/logger');
-const summarizeErrorMessage = require('../utils/summarizeError');
-const { sanitizeHtml } = require('../utils/inputValidator');
-const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
-const { normalizePublicationDate } = require('../utils/publicationDate');
-const { fetchSafeTextUrl } = require('../utils/urlSafety');
-const { parseIntegerEnv } = require('../utils/env');
-const { redactUrlForLog } = require('../utils/logRedaction');
-const { createConcurrencyLimiter } = require('../utils/concurrency');
+import crypto from 'node:crypto';
+import { setTimeout as wait } from 'node:timers/promises';
+import { JSDOM } from 'jsdom';
+import RSSParser from 'rss-parser';
+import logger from '../utils/logger';
+import summarizeErrorMessage from '../utils/summarizeError';
+import inputValidator from '../utils/inputValidator';
+import articleIdentity from '../utils/articleIdentity';
+import publicationDate from '../utils/publicationDate';
+import urlSafety from '../utils/urlSafety';
+import { parseIntegerEnv } from '../utils/env';
+import logRedaction from '../utils/logRedaction';
+import concurrency from '../utils/concurrency';
+const { sanitizeHtml } = inputValidator;
+const { normalizeArticleUrl, normalizeIdentityText } = articleIdentity;
+const { normalizePublicationDate } = publicationDate;
+const { fetchSafeTextUrl } = urlSafety;
+const { redactUrlForLog } = logRedaction;
+const { createConcurrencyLimiter } = concurrency;
 import type { AppError, DynamicRecord, SourceDefinition } from '../utils/types';
 
 interface RssSource extends SourceDefinition {
@@ -77,7 +83,7 @@ const RSS_REQUEST_HEADERS = {
   Pragma: 'no-cache'
 };
 
-const parser = new RSSParser({
+const parser = new RSSParser<DynamicRecord, DynamicRecord>({
   customFields: {
     item: [
       ['media:content', 'media'],
@@ -639,10 +645,10 @@ async function parseFeed(source: RssSource, options: RssOptions = {}) {
           title: sanitizeHtml(item.title),
           description: sanitizeHtml(item.description || item.contentSnippet || ''),
           content: sanitizeHtml(item.contentEncoded || item.content || ''),
-          pubDate: normalizePublicationDate(item.pubDate || item.dcdate || item.isoDate),
+          pubDate: normalizePublicationDate((item.pubDate || item.dcdate || item.isoDate) as string | undefined),
           source: source.name,
           sourceId: source.id,
-          url: item.link || '',
+          url: String(item.link || ''),
           canonicalUrl,
           image: getImageUrl(item),
           author: sanitizeHtml(item.creator || item.author || ''),
@@ -669,7 +675,7 @@ async function parseFeed(source: RssSource, options: RssOptions = {}) {
   }
 }
 
-export = {
+export default {
   discoverFeedUrls,
   parseFeed,
   shutdown,

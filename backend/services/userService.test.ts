@@ -1,5 +1,6 @@
-const { cleanupTempNewsDb, setupTempNewsDb } = require('../test-utils/tempNewsDb');
-import type { Mock } from 'vitest';
+import tempNewsDb from '../test-utils/tempNewsDb';
+const { cleanupTempNewsDb, setupTempNewsDb } = tempNewsDb;
+import { vi as jest, type Mock } from 'vitest';
 
 type RuntimeModule = ReturnType<typeof require>;
 type MockModule = Record<string, Mock>;
@@ -10,18 +11,18 @@ describe('userService imports', () => {
   let database: RuntimeModule;
   let rssParser: MockModule;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.resetModules();
     ({ tempDir } = setupTempNewsDb('news-user-service-test-'));
 
-    jest.doMock('./rssParser', () => ({
+    jest.doMock('./rssParser', () => ({ default: {
       discoverFeedUrls: jest.fn(),
       validateFeedUrl: jest.fn()
-    }));
+    } }));
 
-    userService = require('./userService');
-    database = require('./database');
-    rssParser = require('./rssParser') as MockModule;
+    userService = (await import('./userService')).default;
+    database = (await import('./database')).default;
+    rssParser = (await import('./rssParser')).default as unknown as MockModule;
   });
 
   afterEach(() => {

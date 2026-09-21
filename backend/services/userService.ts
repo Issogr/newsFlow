@@ -1,24 +1,32 @@
-const crypto = require('crypto');
-const database = require('./database');
-const rssParser = require('./rssParser');
-const { isFeedbackConfigured } = require('./feedbackService');
-const websocketService = require('./websocketService');
-const { createError } = require('../utils/errorHandler');
-const { mapWithConcurrency } = require('../utils/concurrency');
-const { parseIntegerEnv } = require('../utils/env');
-const { getProviderIconUrl } = require('../utils/sourceIcons');
+import crypto from 'node:crypto';
+import database from './database';
+import rssParser from './rssParser';
+import feedbackService from './feedbackService';
+import websocketService from './websocketService';
+import { createError } from '../utils/errorHandler';
+import concurrency from '../utils/concurrency';
+import { parseIntegerEnv } from '../utils/env';
+import sourceIcons from '../utils/sourceIcons';
+import publicApi from '../config/publicApi';
+import aiFeatures from '../config/aiFeatures';
+import feedback from '../utils/feedback';
+import sourceCatalog from '../utils/sourceCatalog';
+import auth from '../utils/auth';
+const { isFeedbackConfigured } = feedbackService;
+const { mapWithConcurrency } = concurrency;
+const { getProviderIconUrl } = sourceIcons;
 const {
   getPublicApiFeatures,
   isAuthenticatedPublicApiEnabled
-} = require('../config/publicApi');
-const { getAiFeatures } = require('../config/aiFeatures');
+} = publicApi;
+const { getAiFeatures } = aiFeatures;
 const {
   MAX_FEEDBACK_DESCRIPTION_LENGTH,
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_TITLE_LENGTH,
   MAX_FEEDBACK_VIDEO_BYTES,
-} = require('../utils/feedback');
-const { getConfiguredSourceGroupIds, getConfiguredSourceGroups, getGroupedConfiguredSourceIds } = require('../utils/sourceCatalog');
+} = feedback;
+const { getConfiguredSourceGroupIds, getConfiguredSourceGroups, getGroupedConfiguredSourceIds } = sourceCatalog;
 const {
   hashPassword,
   verifyPassword,
@@ -27,23 +35,8 @@ const {
   createSessionExpiryDate,
   createApiTokenExpiryDate,
   API_TOKEN_TTL_DAYS
-} = require('../utils/auth');
-import type { AppError, DynamicRecord, SourceDefinition, UserSettings } from '../utils/types';
-
-interface UserRecord extends DynamicRecord {
-  id: string;
-  username: string;
-  passwordHash?: string | null;
-  lastActivityAt?: string | null;
-}
-
-interface PasswordSetupTokenRecord extends DynamicRecord {
-  expiresAt: string;
-  purpose: string;
-  usedAt?: string | null;
-  userId: string;
-  username: string;
-}
+} = auth;
+import type { AppError, DynamicRecord, PasswordSetupTokenRecord, SourceDefinition, UserRecord, UserSettings } from '../utils/types';
 
 interface ResolvedUserSettings extends UserSettings {
   defaultLanguage: string;
@@ -335,7 +328,7 @@ function ensureAdminAccount() {
   database.createUser(adminUser);
   database.upsertUserSettings(adminUser.id, getDefaultSettings());
 
-  return database.findUserById(adminUser.id);
+  return database.findUserById(adminUser.id)!;
 }
 
 function getDefaultSettings(overrides: Partial<ResolvedUserSettings> = {}): ResolvedUserSettings {
@@ -354,7 +347,7 @@ function getDefaultSettings(overrides: Partial<ResolvedUserSettings> = {}): Reso
 }
 
 function getUserSettings(userId: string): ResolvedUserSettings {
-  return database.getUserSettings(userId) || getDefaultSettings();
+  return database.getUserSettings(userId) as ResolvedUserSettings | null || getDefaultSettings();
 }
 
 function buildUserPayload(user: UserRecord) {
@@ -567,7 +560,7 @@ async function discoverUserSourceFeeds(payload: DynamicRecord = {}, options: Abo
   }
 
   try {
-    const feeds: DynamicRecord[] = await rssParser.discoverFeedUrls(url, {
+    const feeds = await rssParser.discoverFeedUrls(url, {
       timeout: RSS_INTERACTIVE_VALIDATION_TIMEOUT,
       signal: options.signal
     });
@@ -864,7 +857,7 @@ async function completePasswordSetup(payload: DynamicRecord = {}) {
     });
     database.updateUserLogin(tokenRecord.userId, now);
 
-    return database.findUserById(tokenRecord.userId);
+    return database.findUserById(tokenRecord.userId)!;
   })();
 
   websocketService.disconnectUserSockets(user.id);
@@ -1080,7 +1073,7 @@ async function importUserSettings(userId: string, payload: DynamicRecord = {}, o
   );
 }
 
-export = {
+export default {
   registerUser,
   loginUser,
   logoutUser,

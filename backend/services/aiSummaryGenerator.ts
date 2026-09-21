@@ -1,12 +1,15 @@
-const logger = require('../utils/logger');
-const { removePromotionalSentences } = require('../utils/promotionalContent');
-const { buildArticlePayload, getArticleTextLimit: getSharedArticleTextLimit } = require('./aiArticlePayload');
+import logger from '../utils/logger';
+import promotionalContent from '../utils/promotionalContent';
+import aiArticlePayload from './aiArticlePayload';
+import openRouterClient from './openRouterClient';
+const { removePromotionalSentences } = promotionalContent;
+const { buildArticlePayload, getArticleTextLimit: getSharedArticleTextLimit } = aiArticlePayload;
 const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
   sendJsonChatCompletion
-} = require('./openRouterClient');
+} = openRouterClient;
 import type { AppError, DynamicRecord, NewsArticle } from '../utils/types';
 
 interface TopicConfig extends DynamicRecord {
@@ -324,7 +327,7 @@ function isAiSummaryGenerationAvailable() {
   return getConfig().enabled;
 }
 
-export = {
+export default {
   generateSummaryForArticles,
   isAiSummaryGenerationAvailable,
   _buildPrompt: buildPrompt,

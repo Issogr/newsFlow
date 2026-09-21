@@ -1,12 +1,15 @@
-import express = require('express');
+import express from 'express';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import type { Request, Response } from 'express';
-const database = require('../../services/database');
-const { ARTICLE_RETENTION_HOURS } = require('../../services/newsAggregatorQuery');
-const readerService = require('../../services/readerService');
-const { requireAuthenticatedUser } = require('../../utils/auth');
-const { buildRateLimitMessage, createError } = require('../../utils/errorHandler');
-const { validateAndSanitizeParam } = require('../../utils/inputValidator');
+import database from '../../services/database';
+import newsAggregatorQuery from '../../services/newsAggregatorQuery';
+import readerService from '../../services/readerService';
+import auth from '../../utils/auth';
+import { buildRateLimitMessage, createError } from '../../utils/errorHandler';
+import inputValidator from '../../utils/inputValidator';
+const { ARTICLE_RETENTION_HOURS } = newsAggregatorQuery;
+const { requireAuthenticatedUser } = auth;
+const { validateAndSanitizeParam } = inputValidator;
 
 const router = express.Router();
 
@@ -26,7 +29,7 @@ router.get('/articles/:articleId/reader', [
   readerRateLimit,
   validateAndSanitizeParam('articleId', 'ID articolo non valido')
 ], async (req: Request, res: Response) => {
-  const { articleId } = req.params;
+  const articleId = req.params.articleId as string;
 
   if (articleId.length < 5) {
     throw createError(400, 'ID articolo non valido', 'INVALID_ARTICLE_ID');
@@ -41,4 +44,4 @@ router.get('/articles/:articleId/reader', [
   res.json(readerArticle);
 });
 
-export = router;
+export default router;

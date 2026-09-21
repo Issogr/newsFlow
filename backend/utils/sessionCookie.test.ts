@@ -1,3 +1,6 @@
+import { vi as jest } from 'vitest';
+import sessionCookie from './sessionCookie';
+
 describe('session cookie policy', () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalCookieSecure = process.env.COOKIE_SECURE;
@@ -14,7 +17,7 @@ describe('session cookie policy', () => {
     process.env.NODE_ENV = 'production';
     process.env.COOKIE_SECURE = 'sometimes';
 
-    const { getSessionCookieOptions } = require('./sessionCookie');
+    const { getSessionCookieOptions } = sessionCookie;
     expect(() => getSessionCookieOptions()).toThrow('COOKIE_SECURE must be one of: auto, true, false.');
   });
 
@@ -22,7 +25,7 @@ describe('session cookie policy', () => {
     process.env.NODE_ENV = 'production';
     process.env.COOKIE_SECURE = 'auto';
 
-    const { getSessionCookieOptions } = require('./sessionCookie');
+    const { getSessionCookieOptions } = sessionCookie;
     expect(getSessionCookieOptions({ secure: true }).secure).toBe(true);
   });
 });

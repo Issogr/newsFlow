@@ -1,5 +1,5 @@
 // Explicit, live-model evaluation; never loaded by Vitest or the application.
-import generator = require('../services/aiSummaryGenerator');
+import generator from '../services/aiSummaryGenerator';
 
 const cases = [
   {

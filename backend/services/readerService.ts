@@ -1,11 +1,12 @@
-const { JSDOM } = require('jsdom');
-const { Readability } = require('@mozilla/readability');
-const database = require('./database');
-const logger = require('../utils/logger');
-const summarizeErrorMessage = require('../utils/summarizeError');
-const { createError } = require('../utils/errorHandler');
-const { fetchSafeTextUrl } = require('../utils/urlSafety');
-const { parseIntegerEnv } = require('../utils/env');
+import { JSDOM } from 'jsdom';
+import { Readability } from '@mozilla/readability';
+import database from './database';
+import logger from '../utils/logger';
+import summarizeErrorMessage from '../utils/summarizeError';
+import { createError } from '../utils/errorHandler';
+import urlSafety from '../utils/urlSafety';
+import { parseIntegerEnv } from '../utils/env';
+const { fetchSafeTextUrl } = urlSafety;
 import type { DynamicRecord, NewsArticle } from '../utils/types';
 
 interface ReaderBlock {
@@ -366,7 +367,7 @@ async function fetchReaderPayload(article: ReaderArticle) {
     throw new Error('Readable content extraction failed');
   }
 
-  const contentBlocks = buildBlocksFromHtml(parsed.content);
+  const contentBlocks = buildBlocksFromHtml(parsed.content || '');
   const contentText = blocksToText(contentBlocks.length > 0 ? contentBlocks : buildBlocksFromPlainText(parsed.textContent));
 
   return buildPayload(article, {
@@ -492,7 +493,7 @@ function clearRuntimeState() {
   stopFallbackCachePruneInterval();
 }
 
-async function getReaderArticle(articleId: string, options: DynamicRecord = {}) {
+async function getReaderArticle(articleId: string, options: { userId?: string | null; maxArticleAgeHours?: number | null; forceRefresh?: boolean } = {}) {
   const queryOptions = {
     userId: options.userId || null,
     maxArticleAgeHours: options.maxArticleAgeHours || null
@@ -519,7 +520,7 @@ async function getReaderArticle(articleId: string, options: DynamicRecord = {}) 
   });
 }
 
-module.exports = {
+export default {
   getReaderArticle,
   _clearRuntimeState: clearRuntimeState,
   _getFallbackCacheSize: () => readerFallbackCache.size,

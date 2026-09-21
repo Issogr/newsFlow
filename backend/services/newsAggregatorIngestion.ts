@@ -1,49 +1,44 @@
-const rssParser = require('./rssParser');
-const database = require('./database');
-const logger = require('../utils/logger');
-const websocketService = require('./websocketService');
-const thematicSummaryService = require('./thematicSummaryService');
-const { mapSettledWithConcurrency } = require('../utils/concurrency');
+import rssParser from './rssParser';
+import database from './database';
+import logger from '../utils/logger';
+import websocketService from './websocketService';
+import thematicSummaryService from './thematicSummaryService';
+import concurrency from '../utils/concurrency';
+import aiTopicClassifier from './aiTopicClassifier';
+import { createError } from '../utils/errorHandler';
+import { parseIntegerEnv } from '../utils/env';
+import articleRetention from '../config/articleRetention';
+import newsAggregatorGrouping from './newsAggregatorGrouping';
+import aiStoryGrouper from './aiStoryGrouper';
+const { mapSettledWithConcurrency } = concurrency;
 const {
   classifyTopicDetailsForArticlesWithStatus,
   isAiTopicDetectionAvailable
-} = require('./aiTopicClassifier');
-const { createError } = require('../utils/errorHandler');
-const { parseIntegerEnv } = require('../utils/env');
-const { getArticleRetentionHours } = require('../config/articleRetention');
+} = aiTopicClassifier;
+const { getArticleRetentionHours } = articleRetention;
 const {
   normalizeIncomingArticles,
   buildInsertedGroupsByOwner
-} = require('./newsAggregatorGrouping');
+} = newsAggregatorGrouping;
 const {
   buildStoryGroupId,
   getCandidateSignature: getStoryGroupingCandidateSignature,
   findSimilarStoriesForArticle,
   isAiStoryGroupingAvailable
-} = require('./aiStoryGrouper');
-import type { AppError, DynamicRecord } from '../utils/types';
+} = aiStoryGrouper;
+import type { AppError, DynamicRecord, NewsArticle, SourceDefinition } from '../utils/types';
 
-interface IngestionArticle extends DynamicRecord {
+interface IngestionArticle extends Partial<NewsArticle> {
   aiStoryGroupMatchIds?: string[];
   aiStoryGroupStatus?: string;
   id: string;
-  ownerUserId?: string | null;
-  pubDate?: string;
-  rawSourceId?: string;
   sourceFeedUrl?: string;
-  sourceId?: string;
   sourceUpdatedAt?: string | null;
-  storyGroupId?: string | null;
   topicDetails?: DynamicRecord[];
-  topics?: string[];
 }
 
-interface SourceConfig extends DynamicRecord {
-  id: string;
-  name: string;
+interface SourceConfig extends SourceDefinition {
   ownerUserId?: string | null;
-  updatedAt?: string | null;
-  url: string;
 }
 
 interface SourceFetchTask {
@@ -109,7 +104,7 @@ const sourceFetchFailures = new Map<string, { failedAt: number; failureCount: nu
 const sourceFetchPromises = new Map<string, Promise<SourceFetchResult>>();
 let summaryAfterTopicTimer: NodeJS.Timeout | null = null;
 
-function filterArticlesWithinRetention(articles: IngestionArticle[] = []) {
+function filterArticlesWithinRetention<T extends IngestionArticle>(articles: T[] = []): T[] {
   if (!Array.isArray(articles) || articles.length === 0) {
     return [];
   }
@@ -312,7 +307,7 @@ function buildSourceFetchTasks(sourceConfigs: SourceConfig[] = []) {
   return [...tasks, ...userSourceGroups.values()];
 }
 
-async function fetchSourceTask(task: SourceFetchTask, options: DynamicRecord = {}): Promise<IngestionArticle[]> {
+async function fetchSourceTask(task: SourceFetchTask, options: IngestionOptions = {}): Promise<IngestionArticle[]> {
   const {
     bypassSourceFailureBackoff = false,
     bypassSourceFreshness = false,
@@ -399,7 +394,7 @@ function getRefreshUserIdsForArticles(articles: IngestionArticle[] = [], classif
   return includesGlobalArticles ? [] : [...userIds];
 }
 
-async function processAiTopicsForPendingArticles(articles: IngestionArticle[] = [], options: DynamicRecord = {}) {
+async function processAiTopicsForPendingArticles(articles: NewsArticle[] = [], options: DynamicRecord = {}) {
   if (!Array.isArray(articles) || articles.length === 0) {
     return;
   }
@@ -415,7 +410,7 @@ async function processAiTopicsForPendingArticles(articles: IngestionArticle[] = 
     const failedArticleIds = new Set<string>(classification.failedArticleIds || []);
     const cappedArticleIds = new Set<string>(classification.cappedArticleIds || []);
     const classifiedIds: string[] = [];
-    const topicEntries: DynamicRecord[] = [];
+    const topicEntries: Array<{ articleId: string; topics: DynamicRecord[] }> = [];
 
     topicsByArticleId.forEach((topicDetails: DynamicRecord[], articleId: string) => {
       if (Array.isArray(topicDetails) && topicDetails.length > 0) {
@@ -482,7 +477,7 @@ function scheduleThematicSummariesAfterTopicProcessing(articles: IngestionArticl
   summaryAfterTopicTimer.unref?.();
 }
 
-function scheduleAiTopicsForPendingArticles(normalizedArticles: IngestionArticle[] = [], options: DynamicRecord = {}) {
+function scheduleAiTopicsForPendingArticles(normalizedArticles: NewsArticle[] = [], options: DynamicRecord = {}) {
   if (!Array.isArray(normalizedArticles) || normalizedArticles.length === 0 || !isAiTopicDetectionAvailable()) {
     return false;
   }
@@ -546,7 +541,7 @@ function selectMatchesForConservativeMerge(target: StoryCandidate = { id: '' }, 
   });
 }
 
-async function processAiStoryGroupingForArticle(article: IngestionArticle) {
+async function processAiStoryGroupingForArticle(article: Pick<NewsArticle, 'id'>) {
   const articleId = article?.id;
   if (!articleId) {
     return;
@@ -556,10 +551,10 @@ async function processAiStoryGroupingForArticle(article: IngestionArticle) {
     windowHours: AI_STORY_GROUPING_WINDOW_HOURS,
     limit: AI_STORY_GROUPING_CANDIDATE_LIMIT
   });
-  const target = candidateSet.target || article;
+  const target = candidateSet.target;
   const candidates = candidateSet.candidates || [];
 
-  if (!candidateSet.target || target.aiStoryGroupStatus === 'matched') {
+  if (!target || target.aiStoryGroupStatus === 'matched') {
     return;
   }
 
@@ -595,12 +590,12 @@ async function processAiStoryGroupingForArticle(article: IngestionArticle) {
     return;
   }
 
-  const currentCandidates: StoryCandidate[] = (result.candidates || candidates)
+  const currentCandidates = (result.candidates || candidates)
     .map((candidate: StoryCandidate) => {
       const storedCandidate = database.getArticleById(candidate.id, { maxArticleAgeHours: null });
       return storedCandidate ? { ...candidate, ...storedCandidate } : null;
     })
-    .filter((candidate: StoryCandidate | null): candidate is StoryCandidate => candidate !== null);
+    .filter((candidate) => candidate !== null);
   const matches = selectMatchesForConservativeMerge(currentTarget, currentCandidates, result.matches || []);
   if (matches.length === 0) {
     database.markArticlesAiStoryGrouping([articleId], 'no_match', result.model, {
@@ -625,10 +620,10 @@ async function processAiStoryGroupingForArticle(article: IngestionArticle) {
   const storyGroupId = existingGroupId || buildStoryGroupId(groupedArticleIds);
   const affectedUserIds = [currentTarget, ...matchedCandidates]
     .map((item) => item?.ownerUserId)
-    .filter(Boolean);
+    .filter((userId): userId is string => Boolean(userId));
   const matchEvidence = matchedCandidates
     .map((candidate) => matchesByArticleId.get(candidate.id))
-    .filter(Boolean);
+    .filter((match): match is StoryMatch => Boolean(match));
 
   const updatedCount = database.assignArticlesToStoryGroup(groupedArticleIds, storyGroupId, result.model, matchEvidence);
   if (updatedCount > 0) {
@@ -639,7 +634,7 @@ async function processAiStoryGroupingForArticle(article: IngestionArticle) {
   }
 }
 
-async function processAiStoryGroupingForPendingArticles(articles: IngestionArticle[] = []) {
+async function processAiStoryGroupingForPendingArticles(articles: Pick<NewsArticle, 'id'>[] = []) {
   if (!Array.isArray(articles) || articles.length === 0) {
     return;
   }
@@ -664,7 +659,7 @@ async function processAiStoryGroupingForPendingArticles(articles: IngestionArtic
   }
 }
 
-function scheduleAiStoryGroupingForPendingArticles(normalizedArticles: IngestionArticle[] = [], options: DynamicRecord = {}) {
+function scheduleAiStoryGroupingForPendingArticles(normalizedArticles: Pick<NewsArticle, 'id'>[] = [], options: DynamicRecord = {}) {
   if (!Array.isArray(normalizedArticles) || normalizedArticles.length === 0 || !isAiStoryGroupingAvailable()) {
     return false;
   }
@@ -685,7 +680,7 @@ function scheduleAiStoryGroupingForPendingArticles(normalizedArticles: Ingestion
     return false;
   }
 
-  const articleById = new Map<string, IngestionArticle>(normalizedArticles.map((article) => [article.id, article]));
+  const articleById = new Map(normalizedArticles.map((article) => [article.id, article]));
   const pendingArticleIdSet = new Set<string>(pendingArticleIds);
   const pendingArticles = [...pendingArticleIdSet].map((articleId) => articleById.get(articleId) || { id: articleId }).filter((article) => {
     if (!article.id || pendingAiStoryGroupingIds.has(article.id)) {
@@ -720,7 +715,7 @@ function resetRuntimeStateForTests() {
   }
 }
 
-function mergeNormalizedArticleTopics(normalizedArticles: IngestionArticle[] = []) {
+function mergeNormalizedArticleTopics(normalizedArticles: NewsArticle[] = []) {
   const pendingArticleIdSet = new Set(
     database.getArticleIdsPendingAiTopicProcessing(normalizedArticles.map((article) => article.id))
   );
@@ -729,18 +724,18 @@ function mergeNormalizedArticleTopics(normalizedArticles: IngestionArticle[] = [
     .filter((article) => pendingArticleIdSet.has(article.id))
     .map((article) => ({
       articleId: article.id,
-      topics: article.topicDetails || article.topics
+      topics: Array.isArray(article.topicDetails) ? article.topicDetails : article.topics
     })));
 }
 
-async function persistNormalizedArticles(normalizedArticles: IngestionArticle[] = []) {
+async function persistNormalizedArticles(normalizedArticles: NewsArticle[] = []) {
   const currentSourceById = new Map<string, DynamicRecord | null>();
   const currentArticles = normalizedArticles.filter((article) => {
     if (!article?.ownerUserId) {
       return true;
     }
 
-    const sourceId = article.rawSourceId || article.sourceId;
+    const sourceId = article.rawSourceId || article.sourceId || '';
     const sourceKey = `${article.ownerUserId}:${sourceId}`;
     if (!currentSourceById.has(sourceKey)) {
       currentSourceById.set(sourceKey, database.findUserSourceById(article.ownerUserId, sourceId));
@@ -793,7 +788,7 @@ async function ingestSourceConfigs(sourceConfigs: SourceConfig[] = [], options: 
     getLastRefreshAt = () => null,
     setLastRefreshAt = () => null
   } = runtime;
-  let ingestionRun: DynamicRecord | null = null;
+  let ingestionRun: ReturnType<typeof database.createIngestionRun> | null = null;
 
   try {
     if (includeMaintenance) {
@@ -871,7 +866,7 @@ async function ingestSourceConfigs(sourceConfigs: SourceConfig[] = [], options: 
   }
 }
 
-module.exports = {
+export default {
   createEmptyRefreshPayload,
   ingestSourceConfigs,
   scheduleAiTopicsForPendingArticles,

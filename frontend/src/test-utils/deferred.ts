@@ -1,20 +1,8 @@
 import { act } from '@testing-library/react';
 
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve: (value: T | PromiseLike<T>) => void;
-}
+export const createDeferred = <T = void>() => Promise.withResolvers<T>();
 
-export function createDeferred<T = void>(): Deferred<T> {
-  let resolve!: Deferred<T>['resolve'];
-  const promise = new Promise<T>((res) => {
-    resolve = res;
-  });
-
-  return { promise, resolve };
-}
-
-export async function resolveDeferred<T>(deferred: Deferred<T>, value?: T) {
+export async function resolveDeferred<T>(deferred: PromiseWithResolvers<T>, value?: T) {
   await act(async () => {
     deferred.resolve(value as T);
     await deferred.promise;

@@ -1,9 +1,9 @@
-const { parseIntegerEnv } = require('./env');
+import { parseIntegerEnv } from './env';
 import type { CookieOptions, Request, Response } from 'express';
 
 const SESSION_COOKIE_NAME = 'newsflow_session';
 
-function getSessionCookieOptions(req?: Request): CookieOptions {
+function getSessionCookieOptions(req?: Pick<Request, 'secure'>): CookieOptions {
   const value = String(process.env.COOKIE_SECURE || 'auto').trim().toLowerCase();
   if (!['auto', 'true', 'false'].includes(value) && process.env.NODE_ENV === 'production') {
     throw new Error('COOKIE_SECURE must be one of: auto, true, false.');
@@ -31,7 +31,7 @@ function clearSessionCookie(req: Request, res: Response): void {
   res.clearCookie(SESSION_COOKIE_NAME, options);
 }
 
-export = {
+export default {
   SESSION_COOKIE_NAME,
   clearSessionCookie,
   getSessionCookieOptions,

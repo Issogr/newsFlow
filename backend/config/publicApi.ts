@@ -1,4 +1,4 @@
-const { parseBooleanEnv } = require('../utils/env');
+import { parseBooleanEnv } from '../utils/env';
 
 function isAnonymousPublicApiEnabled() {
   return parseBooleanEnv('PUBLIC_API_ANONYMOUS_ENABLED', false);
@@ -17,7 +17,7 @@ function getPublicApiFeatures() {
   };
 }
 
-export = {
+export default {
   getPublicApiFeatures,
   isAnonymousPublicApiEnabled,
   isAuthenticatedPublicApiEnabled

@@ -1,6 +1,6 @@
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 interface TempNewsDb {
   tempDir: string;
@@ -30,7 +30,7 @@ function cleanupTempNewsDb(
   }
 }
 
-module.exports = {
+export default {
   cleanupTempNewsDb,
   setupTempNewsDb
 };

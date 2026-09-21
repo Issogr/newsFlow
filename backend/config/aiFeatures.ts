@@ -1,4 +1,4 @@
-const { parseBooleanEnv } = require('../utils/env');
+import { parseBooleanEnv } from '../utils/env';
 
 function isAiToggleEnabled(envName: string, fallback = true) {
   return parseBooleanEnv(envName, fallback, { invalidFallback: false });
@@ -18,7 +18,7 @@ function getAiFeatures() {
   };
 }
 
-export = {
+export default {
   getAiFeatures,
   isAiToggleEnabled,
   isOpenRouterFeatureEnabled,

@@ -1,10 +1,12 @@
-import express = require('express');
+import express from 'express';
 import { rateLimit } from 'express-rate-limit';
-import multer = require('multer');
+import multer from 'multer';
 import type { Request, RequestHandler, Response } from 'express';
-const feedbackService = require('../../services/feedbackService');
-const { requireAuthenticatedUser } = require('../../utils/auth');
-const { buildRateLimitMessage, createError } = require('../../utils/errorHandler');
+import feedbackService from '../../services/feedbackService';
+import auth from '../../utils/auth';
+import { buildRateLimitMessage, createError } from '../../utils/errorHandler';
+import feedback from '../../utils/feedback';
+const { requireAuthenticatedUser } = auth;
 const {
   FEEDBACK_CATEGORIES,
   MAX_FEEDBACK_ATTACHMENT_BYTES,
@@ -13,7 +15,7 @@ const {
   MAX_FEEDBACK_TITLE_LENGTH,
   MAX_FEEDBACK_VIDEO_BYTES,
   getFeedbackAttachmentType,
-} = require('../../utils/feedback');
+} = feedback;
 
 const router = express.Router();
 
@@ -130,4 +132,4 @@ router.post('/me/feedback', [requireAuthenticatedUser, feedbackRateLimit, handle
   res.status(201).json({ success: true });
 });
 
-export = router;
+export default router;

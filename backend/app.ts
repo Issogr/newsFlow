@@ -1,20 +1,25 @@
-import path = require('node:path');
-import cors = require('cors');
-import express = require('express');
+import path from 'node:path';
+import cors from 'cors';
+import express from 'express';
 import helmet from 'helmet';
-import morgan = require('morgan');
+import morgan from 'morgan';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
-const apiRoutes = require('./routes/api');
-const publicApiRoutes = require('./routes/publicApi');
-const database = require('./services/database');
-const { getTrustProxySetting, requireSameOriginRequest } = require('./utils/browserSecurity');
-const { errorMiddleware, createError, buildRateLimitMessage } = require('./utils/errorHandler');
-const logger = require('./utils/logger');
-const { redactUrlForLog } = require('./utils/logRedaction');
-const { getAllowedOrigins, isOriginAllowed } = require('./utils/networkConfig');
-const { extractSessionCookie } = require('./utils/auth');
-const { clearSessionCookie, getSessionCookieOptions } = require('./utils/sessionCookie');
+import apiRoutes from './routes/api';
+import publicApiRoutes from './routes/publicApi';
+import database from './services/database';
+import browserSecurity from './utils/browserSecurity';
+import { errorMiddleware, createError, buildRateLimitMessage } from './utils/errorHandler';
+import logger from './utils/logger';
+import logRedaction from './utils/logRedaction';
+import networkConfig from './utils/networkConfig';
+import auth from './utils/auth';
+import sessionCookie from './utils/sessionCookie';
+const { getTrustProxySetting, requireSameOriginRequest } = browserSecurity;
+const { redactUrlForLog } = logRedaction;
+const { getAllowedOrigins, isOriginAllowed } = networkConfig;
+const { extractSessionCookie } = auth;
+const { clearSessionCookie, getSessionCookieOptions } = sessionCookie;
 
 const packageRoot = path.basename(__dirname) === 'dist' ? path.dirname(__dirname) : __dirname;
 const DEFAULT_FRONTEND_DIST_DIR = path.join(packageRoot, 'public');
@@ -173,4 +178,4 @@ function createApp(options: CreateAppOptions = {}): express.Express {
   return app;
 }
 
-export = { createApp };
+export default { createApp };

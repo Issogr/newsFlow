@@ -1,3 +1,4 @@
+import sourceCatalog from './sourceCatalog';
 const {
   extractRegistrableDomain,
   getCanonicalSourceMetadata,
@@ -6,7 +7,7 @@ const {
   getConfiguredSourceGroups,
   getSourceAliases,
   getSourceVariantLabel
-} = require('./sourceCatalog');
+} = sourceCatalog;
 
 describe('sourceCatalog domain grouping', () => {
   test('extracts registrable domains from feed URLs', () => {
@@ -23,7 +24,7 @@ describe('sourceCatalog domain grouping', () => {
       name: 'BBC News',
       iconUrl: 'https://www.bbc.co.uk/favicon.ico'
     });
-    expect(bbcGroup.subSources).toEqual(expect.arrayContaining([
+    expect(bbcGroup!.subSources).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'bbc_home', label: 'Home', iconUrl: 'https://www.bbc.co.uk/favicon.ico' }),
       expect.objectContaining({ id: 'bbc_world', label: 'World' }),
       expect.objectContaining({ id: 'bbc_technology', label: 'Technology' })
@@ -52,6 +53,6 @@ describe('sourceCatalog domain grouping', () => {
     expect(getCanonicalSourceName('bbc_home', 'BBC News - Home')).toBe('BBC News');
     expect(getSourceVariantLabel('bbc_world', 'BBC News - World')).toBe('World');
 
-    expect(getSourceAliases('ansa.it').ids).toEqual(expect.arrayContaining(['ansa.it', 'ansa', 'ansa_home', 'ansa_mondo']));
+    expect(getSourceAliases('ansa.it', '').ids).toEqual(expect.arrayContaining(['ansa.it', 'ansa', 'ansa_home', 'ansa_mondo']));
   });
 });

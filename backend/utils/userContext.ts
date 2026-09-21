@@ -16,6 +16,6 @@ function buildUserContext(userId: string | null | undefined, settings: UserSetti
   };
 }
 
-export = {
+export default {
   buildUserContext,
 };

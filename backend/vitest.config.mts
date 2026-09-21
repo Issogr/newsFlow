@@ -4,7 +4,6 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    setupFiles: ['../scripts/vitest-jest-compat.mts'],
     coverage: {
       provider: 'v8',
       include: ['app.ts', 'server.ts', 'config/**/*.ts', 'routes/**/*.ts', 'services/**/*.ts', 'utils/**/*.ts'],

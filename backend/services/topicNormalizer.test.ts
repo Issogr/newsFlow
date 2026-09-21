@@ -1,4 +1,4 @@
-const topicNormalizer = require('./topicNormalizer');
+import topicNormalizer from './topicNormalizer';
 const topicRegressionFixtures = [
   { title: 'A Roma due persone al corteo del 25 aprile ferite da colpi di pistola ad aria compressa', expected: ['Cronaca', 'Politica'], rejected: ['Tecnologia'] },
   { title: 'Arrestato dopo una rapina in centro, indaga la procura', expected: ['Cronaca'], rejected: ['Economia'] },

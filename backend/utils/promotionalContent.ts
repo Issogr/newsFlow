@@ -73,7 +73,7 @@ function removePromotionalSentences(value: unknown = '') {
   return paragraphs.join('\n\n').trim();
 }
 
-export = {
+export default {
   isPromotionalDealArticle,
   removePromotionalSentences
 };

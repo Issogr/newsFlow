@@ -1,10 +1,12 @@
-const { groupSimilarNews } = require('./newsAggregatorGrouping');
+import grouping from './newsAggregatorGrouping';
+const { groupSimilarNews } = grouping;
 
 describe('newsAggregatorGrouping', () => {
   test('groups reworded articles when AI story group id matches', () => {
     const groups = groupSimilarNews([
       {
         id: 'article-1',
+        content: '', topics: [],
         sourceId: 'source-a',
         source: 'Source A',
         title: 'Meloni meets Trump in Rome',
@@ -15,6 +17,7 @@ describe('newsAggregatorGrouping', () => {
       },
       {
         id: 'article-2',
+        content: '', topics: [],
         sourceId: 'source-b',
         source: 'Source B',
         title: 'Tariffs and Ukraine at Trump Meloni summit',
@@ -36,6 +39,7 @@ describe('newsAggregatorGrouping', () => {
     const groups = groupSimilarNews([
       {
         id: 'article-1',
+        content: '', topics: [],
         sourceId: 'source-a',
         source: 'Source A',
         title: 'Meloni meets Trump in Rome',
@@ -46,6 +50,7 @@ describe('newsAggregatorGrouping', () => {
       },
       {
         id: 'article-2',
+        content: '', topics: [],
         sourceId: 'source-a',
         source: 'Source A',
         title: 'Tariffs and Ukraine at Trump Meloni summit',
@@ -67,6 +72,7 @@ describe('newsAggregatorGrouping', () => {
     const groups = groupSimilarNews([
       {
         id: 'article-1',
+        content: '', topics: [],
         sourceId: 'source-a',
         source: 'Source A',
         title: 'Initial report on Rome summit',
@@ -77,6 +83,7 @@ describe('newsAggregatorGrouping', () => {
       },
       {
         id: 'article-2',
+        content: '', topics: [],
         sourceId: 'source-b',
         source: 'Source B',
         title: 'Tariffs and Ukraine at Trump Meloni summit',
@@ -87,6 +94,7 @@ describe('newsAggregatorGrouping', () => {
       },
       {
         id: 'article-3',
+        content: '', topics: [],
         sourceId: 'source-c',
         source: 'Source C',
         title: 'Summit talks in Rome cover tariffs and Ukraine',

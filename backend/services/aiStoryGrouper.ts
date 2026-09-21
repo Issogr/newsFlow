@@ -1,14 +1,17 @@
-const crypto = require('crypto');
-const logger = require('../utils/logger');
-const { parseIntegerEnv } = require('../utils/env');
+import crypto from 'node:crypto';
+import logger from '../utils/logger';
+import { parseIntegerEnv } from '../utils/env';
+import openRouterClient from './openRouterClient';
+import aiArticlePayload from './aiArticlePayload';
+import articleIdentity from '../utils/articleIdentity';
 const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
   sendJsonChatCompletion
-} = require('./openRouterClient');
-const { truncateText } = require('./aiArticlePayload');
-const { normalizeArticleUrl } = require('../utils/articleIdentity');
+} = openRouterClient;
+const { truncateText } = aiArticlePayload;
+const { normalizeArticleUrl } = articleIdentity;
 import type { DynamicRecord, NewsArticle } from '../utils/types';
 
 const DEFAULT_OPENROUTER_STORY_GROUPING_MODEL = 'qwen/qwen3.7-flash';
@@ -217,7 +220,7 @@ function isAiStoryGroupingAvailable() {
   return getConfig().enabled;
 }
 
-export = {
+export default {
   findSimilarStoriesForArticle,
   isAiStoryGroupingAvailable,
   buildStoryGroupId,

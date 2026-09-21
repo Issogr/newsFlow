@@ -1,11 +1,15 @@
-const newsService = require('../../services/newsAggregator');
-const userService = require('../../services/userService');
-const { isAuthenticatedPublicApiEnabled } = require('../../config/publicApi');
-const { extractSessionCookie } = require('../../utils/auth');
-const { createError } = require('../../utils/errorHandler');
-const { buildUserContext } = require('../../utils/userContext');
-const { clearSessionCookie, setSessionCookie } = require('../../utils/sessionCookie');
-const logger = require('../../utils/logger');
+import newsService from '../../services/newsAggregator';
+import userService from '../../services/userService';
+import publicApi from '../../config/publicApi';
+import auth from '../../utils/auth';
+import { createError } from '../../utils/errorHandler';
+import userContext from '../../utils/userContext';
+import sessionCookie from '../../utils/sessionCookie';
+import logger from '../../utils/logger';
+const { isAuthenticatedPublicApiEnabled } = publicApi;
+const { extractSessionCookie } = auth;
+const { buildUserContext } = userContext;
+const { clearSessionCookie, setSessionCookie } = sessionCookie;
 import type { NextFunction, Request, Response } from 'express';
 import type { UnknownRecord } from '../../utils/types';
 
@@ -64,7 +68,7 @@ function requireAuthenticatedPublicApiFeature(req: Request, res: Response, next:
   next(createError(404, 'Public API token access is disabled.', 'PUBLIC_API_DISABLED'));
 }
 
-export = {
+export default {
   clearSessionCookie,
   getRequestAbortSignal,
   getRequestIds,

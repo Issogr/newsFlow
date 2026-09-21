@@ -1,5 +1,5 @@
-import configuredSources = require('../config/newsSources');
-import sourceIcons = require('./sourceIcons');
+import configuredSources from '../config/newsSources';
+import sourceIcons from './sourceIcons';
 import type { SourceDefinition, SourceGroup } from './types';
 
 const { getProviderIconUrl } = sourceIcons;
@@ -113,42 +113,31 @@ function buildDomainSourceGroups(
     includeLegacyIds = false
   } = options;
 
-  const groupedSources = sources.reduce<Map<string, { id: string; domain: string; sources: SourceDefinition[] }>>((groups, source) => {
-    const registrableDomain = extractRegistrableDomain(source.url) || source.id;
-    const group = groups.get(registrableDomain) || {
-      id: registrableDomain,
-      domain: registrableDomain,
-      sources: []
-    };
-
-    group.sources.push(source);
-    groups.set(registrableDomain, group);
-    return groups;
-  }, new Map());
+  const groupedSources = Map.groupBy(sources, (source) => extractRegistrableDomain(source.url) || source.id);
 
   return new Map(
-    [...groupedSources.entries()].map(([groupId, group]) => {
-      const groupName = deriveGroupName(group.sources, group.domain);
-      const language = group.sources[0]?.language || null;
+    [...groupedSources.entries()].map(([groupId, members]) => {
+      const groupName = deriveGroupName(members, groupId);
+      const language = members[0]?.language || null;
       const legacyIds = includeLegacyIds
-        ? new Set(group.sources.map((source) => source.groupId).filter((id): id is string => Boolean(id)))
+        ? new Set(members.map((source) => source.groupId).filter((id): id is string => Boolean(id)))
         : new Set<string>();
 
       return [groupId, {
         id: groupId,
         name: groupName,
         language,
-        domain: group.domain,
-        iconUrl: group.sources.find((source) => source.iconUrl)?.iconUrl || getProviderIconUrl(group.domain),
-        subSources: group.sources.map((source) => ({
+        domain: groupId,
+        iconUrl: members.find((source) => source.iconUrl)?.iconUrl || getProviderIconUrl(groupId),
+        subSources: members.map((source) => ({
           id: source.id,
           name: source.name,
-          label: deriveSubSourceLabel(source, groupName, group.sources.length),
+          label: deriveSubSourceLabel(source, groupName, members.length),
           language: source.language || null,
-          iconUrl: source.iconUrl || getProviderIconUrl(source.url || group.domain)
+          iconUrl: source.iconUrl || getProviderIconUrl(source.url || groupId)
         })),
-        memberIds: new Set(group.sources.map((source) => source.id)),
-        memberNames: new Set(group.sources.map((source) => source.name)),
+        memberIds: new Set(members.map((source) => source.id)),
+        memberNames: new Set(members.map((source) => source.name)),
         legacyIds
       }];
     })
@@ -266,7 +255,7 @@ function getLegacyConfiguredSourceGroupIds() {
   );
 }
 
-export = {
+export default {
   buildDomainSourceGroups,
   extractRegistrableDomain,
   getConfiguredSourceGroups,

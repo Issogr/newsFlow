@@ -13,6 +13,9 @@
 - simplified fresh SQLite initialization through the existing migration chain, reused article projections, and removed unused compact-card settings and WebSocket statistics
 - replaced the OpenRouter chat SDK with native fetch, specialized topic batching and daily summary scheduling, and reused native stream consumption
 - removed the custom Vitest launcher and redundant shared ESLint configuration factory
+- removed the Jest compatibility loader through native backend imports and Vitest mocks, replaced frontend Axios with fetch and backend Winston with console logging, and reused native IP-range checks, grouping, and deferred promises
+- consolidated migration bookkeeping and duplicate-article updates, removed one-use summary caches and helper injection, and deleted unused frontend browser targets
+- simplified backend environment and error helper imports, removed duplicate inherited type fields, and flattened redundant auth-test scopes
 
 ## 3.7.0
 

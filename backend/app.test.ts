@@ -1,12 +1,14 @@
-import fs = require('node:fs');
-import http = require('node:http');
-import path = require('node:path');
+import fs from 'node:fs';
+import http from 'node:http';
+import path from 'node:path';
+import { vi as jest } from 'vitest';
+import request from 'supertest';
+import tempNewsDb from './test-utils/tempNewsDb';
 import type { Application } from 'express';
 import type { Socket } from 'socket.io-client';
 import type { Response as SupertestResponse } from 'supertest';
 
-const request = require('supertest') as typeof import('supertest');
-const { cleanupTempNewsDb, setupTempNewsDb } = require('./test-utils/tempNewsDb');
+const { cleanupTempNewsDb, setupTempNewsDb } = tempNewsDb;
 
 const originalEnvironment = {
   APP_BASE_URL: process.env.APP_BASE_URL,
@@ -30,7 +32,7 @@ describe('browser application boundary', () => {
   let database: ReturnType<typeof require>;
   let tempDir: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.resetModules();
     process.env.NODE_ENV = 'test';
     process.env.APP_BASE_URL = 'http://localhost';
@@ -44,14 +46,14 @@ describe('browser application boundary', () => {
     fs.writeFileSync(path.join(frontendDir, 'index.html'), '<!doctype html><title>News Flow</title><main>application shell</main>');
     fs.writeFileSync(path.join(frontendDir, 'assets', 'app.js'), 'globalThis.newsFlow = true;');
 
-    jest.doMock('./services/newsAggregator', () => ({
+    jest.doMock('./services/newsAggregator', () => ({ default: {
       getCachedNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       refreshUserSources: jest.fn().mockResolvedValue({ success: true }),
-    }));
-    jest.doMock('./services/feedbackService', () => ({ isFeedbackConfigured: jest.fn(() => false) }));
+    } }));
+    jest.doMock('./services/feedbackService', () => ({ default: { isFeedbackConfigured: jest.fn(() => false) } }));
 
-    app = require('./app').createApp({ frontendDistDir: frontendDir });
-    database = require('./services/database');
+    app = (await import('./app')).default.createApp({ frontendDistDir: frontendDir });
+    database = (await import('./services/database')).default;
   });
 
   afterEach(() => {
@@ -128,7 +130,7 @@ describe('browser application boundary', () => {
   test('emits a secure session cookie behind the trusted HTTPS proxy', async () => {
     process.env.APP_BASE_URL = 'https://news.example';
     process.env.TRUST_PROXY = '1';
-    const secureApp = require('./app').createApp({ frontendDistDir: path.join(tempDir, 'frontend') });
+    const secureApp = (await import('./app')).default.createApp({ frontendDistDir: path.join(tempDir, 'frontend') });
 
     const response = await request(secureApp)
       .post('/api/auth/register')
@@ -187,7 +189,7 @@ describe('browser application boundary', () => {
       .expect(201);
     const cookie = getCookiePair(registration);
     const token = cookie.slice(cookie.indexOf('=') + 1);
-    const { hashSessionToken } = require('./utils/auth');
+    const { hashSessionToken } = (await import('./utils/auth')).default;
 
     database.refreshSessionExpiry(
       hashSessionToken(token),
@@ -223,7 +225,7 @@ describe('browser application boundary', () => {
 
   test('authenticates direct same-origin Socket.IO polling and WebSocket connections', async () => {
     const server = http.createServer(app);
-    const io = require('./services/websocketService').initialize(server);
+    const io = (await import('./services/websocketService')).default.initialize(server);
     let websocketClient: Socket | null = null;
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     const address = server.address();
@@ -282,7 +284,7 @@ describe('browser application boundary', () => {
       });
       expect(await rejectedAuth.text()).toContain('WebSocket auth failed');
 
-      const { io: createSocketClient } = require('socket.io-client');
+      const { io: createSocketClient } = await import('socket.io-client');
       websocketClient = createSocketClient(`http://127.0.0.1:${address.port}`, {
         autoConnect: false,
         extraHeaders: {

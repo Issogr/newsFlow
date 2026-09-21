@@ -18,6 +18,44 @@ export interface AuthUser {
   sessionToken?: string;
 }
 
+export interface UserRecord extends DynamicRecord {
+  id: string;
+  username: string;
+  passwordHash?: string | null;
+  lastActivityAt?: string | null;
+}
+
+export interface PasswordSetupTokenRecord extends DynamicRecord {
+  expiresAt: string;
+  purpose: string;
+  usedAt?: string | null;
+  userId: string;
+  username: string;
+}
+
+export interface SummarySource extends DynamicRecord {
+  articleId?: string;
+  contentHash?: string;
+}
+
+export interface SummaryRecord extends DynamicRecord {
+  articleCount?: number;
+  errorMessage?: string;
+  failureCategory?: string;
+  generatedAt?: string;
+  lastAttemptAt?: string;
+  id?: string;
+  model?: string;
+  periodEnd?: string;
+  periodStart?: string;
+  retryCount?: number;
+  sources?: SummarySource[];
+  status?: string;
+  summaryText?: string;
+  summaryTextByLocale?: Record<string, string>;
+  topicKey?: string;
+}
+
 export interface ApiTokenRecord {
   id: string;
   userId: string;
@@ -46,7 +84,7 @@ export interface SourceDefinition {
   userId?: string;
   isActive?: boolean;
   createdAt?: string;
-  updatedAt?: string;
+  updatedAt?: string | null;
   validatedAt?: string | null;
   [key: string]: unknown;
 }
@@ -94,7 +132,7 @@ export interface NewsArticle {
   [key: string]: unknown;
 }
 
-export interface NewsQuery {
+export interface NewsQuery extends DynamicRecord {
   search: string;
   sourceIds: string[];
   topics: string[];

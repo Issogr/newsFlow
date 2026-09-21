@@ -1,8 +1,9 @@
 const originalEnv = process.env;
 const OPENROUTER_TEST_ENV = { OPENROUTER_API_KEY: 'test-key' };
-const createMockLogger = require('../test-utils/mockLogger');
-const { isPromotionalDealArticle } = require('../utils/promotionalContent');
-import type { Mock } from 'vitest';
+import createMockLogger from '../test-utils/mockLogger';
+import promotionalContent from '../utils/promotionalContent';
+const { isPromotionalDealArticle } = promotionalContent;
+import { vi as jest, type Mock } from 'vitest';
 import type { MockLogger } from '../test-utils/mockLogger';
 
 type RuntimeModule = ReturnType<typeof require>;
@@ -34,15 +35,20 @@ interface Identified {
 
 function resetServiceRuntime(env: NodeJS.ProcessEnv = {}): void {
   jest.resetModules();
+  jest.doUnmock('./aiSummaryGenerator');
+  jest.doUnmock('./database');
+  jest.doUnmock('./readerService');
+  jest.doUnmock('./websocketService');
+  jest.doUnmock('../utils/logger');
   process.env = {
     ...originalEnv,
     ...env
   };
 }
 
-function loadService({ env = {} }: { env?: NodeJS.ProcessEnv } = {}): RuntimeModule {
+async function loadService({ env = {} }: { env?: NodeJS.ProcessEnv } = {}): Promise<RuntimeModule> {
   resetServiceRuntime(env);
-  return require('./thematicSummaryService');
+  return (await import('./thematicSummaryService')).default;
 }
 
 afterEach(() => {
@@ -53,8 +59,8 @@ afterEach(() => {
 describe('thematicSummaryService', () => {
   let thematicSummaryService: RuntimeModule;
 
-  beforeEach(() => {
-    thematicSummaryService = loadService({
+  beforeEach(async () => {
+    thematicSummaryService = await loadService({
       env: {
         AI_SUMMARY_TIME_ZONE: 'Europe/Rome'
       }
@@ -167,7 +173,7 @@ function createDatabaseMock(overrides: MockModule = {}): MockModule {
   return databaseMock;
 }
 
-function loadServiceWithMocks({
+async function loadServiceWithMocks({
   databaseMock,
   env = {},
   aiSummaryGeneratorMock,
@@ -187,22 +193,22 @@ function loadServiceWithMocks({
     loggerMock: loggerMock || createMockLogger()
   };
 
-  jest.doMock('./database', () => createDatabaseMock(databaseMock));
+  jest.doMock('./database', () => ({ default: createDatabaseMock(databaseMock) }));
   if (aiSummaryGeneratorMock) {
-    jest.doMock('./aiSummaryGenerator', () => aiSummaryGeneratorMock);
+    jest.doMock('./aiSummaryGenerator', () => ({ default: aiSummaryGeneratorMock }));
   }
-  jest.doMock('./readerService', () => mocks.readerServiceMock);
-  jest.doMock('./websocketService', () => mocks.websocketServiceMock);
-  jest.doMock('../utils/logger', () => mocks.loggerMock);
+  jest.doMock('./readerService', () => ({ default: mocks.readerServiceMock }));
+  jest.doMock('./websocketService', () => ({ default: mocks.websocketServiceMock }));
+  jest.doMock('../utils/logger', () => ({ default: mocks.loggerMock }));
 
   return {
-    service: require('./thematicSummaryService'),
+    service: (await import('./thematicSummaryService')).default as RuntimeModule,
     ...mocks
   };
 }
 
 describe('thematic summary listing', () => {
-  test('adds generic slots to the latest topic summaries', () => {
+  test('adds generic slots to the latest topic summaries', async () => {
     const databaseMock = {
       listLatestThematicSummaries: jest.fn(() => [
         {
@@ -215,7 +221,7 @@ describe('thematic summary listing', () => {
       ])
     };
 
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: {
         OPENROUTER_API_KEY: 'test-key',
@@ -241,7 +247,7 @@ describe('thematic summary listing', () => {
     ], 1);
   });
 
-  test('keeps latest topic summaries on one coherent window', () => {
+  test('keeps latest topic summaries on one coherent window', async () => {
     const databaseMock = {
       listLatestThematicSummaries: jest.fn(() => [
         {
@@ -261,7 +267,7 @@ describe('thematic summary listing', () => {
       ])
     };
 
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: {
         OPENROUTER_API_KEY: 'test-key',
@@ -280,8 +286,8 @@ describe('thematic summary listing', () => {
     expect(items).toHaveLength(1);
   });
 
-  test('marks a current-window briefing stale after its input refresh fails', () => {
-    const { service } = loadServiceWithMocks({
+  test('marks a current-window briefing stale after its input refresh fails', async () => {
+    const { service } = await loadServiceWithMocks({
       env: OPENROUTER_TEST_ENV,
       databaseMock: { listLatestThematicSummaries: jest.fn(() => [{
         id: 'science-current', topicKey: 'science', periodStart: '2026-05-20T18:00:00.000Z',
@@ -291,7 +297,7 @@ describe('thematic summary listing', () => {
     expect(service.getLatestSummaries({ referenceDate: '2026-05-21T18:05:00.000Z' }).items[0]).toMatchObject({ isStale: true });
   });
 
-  test('hides topics when the latest briefing is empty', () => {
+  test('hides topics when the latest briefing is empty', async () => {
     const databaseMock = {
       listLatestThematicSummaries: jest.fn(() => [
         {
@@ -303,7 +309,7 @@ describe('thematic summary listing', () => {
         }
       ])
     };
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: { OPENROUTER_API_KEY: 'test-key' }
     });
@@ -338,7 +344,7 @@ describe('thematic summary reader prewarm', () => {
       })
     };
 
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: {
         OPENROUTER_API_KEY: 'test-key',
@@ -391,7 +397,7 @@ describe('thematic summary reader prewarm', () => {
         })
     };
 
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: {
         OPENROUTER_API_KEY: 'test-key',
@@ -443,7 +449,7 @@ describe('thematic summary reader prewarm', () => {
       })
     };
 
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: {
         OPENROUTER_API_KEY: 'test-key',
@@ -489,7 +495,7 @@ describe('thematic summary reader prewarm', () => {
     const readerServiceMock = {
       getReaderArticle: jest.fn().mockResolvedValue({ contentText: 'Useful reader content '.repeat(30), fallback: false })
     };
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock: {
         getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Scienza') ? articles : []),
         getReaderCache: jest.fn(() => null)
@@ -520,7 +526,7 @@ describe('thematic summary reader prewarm', () => {
       { id: 'corroborated', title: 'Major research finding', source: 'Nature', storyGroupId: 'research', pubDate: '2026-05-21T16:00:00.000Z' },
       { id: 'another-report', title: 'New research confirmed', source: 'BBC', storyGroupId: 'research', pubDate: '2026-05-21T15:00:00.000Z' }
     ];
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock: { getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Scienza') ? articles : []) },
       env: { ...OPENROUTER_TEST_ENV, AI_SUMMARY_PROMPT_MAX_ARTICLES: '1' },
       readerServiceMock
@@ -538,7 +544,7 @@ describe('thematic summary reader prewarm', () => {
     const readerServiceMock = {
       getReaderArticle: jest.fn().mockResolvedValue({ contentText: 'Useful reader content '.repeat(30), fallback: false })
     };
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock: { getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Scienza') ? articles : []) },
       env: OPENROUTER_TEST_ENV,
       readerServiceMock
@@ -558,7 +564,7 @@ describe('thematic summary reader prewarm', () => {
     const readerServiceMock = {
       getReaderArticle: jest.fn().mockResolvedValue({ contentText: 'Useful reader content '.repeat(30), fallback: false })
     };
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock: {
         getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Scienza') ? articles : []),
         getReaderCache: jest.fn(() => null)
@@ -622,7 +628,7 @@ describe('thematic summary generation coalescing', () => {
         return payload;
       })
     };
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: OPENROUTER_TEST_ENV,
       aiSummaryGeneratorMock: createAiSummaryGeneratorMock({ generateSummaryForArticles })
@@ -698,7 +704,7 @@ describe('thematic summary generation retries', () => {
     });
     const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
 
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: OPENROUTER_TEST_ENV,
       aiSummaryGeneratorMock,
@@ -745,7 +751,7 @@ describe('thematic summary generation retries', () => {
     const aiSummaryGeneratorMock = createAiSummaryGeneratorMock();
     const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
 
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: OPENROUTER_TEST_ENV,
       aiSummaryGeneratorMock,
@@ -775,7 +781,7 @@ describe('thematic summary generation retries', () => {
     };
     const aiSummaryGeneratorMock = createAiSummaryGeneratorMock();
 
-    const { service } = loadServiceWithMocks({ databaseMock, env: OPENROUTER_TEST_ENV, aiSummaryGeneratorMock });
+    const { service } = await loadServiceWithMocks({ databaseMock, env: OPENROUTER_TEST_ENV, aiSummaryGeneratorMock });
     await service.generateDueSummaries({ referenceDate: new Date('2026-05-21T11:10:00.000Z') });
 
     expect(databaseMock.getThematicSummary).toHaveBeenCalledWith('technology', '2026-05-19T18:00:00.000Z', '2026-05-20T18:00:00.000Z');
@@ -794,7 +800,7 @@ describe('thematic summary generation retries', () => {
     const aiSummaryGeneratorMock = createAiSummaryGeneratorMock();
     const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
 
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       aiSummaryGeneratorMock,
       websocketServiceMock
@@ -858,7 +864,7 @@ describe('thematic summary generation retries', () => {
     });
     const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
 
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: OPENROUTER_TEST_ENV,
       aiSummaryGeneratorMock,
@@ -935,7 +941,7 @@ describe('thematic summary generation retries', () => {
     });
     const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
 
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: OPENROUTER_TEST_ENV,
       aiSummaryGeneratorMock,
@@ -976,7 +982,7 @@ describe('thematic summary generation retries', () => {
       summaryText: 'Grounded summary [1].', summaryTextByLocale: { en: 'Grounded summary [1].', it: 'Sintesi verificata [1].' },
       inputArticles: [{ ref: 1, description: 'Exact model evidence' }], model: 'test-model'
     }) });
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       env: { ...OPENROUTER_TEST_ENV, AI_SUMMARY_PROMPT_MAX_ARTICLES: '2' },
       databaseMock: {
         getThematicSummary: jest.fn((key) => key === 'technology' ? stored : null),
@@ -1030,7 +1036,7 @@ describe('thematic summary generation retries', () => {
     };
     const aiSummaryGeneratorMock = createAiSummaryGeneratorMock();
 
-    const { service } = loadServiceWithMocks({ databaseMock, env: OPENROUTER_TEST_ENV, aiSummaryGeneratorMock });
+    const { service } = await loadServiceWithMocks({ databaseMock, env: OPENROUTER_TEST_ENV, aiSummaryGeneratorMock });
     const result = await service.generateDueSummaries({ window: summaryWindow });
 
     expect(result.items).toEqual(expect.arrayContaining([completedTechnologySummary]));
@@ -1047,7 +1053,7 @@ describe('thematic summary generation retries', () => {
       upsertThematicSummary: jest.fn()
     };
     const aiSummaryGeneratorMock = createAiSummaryGeneratorMock();
-    const { service } = loadServiceWithMocks({ databaseMock, env: OPENROUTER_TEST_ENV, aiSummaryGeneratorMock });
+    const { service } = await loadServiceWithMocks({ databaseMock, env: OPENROUTER_TEST_ENV, aiSummaryGeneratorMock });
 
     const result = await service.generateDueSummaries({
       window: summaryWindow,
@@ -1105,7 +1111,7 @@ describe('thematic summary generation retries', () => {
       generateSummaryForArticles: jest.fn().mockRejectedValue(new Error('OpenRouter network timeout'))
     });
     const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: OPENROUTER_TEST_ENV,
       aiSummaryGeneratorMock,
@@ -1183,7 +1189,7 @@ describe('thematic summary generation retries', () => {
       })
     });
 
-    const { service } = loadServiceWithMocks({ databaseMock, env: OPENROUTER_TEST_ENV, aiSummaryGeneratorMock });
+    const { service } = await loadServiceWithMocks({ databaseMock, env: OPENROUTER_TEST_ENV, aiSummaryGeneratorMock });
 
     await service.generateDueSummaries({ window: summaryWindow });
 
@@ -1214,7 +1220,7 @@ describe('thematic summary generation retries', () => {
     const aiSummaryGeneratorMock = createAiSummaryGeneratorMock();
     const websocketServiceMock = { broadcastFeedRefresh: jest.fn() };
 
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: {
         ...OPENROUTER_TEST_ENV,
@@ -1268,7 +1274,7 @@ describe('thematic summary generation retries', () => {
       })
     });
 
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: {
         ...OPENROUTER_TEST_ENV,
@@ -1306,7 +1312,7 @@ describe('thematic summary generation retries', () => {
     };
     const aiSummaryGeneratorMock = createAiSummaryGeneratorMock();
 
-    const { service } = loadServiceWithMocks({
+    const { service } = await loadServiceWithMocks({
       databaseMock,
       env: {
         ...OPENROUTER_TEST_ENV,
@@ -1354,7 +1360,7 @@ describe('thematic summary generation retries', () => {
       generateSummaryForArticles: jest.fn().mockRejectedValue(validationError)
     });
 
-    const { service } = loadServiceWithMocks({ databaseMock, env: OPENROUTER_TEST_ENV, aiSummaryGeneratorMock });
+    const { service } = await loadServiceWithMocks({ databaseMock, env: OPENROUTER_TEST_ENV, aiSummaryGeneratorMock });
     await service.generateDueSummaries({ window: summaryWindow });
     await service.generateDueSummaries({ window: summaryWindow });
 
@@ -1395,7 +1401,7 @@ describe('thematic summary generation retries', () => {
       generateSummaryForArticles: jest.fn().mockRejectedValue(validationError)
     });
 
-    const { service } = loadServiceWithMocks({ databaseMock, env: OPENROUTER_TEST_ENV, aiSummaryGeneratorMock });
+    const { service } = await loadServiceWithMocks({ databaseMock, env: OPENROUTER_TEST_ENV, aiSummaryGeneratorMock });
     await service.generateDueSummaries({ window: summaryWindow });
 
     expect(databaseMock.upsertThematicSummary).toHaveBeenCalledWith(expect.objectContaining({

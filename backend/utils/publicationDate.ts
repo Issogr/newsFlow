@@ -25,7 +25,7 @@ function normalizePublicationDate(value: DateInput, referenceDate: DateInput = n
   return parsed.toISOString();
 }
 
-export = {
+export default {
   getCurrentPublicationDay,
   normalizePublicationDate
 };

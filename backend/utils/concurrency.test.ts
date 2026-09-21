@@ -1,4 +1,5 @@
-const { createConcurrencyLimiter } = require('./concurrency');
+import concurrency from './concurrency';
+const { createConcurrencyLimiter } = concurrency;
 
 describe('createConcurrencyLimiter', () => {
   test('shares one concurrency cap across independent callers', async () => {

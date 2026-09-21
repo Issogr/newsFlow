@@ -1,3 +1,6 @@
+import { vi as jest } from 'vitest';
+import aiFeatures from './aiFeatures';
+
 const AI_FEATURE_ENV_NAMES = [
   'OPENROUTER_API_KEY',
   'AI_TOPIC_DETECTION_ENABLED',
@@ -28,7 +31,7 @@ describe('aiFeatures config', () => {
   test('enables all AI features by default when OpenRouter is configured', () => {
     process.env.OPENROUTER_API_KEY = 'test-key';
 
-    const { getAiFeatures } = require('./aiFeatures');
+    const { getAiFeatures } = aiFeatures;
 
     expect(getAiFeatures()).toEqual({
       ai: {
@@ -42,7 +45,7 @@ describe('aiFeatures config', () => {
   test('disables all AI features when OpenRouter is not configured', () => {
     delete process.env.OPENROUTER_API_KEY;
 
-    const { getAiFeatures } = require('./aiFeatures');
+    const { getAiFeatures } = aiFeatures;
 
     expect(getAiFeatures()).toEqual({
       ai: {
@@ -59,7 +62,7 @@ describe('aiFeatures config', () => {
     process.env.AI_STORY_GROUPING_ENABLED = 'false';
     process.env.AI_SUMMARY_GENERATION_ENABLED = 'false';
 
-    const { getAiFeatures } = require('./aiFeatures');
+    const { getAiFeatures } = aiFeatures;
 
     expect(getAiFeatures()).toEqual({
       ai: {
@@ -75,7 +78,7 @@ describe('aiFeatures config', () => {
     process.env.AI_TOPIC_DETECTION_ENABLED = 'true';
     process.env.AI_STORY_GROUPING_ENABLED = 'true';
 
-    const { getAiFeatures } = require('./aiFeatures');
+    const { getAiFeatures } = aiFeatures;
 
     expect(getAiFeatures().ai.topicDetectionEnabled).toBe(true);
     expect(getAiFeatures().ai.storyGroupingEnabled).toBe(true);
@@ -87,7 +90,7 @@ describe('aiFeatures config', () => {
     process.env.AI_STORY_GROUPING_ENABLED = '1';
     process.env.AI_SUMMARY_GENERATION_ENABLED = 'yes';
 
-    const { getAiFeatures } = require('./aiFeatures');
+    const { getAiFeatures } = aiFeatures;
 
     expect(getAiFeatures()).toEqual({
       ai: {

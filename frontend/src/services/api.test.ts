@@ -1,264 +1,145 @@
-import type { Mock } from 'vitest';
-import type { ApiErrorLike } from '../types';
+import { vi, type MockedFunction } from 'vitest';
+import {
+  addUserSource, AUTH_EXPIRED_EVENT, discoverRssFeeds, fetchCurrentUser, fetchNews,
+  fetchReadLaterNews, fetchReaderArticle, fetchThematicSummaries, importUserSettings,
+  isRequestCanceled, loginUser, removeReadLaterArticles, saveReadLaterArticles,
+  submitFeedback, updateUserSource, updateUserSettings
+} from './api';
 
-interface MockApi {
-  interceptors: { request: { use: Mock }; response: { use: Mock } };
-  get: Mock;
-  post: Mock;
-  patch: Mock;
-  delete: Mock;
-}
+let fetchMock: MockedFunction<typeof fetch>;
 
-var mockApi: MockApi;
-var mockApiConfig: { baseURL?: string; withCredentials?: boolean; headers?: Record<string, string> };
-var responseErrorHandler: (error: ApiErrorLike) => Promise<never>;
-
-import axios from 'axios';
-import { addUserSource, AUTH_EXPIRED_EVENT, discoverRssFeeds, fetchNews, fetchReadLaterNews, fetchReaderArticle, fetchThematicSummaries, importUserSettings, isRequestCanceled, removeReadLaterArticles, saveReadLaterArticles, submitFeedback, updateUserSource } from './api';
-
-const asAbortSignal = (value: string) => value as unknown as AbortSignal;
-
-vi.mock('axios', () => {
-  const axios = {
-    create: vi.fn((config) => {
-      mockApiConfig = config;
-      mockApi = {
-        interceptors: {
-          request: { use: vi.fn() },
-          response: {
-            use: vi.fn((successHandler, errorHandler) => {
-              responseErrorHandler = errorHandler;
-            })
-          }
-        },
-        get: vi.fn(),
-        post: vi.fn(),
-        patch: vi.fn(),
-        delete: vi.fn()
-      };
-
-      return mockApi;
-    }),
-    isCancel: vi.fn()
-  };
-
-  return {
-    ...axios,
-    default: axios
-  };
+beforeEach(() => {
+  fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ success: true }));
 });
 
-describe('api service', () => {
-  const mockedIsCancel = vi.mocked(axios.isCancel);
+afterEach(() => vi.restoreAllMocks());
 
-  beforeEach(() => {
-    mockedIsCancel.mockReturnValue(false);
-    window.localStorage.clear();
+test('uses same-origin browser requests and returns decoded JSON', async () => {
+  fetchMock.mockResolvedValueOnce(Response.json({ user: { username: 'alice' } }));
+  await expect(fetchCurrentUser()).resolves.toEqual({ user: { username: 'alice' } });
+  expect(fetchMock).toHaveBeenCalledWith('/api/me', expect.objectContaining({ method: 'GET', credentials: 'same-origin' }));
+  await updateUserSettings({ themeMode: 'dark' });
+  expect(fetchMock).toHaveBeenLastCalledWith('/api/me/settings', expect.objectContaining({
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{"themeMode":"dark"}'
+  }));
+});
+
+test('encodes active filters, pagination and reader ids', async () => {
+  await fetchNews({
+    refresh: true, search: '  economy & science  ', sourceIds: ['ansa', 'bbc'], topics: ['Economy'],
+    beforePubDate: '2026-05-21T10:00:00.000Z', beforeId: 'article-10',
+    excludeArticleIds: ['article-2', 'article-3'], includeFilters: false
   });
-
-  test('uses a longer timeout budget for reader article requests', async () => {
-    mockApi.get.mockResolvedValue({
-      data: { articleId: 'article-1' }
-    });
-
-    await fetchReaderArticle('article-1', {
-      refresh: true,
-      signal: asAbortSignal('reader-signal')
-    });
-
-    expect(mockApi.get).toHaveBeenCalledWith('/articles/article-1/reader', {
-      params: { refresh: 'true' },
-      signal: 'reader-signal',
-      timeout: 30000
-    });
+  const url = new URL(String(fetchMock.mock.calls[0][0]), 'https://news.example');
+  expect(url.pathname).toBe('/api/news');
+  expect(Object.fromEntries(url.searchParams)).toEqual({
+    page: '1', pageSize: '12', refresh: 'true', search: 'economy & science', sources: 'ansa,bbc',
+    topics: 'Economy', beforePubDate: '2026-05-21T10:00:00.000Z', beforeId: 'article-10',
+    excludeArticleIds: 'article-2,article-3'
   });
+  await fetchReaderArticle('source/article 1', { refresh: true });
+  expect(fetchMock.mock.lastCall?.[0]).toBe('/api/articles/source%2Farticle%201/reader?refresh=true');
+});
 
-  test('uses a bounded timeout and forwards cancellation for custom source requests', async () => {
-    mockApi.post.mockResolvedValue({ data: { success: true } });
-    mockApi.patch.mockResolvedValue({ data: { success: true } });
+test('preserves the request budgets and composes caller cancellation', async () => {
+  const timeout = vi.spyOn(AbortSignal, 'timeout');
+  const controller = new AbortController();
+  const signal = controller.signal;
+  await fetchCurrentUser();
+  await fetchReaderArticle('article-1', { signal });
+  await addUserSource({ url: 'https://example.com/feed' }, { signal });
+  await updateUserSource('source-1', { name: 'Feed' }, { signal });
+  await importUserSettings({ customSources: [] }, { signal });
+  await discoverRssFeeds('https://example.com', { signal });
+  await submitFeedback({ category: 'bug', title: 'Upload bug', description: 'Details' });
+  expect(timeout.mock.calls.map(([budget]) => budget)).toEqual([15000, 30000, 45000, 45000, 45000, 45000, 60000]);
+  controller.abort();
+  expect(fetchMock.mock.calls.slice(1, 6).every(([, options]) => options?.signal?.aborted)).toBe(true);
+});
 
-    await addUserSource({ url: 'https://example.com/feed.xml' }, { signal: asAbortSignal('add-signal') });
-    await updateUserSource('source-1', { name: 'Feed' }, { signal: asAbortSignal('update-signal') });
-    await importUserSettings({ customSources: [] }, { signal: asAbortSignal('import-signal') });
+test('lets the browser set multipart feedback boundaries', async () => {
+  const attachment = new File(['image'], 'screenshot.png', { type: 'image/png' });
+  await submitFeedback({ category: 'bug', title: 'Upload bug', description: 'Details', attachment });
+  const [url, options] = fetchMock.mock.lastCall!;
+  expect(url).toBe('/api/me/feedback');
+  expect(options?.headers).toBeUndefined();
+  const body = options?.body as FormData;
+  expect(body.get('category')).toBe('bug');
+  expect(body.get('title')).toBe('Upload bug');
+  expect(body.get('description')).toBe('Details');
+  expect(body.get('attachment')).toBe(attachment);
+});
 
-    expect(mockApi.post).toHaveBeenNthCalledWith(1, '/me/sources', { url: 'https://example.com/feed.xml' }, {
-      signal: 'add-signal',
-      timeout: 45000
-    });
-    expect(mockApi.patch).toHaveBeenCalledWith('/me/sources/source-1', { name: 'Feed' }, {
-      signal: 'update-signal',
-      timeout: 45000
-    });
-    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/me/settings/import', { customSources: [] }, {
-      signal: 'import-signal',
-      timeout: 45000
-    });
-  });
+test('uses cached summary, RSS discovery and read-later endpoints', async () => {
+  fetchMock.mockResolvedValueOnce(Response.json({ feeds: [{ url: 'https://example.com/rss' }] }));
+  await expect(discoverRssFeeds('https://example.com')).resolves.toEqual({ feeds: [{ url: 'https://example.com/rss' }] });
+  expect(fetchMock).toHaveBeenLastCalledWith('/api/me/sources/discover', expect.objectContaining({ method: 'POST', body: '{"url":"https://example.com"}' }));
+  await fetchReadLaterNews({ page: 2, sourceIds: ['source-a'], topics: ['Tecnologia'] });
+  expect(fetchMock.mock.lastCall?.[0]).toBe('/api/read-later?page=2&pageSize=12&sources=source-a&topics=Tecnologia&includeFilters=true');
+  await saveReadLaterArticles(['article-1']);
+  expect(fetchMock).toHaveBeenLastCalledWith('/api/me/read-later', expect.objectContaining({ method: 'POST', body: '{"articleIds":["article-1"]}' }));
+  await removeReadLaterArticles(['article-1']);
+  expect(fetchMock).toHaveBeenLastCalledWith('/api/me/read-later/remove', expect.objectContaining({ method: 'POST', body: '{"articleIds":["article-1"]}' }));
+  await fetchThematicSummaries();
+  expect(fetchMock.mock.lastCall?.[0]).toBe('/api/thematic-summaries');
+});
 
-  test('discovers RSS feeds through the authenticated API', async () => {
-    mockApi.post.mockResolvedValue({
-      data: { feeds: [{ title: 'Example feed', url: 'https://example.com/feed.xml' }] }
-    });
-
-    await expect(discoverRssFeeds('https://example.com', { signal: asAbortSignal('discovery-signal') })).resolves.toEqual({
-      feeds: [{ title: 'Example feed', url: 'https://example.com/feed.xml' }]
-    });
-    expect(mockApi.post).toHaveBeenCalledWith('/me/sources/discover', { url: 'https://example.com' }, {
-      signal: 'discovery-signal',
-      timeout: 45000
-    });
-  });
-
-  test('encodes reader article ids in route paths', async () => {
-    mockApi.get.mockResolvedValue({
-      data: { articleId: 'source/article 1' }
-    });
-
-    await fetchReaderArticle('source/article 1');
-
-    expect(mockApi.get).toHaveBeenCalledWith('/articles/source%2Farticle%201/reader', expect.objectContaining({
-      timeout: 30000
-    }));
-  });
-
-  test('targets the browser-facing API namespace', () => {
-    expect(mockApiConfig).toEqual(expect.objectContaining({
-      baseURL: '/api',
-      withCredentials: true
-    }));
-  });
-
-  test('builds news query params only from active filters and manual refresh state', async () => {
-    mockApi.get.mockResolvedValue({ data: { items: [] } });
-
-    await fetchNews({
-      refresh: true,
-      search: '  economy  ',
-      sourceIds: ['ansa', 'bbc'],
-      topics: ['Economy'],
-      beforePubDate: '2026-05-21T10:00:00.000Z',
-      beforeId: 'article-10',
-      excludeArticleIds: ['article-2', 'article-3'],
-      includeFilters: false,
-      signal: asAbortSignal('news-signal')
-    });
-
-    expect(mockApi.get).toHaveBeenCalledWith('/news', {
-      params: {
-        page: 1,
-        pageSize: 12,
-        refresh: 'true',
-        search: 'economy',
-        sources: 'ansa,bbc',
-        topics: 'Economy',
-        beforePubDate: '2026-05-21T10:00:00.000Z',
-        beforeId: 'article-10',
-        excludeArticleIds: 'article-2,article-3'
-      },
-      signal: 'news-signal'
-    });
-  });
-
-  test('lets the browser set multipart feedback boundaries', async () => {
-    mockApi.post.mockResolvedValue({ data: { success: true } });
-    const attachment = new File(['image'], 'screenshot.png', { type: 'image/png' });
-
-    await submitFeedback({
-      category: 'bug',
-      title: 'Upload bug',
-      description: 'The attachment should upload.',
-      attachment
-    });
-
-    expect(mockApi.post).toHaveBeenCalledWith('/me/feedback', expect.any(FormData), {
-      timeout: 60000
-    });
-    expect(mockApiConfig.headers?.['Content-Type']).toBeUndefined();
-  });
-
-  test('uses read-later endpoints for saved article lists and toggles', async () => {
-    mockApi.get.mockResolvedValue({ data: { items: [] } });
-    mockApi.post.mockResolvedValue({ data: { success: true } });
-
-    await fetchReadLaterNews({ page: 2, sourceIds: ['source-a'], topics: ['Tecnologia'] });
-    await saveReadLaterArticles(['article-1']);
-    await removeReadLaterArticles(['article-1']);
-
-    expect(mockApi.get).toHaveBeenCalledWith('/read-later', {
-      params: {
-        page: 2,
-        pageSize: 12,
-        sources: 'source-a',
-        topics: 'Tecnologia',
-        includeFilters: 'true'
-      },
-      signal: undefined
-    });
-    expect(mockApi.post).toHaveBeenCalledWith('/me/read-later', { articleIds: ['article-1'] });
-    expect(mockApi.post).toHaveBeenCalledWith('/me/read-later/remove', { articleIds: ['article-1'] });
-  });
-
-  test('fetches thematic summaries from the app API', async () => {
-    mockApi.get.mockResolvedValue({ data: { items: [] } });
-
-    await fetchThematicSummaries({ signal: asAbortSignal('summary-signal') });
-
-    expect(mockApi.get).toHaveBeenCalledWith('/thematic-summaries', { signal: 'summary-signal' });
-  });
-
-  test('broadcasts auth expiry when a non-auth request returns 401', async () => {
-    const listener = vi.fn();
-    window.addEventListener(AUTH_EXPIRED_EVENT, listener);
-
-    const error = {
-      response: { status: 401 },
-      config: { url: '/me' }
-    };
-
-    await expect(responseErrorHandler(error)).rejects.toBe(error);
+test('notifies auth expiry only for non-auth 401 responses, including non-JSON errors', async () => {
+  const listener = vi.fn();
+  window.addEventListener(AUTH_EXPIRED_EVENT, listener);
+  try {
+    fetchMock.mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }));
+    await expect(fetchCurrentUser()).rejects.toMatchObject({ response: { status: 401, data: 'Unauthorized' } });
     expect(listener).toHaveBeenCalledTimes(1);
-
+    fetchMock.mockResolvedValueOnce(Response.json({ error: { message: 'Invalid credentials' } }, { status: 401 }));
+    await expect(loginUser({ username: 'alice', password: 'incorrect' })).rejects.toMatchObject({ response: { status: 401 } });
+    expect(listener).toHaveBeenCalledTimes(1);
+  } finally {
     window.removeEventListener(AUTH_EXPIRED_EVENT, listener);
+  }
+});
+
+test('preserves HTTP errors and distinguishes network failures', async () => {
+  fetchMock.mockResolvedValueOnce(Response.json({ error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Slow down' } }, { status: 429 }));
+  const error = await fetchCurrentUser().catch((error: unknown) => error);
+  expect(error).toMatchObject({ response: { status: 429, data: { error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Slow down' } } } });
+  expect(error).not.toHaveProperty('newsFlowClientCode');
+  fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  await expect(fetchCurrentUser()).rejects.toMatchObject({ newsFlowClientCode: 'network' });
+  fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+  await expect(fetchCurrentUser()).resolves.toBe('');
+});
+
+test.each(['fetch', 'body'])('enforces the deadline during %s', async (phase) => {
+  const deadline = new AbortController();
+  vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+  fetchMock.mockImplementation(async (_url, options) => {
+    const pending = new Promise<never>((_resolve, reject) => {
+      options!.signal!.addEventListener('abort', () => reject(options!.signal!.reason), { once: true });
+    });
+    return phase === 'fetch' ? pending : { text: () => pending } as unknown as Response;
   });
+  const result = fetchCurrentUser();
+  await Promise.resolve();
+  deadline.abort(new DOMException('Timed out', 'TimeoutError'));
+  const error = await result.catch((error: unknown) => error);
+  expect(error).toMatchObject({ code: 'ECONNABORTED', newsFlowClientCode: 'timeout' });
+  expect(isRequestCanceled(error)).toBe(false);
+});
 
-  test('does not broadcast auth expiry for auth-route 401 responses', async () => {
-    const listener = vi.fn();
-    window.addEventListener(AUTH_EXPIRED_EVENT, listener);
-
-    const error = {
-      response: { status: 401 },
-      config: { url: '/auth/login' }
-    };
-
-    await expect(responseErrorHandler(error)).rejects.toBe(error);
-    expect(listener).not.toHaveBeenCalled();
-
-    window.removeEventListener(AUTH_EXPIRED_EVENT, listener);
-  });
-
-  test.each<[string, ApiErrorLike, string]>([
-    ['timeout', { code: 'ECONNABORTED', config: { url: '/news' } }, 'timeout'],
-    ['network', { config: { url: '/news' } }, 'network']
-  ])('marks %s errors with a structured client code', async (label, error, clientCode) => {
-    await expect(responseErrorHandler(error)).rejects.toBe(error);
-
-    expect(error.newsFlowClientCode).toBe(clientCode);
-  });
-
-  test('leaves HTTP response errors response-driven', async () => {
-    const error: ApiErrorLike = { response: { status: 429 }, config: { url: '/news' } };
-
-    await expect(responseErrorHandler(error)).rejects.toBe(error);
-
-    expect(error.newsFlowClientCode).toBeUndefined();
-  });
-
-  test('recognizes axios and native cancellation errors', () => {
-    mockedIsCancel.mockImplementation((error) => Boolean(error && typeof error === 'object' && 'axiosCancel' in error && error.axiosCancel === true));
-
-    expect(isRequestCanceled({ axiosCancel: true })).toBe(true);
-    expect(isRequestCanceled({ code: 'ERR_CANCELED' })).toBe(true);
-    expect(isRequestCanceled({ name: 'CanceledError' })).toBe(true);
-    expect(isRequestCanceled(new Error('other'))).toBe(false);
-  });
+test('cancels before sending and while fetching, including custom abort reasons', async () => {
+  const controller = new AbortController();
+  fetchMock.mockImplementation((_url, options) => new Promise((_resolve, reject) => {
+    options!.signal!.addEventListener('abort', () => reject(options!.signal!.reason), { once: true });
+  }));
+  const result = fetchThematicSummaries({ signal: controller.signal });
+  controller.abort('user navigated away');
+  const error = await result.catch((error: unknown) => error);
+  expect(isRequestCanceled(error)).toBe(true);
+  expect(error).toMatchObject({ code: 'ERR_CANCELED' });
+  expect(error).not.toHaveProperty('newsFlowClientCode');
+  fetchMock.mockClear();
+  await expect(fetchThematicSummaries({ signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(isRequestCanceled(new Error('other'))).toBe(false);
 });

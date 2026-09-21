@@ -1,23 +1,24 @@
-jest.mock('axios', () => ({
+import { vi as jest } from 'vitest';
+jest.doMock('axios', () => ({ default: {
   get: jest.fn()
-}));
+} }));
 
-jest.mock('dns', () => ({
+jest.doMock('node:dns', () => ({
   promises: {
     lookup: jest.fn()
   }
 }));
 
-const createMockLogger = require('../test-utils/mockLogger');
+import createMockLogger from '../test-utils/mockLogger';
 
-jest.mock('../utils/logger', createMockLogger);
+jest.doMock('../utils/logger', () => ({ default: createMockLogger() }));
 
-const { Readable } = require('stream');
-const axios = require('axios');
-const dns = require('dns').promises;
-const rssParser = require('./rssParser');
-const { normalizeArticleUrl } = require('../utils/articleIdentity');
-const { normalizePublicationDate } = require('../utils/publicationDate');
+import { Readable } from 'node:stream';
+const axios: ReturnType<typeof require> = (await import('axios')).default;
+const dns: { lookup: import('vitest').Mock } = jest.mocked((await import('node:dns')).promises);
+const rssParser: ReturnType<typeof require> = (await import('./rssParser')).default;
+const { normalizeArticleUrl } = (await import('../utils/articleIdentity')).default;
+const { normalizePublicationDate } = (await import('../utils/publicationDate')).default;
 
 describe('rssParser article ids', () => {
   beforeEach(() => {

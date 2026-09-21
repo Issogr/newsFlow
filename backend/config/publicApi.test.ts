@@ -1,3 +1,6 @@
+import { vi as jest } from 'vitest';
+import publicApi from './publicApi';
+
 describe('publicApi config', () => {
   const originalEnv = process.env;
 
@@ -14,7 +17,6 @@ describe('publicApi config', () => {
     process.env.PUBLIC_API_ANONYMOUS_ENABLED = 'true';
     process.env.PUBLIC_API_AUTHENTICATED_ENABLED = 'true';
 
-    const publicApi = require('./publicApi');
 
     expect(publicApi.isAnonymousPublicApiEnabled()).toBe(true);
     expect(publicApi.isAuthenticatedPublicApiEnabled()).toBe(true);
@@ -24,7 +26,6 @@ describe('publicApi config', () => {
     process.env.PUBLIC_API_ANONYMOUS_ENABLED = '1';
     process.env.PUBLIC_API_AUTHENTICATED_ENABLED = 'yes';
 
-    const publicApi = require('./publicApi');
 
     expect(publicApi.isAnonymousPublicApiEnabled()).toBe(false);
     expect(publicApi.isAuthenticatedPublicApiEnabled()).toBe(false);

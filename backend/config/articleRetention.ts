@@ -1,4 +1,4 @@
-const { parseIntegerEnv } = require('../utils/env');
+import { parseIntegerEnv } from '../utils/env';
 
 const DEFAULT_ARTICLE_RETENTION_HOURS = 24;
 
@@ -10,6 +10,6 @@ function getArticleRetentionHours({ allowNegative = false }: { allowNegative?: b
   );
 }
 
-export = {
+export default {
   getArticleRetentionHours
 };

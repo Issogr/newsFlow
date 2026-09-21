@@ -1,8 +1,8 @@
-const dns = require('dns').promises;
-const net = require('net');
-const axios = require('axios');
-const { createError } = require('./errorHandler');
-const { parseIntegerEnv } = require('./env');
+import { promises as dns } from 'node:dns';
+import net from 'node:net';
+import axios from 'axios';
+import { createError } from './errorHandler';
+import { parseIntegerEnv } from './env';
 import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 import type { LookupAddress, LookupOptions } from 'node:dns';
 import type { AppError } from './types';
@@ -33,82 +33,16 @@ function normalizeHostname(hostname: unknown) {
   return String(hostname || '').trim().replace(/^\[/, '').replace(/\]$/, '').toLowerCase();
 }
 
-function ipv4ToNumber(address: unknown) {
-  const octets = String(address || '').split('.').map(Number);
-  if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
-    return null;
-  }
-
-  return (((octets[0] << 24) >>> 0) + (octets[1] << 16) + (octets[2] << 8) + octets[3]) >>> 0;
-}
-
-function isIpv4InCidr(address: string, cidrBase: string, prefixLength: number) {
-  const addressNumber = ipv4ToNumber(address);
-  const baseNumber = ipv4ToNumber(cidrBase);
-
-  if (addressNumber === null || baseNumber === null) {
-    return false;
-  }
-
-  const mask = prefixLength === 0 ? 0 : (0xffffffff << (32 - prefixLength)) >>> 0;
-  return (addressNumber & mask) === (baseNumber & mask);
-}
-
-function extractIpv4MappedIpv6(address: string) {
-  const normalized = normalizeHostname(address);
-  const dottedMatch = normalized.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
-  if (dottedMatch && ipv4ToNumber(dottedMatch[1]) !== null) {
-    return dottedMatch[1];
-  }
-
-  const hexMatch = normalized.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (!hexMatch) {
-    return '';
-  }
-
-  const high = parseInt(hexMatch[1], 16);
-  const low = parseInt(hexMatch[2], 16);
-  if (!Number.isFinite(high) || !Number.isFinite(low)) {
-    return '';
-  }
-
-  return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.');
-}
-
-function isPrivateIpv4(address: string) {
-  return UNSAFE_IPV4_RANGES.some(([cidrBase, prefixLength]) => isIpv4InCidr(address, cidrBase, prefixLength));
-}
-
-function isPrivateIpv6(address: string) {
-  const normalized = normalizeHostname(address);
-  const mappedIpv4 = extractIpv4MappedIpv6(normalized);
-  if (mappedIpv4) {
-    return isPrivateIpv4(mappedIpv4);
-  }
-
-  return normalized === '::1'
-    || normalized === '::'
-    || normalized.startsWith('fc')
-    || normalized.startsWith('fd')
-    || normalized.startsWith('fe8')
-    || normalized.startsWith('fe9')
-    || normalized.startsWith('fea')
-    || normalized.startsWith('feb')
-    || normalized.startsWith('ff')
-    || normalized.startsWith('2001:db8:');
-}
+const blockedAddresses = new net.BlockList();
+UNSAFE_IPV4_RANGES.forEach(([address, prefix]) => blockedAddresses.addSubnet(address, prefix, 'ipv4'));
+const unsafeIpv6Ranges: Array<[string, number]> = [
+  ['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8], ['2001:db8::', 32]
+];
+unsafeIpv6Ranges.forEach(([address, prefix]) => blockedAddresses.addSubnet(address, prefix, 'ipv6'));
 
 function isPrivateAddress(address: string) {
   const type = net.isIP(address);
-  if (type === 4) {
-    return isPrivateIpv4(address);
-  }
-
-  if (type === 6) {
-    return isPrivateIpv6(address);
-  }
-
-  return false;
+  return type !== 0 && blockedAddresses.check(address, type === 4 ? 'ipv4' : 'ipv6');
 }
 
 function createInvalidUrlError(message = 'Invalid outbound URL'): AppError {
@@ -294,7 +228,7 @@ async function fetchSafeTextUrl(rawUrl: unknown, requestConfig: SafeRequestConfi
 }> {
   requestConfig.signal?.throwIfAborted();
   const maxRedirects = Number.isFinite(requestConfig.maxRedirects)
-    ? requestConfig.maxRedirects
+    ? requestConfig.maxRedirects!
     : MAX_REDIRECTS;
   const maxResponseBytes = normalizeMaxResponseBytes(requestConfig.maxResponseBytes);
   const {
@@ -304,7 +238,7 @@ async function fetchSafeTextUrl(rawUrl: unknown, requestConfig: SafeRequestConfi
     lookup: ignoredLookup,
     ...baseRequestConfig
   } = requestConfig;
-  const axiosConfig = {
+  const axiosConfig: AxiosRequestConfig = {
     ...baseRequestConfig,
     maxRedirects: 0,
     responseType: 'stream',
@@ -317,7 +251,7 @@ async function fetchSafeTextUrl(rawUrl: unknown, requestConfig: SafeRequestConfi
     requestConfig.signal?.throwIfAborted();
     const response = await axios.get(currentTarget.url, {
       ...axiosConfig,
-      lookup: createPinnedLookup(currentTarget)
+      lookup: createPinnedLookup(currentTarget) as AxiosRequestConfig['lookup']
     });
 
     if (response.status >= 300 && response.status < 400) {
@@ -348,6 +282,6 @@ async function fetchSafeTextUrl(rawUrl: unknown, requestConfig: SafeRequestConfi
   throw createError(400, 'Too many redirects while fetching outbound URL', 'INVALID_URL');
 }
 
-export = {
+export default {
   fetchSafeTextUrl
 };

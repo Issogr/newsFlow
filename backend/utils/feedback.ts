@@ -19,7 +19,7 @@ function getFeedbackAttachmentType(file: { mimetype?: string } | null | undefine
   return null;
 }
 
-export = {
+export default {
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_VIDEO_BYTES,
   MAX_FEEDBACK_ATTACHMENT_BYTES,

@@ -1,33 +1,34 @@
-jest.mock('@mozilla/readability', () => ({
+import { vi as jest } from 'vitest';
+jest.doMock('@mozilla/readability', () => ({
   Readability: jest.fn()
 }));
 
-jest.mock('./database', () => ({
+jest.doMock('./database', () => ({ default: {
   getArticleById: jest.fn(),
   getReaderCache: jest.fn(),
   upsertReaderCache: jest.fn()
-}));
+} }));
 
-const createMockLogger = require('../test-utils/mockLogger');
+import createMockLogger from '../test-utils/mockLogger';
 
-jest.mock('../utils/logger', createMockLogger);
+jest.doMock('../utils/logger', () => ({ default: createMockLogger() }));
 
-jest.mock('../utils/urlSafety', () => ({
+jest.doMock('../utils/urlSafety', () => ({ default: {
   fetchSafeTextUrl: jest.fn()
-}));
+} }));
 
-const { Readability } = require('@mozilla/readability');
-const database = require('./database');
-const logger = require('../utils/logger');
-const { fetchSafeTextUrl } = require('../utils/urlSafety');
-const readerService = require('./readerService');
+const { Readability }: ReturnType<typeof require> = await import('@mozilla/readability');
+const database: ReturnType<typeof require> = (await import('./database')).default;
+const logger = jest.mocked((await import('../utils/logger')).default);
+const { fetchSafeTextUrl }: ReturnType<typeof require> = (await import('../utils/urlSafety')).default;
+const readerService: ReturnType<typeof require> = (await import('./readerService')).default;
 
 interface FetchResponse {
   data: string;
 }
 
 function mockReadableArticle(title = 'Readable headline') {
-  Readability.mockImplementation(() => ({
+  Readability.mockImplementation(function () { return {
     parse: () => ({
       title,
       siteName: 'Readable Site',
@@ -37,7 +38,7 @@ function mockReadableArticle(title = 'Readable headline') {
       textContent: 'First paragraph. Second paragraph.',
       content: `<h1>${title}</h1><p>First paragraph.</p><p>Second paragraph.</p>`
     })
-  }));
+  }; });
 }
 
 describe('readerService', () => {

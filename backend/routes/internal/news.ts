@@ -1,10 +1,14 @@
-import express = require('express');
+import express from 'express';
 import type { Request, Response } from 'express';
-const newsService = require('../../services/newsAggregator');
-const { requireAuthenticatedUser } = require('../../utils/auth');
-const { sanitizeQuery } = require('../../utils/inputValidator');
-const { parseNewsQuery } = require('../../utils/newsQuery');
-const { getRequestIds, getUserContext } = require('./helpers');
+import newsService from '../../services/newsAggregator';
+import auth from '../../utils/auth';
+import inputValidator from '../../utils/inputValidator';
+import newsQuery from '../../utils/newsQuery';
+import helpers from './helpers';
+const { requireAuthenticatedUser } = auth;
+const { sanitizeQuery } = inputValidator;
+const { parseNewsQuery } = newsQuery;
+const { getRequestIds, getUserContext } = helpers;
 
 const router = express.Router();
 
@@ -30,4 +34,4 @@ router.post('/me/read-later/remove', requireAuthenticatedUser, async (req, res) 
   res.json(result);
 });
 
-export = router;
+export default router;

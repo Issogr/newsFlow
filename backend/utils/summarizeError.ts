@@ -15,4 +15,4 @@ function summarizeErrorMessage(error: unknown, maxLength = 220) {
   return `${message.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
-export = summarizeErrorMessage;
+export default summarizeErrorMessage;

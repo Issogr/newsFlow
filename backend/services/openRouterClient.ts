@@ -1,5 +1,7 @@
-const { parseIntegerEnv } = require('../utils/env');
-const { isOpenRouterFeatureEnabled } = require('../config/aiFeatures');
+import { parseIntegerEnv } from '../utils/env';
+import aiFeatures from '../config/aiFeatures';
+import aiMetrics from '../utils/aiMetrics';
+const { isOpenRouterFeatureEnabled } = aiFeatures;
 const {
   estimateTokenCountFromChars,
   extractUsage,
@@ -7,7 +9,7 @@ const {
   getChatPromptCharCount,
   getFinishReason,
   logAiRequestMetric
-} = require('../utils/aiMetrics');
+} = aiMetrics;
 import type { AppError, DynamicRecord } from '../utils/types';
 
 const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
@@ -398,7 +400,7 @@ async function sendJsonChatCompletion(config: OpenRouterConfig, chatRequest: Cha
   }
 }
 
-export = {
+export default {
   assertOpenRouterRequestAllowed,
   clearOpenRouterFailure,
   extractAssistantContent,

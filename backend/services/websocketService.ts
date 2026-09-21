@@ -1,10 +1,15 @@
-const logger = require('../utils/logger');
-const { getAllowedOrigins, isOriginAllowed } = require('../utils/networkConfig');
-const { hasSameOriginRequestHeaders } = require('../utils/browserSecurity');
-const { parseIntegerEnv } = require('../utils/env');
-const { buildDomainSourceGroups } = require('../utils/sourceCatalog');
-const database = require('./database');
-const { resolveAuthenticatedSession } = require('../utils/auth');
+import { Server } from 'socket.io';
+import logger from '../utils/logger';
+import networkConfig from '../utils/networkConfig';
+import browserSecurity from '../utils/browserSecurity';
+import { parseIntegerEnv } from '../utils/env';
+import sourceCatalog from '../utils/sourceCatalog';
+import database from './database';
+import auth from '../utils/auth';
+const { getAllowedOrigins, isOriginAllowed } = networkConfig;
+const { hasSameOriginRequestHeaders } = browserSecurity;
+const { buildDomainSourceGroups } = sourceCatalog;
+const { resolveAuthenticatedSession } = auth;
 import type { Server as HttpServer } from 'node:http';
 import type { IncomingHttpHeaders } from 'node:http';
 import type { AppError, DynamicRecord, SourceGroup } from '../utils/types';
@@ -138,7 +143,7 @@ function scheduleSessionExpiryCheck(socket: SocketLike) {
   const delay = Math.min(Math.max(0, expiresAt - Date.now()), MAX_TIMEOUT_MS);
   socket.data.sessionExpiryTimer = setTimeout(() => {
     try {
-      const session = database.findSessionByTokenHash(socket.data.sessionTokenHash);
+      const session = database.findSessionByTokenHash(socket.data.sessionTokenHash!);
       const nextExpiresAt = Date.parse(session?.expiresAt || '');
       if (!session || !Number.isFinite(nextExpiresAt) || nextExpiresAt <= Date.now()) {
         disconnectSocket(socket);
@@ -208,10 +213,9 @@ function buildSocketFilters(filters: SocketFilterInput = {}) {
 }
 
 function initialize(server: HttpServer) {
-  const socketIo = require('socket.io');
   const allowedOrigins = getAllowedOrigins();
 
-  const socketServer: SocketServerLike = socketIo(server, {
+  const socketServer: SocketServerLike = new Server(server, {
     cors: {
       origin: (origin: string | undefined, callback: (error: Error | null, allowed?: boolean) => void) => {
         if (isOriginAllowed(origin, allowedOrigins)) {
@@ -261,7 +265,7 @@ function initialize(server: HttpServer) {
     scheduleSessionExpiryCheck(socket);
 
     socket.on('subscribe:filters', (filters = {}) => {
-      database.touchUserActivity(socket.data.userId, new Date().toISOString(), 60);
+      database.touchUserActivity(socket.data.userId!, new Date().toISOString(), 60);
       Object.assign(socket.data, buildSocketFilters(filters));
     });
 
@@ -488,19 +492,9 @@ function broadcastNewsUpdate(newsGroups: NewsGroup[] = []) {
     ...buildGroupSourceSets(group, customSourceGroupCache)
   }));
   const globalGroups = preparedGroups.filter((group) => !group.ownerUserId);
-  const privateGroupsByUserId = new Map<string, NewsGroup[]>();
+  const privateGroupsByUserId = Map.groupBy(preparedGroups.filter((group) => group.ownerUserId), (group) => group.ownerUserId!);
   const socketBuckets = new Map<string, SocketBucket>();
   const candidateGroupCache = new Map<string, NewsGroup[]>();
-
-  preparedGroups.forEach((group) => {
-    if (!group.ownerUserId) {
-      return;
-    }
-
-    const userGroups = privateGroupsByUserId.get(group.ownerUserId) || [];
-    userGroups.push(group);
-    privateGroupsByUserId.set(group.ownerUserId, userGroups);
-  });
 
   activeConnections.forEach((socket) => {
     const bucketKey = `${socket.data?.userId || ''}:${socket.data?.filterSignature || ''}`;
@@ -578,7 +572,7 @@ function shutdown(callback: () => void = () => {}) {
   socketServer.close(callback);
 }
 
-module.exports = {
+export default {
   initialize,
   disconnectUserSockets,
   disconnectSessionSockets,

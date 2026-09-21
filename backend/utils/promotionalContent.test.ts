@@ -1,4 +1,5 @@
-const { isPromotionalDealArticle, removePromotionalSentences } = require('./promotionalContent');
+import promotionalContent from './promotionalContent';
+const { isPromotionalDealArticle, removePromotionalSentences } = promotionalContent;
 
 describe('promotional content filtering', () => {
   test.each([

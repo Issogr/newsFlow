@@ -1,4 +1,5 @@
-const { parseJsonArray } = require('../utils/json');
+import json from '../utils/json';
+const { parseJsonArray } = json;
 import type { DynamicRecord, SourceDefinition, UserSettings } from '../utils/types';
 import type SqliteDatabase from './sqliteDatabase';
 
@@ -348,4 +349,4 @@ function createUserStateRepository({ getDb }: { getDb: () => SqliteDatabase }) {
   };
 }
 
-export = createUserStateRepository;
+export default createUserStateRepository;

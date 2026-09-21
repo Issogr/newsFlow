@@ -84,7 +84,7 @@ function isOriginAllowed(origin: string | undefined, allowedOrigins: string[]) {
   return allowedOrigins.some((allowedOrigin) => matchesAllowedOrigin(origin, allowedOrigin));
 }
 
-export = {
+export default {
   getAllowedOrigins,
   isOriginAllowed
 };

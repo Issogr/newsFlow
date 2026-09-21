@@ -1,13 +1,15 @@
-import http = require('http');
-const { createApp } = require('./app');
-const logger = require('./utils/logger');
-const database = require('./services/database');
-const websocketService = require('./services/websocketService');
-const newsService = require('./services/newsAggregator');
-const rssParser = require('./services/rssParser');
-const userService = require('./services/userService');
-const { parseIntegerEnv } = require('./utils/env');
-const { flushApiTokenUsage, startApiTokenUsageFlushTimer, stopApiTokenUsageFlushTimer } = require('./utils/auth');
+import http from 'node:http';
+import appModule from './app';
+import logger from './utils/logger';
+import database from './services/database';
+import websocketService from './services/websocketService';
+import newsService from './services/newsAggregator';
+import rssParser from './services/rssParser';
+import userService from './services/userService';
+import { parseIntegerEnv } from './utils/env';
+import auth from './utils/auth';
+const { createApp } = appModule;
+const { flushApiTokenUsage, startApiTokenUsageFlushTimer, stopApiTokenUsageFlushTimer } = auth;
 
 logger.setupGlobalErrorHandlers();
 
@@ -73,4 +75,4 @@ function shutdown(signal: NodeJS.Signals) {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-export = server;
+export default server;

@@ -1,4 +1,4 @@
-import type { DynamicRecord } from '../utils/types';
+import type { DynamicRecord, PasswordSetupTokenRecord, SessionRecord, UserRecord } from '../utils/types';
 import type SqliteDatabase from './sqliteDatabase';
 
 function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
@@ -7,17 +7,21 @@ function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
     return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
   }
 
-  function mapUserRow(row: DynamicRecord | undefined | null) {
+  function mapUserRow(row: DynamicRecord): UserRecord;
+  function mapUserRow(row: DynamicRecord | undefined | null): UserRecord | null;
+  function mapUserRow(row: DynamicRecord | undefined | null): UserRecord | null {
     if (!row) {
       return null;
     }
 
     return {
       ...row,
+      id: row.id as string,
+      username: row.username as string,
       publicApiLastUsedAt: row.publicApiLastUsedAt || null,
       publicApiRequestCount: Number(row.publicApiRequestCount || 0),
       passwordConfigured: Boolean(row.passwordConfigured)
-    };
+    } as UserRecord;
   }
 
   function createUser(user: DynamicRecord = {}) {
@@ -76,7 +80,7 @@ function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
              CASE WHEN password_hash IS NOT NULL AND password_hash != '' THEN 1 ELSE 0 END AS passwordConfigured
       FROM users
       ORDER BY lower(username) ASC
-    `).all().map(mapUserRow);
+    `).all().map((row) => mapUserRow(row));
   }
 
   function updateUserLogin(userId: string, loginAt: string) {
@@ -290,7 +294,7 @@ function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
       return null;
     }
 
-    return getDb().prepare(`
+    return getDb().prepare<SessionRecord>(`
       SELECT user_sessions.token_hash AS tokenHash, user_sessions.user_id AS userId,
              user_sessions.created_at AS createdAt, user_sessions.expires_at AS expiresAt,
              users.username AS username
@@ -355,7 +359,7 @@ function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
       return null;
     }
 
-    return getDb().prepare(`
+    return getDb().prepare<PasswordSetupTokenRecord>(`
       SELECT password_setup_tokens.id, password_setup_tokens.user_id AS userId,
              password_setup_tokens.token_hash AS tokenHash,
              password_setup_tokens.purpose,
@@ -454,4 +458,4 @@ function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
   };
 }
 
-export = createAuthRepository;
+export default createAuthRepository;

@@ -1,4 +1,5 @@
-const { MAX_NEWS_PAGE, MAX_RECENT_HOURS, MAX_SOURCE_FILTERS, MAX_TOPIC_FILTERS, parseNewsQuery } = require('./newsQuery');
+import newsQuery from './newsQuery';
+const { MAX_NEWS_PAGE, MAX_RECENT_HOURS, MAX_SOURCE_FILTERS, MAX_TOPIC_FILTERS, parseNewsQuery } = newsQuery;
 
 describe('newsQuery', () => {
   test('parses feed query parameters while bounding pagination and optional recency', () => {

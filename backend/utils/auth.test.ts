@@ -1,4 +1,6 @@
-const { extractBearerToken, extractSessionCookie, safeTokenCompare } = require('./auth');
+import { vi as jest } from 'vitest';
+import authModule from './auth';
+const { extractBearerToken, extractSessionCookie, safeTokenCompare } = authModule;
 
 describe('auth utils', () => {
   test('extractBearerToken returns empty string for invalid values', () => {
@@ -26,26 +28,24 @@ describe('auth utils', () => {
 });
 
 describe('auth session cleanup throttling', () => {
-  test('purges expired sessions at most once per cleanup interval', () => {
+  test('purges expired sessions at most once per cleanup interval', async () => {
     jest.resetModules();
 
     const databaseMock = {
       purgeExpiredSessions: jest.fn(() => 2)
     };
 
-    jest.doMock('../services/database', () => databaseMock);
+    jest.doMock('../services/database', () => ({ default: databaseMock }));
 
-    jest.isolateModules(() => {
-      const auth = require('./auth');
+    const auth = (await import('./auth')).default;
 
-      expect(auth.purgeExpiredSessionsIfNeeded(5 * 60 * 1000)).toBe(2);
-      expect(auth.purgeExpiredSessionsIfNeeded((5 * 60 * 1000) + 1_000)).toBe(0);
-      expect(auth.purgeExpiredSessionsIfNeeded(10 * 60 * 1000)).toBe(2);
-      expect(databaseMock.purgeExpiredSessions).toHaveBeenCalledTimes(2);
-    });
+    expect(auth.purgeExpiredSessionsIfNeeded(5 * 60 * 1000)).toBe(2);
+    expect(auth.purgeExpiredSessionsIfNeeded((5 * 60 * 1000) + 1_000)).toBe(0);
+    expect(auth.purgeExpiredSessionsIfNeeded(10 * 60 * 1000)).toBe(2);
+    expect(databaseMock.purgeExpiredSessions).toHaveBeenCalledTimes(2);
   });
 
-  test('refreshes the backend session expiry only when it is close to expiring', () => {
+  test('refreshes the backend session expiry only when it is close to expiring', async () => {
     jest.resetModules();
 
     const databaseMock = {
@@ -60,25 +60,23 @@ describe('auth session cleanup throttling', () => {
       purgeExpiredSessions: jest.fn(() => 0)
     };
 
-    jest.doMock('../services/database', () => databaseMock);
+    jest.doMock('../services/database', () => ({ default: databaseMock }));
 
-    jest.isolateModules(() => {
-      const auth = require('./auth');
+    const auth = (await import('./auth')).default;
 
-      const resolved = auth.resolveAuthenticatedSession({
-        headers: {
-          cookie: 'newsflow_session=my-session-token'
-        }
-      });
-
-      expect(resolved.user).toEqual(expect.objectContaining({ username: 'alice' }));
-      expect(databaseMock.findSessionByTokenHash).toHaveBeenCalledWith(auth.hashSessionToken('my-session-token'));
-      expect(databaseMock.refreshSessionExpiry).toHaveBeenCalledWith('hashed-token', expect.any(String));
-      expect(databaseMock.touchUserActivity).toHaveBeenCalledWith('user-1', expect.any(String), expect.any(Number));
+    const resolved = auth.resolveAuthenticatedSession({
+      headers: {
+        cookie: 'newsflow_session=my-session-token'
+      }
     });
+
+    expect(resolved.user).toEqual(expect.objectContaining({ username: 'alice' }));
+    expect(databaseMock.findSessionByTokenHash).toHaveBeenCalledWith(auth.hashSessionToken('my-session-token'));
+    expect(databaseMock.refreshSessionExpiry).toHaveBeenCalledWith('hashed-token', expect.any(String));
+    expect(databaseMock.touchUserActivity).toHaveBeenCalledWith('user-1', expect.any(String), expect.any(Number));
   });
 
-  test('skips session expiry refresh while the session is still fresh', () => {
+  test('skips session expiry refresh while the session is still fresh', async () => {
     jest.resetModules();
 
     const freshExpiresAt = new Date(Date.now() + (7 * 24 * 60 * 60 * 1000)).toISOString();
@@ -94,24 +92,22 @@ describe('auth session cleanup throttling', () => {
       purgeExpiredSessions: jest.fn(() => 0)
     };
 
-    jest.doMock('../services/database', () => databaseMock);
+    jest.doMock('../services/database', () => ({ default: databaseMock }));
 
-    jest.isolateModules(() => {
-      const auth = require('./auth');
+    const auth = (await import('./auth')).default;
 
-      const resolved = auth.resolveAuthenticatedSession({
-        headers: {
-          cookie: 'newsflow_session=my-session-token'
-        }
-      });
-
-      expect(resolved.session.expiresAt).toBe(freshExpiresAt);
-      expect(databaseMock.refreshSessionExpiry).not.toHaveBeenCalled();
-      expect(databaseMock.touchUserActivity).toHaveBeenCalledWith('user-1', expect.any(String), expect.any(Number));
+    const resolved = auth.resolveAuthenticatedSession({
+      headers: {
+        cookie: 'newsflow_session=my-session-token'
+      }
     });
+
+    expect(resolved.session.expiresAt).toBe(freshExpiresAt);
+    expect(databaseMock.refreshSessionExpiry).not.toHaveBeenCalled();
+    expect(databaseMock.touchUserActivity).toHaveBeenCalledWith('user-1', expect.any(String), expect.any(Number));
   });
 
-  test('authenticates private sessions only from the backend session cookie', () => {
+  test('authenticates private sessions only from the backend session cookie', async () => {
     jest.resetModules();
 
     const databaseMock = {
@@ -126,30 +122,28 @@ describe('auth session cleanup throttling', () => {
       purgeExpiredSessions: jest.fn(() => 0)
     };
 
-    jest.doMock('../services/database', () => databaseMock);
+    jest.doMock('../services/database', () => ({ default: databaseMock }));
 
-    jest.isolateModules(() => {
-      const auth = require('./auth');
-      const resolved = auth.resolveAuthenticatedSession({
-        headers: { cookie: 'other=value; newsflow_session=cookie-token' }
-      });
-
-      expect(resolved.user.username).toBe('alice');
-      expect(databaseMock.findSessionByTokenHash).toHaveBeenCalledWith(auth.hashSessionToken('cookie-token'));
-
-      [
-        { headers: { authorization: 'Bearer bearer-token' } },
-        { headers: { 'x-session-token': 'header-token' } },
-        { authToken: 'socket-token' }
-      ].forEach((options) => {
-        expect(() => auth.resolveAuthenticatedSession(options)).toThrow('Authentication required');
-      });
-
-      expect(databaseMock.findSessionByTokenHash).toHaveBeenCalledTimes(1);
+    const auth: ReturnType<typeof require> = (await import('./auth')).default;
+    const resolved = auth.resolveAuthenticatedSession({
+      headers: { cookie: 'other=value; newsflow_session=cookie-token' }
     });
+
+    expect(resolved.user.username).toBe('alice');
+    expect(databaseMock.findSessionByTokenHash).toHaveBeenCalledWith(auth.hashSessionToken('cookie-token'));
+
+    [
+      { headers: { authorization: 'Bearer bearer-token' } },
+      { headers: { 'x-session-token': 'header-token' } },
+      { authToken: 'socket-token' }
+    ].forEach((options) => {
+      expect(() => auth.resolveAuthenticatedSession(options)).toThrow('Authentication required');
+    });
+
+    expect(databaseMock.findSessionByTokenHash).toHaveBeenCalledTimes(1);
   });
 
-  test('batches API token usage updates until flush', () => {
+  test('batches API token usage updates until flush', async () => {
     jest.resetModules();
 
     const databaseMock = {
@@ -163,22 +157,20 @@ describe('auth session cleanup throttling', () => {
       purgeExpiredApiTokens: jest.fn(() => 0)
     };
 
-    jest.doMock('../services/database', () => databaseMock);
+    jest.doMock('../services/database', () => ({ default: databaseMock }));
 
-    jest.isolateModules(() => {
-      const auth = require('./auth');
+    const auth = (await import('./auth')).default;
 
-      auth.resolveAuthenticatedApiToken({ headers: { authorization: 'Bearer nfapi_secret' } });
+    auth.resolveAuthenticatedApiToken({ headers: { authorization: 'Bearer nfapi_secret' } });
 
-      expect(databaseMock.touchApiTokenUsage).not.toHaveBeenCalled();
+    expect(databaseMock.touchApiTokenUsage).not.toHaveBeenCalled();
 
-      auth.flushApiTokenUsage({ force: true });
+    auth.flushApiTokenUsage({ force: true });
 
-      expect(databaseMock.touchApiTokenUsage).toHaveBeenCalledWith('token-1', expect.any(String));
-    });
+    expect(databaseMock.touchApiTokenUsage).toHaveBeenCalledWith('token-1', expect.any(String));
   });
 
-  test('periodic timer flushes low-volume API token usage', () => {
+  test('periodic timer flushes low-volume API token usage', async () => {
     jest.resetModules();
     jest.useFakeTimers();
 
@@ -193,21 +185,19 @@ describe('auth session cleanup throttling', () => {
       purgeExpiredApiTokens: jest.fn(() => 0)
     };
 
-    jest.doMock('../services/database', () => databaseMock);
+    jest.doMock('../services/database', () => ({ default: databaseMock }));
 
-    jest.isolateModules(() => {
-      const auth = require('./auth');
+    const auth = (await import('./auth')).default;
 
-      auth.resolveAuthenticatedApiToken({ headers: { authorization: 'Bearer nfapi_secret' } });
-      auth.startApiTokenUsageFlushTimer();
+    auth.resolveAuthenticatedApiToken({ headers: { authorization: 'Bearer nfapi_secret' } });
+    auth.startApiTokenUsageFlushTimer();
 
-      expect(databaseMock.touchApiTokenUsage).not.toHaveBeenCalled();
+    expect(databaseMock.touchApiTokenUsage).not.toHaveBeenCalled();
 
-      jest.advanceTimersByTime(5000);
+    jest.advanceTimersByTime(5000);
 
-      expect(databaseMock.touchApiTokenUsage).toHaveBeenCalledWith('token-1', expect.any(String));
-      auth.stopApiTokenUsageFlushTimer();
-    });
+    expect(databaseMock.touchApiTokenUsage).toHaveBeenCalledWith('token-1', expect.any(String));
+    auth.stopApiTokenUsageFlushTimer();
 
     jest.useRealTimers();
   });

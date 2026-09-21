@@ -1,5 +1,5 @@
-const aiSummaryGenerator = require('./aiSummaryGenerator');
-import type { Mock } from 'vitest';
+const aiSummaryGenerator: ReturnType<typeof require> = (await import('./aiSummaryGenerator')).default;
+import { vi as jest, type Mock } from 'vitest';
 
 describe('aiSummaryGenerator', () => {
   const originalEnv = process.env;

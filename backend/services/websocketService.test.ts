@@ -1,5 +1,5 @@
-const createMockLogger = require('../test-utils/mockLogger');
-import type { Mock } from 'vitest';
+import createMockLogger from '../test-utils/mockLogger';
+import { vi as jest, type Mock } from 'vitest';
 
 type Handler = (...args: unknown[]) => unknown;
 
@@ -46,7 +46,7 @@ describe('websocketService', () => {
   let authMock: MockModule;
   let websocketService: ReturnType<typeof require>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.resetModules();
 
     ioMock = {
@@ -63,7 +63,7 @@ describe('websocketService', () => {
       })
     };
 
-    socketFactory = jest.fn(() => ioMock);
+    socketFactory = jest.fn(function () { return ioMock; });
     databaseMock = {
       findSessionByTokenHash: jest.fn(() => null),
       listUserSources: jest.fn(() => []),
@@ -82,22 +82,22 @@ describe('websocketService', () => {
       }))
     };
 
-    jest.doMock('socket.io', () => socketFactory);
-    jest.doMock('../utils/logger', createMockLogger);
-    jest.doMock('../utils/networkConfig', () => ({
+    jest.doMock('socket.io', () => ({ Server: socketFactory }));
+    jest.doMock('../utils/logger', () => ({ default: createMockLogger() }));
+    jest.doMock('../utils/networkConfig', () => ({ default: {
       getAllowedOrigins: jest.fn(() => ['http://localhost:3000']),
       isOriginAllowed: jest.fn(() => true)
-    }));
-    jest.doMock('../utils/browserSecurity', () => ({
+    } }));
+    jest.doMock('../utils/browserSecurity', () => ({ default: {
       hasSameOriginRequestHeaders: jest.fn((request) => {
         const origin = request.headers?.origin;
         return !origin || origin === 'http://localhost:3000';
       })
-    }));
-    jest.doMock('./database', () => databaseMock);
-    jest.doMock('../utils/auth', () => authMock);
+    } }));
+    jest.doMock('./database', () => ({ default: databaseMock }));
+    jest.doMock('../utils/auth', () => ({ default: authMock }));
 
-    websocketService = require('./websocketService');
+    websocketService = (await import('./websocketService')).default;
     websocketService.initialize({});
   });
 
@@ -358,7 +358,7 @@ describe('websocketService', () => {
     expect(socketTwo.emit).not.toHaveBeenCalled();
   });
 
-  test('logs failed emits during feed refresh broadcasts', () => {
+  test('logs failed emits during feed refresh broadcasts', async () => {
     const failingSocket = createSocket('socket-2', { auth: { token: 'token-2' }, headers: {} });
     failingSocket.emit.mockImplementation(() => {
       throw new Error('socket emit failed');
@@ -368,7 +368,7 @@ describe('websocketService', () => {
 
     websocketService.broadcastFeedRefresh();
 
-    expect(require('../utils/logger').warn).toHaveBeenCalledWith(expect.stringContaining('socket emit failed'));
+    expect((await import('../utils/logger')).default.warn).toHaveBeenCalledWith(expect.stringContaining('socket emit failed'));
   });
 
   test('disconnects active sockets for a deleted user immediately', () => {

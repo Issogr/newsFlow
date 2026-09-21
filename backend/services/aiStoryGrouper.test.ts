@@ -1,11 +1,11 @@
-import type { Mock } from 'vitest';
+import { vi as jest, type Mock } from 'vitest';
 
 describe('aiStoryGrouper', () => {
   let aiStoryGrouper: ReturnType<typeof require>;
   let sendMock: Mock;
   let fetchMock: Mock;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.resetModules();
     process.env.OPENROUTER_API_KEY = 'test-key';
     process.env.OPENROUTER_STORY_GROUPING_MODEL = 'test-story-grouping-model';
@@ -23,7 +23,7 @@ describe('aiStoryGrouper', () => {
         }
       ]
     }));
-    aiStoryGrouper = require('./aiStoryGrouper');
+    aiStoryGrouper = (await import('./aiStoryGrouper')).default;
     fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => (
       Response.json(await sendMock(JSON.parse(String(options?.body))))
     ));

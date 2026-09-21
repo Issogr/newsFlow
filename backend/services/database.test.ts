@@ -1,12 +1,15 @@
-const SqliteDatabase = require('./sqliteDatabase');
-const configuredSources = require('../config/newsSources');
-const { cleanupTempNewsDb, setupTempNewsDb } = require('../test-utils/tempNewsDb');
+import { vi as jest } from 'vitest';
+import SqliteDatabase from './sqliteDatabase';
+import configuredSources from '../config/newsSources';
+import tempNewsDb from '../test-utils/tempNewsDb';
+import sourceCatalog from '../utils/sourceCatalog';
+const { cleanupTempNewsDb, setupTempNewsDb } = tempNewsDb;
 const {
   getCanonicalSourceId,
   getCanonicalSourceName,
   getConfiguredSourceGroups
-} = require('../utils/sourceCatalog');
-import type SqliteDatabaseConnection = require('./sqliteDatabase');
+} = sourceCatalog;
+import type SqliteDatabaseConnection from './sqliteDatabase';
 
 type RuntimeModule = ReturnType<typeof require>;
 
@@ -15,7 +18,7 @@ interface TestSource {
   name: string;
   groupId?: string;
   url?: string;
-  language?: string;
+  language?: string | null;
 }
 
 interface TestSourceGroup {
@@ -39,15 +42,13 @@ function getMigrationVersion(database: SqliteDatabaseConnection): string | undef
 const sourceGroups = getConfiguredSourceGroups();
 const primarySource = configuredSources.find((source: TestSource) => !source.groupId) || configuredSources[0] || { id: 'source-a', name: 'Source A' };
 const secondarySource = configuredSources.find((source: TestSource) => !source.groupId && source.id !== primarySource.id) || configuredSources[1] || { id: 'source-b', name: 'Source B' };
-const groupedSource = configuredSources.find((source: TestSource) => source.groupId) || null;
+const groupedSource = configuredSources.find((source: TestSource) => source.groupId)!;
 const groupedSourceFamily = groupedSource
   ? sourceGroups.find((group: TestSourceGroup) => group.subSources.some((subSource: TestSource) => subSource.id === groupedSource.id))
   : null;
 const groupedSourceFamilyId = groupedSourceFamily?.id || groupedSource?.id || 'grouped-source';
 const groupedSourceFamilyName = groupedSourceFamily?.name || groupedSource?.name || 'Grouped Source';
-const alternateGroupedSource = groupedSourceFamily
-  ? configuredSources.find((source: TestSource) => source.id !== groupedSource?.id && groupedSourceFamily.subSources.some((subSource: TestSource) => subSource.id === source.id))
-  : null;
+const alternateGroupedSource = configuredSources.find((source: TestSource) => source.id !== groupedSource?.id && groupedSourceFamily?.subSources.some((subSource: TestSource) => subSource.id === source.id))!;
 const primarySourceFamilyId = getCanonicalSourceId(primarySource.id, primarySource.name);
 const secondarySourceFamilyId = getCanonicalSourceId(secondarySource.id, secondarySource.name);
 const secondarySourceFamilyName = getCanonicalSourceName(secondarySource.id, secondarySource.name);
@@ -66,8 +67,8 @@ describe('database migrations', () => {
     cleanupTempNewsDb({ tempDir }, database);
   });
 
-  test('initializes a fresh database at the latest migration version', () => {
-    database = require('./database');
+  test('initializes a fresh database at the latest migration version', async () => {
+    database = (await import('./database')).default;
     database.getDb();
 
     const sqlite = new SqliteDatabase(dbPath, { readOnly: true });
@@ -83,12 +84,12 @@ describe('database migrations', () => {
     const thematicSummaryColumns = getColumnNames(sqlite, 'thematic_summaries');
     const podcastTables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('podcast_summaries', 'podcast_summary_audio')").all();
     const readThematicSummaryColumns = getColumnNames(sqlite, 'user_read_thematic_summaries');
-    const articleIndexNames = sqlite.prepare('PRAGMA index_list(articles)').all().map((index: { name: string }) => index.name);
-    const userIndexNames = sqlite.prepare('PRAGMA index_list(users)').all().map((index: { name: string }) => index.name);
-    const topicIndexNames = sqlite.prepare('PRAGMA index_list(article_topics)').all().map((index: { name: string }) => index.name);
+    const articleIndexNames = sqlite.prepare('PRAGMA index_list(articles)').all().map((index) => index.name);
+    const userIndexNames = sqlite.prepare('PRAGMA index_list(users)').all().map((index) => index.name);
+    const topicIndexNames = sqlite.prepare('PRAGMA index_list(article_topics)').all().map((index) => index.name);
     const articleSearchTriggerNames = sqlite.prepare(`
       SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'article_search_%'
-    `).all().map((trigger: { name: string }) => trigger.name);
+    `).all().map((trigger) => trigger.name);
 
     sqlite.close();
 
@@ -137,7 +138,7 @@ describe('database migrations', () => {
     ]));
   });
 
-  test('refuses to start with case-insensitive duplicate usernames', () => {
+  test('refuses to start with case-insensitive duplicate usernames', async () => {
     const sqlite = new SqliteDatabase(dbPath);
     sqlite.exec(`
       CREATE TABLE users (
@@ -149,12 +150,12 @@ describe('database migrations', () => {
     `);
     sqlite.close();
 
-    database = require('./database');
+    database = (await import('./database')).default;
 
     expect(() => database.getDb()).toThrow('case-insensitive duplicate username');
   });
 
-  test('migrates reader text width from schema version 41', () => {
+  test('migrates reader text width from schema version 41', async () => {
     const sqlite = new SqliteDatabase(dbPath);
     sqlite.exec(`
       CREATE TABLE app_meta (
@@ -171,7 +172,7 @@ describe('database migrations', () => {
     `);
     sqlite.close();
 
-    database = require('./database');
+    database = (await import('./database')).default;
     database.getDb();
 
     const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
@@ -183,8 +184,8 @@ describe('database migrations', () => {
     expect(width).toBe('default');
   });
 
-  test('drops clickbait columns from schema version 43', () => {
-    database = require('./database');
+  test('drops clickbait columns from schema version 43', async () => {
+    database = (await import('./database')).default;
     const sqlite = database.getDb();
     sqlite.exec(`
       ALTER TABLE articles ADD COLUMN clickbait_label TEXT NOT NULL DEFAULT '';
@@ -201,13 +202,13 @@ describe('database migrations', () => {
     database.closeDb();
     jest.resetModules();
 
-    database = require('./database');
+    database = (await import('./database')).default;
     database.getDb();
 
     const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const migrationVersion = getMigrationVersion(migratedDb);
     const articleColumns = getColumnNames(migratedDb, 'articles');
-    const articleIndexes = migratedDb.prepare('PRAGMA index_list(articles)').all().map((index: { name: string }) => index.name);
+    const articleIndexes = migratedDb.prepare('PRAGMA index_list(articles)').all().map((index) => index.name);
     migratedDb.close();
 
     expect(migrationVersion).toBe('46');
@@ -215,8 +216,8 @@ describe('database migrations', () => {
     expect(articleIndexes).not.toContain('idx_articles_ai_clickbait_processed_at');
   });
 
-  test('migrates summary evidence storage from version 44 without losing completed briefings', () => {
-    database = require('./database');
+  test('migrates summary evidence storage from version 44 without losing completed briefings', async () => {
+    database = (await import('./database')).default;
     const window = { periodStart: '2026-07-13T18:00:00.000Z', periodEnd: '2026-07-14T18:00:00.000Z' };
     database.upsertThematicSummary({ ...window, topicKey: 'science', summaryText: 'Saved briefing [1].' });
     database.getDb().exec(`
@@ -226,14 +227,14 @@ describe('database migrations', () => {
     `);
     database.closeDb();
     jest.resetModules();
-    database = require('./database');
+    database = (await import('./database')).default;
     expect(database.getThematicSummary('science', window.periodStart, window.periodEnd)).toMatchObject({
       summaryText: 'Saved briefing [1].', inputArticles: []
     });
     expect(getMigrationVersion(database.getDb())).toBe('46');
   });
 
-  test('migrates an unversioned legacy database instead of marking it current', () => {
+  test('migrates an unversioned legacy database instead of marking it current', async () => {
     const sqlite = new SqliteDatabase(dbPath);
 
     sqlite.exec(`
@@ -266,7 +267,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    database = require('./database');
+    database = (await import('./database')).default;
     database.getDb();
 
     const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
@@ -293,7 +294,7 @@ describe('database migrations', () => {
     expect(userSourceColumns).toContain('icon_url');
   });
 
-  test('migrates an existing schema version 15 database', () => {
+  test('migrates an existing schema version 15 database', async () => {
     const sqlite = new SqliteDatabase(dbPath);
 
     sqlite.exec(`
@@ -372,7 +373,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    database = require('./database');
+    database = (await import('./database')).default;
     database.getDb();
 
     const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
@@ -422,11 +423,11 @@ describe('database migrations', () => {
     expect(userSourceColumns).toContain('icon_url');
   });
 
-  test('migrates version 23 by forcing source review and removing custom duplicates of built-in feeds', () => {
+  test('migrates version 23 by forcing source review and removing custom duplicates of built-in feeds', async () => {
     const now = new Date().toISOString();
     const duplicateBuiltInSource = configuredSources.find((source: TestSource) => source.id === 'ilpost') || configuredSources[0];
 
-    database = require('./database');
+    database = (await import('./database')).default;
     const sqlite = database.getDb();
 
     database.createUser({
@@ -500,7 +501,7 @@ describe('database migrations', () => {
 
     database.closeDb();
     jest.resetModules();
-    database = require('./database');
+    database = (await import('./database')).default;
     database.getDb();
 
     const migratedVersion = getMigrationVersion(database.getDb());
@@ -516,7 +517,7 @@ describe('database migrations', () => {
     expect(articleIds).toEqual(['kept-private-article']);
   });
 
-  test('drops unused thematic summary title columns during migration', () => {
+  test('drops unused thematic summary title columns during migration', async () => {
     const sqlite = new SqliteDatabase(dbPath);
 
     sqlite.exec(`
@@ -590,7 +591,7 @@ describe('database migrations', () => {
     `);
     sqlite.close();
 
-    database = require('./database');
+    database = (await import('./database')).default;
     database.getDb();
 
     const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
@@ -613,7 +614,7 @@ describe('database migrations', () => {
     });
   });
 
-  test('removes legacy podcast storage when upgrading from schema version 42', () => {
+  test('removes legacy podcast storage when upgrading from schema version 42', async () => {
     const sqlite = new SqliteDatabase(dbPath);
     const legacyAudio = Buffer.from('legacy-italian-audio');
     const parentMirrorAudio = Buffer.from('differing-parent-mirror');
@@ -729,7 +730,7 @@ describe('database migrations', () => {
     );
     sqlite.close();
 
-    database = require('./database');
+    database = (await import('./database')).default;
     database.getDb();
 
     const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
@@ -742,8 +743,8 @@ describe('database migrations', () => {
     expect(podcastTables).toEqual([]);
   });
 
-  test('removes podcast data and read markers from version 45 while preserving text summaries', () => {
-    database = require('./database');
+  test('removes podcast data and read markers from version 45 while preserving text summaries', async () => {
+    database = (await import('./database')).default;
     const sqlite = database.getDb();
     const now = new Date().toISOString();
     database.createUser({ id: 'user-1', username: 'alice', passwordHash: null, createdAt: now, updatedAt: now });
@@ -764,7 +765,7 @@ describe('database migrations', () => {
     `);
     database.closeDb();
     jest.resetModules();
-    database = require('./database');
+    database = (await import('./database')).default;
 
     expect(getMigrationVersion(database.getDb())).toBe('46');
     expect(database.getDb().prepare("SELECT name FROM sqlite_master WHERE name IN ('podcast_summaries', 'podcast_summary_audio')").all()).toEqual([]);
@@ -772,7 +773,7 @@ describe('database migrations', () => {
     expect(database.getThematicSummary('science', window.periodStart, window.periodEnd)).toMatchObject({ summaryText: 'Saved briefing [1].' });
   });
 
-  test('rejects a future schema before creating current-schema objects', () => {
+  test('rejects a future schema before creating current-schema objects', async () => {
     const sqlite = new SqliteDatabase(dbPath);
     sqlite.exec(`
       CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -780,11 +781,11 @@ describe('database migrations', () => {
     `);
     sqlite.close();
 
-    database = require('./database');
+    database = (await import('./database')).default;
     expect(() => database.getDb()).toThrow('Unsupported database schema version 99');
 
     const unchangedDb = new SqliteDatabase(dbPath, { readOnly: true });
-    const tableNames = unchangedDb.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((row: { name: string }) => row.name);
+    const tableNames = unchangedDb.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((row) => row.name);
     const migrationVersion = getMigrationVersion(unchangedDb);
     unchangedDb.close();
 
@@ -792,7 +793,7 @@ describe('database migrations', () => {
     expect(migrationVersion).toBe('99');
   });
 
-  test('rolls back a failed schema transition and its version update', () => {
+  test('rolls back a failed schema transition and its version update', async () => {
     const sqlite = new SqliteDatabase(dbPath);
     sqlite.exec(`
       CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -806,7 +807,7 @@ describe('database migrations', () => {
     `);
     sqlite.close();
 
-    database = require('./database');
+    database = (await import('./database')).default;
     expect(() => database.getDb()).toThrow('case-insensitive duplicate username');
 
     const rolledBackDb = new SqliteDatabase(dbPath, { readOnly: true });
@@ -818,8 +819,8 @@ describe('database migrations', () => {
     expect(userColumns).toContain('role');
   });
 
-  test('rebuilds article search and installs synchronization triggers during migration', () => {
-    database = require('./database');
+  test('rebuilds article search and installs synchronization triggers during migration', async () => {
+    database = (await import('./database')).default;
     const sqlite = database.getDb();
     const now = new Date().toISOString();
     database.upsertArticles([{
@@ -845,7 +846,7 @@ describe('database migrations', () => {
     `);
     database.closeDb();
     jest.resetModules();
-    database = require('./database');
+    database = (await import('./database')).default;
     database.getDb();
 
     const searchRows = database.getDb().prepare(`
@@ -861,7 +862,7 @@ describe('database migrations', () => {
     expect(database.getArticles({ search: 'rebuilt' }).map((article: Identified) => article.id)).toEqual(['migration-search-article']);
   });
 
-  test('rejects databases on an older schema version', () => {
+  test('rejects databases on an older schema version', async () => {
     const sqlite = new SqliteDatabase(dbPath);
 
     sqlite.exec(`
@@ -874,7 +875,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    database = require('./database');
+    database = (await import('./database')).default;
     expect(() => database.getDb()).toThrow('Unsupported database schema version 10');
   });
 });
@@ -883,10 +884,10 @@ describe('database queries and user data', () => {
   let tempDir: string;
   let database: RuntimeModule;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.resetModules();
     ({ tempDir } = setupTempNewsDb('news-db-test-'));
-    database = require('./database');
+    database = (await import('./database')).default;
     database.getDb();
   });
 
@@ -1823,7 +1824,7 @@ describe('database queries and user data', () => {
     prepareSpy.mockRestore();
   });
 
-  test('moves read-later state, reader cache, and topics before deleting duplicate articles', () => {
+  test('moves saved state, reader cache, topics and missing story metadata before deleting duplicates', () => {
     const now = new Date('2026-03-15T14:30:00.000Z').toISOString();
     const duplicateUpdatedAt = new Date('2026-03-15T14:00:00.000Z').toISOString();
     const canonicalUrl = 'https://example.com/shared-story';
@@ -1859,6 +1860,11 @@ describe('database queries and user data', () => {
       duplicateUpdatedAt,
       duplicateUpdatedAt
     );
+    database.assignArticlesToStoryGroup(['duplicate-article'], 'shared-story-group', 'duplicate-model', [
+      { articleId: 'related-article', confidence: 0.91, reason: 'Same event' }
+    ]);
+    database.getDb().prepare("UPDATE articles SET story_group_id = '', ai_story_group_model = 'original-model' WHERE id = ?")
+      .run('canonical-article');
     database.saveReadLaterArticles('user-1', ['duplicate-article']);
     database.upsertReaderCache('duplicate-article', {
       url: canonicalUrl,
@@ -1894,7 +1900,14 @@ describe('database queries and user data', () => {
       contentText: 'Duplicate reader body'
     }));
     expect(database.getArticleById('canonical-article', { maxArticleAgeHours: null })).toEqual(expect.objectContaining({
-      topics: ['Tecnologia']
+      topics: ['Tecnologia'],
+      storyGroupId: 'shared-story-group',
+      aiStoryGroupStatus: 'matched',
+      aiStoryGroupModel: 'original-model',
+      aiStoryGroupMatchIds: ['related-article'],
+      aiStoryGroupConfidence: 0.91,
+      aiStoryGroupReason: 'Same event',
+      aiStoryGroupProcessedAt: expect.any(String)
     }));
     expect(database.getTopicClassificationReport('canonical-article').storedTopics).toEqual([
       expect.objectContaining({

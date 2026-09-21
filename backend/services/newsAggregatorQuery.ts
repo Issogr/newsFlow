@@ -1,10 +1,14 @@
-const database = require('./database');
-const newsSources = require('../config/newsSources');
-const { buildDomainSourceGroups, getConfiguredSourceGroups } = require('../utils/sourceCatalog');
-const { MAX_NEWS_PAGE } = require('../utils/newsQuery');
-const { TITLE_GROUP_WINDOW_MS, groupSimilarNews } = require('./newsAggregatorGrouping');
-const { parseIntegerEnv } = require('../utils/env');
-const { getArticleRetentionHours } = require('../config/articleRetention');
+import database from './database';
+import newsSources from '../config/newsSources';
+import sourceCatalog from '../utils/sourceCatalog';
+import newsQuery from '../utils/newsQuery';
+import newsAggregatorGrouping from './newsAggregatorGrouping';
+import { parseIntegerEnv } from '../utils/env';
+import articleRetention from '../config/articleRetention';
+const { buildDomainSourceGroups, getConfiguredSourceGroups } = sourceCatalog;
+const { MAX_NEWS_PAGE } = newsQuery;
+const { TITLE_GROUP_WINDOW_MS, groupSimilarNews } = newsAggregatorGrouping;
+const { getArticleRetentionHours } = articleRetention;
 import type { DynamicRecord, NewsArticle, SourceDefinition, SourceGroup } from '../utils/types';
 
 type FeedArticle = NewsArticle & DynamicRecord;
@@ -34,16 +38,7 @@ interface FeedFilters extends DynamicRecord {
   topics?: string[];
 }
 
-interface QueryOptions extends DynamicRecord {
-  configuredSourcesOnly?: boolean;
-  customSourceGroups?: Map<string, SourceGroup>;
-  excludedSourceIds?: string[];
-  excludedSubSourceIds?: string[];
-  maxArticleAgeHours?: number | null;
-  readLaterUserId?: string | null;
-  sourceMetadataCache?: Map<string, DynamicRecord>;
-  userId?: string | null;
-}
+type QueryOptions = NonNullable<Parameters<typeof database.getArticles>[1]>;
 
 interface AvailableSource extends DynamicRecord {
   iconUrl?: string;
@@ -141,7 +136,7 @@ function expandUserSources(userSources: SourceDefinition[] = []) {
 }
 
 function getAvailableSources(userSources: SourceDefinition[] = []) {
-  const availableSources = new Map<string, AvailableSource>(getConfiguredSourceGroups().map((group: SourceGroup) => [group.id, { ...group, subSources: [...group.subSources] }]));
+  const availableSources = new Map<string, AvailableSource>(getConfiguredSourceGroups().map((group) => [group.id, { ...group, subSources: [...group.subSources] }]));
   const customGroups = buildDomainSourceGroups(userSources);
 
   customGroups.forEach((group: SourceGroup) => {
@@ -263,7 +258,7 @@ function fetchGroupedReadLaterPage(filters: FeedFilters = {}, queryOptions: Quer
   const requiredGroups = pageStart + pageSize + 1;
 
   while (hasMoreArticles) {
-    const batch = database.getReadLaterArticles(queryOptions.userId, {
+    const batch = database.getReadLaterArticles(queryOptions.userId || '', {
       search: filters.search,
       sourceIds: filters.sourceIds,
       topics: filters.topics,
@@ -544,7 +539,7 @@ async function getReadLaterFeed(filters: FeedFilters = {}, userContext: UserCont
   };
 }
 
-module.exports = {
+export default {
   ARTICLE_RETENTION_HOURS,
   newsSources,
   expandUserSources,

@@ -1,15 +1,19 @@
-const logger = require('../utils/logger');
-const { mapSettledWithConcurrency } = require('../utils/concurrency');
-const { isAiToggleEnabled } = require('../config/aiFeatures');
-import topicNormalizer = require('./topicNormalizer');
-import classifierUtils = require('./aiClassifierUtils');
+import logger from '../utils/logger';
+import concurrency from '../utils/concurrency';
+import aiFeatures from '../config/aiFeatures';
+import topicNormalizer from './topicNormalizer';
+import classifierUtils from './aiClassifierUtils';
+import openRouterClient from './openRouterClient';
+import aiArticlePayload from './aiArticlePayload';
+const { mapSettledWithConcurrency } = concurrency;
+const { isAiToggleEnabled } = aiFeatures;
 const {
   extractAssistantContent,
   getOpenRouterConfig,
   parseJsonContent,
   sendJsonChatCompletion
-} = require('./openRouterClient');
-const { truncateText } = require('./aiArticlePayload');
+} = openRouterClient;
+const { truncateText } = aiArticlePayload;
 const {
   getClassifierBatchConfig,
   getClassifierEntries,
@@ -287,7 +291,7 @@ function normalizeClassifierDetails(
   return result;
 }
 
-async function classifyBatch(batch: NewsArticle[], config: DynamicRecord, context: ClassifierContext = {}) {
+async function classifyBatch(batch: NewsArticle[], config: ReturnType<typeof getConfig>, context: ClassifierContext = {}) {
   const allowedIds = new Set(batch.map((article) => article.id).filter(Boolean));
   const articlesById = new Map(batch.map((article) => [article.id, article]));
   const refToArticleId = new Map(batch.map((article, index) => [String(index + 1), article.id]));
@@ -391,7 +395,7 @@ function isAiTopicDetectionAvailable() {
   return getConfig().enabled;
 }
 
-export = {
+export default {
   classifyTopicDetailsForArticlesWithStatus,
   isAiTopicDetectionAvailable,
   _getConfig: getConfig,

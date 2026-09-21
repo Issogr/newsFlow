@@ -1,17 +1,18 @@
-jest.mock('dns', () => ({
+import { vi as jest } from 'vitest';
+jest.doMock('node:dns', () => ({
   promises: {
     lookup: jest.fn()
   }
 }));
 
-jest.mock('axios', () => ({
+jest.doMock('axios', () => ({ default: {
   get: jest.fn()
-}));
+} }));
 
-const dns = require('dns').promises;
-const axios = require('axios');
-const { fetchSafeTextUrl } = require('./urlSafety');
-const { Readable } = require('node:stream');
+const dns: { lookup: import('vitest').Mock } = jest.mocked((await import('node:dns')).promises);
+const axios: ReturnType<typeof require> = (await import('axios')).default;
+const { fetchSafeTextUrl } = (await import('./urlSafety')).default;
+import { Readable } from 'node:stream';
 
 describe('urlSafety', () => {
   beforeEach(() => {
@@ -73,6 +74,24 @@ describe('urlSafety', () => {
       status: 403,
       code: 'FORBIDDEN_URL'
     });
+  });
+
+  test.each([
+    ['172.31.255.255', 4, true], ['172.32.0.0', 4, false],
+    ['::', 6, true], ['fd00::1', 6, true], ['febf::1', 6, true],
+    ['ff02::1', 6, true], ['2001:db8::1', 6, true],
+    ['::ffff:192.168.1.1', 6, true], ['::ffff:c0a8:101', 6, true],
+    ['2606:4700:4700::1111', 6, false]
+  ])('preserves outbound range policy for %s', async (address, family, blocked) => {
+    dns.lookup.mockResolvedValue([{ address, family }]);
+    axios.get.mockResolvedValue({ status: 200, data: 'ok', headers: {} });
+    const result = fetchSafeTextUrl('https://example.com/feed');
+    if (blocked) {
+      await expect(result).rejects.toMatchObject({ code: 'FORBIDDEN_URL' });
+      expect(axios.get).not.toHaveBeenCalled();
+    } else {
+      await expect(result).resolves.toMatchObject({ data: 'ok' });
+    }
   });
 
   test('rejects non-http outbound schemes', async () => {

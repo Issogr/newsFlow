@@ -1,16 +1,20 @@
-import type { AppError, DateInput, DynamicRecord } from '../utils/types';
+import type { AppError, DateInput, DynamicRecord, NewsArticle, SummaryRecord, SummarySource } from '../utils/types';
 import { createHash } from 'node:crypto';
 
-const database = require('./database');
-const logger = require('../utils/logger');
-const aiSummaryGenerator = require('./aiSummaryGenerator');
-const readerService = require('./readerService');
-const websocketService = require('./websocketService');
-const { parseIntegerEnv } = require('../utils/env');
-const { isAiToggleEnabled } = require('../config/aiFeatures');
-const { mapSettledWithConcurrency } = require('../utils/concurrency');
-const { isPromotionalDealArticle } = require('../utils/promotionalContent');
-const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/articleIdentity');
+import database from './database';
+import logger from '../utils/logger';
+import aiSummaryGenerator from './aiSummaryGenerator';
+import readerService from './readerService';
+import websocketService from './websocketService';
+import { parseIntegerEnv } from '../utils/env';
+import aiFeatures from '../config/aiFeatures';
+import concurrency from '../utils/concurrency';
+import promotionalContent from '../utils/promotionalContent';
+import articleIdentity from '../utils/articleIdentity';
+const { isAiToggleEnabled } = aiFeatures;
+const { mapSettledWithConcurrency } = concurrency;
+const { isPromotionalDealArticle } = promotionalContent;
+const { normalizeArticleUrl, normalizeIdentityText } = articleIdentity;
 
 const DEFAULT_SUMMARY_TIME_ZONE = 'Europe/Rome';
 const SUMMARY_HISTORY_RETAIN_COUNT = 1;
@@ -48,56 +52,16 @@ interface LocalDateParts {
   second: number;
 }
 
-interface SummaryArticleContext {
-  getArticlesForTopic(topicConfig: SummaryTopic): SummaryArticle[];
-}
-
 interface PrewarmAttempt {
   attemptedAt: string;
   succeeded: boolean;
 }
 
-interface SummaryArticle extends DynamicRecord {
-  canonicalUrl?: string;
-  content?: string;
-  description?: string;
-  id: string;
-  pubDate?: string;
-  rawSource?: string;
+interface SummaryArticle extends NewsArticle {
   readerText?: string;
-  source?: string;
-  sourceIconUrl?: string;
-  sourceId?: string;
-  storyGroupId?: string | null;
-  title: string;
-  url?: string;
-}
-
-interface SummarySource extends DynamicRecord {
-  articleId?: string;
-  contentHash?: string;
-}
-
-interface SummaryRecord extends DynamicRecord {
-  articleCount?: number;
-  errorMessage?: string;
-  failureCategory?: string;
-  generatedAt?: string;
-  lastAttemptAt?: string;
-  id?: string;
-  model?: string;
-  periodEnd?: string;
-  periodStart?: string;
-  retryCount?: number;
-  sources?: SummarySource[];
-  status?: string;
-  summaryText?: string;
-  summaryTextByLocale?: Record<string, string>;
-  topicKey?: string;
 }
 
 interface SummaryOptions extends DynamicRecord {
-  articleContext?: SummaryArticleContext;
   broadcast?: boolean;
   canGenerateSummaries?: boolean;
   force?: boolean;
@@ -508,20 +472,6 @@ function getArticlesForSummaryTopic(topicConfig: SummaryTopic, window: SummaryWi
   )));
 }
 
-function createSummaryArticleContext(window: SummaryWindow): SummaryArticleContext {
-  const articlesByTopicKey = new Map<string, SummaryArticle[]>();
-
-  return {
-    getArticlesForTopic(topicConfig: SummaryTopic) {
-      if (!articlesByTopicKey.has(topicConfig.key)) {
-        articlesByTopicKey.set(topicConfig.key, getArticlesForSummaryTopic(topicConfig, window));
-      }
-
-      return articlesByTopicKey.get(topicConfig.key) || [];
-    }
-  };
-}
-
 function getCachedReaderText(articleId: string, cacheByArticleId: Map<string, ReaderCacheEntry>) {
   const cached = cacheByArticleId.get(articleId);
   if (!cached || !isUsefulReaderText(cached.contentText)) {
@@ -532,7 +482,7 @@ function getCachedReaderText(articleId: string, cacheByArticleId: Map<string, Re
 }
 
 function withCachedReaderText(articles: SummaryArticle[] = []) {
-  const cacheByArticleId: Map<string, ReaderCacheEntry> = database.getReaderCaches(articles.map((article) => article.id), null);
+  const cacheByArticleId = database.getReaderCaches(articles.map((article) => article.id));
 
   return articles.map((article) => ({
     ...article,
@@ -577,15 +527,6 @@ function selectPromptArticles(articles: SummaryArticle[] = [], maxArticles = 40)
   uniqueArticles.forEach((article) => addArticle(article, false));
 
   return selected;
-}
-
-function getSelectedSummaryArticles(topicConfig: SummaryTopic, window: SummaryWindow, articleContext: SummaryArticleContext | null = null, existingArticles: SummaryArticle[] | null = null) {
-  const articles = Array.isArray(existingArticles)
-    ? existingArticles
-    : (articleContext?.getArticlesForTopic
-      ? articleContext.getArticlesForTopic(topicConfig)
-      : getArticlesForSummaryTopic(topicConfig, window));
-  return selectPromptArticles(articles, SUMMARY_PROMPT_MAX_ARTICLES);
 }
 
 function getSummarySourceArticleIds(summary: SummaryRecord = {}) {
@@ -641,16 +582,15 @@ async function prewarmReaderCacheForDueWindow(options: SummaryOptions = {}) {
     const attemptedArticles = shouldRetainAttempts
       ? (attemptedPrewarmArticleIdsByWindow.get(window.periodEnd) || new Map<string, PrewarmAttempt>())
       : new Map<string, PrewarmAttempt>();
-    const articleContext = createSummaryArticleContext(window);
     const candidateArticlesById = new Map<string, SummaryArticle>();
     if (aiSummaryGenerator.isAiSummaryGenerationAvailable() || options.force === true) {
       SUMMARY_TOPICS.forEach((topicConfig) => {
-        getSelectedSummaryArticles(topicConfig, window, articleContext)
+        selectPromptArticles(getArticlesForSummaryTopic(topicConfig, window), SUMMARY_PROMPT_MAX_ARTICLES)
           .forEach((article) => candidateArticlesById.set(article.id, article));
       });
     }
     const candidateArticles = [...candidateArticlesById.values()];
-    const readerCacheByArticleId: Map<string, ReaderCacheEntry> = database.getReaderCaches(candidateArticles.map((article) => article.id), null);
+    const readerCacheByArticleId = database.getReaderCaches(candidateArticles.map((article) => article.id));
     const candidates = candidateArticles.filter((article) => {
       return article?.id
         && (options.force === true || isPrewarmAttemptDue(attemptedArticles.get(article.id), referenceDate))
@@ -674,7 +614,7 @@ async function prewarmReaderCacheForDueWindow(options: SummaryOptions = {}) {
         userId: null,
         maxArticleAgeHours: null
       });
-      return payload && !payload.fallback && isUsefulReaderText(payload.contentText);
+      return Boolean(payload && !payload.fallback && isUsefulReaderText(payload.contentText));
     });
     results.forEach((result: PromiseSettledResult<boolean>, index: number) => {
       const article = candidates[index];
@@ -705,22 +645,20 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
     && !canRetryExhaustedInvalidOutput) {
     logger.debug(`Thematic summary retry skipped during cooldown: topic=${topicConfig.key}, windowEnd=${window.periodEnd}`);
     return {
-      summary: TERMINAL_SUMMARY_STATUSES.has(existingSummary.status) ? existingSummary : null,
+      summary: TERMINAL_SUMMARY_STATUSES.has(existingSummary.status || '') ? existingSummary : null,
       generatedNow: false
     };
   }
 
   if (shouldWaitForPendingTopicProcessing(window, options)) {
     return {
-      summary: TERMINAL_SUMMARY_STATUSES.has(existingSummary?.status) ? existingSummary : null,
+      summary: TERMINAL_SUMMARY_STATUSES.has(existingSummary?.status || '') ? existingSummary : null,
       generatedNow: false
     };
   }
 
-  const articles = options.articleContext?.getArticlesForTopic
-    ? options.articleContext.getArticlesForTopic(topicConfig)
-    : getArticlesForSummaryTopic(topicConfig, window);
-  const selectedArticles = getSelectedSummaryArticles(topicConfig, window, options.articleContext, articles);
+  const articles = getArticlesForSummaryTopic(topicConfig, window);
+  const selectedArticles = selectPromptArticles(articles, SUMMARY_PROMPT_MAX_ARTICLES);
   const enrichedArticles = withCachedReaderText(selectedArticles);
   const sources = buildSourceList(enrichedArticles);
 
@@ -826,7 +764,6 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
 async function runDueSummaries(options: SummaryOptions = {}): Promise<DueSummaryResult> {
     const referenceDate = options.referenceDate || new Date();
     const window = options.window || getLatestDueWindow(referenceDate);
-    const articleContext = options.articleContext || createSummaryArticleContext(window);
     const summaries: SummaryRecord[] = [];
     let generatedCount = 0;
     const generatedTopicKeys: string[] = [];
@@ -835,7 +772,7 @@ async function runDueSummaries(options: SummaryOptions = {}): Promise<DueSummary
     const topicResults = canGenerateSummaries
       ? await mapSettledWithConcurrency(SUMMARY_TOPICS, SUMMARY_GENERATION_CONCURRENCY, async (topicConfig: SummaryTopic) => ({
         topicConfig,
-        result: await generateSummaryForTopic(topicConfig, window, { ...options, canGenerateSummaries, articleContext })
+        result: await generateSummaryForTopic(topicConfig, window, { ...options, canGenerateSummaries })
       }))
       : [];
 
@@ -846,12 +783,12 @@ async function runDueSummaries(options: SummaryOptions = {}): Promise<DueSummary
       }
 
       const { topicConfig, result } = topicResult.value;
-      if (TERMINAL_SUMMARY_STATUSES.has(result.summary?.status)) {
+      if (result.summary && TERMINAL_SUMMARY_STATUSES.has(result.summary.status || '')) {
         summaries.push(result.summary);
       }
       if (result.generatedNow) {
         generatedCount += 1;
-        if (TERMINAL_SUMMARY_STATUSES.has(result.summary?.status)) {
+        if (TERMINAL_SUMMARY_STATUSES.has(result.summary?.status || '')) {
           generatedTopicKeys.push(topicConfig.key);
         }
       }
@@ -989,7 +926,7 @@ function stopScheduler() {
   pendingGenerationOptions = [];
 }
 
-module.exports = {
+export default {
   getLatestSummaries,
   generateDueSummaries,
   prewarmReaderCacheForDueWindow,

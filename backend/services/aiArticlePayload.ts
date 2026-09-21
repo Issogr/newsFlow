@@ -1,4 +1,4 @@
-const { parseIntegerEnv } = require('../utils/env');
+import { parseIntegerEnv } from '../utils/env';
 import type { NewsArticle } from '../utils/types';
 
 const DEFAULT_READER_TEXT_MAX_CHARS = 3000;
@@ -48,7 +48,7 @@ function buildArticlePayload(
   };
 }
 
-export = {
+export default {
   buildArticlePayload,
   getArticleTextLimit,
   truncateText

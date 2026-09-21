@@ -1,12 +1,14 @@
-import express = require('express');
+import express from 'express';
 import type { Request, Response } from 'express';
-const userService = require('../../services/userService');
-const { requireAuthenticatedUser } = require('../../utils/auth');
+import userService from '../../services/userService';
+import auth from '../../utils/auth';
+import helpers from './helpers';
+const { requireAuthenticatedUser } = auth;
 const {
   refreshUserSourcesInBackground,
   getRequestAbortSignal,
   requireAuthenticatedPublicApiFeature,
-} = require('./helpers');
+} = helpers;
 
 const router = express.Router();
 
@@ -45,4 +47,4 @@ router.post('/me/settings/import', requireAuthenticatedUser, async (req, res) =>
   res.json({ success: true, ...result });
 });
 
-export = router;
+export default router;

@@ -1,19 +1,24 @@
-import crypto = require('crypto');
-import express = require('express');
+import crypto from 'node:crypto';
+import express from 'express';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import type { NextFunction, Request, Response } from 'express';
 import type { AppError } from '../utils/types';
-const newsService = require('../services/newsAggregator');
-const userService = require('../services/userService');
-const { buildRateLimitMessage, createError } = require('../utils/errorHandler');
-const { sanitizeQuery } = require('../utils/inputValidator');
-const { extractBearerToken, resolveAuthenticatedApiToken } = require('../utils/auth');
-const { parseNewsQuery } = require('../utils/newsQuery');
-const { buildUserContext } = require('../utils/userContext');
+import newsService from '../services/newsAggregator';
+import userService from '../services/userService';
+import { buildRateLimitMessage, createError } from '../utils/errorHandler';
+import inputValidator from '../utils/inputValidator';
+import auth from '../utils/auth';
+import newsQuery from '../utils/newsQuery';
+import userContext from '../utils/userContext';
+import publicApi from '../config/publicApi';
+const { sanitizeQuery } = inputValidator;
+const { extractBearerToken, resolveAuthenticatedApiToken } = auth;
+const { parseNewsQuery } = newsQuery;
+const { buildUserContext } = userContext;
 const {
   isAnonymousPublicApiEnabled,
   isAuthenticatedPublicApiEnabled
-} = require('../config/publicApi');
+} = publicApi;
 
 const router = express.Router();
 const INVALID_TOKEN_CACHE_MAX_ENTRIES = 1000;
@@ -192,4 +197,4 @@ router.get('/news', [
   });
 });
 
-export = router;
+export default router;

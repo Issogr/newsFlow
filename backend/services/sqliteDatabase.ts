@@ -94,4 +94,4 @@ class SqliteDatabase {
   }
 }
 
-export = SqliteDatabase;
+export default SqliteDatabase;

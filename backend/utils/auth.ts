@@ -1,9 +1,10 @@
-const crypto = require('crypto');
-const { promisify } = require('util');
-const database = require('../services/database');
-const { createError } = require('./errorHandler');
-const { parseIntegerEnv } = require('./env');
-const { clearSessionCookie, SESSION_COOKIE_NAME, setSessionCookie } = require('./sessionCookie');
+import crypto from 'node:crypto';
+import { promisify } from 'node:util';
+import database from '../services/database';
+import { createError } from './errorHandler';
+import { parseIntegerEnv } from './env';
+import sessionCookie from './sessionCookie';
+const { clearSessionCookie, SESSION_COOKIE_NAME, setSessionCookie } = sessionCookie;
 import type { IncomingHttpHeaders } from 'node:http';
 import type { RequestHandler } from 'express';
 import type { ApiTokenRecord, AppError, AuthUser, SessionRecord } from './types';
@@ -25,7 +26,7 @@ let pendingApiTokenUsageCount = 0;
 let lastApiTokenUsageFlushAt = Date.now();
 let apiTokenUsageFlushTimer: NodeJS.Timeout | null = null;
 
-function extractBearerToken(authorizationHeader: unknown) {
+function extractBearerToken(authorizationHeader: unknown = '') {
   if (!authorizationHeader || typeof authorizationHeader !== 'string') {
     return '';
   }
@@ -91,7 +92,7 @@ async function hashPassword(password: unknown): Promise<string | null> {
   }
 
   const salt = crypto.randomBytes(16).toString('hex');
-  const derivedKey = (await scryptAsync(normalized, salt, 64)).toString('hex');
+  const derivedKey = (await scryptAsync(normalized, salt, 64) as Buffer).toString('hex');
   return `${salt}:${derivedKey}`;
 }
 
@@ -107,7 +108,7 @@ async function verifyPassword(password: unknown, storedHash: unknown) {
     return false;
   }
 
-  const candidate = (await scryptAsync(normalized, salt, 64)).toString('hex');
+  const candidate = (await scryptAsync(normalized, salt, 64) as Buffer).toString('hex');
   return safeTokenCompare(derivedKey, candidate);
 }
 
@@ -343,7 +344,7 @@ function resolveAuthenticatedApiToken({ headers = {} }: { headers?: IncomingHttp
   };
 }
 
-export = {
+export default {
   requireAuthenticatedUser,
   requireAdminUser,
   resolveAuthenticatedApiToken,

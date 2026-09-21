@@ -100,7 +100,7 @@ function createConcurrencyLimiter(concurrency = 1) {
   });
 }
 
-export = {
+export default {
   createConcurrencyLimiter,
   mapWithConcurrency,
   mapSettledWithConcurrency

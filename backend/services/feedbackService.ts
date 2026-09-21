@@ -1,6 +1,7 @@
-const { createError } = require('../utils/errorHandler');
-const { getFeedbackAttachmentType } = require('../utils/feedback');
-const { parseIntegerEnv } = require('../utils/env');
+import { createError } from '../utils/errorHandler';
+import feedback from '../utils/feedback';
+import { parseIntegerEnv } from '../utils/env';
+const { getFeedbackAttachmentType } = feedback;
 import type { AuthUser, DynamicRecord } from '../utils/types';
 
 interface TelegramResult extends DynamicRecord {
@@ -215,7 +216,7 @@ async function sendFeedback({
   }
 }
 
-export = {
+export default {
   isFeedbackConfigured,
   sendFeedback,
 };

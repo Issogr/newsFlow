@@ -1,12 +1,15 @@
-const { getProviderIconUrl } = require('../utils/sourceIcons');
-const configuredSources = require('../config/newsSources');
-const { normalizeArticleUrl } = require('../utils/articleIdentity');
-const { getConfiguredSourceGroups } = require('../utils/sourceCatalog');
-import type winston from 'winston';
+import sourceIcons from '../utils/sourceIcons';
+import configuredSources from '../config/newsSources';
+import articleIdentity from '../utils/articleIdentity';
+import sourceCatalog from '../utils/sourceCatalog';
+import type appLogger from '../utils/logger';
+const { getProviderIconUrl } = sourceIcons;
+const { normalizeArticleUrl } = articleIdentity;
+const { getConfiguredSourceGroups } = sourceCatalog;
 import type SqliteDatabase from './sqliteDatabase';
 import type { SourceDefinition } from '../utils/types';
 
-function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
+function createDatabaseSchema({ logger }: { logger: typeof appLogger }) {
   const CURRENT_SCHEMA_VERSION = 46;
   const MIN_SUPPORTED_SCHEMA_VERSION = 15;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
@@ -120,7 +123,7 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
   }
 
   function getAllConfiguredSourceGroupIds() {
-    return getConfiguredSourceGroups().map((source: SourceDefinition) => source.id);
+    return getConfiguredSourceGroups().map((source) => source.id);
   }
 
   function getConfiguredSourceUrlKeys() {
@@ -491,13 +494,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         CREATE INDEX IF NOT EXISTS idx_api_tokens_revoked_at ON api_tokens (revoked_at);
       `);
 
-      database.prepare(`
-        INSERT INTO app_meta (key, value)
-        VALUES ('migration_version', '16')
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value
-      `).run();
-
-      logger.info('Migrated DB schema from version 15 to 16');
       return;
     }
 
@@ -510,8 +506,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         `);
       }
 
-      setCurrentSchemaVersion(database, 17);
-      logger.info('Migrated DB schema from version 16 to 17');
       return;
     }
 
@@ -531,8 +525,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         END
       `);
 
-      setCurrentSchemaVersion(database, 18);
-      logger.info('Migrated DB schema from version 17 to 18');
       return;
     }
 
@@ -556,8 +548,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
             last_used_ip = NULL
       `);
 
-      setCurrentSchemaVersion(database, 19);
-      logger.info('Migrated DB schema from version 18 to 19');
       return;
     }
 
@@ -585,8 +575,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         CREATE INDEX IF NOT EXISTS idx_articles_ai_topics_processed_at ON articles (ai_topics_processed_at)
       `);
 
-      setCurrentSchemaVersion(database, 20);
-      logger.info('Migrated DB schema from version 19 to 20');
       return;
     }
 
@@ -617,8 +605,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         `);
       }
 
-      setCurrentSchemaVersion(database, 21);
-      logger.info('Migrated DB schema from version 20 to 21');
       return;
     }
 
@@ -631,8 +617,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         `);
       }
 
-      setCurrentSchemaVersion(database, 22);
-      logger.info('Migrated DB schema from version 21 to 22');
       return;
     }
 
@@ -659,8 +643,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         updateSourceIcon.run(getProviderIconUrl(source.url), source.id);
       });
 
-      setCurrentSchemaVersion(database, 23);
-      logger.info('Migrated DB schema from version 22 to 23');
       return;
     }
 
@@ -705,8 +687,7 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
 
       transaction();
 
-      setCurrentSchemaVersion(database, 24);
-      logger.info(`Migrated DB schema from version 23 to 24; reset source setup for ${DEFAULT_SOURCE_REVIEW_VERSION} and removed ${duplicateUserSources.length} duplicate custom sources`);
+      logger.info(`Reset source setup for ${DEFAULT_SOURCE_REVIEW_VERSION} and removed ${duplicateUserSources.length} duplicate custom sources`);
       return;
     }
 
@@ -721,8 +702,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         `);
       }
 
-      setCurrentSchemaVersion(database, 25);
-      logger.info('Migrated DB schema from version 24 to 25');
       return;
     }
 
@@ -744,8 +723,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         ON user_read_later_articles (article_id);
       `);
 
-      setCurrentSchemaVersion(database, 26);
-      logger.info('Migrated DB schema from version 25 to 26');
       return;
     }
 
@@ -777,8 +754,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         ON thematic_summaries (topic_key, period_end DESC);
       `);
 
-      setCurrentSchemaVersion(database, 27);
-      logger.info('Migrated DB schema from version 26 to 27');
       return;
     }
 
@@ -810,8 +785,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         `);
       }
 
-      setCurrentSchemaVersion(database, 28);
-      logger.info('Migrated DB schema from version 27 to 28');
       return;
     }
 
@@ -831,8 +804,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
       }
       database.exec('CREATE INDEX IF NOT EXISTS idx_articles_story_group_id ON articles (story_group_id)');
 
-      setCurrentSchemaVersion(database, 29);
-      logger.info('Migrated DB schema from version 28 to 29');
       return;
     }
 
@@ -843,16 +814,12 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
       }
       ensureCaseInsensitiveUsernameUniqueness(database);
 
-      setCurrentSchemaVersion(database, 30);
-      logger.info('Migrated DB schema from version 29 to 30');
       return;
     }
 
     if (currentVersion === 30) {
       database.exec(getPodcastSummariesV31SchemaSql());
 
-      setCurrentSchemaVersion(database, 31);
-      logger.info('Migrated DB schema from version 30 to 31');
       return;
     }
 
@@ -862,8 +829,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         database.exec("ALTER TABLE podcast_summaries ADD COLUMN audio_voice TEXT NOT NULL DEFAULT ''");
       }
 
-      setCurrentSchemaVersion(database, 32);
-      logger.info('Migrated DB schema from version 31 to 32');
       return;
     }
 
@@ -879,8 +844,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         database.exec('ALTER TABLE articles ADD COLUMN ai_story_group_reason TEXT');
       }
 
-      setCurrentSchemaVersion(database, 33);
-      logger.info('Migrated DB schema from version 32 to 33');
       return;
     }
 
@@ -893,8 +856,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         database.exec('ALTER TABLE thematic_summaries ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0');
       }
 
-      setCurrentSchemaVersion(database, 34);
-      logger.info('Migrated DB schema from version 33 to 34');
       return;
     }
 
@@ -916,8 +877,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         database.exec('ALTER TABLE podcast_summaries ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0');
       }
 
-      setCurrentSchemaVersion(database, 35);
-      logger.info('Migrated DB schema from version 34 to 35');
       return;
     }
 
@@ -933,8 +892,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         database.exec('ALTER TABLE thematic_summaries DROP COLUMN title_it');
       }
 
-      setCurrentSchemaVersion(database, 36);
-      logger.info('Migrated DB schema from version 35 to 36');
       return;
     }
 
@@ -954,8 +911,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         ON CONFLICT(podcast_id, locale) DO NOTHING
       `);
 
-      setCurrentSchemaVersion(database, 37);
-      logger.info('Migrated DB schema from version 36 to 37');
       return;
     }
 
@@ -973,8 +928,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         ON user_read_thematic_summaries (user_id, read_at DESC);
       `);
 
-      setCurrentSchemaVersion(database, 38);
-      logger.info('Migrated DB schema from version 37 to 38');
       return;
     }
 
@@ -1006,8 +959,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
       }
       database.exec('CREATE INDEX IF NOT EXISTS idx_articles_ai_clickbait_processed_at ON articles (ai_clickbait_processed_at)');
 
-      setCurrentSchemaVersion(database, 39);
-      logger.info('Migrated DB schema from version 38 to 39');
       return;
     }
 
@@ -1017,8 +968,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         database.exec('ALTER TABLE user_settings DROP COLUMN article_retention_hours');
       }
 
-      setCurrentSchemaVersion(database, 40);
-      logger.info('Migrated DB schema from version 39 to 40');
       return;
     }
 
@@ -1028,8 +977,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         database.exec('ALTER TABLE user_settings DROP COLUMN recent_hours');
       }
 
-      setCurrentSchemaVersion(database, 41);
-      logger.info('Migrated DB schema from version 40 to 41');
       return;
     }
 
@@ -1039,8 +986,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         database.exec("ALTER TABLE user_settings ADD COLUMN reader_text_width TEXT NOT NULL DEFAULT 'default'");
       }
 
-      setCurrentSchemaVersion(database, 42);
-      logger.info('Migrated DB schema from version 41 to 42');
       return;
     }
 
@@ -1108,8 +1053,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         SELECT id, title, description, content FROM articles;
       `);
 
-      setCurrentSchemaVersion(database, 43);
-      logger.info('Migrated DB schema from version 42 to 43');
       return;
     }
 
@@ -1131,8 +1074,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         }
       });
 
-      setCurrentSchemaVersion(database, 44);
-      logger.info('Migrated DB schema from version 43 to 44');
       return;
     }
 
@@ -1144,8 +1085,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
       if (!columns.has('last_attempt_at')) {
         database.exec("ALTER TABLE thematic_summaries ADD COLUMN last_attempt_at TEXT NOT NULL DEFAULT ''");
       }
-      setCurrentSchemaVersion(database, 45);
-      logger.info('Migrated DB schema from version 44 to 45');
       return;
     }
 
@@ -1160,8 +1099,6 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
         DROP TABLE IF EXISTS podcast_summary_audio;
         DROP TABLE IF EXISTS podcast_summaries;
       `);
-      setCurrentSchemaVersion(database, 46);
-      logger.info('Migrated DB schema from version 45 to 46');
       return;
     }
 
@@ -1188,11 +1125,9 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
     for (let version = currentVersion; version < CURRENT_SCHEMA_VERSION; version += 1) {
       database.transaction(() => {
         migrateSchemaStep(database, version);
-        const nextVersion = getCurrentSchemaVersion(database);
-        if (nextVersion !== version + 1) {
-          throw new Error(`Database migration ${version} did not advance to version ${version + 1}`);
-        }
+        setCurrentSchemaVersion(database, version + 1);
       })();
+      logger.info(`Migrated DB schema from version ${version} to ${version + 1}`);
     }
   }
 
@@ -1235,4 +1170,4 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
   };
 }
 
-export = createDatabaseSchema;
+export default createDatabaseSchema;

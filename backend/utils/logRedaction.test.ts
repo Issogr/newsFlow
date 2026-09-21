@@ -1,4 +1,5 @@
-const { redactUrlForLog } = require('./logRedaction');
+import logRedaction from './logRedaction';
+const { redactUrlForLog } = logRedaction;
 
 describe('logRedaction', () => {
   test('redacts sensitive query values and URL credentials', () => {

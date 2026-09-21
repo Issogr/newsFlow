@@ -1,4 +1,5 @@
-const { getAllowedOrigins, isOriginAllowed } = require('./networkConfig');
+import networkConfig from './networkConfig';
+const { getAllowedOrigins, isOriginAllowed } = networkConfig;
 
 describe('networkConfig utils', () => {
   const originalNodeEnv = process.env.NODE_ENV;

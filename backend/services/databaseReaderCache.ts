@@ -1,8 +1,9 @@
-const { parseJsonValue } = require('../utils/json');
+import json from '../utils/json';
+const { parseJsonValue } = json;
 import type { DynamicRecord } from '../utils/types';
 import type SqliteDatabase from './sqliteDatabase';
 
-interface ReaderCacheEntry {
+interface ReaderCacheEntry extends DynamicRecord {
   articleId: string;
   url: string;
   title: string;
@@ -167,4 +168,4 @@ function createReaderCacheRepository({
   };
 }
 
-export = createReaderCacheRepository;
+export default createReaderCacheRepository;

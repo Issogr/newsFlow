@@ -1,10 +1,15 @@
-import publicationDate = require('../utils/publicationDate');
-import json = require('../utils/json');
-import type { DynamicRecord, NewsArticle, SourceGroup } from '../utils/types';
+import publicationDate from '../utils/publicationDate';
+import json from '../utils/json';
+import topicNormalizer from './topicNormalizer';
+import articleIdentity from '../utils/articleIdentity';
+import sourceCatalog from '../utils/sourceCatalog';
+import type { DynamicRecord, NewsArticle, SourceGroup, SummaryRecord } from '../utils/types';
 import type SqliteDatabase from './sqliteDatabase';
 
 const { getCurrentPublicationDay, normalizePublicationDate } = publicationDate;
 const { parseJsonArray } = json;
+const { normalizeArticleUrl, normalizeIdentityText } = articleIdentity;
+const { getRawConfiguredSourceIds, getConfiguredSourceGroupIds, getLegacyConfiguredSourceGroupIds, getGroupedConfiguredSourceIds } = sourceCatalog;
 
 const ARTICLE_SELECT_COLUMNS = `
   a.id, a.source_id AS sourceId, a.source_name AS source,
@@ -67,13 +72,6 @@ interface TopicDetail extends DynamicRecord {
   reasonCode?: string | null;
   source?: string;
   topic: string;
-}
-
-interface TopicNormalizer {
-  CANONICAL_TOPICS: string[];
-  classifyTopicsFromText: (article: DynamicRecord) => TopicDetail[];
-  isCanonicalTopic: (topic: unknown) => boolean;
-  normalizeTopic: (topic: unknown) => string | null;
 }
 
 interface ArticleRow extends DynamicRecord {
@@ -196,29 +194,15 @@ interface UserSourceRow extends DynamicRecord {
 interface ArticleRepositoryDependencies {
   getDb: () => SqliteDatabase;
   chunkValues: <T>(values: T[], size?: number) => T[][];
-  topicNormalizer: TopicNormalizer;
-  normalizeArticleUrl: (value: unknown) => string;
-  normalizeIdentityText: (value: unknown, options?: { lowercase?: boolean }) => string;
   getResolvedSourceAliases: (sourceId: string, sourceName: string | null, userId: string | null, groups?: Map<string, SourceGroup> | null) => SourceAliases;
   getResolvedSourceMetadata: (sourceId: string, sourceName: string, userId: string | null, groups?: Map<string, SourceGroup> | null) => SourceMetadata;
-  getRawConfiguredSourceIds: () => Set<string>;
-  getConfiguredSourceGroupIds: () => Set<string>;
-  getLegacyConfiguredSourceGroupIds: () => Set<string>;
-  getGroupedConfiguredSourceIds: () => Set<string>;
 }
 
 function createArticleRepository({
   getDb,
   chunkValues,
-  topicNormalizer,
-  normalizeArticleUrl,
-  normalizeIdentityText,
   getResolvedSourceAliases,
-  getResolvedSourceMetadata,
-  getRawConfiguredSourceIds,
-  getConfiguredSourceGroupIds,
-  getLegacyConfiguredSourceGroupIds,
-  getGroupedConfiguredSourceIds
+  getResolvedSourceMetadata
 }: ArticleRepositoryDependencies) {
   const TITLE_DEDUPE_WINDOW_MS = 3 * 60 * 60 * 1000;
 
@@ -845,47 +829,17 @@ function createArticleRepository({
     `).run(persistedArticleId, duplicateId);
 
     database.prepare(`
-      UPDATE articles
-      SET story_group_id = COALESCE(NULLIF(story_group_id, ''), (
-            SELECT story_group_id
-            FROM articles duplicate
-            WHERE duplicate.id = ?
-          )),
-          ai_story_group_processed_at = COALESCE(ai_story_group_processed_at, (
-            SELECT ai_story_group_processed_at
-            FROM articles duplicate
-            WHERE duplicate.id = ?
-          )),
-          ai_story_group_status = COALESCE(ai_story_group_status, (
-            SELECT ai_story_group_status
-            FROM articles duplicate
-            WHERE duplicate.id = ?
-          )),
-          ai_story_group_model = COALESCE(ai_story_group_model, (
-            SELECT ai_story_group_model
-            FROM articles duplicate
-            WHERE duplicate.id = ?
-          )),
-          ai_story_group_match_ids = COALESCE(NULLIF(NULLIF(ai_story_group_match_ids, ''), '[]'), (
-            SELECT ai_story_group_match_ids
-            FROM articles duplicate
-            WHERE duplicate.id = ?
-          )),
-          ai_story_group_confidence = COALESCE(ai_story_group_confidence, (
-            SELECT ai_story_group_confidence
-            FROM articles duplicate
-            WHERE duplicate.id = ?
-          )),
-          ai_story_group_reason = COALESCE(ai_story_group_reason, (
-            SELECT ai_story_group_reason
-            FROM articles duplicate
-            WHERE duplicate.id = ?
-          ))
-      WHERE id = ?
-    `).run(
-      duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, duplicateId, duplicateId,
-      persistedArticleId
-    );
+      UPDATE articles AS target
+      SET story_group_id = COALESCE(NULLIF(target.story_group_id, ''), duplicate.story_group_id),
+          ai_story_group_processed_at = COALESCE(target.ai_story_group_processed_at, duplicate.ai_story_group_processed_at),
+          ai_story_group_status = COALESCE(target.ai_story_group_status, duplicate.ai_story_group_status),
+          ai_story_group_model = COALESCE(target.ai_story_group_model, duplicate.ai_story_group_model),
+          ai_story_group_match_ids = COALESCE(NULLIF(NULLIF(target.ai_story_group_match_ids, ''), '[]'), duplicate.ai_story_group_match_ids),
+          ai_story_group_confidence = COALESCE(target.ai_story_group_confidence, duplicate.ai_story_group_confidence),
+          ai_story_group_reason = COALESCE(target.ai_story_group_reason, duplicate.ai_story_group_reason)
+      FROM articles duplicate
+      WHERE duplicate.id = ? AND target.id = ?
+    `).run(duplicateId, persistedArticleId);
   }
 
   function getTopicDetailsByArticleIds(articleIds: string[]): Map<string, TopicDetail[]> {
@@ -1220,7 +1174,7 @@ function createArticleRepository({
     }
 
     return chunkValues(normalizedArticleIds).flatMap((ids) => {
-      return getDb().prepare(`
+      return getDb().prepare<IdRow>(`
         SELECT id
         FROM articles
         WHERE id IN (${ids.map(() => '?').join(', ')})
@@ -1256,7 +1210,7 @@ function createArticleRepository({
     }
 
     return chunkValues(normalizedArticleIds).flatMap((ids) => {
-      return getDb().prepare(`
+      return getDb().prepare<IdRow>(`
         SELECT id
         FROM articles
         WHERE id IN (${ids.map(() => '?').join(', ')})
@@ -1438,7 +1392,7 @@ function createArticleRepository({
 
     const ownerKey = ownerUserId || '';
     return chunkValues(normalizedStoryGroupIds).flatMap((ids) => {
-      return getDb().prepare(`
+      return getDb().prepare<IdRow>(`
         SELECT id
         FROM articles
         WHERE story_group_id IN (${ids.map(() => '?').join(', ')})
@@ -2018,7 +1972,9 @@ function createArticleRepository({
     };
   }
 
-  function mapThematicSummaryRow(row: Row | undefined | null) {
+  function mapThematicSummaryRow(row: Row): SummaryRecord;
+  function mapThematicSummaryRow(row: Row | undefined | null): SummaryRecord | null;
+  function mapThematicSummaryRow(row: Row | undefined | null): SummaryRecord | null {
     if (!row) {
       return null;
     }
@@ -2044,7 +2000,7 @@ function createArticleRepository({
       retryCount: row.retryCount || 0,
       errorMessage: row.errorMessage,
       generatedAt: row.generatedAt
-    };
+    } as unknown as SummaryRecord;
   }
 
   function upsertThematicSummary(summary: DynamicRecord = {}) {
@@ -2147,7 +2103,7 @@ function createArticleRepository({
       ORDER BY period_end DESC, topic_key ASC
     `).all(...normalizedTopicKeys, normalizedLimit);
 
-    return rows.map(mapThematicSummaryRow).filter(Boolean);
+    return rows.map((row) => mapThematicSummaryRow(row));
   }
 
   function pruneSummaryHistory(options: DynamicRecord = {}) {
@@ -2200,7 +2156,7 @@ function createArticleRepository({
       excludedSubSourceFilter
     );
 
-    return getDb().prepare(`
+    return getDb().prepare<{ count: number }>(`
       SELECT COUNT(*) AS count
       FROM articles
       WHERE ${where.join(' AND ')}
@@ -2487,7 +2443,7 @@ function createArticleRepository({
   }
 
   function getLatestIngestionRun() {
-    return getDb().prepare(`
+    return getDb().prepare<DynamicRecord & { completedAt: string | null; startedAt: string }>(`
       SELECT id, started_at AS startedAt, completed_at AS completedAt, status,
              fetched_count AS fetchedCount, inserted_count AS insertedCount,
              updated_count AS updatedCount, error_message AS errorMessage
@@ -2535,4 +2491,4 @@ function createArticleRepository({
   };
 }
 
-export = createArticleRepository;
+export default createArticleRepository;

@@ -1,8 +1,8 @@
-const createMockLogger = require('../test-utils/mockLogger');
-jest.mock('../utils/logger', createMockLogger);
-const logger = require('../utils/logger');
-const openRouterClient = require('./openRouterClient');
-import type { Mock } from 'vitest';
+import createMockLogger from '../test-utils/mockLogger';
+import { vi as jest, type Mock } from 'vitest';
+jest.doMock('../utils/logger', () => ({ default: createMockLogger() }));
+const logger: ReturnType<typeof require> = (await import('../utils/logger')).default;
+const openRouterClient: ReturnType<typeof require> = (await import('./openRouterClient')).default;
 
 const config = { apiKey: 'test-key', baseUrl: 'https://openrouter.ai/api/v1', timeoutMs: 1000 };
 const request = { model: 'test/model', messages: [{ role: 'user', content: 'test' }], max_tokens: 20 };

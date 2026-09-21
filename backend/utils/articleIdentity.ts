@@ -90,7 +90,7 @@ function normalizeArticleUrl(rawUrl: unknown) {
   }
 }
 
-export = {
+export default {
   normalizeArticleUrl,
   normalizeIdentityText
 };

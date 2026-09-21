@@ -36,4 +36,4 @@ const newsSources: SourceDefinition[] = [
   { id: 'guardian_technology', name: 'The Guardian - Technology', groupId: 'guardian', subSource: 'Technology', url: 'https://www.theguardian.com/technology/rss', iconUrl: SOURCE_ICONS.guardian, type: 'rss', language: 'en' }
 ];
 
-export = newsSources;
+export default newsSources;

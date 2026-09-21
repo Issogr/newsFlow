@@ -1,3 +1,5 @@
+import { vi as jest } from 'vitest';
+
 describe('feedbackService', () => {
   const originalEnv = process.env;
   const originalFetch = globalThis.fetch;
@@ -55,7 +57,7 @@ describe('feedbackService', () => {
     });
     globalThis.fetch = fetchMock;
 
-    const { sendFeedback } = require('./feedbackService');
+    const { sendFeedback }: ReturnType<typeof require> = (await import('./feedbackService')).default;
 
     await sendFeedback(feedback);
 
@@ -73,7 +75,7 @@ describe('feedbackService', () => {
       return Promise.reject(new globalThis.DOMException('Timed out', 'TimeoutError'));
     });
     globalThis.fetch = fetchMock;
-    const { sendFeedback } = require('./feedbackService');
+    const { sendFeedback }: ReturnType<typeof require> = (await import('./feedbackService')).default;
 
     await expect(sendFeedback({
       user: { id: 'user-1', username: 'alice' },

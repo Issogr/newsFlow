@@ -16,7 +16,7 @@ function parseJsonArray<T = unknown>(value: unknown, fallback: T[] = []): T[] {
   return Array.isArray(parsed) ? parsed : fallback;
 }
 
-export = {
+export default {
   parseJsonArray,
   parseJsonValue,
 };

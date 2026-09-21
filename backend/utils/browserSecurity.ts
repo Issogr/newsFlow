@@ -105,7 +105,7 @@ function getTrustProxySetting(value = process.env.TRUST_PROXY): boolean | number
   return entries.length > 1 ? entries : normalized;
 }
 
-export = {
+export default {
   getTrustProxySetting,
   hasSameOriginRequestHeaders,
   requireSameOriginRequest,

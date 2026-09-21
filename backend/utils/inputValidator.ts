@@ -1,5 +1,5 @@
-const { decode } = require('html-entities');
-const { createError } = require('./errorHandler');
+import { decode } from 'html-entities';
+import { createError } from './errorHandler';
 import type { RequestHandler } from 'express';
 
 function sanitizeString(input: unknown) {
@@ -67,7 +67,7 @@ function sanitizeBody(fieldNames: string[] = []): RequestHandler {
   };
 }
 
-export = {
+export default {
   sanitizeHtml,
   sanitizeQuery,
   validateAndSanitizeParam,

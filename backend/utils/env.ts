@@ -9,7 +9,7 @@ interface BooleanEnvOptions {
   invalidFallback?: boolean;
 }
 
-function parseIntegerEnv(name: string, fallbackValue: number, options: IntegerEnvOptions = {}) {
+export function parseIntegerEnv(name: string, fallbackValue: number, options: IntegerEnvOptions = {}) {
   const rawValue = process.env[name];
   const parsed = options.strict === true
     ? Number(rawValue)
@@ -39,7 +39,7 @@ function parseIntegerEnv(name: string, fallbackValue: number, options: IntegerEn
   return value;
 }
 
-function parseBooleanEnv(name: string, fallbackValue = false, options: BooleanEnvOptions = {}) {
+export function parseBooleanEnv(name: string, fallbackValue = false, options: BooleanEnvOptions = {}) {
   const rawValue = process.env[name];
   if (rawValue === undefined || rawValue === '') {
     return Boolean(fallbackValue);
@@ -57,8 +57,3 @@ function parseBooleanEnv(name: string, fallbackValue = false, options: BooleanEn
     ? Boolean(options.invalidFallback)
     : Boolean(fallbackValue);
 }
-
-export = {
-  parseBooleanEnv,
-  parseIntegerEnv,
-};

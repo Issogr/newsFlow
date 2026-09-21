@@ -1,16 +1,17 @@
-jest.mock('./logger', () => {
+import { vi as jest } from 'vitest';
+jest.doMock('./logger', () => {
   const info = jest.fn();
   const warn = jest.fn();
 
-  return {
+  return { default: {
     info,
     warn,
     log: jest.fn((level: string, ...args: unknown[]) => (level === 'warn' ? warn : info)(...args))
-  };
+  } };
 });
 
-const logger = require('./logger');
-const { extractUsage, logAiRequestMetric } = require('./aiMetrics');
+const logger: ReturnType<typeof require> = (await import('./logger')).default;
+const { extractUsage, logAiRequestMetric } = (await import('./aiMetrics')).default;
 
 describe('aiMetrics', () => {
   beforeEach(() => {

@@ -1,5 +1,6 @@
-const { isAiToggleEnabled } = require('../config/aiFeatures');
-const { parseIntegerEnv } = require('../utils/env');
+import aiFeatures from '../config/aiFeatures';
+import { parseIntegerEnv } from '../utils/env';
+const { isAiToggleEnabled } = aiFeatures;
 import type { DynamicRecord } from '../utils/types';
 
 function getClassifierBatchConfig() {
@@ -70,7 +71,7 @@ function summarizeResponseShape(response: DynamicRecord = {}, options: { include
   return `${baseSummary}, reasoningChars=${reasoningChars}, refusalChars=${refusalChars}`;
 }
 
-export = {
+export default {
   getClassifierBatchConfig,
   getClassifierEntries,
   isTimeoutError,

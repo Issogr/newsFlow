@@ -167,10 +167,10 @@ Model overrides:
 
 ## Admin Setup
 
-The backend creates a reserved admin account on startup. If its password is missing, startup logs only a warning; setup secrets are intentionally not written to logs. Generate a single-use link locally from `backend/`:
+The backend creates a reserved admin account on startup. If its password is missing, startup logs only a warning; setup secrets are intentionally not written to logs. After `npm run build`, generate a single-use link locally from `backend/`:
 
 ```bash
-node -e "const userService=require('./services/userService'); console.log(userService.ensureAdminBootstrap());"
+node -e "const userService=require('./dist/services/userService').default; console.log(userService.ensureAdminBootstrap());"
 ```
 
 ## Repository Layout

@@ -1,9 +1,10 @@
-jest.mock('./rssParser', () => ({
+import { vi as jest } from 'vitest';
+jest.doMock('./rssParser', () => ({ default: {
   parseFeed: jest.fn(),
   _buildArticleId: jest.fn((source, item, canonicalUrl = '') => `${source.id}:${canonicalUrl || item.link || item.title}`)
-}));
+} }));
 
-jest.mock('./database', () => ({
+jest.doMock('./database', () => ({ default: {
   createIngestionRun: jest.fn(() => ({ id: 1 })),
   completeIngestionRun: jest.fn(),
   countArticles: jest.fn(() => 1),
@@ -35,18 +36,18 @@ jest.mock('./database', () => ({
   listUserSources: jest.fn(() => []),
   listAllActiveUserSources: jest.fn(() => []),
   findUserSourceById: jest.fn(() => null)
-}));
+} }));
 
-const createMockLogger = require('../test-utils/mockLogger');
+import createMockLogger from '../test-utils/mockLogger';
 
-jest.mock('../utils/logger', createMockLogger);
+jest.doMock('../utils/logger', () => ({ default: createMockLogger() }));
 
-jest.mock('./websocketService', () => ({
+jest.doMock('./websocketService', () => ({ default: {
   broadcastNewsUpdate: jest.fn(),
   broadcastFeedRefresh: jest.fn()
-}));
+} }));
 
-jest.mock('./aiTopicClassifier', () => ({
+jest.doMock('./aiTopicClassifier', () => ({ default: {
   classifyTopicDetailsForArticlesWithStatus: jest.fn(async () => ({
     topicsByArticleId: new Map(),
     attemptedArticleIds: [],
@@ -54,31 +55,31 @@ jest.mock('./aiTopicClassifier', () => ({
     cappedArticleIds: []
   })),
   isAiTopicDetectionAvailable: jest.fn(() => true)
-}));
+} }));
 
-jest.mock('./aiStoryGrouper', () => ({
+jest.doMock('./aiStoryGrouper', () => ({ default: {
   buildStoryGroupId: jest.fn((articleIds = []) => `ai-story-${articleIds.filter(Boolean).sort().join('-')}`),
   getCandidateSignature: jest.fn((_target = {}, candidates = []) => candidates.map((candidate: { id: string }) => candidate.id).filter(Boolean).sort()),
   findSimilarStoriesForArticle: jest.fn(async () => ({ matches: [], model: 'test-story-model' })),
   isAiStoryGroupingAvailable: jest.fn(() => false)
-}));
+} }));
 
-jest.mock('./thematicSummaryService', () => ({
+jest.doMock('./thematicSummaryService', () => ({ default: {
   generateDueSummaries: jest.fn(() => Promise.resolve({ items: [] })),
   startScheduler: jest.fn(),
   stopScheduler: jest.fn()
-}));
+} }));
 
 process.env.AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS = '0';
 
-const rssParser = require('./rssParser');
-const database = require('./database');
-const websocketService = require('./websocketService');
-const aiTopicClassifier = require('./aiTopicClassifier');
-const aiStoryGrouper = require('./aiStoryGrouper');
-const thematicSummaryService = require('./thematicSummaryService');
-const newsAggregator = require('./newsAggregator');
-const { normalizeIncomingArticles } = require('./newsAggregatorGrouping');
+const rssParser: ReturnType<typeof require> = (await import('./rssParser')).default;
+const database: ReturnType<typeof require> = (await import('./database')).default;
+const websocketService: ReturnType<typeof require> = (await import('./websocketService')).default;
+const aiTopicClassifier: ReturnType<typeof require> = (await import('./aiTopicClassifier')).default;
+const aiStoryGrouper: ReturnType<typeof require> = (await import('./aiStoryGrouper')).default;
+const thematicSummaryService: ReturnType<typeof require> = (await import('./thematicSummaryService')).default;
+const newsAggregator: ReturnType<typeof require> = (await import('./newsAggregator')).default;
+const { normalizeIncomingArticles }: ReturnType<typeof require> = (await import('./newsAggregatorGrouping')).default;
 const {
   ingestSourceConfigs,
   scheduleAiTopicsForPendingArticles,
@@ -87,9 +88,9 @@ const {
   _resetRuntimeStateForTests,
   _pruneSourceFetchTimestamps,
   _sourceFetchTimestamps
-} = require('./newsAggregatorIngestion');
-const { mapSettledWithConcurrency } = require('../utils/concurrency');
-const { getCanonicalSourceId, getCanonicalSourceName } = require('../utils/sourceCatalog');
+}: ReturnType<typeof require> = (await import('./newsAggregatorIngestion')).default;
+const { mapSettledWithConcurrency } = (await import('../utils/concurrency')).default;
+const { getCanonicalSourceId, getCanonicalSourceName } = (await import('../utils/sourceCatalog')).default;
 
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
 const ansaSourceName = getCanonicalSourceName('ansa_mondo', 'ANSA - Mondo');
@@ -99,22 +100,7 @@ async function flushBackgroundAiProcessing() {
   await Promise.resolve();
 }
 
-interface Deferred<T = unknown> {
-  promise: Promise<T>;
-  resolve: (value?: T | PromiseLike<T>) => void;
-  reject: (reason?: unknown) => void;
-}
-
-function createDeferred<T = unknown>(): Deferred<T> {
-  let resolve!: Deferred<T>['resolve'];
-  let reject!: Deferred<T>['reject'];
-  const promise = new Promise<T>((promiseResolve, promiseReject) => {
-    resolve = (value) => promiseResolve(value as T | PromiseLike<T>);
-    reject = promiseReject;
-  });
-
-  return { promise, resolve, reject };
-}
+const createDeferred = <T = unknown>() => Promise.withResolvers<T>();
 
 function recentIso({ hoursAgo = 0, minutesAgo = 0 } = {}) {
   return new Date(Date.now() - ((hoursAgo * 60 * 60 * 1000) + (minutesAgo * 60 * 1000))).toISOString();
@@ -401,7 +387,7 @@ describe('newsAggregator service flows', () => {
 
     expect(rssParser.parseFeed).toHaveBeenCalledTimes(1);
 
-    feedFetch.resolve();
+    feedFetch.resolve(undefined);
     await Promise.all([firstRefresh, secondRefresh]);
 
     expect(rssParser.parseFeed).toHaveBeenCalledTimes(1);
@@ -649,7 +635,7 @@ describe('newsAggregator service flows', () => {
     expect(database.getArticles).toHaveBeenCalled();
     expect(result.meta.pendingUserRefresh).toBe(true);
 
-    parseRelease.resolve();
+    parseRelease.resolve(undefined);
     await Promise.resolve();
   });
 
@@ -684,7 +670,7 @@ describe('newsAggregator service flows', () => {
     expect(secondFeed.meta.pendingUserRefresh).toBe(true);
     expect(database.getArticles).toHaveBeenCalledTimes(2);
 
-    parseRelease.resolve();
+    parseRelease.resolve(undefined);
     await new Promise((resolve) => { setTimeout(resolve, 0); });
 
     expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(false);
@@ -718,7 +704,7 @@ describe('newsAggregator service flows', () => {
     await expect(newsAggregator.refreshUserSources('user-2')).resolves.toMatchObject({ success: true });
     expect(rssParser.parseFeed).toHaveBeenCalledWith(expect.objectContaining({ id: 'fast-source' }), expect.any(Object));
 
-    slowRelease.resolve();
+    slowRelease.resolve(undefined);
     await slowRefresh;
   });
 

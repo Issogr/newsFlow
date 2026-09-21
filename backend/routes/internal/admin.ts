@@ -1,10 +1,12 @@
-import express = require('express');
+import express from 'express';
 import type { Request, Response } from 'express';
-const database = require('../../services/database');
-const userService = require('../../services/userService');
-const { requireAdminUser, requireAuthenticatedUser } = require('../../utils/auth');
-const { createError } = require('../../utils/errorHandler');
-const { validateAndSanitizeParam } = require('../../utils/inputValidator');
+import database from '../../services/database';
+import userService from '../../services/userService';
+import auth from '../../utils/auth';
+import { createError } from '../../utils/errorHandler';
+import inputValidator from '../../utils/inputValidator';
+const { requireAdminUser, requireAuthenticatedUser } = auth;
+const { validateAndSanitizeParam } = inputValidator;
 
 const router = express.Router();
 
@@ -17,7 +19,7 @@ router.post('/admin/users/:userId/password-setup-link', [
   requireAdminUser,
   validateAndSanitizeParam('userId', 'Invalid user ID')
 ], async (req: Request, res: Response) => {
-  const result = userService.createUserPasswordSetupLink(req.user.id, req.params.userId);
+  const result = userService.createUserPasswordSetupLink(req.user.id, req.params.userId as string);
   res.json({ success: true, ...result });
 });
 
@@ -26,7 +28,7 @@ router.delete('/admin/users/:userId', [
   requireAdminUser,
   validateAndSanitizeParam('userId', 'Invalid user ID')
 ], async (req: Request, res: Response) => {
-  const result = userService.deleteUserAsAdmin(req.user.id, req.params.userId);
+  const result = userService.deleteUserAsAdmin(req.user.id, req.params.userId as string);
   res.json(result);
 });
 
@@ -35,7 +37,7 @@ router.get('/admin/articles/:articleId/topics/debug', [
   requireAdminUser,
   validateAndSanitizeParam('articleId', 'Invalid article ID')
 ], async (req: Request, res: Response) => {
-  const report = database.getTopicClassificationReport(req.params.articleId);
+  const report = database.getTopicClassificationReport(req.params.articleId as string);
   if (!report) {
     throw createError(404, 'Article not found', 'RESOURCE_NOT_FOUND');
   }
@@ -43,4 +45,4 @@ router.get('/admin/articles/:articleId/topics/debug', [
   res.json(report);
 });
 
-export = router;
+export default router;

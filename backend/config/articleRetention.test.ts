@@ -1,5 +1,6 @@
 const originalArticleRetentionHours = process.env.ARTICLE_RETENTION_HOURS;
-const { getArticleRetentionHours } = require('./articleRetention');
+import articleRetention from './articleRetention';
+const { getArticleRetentionHours } = articleRetention;
 
 describe('articleRetention config', () => {
   afterEach(() => {

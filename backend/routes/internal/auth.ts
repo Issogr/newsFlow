@@ -1,11 +1,14 @@
-import express = require('express');
+import express from 'express';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import type { Request, Response } from 'express';
-const userService = require('../../services/userService');
-const { requireAuthenticatedUser } = require('../../utils/auth');
-const { buildRateLimitMessage } = require('../../utils/errorHandler');
-const { sanitizeBody, sanitizeQuery } = require('../../utils/inputValidator');
-const { clearSessionCookie, sendAuthResult } = require('./helpers');
+import userService from '../../services/userService';
+import auth from '../../utils/auth';
+import { buildRateLimitMessage } from '../../utils/errorHandler';
+import inputValidator from '../../utils/inputValidator';
+import helpers from './helpers';
+const { requireAuthenticatedUser } = auth;
+const { sanitizeBody, sanitizeQuery } = inputValidator;
+const { clearSessionCookie, sendAuthResult } = helpers;
 
 const router = express.Router();
 
@@ -63,9 +66,9 @@ router.post('/auth/password-setup/complete', passwordSetupRateLimit, async (req,
 });
 
 router.post('/auth/logout', requireAuthenticatedUser, async (req, res) => {
-  userService.logoutUser(req.user.sessionToken);
+  userService.logoutUser(req.user.sessionToken!);
   clearSessionCookie(req, res);
   res.json({ success: true });
 });
 
-export = router;
+export default router;

@@ -1,8 +1,10 @@
-import express = require('express');
-const database = require('../../services/database');
-const thematicSummaryService = require('../../services/thematicSummaryService');
-const { requireAuthenticatedUser } = require('../../utils/auth');
-const { getRequestIds } = require('./helpers');
+import express from 'express';
+import database from '../../services/database';
+import thematicSummaryService from '../../services/thematicSummaryService';
+import auth from '../../utils/auth';
+import helpers from './helpers';
+const { requireAuthenticatedUser } = auth;
+const { getRequestIds } = helpers;
 
 const router = express.Router();
 
@@ -19,4 +21,4 @@ router.post('/me/thematic-summaries/read', requireAuthenticatedUser, async (req,
   res.status(201).json({ success: true, readSummaryIds });
 });
 
-export = router;
+export default router;

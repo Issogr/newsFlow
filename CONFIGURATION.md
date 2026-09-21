@@ -32,7 +32,7 @@ This file documents the environment variables and build arguments that can chang
 | `ADMIN_USERNAME` | `admin` | Reserved admin account username. Backend auth lowercases it; user-service display/bootstrap handling trims to 40 chars. |
 | `ALLOWED_ORIGINS` | Development `*`; production localhost origins; Compose `APP_BASE_URL` | Comma-separated public API and Socket.IO origin allowlist. Private browser APIs additionally require the exact same origin as `APP_BASE_URL`. Supports exact origins, `*`, wildcard patterns, and `@local-network`. |
 | `SERVER_TIMEOUT` | `60000` | Backend HTTP server timeout in ms. Minimum `1000`. |
-| `LOG_LEVEL` | `info` in production, `debug` otherwise | Winston log level such as `debug`, `info`, `warn`, or `error`. |
+| `LOG_LEVEL` | `info` in production, `debug` otherwise | Console log threshold: `error`, `warn`, `info`, `http`, `verbose`, `debug`, or `silly`. Logs include an ISO timestamp and are silent in tests. |
 | `SESSION_PURGE_INTERVAL_MS` | `300000` | Interval for backend expired auth/session cleanup. Minimum `1000`. |
 | `SESSION_REFRESH_WINDOW_MS` | `86400000` | Backend session renewal window before expiry. Minimum `0`. |
 | `USER_ACTIVITY_TOUCH_INTERVAL_SECONDS` | `60` | Minimum interval between persisted user activity timestamp updates. Minimum `0`. |

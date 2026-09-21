@@ -1,45 +1,22 @@
-import winston = require('winston');
-import type { TransformableInfo } from 'logform';
+import { formatWithOptions } from 'node:util';
 
-type AppLogger = winston.Logger & { setupGlobalErrorHandlers: () => void };
-
-// Custom formatting for console output.
-const consoleFormat = winston.format.printf(({ level, message, timestamp, ...meta }: TransformableInfo) => {
-  const metaStr = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
-  return `${timestamp} [${level.toUpperCase()}]: ${message} ${metaStr}`;
-});
-
-// Resolve the log level from the current environment.
 const LOG_LEVEL = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
 const isTestEnvironment = process.env.NODE_ENV === 'test';
+const levels = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
 
-function createConsoleTransport({ silent = false } = {}) {
-  return new winston.transports.Console({
-    silent,
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.timestamp({
-        format: 'HH:mm:ss'
-      }),
-      consoleFormat
-    )
-  });
+function log(level: string, ...args: unknown[]) {
+  if (isTestEnvironment || levels.indexOf(level) > levels.indexOf(LOG_LEVEL)) return;
+  console.log(`${new Date().toISOString()} [${level.toUpperCase()}]: ${formatWithOptions({ colors: Boolean(process.stdout.isTTY) }, ...args)}`);
 }
 
-// Winston logger configuration.
-const logger = winston.createLogger({
-  level: LOG_LEVEL,
-  format: winston.format.combine(
-    winston.format.timestamp({
-      format: 'YYYY-MM-DD HH:mm:ss'
-    }),
-    winston.format.errors({ stack: true }),
-    winston.format.splat(),
-    winston.format.json()
-  ),
-  defaultMeta: { service: 'newsflow' },
-  transports: [createConsoleTransport({ silent: isTestEnvironment })]
-}) as AppLogger;
+const logger = {
+  log,
+  debug: (...args: unknown[]) => log('debug', ...args),
+  info: (...args: unknown[]) => log('info', ...args),
+  warn: (...args: unknown[]) => log('warn', ...args),
+  error: (...args: unknown[]) => log('error', ...args),
+  setupGlobalErrorHandlers
+};
 
 let globalErrorHandlersConfigured = false;
 
@@ -91,6 +68,4 @@ if (!isTestEnvironment) {
   logger.info('Logger initialized with level: ' + LOG_LEVEL);
 }
 
-logger.setupGlobalErrorHandlers = setupGlobalErrorHandlers;
-
-export = logger;
+export default logger;

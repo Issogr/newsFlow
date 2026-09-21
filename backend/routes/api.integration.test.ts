@@ -1,14 +1,18 @@
 import type { Application, NextFunction, Request, Response } from 'express';
 import type { Response as SupertestResponse } from 'supertest';
-import type { Mock } from 'vitest';
+import { vi as jest, type Mock } from 'vitest';
+import express from 'express';
+import request from 'supertest';
+import sourceCatalog from '../utils/sourceCatalog';
+import feedback from '../utils/feedback';
+import tempNewsDb from '../test-utils/tempNewsDb';
 
 type RuntimeModule = ReturnType<typeof require>;
 type MockModule = Record<string, Mock>;
 
-const request = require('supertest') as typeof import('supertest');
-const { getCanonicalSourceId } = require('../utils/sourceCatalog');
-const { MAX_FEEDBACK_IMAGE_BYTES } = require('../utils/feedback');
-const { cleanupTempNewsDb, setupTempNewsDb } = require('../test-utils/tempNewsDb');
+const { getCanonicalSourceId } = sourceCatalog;
+const { MAX_FEEDBACK_IMAGE_BYTES } = feedback;
+const { cleanupTempNewsDb, setupTempNewsDb } = tempNewsDb;
 
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
 const originalAnonymousPublicApiEnabled = process.env.PUBLIC_API_ANONYMOUS_ENABLED;
@@ -21,11 +25,10 @@ const expectedDisabledAiFeatures = {
   thematicSummariesEnabled: false
 };
 
-function buildApiTestApp(): Application {
-  const express = require('express') as typeof import('express');
-  const apiRoutes = require('./api');
-  const publicApiRoutes = require('./publicApi');
-  const { createError, errorMiddleware } = require('../utils/errorHandler');
+async function buildApiTestApp(): Promise<Application> {
+  const apiRoutes = (await import('./api')).default;
+  const publicApiRoutes = (await import('./publicApi')).default;
+  const { createError, errorMiddleware } = await import('../utils/errorHandler');
 
   const app = express();
   app.use(express.json());
@@ -59,42 +62,42 @@ describe('API auth and user flows', () => {
   let userService: RuntimeModule;
   let feedbackService: MockModule;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.resetModules();
     process.env.PUBLIC_API_ANONYMOUS_ENABLED = 'true';
     process.env.PUBLIC_API_AUTHENTICATED_ENABLED = 'true';
     delete process.env.OPENROUTER_API_KEY;
     ({ tempDir } = setupTempNewsDb('news-api-test-'));
 
-    jest.doMock('../services/newsAggregator', () => ({
+    jest.doMock('../services/newsAggregator', () => ({ default: {
       getNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       getReadLaterFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       saveReadLaterArticles: jest.fn().mockReturnValue({ success: true, readLater: true, articleIds: ['article-1'], savedCount: 1 }),
       removeReadLaterArticles: jest.fn().mockReturnValue({ success: true, readLater: false, articleIds: ['article-1'], removedCount: 1, deletedExpiredArticleCount: 0 }),
       getCachedNewsFeed: jest.fn().mockResolvedValue({ items: [], meta: {}, filters: {} }),
       refreshUserSources: jest.fn().mockResolvedValue({ success: true })
-    }));
+    } }));
 
-    jest.doMock('../services/rssParser', () => ({
+    jest.doMock('../services/rssParser', () => ({ default: {
       discoverFeedUrls: jest.fn(),
       validateFeedUrl: jest.fn()
-    }));
+    } }));
 
-    jest.doMock('../services/feedbackService', () => ({
+    jest.doMock('../services/feedbackService', () => ({ default: {
       isFeedbackConfigured: jest.fn(() => true),
       sendFeedback: jest.fn().mockResolvedValue({ messageId: 1 })
-    }));
+    } }));
 
-    jest.doMock('../services/thematicSummaryService', () => ({
+    jest.doMock('../services/thematicSummaryService', () => ({ default: {
       getLatestSummaries: jest.fn(() => ({ items: [], topics: [] }))
-    }));
+    } }));
 
-    app = buildApiTestApp();
-    database = require('../services/database');
-    newsService = require('../services/newsAggregator') as MockModule;
-    rssParser = require('../services/rssParser') as MockModule;
-    userService = require('../services/userService');
-    feedbackService = require('../services/feedbackService') as MockModule;
+    app = await buildApiTestApp();
+    database = (await import('../services/database')).default;
+    newsService = (await import('../services/newsAggregator')).default as unknown as MockModule;
+    rssParser = (await import('../services/rssParser')).default as unknown as MockModule;
+    userService = (await import('../services/userService')).default;
+    feedbackService = (await import('../services/feedbackService')).default as unknown as MockModule;
   });
 
   afterEach(() => {
@@ -650,7 +653,7 @@ describe('API auth and user flows', () => {
 
     expect(database.findUserById(registerResponse.body.user.id).publicApiRequestCount).toBe(0);
     userService.flushAnonymousPublicApiUsage({ force: true });
-    require('../utils/auth').flushApiTokenUsage({ force: true });
+    (await import('../utils/auth')).default.flushApiTokenUsage({ force: true });
 
     const usageRow = database.getDb().prepare(`
       SELECT public_api_request_count AS publicApiRequestCount,

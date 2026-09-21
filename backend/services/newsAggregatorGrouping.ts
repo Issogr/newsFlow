@@ -1,9 +1,11 @@
-const crypto = require('crypto');
-const topicNormalizer = require('./topicNormalizer');
+import crypto from 'node:crypto';
+import topicNormalizer from './topicNormalizer';
+import sourceCatalog from '../utils/sourceCatalog';
+import articleIdentity from '../utils/articleIdentity';
 const {
   getCanonicalSourceMetadata
-} = require('../utils/sourceCatalog');
-const { normalizeArticleUrl } = require('../utils/articleIdentity');
+} = sourceCatalog;
+const { normalizeArticleUrl } = articleIdentity;
 import type { DynamicRecord, NewsArticle } from '../utils/types';
 
 type Article = NewsArticle & DynamicRecord;
@@ -283,12 +285,12 @@ function buildIncomingArticleDeduplicationKey(article: Article) {
   return article.id;
 }
 
-function normalizeIncomingArticles(articles: Article[] = []): Article[] {
+function normalizeIncomingArticles(articles: Partial<NewsArticle>[] = []): Article[] {
   const dedupedArticles = new Map<string, Article>();
 
   articles.forEach((article) => {
-    const topicDetails = topicNormalizer.extractTopicDetails(article, article.rawTopics);
-    const sourceMetadata = getCanonicalSourceMetadata(article.sourceId, article.source);
+    const topicDetails = topicNormalizer.extractTopicDetails(article, Array.isArray(article.rawTopics) ? article.rawTopics : []);
+    const sourceMetadata = getCanonicalSourceMetadata(String(article.sourceId || ''), String(article.source || ''));
     const normalizedArticle = {
       ...article,
       rawSourceId: article.sourceId,
@@ -315,19 +317,7 @@ function buildInsertedGroupsByOwner(normalizedArticles: Article[] = [], inserted
   const insertedIdSet = new Set(insertedIds);
   const insertedArticles = normalizedArticles.filter((article) => insertedIdSet.has(article.id));
   const globalArticles = insertedArticles.filter((article) => !article.ownerUserId);
-  const privateGroupsByUserId = new Map<string, Article[]>();
-
-  insertedArticles
-    .filter((article) => article.ownerUserId)
-    .forEach((article) => {
-      const userId = article.ownerUserId;
-      if (!userId) {
-        return;
-      }
-      const current = privateGroupsByUserId.get(userId) || [];
-      current.push(article);
-      privateGroupsByUserId.set(userId, current);
-    });
+  const privateGroupsByUserId = Map.groupBy(insertedArticles.filter((article) => article.ownerUserId), (article) => article.ownerUserId!);
 
   return {
     globalGroups: groupSimilarNews(globalArticles),
@@ -337,7 +327,7 @@ function buildInsertedGroupsByOwner(normalizedArticles: Article[] = [], inserted
   };
 }
 
-export = {
+export default {
   TITLE_GROUP_WINDOW_MS,
   groupSimilarNews,
   normalizeIncomingArticles,

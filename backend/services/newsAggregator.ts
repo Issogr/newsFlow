@@ -1,24 +1,28 @@
-const database = require('./database');
-const logger = require('../utils/logger');
-const { createError } = require('../utils/errorHandler');
+import database from './database';
+import logger from '../utils/logger';
+import { createError } from '../utils/errorHandler';
+import newsAggregatorQuery from './newsAggregatorQuery';
+import sourceCatalog from '../utils/sourceCatalog';
+import newsAggregatorIngestion from './newsAggregatorIngestion';
+import websocketService from './websocketService';
+import { parseIntegerEnv } from '../utils/env';
+import articleRetention from '../config/articleRetention';
+import thematicSummaryService from './thematicSummaryService';
 const {
   newsSources,
   expandUserSources,
   getNewsFeed: buildNewsFeed,
   getReadLaterFeed: buildReadLaterFeed,
   _resetFilterStatsCache: resetFilterStatsCache
-} = require('./newsAggregatorQuery');
+} = newsAggregatorQuery;
 const {
   getCanonicalSourceId
-} = require('../utils/sourceCatalog');
+} = sourceCatalog;
 const {
   createEmptyRefreshPayload,
   ingestSourceConfigs
-} = require('./newsAggregatorIngestion');
-const websocketService = require('./websocketService');
-const { parseIntegerEnv } = require('../utils/env');
-const { getArticleRetentionHours } = require('../config/articleRetention');
-const thematicSummaryService = require('./thematicSummaryService');
+} = newsAggregatorIngestion;
+const { getArticleRetentionHours } = articleRetention;
 import type { AppError, DynamicRecord, SourceDefinition } from '../utils/types';
 
 interface UserContext extends DynamicRecord {
@@ -79,7 +83,7 @@ function getManualRefreshAllowedAt(userId: string | null | undefined, referenceT
   }
 
   const lastRefreshAt = userManualRefreshTimestamps.get(userId);
-  if (!Number.isFinite(lastRefreshAt)) {
+  if (lastRefreshAt === undefined || !Number.isFinite(lastRefreshAt)) {
     return null;
   }
 
@@ -414,7 +418,7 @@ function resetImmediateRefreshState() {
 
 process.on('exit', stopScheduler);
 
-module.exports = {
+export default {
   ingestAllNews,
   refreshUserSources,
   getNewsFeed,

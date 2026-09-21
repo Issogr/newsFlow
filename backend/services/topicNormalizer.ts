@@ -298,7 +298,7 @@ function extractTopicDetails(article: Partial<NewsArticle> = {}, rawTopics: unkn
     .slice(0, 4);
 }
 
-export = {
+export default {
   CANONICAL_TOPICS,
   cleanTopicValue,
   normalizeTopic,

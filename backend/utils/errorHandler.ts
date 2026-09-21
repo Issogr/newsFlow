@@ -2,8 +2,9 @@
  * Utility for standardizing application error handling
  */
 
-const logger = require('./logger');
-const { redactUrlForLog } = require('./logRedaction');
+import logger from './logger';
+import logRedaction from './logRedaction';
+const { redactUrlForLog } = logRedaction;
 import type { ErrorRequestHandler } from 'express';
 import type { AppError, UnknownRecord } from './types';
 
@@ -46,7 +47,7 @@ const ERROR_MESSAGES: Record<string, string> = {
  * @param {Error} originalError - Original error for logging
  * @returns {Object} - Standardized error object
  */
-const createError = (status: number, message: string, code: string, originalError: Error | null = null): AppError => {
+export const createError = (status: number, message: string, code: string, originalError: Error | null = null): AppError => {
   // Log the original error when available
   if (originalError) {
     logger.error(`${code || 'ERROR'}: ${message} - Original error: ${redactUrlForLog(originalError.message)}`, {
@@ -67,7 +68,7 @@ const createError = (status: number, message: string, code: string, originalErro
   return error;
 };
 
-function buildRateLimitMessage(message: string) {
+export function buildRateLimitMessage(message: string) {
   return {
     error: {
       message,
@@ -79,7 +80,7 @@ function buildRateLimitMessage(message: string) {
 /**
  * Middleware for centralized error handling
  */
-const errorMiddleware: ErrorRequestHandler = (err: AppError, req, res, next) => {
+export const errorMiddleware: ErrorRequestHandler = (err: AppError, req, res, next) => {
   if (req.aborted || res.destroyed) {
     return;
   }
@@ -124,10 +125,4 @@ const errorMiddleware: ErrorRequestHandler = (err: AppError, req, res, next) => 
       code: code
     }
   });
-};
-
-export = {
-  createError,
-  errorMiddleware,
-  buildRateLimitMessage
 };
