@@ -29,3 +29,23 @@ test('prepares one dated release containing changes from multiple commits', () =
     assert.throws(() => getReleaseNotes(changelog, entry), /first CHANGELOG.md section/);
   }
 });
+
+test('requires the release commit title to match the finalized announcement', () => {
+  const entry = { id: '2026-09-21-02', date: '2026-09-21' };
+  const changelog = `# Changelog\n\n## ${entry.id}\n\n- Improved summaries.\n`;
+  const title = `Prepared update ${entry.id}`;
+
+  for (const message of [title, `${title}\n\nRelease details.`, `${title}\r\n\r\nRelease details.`]) {
+    assert.equal(getReleaseNotes(changelog, entry, message).tag, `update-${entry.id}`);
+  }
+  for (const message of [
+    '',
+    'Update dependencies',
+    'Prepared update 2026-09-21-01',
+    entry.id,
+    `${title} extra`,
+    `Update dependencies\n\n${title}`,
+  ]) {
+    assert.throws(() => getReleaseNotes(changelog, entry, message), /release commit title must be exactly/);
+  }
+});

@@ -1,18 +1,16 @@
 name: Publish Update
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
 
-concurrency:
-  group: publish-update
-  cancel-in-progress: false
-
 jobs:
   validate:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Prepared update ')
     uses: ./.github/workflows/validate-services.yml
     with:
       audit: true
@@ -25,6 +23,9 @@ jobs:
     name: Publish application image
     runs-on: ubuntu-latest
     needs: [validate, compose-smoke]
+    concurrency:
+      group: publish-update
+      cancel-in-progress: false
     env:
       PRIVATE_REGISTRY_ENDPOINT: ${{ secrets.PRIVATE_REGISTRY_ENDPOINT }}
     permissions:
@@ -42,6 +43,8 @@ jobs:
 
       - name: Prepare dated release notes
         id: release
+        env:
+          RELEASE_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: node scripts/release-notes.mts
 
       - name: Check announcement has not already been published

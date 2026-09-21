@@ -3,7 +3,7 @@
 ## 2026-09-21-01
 
 - refreshed the app with a consistent minimal visual system: flatter surfaces, shared controls, calmer navigation, clearer source/headline hierarchy, and labeled topic summaries across light and dark themes, while preserving source logos, topic colors, AI rings, and reading features
-- switched to manually published `latest` images and dated GitHub releases so multiple commits can ship as one announced update
+- switched to `latest` images and dated GitHub releases triggered by `Prepared update YYYY-MM-DD-NN` commits on `main`, with commit titles checked against the finalized changelog ID so multiple commits can ship as one announced update
 - replaced in-app version badges with dated changelog entries and a Settings shortcut; update acknowledgements now track announcement IDs, while draft notes stay quiet
 - added a source-grounding review before publishing AI summaries, fixed zero/malformed citations and uncited paragraphs, and saved exact input excerpts for reproducible quality checks
 - improved summary evidence with 24 source-balanced stories, prioritized multi-publisher coverage, longer RSS excerpts, and narrower shopping filters that preserve business news
