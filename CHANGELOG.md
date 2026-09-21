@@ -1,7 +1,9 @@
 # Changelog
 
-## 3.7.0
+## Unreleased
 
+- switched to manually published `latest` images and dated GitHub releases so multiple commits can ship as one announced update
+- replaced in-app version badges with dated changelog entries and a Settings shortcut; update acknowledgements now track announcement IDs, while draft notes stay quiet
 - added a source-grounding review before publishing AI summaries, fixed zero/malformed citations and uncited paragraphs, and saved exact input excerpts for reproducible quality checks
 - improved summary evidence with 24 source-balanced stories, prioritized multi-publisher coverage, longer RSS excerpts, and narrower shopping filters that preserve business news
 - regenerate summaries for corrected evidence and replacement articles, invalidate outdated reader caches, and show localized coverage dates and stale status while preserving successful generation timestamps after failed refreshes
@@ -10,6 +12,9 @@
 - simplified fresh SQLite initialization through the existing migration chain, reused article projections, and removed unused compact-card settings and WebSocket statistics
 - replaced the OpenRouter chat SDK with native fetch, specialized topic batching and daily summary scheduling, and reused native stream consumption and Express range parsing
 - removed the custom Vitest launcher and redundant shared ESLint configuration factory
+
+## 3.7.0
+
 - consolidated the BFF into the backend so one Node service now owns secure same-origin sessions, APIs, Socket.IO, and static frontend hosting behind Caddy
 - removed the BFF image, proxy secret, encrypted session bridge, second session database, and their obsolete tests and deployment configuration
 - existing deployments require users to sign in once after upgrading because the retired BFF browser sessions are intentionally not migrated

@@ -21,7 +21,7 @@ const ReleaseUpdateNotice = ({ t, releaseNotes, onOpen, onDismiss }: { t: Transl
       window.clearTimeout(frameTimeoutId);
       window.clearTimeout(timeoutId);
     };
-  }, [onDismiss, releaseNotes.version]);
+  }, [onDismiss, releaseNotes.id]);
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-[calc(1rem+env(safe-area-inset-top))] z-50 flex justify-center pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:top-[calc(1.25rem+env(safe-area-inset-top))]">
@@ -38,7 +38,7 @@ const ReleaseUpdateNotice = ({ t, releaseNotes, onOpen, onDismiss }: { t: Transl
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <p className="truncate text-sm font-semibold text-slate-900">{t('releaseNoticeTitle')}</p>
                 <span className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
-                  v{releaseNotes.version}
+                  <time dateTime={releaseNotes.date}>{releaseNotes.dateLabel}</time>
                 </span>
               </div>
               <p className="mt-0.5 truncate text-xs text-slate-500">{t('releaseNoticeSubtitle')}</p>

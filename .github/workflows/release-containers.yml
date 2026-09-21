@@ -1,22 +1,18 @@
-name: Release Containers
+name: Publish Update
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: containers-${{ github.ref }}
-  cancel-in-progress: true
+  group: publish-update
+  cancel-in-progress: false
 
 jobs:
   validate:
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/validate-services.yml
     with:
       audit: true
@@ -26,12 +22,32 @@ jobs:
     runs-on: ubuntu-latest
     needs: validate
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.20.0'
+
+      - name: Prepare dated release notes
+        id: release
+        run: node scripts/release-notes.mts
+
+      - name: Check announcement has not already been published
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          count=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$RELEASE_TAG" --jq 'length')
+          if [ "$count" -ne 0 ]; then
+            echo "Announcement $RELEASE_TAG already exists. Use a new changelog ID for a new update."
+            exit 1
+          fi
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -56,8 +72,7 @@ jobs:
           images: ${{ steps.prep.outputs.image }}
           flavor: latest=false
           tags: |
-            type=sha,prefix=,format=long
-            type=ref,event=tag
+            type=raw,value=latest
           labels: |
             org.opencontainers.image.title=${{ github.event.repository.name }}
             org.opencontainers.image.description=Application image for News Flow in ${{ github.repository }}
@@ -82,3 +97,16 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.release.outputs.title }}
+          RELEASE_NOTES_FILE: ${{ steps.release.outputs.notes_file }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            --target "$GITHUB_SHA" \
+            --title "$RELEASE_TITLE" \
+            --notes-file "$RELEASE_NOTES_FILE" \
+            --latest

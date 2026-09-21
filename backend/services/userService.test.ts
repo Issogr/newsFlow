@@ -46,7 +46,7 @@ describe('userService imports', () => {
         readerPanelPosition: 'left',
         readerTextSize: 'large',
         readerTextWidth: 'widest',
-        lastSeenReleaseNotesVersion: '3.2.3',
+        lastSeenReleaseNotesVersion: '2026-09-21-02',
         excludedSourceIds: ['bbc'],
         excludedSubSourceIds: []
       },
@@ -67,7 +67,7 @@ describe('userService imports', () => {
         readerPanelPosition: 'left',
         readerTextSize: 'large',
         readerTextWidth: 'widest',
-        lastSeenReleaseNotesVersion: '3.2.3',
+        lastSeenReleaseNotesVersion: '2026-09-21-02',
         excludedSourceIds: []
       }),
       customSources: [
@@ -88,7 +88,7 @@ describe('userService imports', () => {
       readerPanelPosition: 'left',
       readerTextSize: 'large',
       readerTextWidth: 'widest',
-      lastSeenReleaseNotesVersion: '3.2.3',
+      lastSeenReleaseNotesVersion: '2026-09-21-02',
       excludedSourceIds: []
     });
     expect(database.getUserSettings(userId)).not.toHaveProperty('articleRetentionHours');

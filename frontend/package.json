@@ -1,6 +1,5 @@
 {
   "name": "newsflow-frontend",
-  "version": "3.7.0",
   "private": true,
   "dependencies": {
     "axios": "^1.20.0",

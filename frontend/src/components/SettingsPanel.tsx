@@ -41,11 +41,10 @@ const UnsavedSettingsDialog = ({ t, saving, onCancel, onDiscard, onSave }: { t: 
   </ModalDialog>
 );
 
-const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersion, onClose, onOpenReleaseNotes, patchSession, restoreFocusRef, view = 'settings' }: {
+const SettingsPanel = ({ t, currentUser, availableSources, onClose, onOpenReleaseNotes, patchSession, restoreFocusRef, view = 'settings' }: {
   t: Translator;
   currentUser: CurrentUser;
   availableSources: NewsSource[];
-  currentChangelogVersion: string;
   onClose: () => void;
   onOpenReleaseNotes: () => void;
   patchSession: (patch: Partial<CurrentUser>) => void;
@@ -208,7 +207,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, currentChangelogVersi
             disabled={saving}
             className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900 disabled:opacity-50"
           >
-            {t('changelogVersionLabel', { version: currentChangelogVersion })}
+            {t('changelogTitle')}
           </button>
         </div>
         <button type="button" onClick={handleSaveAndClose} disabled={saving || !hasUnsavedChanges} className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">

@@ -71,7 +71,7 @@ function App() {
   const [sessionLoadFailed, setSessionLoadFailed] = useState<boolean>(false);
   const [sessionLoadAttempt, setSessionLoadAttempt] = useState(0);
   const [releaseNotesState, setReleaseNotesState] = useState({
-    noticeHiddenVersion: '',
+    noticeHiddenId: '',
     saving: false,
     modalOpen: false
   });
@@ -94,20 +94,20 @@ function App() {
   const isApiDocsRoute = locationState.pathname === API_DOCS_PATH;
   const legalPolicy = LEGAL_POLICY_BY_PATH[locationState.pathname] || '';
   const sourceSetupPending = authData?.settings?.sourceSetupCompleted === false && !authData?.user?.isAdmin;
-  const needsReleaseNotesAck = authData?.settings?.lastSeenReleaseNotesVersion !== releaseNotes.version;
+  const needsReleaseNotesAck = Boolean(releaseNotes.date && authData?.settings?.lastSeenReleaseNotesVersion !== releaseNotes.id);
   const shouldShowReleaseNotesModal = Boolean(
     authData
     && !authData?.user?.isAdmin
-    && releaseNotes.version
+    && releaseNotes.id
     && releaseNotesState.modalOpen
     && !sourceSetupPending
   );
   const shouldShowReleaseNotice = Boolean(
     authData
     && !authData?.user?.isAdmin
-    && releaseNotes.version
+    && releaseNotes.id
     && needsReleaseNotesAck
-    && releaseNotesState.noticeHiddenVersion !== releaseNotes.version
+    && releaseNotesState.noticeHiddenId !== releaseNotes.id
     && !releaseNotesState.modalOpen
     && !sourceSetupPending
   );
@@ -215,7 +215,7 @@ function App() {
   }, [locale]);
 
   useEffect(() => {
-    setReleaseNotesState({ noticeHiddenVersion: '', saving: false, modalOpen: false });
+    setReleaseNotesState({ noticeHiddenId: '', saving: false, modalOpen: false });
   }, [authData?.user?.id]);
 
   const handleAuthSuccess = useCallback((payload: CurrentUser) => {
@@ -272,11 +272,11 @@ function App() {
   }, []);
 
   const acknowledgeCurrentReleaseNotes = useCallback(async () => {
-    const version = CURRENT_CHANGELOG_ENTRY.version;
+    const id = CURRENT_CHANGELOG_ENTRY.id;
 
     setReleaseNotesState((current) => ({
       ...current,
-      noticeHiddenVersion: version,
+      noticeHiddenId: id,
       modalOpen: false,
       saving: needsReleaseNotesAck
     }));
@@ -286,7 +286,7 @@ function App() {
     }
 
     try {
-      const response = await updateUserSettings({ lastSeenReleaseNotesVersion: version });
+      const response = await updateUserSettings({ lastSeenReleaseNotesVersion: id });
       patchSession({ settings: response.settings });
     } catch {
       // Keep the notice dismissed for this session; persistence retries on the next login.
@@ -304,9 +304,9 @@ function App() {
     setReleaseNotesState((current) => ({
       ...current,
       modalOpen: true,
-      noticeHiddenVersion: releaseNotes.version
+      noticeHiddenId: releaseNotes.id
     }));
-  }, [releaseNotes.version]);
+  }, [releaseNotes.id]);
 
   if (loadingSession) {
     return APP_LOADING_FALLBACK;
@@ -394,7 +394,6 @@ function App() {
             t={t}
             onLogout={handleLogout}
             patchSession={patchSession}
-            currentChangelogVersion={releaseNotes.version}
             onOpenReleaseNotes={handleOpenReleaseNotes}
           />
         )}

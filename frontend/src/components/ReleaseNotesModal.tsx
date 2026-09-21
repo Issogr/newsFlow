@@ -36,7 +36,7 @@ const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss, restoreFocusRef
 
         <div className="flex-1 space-y-5 overflow-y-auto py-6 pl-[calc(1.5rem+env(safe-area-inset-left))] pr-[calc(1.5rem+env(safe-area-inset-right))] sm:px-6">
           <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-            {t('changelogVersionLabel', { version: releaseNotes.version })}
+            {releaseNotes.date ? <time dateTime={releaseNotes.date}>{releaseNotes.dateLabel}</time> : t('changelogUnreleased')}
           </span>
 
           <ul className="space-y-3 text-sm text-slate-700">

@@ -165,13 +165,12 @@ function filterThematicSummariesForFeatures(summaries: ThematicSummary[] = [], f
   });
 }
 
-const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, currentChangelogVersion, onOpenReleaseNotes }: {
+const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpenReleaseNotes }: {
   currentUser: CurrentUser;
   locale: Locale;
   t: Translator;
   onLogout: () => void;
   patchSession: (patch: Partial<CurrentUser>) => void;
-  currentChangelogVersion: string;
   onOpenReleaseNotes: () => void;
 }) => {
   const needsSourceSetup = currentUser?.settings?.sourceSetupCompleted === false && !currentUser?.user?.isAdmin;
@@ -1039,7 +1038,6 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, curren
           t={t}
           currentUser={currentUser}
           availableSources={sourceCatalog}
-          currentChangelogVersion={currentChangelogVersion}
           onClose={() => setAccountPanel(null)}
           onOpenReleaseNotes={onOpenReleaseNotes}
           patchSession={patchSession}

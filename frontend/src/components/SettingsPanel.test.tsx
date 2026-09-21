@@ -32,7 +32,6 @@ const renderPanel = (overrides: Partial<ComponentProps<typeof SettingsPanel>> = 
     t,
     currentUser,
     availableSources: [],
-    currentChangelogVersion: '3.5.11',
     onClose: vi.fn(),
     onOpenReleaseNotes: vi.fn(),
     patchSession: vi.fn(),
@@ -46,6 +45,12 @@ const renderPanel = (overrides: Partial<ComponentProps<typeof SettingsPanel>> = 
 describe('SettingsPanel', () => {
   beforeEach(() => {
     window.localStorage.clear();
+  });
+
+  test('opens release notes from the version-free Settings link', () => {
+    const { onOpenReleaseNotes } = renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'What’s new' }));
+    expect(onOpenReleaseNotes).toHaveBeenCalledTimes(1);
   });
 
   test('offers save, discard, or continued editing when closing a draft', () => {

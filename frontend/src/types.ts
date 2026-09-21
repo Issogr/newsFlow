@@ -82,6 +82,7 @@ export interface UserSettings {
   readerPanelPosition?: 'left' | 'center' | 'right';
   readerTextSize?: 'small' | 'medium' | 'large';
   readerTextWidth?: 'default' | 'wide' | 'widest';
+  // ponytail: keep the persisted API field name; its value is now a changelog ID.
   lastSeenReleaseNotesVersion?: string;
   excludedSourceIds?: string[];
   excludedSubSourceIds?: string[];
@@ -247,4 +248,4 @@ export interface ChangelogContent {
   items: string[];
 }
 
-export type ReleaseNotes = ChangelogContent & { version: string };
+export type ReleaseNotes = ChangelogContent & { id: string; date: string; dateLabel: string };

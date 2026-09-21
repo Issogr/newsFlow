@@ -74,9 +74,25 @@ For automatic production HTTPS:
 
 Published images:
 
-- `ghcr.io/issogr/newsflow:<release-tag>` (includes the built frontend)
+- `ghcr.io/issogr/newsflow:latest` (includes the built frontend)
+
+The bundled Compose file builds your local checkout. To use the published image instead, set the `newsflow` service's `image` to `ghcr.io/issogr/newsflow:latest` and remove its `build` block. Pull the image and recreate the service when upgrading; the `latest` tag does not update running containers automatically. Each image retains its source commit in the `org.opencontainers.image.revision` label, and can be pinned by digest.
 
 When using the image outside the bundled Compose stack, set both `APP_BASE_URL` and `ALLOWED_ORIGINS` to the public origin. Existing deployments can remove the retired `bff-data` volume after upgrading.
+
+## Publishing An Update
+
+Updates are batches of commits, not package versions. CI runs on pushes and pull requests, but publishing happens only when you manually run **Actions → Publish Update → Run workflow** on `main`.
+
+1. Collect changes from as many commits as needed under `## Unreleased` in `CHANGELOG.md`. Keep the matching English/Italian user-facing notes in `frontend/src/config/changelog.ts`; draft metadata is `id: 'unreleased', date: ''`.
+2. When the batch is ready, choose a date and a unique announcement ID, for example `date: '2026-09-21'` and `id: '2026-09-21-01'`. Use `02`, `03`, etc. for additional updates on the same day. Rename the first changelog heading to `## 2026-09-21-01`.
+3. Check the release notes locally with `node scripts/release-notes.mts`, then commit and push the complete batch to `main` when ready.
+4. Run **Publish Update** on `main`. It validates both packages, audits production dependencies, rejects unfinished or reused announcements, publishes only the `:latest` image tag, then creates a GitHub Release tagged `update-2026-09-21-01` with that changelog section as its body. GitHub subscribers can follow **Watch → Custom → Releases**.
+5. For the next batch, add a new `Unreleased` section above the published history and reset the app metadata to the draft values while editing the new notes. Do not reuse a published announcement ID. Package versions do not need bumping.
+
+The app displays a localized release date and tracks each user's acknowledgement by announcement ID. Draft notes are available from **Settings → What's new** without showing an update notice or recording an acknowledgement. The existing `lastSeenReleaseNotesVersion` settings field stores the ID for compatibility with current databases and settings exports.
+
+The app includes the latest announcement; full history remains in `CHANGELOG.md` and GitHub Releases. Users who skip multiple releases see the newest announcement after their installation updates and they reload the app. A workflow retry after the image upload can finish creating the release while its tag is still absent; once the release tag exists, use a new announcement for further changes.
 
 ## Configuration
 Full configuration reference: [`CONFIGURATION.md`](CONFIGURATION.md).

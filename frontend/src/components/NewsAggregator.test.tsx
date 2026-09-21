@@ -95,7 +95,6 @@ async function renderNewsAggregator(overrides: Partial<NewsAggregatorProps> = {}
         t={overrides.t || createTranslator(locale)}
         onLogout={overrides.onLogout || vi.fn()}
         patchSession={overrides.patchSession || vi.fn()}
-        currentChangelogVersion={overrides.currentChangelogVersion || '3.6.0'}
         onOpenReleaseNotes={overrides.onOpenReleaseNotes || vi.fn()}
       />
     );
@@ -806,7 +805,6 @@ describe('NewsAggregator', () => {
           t={createTranslator('en')}
           onLogout={onLogout}
           patchSession={patchSession}
-          currentChangelogVersion="3.6.0"
           onOpenReleaseNotes={vi.fn()}
         />
       );

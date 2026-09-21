@@ -52,6 +52,10 @@ jobs:
         working-directory: ${{ matrix.service }}
         run: npm run test:coverage
 
+      - name: Test release notes preparation
+        if: matrix.service == 'backend'
+        run: node --test scripts/release-notes.test.mts
+
       - name: Audit production dependencies
         if: inputs.audit
         working-directory: ${{ matrix.service }}
