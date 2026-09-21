@@ -1,4 +1,5 @@
 import type { AppError, DateInput, DynamicRecord } from '../utils/types';
+import { createHash } from 'node:crypto';
 
 const database = require('./database');
 const logger = require('../utils/logger');
@@ -26,7 +27,7 @@ const SUMMARY_READER_TEXT_MIN_CHARS = parseIntegerEnv('AI_SUMMARY_READER_TEXT_MI
 const SUMMARY_FAILED_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
 const SUMMARY_INVALID_OUTPUT_MAX_RETRIES = parseIntegerEnv('AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES', 2, { min: 0, max: 10 });
 const SUMMARY_PENDING_TOPIC_GRACE_MS = parseIntegerEnv('AI_SUMMARY_PENDING_TOPIC_GRACE_MS', 15 * 60 * 1000, { min: 0, max: 6 * 60 * 60 * 1000 });
-const SUMMARY_PROMPT_MAX_ARTICLES = parseIntegerEnv('AI_SUMMARY_PROMPT_MAX_ARTICLES', 60, { min: 1, max: SUMMARY_MAX_ARTICLES_PER_TOPIC });
+const SUMMARY_PROMPT_MAX_ARTICLES = parseIntegerEnv('AI_SUMMARY_PROMPT_MAX_ARTICLES', 24, { min: 1, max: SUMMARY_MAX_ARTICLES_PER_TOPIC });
 const PODCAST_PROMPT_MAX_ARTICLES = parseIntegerEnv('AI_PODCAST_PROMPT_MAX_ARTICLES', 40, { min: 1, max: 300 });
 const PODCAST_TTS_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_PODCAST_TTS_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
 const PODCAST_TTS_MAX_RETRIES = parseIntegerEnv('AI_PODCAST_TTS_MAX_RETRIES', 4, { min: 0, max: 20 });
@@ -80,6 +81,7 @@ interface SummaryArticle extends DynamicRecord {
 
 interface SummarySource extends DynamicRecord {
   articleId?: string;
+  contentHash?: string;
 }
 
 interface PodcastAudioRecord extends DynamicRecord {
@@ -106,6 +108,7 @@ interface SummaryRecord extends DynamicRecord {
   errorMessage?: string;
   failureCategory?: string;
   generatedAt?: string;
+  lastAttemptAt?: string;
   id?: string;
   model?: string;
   periodEnd?: string;
@@ -445,7 +448,7 @@ function isFailedSummaryRetryDue(summary: SummaryRecord = {}, referenceDate: Dat
     return true;
   }
 
-  const generatedAtTime = Date.parse(summary.generatedAt || '');
+  const generatedAtTime = Date.parse(summary.lastAttemptAt || summary.generatedAt || '');
   if (!Number.isFinite(generatedAtTime)) {
     return true;
   }
@@ -483,6 +486,10 @@ function buildSourceList(articles: SummaryArticle[] = []) {
   return articles.map((article, index) => ({
     index: index + 1,
     articleId: article.id,
+    contentHash: createHash('sha256').update(JSON.stringify([
+      article.title, article.description, article.content, article.readerText,
+      article.source || article.rawSource, article.url, article.pubDate
+    ].map(normalizeReaderText))).digest('hex'),
     title: article.title,
     source: article.source || article.rawSource || '',
     sourceIconUrl: article.sourceIconUrl || '',
@@ -589,9 +596,21 @@ function dedupeThematicCandidateArticles(articles: SummaryArticle[] = []) {
 }
 
 function getArticlesForSummaryTopic(topicConfig: SummaryTopic, window: SummaryWindow) {
-  return dedupeThematicCandidateArticles(filterNewsworthySummaryArticles(
+  const articles = filterNewsworthySummaryArticles(
     database.getArticlesForThematicSummary(buildSummaryArticleQuery(topicConfig, window))
-  ));
+  );
+  const publishersByStory = new Map<string, Set<string>>();
+  const storyKey = (article: SummaryArticle) => getThematicArticleIdentityKeys(article)[0] || article.id;
+  articles.forEach((article) => {
+    const key = storyKey(article);
+    const publishers = publishersByStory.get(key) || new Set<string>();
+    publishers.add(getPromptArticleSourceKey(article));
+    publishersByStory.set(key, publishers);
+  });
+  // ponytail: independent publisher count proxies importance; use editorial scoring if coverage evaluations need it.
+  return dedupeThematicCandidateArticles([...articles].sort((left, right) => (
+    publishersByStory.get(storyKey(right))!.size - publishersByStory.get(storyKey(left))!.size
+  )));
 }
 
 function createSummaryArticleContext(window: SummaryWindow): SummaryArticleContext {
@@ -741,17 +760,13 @@ function getSummarySourceArticleIds(summary: SummaryRecord = {}) {
     .filter(Boolean);
 }
 
-function hasSameArticleSelection(summary: SummaryRecord = {}, selectedArticles: SummaryArticle[] = []) {
-  const currentArticleIds = selectedArticles.map((article) => String(article?.id || '').trim()).filter(Boolean);
-  const storedArticleIds = getSummarySourceArticleIds(summary);
-
-  return storedArticleIds.length === currentArticleIds.length
-    && storedArticleIds.every((articleId, index) => articleId === currentArticleIds[index]);
-}
-
-function hasExpandedArticleSelection(summary: SummaryRecord = {}, selectedArticles: SummaryArticle[] = []) {
-  // ponytail: count growth avoids retention reshuffles; persist selection revisions if capped late arrivals must regenerate.
-  return selectedArticles.length > getSummarySourceArticleIds(summary).length;
+function hasChangedArticleSelection(summary: SummaryRecord = {}, sources: SummarySource[] = []) {
+  const previousById = new Map((summary.sources || []).map((source) => [source.articleId, source]));
+  // Removed articles alone are retention, not a reason to rewrite a briefing.
+  return sources.some((source) => {
+    const previous = previousById.get(source.articleId);
+    return !previous || Boolean(previous.contentHash && previous.contentHash !== source.contentHash);
+  });
 }
 
 function getPodcastScriptTextByLocale(summary: SummaryRecord = {}): Record<string, string> {
@@ -1110,24 +1125,20 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
     ? options.articleContext.getArticlesForTopic(topicConfig)
     : getArticlesForSummaryTopic(topicConfig, window);
   const selectedArticles = getSelectedSummaryArticles(topicConfig, window, options.articleContext, articles);
+  const enrichedArticles = withCachedReaderText(selectedArticles);
+  const sources = buildSourceList(enrichedArticles);
 
-  if (canRetryExhaustedInvalidOutput && options.force !== true && !hasExpandedArticleSelection(existingSummary, selectedArticles)) {
+  if (canRetryExhaustedInvalidOutput && options.force !== true && !hasChangedArticleSelection(existingSummary, sources)) {
     logger.debug(`Thematic summary retry skipped after invalid output limit: topic=${topicConfig.key}, windowEnd=${window.periodEnd}`);
     return { summary: null, generatedNow: false };
   }
 
   if (existingSummary?.status === 'completed' && options.force !== true) {
-    if (hasSameArticleSelection(existingSummary, selectedArticles)) {
-      return { summary: existingSummary, generatedNow: false };
-    }
-    if (selectedArticles.length === 0) {
-      return { summary: existingSummary, generatedNow: false };
-    }
-    if (!hasExpandedArticleSelection(existingSummary, selectedArticles)) {
+    if (!hasChangedArticleSelection(existingSummary, sources)) {
       return { summary: existingSummary, generatedNow: false };
     }
 
-    logger.info(`Thematic summary new articles detected: topic=${topicConfig.key}, windowEnd=${window.periodEnd}, previous=${getSummarySourceArticleIds(existingSummary).length}, current=${selectedArticles.length}`);
+    logger.info(`Thematic summary input changed: topic=${topicConfig.key}, windowEnd=${window.periodEnd}, previous=${getSummarySourceArticleIds(existingSummary).length}, current=${selectedArticles.length}`);
   }
 
   if (articles.length === 0) {
@@ -1145,8 +1156,6 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
     return { summary: null, generatedNow: false };
   }
 
-  const enrichedArticles = withCachedReaderText(selectedArticles);
-  const sources = buildSourceList(enrichedArticles);
   const basePayload = {
     id: buildSummaryId(topicConfig.key, window.periodStart, window.periodEnd),
     topicKey: topicConfig.key,
@@ -1175,6 +1184,8 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
         ...basePayload,
         summaryText: generated.summaryText,
         summaryTextByLocale: generated.summaryTextByLocale,
+        inputArticles: generated.inputArticles,
+        lastAttemptAt: basePayload.generatedAt,
         model: generated.model,
         status: 'completed',
         failureCategory: '',
@@ -1187,14 +1198,18 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
     const failureCategory = getSummaryFailureCategory(failure);
     logger.warn(`Thematic summary generation failed: topic=${topicConfig.key}, windowEnd=${window.periodEnd}, error=${failure.message}`);
     if (existingSummary?.status === 'completed') {
+      const summary = database.upsertThematicSummary({
+        ...existingSummary,
+        failureCategory,
+        retryCount: (existingSummary.retryCount || 0) + 1,
+        errorMessage: failure.message,
+        lastAttemptAt: basePayload.generatedAt
+      });
+      if (!existingSummary.failureCategory) {
+        broadcastSummariesRefresh(options);
+      }
       return {
-        summary: database.upsertThematicSummary({
-          ...existingSummary,
-          failureCategory,
-          retryCount: (existingSummary.retryCount || 0) + 1,
-          errorMessage: failure.message,
-          generatedAt: basePayload.generatedAt
-        }),
+        summary,
         generatedNow: false
       };
     }
@@ -1461,7 +1476,7 @@ function getLatestSummaries(options: SummaryOptions = {}) {
         ...summary,
         topicLabel: topic.label,
         summarySlot: getSummaryWindowSlot(summary),
-        isStale: summary.periodEnd !== latestDueWindow.periodEnd
+        isStale: summary.periodEnd !== latestDueWindow.periodEnd || Boolean(summary.failureCategory)
       } : null;
     })
     .filter((summary: SummaryRecord | null) => summary && summary.status !== 'empty');

@@ -125,7 +125,7 @@ AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed 
 | `AI_TOPIC_DETECTION_ENABLED` | `true` | Adds AI topic metadata during ingestion. |
 | `AI_STORY_GROUPING_ENABLED`, `AI_SUMMARY_GENERATION_ENABLED`, `AI_PODCAST_GENERATION_ENABLED` | `false` | Enable individual optional AI jobs. |
 | `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips provider calls for articles the local classifier can topic with high confidence. |
-| `AI_SUMMARY_PROMPT_MAX_ARTICLES` | `60` | Max selected articles included in one thematic-summary prompt after dedupe/source balancing. |
+| `AI_SUMMARY_PROMPT_MAX_ARTICLES` | `24` | Max selected articles included in one thematic-summary prompt after dedupe/source balancing. |
 | `AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS` | `5000` | Debounces summary checks triggered by topic-classification completion. |
 | `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarms reader text before summary windows when summaries are enabled. |
 | `AI_SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS` | `300000` | Cooldown before retrying failed reader prewarm attempts. |

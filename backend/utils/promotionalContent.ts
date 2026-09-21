@@ -1,4 +1,5 @@
-const PROMOTIONAL_DEAL_PATTERN = /\b(deal|deals|discount|discounts|sale|sales|coupon|coupons|promo|promotion|offer|offers|offerta|offerte|sconto|sconti|saldi|minimo storico|minimi storici|lowest price|lowest prices|best price|best prices|price drop|price drops|record low|record-low|all-time low|deal alert|black friday|cyber monday|prime day|gift card|carta regalo|cashback|prezzo migliore|prezzi migliori|miglior prezzo|migliori prezzi|prezzo piu basso|prezzi piu bassi|calo di prezzo)\b/u;
+// Business deals, sales results, and job offers are news, not shopping signals.
+const PROMOTIONAL_DEAL_PATTERN = /\b(discount|discounts|coupon|coupons|promo code|codice promo|on sale|in offerta|sconto|sconti|saldi|minimo storico|minimi storici|lowest price|lowest prices|best price|best prices|price drop|price drops|record[- ]low price|all-time low price|deal alert|black friday|cyber monday|prime day|gift card|carta regalo|cashback|prezzo migliore|prezzi migliori|miglior prezzo|migliori prezzi|prezzo piu basso|prezzi piu bassi|calo di prezzo)\b/u;
 const PRICE_PATTERN = /(?:[$€£]\s?\d|\b\d+(?:[.,]\d{2})?\s?(?:dollari|euro|usd|eur)\b)/u;
 const RETAILER_PATTERN = /\b(best buy|amazon|walmart|target|ebay|mediaworld|unieuro|euronics|store|shop|shopping|buy|preorder|pre-order|acquista|compra|carrello|retailer|rivenditore)\b/u;
 const PRODUCT_DEAL_PATTERN = /\b(tv|oled|lamp|monitor|laptop|notebook|tablet|phone|iphone|ipad|smartwatch|watch|headphones|earbuds|speaker|router|ssd|console|camera|vacuum|robot|keyboard|mouse|adapter|adaptor|bluetooth|airfly|televisore|lampada|adattatore|cuffie|auricolari|friggitrice)\b/u;
@@ -22,7 +23,8 @@ function isPromotionalDealText(value: unknown = '') {
   }
 
   if (!PROMOTIONAL_DEAL_PATTERN.test(normalizedText)
-    && !/\b(?:best|top)\b.{0,50}\b(?:deals?|discounts?|offers?|sconti|offerte|prices?|prezzi)\b/u.test(normalizedText)) {
+    && !/\b(?:best|top)\b.{0,50}\b(?:deals?|discounts?|offers?|sconti|offerte|prices?|prezzi)\b/u.test(normalizedText)
+    && !/\b\d+\s?%\s+(?:off|di sconto)\b/u.test(normalizedText)) {
     return false;
   }
 
@@ -33,7 +35,7 @@ function isPromotionalDealText(value: unknown = '') {
 }
 
 function isPromotionalDealArticle(article: Partial<NewsArticle> = {}) {
-  return isPromotionalDealText([
+  return DEAL_URL_PATTERN.test(normalizePromotionalDetectionText(article.url)) || isPromotionalDealText([
     article.title,
     article.description,
     article.content,

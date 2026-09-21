@@ -160,6 +160,12 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 
 ## AI Summaries And Prewarm
 
+Each thematic summary uses two sequential requests to `OPENROUTER_SUMMARY_MODEL`: bilingual generation, then a source-grounding review of the exact same excerpts. The review checks claim support, citations, contradictions, uncertainty, and translation consistency; failed or malformed reviews are retried through the existing invalid-output policy. This is an additional AI check, not an independent fact-check of the publishers.
+
+The default selection prioritizes stories covered by multiple publishers, deduplicates them, and balances sources across up to 24 stories. The 30,000-character text budget allows up to 1,250 characters per story at that cap, including longer RSS content when reader text is unavailable. Completed summaries retain their exact input excerpts in SQLite for later evaluation. Source fingerprints trigger regeneration for changed evidence or replacement articles, while retention-only removals preserve the previous briefing. Reader caches are invalidated when article text changes. Coverage dates and stale status are shown in the reader panel.
+
+To check the configured model against a small fixed evidence set, run `npm run eval:summaries` in `backend/` with `OPENROUTER_API_KEY` set. This makes seven live grounding requests covering supported facts, invented numbers, uncertainty, contradictions, geographic scope, and language consistency; it exits nonzero for mismatches or invalid responses. `npm run eval:summaries -- --help` is offline. Use this smoke evaluation alongside manual reviews of saved excerpts before changing models or prompts.
+
 | Variable | Default | Details |
 | --- | --- | --- |
 | `OPENROUTER_SUMMARY_MODEL` | `qwen/qwen3.7-flash` | Model used for thematic summaries. |
@@ -167,7 +173,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 | `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | IANA time zone used for the daily `20:00` summary and podcast slot. Invalid zones fall back to `Europe/Rome`. |
 | `THEMATIC_SUMMARY_CHECK_INTERVAL_MS` | `60000` | Scheduler interval for checking due summaries and podcasts. Minimum `1000`. |
 | `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC` | `120` | Max built-in topic-tagged articles queried before deduplication and prompt selection. Minimum `1`, maximum `300`. |
-| `AI_SUMMARY_PROMPT_MAX_ARTICLES` | `60` | Max deduped/source-balanced articles included in one thematic-summary prompt. Minimum `1`, maximum `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC`. |
+| `AI_SUMMARY_PROMPT_MAX_ARTICLES` | `24` | Max deduped/source-balanced articles included in one thematic-summary prompt. Minimum `1`, maximum `AI_SUMMARY_MAX_ARTICLES_PER_TOPIC`. |
 | `AI_SUMMARY_GENERATION_CONCURRENCY` | `2` | Max topic summary generations run concurrently for one due window. Minimum `1`, maximum `6`. |
 | `AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS` | `30000` | Hard aggregate description/reader-text budget divided across selected summary articles. Prompt instructions and bounded article metadata are additional. Minimum `10000`, maximum `240000`. |
 | `AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES` | `2` | Additional retries for invalid summary or podcast-script model output before treating it as terminal. Minimum `0`, maximum `10`. |

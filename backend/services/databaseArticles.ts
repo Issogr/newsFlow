@@ -1102,6 +1102,7 @@ function createArticleRepository({
       WHERE id = ?
     `);
     const deleteArticleStmt = database.prepare('DELETE FROM articles WHERE id = ?');
+    const deleteReaderCacheStmt = database.prepare('DELETE FROM reader_cache WHERE article_id = ?');
     const articleFieldSelectSql = `
       SELECT id, source_id AS sourceId, source_name AS sourceName, owner_user_id AS ownerUserId,
              title, description, content, url, canonical_url AS canonicalUrl, image, author,
@@ -1201,6 +1202,7 @@ function createArticleRepository({
 
           if (exists && storyGroupingFieldsChanged(previousArticleFields, values)) {
             resetStoryGroupingStmt.run(persistedArticleId);
+            deleteReaderCacheStmt.run(persistedArticleId);
           }
         }
 
@@ -1958,6 +1960,7 @@ function createArticleRepository({
       return {
       index: Number(source?.index) || index + 1,
       articleId: String(source?.articleId || '').trim(),
+      ...(source.contentHash ? { contentHash: String(source.contentHash).slice(0, 64) } : {}),
       title: String(source?.title || '').trim().slice(0, 300),
       source: String(source?.source || '').trim().slice(0, 120),
       sourceIconUrl: String(source?.sourceIconUrl || '').trim().slice(0, 1000),
@@ -2044,6 +2047,8 @@ function createArticleRepository({
       summaryTextEn: localized.textEn,
       summaryTextIt: localized.textIt,
       sourcesJson: JSON.stringify(normalizeSummarySources(summary.sources || [])),
+      inputJson: JSON.stringify(Array.isArray(summary.inputArticles) ? summary.inputArticles : []),
+      lastAttemptAt: String(summary.lastAttemptAt || summary.generatedAt || '').trim(),
       articleCount: Math.max(0, Number(summary.articleCount) || 0),
       model: String(summary.model || '').trim().slice(0, 120),
       status: String(summary.status || 'completed').trim().slice(0, 40),
@@ -2071,6 +2076,8 @@ function createArticleRepository({
       summaryText: localized.text,
       summaryTextByLocale: localized.textByLocale,
       sources: parseJsonArray(row.sourcesJson),
+      ...(row.inputJson !== undefined ? { inputArticles: parseJsonArray(row.inputJson) } : {}),
+      lastAttemptAt: row.lastAttemptAt || row.generatedAt,
       articleCount: row.articleCount,
       model: row.model,
       status: row.status,
@@ -2342,9 +2349,9 @@ function createArticleRepository({
       INSERT INTO thematic_summaries (
         id, topic_key, topic_label, topics_json, period_start, period_end,
         summary_text, summary_text_en, summary_text_it,
-        sources_json, article_count, model, status, failure_category, retry_count, error_message, generated_at
+        sources_json, input_json, last_attempt_at, article_count, model, status, failure_category, retry_count, error_message, generated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(topic_key, period_start, period_end) DO UPDATE SET
         topic_label = excluded.topic_label,
         topics_json = excluded.topics_json,
@@ -2352,6 +2359,8 @@ function createArticleRepository({
         summary_text_en = excluded.summary_text_en,
         summary_text_it = excluded.summary_text_it,
         sources_json = excluded.sources_json,
+        input_json = excluded.input_json,
+        last_attempt_at = excluded.last_attempt_at,
         article_count = excluded.article_count,
         model = excluded.model,
         status = excluded.status,
@@ -2370,6 +2379,8 @@ function createArticleRepository({
       normalized.summaryTextEn,
       normalized.summaryTextIt,
       normalized.sourcesJson,
+      normalized.inputJson,
+      normalized.lastAttemptAt,
       normalized.articleCount,
       normalized.model,
       normalized.status,
@@ -2389,7 +2400,8 @@ function createArticleRepository({
              summary_text_en AS summaryTextEn, summary_text_it AS summaryTextIt,
              sources_json AS sourcesJson, article_count AS articleCount, model, status,
              failure_category AS failureCategory, retry_count AS retryCount,
-             error_message AS errorMessage, generated_at AS generatedAt
+             error_message AS errorMessage, generated_at AS generatedAt,
+             input_json AS inputJson, last_attempt_at AS lastAttemptAt
       FROM thematic_summaries
       WHERE topic_key = ? AND period_start = ? AND period_end = ?
       LIMIT 1
@@ -2413,7 +2425,7 @@ function createArticleRepository({
              summary_text_en AS summaryTextEn, summary_text_it AS summaryTextIt,
              sources_json AS sourcesJson, article_count AS articleCount, model, status,
              failure_category AS failureCategory, retry_count AS retryCount,
-             error_message AS errorMessage, generated_at AS generatedAt
+             error_message AS errorMessage, generated_at AS generatedAt, last_attempt_at AS lastAttemptAt
       FROM (
         SELECT *, ROW_NUMBER() OVER (
           PARTITION BY topic_key

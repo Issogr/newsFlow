@@ -34,7 +34,7 @@ function buildArticlePayload(
   );
   const readerText = truncateText(article.readerText || '', articleTextLimit);
   const fallbackText = truncateText(
-    article.description || article.content || '',
+    String(article.content || '').length > String(article.description || '').length ? article.content : article.description || '',
     Math.min(options.rssMetadataMaxChars || DEFAULT_RSS_METADATA_MAX_CHARS, articleTextLimit)
   );
 

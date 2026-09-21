@@ -7,7 +7,7 @@ import type SqliteDatabase from './sqliteDatabase';
 import type { SourceDefinition } from '../utils/types';
 
 function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
-  const CURRENT_SCHEMA_VERSION = 44;
+  const CURRENT_SCHEMA_VERSION = 45;
   const MIN_SUPPORTED_SCHEMA_VERSION = 15;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
@@ -451,6 +451,10 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
 
     if (podcastSummaryColumns.has('audio_blob') || !triggerExists(database, 'article_search_after_insert')) {
       return 42;
+    }
+
+    if (!thematicSummaryColumns.has('input_json') || !thematicSummaryColumns.has('last_attempt_at')) {
+      return 44;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -1129,6 +1133,19 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
 
       setCurrentSchemaVersion(database, 44);
       logger.info('Migrated DB schema from version 43 to 44');
+      return;
+    }
+
+    if (currentVersion === 44) {
+      const columns = getColumnNames(database, 'thematic_summaries');
+      if (!columns.has('input_json')) {
+        database.exec("ALTER TABLE thematic_summaries ADD COLUMN input_json TEXT NOT NULL DEFAULT '[]'");
+      }
+      if (!columns.has('last_attempt_at')) {
+        database.exec("ALTER TABLE thematic_summaries ADD COLUMN last_attempt_at TEXT NOT NULL DEFAULT ''");
+      }
+      setCurrentSchemaVersion(database, 45);
+      logger.info('Migrated DB schema from version 44 to 45');
       return;
     }
 

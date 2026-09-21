@@ -93,7 +93,8 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('44');
+    expect(migrationVersion).toBe('45');
+    expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['input_json', 'last_attempt_at']));
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -167,6 +168,7 @@ describe('database migrations', () => {
         user_id TEXT PRIMARY KEY,
         reader_text_size TEXT NOT NULL DEFAULT 'medium'
       );
+      CREATE TABLE thematic_summaries (id TEXT PRIMARY KEY);
       INSERT INTO app_meta (key, value) VALUES ('migration_version', '41');
       INSERT INTO user_settings (user_id) VALUES ('user-1');
     `);
@@ -180,7 +182,7 @@ describe('database migrations', () => {
     const width = migratedDb.prepare('SELECT reader_text_width AS readerTextWidth FROM user_settings WHERE user_id = ?').get('user-1')?.readerTextWidth;
     migratedDb.close();
 
-    expect(migrationVersion).toBe('44');
+    expect(migrationVersion).toBe('45');
     expect(width).toBe('default');
   });
 
@@ -211,9 +213,27 @@ describe('database migrations', () => {
     const articleIndexes = migratedDb.prepare('PRAGMA index_list(articles)').all().map((index: { name: string }) => index.name);
     migratedDb.close();
 
-    expect(migrationVersion).toBe('44');
+    expect(migrationVersion).toBe('45');
     expect(articleColumns).toEqual(expect.not.arrayContaining(['clickbait_label', 'clickbait_score', 'clickbait_source', 'clickbait_confidence', 'clickbait_model', 'clickbait_reason_code', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(articleIndexes).not.toContain('idx_articles_ai_clickbait_processed_at');
+  });
+
+  test('migrates summary evidence storage from version 44 without losing completed briefings', () => {
+    database = require('./database');
+    const window = { periodStart: '2026-07-13T18:00:00.000Z', periodEnd: '2026-07-14T18:00:00.000Z' };
+    database.upsertThematicSummary({ ...window, topicKey: 'science', summaryText: 'Saved briefing [1].' });
+    database.getDb().exec(`
+      ALTER TABLE thematic_summaries DROP COLUMN input_json;
+      ALTER TABLE thematic_summaries DROP COLUMN last_attempt_at;
+      UPDATE app_meta SET value = '44' WHERE key = 'migration_version';
+    `);
+    database.closeDb();
+    jest.resetModules();
+    database = require('./database');
+    expect(database.getThematicSummary('science', window.periodStart, window.periodEnd)).toMatchObject({
+      summaryText: 'Saved briefing [1].', inputArticles: []
+    });
+    expect(getMigrationVersion(database.getDb())).toBe('45');
   });
 
   test('migrates an unversioned legacy database instead of marking it current', () => {
@@ -262,7 +282,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('44');
+    expect(migratedVersion).toBe('45');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
@@ -380,7 +400,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('44');
+    expect(migratedVersion).toBe('45');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason']));
     expect(articleColumns).toEqual(expect.not.arrayContaining(['clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
@@ -495,7 +515,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source: Identified) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article: Identified) => article.id);
 
-    expect(migratedVersion).toBe('44');
+    expect(migratedVersion).toBe('45');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source: Identified) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -591,7 +611,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('44');
+    expect(migratedVersion).toBe('45');
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
     expect(row).toEqual({
       summaryText: 'English text [1]',
@@ -607,6 +627,7 @@ describe('database migrations', () => {
     const englishChildAudio = Buffer.from('authoritative-english-audio');
 
     sqlite.exec(`
+      CREATE TABLE thematic_summaries (id TEXT PRIMARY KEY);
       CREATE TABLE app_meta (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -740,7 +761,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('44');
+    expect(migratedVersion).toBe('45');
     expect(audioRow).toEqual({
       podcastId: 'legacy-podcast',
       locale: 'it',
@@ -1521,7 +1542,10 @@ describe('database queries and user data', () => {
         en: 'AI chips accelerated during the window [1].',
         it: 'I chip AI hanno accelerato nella finestra [1].'
       },
-      sources: [{ index: 1, articleId: 'summary-global-tech', title: 'AI chips accelerate', source: primarySource.name, url: 'https://example.com/tech' }],
+      sources: [{ index: 1, articleId: 'summary-global-tech', contentHash: 'abc123', title: 'AI chips accelerate', source: primarySource.name, url: 'https://example.com/tech' }],
+      inputArticles: [{ ref: 1, title: 'AI chips accelerate', description: 'Exact excerpt sent to the model.', contentType: 'rss_metadata' }],
+      generatedAt: '2025-05-21T13:01:00.000Z',
+      lastAttemptAt: '2025-05-21T13:10:00.000Z',
       articleCount: 1,
       model: 'test-model'
     });
@@ -1530,13 +1554,17 @@ describe('database queries and user data', () => {
     expect(summary).toEqual(expect.objectContaining({
       topicKey: 'technology',
       summaryTextByLocale: expect.objectContaining({ it: 'I chip AI hanno accelerato nella finestra [1].' }),
-      sources: [expect.objectContaining({ articleId: 'summary-global-tech' })],
+      sources: [expect.objectContaining({ articleId: 'summary-global-tech', contentHash: 'abc123' })],
+      inputArticles: [expect.objectContaining({ ref: 1, description: 'Exact excerpt sent to the model.' })],
+      generatedAt: '2025-05-21T13:01:00.000Z',
+      lastAttemptAt: '2025-05-21T13:10:00.000Z',
       failureCategory: '',
       retryCount: 0
     }));
     expect(summary).not.toHaveProperty('title');
     expect(summary).not.toHaveProperty('titleByLocale');
     expect(database.listLatestThematicSummaries(['technology'])).toHaveLength(1);
+    expect(database.listLatestThematicSummaries(['technology'])[0]).not.toHaveProperty('inputArticles');
 
     const emptySummary = database.upsertThematicSummary({
       topicKey: 'technology',
@@ -2058,8 +2086,8 @@ describe('database queries and user data', () => {
         id: 'incoming-article',
         sourceId: primarySource.id,
         source: primarySource.name,
-        title: 'Incoming story',
-        description: 'Incoming description',
+        title: 'Canonical story',
+        description: 'Canonical description',
         content: '',
         url: canonicalUrl,
         language: 'en',
@@ -2085,6 +2113,21 @@ describe('database queries and user data', () => {
         reasonCode: 'duplicate_topic'
       })
     ]);
+  });
+
+  test('invalidates cached reader evidence for corrected article text but preserves it for image-only updates', () => {
+    const article = {
+      id: 'corrected-reader', sourceId: primarySource.id, source: primarySource.name,
+      title: 'Council vote', description: 'Funding was approved.', content: '',
+      url: 'https://example.com/council-vote', pubDate: '2026-05-21T08:00:00.000Z'
+    };
+    database.upsertArticles([article]);
+    database.upsertReaderCache(article.id, { title: article.title, contentText: 'Previous full article evidence.' });
+    database.upsertArticles([{ ...article, image: 'https://example.com/photo.jpg' }]);
+    expect(database.getReaderCache(article.id)?.contentText).toBe('Previous full article evidence.');
+    database.upsertArticles([{ ...article, description: 'Correction: funding was NOT approved.' }]);
+    expect(database.getReaderCache(article.id)).toBeNull();
+    expect(database.getArticleById(article.id, { maxArticleAgeHours: null })?.description).toBe('Correction: funding was NOT approved.');
   });
 
   test('normalizes future publication dates on insert and during cleanup', () => {

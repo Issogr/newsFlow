@@ -258,7 +258,9 @@ describe('thematic summary podcast UI', () => {
     });
 
     expect(screen.getByText('Lunch time')).toBeInTheDocument();
-    expect(screen.queryByText(/2026/u)).not.toBeInTheDocument();
+    expect(screen.getByText('Coverage:', { exact: false })).toBeInTheDocument();
+    expect(document.querySelector('time[datetime="2026-05-21T05:00:00.000Z"]')).toBeInTheDocument();
+    expect(document.querySelector('time[datetime="2026-05-21T11:00:00.000Z"]')).toBeInTheDocument();
     expect(screen.getByText('The first argument covers chip supply and infrastructure.')).toBeInTheDocument();
     expect(screen.getByText('The second argument moves to software policy and regulation.')).toBeInTheDocument();
   });
@@ -288,6 +290,15 @@ describe('thematic summary podcast UI', () => {
     expect(screen.queryByText(/Previous technology briefing/u)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Today' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Yesterday' })).not.toBeInTheDocument();
+  });
+
+  test.each(['en', 'it'] as const)('shows localized stale status and clears it when the briefing updates (%s)', (locale) => {
+    const translated = createTranslator(locale);
+    const summary = createTopicSummary('science', { isStale: true });
+    const { rerender } = renderSummaryPanel(summary, { locale, t: translated });
+    expect(screen.getByRole('status')).toHaveTextContent(translated('summaryStaleNotice'));
+    rerender(<ThematicSummaryPanel summary={{ ...summary, isStale: false }} locale={locale} t={translated} onClose={vi.fn()} />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   test('shows text-shaped loading feedback while a thematic summary opens', () => {

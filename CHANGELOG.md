@@ -2,6 +2,10 @@
 
 ## 3.7.0
 
+- added a source-grounding review before publishing AI summaries, fixed zero/malformed citations and uncited paragraphs, and saved exact input excerpts for reproducible quality checks
+- improved summary evidence with 24 source-balanced stories, prioritized multi-publisher coverage, longer RSS excerpts, and narrower shopping filters that preserve business news
+- regenerate summaries for corrected evidence and replacement articles, invalidate outdated reader caches, and show localized coverage dates and stale status while preserving successful generation timestamps after failed refreshes
+- added SQLite schema 45 for summary evidence and retry timestamps, plus an explicit live-model grounding smoke evaluation
 - replaced custom podcast playback controls with native browser audio controls while keeping skip buttons and localized playback errors
 - simplified fresh SQLite initialization through the existing migration chain, reused article projections, and removed unused compact-card settings and WebSocket statistics
 - replaced the OpenRouter chat SDK with native fetch, specialized topic batching and daily summary scheduling, and reused native stream consumption and Express range parsing

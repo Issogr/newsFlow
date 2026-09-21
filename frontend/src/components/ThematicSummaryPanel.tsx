@@ -140,7 +140,7 @@ function getPodcastSlotLabel(summary: Partial<ThematicSummary> = {}, t: Translat
   return t(PODCAST_SLOT_LABEL_KEYS[getPodcastSlot(summary)] || 'podcastBriefing');
 }
 
-function formatPodcastGeneratedAt(value: unknown, locale: Locale = 'en') {
+function formatSummaryDate(value: unknown, locale: Locale = 'en') {
   const date = new Date(String(value || ''));
   if (Number.isNaN(date.getTime())) {
     return '';
@@ -334,6 +334,8 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   const [readySummaryId, setReadySummaryId] = useState('');
   const isPodcast = isPodcastSummary(summary);
   const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [summary, locale]);
+  const coverageStart = formatSummaryDate(summary.periodStart, locale);
+  const coverageEnd = formatSummaryDate(summary.periodEnd, locale);
   const sourceByIndex = useMemo(() => new Map<number, SummarySource>((summary?.sources || []).map((source: SummarySource) => [Number(source.index), source])), [summary?.sources]);
   const showSummaryOpeningSkeleton = showOpeningSkeleton && !isPodcast && readySummaryId !== summary?.id;
   const podcastSummaries = useMemo(() => getPodcastSummariesForPanel(summary, summaries), [summaries, summary]);
@@ -532,7 +534,20 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                         </>
                       )}
                     </span>
+                    {coverageStart && coverageEnd && (
+                      <p className="mt-2 font-normal normal-case tracking-normal text-slate-500">
+                        {t('summaryCoverage')}{' '}
+                        <time dateTime={summary.periodStart}>{coverageStart}</time>
+                        {' – '}
+                        <time dateTime={summary.periodEnd}>{coverageEnd}</time>
+                      </p>
+                    )}
                   </div>
+                )}
+                {!isPodcast && summary.isStale && (
+                  <p role="status" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    {t('summaryStaleNotice')}
+                  </p>
                 )}
               </div>
 
@@ -548,7 +563,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                       const selectedLanguageLabel = getPodcastLanguageLabel(selectedLocale, locale);
                       const availableLanguageList = formatLanguageList(audioChoice.completedLocales, locale);
                       const showAvailabilityNotice = audioChoice.completedLocales.length > 0 && selectedLocale !== locale;
-                      const generatedAtLabel = formatPodcastGeneratedAt(podcastSummary.generatedAt, locale);
+                      const generatedAtLabel = formatSummaryDate(podcastSummary.generatedAt, locale);
 
                       return (
                         <section key={podcastSummary.id} className="space-y-4 border-b border-slate-200 pb-5 last:border-b-0 last:pb-0">

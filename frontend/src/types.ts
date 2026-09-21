@@ -148,6 +148,7 @@ export interface ThematicSummary extends ThematicSummaryAudio {
   periodEnd?: string;
   generatedAt?: string;
   articleCount?: number;
+  isStale?: boolean;
   titleByLocale?: Partial<Record<Locale, string>>;
   summaryTextByLocale?: Partial<Record<Locale, string>>;
   summaryText?: string;

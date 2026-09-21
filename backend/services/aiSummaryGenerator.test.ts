@@ -16,7 +16,7 @@ describe('aiSummaryGenerator', () => {
       OPENROUTER_API_KEY: 'test-key',
       OPENROUTER_SUMMARY_MODEL: 'test-summary-model'
     };
-    const sendMock = jest.fn().mockResolvedValue({
+    const generatedResponse = {
       choices: [{
         message: {
           content: JSON.stringify({
@@ -25,12 +25,15 @@ describe('aiSummaryGenerator', () => {
           })
         }
       }]
-    });
+    };
+    const sendMock = jest.fn()
+      .mockResolvedValueOnce(generatedResponse)
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ supported: true, issues: [] }) } }] });
     fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => (
       Response.json(await sendMock(JSON.parse(String(options?.body))))
     ));
 
-    await aiSummaryGenerator.generateSummaryForArticles({ key: 'science', label: 'Science' }, [{
+    const summary = await aiSummaryGenerator.generateSummaryForArticles({ key: 'science', label: 'Science' }, [{
       id: 'article-1',
       title: 'Science update',
       description: 'A useful science article.',
@@ -46,6 +49,48 @@ describe('aiSummaryGenerator', () => {
         })
       })
     }));
+    const generationInput = JSON.parse(sendMock.mock.calls[0][0].messages[1].content.split('\n').at(-1));
+    const verificationInput = JSON.parse(sendMock.mock.calls[1][0].messages[1].content.split('\n').at(-1));
+    expect(verificationInput.articles).toEqual(generationInput.articles);
+    expect(summary.inputArticles).toEqual(generationInput.articles);
+    expect(verificationInput.briefings).toEqual(summary.summaryTextByLocale);
+  });
+
+  test.each([
+    ['contradictory claims', { supported: false, issues: ['en/it: first-ever conflicts with previous occurrences [1]'] }],
+    ['unsupported funding', { supported: false, issues: ['en/it: the cited vote was postponed, not approved [1]'] }],
+    ['translation drift', { supported: false, issues: ['it: a statewide measure became a national measure [1]'] }],
+    ['wrong language', { supported: false, issues: ['it: briefing is written in English'] }],
+    ['ambiguous verdict', { supported: true, issues: ['A claim is unsupported [1]'] }],
+    ['missing verdict', {}],
+    ['invalid verdict types', { supported: 'true', issues: [] }]
+  ])('rejects %s before publishing', async (_label, verdict) => {
+    process.env = { ...originalEnv, OPENROUTER_API_KEY: 'test-key' };
+    const draft = {
+      en: { paragraphs: ['The council approved ten billion euros in funding and passed the new law unanimously [1].'] },
+      it: { paragraphs: ['Il consiglio ha approvato dieci miliardi di euro di finanziamenti e la nuova legge all’unanimita [1].'] }
+    };
+    fetchMock = jest.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify(draft) } }] }))
+      .mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify(verdict) } }] }));
+
+    await expect(aiSummaryGenerator.generateSummaryForArticles({ key: 'politics' }, [{
+      id: 'council', title: 'Council delays vote',
+      description: 'The council postponed its vote. No funding was approved.', source: 'Example News'
+    }])).rejects.toMatchObject({ code: 'SUMMARY_VALIDATION_FAILED' });
+  });
+
+  test('fails closed when the grounding request fails', async () => {
+    process.env = { ...originalEnv, OPENROUTER_API_KEY: 'test-key' };
+    fetchMock = jest.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify({
+        en: { paragraphs: ['Officials postponed a council vote and did not approve any funding during the session [1].'] },
+        it: { paragraphs: ['I funzionari hanno rinviato il voto del consiglio senza approvare finanziamenti durante la seduta [1].'] }
+      }) } }] }))
+      .mockResolvedValueOnce(Response.json({ error: { message: 'Verification unavailable' } }, { status: 400 }));
+    await expect(aiSummaryGenerator.generateSummaryForArticles({ key: 'politics' }, [{
+      id: 'council', title: 'Council delays vote', description: 'No funding was approved.'
+    }])).rejects.toThrow('Verification unavailable');
   });
 
   test('uses cached reader text in the summary prompt when available', () => {
@@ -76,6 +121,7 @@ describe('aiSummaryGenerator', () => {
     expect(prompt).not.toContain('Brief title');
     expect(prompt).not.toContain('Titolo breve');
     expect(prompt).toContain('Start a new paragraph whenever the subject, argument, or subtopic changes');
+    expect(prompt).toContain('Preserve names, numbers, units, dates, negations, attribution, and uncertainty');
     expect(payload.articles[0]).toEqual(expect.objectContaining({
       ref: 1,
       description: 'Full cached reader text with significantly more useful article context.',
@@ -117,6 +163,19 @@ describe('aiSummaryGenerator', () => {
     expect(aiSummaryGenerator._getCompletionTokenBudget(1)).toBe(1565);
     expect(aiSummaryGenerator._getCompletionTokenBudget(7)).toBe(1955);
     expect(aiSummaryGenerator._getCompletionTokenBudget(120)).toBe(4000);
+  });
+
+  test('preserves more evidence per story at the default 24-article selection', () => {
+    process.env = { ...originalEnv };
+    delete process.env.AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS;
+    const articles = Array.from({ length: 24 }, (_, index) => ({
+      id: String(index), title: 'Council report',
+      description: `${'Background information. '.repeat(30)}No funding was approved. ${'Further details. '.repeat(50)}`
+    }));
+    const input = JSON.parse(aiSummaryGenerator._buildPrompt({ key: 'politics' }, articles).split('\n').at(-1));
+    expect(input.articles[0].description).toContain('No funding was approved.');
+    expect(input.articles[0].description.length).toBe(1250);
+    expect(input.articles.reduce((sum: number, article: { description: string }) => sum + article.description.length, 0)).toBeLessThanOrEqual(30000);
   });
 
   test('removes promotional price-drop sentences from generated summaries', () => {
@@ -162,6 +221,23 @@ describe('aiSummaryGenerator', () => {
         it: 'Policy makers discussed a new chip rule with industry leaders and regulators during the window [1].'
       }
     }, 1)).toThrow('identical');
+  });
+
+  test.each(['[0]', '[0] [999]', '[999]', '[1] [1, 2]', '[1] [-1]'])('rejects invalid citation sequence %s', (citations) => {
+    expect(() => aiSummaryGenerator._validateGeneratedSummary({ summaryTextByLocale: {
+      en: `Officials discussed a proposed policy in detail during the public session ${citations}.`,
+      it: `I funzionari hanno discusso in dettaglio una proposta durante la seduta pubblica ${citations}.`
+    } }, 1)).toThrow(/citation/u);
+  });
+
+  test.each(['en', 'it'])('rejects uncited paragraphs in %s', (locale) => {
+    const texts = {
+      en: 'Officials discussed a proposed policy in detail during the public session [1].',
+      it: 'I funzionari hanno discusso in dettaglio una proposta durante la seduta pubblica [1].'
+    };
+    expect(() => aiSummaryGenerator._validateGeneratedSummary({ summaryTextByLocale: {
+      ...texts, [locale]: `${texts[locale as keyof typeof texts]}\n\nAn additional claim has no supporting reference.`
+    } }, 1)).toThrow('uncited paragraph');
   });
 
   test.each([

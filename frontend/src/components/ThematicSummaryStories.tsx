@@ -48,7 +48,8 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
               }}
               className="group relative inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full p-[1.5px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
               style={AI_ACCENT_GRADIENT_STYLE}
-              aria-label={ariaLabel}
+              aria-label={summary.isStale ? `${ariaLabel} · ${t('summaryOutdated')}` : ariaLabel}
+              title={summary.isStale ? t('summaryOutdated') : undefined}
             >
               <span className={`inline-flex h-full w-full items-center justify-center rounded-full transition-[filter] group-hover:brightness-110 ${circleClassName}`}>
                 <PrimaryIcon className="h-6 w-6" aria-hidden="true" />

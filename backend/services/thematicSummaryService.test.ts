@@ -321,6 +321,17 @@ describe('thematic summary listing', () => {
     expect(items).toHaveLength(1);
   });
 
+  test('marks a current-window briefing stale after its input refresh fails', () => {
+    const { service } = loadServiceWithMocks({
+      env: OPENROUTER_TEST_ENV,
+      databaseMock: { listLatestThematicSummaries: jest.fn(() => [{
+        id: 'science-current', topicKey: 'science', periodStart: '2026-05-20T18:00:00.000Z',
+        periodEnd: '2026-05-21T18:00:00.000Z', status: 'completed', failureCategory: 'invalid_output'
+      }]) }
+    });
+    expect(service.getLatestSummaries({ referenceDate: '2026-05-21T18:05:00.000Z' }).items[0]).toMatchObject({ isStale: true });
+  });
+
   test('hides topics when the latest briefing is empty', () => {
     const databaseMock = {
       listLatestThematicSummaries: jest.fn(() => [
@@ -582,6 +593,47 @@ describe('thematic summary reader prewarm', () => {
     })).resolves.toMatchObject({ attemptedCount: 1 });
     expect(readerServiceMock.getReaderArticle).toHaveBeenCalledTimes(1);
     expect(readerServiceMock.getReaderArticle).toHaveBeenCalledWith('selected', expect.any(Object));
+  });
+
+  test('prioritizes independently covered stories before applying the prompt cap', async () => {
+    const readerServiceMock = {
+      getReaderArticle: jest.fn().mockResolvedValue({ contentText: 'Useful reader content '.repeat(30), fallback: false })
+    };
+    const articles = [
+      { id: 'single', title: 'Latest isolated story', source: 'BBC', pubDate: '2026-05-21T17:00:00.000Z' },
+      { id: 'corroborated', title: 'Major research finding', source: 'Nature', storyGroupId: 'research', pubDate: '2026-05-21T16:00:00.000Z' },
+      { id: 'another-report', title: 'New research confirmed', source: 'BBC', storyGroupId: 'research', pubDate: '2026-05-21T15:00:00.000Z' }
+    ];
+    const { service } = loadServiceWithMocks({
+      databaseMock: { getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Scienza') ? articles : []) },
+      env: { ...OPENROUTER_TEST_ENV, AI_SUMMARY_PROMPT_MAX_ARTICLES: '1' },
+      aiPodcastGeneratorOverrides: { isAiPodcastGenerationAvailable: jest.fn(() => false) },
+      readerServiceMock
+    });
+    await service.prewarmReaderCacheForDueWindow({ referenceDate: '2026-05-21T17:45:00.000Z' });
+    expect(readerServiceMock.getReaderArticle).toHaveBeenCalledTimes(1);
+    expect(readerServiceMock.getReaderArticle).toHaveBeenCalledWith('corroborated', expect.any(Object));
+  });
+
+  test('selects at most 24 source-balanced stories by default', async () => {
+    const articles = Array.from({ length: 60 }, (_, index) => ({
+      id: `article-${index}`, title: `Distinct article number ${index}`, source: `Publisher ${Math.floor(index / 10)}`,
+      pubDate: '2026-05-21T16:00:00.000Z'
+    }));
+    const readerServiceMock = {
+      getReaderArticle: jest.fn().mockResolvedValue({ contentText: 'Useful reader content '.repeat(30), fallback: false })
+    };
+    const { service } = loadServiceWithMocks({
+      databaseMock: { getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Scienza') ? articles : []) },
+      env: OPENROUTER_TEST_ENV,
+      aiPodcastGeneratorOverrides: { isAiPodcastGenerationAvailable: jest.fn(() => false) },
+      readerServiceMock
+    });
+    await service.prewarmReaderCacheForDueWindow({ referenceDate: '2026-05-21T17:45:00.000Z' });
+    const selectedIds = new Set(readerServiceMock.getReaderArticle.mock.calls.map(([id]) => id));
+    const selected = articles.filter((article) => selectedIds.has(article.id));
+    expect(selected).toHaveLength(24);
+    expect(new Set(selected.map((article) => article.source)).size).toBe(6);
   });
 
   test('supports targeted prewarm for podcast-only deployments', async () => {
@@ -1023,6 +1075,45 @@ describe('thematic summary generation retries', () => {
     expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'summaries' });
   });
 
+  test.each(['replacement at cap', 'RSS correction', 'reader enrichment', 'retention only'])('tracks input revisions: %s', async (change) => {
+    const window = createSummaryWindow();
+    let articles = [
+      { id: 'one', title: 'First article', description: 'Original report', source: 'BBC', pubDate: window.periodStart },
+      { id: 'two', title: 'Second article', description: 'Another report', source: 'Reuters', pubDate: window.periodStart }
+    ];
+    let readerText = '';
+    let stored: Record<string, unknown> | null = null;
+    const generator = createAiSummaryGeneratorMock({ generateSummaryForArticles: jest.fn().mockResolvedValue({
+      summaryText: 'Grounded summary [1].', summaryTextByLocale: { en: 'Grounded summary [1].', it: 'Sintesi verificata [1].' },
+      inputArticles: [{ ref: 1, description: 'Exact model evidence' }], model: 'test-model'
+    }) });
+    const { service } = loadServiceWithMocks({
+      env: { ...OPENROUTER_TEST_ENV, AI_SUMMARY_PROMPT_MAX_ARTICLES: '2' },
+      databaseMock: {
+        getThematicSummary: jest.fn((key) => key === 'technology' ? stored : null),
+        getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Tecnologia') ? articles : []),
+        getReaderCache: jest.fn(() => ({ contentText: readerText })),
+        upsertThematicSummary: jest.fn((payload) => {
+          if (payload.topicKey === 'technology') stored = payload;
+          return payload;
+        })
+      },
+      aiSummaryGeneratorMock: generator,
+      aiPodcastGeneratorOverrides: { isAiPodcastGenerationAvailable: jest.fn(() => false) }
+    });
+    await service.generateDueSummaries({ window });
+    await service.generateDueSummaries({ window });
+    expect(generator.generateSummaryForArticles).toHaveBeenCalledTimes(1);
+    expect(stored).toMatchObject({ inputArticles: [{ ref: 1, description: 'Exact model evidence' }] });
+    if (change === 'replacement at cap') articles = [{ ...articles[0], id: 'new', title: 'Late arriving report' }, articles[1]];
+    if (change === 'RSS correction') articles = [{ ...articles[0], description: 'Correction: no funding was approved.' }, articles[1]];
+    if (change === 'reader enrichment') readerText = 'New full article evidence. '.repeat(30);
+    if (change === 'retention only') articles = [articles[1]];
+    await service.generateDueSummaries({ window });
+    await service.generateDueSummaries({ window });
+    expect(generator.generateSummaryForArticles).toHaveBeenCalledTimes(change === 'retention only' ? 1 : 2);
+  });
+
   test('keeps a completed summary when retention only removes selected articles', async () => {
     const summaryWindow = createSummaryWindow();
     const retainedArticle = {
@@ -1149,13 +1240,16 @@ describe('thematic summary generation retries', () => {
         summaryText: 'Previous summary [1].',
         sources: [expect.objectContaining({ articleId: 'article-old' })],
         failureCategory: 'provider_unavailable',
-        retryCount: 1
+        retryCount: 1,
+        generatedAt: '2026-05-21T05:00:00.000Z',
+        lastAttemptAt: expect.any(String)
       })
     ]));
     expect(aiSummaryGeneratorMock.generateSummaryForArticles).toHaveBeenCalledTimes(1);
     expect(databaseMock.upsertThematicSummary).toHaveBeenCalledTimes(1);
     expect(databaseMock.pruneSummaryHistory).not.toHaveBeenCalled();
-    expect(websocketServiceMock.broadcastFeedRefresh).not.toHaveBeenCalled();
+    expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledTimes(1);
+    expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'summaries' });
   });
 
   test('deduplicates topic summaries and reuses topic article queries for podcasts', async () => {
