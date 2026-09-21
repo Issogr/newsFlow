@@ -12,7 +12,7 @@ const SettingsActionButton = ({ icon: Icon, iconClassName, children, ...buttonPr
 } & ButtonHTMLAttributes<HTMLButtonElement>) => (
   <button
     type="button"
-    className="flex items-center gap-3 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-60"
+    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
     {...buttonProps}
   >
     <span className="inline-flex h-8 w-8 items-center justify-center text-slate-700">
@@ -80,7 +80,7 @@ const SettingsAccessSection = ({
         <ExternalPillLink href="/cookie-policy" target="_blank">{t('cookiePolicyLink')}</ExternalPillLink>
       </div>
 
-      <details className="group rounded-[1.25rem] border border-slate-200 bg-slate-50">
+      <details className="group overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-800 [&::-webkit-details-marker]:hidden">
           <span>{t('advancedSettings')}</span>
           <ChevronDown className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" />
@@ -130,7 +130,7 @@ const SettingsAccessSection = ({
                 <div className="grid gap-x-5 gap-y-4 border-y border-slate-200 py-4 md:grid-cols-2 xl:grid-cols-3">
                   {apiTokenStatusItems.map((item) => (
                     <div key={item.key} className="min-w-0">
-                      <p className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${item.labelClassName || 'text-slate-500'}`}>{item.label}</p>
+                      <p className={`text-xs font-medium ${item.labelClassName || 'text-slate-500'}`}>{item.label}</p>
                       <p className={`mt-1 text-sm font-medium ${item.valueClassName || 'break-words text-slate-800'}`}>{item.value}</p>
                     </div>
                   ))}

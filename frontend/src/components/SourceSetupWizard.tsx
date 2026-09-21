@@ -187,12 +187,12 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, patchSession
       className="fixed inset-0 z-[70] flex h-[100dvh] w-full bg-slate-950/45 backdrop-blur-sm sm:items-center sm:justify-center sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pl-[calc(1rem+env(safe-area-inset-left))] sm:pr-[calc(1rem+env(safe-area-inset-right))] sm:pt-[calc(1.5rem+env(safe-area-inset-top))]"
       dismissOnEscape={false}
     >
-      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] sm:h-full sm:max-w-2xl sm:rounded-[1.6rem] sm:border sm:border-slate-200" data-modal-content>
+      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-xl sm:h-full sm:max-w-2xl sm:rounded-2xl sm:border sm:border-slate-200" data-modal-content>
         <div className="border-b border-slate-200 bg-white pb-5 pl-[calc(1.25rem+env(safe-area-inset-left))] pr-[calc(1.25rem+env(safe-area-inset-right))] pt-[calc(1.25rem+env(safe-area-inset-top))] sm:px-6 sm:py-5">
           <div className="flex items-start gap-4">
             <Newspaper className="mt-1 h-6 w-6 shrink-0 text-sky-600" aria-hidden="true" />
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{t('sourceSetupEyebrow')}</p>
+              <p className="text-xs font-medium text-slate-500">{t('sourceSetupEyebrow')}</p>
               <h2 id="source-setup-title" className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 focus:outline-none" data-modal-title tabIndex={-1}>{t('sourceSetupTitle')}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">{t('sourceSetupSubtitle')}</p>
               {isExistingSourceReview ? (
@@ -222,7 +222,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, patchSession
           <div className="space-y-5">
             {sourceGroupsByLanguage.map(([language, languageSources]) => (
               <section key={language} aria-labelledby={`source-language-${language}`}>
-                <h3 id={`source-language-${language}`} className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <h3 id={`source-language-${language}`} className="mb-2 px-1 text-sm font-semibold text-slate-600">
                   {getLanguageSectionLabel(language, t)}
                 </h3>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -237,10 +237,10 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, patchSession
                 return (
                   <div
                     key={source.id}
-                    className={`relative rounded-[1.25rem] border p-3 transition-colors ${
+                    className={`relative rounded-xl border p-3 transition-colors ${
                       sourceFullySelected || sourcePartiallySelected
                         ? 'border-sky-200 bg-sky-50'
-                        : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
                     }`}
                   >
                     <span className={`absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-full border text-white ${sourceFullySelected || sourcePartiallySelected ? 'border-sky-600 bg-sky-600' : 'border-slate-200 bg-white text-transparent'}`} aria-hidden="true">
@@ -301,7 +301,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, patchSession
                   key={source.id}
                   type="button"
                   onClick={() => toggleSelection(source.id)}
-                  className={`relative flex min-h-[5.5rem] w-full items-start gap-3 rounded-[1.25rem] border p-4 text-left transition-colors ${selected ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'}`}
+                  className={`relative flex min-h-[5.5rem] w-full items-start gap-3 rounded-xl border p-4 text-left transition-colors ${selected ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'}`}
                 >
                   <SourceIcon source={source} className="h-10 w-10" />
                   <span className="min-w-0 pr-7">
@@ -337,7 +337,7 @@ const SourceSetupWizard = ({ t, sources = [], currentSettings = {}, patchSession
             type="button"
             onClick={handleSave}
             disabled={saving || selectedCount === 0 || allSelectableIds.length === 0}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
             {saving ? t('saving') : t('sourceSetupContinue')}

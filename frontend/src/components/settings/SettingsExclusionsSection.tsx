@@ -6,7 +6,6 @@ import SourceIcon from '../SourceIcon';
 import { getFriendlyApiErrorMessage } from '../../utils/apiError';
 import type { NewsSource, Translator, UserSettings } from '../../types';
 
-const fieldClassName = 'w-full rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-slate-800 outline-none transition-[border-color,box-shadow] placeholder:text-slate-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-100';
 const sourceLanguages = [
   ['it', 'languageItalian'],
   ['en', 'languageEnglish'],
@@ -95,7 +94,7 @@ const SettingsExclusionsSection = ({
         type="button"
         onClick={() => onStartEditSource(source)}
         disabled={saving}
-        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+        className="ui-icon-button"
         aria-label={t('editSource')}
         title={t('editSource')}
       >
@@ -161,7 +160,7 @@ const SettingsExclusionsSection = ({
                   }}
                   aria-disabled={saving}
                   aria-pressed={isShown}
-                  className={`flex min-w-0 flex-1 items-center gap-3 rounded-[1.25rem] border px-3 py-2.5 text-left transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ${isShown ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
+                  className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ${isShown ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
                 >
                   <SourceIcon source={source} className="h-8 w-8" />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{source.name}</span>
@@ -177,7 +176,7 @@ const SettingsExclusionsSection = ({
                     disabled={saving || !isShown}
                     aria-expanded={isExpanded}
                     aria-label={t(isExpanded ? 'collapseSourceFeeds' : 'expandSourceFeeds', { name: source.name })}
-                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="ui-icon-button"
                   >
                     <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
                   </button>
@@ -195,7 +194,7 @@ const SettingsExclusionsSection = ({
                         value={editingSourceForm.name}
                         onChange={(event) => onEditingSourceFormChange((current) => ({ ...current, name: event.target.value }))}
                         disabled={saving}
-                        className={fieldClassName}
+                        className="ui-field"
                       />
                     </label>
                     <label className="block">
@@ -204,7 +203,7 @@ const SettingsExclusionsSection = ({
                         value={editingSourceForm.language}
                         onChange={(event) => onEditingSourceFormChange((current) => ({ ...current, language: event.target.value }))}
                         disabled={saving}
-                        className={fieldClassName}
+                        className="ui-field"
                       >
                         {sourceLanguages.map(([value, labelKey]) => (
                           <option key={value} value={value}>{t(labelKey)}</option>
@@ -220,7 +219,7 @@ const SettingsExclusionsSection = ({
                       value={editingSourceForm.url}
                       onChange={(event) => onEditingSourceFormChange((current) => ({ ...current, url: event.target.value }))}
                       disabled={saving}
-                      className={fieldClassName}
+                      className="ui-field"
                     />
                   </label>
                   <div className="flex flex-wrap items-center gap-3">

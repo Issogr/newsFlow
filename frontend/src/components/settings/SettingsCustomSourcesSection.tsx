@@ -6,7 +6,6 @@ import { discoverRssFeeds, isRequestCanceled } from '../../services/api';
 import { getFriendlyApiErrorMessage } from '../../utils/apiError';
 import type { DiscoveredFeed, NewsSource, Translator } from '../../types';
 
-const fieldClassName = 'w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition-[border-color,background-color,box-shadow] placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100';
 const SettingsCustomSourcesSection = ({
   t,
   saving,
@@ -114,7 +113,7 @@ const SettingsCustomSourcesSection = ({
                   setDiscoveryError(null);
                 }}
                 disabled={saving || discoveringFeeds || sourceLimitReached}
-                className={fieldClassName}
+                className="ui-field"
                 required
               />
             </label>

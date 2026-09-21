@@ -279,7 +279,7 @@ const ReaderPanel = ({
       headerStart={headerStart}
       labelledBy="reader-panel-title"
       onClose={onClose}
-      panelClassName="flex h-full w-full flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(72rem,calc(100vw-2rem))] lg:rounded-[1.6rem] lg:border lg:border-slate-200"
+      panelClassName="flex h-full w-full flex-col overflow-hidden bg-white shadow-xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(72rem,calc(100vw-2rem))] lg:rounded-2xl lg:border lg:border-slate-200"
     >
           <div className="min-h-0 flex-1 overflow-y-auto bg-white pb-[calc(1.5rem+env(safe-area-inset-bottom))] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-6 sm:pl-[calc(1.25rem+env(safe-area-inset-left))] sm:pr-[calc(1.25rem+env(safe-area-inset-right))] md:pb-[calc(2rem+env(safe-area-inset-bottom))] md:pt-8 lg:pl-[calc(1.5rem+env(safe-area-inset-left))] lg:pr-[calc(1.5rem+env(safe-area-inset-right))]">
             {selectedArticle && (
@@ -330,7 +330,7 @@ const ReaderPanel = ({
                           type="button"
                           onClick={handleShare}
                           disabled={!safeOriginalUrl}
-                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="ui-icon-button"
                           aria-label={t('shareArticle')}
                         >
                           <Share2 className="h-4 w-4" />
@@ -340,7 +340,7 @@ const ReaderPanel = ({
                         type="button"
                         onClick={refreshReader}
                         disabled={!selectedArticleId || loading}
-                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="ui-icon-button"
                         aria-label={t('refreshReader')}
                         title={t('refreshReader')}
                       >
@@ -378,7 +378,7 @@ const ReaderPanel = ({
                     )}
 
                     {selectedReader.byline && (
-                      <p className="mb-8 text-sm font-medium uppercase tracking-[0.16em] text-stone-400">{selectedReader.byline}</p>
+                      <p className="mb-6 text-sm font-medium text-stone-500">{selectedReader.byline}</p>
                     )}
 
                     <div className="space-y-5">

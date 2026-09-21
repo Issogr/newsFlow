@@ -11,7 +11,7 @@ const DEFAULT_MAX_DESCRIPTION_LENGTH = 2800;
 const DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_VIDEO_ATTACHMENT_BYTES = 12 * 1024 * 1024;
 const FEEDBACK_FORM_ID = 'feedback-form';
-const fieldClassName = 'w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition-[border-color,background-color,box-shadow] placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100 aria-invalid:border-red-300 aria-invalid:ring-1 aria-invalid:ring-red-100';
+const fieldClassName = 'ui-field aria-invalid:border-red-300 aria-invalid:ring-1 aria-invalid:ring-red-100';
 const FEEDBACK_CATEGORIES = [
   { id: 'bug', labelKey: 'feedbackCategoryBug', helpKey: 'feedbackCategoryBugHelp', descriptionHelpKey: 'feedbackDescriptionBugHelp', icon: Bug, badgeClassName: 'bg-rose-100 text-rose-700', ringClassName: 'border-rose-200 bg-rose-50' },
   { id: 'feedback', labelKey: 'feedbackCategoryFeedback', helpKey: 'feedbackCategoryFeedbackHelp', descriptionHelpKey: 'feedbackDescriptionFeedbackHelp', icon: MessageSquare, badgeClassName: 'bg-sky-100 text-sky-700', ringClassName: 'border-sky-200 bg-sky-50' },
@@ -222,7 +222,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }: {
                           setSubmitError('');
                         }}
                         aria-pressed={isActive}
-                        className={`flex min-w-0 flex-col items-center rounded-[1.25rem] border px-2 py-3 text-center transition-colors ${isActive ? ringClassName : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}
+                        className={`flex min-w-0 flex-col items-center rounded-xl border px-2 py-3 text-center transition-colors ${isActive ? ringClassName : 'border-slate-200 bg-white hover:bg-slate-50'}`}
                       >
                         <span className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${badgeClassName}`}>
                           <Icon className="h-4 w-4" aria-hidden="true" />
@@ -297,7 +297,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }: {
                     {!attachment && <p className="mt-1 text-sm text-slate-500">{t('feedbackImageHelp')}</p>}
                   </div>
 
-                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 focus-within:ring-2 focus-within:ring-sky-100">
+                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-within:ring-2 focus-within:ring-sky-500">
                     {attachment ? <Paperclip className="h-4 w-4" /> : <ImagePlus className="h-4 w-4" />}
                     {attachment ? t('feedbackReplaceImage') : t('feedbackAttachImage')}
                     <input
@@ -328,7 +328,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }: {
                 {attachment && (
                   <div className="mt-5">
                     {attachmentPreviewUrl && (
-                      <div className="overflow-hidden rounded-[1.25rem] border border-slate-200 bg-slate-50">
+                      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
                         {isVideoAttachment ? (
                           <video src={attachmentPreviewUrl} controls className="max-h-72 w-full bg-slate-950 object-contain" />
                         ) : (
@@ -347,7 +347,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }: {
                           setAttachment(null);
                           setAttachmentError('');
                         }}
-                        className="inline-flex items-center justify-center gap-2 rounded-[1.25rem] border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100"
                       >
                         <Trash2 className="h-4 w-4" />
                         {t('feedbackRemoveImage')}
@@ -366,11 +366,11 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }: {
           <div className="w-full">
             {submitError && <InlineAlert className="mb-3">{submitError}</InlineAlert>}
             <div className="flex items-center justify-between gap-4">
-              <button type="button" onClick={onClose} disabled={submitting} className="rounded-[1.25rem] border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={onClose} disabled={submitting} className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-50">
                 {sent ? t('close') : t('cancel')}
               </button>
               {!sent && (
-                <button type="submit" form={FEEDBACK_FORM_ID} disabled={submitting} className="inline-flex items-center gap-2 rounded-[1.25rem] bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60">
+                <button type="submit" form={FEEDBACK_FORM_ID} disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60">
                   <Send className="h-4 w-4" />
                   {submitting ? t('feedbackSending') : t('feedbackSubmit')}
                 </button>

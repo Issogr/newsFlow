@@ -121,12 +121,15 @@ describe('MobileBottomNav', () => {
 
     fireEvent.click(getNavButton('Search'));
     const input = screen.getByRole('searchbox', { name: 'Search' });
+    expect(screen.queryByRole('button', { name: /Sources/ })).not.toBeInTheDocument();
+    expect(refreshButton.parentElement).toHaveAttribute('inert');
     fireEvent.change(input, { target: { value: 'news' } });
     expect(onSearchChange).toHaveBeenCalledWith('news');
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onSearchClear).toHaveBeenCalled();
     expect(getNavButton('Sources')).toBeInTheDocument();
+    expect(refreshButton.parentElement).not.toHaveAttribute('inert');
   });
 
   it('keeps back to top available while the navbar is collapsed', () => {

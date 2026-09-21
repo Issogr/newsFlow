@@ -21,7 +21,7 @@ const UnsavedSettingsDialog = ({ t, saving, onCancel, onDiscard, onSave }: { t: 
     onRequestClose={onCancel}
     role="alertdialog"
   >
-    <div className="w-full max-w-md rounded-[1.6rem] border border-slate-200 bg-white p-6 shadow-[0_24px_70px_-28px_rgba(15,23,42,0.5)]" data-modal-content>
+    <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl" data-modal-content>
       <h2 id="unsaved-settings-title" className="text-xl font-semibold text-slate-900 focus:outline-none" data-modal-title tabIndex={-1}>
         {t('unsavedSettingsTitle')}
       </h2>
@@ -210,7 +210,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, onOpenReleas
             {t('changelogTitle')}
           </button>
         </div>
-        <button type="button" onClick={handleSaveAndClose} disabled={saving || !hasUnsavedChanges} className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
+        <button type="button" onClick={handleSaveAndClose} disabled={saving || !hasUnsavedChanges} className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60">
           {saving ? t('saving') : t('save')}
         </button>
       </SlideOverPanelFooter> : null}

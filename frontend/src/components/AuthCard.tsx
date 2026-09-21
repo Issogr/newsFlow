@@ -3,8 +3,7 @@ import type { InputHTMLAttributes, ReactNode } from 'react';
 import type { Translator } from '../types';
 
 export const MIN_PASSWORD_LENGTH = 8;
-const AUTH_INPUT_CLASS_NAME = 'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition-colors focus:border-slate-400';
-export const AUTH_PRIMARY_BUTTON_CLASS_NAME = 'inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60';
+export const AUTH_PRIMARY_BUTTON_CLASS_NAME = 'inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 export function getPasswordValidationError(password: string, t: Translator) {
   if (!password) {
@@ -35,15 +34,15 @@ export const AuthTextInput = ({ label, ...inputProps }: { label: string } & Inpu
     <span className="mb-2 block text-sm font-medium text-slate-700">{label}</span>
     <input
       {...inputProps}
-      className={AUTH_INPUT_CLASS_NAME}
+      className="ui-field"
     />
   </label>
 );
 
 const AuthCard = ({ children, subtitle }: { children: ReactNode; subtitle: string }) => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-[max(2.5rem,env(safe-area-inset-top))] text-slate-900">
-      <div className="w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl">
+    <div className="flex min-h-screen items-center justify-center bg-canvas px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-[max(2.5rem,env(safe-area-inset-top))] text-slate-900">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
         <div className="mb-6 flex items-center gap-3">
           <BrandMark className="h-12 w-12" />
           <div>

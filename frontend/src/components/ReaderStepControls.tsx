@@ -58,7 +58,7 @@ const ReaderStepControls = <T extends string>({
   };
 
   return (
-    <div className={`${className} h-11 items-center gap-1 rounded-[1rem] border border-slate-200 bg-slate-50 px-1`} role="group" aria-label={groupLabel}>
+    <div className={`${className} h-11 items-center gap-1 rounded-xl border border-slate-200 bg-white px-1`} role="group" aria-label={groupLabel}>
       <button
         type="button"
         onClick={() => updateValue(order[Math.max(valueIndex - 1, 0)])}

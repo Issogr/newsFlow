@@ -72,16 +72,16 @@ describe('NewsCard', () => {
     expect(screen.getByText('Headline', { selector: 'span' })).toHaveClass('line-clamp-2');
   });
 
-  test('uses single-row responsive header classes', () => {
+  test('keeps source metadata above the headline and actions below the story', () => {
     renderNewsCard();
 
     const sourceRow = screen.getByText('Source A').parentElement?.parentElement;
     const actions = screen.getByRole('button', { name: 'shareArticle' }).parentElement;
 
-    expect(sourceRow).toHaveClass('min-w-0', 'flex-1');
-    expect(sourceRow?.parentElement).toHaveClass('items-center', 'gap-2', 'sm:gap-3');
-    expect(sourceRow?.parentElement).not.toHaveClass('flex-col');
-    expect(actions).toHaveClass('ml-auto', 'gap-1.5', 'sm:gap-2');
+    const headline = screen.getByRole('heading', { name: 'Headline' });
+    expect(sourceRow!.compareDocumentPosition(headline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(headline.compareDocumentPosition(actions!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sourceRow?.parentElement).not.toContainElement(actions);
   });
 
   test('opens a safe external url in a new tab', () => {
@@ -92,7 +92,6 @@ describe('NewsCard', () => {
     const originalSourceButton = screen.getByRole('button', { name: 'openOriginalSource' });
     const readLaterButton = screen.getByRole('button', { name: 'saveReadLater' });
 
-    expect(originalSourceButton).toHaveClass('border-slate-200', 'bg-white', 'text-slate-600');
     expect(originalSourceButton.nextElementSibling).toBe(readLaterButton);
     fireEvent.click(originalSourceButton);
 
@@ -186,7 +185,6 @@ describe('NewsCard', () => {
     expect(technologyTopic.firstElementChild).toHaveClass('rounded-full');
     expect(technologyTopic.getAttribute('style')).toContain('conic-gradient');
     expect(screen.getByLabelText('Economy')).toHaveClass('rounded-full');
-    expect(technologyTopic.parentElement).toHaveClass('-space-x-1');
     expect(screen.queryByText('Technology')).not.toBeInTheDocument();
     expect(screen.queryByText('Economy')).not.toBeInTheDocument();
 
@@ -223,9 +221,8 @@ describe('NewsCard', () => {
 
     expect(screen.getByLabelText('Source A')).toBeInTheDocument();
     expect(screen.getByLabelText('Source B')).toBeInTheDocument();
-    expect(screen.getByLabelText('Source A')).toHaveClass('flex', 'h-9', 'w-9', 'sm:h-10', 'sm:w-10', 'leading-none');
-    expect(screen.getByLabelText('Source A').querySelector('img')!.parentElement).toHaveClass('h-9', 'w-9', 'sm:h-10', 'sm:w-10', 'outline-2');
-    expect(screen.getByLabelText('Source A').querySelector('img')!.parentElement).not.toHaveClass('border-2');
+    expect(screen.getByLabelText('Source A').querySelector('img')).toHaveAttribute('src', 'https://example.com/a.ico');
+    expect(screen.getByLabelText('Source B').querySelector('img')).toHaveAttribute('src', 'https://example.com/b.ico');
     expect(screen.getByLabelText('sources')).toHaveClass('rounded-full');
     expect(screen.getByText('Source A +1')).toBeInTheDocument();
     expect(screen.queryByText('Source B')).not.toBeInTheDocument();
@@ -351,9 +348,9 @@ describe('NewsCard', () => {
     expect(screen.getByText('Headline').compareDocumentPosition(screen.getByRole('img', { name: 'Headline' })) & globalThis.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const imageButton = screen.getByRole('img', { name: 'Headline' }).parentElement;
     const card = imageButton?.closest('article');
-    expect(imageButton).toHaveClass('aspect-video', 'md:grow');
+    expect(imageButton).toHaveClass('aspect-video');
     expect(imageButton).not.toHaveClass('grow');
-    expect(card).toHaveClass('md:h-full', 'md:min-h-[20rem]');
+    expect(card).toHaveClass('md:h-full');
     expect(card).not.toHaveClass('h-full');
     expect(card).not.toHaveClass('min-h-[20rem]');
 

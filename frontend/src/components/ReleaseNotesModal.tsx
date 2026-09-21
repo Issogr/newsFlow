@@ -12,10 +12,10 @@ const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss, restoreFocusRef
       onRequestClose={onDismiss}
       restoreFocusRef={restoreFocusRef}
     >
-      <div className="flex min-h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] sm:min-h-0 sm:max-h-full sm:rounded-[1.6rem] sm:border sm:border-slate-200" data-modal-content>
+      <div className="flex min-h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-xl sm:min-h-0 sm:max-h-full sm:rounded-2xl sm:border sm:border-slate-200" data-modal-content>
         <div className="flex shrink-0 items-start justify-between border-b border-slate-200 pb-5 pl-[calc(1.5rem+env(safe-area-inset-left))] pr-[calc(1.5rem+env(safe-area-inset-right))] pt-[calc(1.25rem+env(safe-area-inset-top))] sm:px-6 sm:py-5">
           <div>
-            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+            <p className="inline-flex items-center gap-2 text-xs font-medium text-slate-500">
               <Sparkles className="h-4 w-4" />
               {releaseNotes.eyebrow}
             </p>
@@ -27,7 +27,7 @@ const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss, restoreFocusRef
             type="button"
             onClick={onDismiss}
             disabled={saving}
-            className="shrink-0 rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="ui-icon-button ml-3"
             aria-label={t('releaseNotesDismiss')}
           >
             <X className="h-5 w-5" />
@@ -39,9 +39,9 @@ const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss, restoreFocusRef
             {releaseNotes.date ? <time dateTime={releaseNotes.date}>{releaseNotes.dateLabel}</time> : t('changelogUnreleased')}
           </span>
 
-          <ul className="space-y-3 text-sm text-slate-700">
+          <ul className="list-disc space-y-4 pl-5 text-sm leading-6 text-slate-700 marker:text-sky-600">
             {releaseNotes.items.map((item) => (
-              <li key={item} className="rounded-2xl bg-slate-50 px-4 py-3">
+              <li key={item} className="pl-1">
                 {item}
               </li>
             ))}
@@ -54,7 +54,7 @@ const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss, restoreFocusRef
             type="button"
             onClick={onDismiss}
             disabled={saving}
-            className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? t('saving') : t('releaseNotesDismiss')}
           </button>

@@ -264,16 +264,16 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   };
 
   const sourceIconItems = sourceEntries.slice(0, 2).map((source) => (
-    <span key={source.id} title={source.name} aria-label={source.name} className="flex h-9 w-9 shrink-0 leading-none sm:h-10 sm:w-10">
+    <span key={source.id} title={source.name} aria-label={source.name} className="flex h-8 w-8 shrink-0 leading-none sm:h-9 sm:w-9">
       <SourceIcon
         source={source}
-        className="h-9 w-9 shadow-md outline outline-2 outline-white sm:h-10 sm:w-10"
+        className="h-8 w-8 outline outline-2 outline-white sm:h-9 sm:w-9"
       />
     </span>
   ));
   const sourceIconStack = sourceEntries.length > 1 ? (aiGroupedStory ? (
     <div
-      className="inline-flex rounded-full p-0.5 shadow-sm"
+      className="inline-flex rounded-full p-0.5"
       style={AI_ACCENT_GRADIENT_STYLE}
       aria-label={t('aiGroupedStory')}
       title={t('aiGroupedStory')}
@@ -283,14 +283,14 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       </div>
     </div>
   ) : (
-    <div className="flex -space-x-2 rounded-full bg-white p-1 shadow-sm ring-1 ring-sky-200" aria-label={t('sources')}>
+    <div className="flex -space-x-2 rounded-full bg-white p-1 ring-1 ring-sky-200" aria-label={t('sources')}>
       {sourceIconItems}
     </div>
   )) : (sourceIconItems[0] || null);
   const sourceSummary = getSourceSummary(group, sourceEntries);
   const publishedAt = getPublishedAt(group, locale);
   const topicBadges = topicEntries.length > 0 ? (
-    <div className="flex w-fit -space-x-1 text-xs font-medium text-slate-600">
+    <div className="flex w-fit shrink-0 -space-x-2 text-xs font-medium text-slate-600">
       {topicEntries.map(({ topic, source }) => {
         const { Icon, iconBadgeClassName } = getTopicPresentation(topic);
         const localizedTopic = getLocalizedTopic(topic, locale);
@@ -300,7 +300,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
           return (
             <span
               key={topic}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full p-[1.5px] shadow-sm ring-2 ring-slate-900/10"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full p-[1.5px]"
               style={AI_ACCENT_GRADIENT_STYLE}
               aria-label={localizedTopic}
               title={localizedTopic}
@@ -315,7 +315,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         return (
           <span
             key={topic}
-            className={`inline-flex h-8 w-8 items-center justify-center rounded-full shadow-sm ring-2 ring-slate-900/10 ${iconBadgeClassName}`}
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${iconBadgeClassName}`}
             aria-label={localizedTopic}
             title={localizedTopic}
           >
@@ -336,7 +336,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         type="button"
         onClick={openOriginalSource}
         disabled={!safeOriginalUrl}
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        className="ui-icon-button"
         aria-label={t('openOriginalSource')}
         title={safeOriginalUrl ? t('openOriginalSourceHelp') : t('openOriginalSourceUnavailable')}
       >
@@ -346,7 +346,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         type="button"
         onClick={() => onToggleReadLater?.(group)}
         disabled={readLaterUpdating}
-        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70 ${group.readLater ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+        className={`ui-icon-button ${group.readLater ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : ''}`}
         aria-label={group.readLater ? t('removeReadLater') : t('saveReadLater')}
         aria-pressed={Boolean(group.readLater)}
         title={group.readLater ? t('removeReadLater') : t('saveReadLater')}
@@ -357,7 +357,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
         type="button"
         onClick={handleShare}
         disabled={!safeOriginalUrl}
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        className="ui-icon-button"
         aria-label={t('shareArticle')}
       >
         <Share2 className="h-4 w-4" />
@@ -366,19 +366,19 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   );
 
   return (
-    <article className="group relative flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-[1.75rem] md:h-full md:min-h-[20rem]">
-      <div className="flex min-w-0 items-center gap-2 px-4 pb-3 pt-5 sm:gap-3 sm:px-5">
+    <article className="relative flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white md:h-full">
+      <div className="flex min-w-0 items-center gap-2 px-4 pt-4 sm:gap-3 sm:px-5 sm:pt-5">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           {sourceIconStack}
           <div className="min-w-0 flex-1">
             {sourceSummary ? (
-              <p className="truncate text-sm font-bold text-slate-950">{sourceSummary}</p>
+              <p className="truncate text-sm font-medium text-slate-900">{sourceSummary}</p>
             ) : null}
             {publishedAt ? (
               <time
                 dateTime={publishedAt.iso}
                 aria-label={t('publishedAt', { date: publishedAt.label })}
-                className="mt-1 inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-slate-500"
+                className="mt-0.5 inline-flex min-w-0 items-center gap-1.5 text-xs text-slate-500"
               >
                 <Clock3 className="h-3.5 w-3.5 shrink-0 text-sky-600" aria-hidden="true" />
                 <span className="truncate">{publishedAt.label}</span>
@@ -386,11 +386,10 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
             ) : null}
           </div>
         </div>
-        {shareControls}
       </div>
 
-      <div className="flex min-w-0 flex-col px-4 pb-4 pt-3 sm:px-5">
-        <h2 className="text-lg font-bold leading-6 tracking-[-0.01em] text-slate-900 sm:text-xl">
+      <div className="flex min-w-0 flex-col px-4 py-4 sm:px-5">
+        <h2 className="text-lg font-semibold leading-7 tracking-tight text-slate-900 sm:text-xl md:min-h-14">
           <button
             type="button"
             className="block w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2"
@@ -405,7 +404,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       {imageUrl ? (
         <button
           type="button"
-          className="relative block aspect-video w-full cursor-pointer overflow-hidden border-y border-slate-100 bg-slate-100 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400 md:grow"
+          className="relative mt-auto block aspect-video w-full shrink-0 cursor-pointer overflow-hidden border-y border-slate-100 bg-slate-100 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400"
           aria-label={group.title}
           title={t('readHereHelp')}
           {...readerInteractionProps}
@@ -414,7 +413,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
             src={imageUrl}
             alt={isGenericNewsCover(imageUrl) ? fallbackImageAlt : group.title}
             loading="lazy"
-            className="block h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.015]"
+            className="block h-full w-full object-cover"
             onError={() => {
               if (!showImages) {
                 setImageUrl('');
@@ -424,19 +423,13 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
               setImageUrl((current) => (isGenericNewsCover(current) ? '' : fallbackImageUrl));
             }}
           />
-          {topicBadges ? (
-            <div className="absolute bottom-3 left-3 z-10">
-              {topicBadges}
-            </div>
-          ) : null}
         </button>
       ) : null}
 
-      {!imageUrl && topicBadges ? (
-        <div className="px-4 pt-3 sm:px-5">
-          {topicBadges}
-        </div>
-      ) : null}
+      <div className="mt-auto flex items-center justify-between gap-2 px-3 py-2 sm:px-4">
+        {topicBadges}
+        {shareControls}
+      </div>
     </article>
   );
 });

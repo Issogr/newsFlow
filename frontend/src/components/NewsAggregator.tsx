@@ -56,38 +56,34 @@ const SKELETON_CARD_COUNT = 6;
 
 function NewsCardSkeleton({ showImage }: { showImage: boolean }) {
   return (
-    <article className="relative flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-[1.75rem] md:h-full md:min-h-[20rem]" aria-hidden="true">
-      <div className="flex min-w-0 items-center gap-2 px-4 pb-3 pt-5 sm:gap-3 sm:px-5">
+    <article className="relative flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white md:h-full" aria-hidden="true">
+      <div className="flex min-w-0 items-center gap-2 px-4 pt-4 sm:gap-3 sm:px-5 sm:pt-5">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-          <div className="h-9 w-9 shrink-0 rounded-full bg-sky-100 sm:h-10 sm:w-10" />
+          <div className="h-8 w-8 shrink-0 rounded-full bg-sky-100 sm:h-9 sm:w-9" />
           <div className="flex-1 space-y-2">
             <div className="h-3.5 w-2/5 rounded-full bg-slate-200" />
             <div className="h-3 w-3/5 rounded-full bg-slate-100" />
           </div>
         </div>
-        <div className="ml-auto flex gap-1.5 sm:gap-2">
-          <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white" />
-          <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white" />
-          <div className="h-9 w-9 rounded-xl border border-slate-200 bg-white" />
-        </div>
       </div>
-      <div className="space-y-2.5 px-4 pb-4 pt-3 sm:px-5">
+      <div className="space-y-3 px-4 py-4 sm:px-5 md:min-h-22">
         <div className="h-4 w-full rounded-full bg-slate-200" />
         <div className="h-4 w-4/5 rounded-full bg-slate-200" />
       </div>
       {showImage ? (
-        <div className="relative aspect-video w-full border-y border-slate-100 bg-slate-200 md:grow">
-          <div className="absolute bottom-3 left-3 flex -space-x-1">
-            <div className="h-8 w-8 rounded-full bg-sky-100 ring-2 ring-slate-900/10" />
-            <div className="h-8 w-8 rounded-full bg-violet-100 ring-2 ring-slate-900/10" />
-          </div>
+        <div className="mt-auto aspect-video w-full border-y border-slate-100 bg-slate-200" />
+      ) : null}
+      <div className="mt-auto flex items-center justify-between gap-2 px-3 py-2 sm:px-4">
+        <div className="flex -space-x-2">
+          <div className="h-8 w-8 rounded-full bg-sky-100" />
+          <div className="h-8 w-8 rounded-full bg-violet-100" />
         </div>
-      ) : (
-        <div className="flex -space-x-1 px-4 pt-3 sm:px-5">
-          <div className="h-8 w-8 rounded-full bg-sky-100 ring-2 ring-slate-900/10" />
-          <div className="h-8 w-8 rounded-full bg-violet-100 ring-2 ring-slate-900/10" />
+        <div className="flex gap-1.5 sm:gap-2">
+          <div className="h-11 w-11 rounded-xl border border-slate-200" />
+          <div className="h-11 w-11 rounded-xl border border-slate-200" />
+          <div className="h-11 w-11 rounded-xl border border-slate-200" />
         </div>
-      )}
+      </div>
     </article>
   );
 }
@@ -109,7 +105,7 @@ function UserMenuItem({ icon: Icon, label, onClick, className = '', iconClassNam
     <button
       type="button"
       onClick={onClick}
-      className={className || 'flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100'}
+      className={className || 'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50'}
       role="menuitem"
     >
       <span className="flex items-center gap-3">
@@ -771,16 +767,16 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
   };
 
   return (
-    <div className="min-h-screen overflow-x-clip bg-white text-slate-900 md:bg-slate-100">
-      <header className={`sticky top-[env(safe-area-inset-top)] z-50 transition-[padding] duration-300 ${topNavCompact ? 'px-4 pt-2' : ''}`}>
-        <div className={`bg-white/95 shadow-none backdrop-blur-xl transition-all duration-300 md:shadow-sm ${topNavCompact ? 'rounded-[1.6rem] border border-b-0 border-slate-200/80 bg-white/90 shadow-none md:border-b md:shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] 2xl:mx-auto 2xl:max-w-7xl' : 'md:border-b md:border-slate-200'}`}>
-          <div className={`mx-auto flex max-w-7xl flex-col px-4 transition-all duration-300 lg:px-6 ${topNavCompact ? 'gap-2 py-2.5' : 'gap-4 py-5'}`}>
+    <div className="min-h-screen overflow-x-clip bg-canvas text-slate-900">
+      <header className="sticky top-0 z-50 bg-surface pt-[env(safe-area-inset-top)]">
+        <div className="border-b border-slate-200">
+          <div className={`mx-auto flex max-w-7xl flex-col px-4 transition-[padding] duration-200 lg:px-6 ${topNavCompact ? 'py-2' : 'py-3'}`}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-3">
-                  <BrandMark className={`transition-all duration-300 ${topNavCompact ? 'h-9 w-9' : 'h-11 w-11'}`} />
+                  <BrandMark className="h-9 w-9 shrink-0" />
                   <div className="min-w-0">
-                    <h1 className={`truncate font-semibold tracking-tight transition-all duration-300 focus:outline-none ${topNavCompact ? 'text-xl' : 'text-2xl'}`} data-focus-fallback tabIndex={-1}>{t('pageTitle')}</h1>
+                    <h1 className="truncate text-xl font-semibold tracking-tight focus:outline-none" data-focus-fallback tabIndex={-1}>{t('pageTitle')}</h1>
                   </div>
                 </div>
               </div>
@@ -830,22 +826,16 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
                     active={userMenuOpen}
                     buttonRef={userMenuButtonRef}
                     className="z-20"
-                    style={{
-                      filter: userMenuOpen
-                        ? 'drop-shadow(0 0 8px rgb(14 165 233 / 0.65))'
-                        : 'drop-shadow(0 0 0 rgb(14 165 233 / 0))',
-                      transition: 'filter 220ms ease-out'
-                    }}
-                    sizeClassName="h-12 w-12 min-w-12 shrink-0 rounded-[1rem] px-0"
+                    sizeClassName="h-11 w-11 min-w-11 shrink-0 rounded-xl px-0"
                     aria-expanded={userMenuOpen}
                     aria-haspopup="menu"
                     aria-label={t('userMenu')}
                   />
 
                   {userMenuOpen && (
-                    <div className={`absolute right-0 ${topNavCompact ? 'top-[calc(100%+1rem)]' : 'top-[calc(100%+1.625rem)]'} z-50 w-60 overflow-hidden rounded-[1.6rem] border border-slate-200/80 bg-white/95 shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] backdrop-blur-xl transition-all duration-200`} role="menu">
-                      <div className="space-y-3 p-3">
-                        <div className="space-y-2 pt-1">
+                    <div className="ui-popover absolute right-0 top-[calc(100%+0.75rem)] z-50 w-60" role="menu">
+                      <div className="p-2">
+                        <div className="space-y-1">
                           <UserMenuItem
                             icon={Rss}
                             label={t('addFeedNews')}
@@ -879,8 +869,8 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
                             icon={LogOut}
                             label={t('logout')}
                             onClick={onLogout}
-                            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-left text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100"
-                            iconClassName="bg-white text-rose-700"
+                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100"
+                            iconClassName="bg-rose-50 text-rose-700"
                           />
                         </div>
                       </div>
@@ -893,7 +883,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-4 pb-24 md:pb-10 lg:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-6 pb-28 md:pb-10 lg:px-6">
         {!isReadLaterView && visibleThematicSummaries.length > 0 && (
           <ThematicSummaryStories
             summaries={visibleThematicSummaries}
@@ -906,7 +896,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
 
         {loading && !loadingMore ? (
           <div
-            className="grid w-full min-w-0 animate-pulse grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3"
+            className="grid w-full min-w-0 animate-pulse grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
             role="status"
             aria-label={t('loadingMore')}
           >
@@ -917,7 +907,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
         ) : error ? (
           <ErrorMessage error={error} onRetry={() => loadNews({ page: 1, append: false, forceRefresh: true })} t={t} />
         ) : visibleNews.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center">
             <h2 className="text-xl font-semibold text-slate-800">{isReadLaterView ? t('readLaterEmptyTitle') : t('noNewsTitle')}</h2>
             <p className="mt-2 text-slate-500">{isReadLaterView ? t('readLaterEmptyText') : t('noNewsText')}</p>
           </div>
@@ -938,7 +928,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
               </div>
             )}
 
-            <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid w-full min-w-0 grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
               {visibleNews.map((group) => (
                 <div key={group.id || group.cursorId || group.items?.[0]?.id} className="feed-card-enter md:h-full">
                   <NewsCard
@@ -1034,7 +1024,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
       <button
         type="button"
         onClick={scrollToTop}
-        className={`fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-[calc(1.5rem+env(safe-area-inset-left))] z-40 hidden h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/90 text-slate-700 shadow-[0_16px_40px_-20px_rgba(14,165,233,0.45)] backdrop-blur-xl transition-all duration-200 hover:bg-white hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 md:inline-flex ${
+        className={`ui-icon-button fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-[calc(1.5rem+env(safe-area-inset-left))] z-40 hidden shadow-sm transition-all duration-200 md:inline-flex ${
           showBackToTop
             ? 'translate-y-0 opacity-100'
             : 'pointer-events-none translate-y-3 opacity-0'

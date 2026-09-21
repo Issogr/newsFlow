@@ -43,7 +43,7 @@ export function FilterSearchInput({
 }) {
   return (
     <div className={className}>
-      <label className="group flex h-full min-w-0 flex-1 items-center gap-2 rounded-[1.25rem] border border-slate-200/80 bg-slate-50/80 px-3 shadow-sm transition-[border-color,background-color,box-shadow] focus-within:border-sky-300 focus-within:bg-white focus-within:shadow-[0_10px_25px_-18px_rgba(14,165,233,0.7)]">
+      <label className="group flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl border border-line bg-surface px-3 transition-colors focus-within:border-sky-500">
         <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-slate-500 transition-colors group-focus-within:text-sky-600">
           <Search className="h-4 w-4" aria-hidden="true" />
         </span>
@@ -61,7 +61,7 @@ export function FilterSearchInput({
           <button
             type="button"
             onClick={onSearchClear}
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-200/70 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
             aria-label={t('clearSearch')}
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -71,7 +71,7 @@ export function FilterSearchInput({
       <button
         type="button"
         onClick={onCancel}
-        className="inline-flex h-full aspect-square shrink-0 items-center justify-center rounded-[1.25rem] border border-slate-200/80 bg-slate-50/80 text-slate-500 shadow-sm transition-colors hover:bg-white hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+        className="ui-icon-button h-full w-auto aspect-square"
         aria-label={t('cancel')}
       >
         <X className={cancelIconClassName} aria-hidden="true" />

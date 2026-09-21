@@ -383,7 +383,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
       labelledBy="thematic-summary-panel-title"
       onClose={onClose}
       overlayClassName="fixed inset-0 z-50 h-[100dvh] w-full overflow-hidden overscroll-none bg-slate-950/35 backdrop-blur-sm"
-      panelClassName="flex h-full w-full flex-col overflow-hidden bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(64rem,calc(100vw-2rem))] lg:rounded-[1.6rem] lg:border lg:border-slate-200"
+      panelClassName="flex h-full w-full flex-col overflow-hidden bg-white shadow-xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(64rem,calc(100vw-2rem))] lg:rounded-2xl lg:border lg:border-slate-200"
     >
           <div
             className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain bg-white pb-[calc(1.5rem+env(safe-area-inset-bottom))] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-6 sm:pl-[calc(1.25rem+env(safe-area-inset-left))] sm:pr-[calc(1.25rem+env(safe-area-inset-right))] md:pb-[calc(2rem+env(safe-area-inset-bottom))] md:pt-8 lg:pl-[calc(1.5rem+env(safe-area-inset-left))] lg:pr-[calc(1.5rem+env(safe-area-inset-right))]"
@@ -403,13 +403,13 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                     <PrimaryIcon className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">{t('thematicSummary')}</p>
+                    <p className="text-xs font-medium text-stone-500">{t('thematicSummary')}</p>
                     <h2 className="mt-1 text-pretty text-2xl font-semibold leading-tight tracking-tight text-stone-900 md:text-[2rem] md:leading-[1.15]">
                       {localizedSummary.displayTopicLabel}
                     </h2>
                   </div>
                 </div>
-                <div className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                <div className="mt-4 text-xs font-medium text-slate-500">
                   <span className="inline-flex items-center gap-2">
                     <Sparkles className="h-3.5 w-3.5" />
                     {getSummarySlotLabel(summary, t)}

@@ -4,8 +4,6 @@ import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_LABELS, READER_TEXT_SIZE_ORD
 import { DEFAULT_READER_TEXT_WIDTH, READER_TEXT_WIDTH_LABELS, READER_TEXT_WIDTH_ORDER } from '../../config/readerTextWidth';
 import type { Translator, UserSettings } from '../../types';
 
-const fieldClassName = 'w-full rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition-[border-color,background-color,box-shadow] focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100';
-
 const SettingsPreferencesSection = ({
   t,
   saving,
@@ -26,7 +24,7 @@ const SettingsPreferencesSection = ({
             value={settings.defaultLanguage}
             onChange={(event) => onSettingChange('defaultLanguage', event.target.value)}
             disabled={saving}
-            className={fieldClassName}
+            className="ui-field"
           >
             <option value="auto">{t('useBrowserLanguage')}</option>
             <option value="it">{t('languageItalian')}</option>
@@ -43,7 +41,7 @@ const SettingsPreferencesSection = ({
             value={settings.themeMode || 'system'}
             onChange={(event) => onSettingChange('themeMode', event.target.value)}
             disabled={saving}
-            className={fieldClassName}
+            className="ui-field"
           >
             <option value="system">{t('themeModeSystem')}</option>
             <option value="light">{t('themeModeLight')}</option>
@@ -62,7 +60,7 @@ const SettingsPreferencesSection = ({
             <select
               value={settings.readerPanelPosition || 'right'}
               onChange={(event) => onSettingChange('readerPanelPosition', event.target.value)}
-              className={fieldClassName}
+              className="ui-field"
             >
               <option value="left">{t('readerPanelPositionLeft')}</option>
               <option value="center">{t('readerPanelPositionCenter')}</option>
@@ -78,7 +76,7 @@ const SettingsPreferencesSection = ({
             <select
               value={settings.readerTextSize || DEFAULT_READER_TEXT_SIZE}
               onChange={(event) => onSettingChange('readerTextSize', event.target.value)}
-              className={fieldClassName}
+              className="ui-field"
             >
               {READER_TEXT_SIZE_ORDER.map((size) => (
                 <option key={size} value={size}>{t(READER_TEXT_SIZE_LABELS[size])}</option>
@@ -94,7 +92,7 @@ const SettingsPreferencesSection = ({
             <select
               value={settings.readerTextWidth || DEFAULT_READER_TEXT_WIDTH}
               onChange={(event) => onSettingChange('readerTextWidth', event.target.value)}
-              className={fieldClassName}
+              className="ui-field"
             >
               {READER_TEXT_WIDTH_ORDER.map((width) => (
                 <option key={width} value={width}>{t(READER_TEXT_WIDTH_LABELS[width])}</option>

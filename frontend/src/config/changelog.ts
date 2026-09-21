@@ -9,6 +9,7 @@ export const CURRENT_CHANGELOG_ENTRY: { id: string; date: string } & Record<Loca
     title: 'What is new',
     intro: 'A quick summary of the latest update.',
     items: [
+      '🎨 A calmer, consistent design across the app, with clearer headlines, labeled topic summaries, and shared controls that keep your familiar colors, icons, and reading features.',
       '✨ AI summaries now check source support and translations before publication, with more context per story and improved shopping filters.',
       '🗓️ Summaries show their coverage dates and outdated status, and refresh when source articles change.',
       '📰 Removed podcast briefings and audio playback; daily AI text summaries remain available.',
@@ -20,6 +21,7 @@ export const CURRENT_CHANGELOG_ENTRY: { id: string; date: string } & Record<Loca
     title: 'Novita',
     intro: 'Un riepilogo rapido dell\'ultimo aggiornamento.',
     items: [
+      '🎨 Un design più essenziale e coerente in tutta l’app, con titoli più leggibili, etichette per le sintesi tematiche e controlli uniformi, mantenendo colori, icone e funzioni di lettura.',
       '✨ Le sintesi IA ora controllano il supporto delle fonti e le traduzioni prima della pubblicazione, con più contesto per notizia e filtri promozionali migliorati.',
       '🗓️ Le sintesi mostrano il periodo coperto e lo stato di aggiornamento, e si rigenerano quando cambiano gli articoli fonte.',
       '📰 Rimossi i briefing podcast e la riproduzione audio; le sintesi testuali IA giornaliere restano disponibili.',

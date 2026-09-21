@@ -20,8 +20,9 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
   const readSummaryIdSet = new Set(readSummaryIds);
 
   return (
-    <section className="mb-5" aria-label={t('thematicSummariesTitle')}>
-      <div className="flex justify-start gap-3 overflow-x-auto py-1 [scrollbar-width:none] md:justify-center [&::-webkit-scrollbar]:hidden">
+    <section className="mb-6 border-b border-slate-200 pb-5" aria-label={t('thematicSummariesTitle')}>
+      <h2 className="mb-3 text-sm font-semibold text-slate-700">{t('thematicSummariesTitle')}</h2>
+      <div className="flex gap-4 overflow-x-auto px-1 py-1">
         {summaries.map((summary) => {
           const localizedSummary = getLocalizedThematicSummary(summary, locale);
           const primaryPresentation = getTopicPresentation(getThematicSummaryPresentationKey(summary));
@@ -31,29 +32,31 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
           const ariaLabel = t('openThematicSummary', { topic: localizedSummary.displayTopicLabel });
 
           return (
-            <button
-              key={summary.id}
-              type="button"
-              onClick={(event) => {
-                event.currentTarget.focus({ preventScroll: true });
-                onOpenSummary(summary);
-              }}
-              className="group relative inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full p-[1.5px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-              style={AI_ACCENT_GRADIENT_STYLE}
-              aria-label={summary.isStale ? `${ariaLabel} · ${t('summaryOutdated')}` : ariaLabel}
-              title={summary.isStale ? t('summaryOutdated') : undefined}
-            >
-              <span className={`inline-flex h-full w-full items-center justify-center rounded-full transition-[filter] group-hover:brightness-110 ${circleClassName}`}>
-                <PrimaryIcon className="h-6 w-6" aria-hidden="true" />
-              </span>
-              {unread && (
-                <span
-                  className="absolute right-0 top-0 h-3 w-3 rounded-full border-2 border-white bg-violet-600 shadow-sm"
-                  aria-hidden="true"
-                  data-testid="thematic-summary-new-dot"
-                />
-              )}
-            </button>
+            <div key={summary.id} className="flex w-20 shrink-0 flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.currentTarget.focus({ preventScroll: true });
+                  onOpenSummary(summary);
+                }}
+                className="group relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full p-[1.5px] focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+                style={AI_ACCENT_GRADIENT_STYLE}
+                aria-label={summary.isStale ? `${ariaLabel} · ${t('summaryOutdated')}` : ariaLabel}
+                title={summary.isStale ? t('summaryOutdated') : undefined}
+              >
+                <span className={`inline-flex h-full w-full items-center justify-center rounded-full transition-[filter] group-hover:brightness-110 ${circleClassName}`}>
+                  <PrimaryIcon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                {unread && (
+                  <span
+                    className="absolute right-0 top-0 h-3 w-3 rounded-full border-2 border-white bg-violet-600 shadow-sm"
+                    aria-hidden="true"
+                    data-testid="thematic-summary-new-dot"
+                  />
+                )}
+              </button>
+              <span className="w-full truncate text-center text-xs font-medium text-slate-600" title={localizedSummary.displayTopicLabel}>{localizedSummary.displayTopicLabel}</span>
+            </div>
           );
         })}
       </div>

@@ -106,7 +106,7 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }: { t: Translator; on
             setMode('login');
             setClientError('');
           }}
-          className={`rounded-2xl px-4 py-2.5 transition-colors ${mode === 'login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+          className={`rounded-xl px-4 py-2.5 transition-colors ${mode === 'login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
         >
           {t('signIn')}
         </button>
@@ -116,7 +116,7 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }: { t: Translator; on
             setMode('register');
             setClientError('');
           }}
-          className={`rounded-2xl px-4 py-2.5 transition-colors ${mode === 'register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+          className={`rounded-xl px-4 py-2.5 transition-colors ${mode === 'register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
         >
           {t('createAccount')}
         </button>
@@ -147,7 +147,7 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }: { t: Translator; on
         />
 
         {mode === 'register' && (
-          <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">{t('passwordHelp')}</p>
+          <p className="text-sm leading-6 text-slate-500">{t('passwordHelp')}</p>
         )}
 
         {Boolean(clientError || error) && (
@@ -168,7 +168,7 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }: { t: Translator; on
           {mode === 'login' ? t('loginAction') : t('registerAction')}
         </button>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-500">
+        <div className="border-t border-slate-200 pt-4 text-xs leading-6 text-slate-500">
           <p>{t('technicalCookieNotice')}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <ExternalPillLink href="/privacy-policy">{t('privacyPolicyLink')}</ExternalPillLink>
