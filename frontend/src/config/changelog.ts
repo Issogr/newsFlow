@@ -11,7 +11,7 @@ export const CURRENT_CHANGELOG_ENTRY: { id: string; date: string } & Record<Loca
     items: [
       '✨ AI summaries now check source support and translations before publication, with more context per story and improved shopping filters.',
       '🗓️ Summaries show their coverage dates and outdated status, and refresh when source articles change.',
-      '🎧 Podcasts now use native browser audio controls, with the same back and forward skip buttons.',
+      '📰 Removed podcast briefings and audio playback; daily AI text summaries remain available.',
       '📣 Updates now use dated release notes instead of version numbers, with the latest notes always available in Settings.'
     ]
   },
@@ -22,7 +22,7 @@ export const CURRENT_CHANGELOG_ENTRY: { id: string; date: string } & Record<Loca
     items: [
       '✨ Le sintesi IA ora controllano il supporto delle fonti e le traduzioni prima della pubblicazione, con più contesto per notizia e filtri promozionali migliorati.',
       '🗓️ Le sintesi mostrano il periodo coperto e lo stato di aggiornamento, e si rigenerano quando cambiano gli articoli fonte.',
-      '🎧 I podcast ora usano i controlli audio nativi del browser, con gli stessi pulsanti per saltare indietro e avanti.',
+      '📰 Rimossi i briefing podcast e la riproduzione audio; le sintesi testuali IA giornaliere restano disponibili.',
       '📣 Gli aggiornamenti ora usano note datate al posto dei numeri di versione, sempre disponibili nelle Impostazioni.'
     ]
   }

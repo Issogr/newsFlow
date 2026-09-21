@@ -2,16 +2,15 @@ import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent }
 import { ExternalLink, Newspaper, Sparkles } from 'lucide-react';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { getTopicPresentation } from '../topicPresentation';
-import { getLocalizedThematicSummary, getThematicSummaryPresentationKey, isPodcastSummary } from '../utils/thematicSummaryLocale';
+import { getLocalizedThematicSummary, getThematicSummaryPresentationKey } from '../utils/thematicSummaryLocale';
 import { DEFAULT_READER_TEXT_SIZE, READER_TEXT_SIZE_STYLES } from '../config/readerTextSize';
 import { DEFAULT_READER_TEXT_WIDTH, READER_TEXT_WIDTH_CLASS_NAMES } from '../config/readerTextWidth';
 import { getStoredReaderTextSizePreference, getStoredReaderTextWidthPreference } from '../utils/readerPreferences';
 import { FullscreenPanelFrame } from './FullscreenModalFrame';
-import PodcastAudioPlayer from './PodcastAudioPlayer';
 import ReaderTextSizeControls from './ReaderTextSizeControls';
 import ReaderTextWidthControls from './ReaderTextWidthControls';
 import TextContentSkeleton from './TextContentSkeleton';
-import type { CurrentUser, Locale, ThematicSummary, ThematicSummaryAudio, Translator } from '../types';
+import type { CurrentUser, Locale, ThematicSummary, Translator } from '../types';
 
 type SummarySource = NonNullable<ThematicSummary['sources']>[number];
 
@@ -21,23 +20,11 @@ const SUMMARY_SLOT_LABEL_KEYS: Record<string, string> = {
   lunch: 'summarySlotLunch',
   evening: 'summarySlotEvening'
 };
-const PODCAST_SLOT_LABEL_KEYS: Record<string, string> = {
-  morning: 'morningPodcast',
-  evening: 'eveningPodcast'
-};
-const PODCAST_AUDIO_STATUS_KEYS: Record<string, string> = {
-  failed: 'podcastAudioFailed',
-  generating: 'podcastAudioGenerating'
-};
 const MOBILE_SUMMARY_SWIPE_QUERY = '(max-width: 767px)';
 const SUMMARY_SWIPE_MIN_DISTANCE = 60;
 const SUMMARY_SWIPE_AXIS_RATIO = 1.35;
 const SUMMARY_SWIPE_FEEDBACK_MAX_OFFSET = 72;
 const SUMMARY_OPENING_SKELETON_MS = 500;
-const PODCAST_LANGUAGE_LABELS: Record<string, Record<Locale, string>> = {
-  en: { en: 'English', it: 'inglese' },
-  it: { en: 'Italian', it: 'italiano' }
-};
 
 function getFallbackSummarySlot(summary: Partial<ThematicSummary> = {}) {
   const date = new Date(summary.periodEnd || '');
@@ -123,23 +110,6 @@ function splitSummaryParagraphs(summaryText = '') {
     .flatMap((paragraph) => splitLongParagraph(paragraph));
 }
 
-function getPodcastSlot(summary: Partial<ThematicSummary> = {}) {
-  if (summary.podcastSlot === 'morning' || summary.podcastSlot === 'evening') {
-    return summary.podcastSlot;
-  }
-
-  const periodEnd = new Date(summary.periodEnd || '');
-  if (Number.isNaN(periodEnd.getTime())) {
-    return 'podcast';
-  }
-
-  return periodEnd.getUTCHours() < 12 ? 'morning' : 'evening';
-}
-
-function getPodcastSlotLabel(summary: Partial<ThematicSummary> = {}, t: Translator) {
-  return t(PODCAST_SLOT_LABEL_KEYS[getPodcastSlot(summary)] || 'podcastBriefing');
-}
-
 function formatSummaryDate(value: unknown, locale: Locale = 'en') {
   const date = new Date(String(value || ''));
   if (Number.isNaN(date.getTime())) {
@@ -150,25 +120,6 @@ function formatSummaryDate(value: unknown, locale: Locale = 'en') {
     dateStyle: 'medium',
     timeStyle: 'short'
   }).format(date);
-}
-
-function getPodcastSummariesForPanel(summary: ThematicSummary, summaries: ThematicSummary[] = []) {
-  const byId = new Map<string, ThematicSummary>();
-  [summary, ...summaries].filter(isPodcastSummary).forEach((podcastSummary) => {
-    if (podcastSummary?.id && !byId.has(podcastSummary.id)) {
-      byId.set(podcastSummary.id, podcastSummary);
-    }
-  });
-
-  const slotOrder: Record<string, number> = { morning: 0, evening: 1, podcast: 2 };
-  return [...byId.values()].sort((left, right) => {
-    const slotComparison = slotOrder[getPodcastSlot(left)] - slotOrder[getPodcastSlot(right)];
-    if (slotComparison !== 0) {
-      return slotComparison;
-    }
-
-    return String(right.periodEnd || '').localeCompare(String(left.periodEnd || ''));
-  });
 }
 
 function getSwipeSummariesForPanel(summary: ThematicSummary, summaries: ThematicSummary[] = []) {
@@ -184,19 +135,7 @@ function getSwipeSummariesForPanel(summary: ThematicSummary, summaries: Thematic
     summaryById.set(summary.id, summary);
   }
 
-  const orderedSummaries = [...summaryById.values()];
-  const podcastSummary = orderedSummaries.find(isPodcastSummary);
-  const topicSummaries = orderedSummaries.filter((availableSummary) => !isPodcastSummary(availableSummary));
-
-  return podcastSummary ? [podcastSummary, ...topicSummaries] : topicSummaries;
-}
-
-function getSwipeSummaryIndex(summary: ThematicSummary, swipeSummaries: ThematicSummary[] = []) {
-  if (isPodcastSummary(summary)) {
-    return swipeSummaries.findIndex(isPodcastSummary);
-  }
-
-  return swipeSummaries.findIndex((availableSummary) => availableSummary?.id === summary?.id);
+  return [...summaryById.values()];
 }
 
 function isMobileSummarySwipeViewport() {
@@ -210,55 +149,6 @@ function getSwipeFeedbackOffset(deltaX: number, hasAdjacentSummary: boolean) {
   const offset = deltaX * resistance;
 
   return Math.max(-SUMMARY_SWIPE_FEEDBACK_MAX_OFFSET, Math.min(SUMMARY_SWIPE_FEEDBACK_MAX_OFFSET, offset));
-}
-
-function getPodcastAudioStatusText(summary: Partial<ThematicSummaryAudio & Pick<ThematicSummary, 'status'>> = {}, t: Translator) {
-  const status = summary.status === 'failed' ? 'failed' : summary.audioStatus;
-  return t((status && PODCAST_AUDIO_STATUS_KEYS[status]) || 'podcastAudioUnavailable');
-}
-
-function getPodcastLanguageLabel(audioLocale = '', locale: Locale = 'en') {
-  const normalizedLocale = String(audioLocale || '').trim().toLowerCase();
-  return PODCAST_LANGUAGE_LABELS[normalizedLocale]?.[locale === 'it' ? 'it' : 'en'] || normalizedLocale.toUpperCase();
-}
-
-function formatLanguageList(locales: string[] = [], locale: Locale = 'en') {
-  const labels = locales.map((audioLocale) => getPodcastLanguageLabel(audioLocale, locale)).filter(Boolean);
-  if (labels.length <= 1) {
-    return labels[0] || '';
-  }
-
-  const formatter = typeof Intl !== 'undefined' && Intl.ListFormat
-    ? new Intl.ListFormat(locale === 'it' ? 'it' : 'en', { style: 'long', type: 'conjunction' })
-    : null;
-  return formatter ? formatter.format(labels) : labels.join(', ');
-}
-
-function getPodcastAudioChoice(summary: ThematicSummary, locale: Locale = 'en') {
-  const audioByLocale = summary.audioByLocale && typeof summary.audioByLocale === 'object' ? summary.audioByLocale : {};
-  const completedLocales = Object.entries(audioByLocale)
-    .filter(([, audio]) => audio?.audioStatus === 'completed' && audio?.audioUrl)
-    .map(([audioLocale]) => audioLocale);
-  const preferredLocale = completedLocales.includes(locale)
-    ? locale
-    : (completedLocales.includes('en') ? 'en' : completedLocales[0]);
-
-  if (preferredLocale) {
-    return {
-      locale: preferredLocale,
-      audio: audioByLocale[preferredLocale],
-      completedLocales
-    };
-  }
-
-  const statusLocale = audioByLocale[locale]
-    ? locale
-    : (audioByLocale.en ? 'en' : Object.keys(audioByLocale)[0]);
-  return {
-    locale: statusLocale || summary.audioLocale || '',
-    audio: statusLocale ? audioByLocale[statusLocale] : summary,
-    completedLocales
-  };
 }
 
 function renderSourceReference(source: SummarySource, key: string, t: Translator) {
@@ -332,23 +222,20 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   const [readerTextWidth, setReaderTextWidth] = useState(() => getStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth));
   const [readySummaryId, setReadySummaryId] = useState('');
-  const isPodcast = isPodcastSummary(summary);
   const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [summary, locale]);
   const coverageStart = formatSummaryDate(summary.periodStart, locale);
   const coverageEnd = formatSummaryDate(summary.periodEnd, locale);
   const sourceByIndex = useMemo(() => new Map<number, SummarySource>((summary?.sources || []).map((source: SummarySource) => [Number(source.index), source])), [summary?.sources]);
-  const showSummaryOpeningSkeleton = showOpeningSkeleton && !isPodcast && readySummaryId !== summary?.id;
-  const podcastSummaries = useMemo(() => getPodcastSummariesForPanel(summary, summaries), [summaries, summary]);
+  const showSummaryOpeningSkeleton = showOpeningSkeleton && readySummaryId !== summary?.id;
   const swipeSummaries = useMemo(() => getSwipeSummariesForPanel(summary, summaries), [summaries, summary]);
-  const swipeSummaryIndex = useMemo(() => getSwipeSummaryIndex(summary, swipeSummaries), [summary, swipeSummaries]);
+  const swipeSummaryIndex = swipeSummaries.findIndex((availableSummary) => availableSummary.id === summary.id);
   const paragraphs = useMemo(() => {
-    return isPodcast ? [] : splitSummaryParagraphs(localizedSummary.displaySummaryText);
-  }, [isPodcast, localizedSummary.displaySummaryText]);
+    return splitSummaryParagraphs(localizedSummary.displaySummaryText);
+  }, [localizedSummary.displaySummaryText]);
   const primaryPresentation = getTopicPresentation(getThematicSummaryPresentationKey(summary));
   const PrimaryIcon = primaryPresentation.Icon;
   const readerTextStyles = READER_TEXT_SIZE_STYLES[readerTextSize] || READER_TEXT_SIZE_STYLES[DEFAULT_READER_TEXT_SIZE];
   const readerTextWidthClassName = READER_TEXT_WIDTH_CLASS_NAMES[readerTextWidth] || READER_TEXT_WIDTH_CLASS_NAMES[DEFAULT_READER_TEXT_WIDTH];
-  const closeLabel = isPodcast ? t('closePodcastSummary') : t('closeThematicSummary');
   const canSwipeSummaries = swipeSummaries.length > 1 && swipeSummaryIndex >= 0 && typeof onSelectSummary === 'function';
   const swipeFeedbackStrength = Math.min(Math.abs(swipeFeedbackOffset) / SUMMARY_SWIPE_FEEDBACK_MAX_OFFSET, 1);
   const swipeFeedbackActive = swipeFeedbackOffset !== 0;
@@ -402,13 +289,13 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
     };
   }, []);
   useEffect(() => {
-    if (!showOpeningSkeleton || isPodcast || !summary?.id) {
+    if (!showOpeningSkeleton || !summary?.id) {
       return undefined;
     }
 
     const timeoutId = setTimeout(() => setReadySummaryId(summary.id), SUMMARY_OPENING_SKELETON_MS);
     return () => clearTimeout(timeoutId);
-  }, [isPodcast, showOpeningSkeleton, summary?.id]);
+  }, [showOpeningSkeleton, summary?.id]);
   useEffect(() => {
     setReaderTextSize(getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   }, [currentUser?.settings?.readerTextSize]);
@@ -423,7 +310,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
       return;
     }
 
-    if ((event.target as Element | null)?.closest?.('a, button, input, textarea, select, audio, [role="button"], [role="slider"]')) {
+    if ((event.target as Element | null)?.closest?.('a, button, input, textarea, select, [role="button"], [role="slider"]')) {
       return;
     }
 
@@ -478,20 +365,20 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   };
   const headerStart = (
     <h2 id="thematic-summary-panel-title" className="sr-only focus:outline-none" data-modal-title tabIndex={-1}>
-      {isPodcast ? t('podcastBriefing') : t('thematicSummary')}: {localizedSummary.displayTopicLabel}
+      {t('thematicSummary')}: {localizedSummary.displayTopicLabel}
     </h2>
   );
 
   return (
     <FullscreenPanelFrame
-      closeLabel={closeLabel}
+      closeLabel={t('closeThematicSummary')}
       containerClassName="relative flex h-[100dvh] w-full justify-center overflow-hidden overscroll-none"
-      headerActions={!isPodcast ? (
+      headerActions={(
         <>
           <ReaderTextWidthControls currentUser={currentUser} onChange={setReaderTextWidth} t={t} value={readerTextWidth} />
           <ReaderTextSizeControls currentUser={currentUser} onChange={setReaderTextSize} t={t} value={readerTextSize} />
         </>
-      ) : null}
+      )}
       headerStart={headerStart}
       labelledBy="thematic-summary-panel-title"
       onClose={onClose}
@@ -516,35 +403,33 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                     <PrimaryIcon className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">{isPodcast ? t('podcastBriefing') : t('thematicSummary')}</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">{t('thematicSummary')}</p>
                     <h2 className="mt-1 text-pretty text-2xl font-semibold leading-tight tracking-tight text-stone-900 md:text-[2rem] md:leading-[1.15]">
                       {localizedSummary.displayTopicLabel}
                     </h2>
                   </div>
                 </div>
-                {!isPodcast && (
-                  <div className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                    <span className="inline-flex items-center gap-2">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      {getSummarySlotLabel(summary, t)}
-                      {Number(summary.articleCount) > 0 && (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span>{t('summaryArticleCount', { count: Number(summary.articleCount) })}</span>
-                        </>
-                      )}
-                    </span>
-                    {coverageStart && coverageEnd && (
-                      <p className="mt-2 font-normal normal-case tracking-normal text-slate-500">
-                        {t('summaryCoverage')}{' '}
-                        <time dateTime={summary.periodStart}>{coverageStart}</time>
-                        {' – '}
-                        <time dateTime={summary.periodEnd}>{coverageEnd}</time>
-                      </p>
+                <div className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  <span className="inline-flex items-center gap-2">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {getSummarySlotLabel(summary, t)}
+                    {Number(summary.articleCount) > 0 && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span>{t('summaryArticleCount', { count: Number(summary.articleCount) })}</span>
+                      </>
                     )}
-                  </div>
-                )}
-                {!isPodcast && summary.isStale && (
+                  </span>
+                  {coverageStart && coverageEnd && (
+                    <p className="mt-2 font-normal normal-case tracking-normal text-slate-500">
+                      {t('summaryCoverage')}{' '}
+                      <time dateTime={summary.periodStart}>{coverageStart}</time>
+                      {' – '}
+                      <time dateTime={summary.periodEnd}>{coverageEnd}</time>
+                    </p>
+                  )}
+                </div>
+                {summary.isStale && (
                   <p role="status" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
                     {t('summaryStaleNotice')}
                   </p>
@@ -554,57 +439,6 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
               <article className="pb-8">
                 {showSummaryOpeningSkeleton ? (
                   <TextContentSkeleton label={t('loadingThematicSummary')} />
-                ) : isPodcast ? (
-                  <div className="space-y-5">
-                    {podcastSummaries.map((podcastSummary) => {
-                      const audioChoice = getPodcastAudioChoice(podcastSummary, locale);
-                      const selectedAudio = audioChoice.audio || {};
-                      const selectedLocale = audioChoice.locale;
-                      const selectedLanguageLabel = getPodcastLanguageLabel(selectedLocale, locale);
-                      const availableLanguageList = formatLanguageList(audioChoice.completedLocales, locale);
-                      const showAvailabilityNotice = audioChoice.completedLocales.length > 0 && selectedLocale !== locale;
-                      const generatedAtLabel = formatSummaryDate(podcastSummary.generatedAt, locale);
-
-                      return (
-                        <section key={podcastSummary.id} className="space-y-4 border-b border-slate-200 pb-5 last:border-b-0 last:pb-0">
-                          {showAvailabilityNotice && (
-                            <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-900" aria-live="polite">
-                              {t('podcastAudioAvailableNotice', { languages: availableLanguageList })}
-                            </div>
-                          )}
-
-                          <div className="flex flex-col gap-1 text-left sm:flex-row sm:items-end sm:justify-between">
-                            <div>
-                              <h3 className="text-lg font-semibold tracking-tight text-slate-950 md:text-xl">{getPodcastSlotLabel(podcastSummary, t)}</h3>
-                              {(selectedLanguageLabel || generatedAtLabel) && (
-                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                                  {selectedLanguageLabel && <span>{t('podcastAudioLanguageLabel', { language: selectedLanguageLabel })}</span>}
-                                  {generatedAtLabel && (
-                                    <time dateTime={podcastSummary.generatedAt} aria-label={t('podcastGeneratedAt', { date: generatedAtLabel })}>
-                                      {t('podcastGeneratedAt', { date: generatedAtLabel })}
-                                    </time>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            {Number(podcastSummary.articleCount) > 0 && (
-                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                                {t('summaryArticleCount', { count: Number(podcastSummary.articleCount) })}
-                              </p>
-                            )}
-                          </div>
-
-                          {selectedAudio.audioStatus === 'completed' && selectedAudio.audioUrl ? (
-                            <PodcastAudioPlayer src={selectedAudio.audioUrl} t={t} />
-                          ) : (
-                            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900" aria-live="polite">
-                              {getPodcastAudioStatusText(selectedAudio, t)}
-                            </div>
-                          )}
-                        </section>
-                      );
-                    })}
-                  </div>
                 ) : (
                   <div className={`space-y-5 ${readerTextStyles.paragraph}`}>
                     {paragraphs.map((paragraph, index) => (

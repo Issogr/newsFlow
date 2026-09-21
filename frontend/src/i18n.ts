@@ -83,8 +83,7 @@ const topicTranslations: Record<string, Record<Locale, string>> = {
   clima: { en: 'Climate', it: 'Clima' },
   climate: { en: 'Climate', it: 'Clima' },
   sicurezza: { en: 'Security', it: 'Sicurezza' },
-  security: { en: 'Security', it: 'Sicurezza' },
-  podcast: { en: 'News podcast', it: 'Podcast news' }
+  security: { en: 'Security', it: 'Sicurezza' }
 };
 
 export function getLocalizedTopic(topic: unknown, locale: Locale = 'en', fallback: unknown = topic): string {

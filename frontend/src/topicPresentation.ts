@@ -4,7 +4,6 @@ import {
   Film,
   FlaskConical,
   Globe2,
-  Headphones,
   HeartPulse,
   Landmark,
   Leaf,
@@ -28,7 +27,6 @@ const TOPIC_BADGE_CLASSES = {
   world: 'bg-[#D7ECFF] text-[#0C4A6E] ring-1 ring-inset ring-[#9CCBF4] hover:bg-[#C8E4FF]',
   climate: 'bg-[#CDEFE8] text-[#115E59] ring-1 ring-inset ring-[#86D4C4] hover:bg-[#BEE8DE]',
   security: 'bg-[#F8D3D7] text-[#991B1B] ring-1 ring-inset ring-[#E6A3AF] hover:bg-[#F4C4CA]',
-  podcast: 'bg-[#D8F3FF] text-[#075985] ring-1 ring-inset ring-[#83D4F2] hover:bg-[#C7EEFF]',
   fallback: 'bg-[#E2E8F0] text-[#334155] ring-1 ring-inset ring-[#B8C4D4] hover:bg-[#D7E0EA]'
 };
 
@@ -48,8 +46,7 @@ const TOPIC_PRESENTATIONS = [
   { pattern: /(spettacolo|entertainment|cinema|film|music|musica|tv|televisione|celebrity)/, Icon: Film, badge: TOPIC_BADGE_CLASSES.entertainment },
   { pattern: /(world|esteri|international|europa|europe|global)/, Icon: Globe2, badge: TOPIC_BADGE_CLASSES.world },
   { pattern: /(climate|clima|environment|ambiente|green|energia)/, Icon: Leaf, badge: TOPIC_BADGE_CLASSES.climate },
-  { pattern: /(security|sicurezza|war|guerra|defense|difesa)/, Icon: Shield, badge: TOPIC_BADGE_CLASSES.security },
-  { pattern: /(podcast|audio|briefing)/, Icon: Headphones, badge: TOPIC_BADGE_CLASSES.podcast }
+  { pattern: /(security|sicurezza|war|guerra|defense|difesa)/, Icon: Shield, badge: TOPIC_BADGE_CLASSES.security }
 ];
 
 export function getTopicPresentation(topic: unknown) {

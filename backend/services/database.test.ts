@@ -81,8 +81,7 @@ describe('database migrations', () => {
     const apiTokenColumns = getColumnNames(sqlite, 'api_tokens');
     const readLaterColumns = getColumnNames(sqlite, 'user_read_later_articles');
     const thematicSummaryColumns = getColumnNames(sqlite, 'thematic_summaries');
-    const podcastSummaryColumns = getColumnNames(sqlite, 'podcast_summaries');
-    const podcastSummaryAudioColumns = getColumnNames(sqlite, 'podcast_summary_audio');
+    const podcastTables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('podcast_summaries', 'podcast_summary_audio')").all();
     const readThematicSummaryColumns = getColumnNames(sqlite, 'user_read_thematic_summaries');
     const articleIndexNames = sqlite.prepare('PRAGMA index_list(articles)').all().map((index: { name: string }) => index.name);
     const userIndexNames = sqlite.prepare('PRAGMA index_list(users)').all().map((index: { name: string }) => index.name);
@@ -93,7 +92,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('45');
+    expect(migrationVersion).toBe('46');
     expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['input_json', 'last_attempt_at']));
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
@@ -127,9 +126,7 @@ describe('database migrations', () => {
     expect(readThematicSummaryColumns).toEqual(expect.arrayContaining(['user_id', 'summary_id', 'read_at']));
     expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['topic_key', 'period_start', 'period_end', 'summary_text', 'summary_text_en', 'summary_text_it', 'sources_json', 'failure_category', 'retry_count']));
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
-    expect(podcastSummaryColumns).toEqual(expect.arrayContaining(['period_start', 'period_end', 'script_text', 'title_en', 'script_text_en', 'title_it', 'script_text_it', 'sources_json', 'failure_category', 'retry_count']));
-    expect(podcastSummaryColumns).toEqual(expect.not.arrayContaining(['audio_blob', 'audio_status', 'audio_voice', 'audio_model', 'audio_mime_type', 'audio_error_message', 'audio_failure_category', 'audio_retry_count', 'audio_failed_at']));
-    expect(podcastSummaryAudioColumns).toEqual(expect.arrayContaining(['podcast_id', 'locale', 'audio_blob', 'audio_status', 'audio_model', 'audio_voice', 'audio_retry_count', 'audio_failed_at']));
+    expect(podcastTables).toEqual([]);
     expect(articleIndexNames).toContain('idx_articles_owner_published_id');
     expect(userIndexNames).toContain('idx_users_username_lower');
     expect(topicIndexNames).toContain('idx_article_topics_topic_article');
@@ -182,7 +179,7 @@ describe('database migrations', () => {
     const width = migratedDb.prepare('SELECT reader_text_width AS readerTextWidth FROM user_settings WHERE user_id = ?').get('user-1')?.readerTextWidth;
     migratedDb.close();
 
-    expect(migrationVersion).toBe('45');
+    expect(migrationVersion).toBe('46');
     expect(width).toBe('default');
   });
 
@@ -213,7 +210,7 @@ describe('database migrations', () => {
     const articleIndexes = migratedDb.prepare('PRAGMA index_list(articles)').all().map((index: { name: string }) => index.name);
     migratedDb.close();
 
-    expect(migrationVersion).toBe('45');
+    expect(migrationVersion).toBe('46');
     expect(articleColumns).toEqual(expect.not.arrayContaining(['clickbait_label', 'clickbait_score', 'clickbait_source', 'clickbait_confidence', 'clickbait_model', 'clickbait_reason_code', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(articleIndexes).not.toContain('idx_articles_ai_clickbait_processed_at');
   });
@@ -233,7 +230,7 @@ describe('database migrations', () => {
     expect(database.getThematicSummary('science', window.periodStart, window.periodEnd)).toMatchObject({
       summaryText: 'Saved briefing [1].', inputArticles: []
     });
-    expect(getMigrationVersion(database.getDb())).toBe('45');
+    expect(getMigrationVersion(database.getDb())).toBe('46');
   });
 
   test('migrates an unversioned legacy database instead of marking it current', () => {
@@ -282,7 +279,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('45');
+    expect(migratedVersion).toBe('46');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
@@ -400,7 +397,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('45');
+    expect(migratedVersion).toBe('46');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason']));
     expect(articleColumns).toEqual(expect.not.arrayContaining(['clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
@@ -500,10 +497,6 @@ describe('database migrations', () => {
       SET value = '23'
       WHERE key = 'migration_version'
     `).run();
-    sqlite.exec(`
-      DROP TABLE podcast_summary_audio;
-      DROP TABLE podcast_summaries;
-    `);
 
     database.closeDb();
     jest.resetModules();
@@ -515,7 +508,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source: Identified) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article: Identified) => article.id);
 
-    expect(migratedVersion).toBe('45');
+    expect(migratedVersion).toBe('46');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source: Identified) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -611,7 +604,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('45');
+    expect(migratedVersion).toBe('46');
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
     expect(row).toEqual({
       summaryText: 'English text [1]',
@@ -620,7 +613,7 @@ describe('database migrations', () => {
     });
   });
 
-  test('migrates legacy podcast audio into per-locale audio rows', () => {
+  test('removes legacy podcast storage when upgrading from schema version 42', () => {
     const sqlite = new SqliteDatabase(dbPath);
     const legacyAudio = Buffer.from('legacy-italian-audio');
     const parentMirrorAudio = Buffer.from('differing-parent-mirror');
@@ -738,60 +731,45 @@ describe('database migrations', () => {
 
     database = require('./database');
     database.getDb();
-    const summary = database.getPodcastSummary('2026-05-21T07:00:00.000Z', '2026-05-21T13:00:00.000Z');
-    const audio = database.getPodcastSummaryAudio('legacy-podcast', 'it');
-    const existingSummary = database.getPodcastSummary('2026-05-21T13:00:00.000Z', '2026-05-21T19:00:00.000Z');
-    const existingAudio = database.getPodcastSummaryAudio('english-child-podcast', 'en');
 
     const migratedDb = new SqliteDatabase(dbPath, { readOnly: true });
     const migratedVersion = getMigrationVersion(migratedDb);
-    const audioRow = migratedDb.prepare(`
-      SELECT podcast_id AS podcastId, locale, audio_blob AS audioBlob, audio_status AS audioStatus
-      FROM podcast_summary_audio
-      WHERE podcast_id = 'legacy-podcast'
-    `).get();
-    const existingChildRows = migratedDb.prepare(`
-      SELECT podcast_id AS podcastId, locale, audio_model AS audioModel,
-             audio_voice AS audioVoice, audio_blob AS audioBlob
-      FROM podcast_summary_audio
-      WHERE podcast_id = 'english-child-podcast'
-      ORDER BY locale
-    `).all();
-    const parentColumns = getColumnNames(migratedDb, 'podcast_summaries');
+    const podcastTables = migratedDb.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('podcast_summaries', 'podcast_summary_audio')").all();
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('45');
-    expect(audioRow).toEqual({
-      podcastId: 'legacy-podcast',
-      locale: 'it',
-      audioBlob: legacyAudio,
-      audioStatus: 'completed'
-    });
-    expect(parentColumns).toEqual(expect.not.arrayContaining(['audio_blob', 'audio_status', 'audio_model', 'audio_voice']));
-    expect(summary).toEqual(expect.objectContaining({
-      id: 'legacy-podcast',
-      audioLocale: 'it',
-      audioStatus: 'completed',
-      audioVoice: 'Charon',
-      audioByLocale: expect.objectContaining({ it: expect.objectContaining({ audioStatus: 'completed' }) })
-    }));
-    expect(audio).toEqual({ data: legacyAudio, mimeType: 'audio/mpeg' });
-    expect(existingChildRows).toEqual([{
-      podcastId: 'english-child-podcast',
-      locale: 'en',
-      audioModel: 'child-model',
-      audioVoice: 'EnglishVoice',
-      audioBlob: englishChildAudio
-    }]);
-    expect(existingSummary).toEqual(expect.objectContaining({
-      id: 'english-child-podcast',
-      audioLocale: 'en',
-      audioModel: 'child-model',
-      audioVoice: 'EnglishVoice',
-      availableAudioLocales: ['en']
-    }));
-    expect(existingAudio).toEqual({ data: englishChildAudio, mimeType: 'audio/mpeg' });
+    expect(migratedVersion).toBe('46');
+    expect(podcastTables).toEqual([]);
+  });
+
+  test('removes podcast data and read markers from version 45 while preserving text summaries', () => {
+    database = require('./database');
+    const sqlite = database.getDb();
+    const now = new Date().toISOString();
+    database.createUser({ id: 'user-1', username: 'alice', passwordHash: null, createdAt: now, updatedAt: now });
+    const window = { periodStart: '2026-05-20T18:00:00.000Z', periodEnd: '2026-05-21T18:00:00.000Z' };
+    database.upsertThematicSummary({ id: 'summary-science', topicKey: 'science', ...window, summaryText: 'Saved briefing [1].' });
+    database.markThematicSummariesRead('user-1', ['summary-science', 'podcast-old']);
+    sqlite.exec(`
+      CREATE TABLE podcast_summaries (id TEXT PRIMARY KEY, script_text TEXT NOT NULL);
+      CREATE TABLE podcast_summary_audio (
+        podcast_id TEXT NOT NULL REFERENCES podcast_summaries(id) ON DELETE CASCADE,
+        locale TEXT NOT NULL,
+        audio_blob BLOB,
+        PRIMARY KEY (podcast_id, locale)
+      );
+      INSERT INTO podcast_summaries VALUES ('podcast-old', 'Stored podcast script');
+      INSERT INTO podcast_summary_audio VALUES ('podcast-old', 'en', X'010203');
+      UPDATE app_meta SET value = '45' WHERE key = 'migration_version';
+    `);
+    database.closeDb();
+    jest.resetModules();
+    database = require('./database');
+
+    expect(getMigrationVersion(database.getDb())).toBe('46');
+    expect(database.getDb().prepare("SELECT name FROM sqlite_master WHERE name IN ('podcast_summaries', 'podcast_summary_audio')").all()).toEqual([]);
+    expect(database.listReadThematicSummaryIds('user-1')).toEqual(['summary-science']);
+    expect(database.getThematicSummary('science', window.periodStart, window.periodEnd)).toMatchObject({ summaryText: 'Saved briefing [1].' });
   });
 
   test('rejects a future schema before creating current-schema objects', () => {
@@ -1584,130 +1562,7 @@ describe('database queries and user data', () => {
     expect(database.listLatestThematicSummaries(['technology'])[0]).toEqual(expect.objectContaining({ status: 'empty' }));
   });
 
-  test('persists podcast summaries with localized scripts and audio payloads', () => {
-    const windowStart = '2025-05-21T07:00:00.000Z';
-    const windowEnd = '2025-05-21T13:00:00.000Z';
-    const summary = database.upsertPodcastSummary({
-      id: 'podcast-summary-test',
-      periodStart: windowStart,
-      periodEnd: windowEnd,
-      titleByLocale: {
-        en: 'News podcast',
-        it: 'Podcast news'
-      },
-      scriptTextByLocale: {
-        en: 'English script',
-        it: 'Testo italiano'
-      },
-      sources: [{ index: 1, articleId: 'podcast-article-1', title: 'Podcast article', source: primarySource.name, url: 'https://example.com/podcast' }],
-      articleCount: 1,
-      model: 'summary-model',
-      audioByLocale: {
-        en: {
-          audio: {
-            data: Buffer.from('english-audio-data').toString('base64'),
-            mimeType: 'audio/mpeg',
-            model: 'tts-model',
-            voice: 'Charon',
-            generatedAt: '2025-05-21T13:05:00.000Z'
-          },
-          audioStatus: 'completed'
-        },
-        it: {
-          audio: {
-            data: Buffer.from('italian-audio-data').toString('base64'),
-            mimeType: 'audio/wav',
-            model: 'tts-model',
-            voice: 'Charon',
-            generatedAt: '2025-05-21T13:05:00.000Z'
-          },
-          audioStatus: 'completed'
-        }
-      },
-      audioFailureCategory: '',
-      audioRetryCount: 0,
-      audioFailedAt: null,
-      failureCategory: '',
-      retryCount: 0,
-      generatedAt: '2025-05-21T13:05:00.000Z'
-    });
-
-    expect(summary).toEqual(expect.objectContaining({
-      id: 'podcast-summary-test',
-      type: 'podcast',
-      topicKey: 'podcast',
-      titleByLocale: expect.objectContaining({ it: 'Podcast news' }),
-      summaryTextByLocale: expect.objectContaining({ it: 'Testo italiano' }),
-      audioStatus: 'completed',
-      audioFailureCategory: '',
-      audioRetryCount: 0,
-      audioVoice: 'Charon',
-      failureCategory: '',
-      retryCount: 0,
-      audioUrl: `/api/podcast-summary/podcast-summary-test/audio?locale=en&v=${encodeURIComponent('2025-05-21T13:05:00.000Z:tts-model:Charon')}`,
-      availableAudioLocales: ['en', 'it'],
-      audioByLocale: expect.objectContaining({
-        en: expect.objectContaining({
-          audioStatus: 'completed',
-          audioUrl: `/api/podcast-summary/podcast-summary-test/audio?locale=en&v=${encodeURIComponent('2025-05-21T13:05:00.000Z:tts-model:Charon')}`
-        }),
-        it: expect.objectContaining({
-          audioStatus: 'completed',
-          audioUrl: `/api/podcast-summary/podcast-summary-test/audio?locale=it&v=${encodeURIComponent('2025-05-21T13:05:00.000Z:tts-model:Charon')}`
-        })
-      })
-    }));
-    expect(database.listLatestPodcastSummaries(1)).toEqual([expect.objectContaining({ id: 'podcast-summary-test' })]);
-    expect(database.getPodcastSummaryAudio('podcast-summary-test')).toEqual(expect.objectContaining({
-      data: Buffer.from('english-audio-data'),
-      mimeType: 'audio/mpeg'
-    }));
-    expect(database.getPodcastSummaryAudio('podcast-summary-test', 'it')).toEqual(expect.objectContaining({
-      data: Buffer.from('italian-audio-data'),
-      mimeType: 'audio/wav'
-    }));
-    expect(database.getPodcastSummaryAudio('podcast-summary-test', 'fr')).toBeNull();
-  });
-
-  test('writes child audio against the persisted parent id on period conflict', () => {
-    const periodStart = '2025-05-22T07:00:00.000Z';
-    const periodEnd = '2025-05-22T13:00:00.000Z';
-    database.upsertPodcastSummary({
-      id: 'persisted-podcast-id',
-      periodStart,
-      periodEnd,
-      title: 'Original podcast',
-      scriptText: 'Original script'
-    });
-
-    const summary = database.upsertPodcastSummary({
-      id: 'conflicting-podcast-id',
-      periodStart,
-      periodEnd,
-      title: 'Updated podcast',
-      scriptText: 'Updated script',
-      audioLocale: 'it',
-      audio: { data: Buffer.from('conflict-audio').toString('base64'), mimeType: 'audio/mpeg' },
-      audioStatus: 'completed'
-    });
-    const parentRows = database.getDb().prepare(`
-      SELECT id FROM podcast_summaries WHERE period_start = ? AND period_end = ?
-    `).all(periodStart, periodEnd);
-    const audioRows = database.getDb().prepare(`
-      SELECT podcast_id AS podcastId, locale FROM podcast_summary_audio
-      WHERE podcast_id IN (?, ?)
-    `).all('persisted-podcast-id', 'conflicting-podcast-id');
-
-    expect(summary).toEqual(expect.objectContaining({ id: 'persisted-podcast-id', audioStatus: 'completed', audioLocale: 'it' }));
-    expect(parentRows).toEqual([{ id: 'persisted-podcast-id' }]);
-    expect(audioRows).toEqual([{ podcastId: 'persisted-podcast-id', locale: 'it' }]);
-    expect(database.getPodcastSummaryAudio('persisted-podcast-id', 'it')).toEqual({
-      data: Buffer.from('conflict-audio'),
-      mimeType: 'audio/mpeg'
-    });
-  });
-
-  test('prunes old summary and podcast windows after replacements exist', () => {
+  test('prunes old summary windows after replacements exist', () => {
     const oldStart = '2025-05-20T17:00:00.000Z';
     const oldEnd = '2025-05-21T05:00:00.000Z';
     const currentStart = '2025-05-21T05:00:00.000Z';
@@ -1734,78 +1589,15 @@ describe('database queries and user data', () => {
       periodEnd: currentEnd,
       summaryText: 'Current technology summary'
     });
-    database.upsertPodcastSummary({
-      id: 'old-podcast-summary',
-      periodStart: oldStart,
-      periodEnd: oldEnd,
-      title: 'Old podcast',
-      scriptText: 'Old podcast script',
-      audio: { data: Buffer.from('old-audio').toString('base64'), mimeType: 'audio/mpeg' },
-      audioStatus: 'completed'
-    });
-    database.upsertPodcastSummary({
-      id: 'current-podcast-summary',
-      periodStart: currentStart,
-      periodEnd: currentEnd,
-      title: 'Current podcast',
-      scriptText: 'Current podcast script',
-      audio: { data: Buffer.from('current-audio').toString('base64'), mimeType: 'audio/mpeg' },
-      audioStatus: 'completed'
-    });
 
     expect(database.pruneSummaryHistory({
       periodEnd: currentEnd,
-      topicKeys: ['technology'],
-      podcast: true
-    })).toEqual({ thematicSummaries: 1, podcastSummaries: 1 });
+      topicKeys: ['technology']
+    })).toEqual({ thematicSummaries: 1 });
 
     expect(database.getThematicSummary('technology', oldStart, oldEnd)).toBeNull();
     expect(database.getThematicSummary('politics', oldStart, oldEnd)).toEqual(expect.objectContaining({ summaryText: 'Old politics summary' }));
     expect(database.getThematicSummary('technology', currentStart, currentEnd)).toEqual(expect.objectContaining({ summaryText: 'Current technology summary' }));
-    expect(database.getPodcastSummary(oldStart, oldEnd)).toBeNull();
-    expect(database.getPodcastSummaryAudio('old-podcast-summary')).toBeNull();
-    expect(database.getPodcastSummary(currentStart, currentEnd)).toEqual(expect.objectContaining({ id: 'current-podcast-summary' }));
-    expect(database.getPodcastSummaryAudio('current-podcast-summary')).toEqual(expect.objectContaining({ data: Buffer.from('current-audio') }));
-  });
-
-  test('lists and retains the latest two podcast windows when requested', () => {
-    const firstStart = '2025-05-20T17:00:00.000Z';
-    const firstEnd = '2025-05-21T05:00:00.000Z';
-    const secondStart = '2025-05-21T05:00:00.000Z';
-    const secondEnd = '2025-05-21T17:00:00.000Z';
-    const thirdStart = '2025-05-21T17:00:00.000Z';
-    const thirdEnd = '2025-05-22T05:00:00.000Z';
-
-    [
-      ['first-podcast-summary', firstStart, firstEnd],
-      ['second-podcast-summary', secondStart, secondEnd],
-      ['third-podcast-summary', thirdStart, thirdEnd]
-    ].forEach(([id, periodStart, periodEnd]) => {
-      database.upsertPodcastSummary({
-        id,
-        periodStart,
-        periodEnd,
-        title: id,
-        scriptText: `${id} script`,
-        audio: { data: Buffer.from(id).toString('base64'), mimeType: 'audio/mpeg' },
-        audioStatus: 'completed'
-      });
-    });
-
-    expect(database.listLatestPodcastSummaries(2).map((summary: Identified) => summary.id)).toEqual([
-      'third-podcast-summary',
-      'second-podcast-summary'
-    ]);
-
-    expect(database.pruneSummaryHistory({
-      periodEnd: thirdEnd,
-      podcast: true,
-      podcastRetainCount: 2
-    })).toEqual({ thematicSummaries: 0, podcastSummaries: 1 });
-
-    expect(database.getPodcastSummary(firstStart, firstEnd)).toBeNull();
-    expect(database.getPodcastSummary(secondStart, secondEnd)).toEqual(expect.objectContaining({ id: 'second-podcast-summary' }));
-    expect(database.getPodcastSummary(thirdStart, thirdEnd)).toEqual(expect.objectContaining({ id: 'third-podcast-summary' }));
   });
 
   test('lists and retains the latest two thematic summary windows when requested', () => {
@@ -1834,7 +1626,7 @@ describe('database queries and user data', () => {
       periodEnd: windows[2][1],
       topicKeys: ['technology'],
       thematicRetainCount: 2
-    })).toEqual({ thematicSummaries: 1, podcastSummaries: 0 });
+    })).toEqual({ thematicSummaries: 1 });
     expect(database.getThematicSummary('technology', ...windows[0])).toBeNull();
     expect(database.getThematicSummary('technology', ...windows[1])).toEqual(expect.objectContaining({ id: 'technology-summary-2' }));
     expect(database.getThematicSummary('technology', ...windows[2])).toEqual(expect.objectContaining({ id: 'technology-summary-3' }));

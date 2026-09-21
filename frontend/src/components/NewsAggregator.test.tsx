@@ -4,7 +4,6 @@ import { fetchNews as fetchNewsImplementation, fetchReadLaterNews as fetchReadLa
 import useTopicRefreshSocketImplementation, { type NewsUpdatePayload, type TopicRefreshSocketOptions } from '../hooks/useTopicRefreshSocket';
 import { createDeferred, resolveDeferred } from '../test-utils/deferred';
 import { createTestCurrentUser } from '../test-utils/currentUser';
-import { createPodcastSummary } from '../test-utils/thematicSummaries';
 import { createTranslator } from '../i18n';
 import type { ComponentProps } from 'react';
 import type { FeedResponse, Locale, NewsGroup, ThematicSummary } from '../types';
@@ -499,7 +498,7 @@ describe('NewsAggregator', () => {
     expect(storyButton.querySelector('.lucide-sparkles')).toBeNull();
   });
 
-  test('does not fetch thematic summaries when summary and podcast features are disabled', async () => {
+  test('does not fetch thematic summaries when the feature is disabled', async () => {
     fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Top headline'));
 
     await renderNewsAggregator({
@@ -507,8 +506,7 @@ describe('NewsAggregator', () => {
         ...currentUser,
         features: {
           ai: {
-            thematicSummariesEnabled: false,
-            podcastsEnabled: false
+            thematicSummariesEnabled: false
           }
         }
       }
@@ -516,34 +514,6 @@ describe('NewsAggregator', () => {
 
     expect(await screen.findByText('Top headline')).toBeInTheDocument();
     expect(fetchThematicSummaries).not.toHaveBeenCalled();
-  });
-
-  test('hides podcast stories when the podcast feature is disabled', async () => {
-    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('group-1', 'Top headline'));
-    fetchThematicSummaries.mockResolvedValue({
-      items: [
-        createPodcastSummary(),
-        createThematicSummary({
-          summaryTextByLocale: { en: 'Technology update [1].', it: 'Aggiornamento tecnologia [1].' },
-          sources: []
-        })
-      ]
-    });
-
-    await renderNewsAggregator({
-      currentUser: {
-        ...currentUser,
-        features: {
-          ai: {
-            thematicSummariesEnabled: true,
-            podcastsEnabled: false
-          }
-        }
-      }
-    });
-
-    expect(await screen.findByRole('button', { name: 'Open Technology summary' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open podcast briefing' })).not.toBeInTheDocument();
   });
 
   test('refreshes thematic stories when summary socket refresh arrives', async () => {

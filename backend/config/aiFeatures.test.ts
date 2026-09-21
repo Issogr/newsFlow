@@ -2,8 +2,7 @@ const AI_FEATURE_ENV_NAMES = [
   'OPENROUTER_API_KEY',
   'AI_TOPIC_DETECTION_ENABLED',
   'AI_STORY_GROUPING_ENABLED',
-  'AI_SUMMARY_GENERATION_ENABLED',
-  'AI_PODCAST_GENERATION_ENABLED'
+  'AI_SUMMARY_GENERATION_ENABLED'
 ];
 
 function getIsolatedAiFeatureEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -35,8 +34,7 @@ describe('aiFeatures config', () => {
       ai: {
         topicDetectionEnabled: true,
         storyGroupingEnabled: true,
-        thematicSummariesEnabled: true,
-        podcastsEnabled: true
+        thematicSummariesEnabled: true
       }
     });
   });
@@ -50,8 +48,7 @@ describe('aiFeatures config', () => {
       ai: {
         topicDetectionEnabled: false,
         storyGroupingEnabled: false,
-        thematicSummariesEnabled: false,
-        podcastsEnabled: false
+        thematicSummariesEnabled: false
       }
     });
   });
@@ -61,7 +58,6 @@ describe('aiFeatures config', () => {
     process.env.AI_TOPIC_DETECTION_ENABLED = 'false';
     process.env.AI_STORY_GROUPING_ENABLED = 'false';
     process.env.AI_SUMMARY_GENERATION_ENABLED = 'false';
-    process.env.AI_PODCAST_GENERATION_ENABLED = 'false';
 
     const { getAiFeatures } = require('./aiFeatures');
 
@@ -69,8 +65,7 @@ describe('aiFeatures config', () => {
       ai: {
         topicDetectionEnabled: false,
         storyGroupingEnabled: false,
-        thematicSummariesEnabled: false,
-        podcastsEnabled: false
+        thematicSummariesEnabled: false
       }
     });
   });
@@ -91,7 +86,6 @@ describe('aiFeatures config', () => {
     process.env.AI_TOPIC_DETECTION_ENABLED = 'auto';
     process.env.AI_STORY_GROUPING_ENABLED = '1';
     process.env.AI_SUMMARY_GENERATION_ENABLED = 'yes';
-    process.env.AI_PODCAST_GENERATION_ENABLED = '0';
 
     const { getAiFeatures } = require('./aiFeatures');
 
@@ -99,8 +93,7 @@ describe('aiFeatures config', () => {
       ai: {
         topicDetectionEnabled: false,
         storyGroupingEnabled: false,
-        thematicSummariesEnabled: false,
-        podcastsEnabled: false
+        thematicSummariesEnabled: false
       }
     });
   });

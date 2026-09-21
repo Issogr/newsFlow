@@ -5,7 +5,6 @@ import {
   Film,
   FlaskConical,
   Globe2,
-  Headphones,
   HeartPulse,
   Landmark,
   Leaf,
@@ -30,7 +29,6 @@ describe('getTopicPresentation', () => {
     ['World', Globe2],
     ['Climate', Leaf],
     ['Security', Shield],
-    ['Podcast', Headphones],
     ['Unknown', Tags]
   ])('maps %s to its presentation', (topic, Icon) => {
     expect(getTopicPresentation(topic).Icon).toBe(Icon);

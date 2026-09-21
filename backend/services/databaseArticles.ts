@@ -163,20 +163,6 @@ interface NormalizedTopicUpdate extends DynamicRecord {
   topics: NormalizedTopicEntry[];
 }
 
-interface NormalizedPodcastAudioEntry extends DynamicRecord {
-  audioBlob: Buffer | null;
-  audioErrorMessage: string | null;
-  audioFailedAt: string | null;
-  audioFailureCategory: string;
-  audioMimeType: string;
-  audioModel: string;
-  audioRetryCount: number;
-  audioStatus: string;
-  audioVoice: string;
-  generatedAt: string;
-  locale: string;
-}
-
 interface StoryAnchorRow extends DynamicRecord {
   id: string;
   ownerUserId?: string | null;
@@ -1984,20 +1970,6 @@ function createArticleRepository({
     };
   }
 
-  function normalizeLocalizedSummaryFields(summary: DynamicRecord = {}, textFieldName: string, textByLocaleFieldName: string) {
-    const titleByLocale = getRecord(summary.titleByLocale);
-    const titleEn = String(summary.titleEn || titleByLocale.en || summary.title || '').trim().slice(0, 180);
-    const titleIt = String(summary.titleIt || titleByLocale.it || titleEn || summary.title || '').trim().slice(0, 180);
-    const localizedText = normalizeLocalizedTextFields(summary, textFieldName, textByLocaleFieldName);
-
-    return {
-      ...localizedText,
-      title: titleEn || titleIt,
-      titleEn,
-      titleIt
-    };
-  }
-
   function getLocalizedTextRowFields(row: Row = {}, textFieldName: string) {
     const textEnKey = `${textFieldName}En`;
     const textItKey = `${textFieldName}It`;
@@ -2007,19 +1979,6 @@ function createArticleRepository({
       textByLocale: {
         en: row[textEnKey] || row[textFieldName] || row[textItKey] || '',
         it: row[textItKey] || row[textEnKey] || row[textFieldName] || ''
-      }
-    };
-  }
-
-  function getLocalizedSummaryRowFields(row: Row = {}, textFieldName: string) {
-    const localizedText = getLocalizedTextRowFields(row, textFieldName);
-
-    return {
-      ...localizedText,
-      title: row.titleEn || row.title || row.titleIt || '',
-      titleByLocale: {
-        en: row.titleEn || row.title || row.titleIt || '',
-        it: row.titleIt || row.titleEn || row.title || ''
       }
     };
   }
@@ -2086,257 +2045,6 @@ function createArticleRepository({
       errorMessage: row.errorMessage,
       generatedAt: row.generatedAt
     };
-  }
-
-  function normalizePodcastAudioData(audioData: unknown) {
-    if (!audioData) {
-      return null;
-    }
-
-    if (Buffer.isBuffer(audioData)) {
-      return audioData;
-    }
-
-    if (typeof audioData === 'string') {
-      const base64Data = audioData.includes(',') && /^data:audio\//i.test(audioData)
-        ? audioData.slice(audioData.indexOf(',') + 1)
-        : audioData;
-      try {
-        const buffer = Buffer.from(base64Data, 'base64');
-        return buffer.length > 0 ? buffer : null;
-      } catch {
-        return null;
-      }
-    }
-
-    return null;
-  }
-
-  function normalizePodcastLocale(locale: unknown = '') {
-    const normalized = String(locale || '').trim().toLowerCase().replace(/_/gu, '-');
-    return /^[a-z]{2}(?:-[a-z0-9]{2,8})?$/u.test(normalized) ? normalized : '';
-  }
-
-  function normalizePodcastAudioEntry(locale: unknown, entry: DynamicRecord = {}, defaultGeneratedAt = ''): NormalizedPodcastAudioEntry | null {
-    const normalizedLocale = normalizePodcastLocale(locale);
-    if (!normalizedLocale) {
-      return null;
-    }
-
-    const audio = getRecord(entry.audio);
-    const audioBlob = normalizePodcastAudioData(entry.audioData || audio.data || entry.data || null);
-    const requestedAudioStatus = String(entry.audioStatus || (audioBlob ? 'completed' : 'not_available')).trim().slice(0, 40);
-    const audioStatus = requestedAudioStatus === 'completed' && !audioBlob ? 'not_available' : requestedAudioStatus;
-
-    return {
-      locale: normalizedLocale,
-      audioModel: String(entry.audioModel || audio.model || '').trim().slice(0, 120),
-      audioVoice: String(entry.audioVoice || audio.voice || '').trim().slice(0, 120),
-      audioMimeType: String(entry.audioMimeType || audio.mimeType || '').trim().slice(0, 120),
-      audioBlob,
-      audioStatus,
-      audioErrorMessage: entry.audioErrorMessage ? String(entry.audioErrorMessage).trim().slice(0, 1000) : null,
-      audioFailureCategory: String(entry.audioFailureCategory || '').trim().slice(0, 80),
-      audioRetryCount: Math.max(0, Number(entry.audioRetryCount) || 0),
-      audioFailedAt: entry.audioFailedAt ? String(entry.audioFailedAt).trim() : null,
-      generatedAt: String(entry.generatedAt || audio.generatedAt || defaultGeneratedAt || new Date().toISOString()).trim()
-    };
-  }
-
-  function normalizePodcastAudioEntries(summary: DynamicRecord = {}, defaultGeneratedAt = '') {
-    const entries: NormalizedPodcastAudioEntry[] = [];
-    const audioByLocale = getRecord(summary.audioByLocale);
-
-    Object.entries(audioByLocale).forEach(([locale, entry]) => {
-      const normalized = normalizePodcastAudioEntry(locale, getRecord(entry), defaultGeneratedAt);
-      if (normalized) {
-        entries.push(normalized);
-      }
-    });
-
-    if (summary.audio || summary.audioData || summary.audioStatus) {
-      const legacyLocale = normalizePodcastLocale(summary.audioLocale || summary.locale || 'it');
-      const normalized = normalizePodcastAudioEntry(legacyLocale, summary, defaultGeneratedAt);
-      if (normalized) {
-        entries.push(normalized);
-      }
-    }
-
-    return [...new Map(entries.map((entry) => [entry.locale, entry])).values()];
-  }
-
-  function normalizePodcastSummaryPayload(summary: DynamicRecord = {}) {
-    const periodStart = String(summary.periodStart || '').trim();
-    const periodEnd = String(summary.periodEnd || '').trim();
-
-    if (!periodStart || !periodEnd) {
-      return null;
-    }
-
-    const id = String(summary.id || `podcast:${periodStart}:${periodEnd}`).trim();
-    const localized = normalizeLocalizedSummaryFields(summary, 'scriptText', 'scriptTextByLocale');
-    const generatedAt = String(summary.generatedAt || new Date().toISOString()).trim();
-    const audioEntries = normalizePodcastAudioEntries(summary, generatedAt);
-
-    return {
-      id,
-      periodStart,
-      periodEnd,
-      title: localized.title,
-      scriptText: localized.text,
-      titleEn: localized.titleEn,
-      scriptTextEn: localized.textEn,
-      titleIt: localized.titleIt,
-      scriptTextIt: localized.textIt,
-      sourcesJson: JSON.stringify(normalizeSummarySources(summary.sources || [])),
-      articleCount: Math.max(0, Number(summary.articleCount) || 0),
-      scriptModel: String(summary.scriptModel || summary.model || '').trim().slice(0, 120),
-      status: String(summary.status || 'completed').trim().slice(0, 40),
-      failureCategory: String(summary.failureCategory || '').trim().slice(0, 80),
-      retryCount: Math.max(0, Number(summary.retryCount) || 0),
-      errorMessage: summary.errorMessage ? String(summary.errorMessage).trim().slice(0, 1000) : null,
-      generatedAt,
-      audioEntries
-    };
-  }
-
-  function mapPodcastSummaryRow(row: Row | undefined | null) {
-    if (!row) {
-      return null;
-    }
-
-    const localized = getLocalizedSummaryRowFields(row, 'scriptText');
-    const audioByLocale = getPodcastSummaryAudioRows(String(row.id || ''));
-    const audioLocales = Object.keys(audioByLocale);
-    const completedAudioLocales = audioLocales.filter((locale) => audioByLocale[locale]?.audioStatus === 'completed' && audioByLocale[locale]?.audioUrl);
-    const primaryAudioLocale = completedAudioLocales.includes('en')
-      ? 'en'
-      : (completedAudioLocales[0] || (audioLocales.includes('en') ? 'en' : audioLocales[0]));
-    const primaryAudio = primaryAudioLocale ? audioByLocale[primaryAudioLocale] : null;
-
-    return {
-      id: row.id,
-      type: 'podcast',
-      topicKey: 'podcast',
-      topicLabel: 'Podcast',
-      topics: ['Podcast'],
-      periodStart: row.periodStart,
-      periodEnd: row.periodEnd,
-      title: localized.title,
-      summaryText: localized.text,
-      titleByLocale: localized.titleByLocale,
-      summaryTextByLocale: localized.textByLocale,
-      sources: parseJsonArray(row.sourcesJson),
-      articleCount: row.articleCount,
-      model: row.scriptModel,
-      audioByLocale,
-      availableAudioLocales: completedAudioLocales,
-      audioLocale: primaryAudioLocale || '',
-      audioModel: primaryAudio?.audioModel || '',
-      audioVoice: primaryAudio?.audioVoice || '',
-      audioMimeType: primaryAudio?.audioMimeType || '',
-      audioStatus: primaryAudio?.audioStatus || 'not_available',
-      audioErrorMessage: primaryAudio?.audioErrorMessage || null,
-      audioFailureCategory: primaryAudio?.audioFailureCategory || '',
-      audioRetryCount: primaryAudio?.audioRetryCount ?? 0,
-      audioFailedAt: primaryAudio?.audioFailedAt || null,
-      audioUrl: primaryAudio?.audioUrl || '',
-      status: row.status,
-      failureCategory: row.failureCategory || '',
-      retryCount: row.retryCount || 0,
-      errorMessage: row.errorMessage,
-      generatedAt: row.generatedAt
-    };
-  }
-
-  function mapPodcastAudioRow(row: Row | undefined | null, podcastId = ''): DynamicRecord | null {
-    if (!row) {
-      return null;
-    }
-
-    const locale = normalizePodcastLocale(row.locale);
-    if (!locale) {
-      return null;
-    }
-
-    return {
-      locale,
-      audioModel: row.audioModel || '',
-      audioVoice: row.audioVoice || '',
-      audioMimeType: row.audioMimeType || '',
-      audioStatus: row.audioStatus || 'not_available',
-      audioErrorMessage: row.audioErrorMessage || '',
-      audioFailureCategory: row.audioFailureCategory || '',
-      audioRetryCount: row.audioRetryCount || 0,
-      audioFailedAt: row.audioFailedAt || null,
-      generatedAt: row.generatedAt || '',
-      audioUrl: row.audioStatus === 'completed'
-        ? `/api/podcast-summary/${encodeURIComponent(podcastId)}/audio?locale=${encodeURIComponent(locale)}&v=${encodeURIComponent([row.generatedAt, row.audioModel, row.audioVoice].filter(Boolean).join(':'))}`
-        : ''
-    };
-  }
-
-  function getPodcastSummaryAudioRows(podcastId = ''): Record<string, DynamicRecord> {
-    const normalizedPodcastId = String(podcastId || '').trim();
-    if (!normalizedPodcastId) {
-      return {};
-    }
-
-    const rows = getDb().prepare(`
-      SELECT locale, audio_model AS audioModel, audio_voice AS audioVoice,
-             audio_mime_type AS audioMimeType, audio_status AS audioStatus,
-             audio_error_message AS audioErrorMessage, audio_failure_category AS audioFailureCategory,
-             audio_retry_count AS audioRetryCount, audio_failed_at AS audioFailedAt,
-             generated_at AS generatedAt
-      FROM podcast_summary_audio
-      WHERE podcast_id = ?
-      ORDER BY locale ASC
-    `).all(normalizedPodcastId);
-
-    const audioRows = rows
-      .map((row) => mapPodcastAudioRow(row, normalizedPodcastId))
-      .filter((row): row is DynamicRecord => row !== null);
-    return Object.fromEntries(audioRows.map((row) => [row.locale, row]));
-  }
-
-  function upsertPodcastAudioRow(podcastId: string, audioEntry: DynamicRecord = {}) {
-    const normalizedPodcastId = String(podcastId || '').trim();
-    if (!normalizedPodcastId || !audioEntry?.locale) {
-      return;
-    }
-
-    getDb().prepare(`
-      INSERT INTO podcast_summary_audio (
-        podcast_id, locale, audio_model, audio_voice, audio_mime_type, audio_blob,
-        audio_status, audio_error_message, audio_failure_category, audio_retry_count,
-        audio_failed_at, generated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(podcast_id, locale) DO UPDATE SET
-        audio_model = excluded.audio_model,
-        audio_voice = excluded.audio_voice,
-        audio_mime_type = excluded.audio_mime_type,
-        audio_blob = excluded.audio_blob,
-        audio_status = excluded.audio_status,
-        audio_error_message = excluded.audio_error_message,
-        audio_failure_category = excluded.audio_failure_category,
-        audio_retry_count = excluded.audio_retry_count,
-        audio_failed_at = excluded.audio_failed_at,
-        generated_at = excluded.generated_at
-    `).run(
-      normalizedPodcastId,
-      audioEntry.locale,
-      audioEntry.audioModel,
-      audioEntry.audioVoice,
-      audioEntry.audioMimeType,
-      audioEntry.audioBlob,
-      audioEntry.audioStatus,
-      audioEntry.audioErrorMessage,
-      audioEntry.audioFailureCategory,
-      audioEntry.audioRetryCount,
-      audioEntry.audioFailedAt,
-      audioEntry.generatedAt
-    );
   }
 
   function upsertThematicSummary(summary: DynamicRecord = {}) {
@@ -2445,7 +2153,7 @@ function createArticleRepository({
   function pruneSummaryHistory(options: DynamicRecord = {}) {
     const periodEnd = String(options.periodEnd || '').trim();
     if (!periodEnd) {
-      return { thematicSummaries: 0, podcastSummaries: 0 };
+      return { thematicSummaries: 0 };
     }
 
     const topicKeys = [...new Set((Array.isArray(options.topicKeys) ? options.topicKeys : [])
@@ -2469,148 +2177,7 @@ function createArticleRepository({
           )
       `).run(periodEnd, ...topicKeys, periodEnd, thematicRetainCount).changes
       : 0;
-    const podcastRetainCount = Math.max(1, Number(options.podcastRetainCount) || 1);
-    const podcastSummaries = options.podcast === true
-      ? db.prepare(`
-        DELETE FROM podcast_summaries
-        WHERE period_end < ?
-          AND period_end NOT IN (
-            SELECT period_end
-            FROM podcast_summaries
-            WHERE period_end <= ?
-              AND status IN ('completed', 'empty', 'failed')
-            ORDER BY period_end DESC
-            LIMIT ?
-          )
-      `).run(periodEnd, periodEnd, podcastRetainCount).changes
-      : 0;
-
-    return { thematicSummaries, podcastSummaries };
-  }
-
-  function upsertPodcastSummary(summary: DynamicRecord = {}) {
-    const normalized = normalizePodcastSummaryPayload(summary);
-    if (!normalized) {
-      return null;
-    }
-
-    const database = getDb();
-    const upsertPodcast = database.prepare(`
-      INSERT INTO podcast_summaries (
-        id, period_start, period_end, title, script_text, title_en, script_text_en,
-        title_it, script_text_it, sources_json, article_count, script_model,
-        status, failure_category, retry_count, error_message, generated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(period_start, period_end) DO UPDATE SET
-        title = excluded.title,
-        script_text = excluded.script_text,
-        title_en = excluded.title_en,
-        script_text_en = excluded.script_text_en,
-        title_it = excluded.title_it,
-        script_text_it = excluded.script_text_it,
-        sources_json = excluded.sources_json,
-        article_count = excluded.article_count,
-        script_model = excluded.script_model,
-        status = excluded.status,
-        failure_category = excluded.failure_category,
-        retry_count = excluded.retry_count,
-        error_message = excluded.error_message,
-        generated_at = excluded.generated_at
-      RETURNING id
-    `);
-    const transaction = database.transaction(() => {
-      const persistedPodcast = upsertPodcast.get(
-        normalized.id,
-        normalized.periodStart,
-        normalized.periodEnd,
-        normalized.title,
-        normalized.scriptText,
-        normalized.titleEn,
-        normalized.scriptTextEn,
-        normalized.titleIt,
-        normalized.scriptTextIt,
-        normalized.sourcesJson,
-        normalized.articleCount,
-        normalized.scriptModel,
-        normalized.status,
-        normalized.failureCategory,
-        normalized.retryCount,
-        normalized.errorMessage,
-        normalized.generatedAt
-      );
-
-      normalized.audioEntries.forEach((audioEntry) => upsertPodcastAudioRow(String(persistedPodcast!.id), audioEntry));
-    });
-
-    transaction();
-
-    return getPodcastSummary(normalized.periodStart, normalized.periodEnd);
-  }
-
-  function getPodcastSummary(periodStart: string, periodEnd: string) {
-    const row = getDb().prepare(`
-      SELECT id, period_start AS periodStart, period_end AS periodEnd, title, script_text AS scriptText,
-             title_en AS titleEn, script_text_en AS scriptTextEn,
-             title_it AS titleIt, script_text_it AS scriptTextIt,
-             sources_json AS sourcesJson, article_count AS articleCount, script_model AS scriptModel,
-             status, failure_category AS failureCategory, retry_count AS retryCount, error_message AS errorMessage,
-             generated_at AS generatedAt
-      FROM podcast_summaries
-      WHERE period_start = ? AND period_end = ?
-      LIMIT 1
-    `).get(periodStart, periodEnd);
-
-    return mapPodcastSummaryRow(row);
-  }
-
-  function listLatestPodcastSummaries(limit = 1) {
-    const normalizedLimit = Math.max(1, Math.min(Number(limit) || 1, 10));
-    const rows = getDb().prepare(`
-      SELECT id, period_start AS periodStart, period_end AS periodEnd, title, script_text AS scriptText,
-             title_en AS titleEn, script_text_en AS scriptTextEn,
-             title_it AS titleIt, script_text_it AS scriptTextIt,
-             sources_json AS sourcesJson, article_count AS articleCount, script_model AS scriptModel,
-             status, failure_category AS failureCategory, retry_count AS retryCount, error_message AS errorMessage,
-             generated_at AS generatedAt
-      FROM podcast_summaries
-      WHERE status IN ('completed', 'empty', 'failed')
-      ORDER BY period_end DESC
-      LIMIT ?
-    `).all(normalizedLimit);
-
-    return rows.map(mapPodcastSummaryRow).filter(Boolean);
-  }
-
-  function getPodcastSummaryAudio(podcastId: string, locale: unknown = '') {
-    const normalizedPodcastId = String(podcastId || '').trim();
-    const requestedLocale = String(locale || '').trim();
-    const normalizedLocale = normalizePodcastLocale(locale);
-    if (requestedLocale && !normalizedLocale) {
-      return null;
-    }
-
-    const audioRow = normalizedLocale ? getDb().prepare(`
-      SELECT audio_blob AS audioBlob, audio_mime_type AS audioMimeType
-      FROM podcast_summary_audio
-      WHERE podcast_id = ? AND locale = ? AND audio_status = 'completed' AND audio_blob IS NOT NULL
-      LIMIT 1
-    `).get(normalizedPodcastId, normalizedLocale) : getDb().prepare(`
-      SELECT audio_blob AS audioBlob, audio_mime_type AS audioMimeType
-      FROM podcast_summary_audio
-      WHERE podcast_id = ? AND audio_status = 'completed' AND audio_blob IS NOT NULL
-      ORDER BY CASE locale WHEN 'en' THEN 0 WHEN 'it' THEN 1 ELSE 2 END, locale ASC
-      LIMIT 1
-    `).get(normalizedPodcastId);
-
-    if (audioRow?.audioBlob) {
-      return {
-        data: audioRow.audioBlob,
-        mimeType: audioRow.audioMimeType || 'audio/mpeg'
-      };
-    }
-
-    return null;
+    return { thematicSummaries };
   }
 
   function countArticles(options: ArticleOptions = {}) {
@@ -2940,10 +2507,6 @@ function createArticleRepository({
     getThematicSummary,
     listLatestThematicSummaries,
     pruneSummaryHistory,
-    upsertPodcastSummary,
-    getPodcastSummary,
-    listLatestPodcastSummaries,
-    getPodcastSummaryAudio,
     getReadLaterArticleIdSet,
     isReadLaterArticle,
     saveReadLaterArticles,

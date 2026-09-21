@@ -7,7 +7,7 @@ import type SqliteDatabase from './sqliteDatabase';
 import type { SourceDefinition } from '../utils/types';
 
 function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
-  const CURRENT_SCHEMA_VERSION = 45;
+  const CURRENT_SCHEMA_VERSION = 46;
   const MIN_SUPPORTED_SCHEMA_VERSION = 15;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
@@ -1146,6 +1146,22 @@ function createDatabaseSchema({ logger }: { logger: winston.Logger }) {
       }
       setCurrentSchemaVersion(database, 45);
       logger.info('Migrated DB schema from version 44 to 45');
+      return;
+    }
+
+    if (currentVersion === 45) {
+      if (tableExists(database, 'podcast_summaries') && tableExists(database, 'user_read_thematic_summaries')) {
+        database.exec(`
+          DELETE FROM user_read_thematic_summaries
+          WHERE summary_id IN (SELECT id FROM podcast_summaries);
+        `);
+      }
+      database.exec(`
+        DROP TABLE IF EXISTS podcast_summary_audio;
+        DROP TABLE IF EXISTS podcast_summaries;
+      `);
+      setCurrentSchemaVersion(database, 46);
+      logger.info('Migrated DB schema from version 45 to 46');
       return;
     }
 

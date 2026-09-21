@@ -39,7 +39,6 @@ import DesktopTopNavFilters from './DesktopTopNavFilters';
 import TopNavActionButton from './TopNavActionButton';
 import ThematicSummaryStories from './ThematicSummaryStories';
 import ThematicSummaryPanel from './ThematicSummaryPanel';
-import { isPodcastSummary } from '../utils/thematicSummaryLocale';
 import type { LucideIcon } from 'lucide-react';
 import type { ActiveFilters, AvailableTopic, CurrentUser, FeedCursor, FeedMeta, Locale, NewsGroup, NewsSource, ThematicSummary, Translator } from '../types';
 
@@ -133,36 +132,7 @@ function getCurrentThematicSummarySelection(selectedSummary: ThematicSummary | n
     return sameIdSummary;
   }
 
-  if (isPodcastSummary(selectedSummary)) {
-    return summaries.find(isPodcastSummary) || null;
-  }
-
-  return summaries.find((summary) => !isPodcastSummary(summary) && summary?.topicKey === selectedSummary.topicKey) || null;
-}
-
-interface AiFeatureState {
-  thematicSummariesEnabled: boolean;
-  podcastsEnabled: boolean;
-  surfaceEnabled: boolean;
-}
-
-function getAiSummaryFeatureState(aiFeatures: NonNullable<CurrentUser['features']>['ai'] = {}): AiFeatureState {
-  const thematicSummariesEnabled = aiFeatures.thematicSummariesEnabled !== false;
-  const podcastsEnabled = aiFeatures.podcastsEnabled !== false;
-
-  return {
-    thematicSummariesEnabled,
-    podcastsEnabled,
-    surfaceEnabled: thematicSummariesEnabled || podcastsEnabled
-  };
-}
-
-function filterThematicSummariesForFeatures(summaries: ThematicSummary[] = [], featureState: Partial<AiFeatureState> = {}) {
-  return (Array.isArray(summaries) ? summaries : []).filter((summary) => {
-    return isPodcastSummary(summary)
-      ? featureState.podcastsEnabled !== false
-      : featureState.thematicSummariesEnabled !== false;
-  });
+  return summaries.find((summary) => summary?.topicKey === selectedSummary.topicKey) || null;
 }
 
 const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpenReleaseNotes }: {
@@ -236,11 +206,10 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
     ? currentUser.sourceCatalog
     : sourceCatalog;
   const readThematicSummariesStorageKey = useMemo(() => getReadThematicSummariesStorageKey(currentUser), [currentUser]);
-  const aiFeatureOptions = currentUser?.features?.ai;
-  const aiSummaryFeatureState = useMemo(() => getAiSummaryFeatureState(aiFeatureOptions), [aiFeatureOptions]);
+  const thematicSummariesEnabled = currentUser?.features?.ai?.thematicSummariesEnabled !== false;
   const visibleThematicSummaries = useMemo(() => {
-    return filterThematicSummariesForFeatures(thematicSummaries, aiSummaryFeatureState);
-  }, [aiSummaryFeatureState, thematicSummaries]);
+    return thematicSummariesEnabled ? thematicSummaries : [];
+  }, [thematicSummariesEnabled, thematicSummaries]);
   const displayedThematicSummary = useMemo(() => {
     if (!selectedThematicSummary?.id) {
       return null;
@@ -606,7 +575,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
   }, []);
 
   const loadThematicSummaries = useCallback(async () => {
-    if (needsSourceSetup || !aiSummaryFeatureState.surfaceEnabled) {
+    if (needsSourceSetup || !thematicSummariesEnabled) {
       cancelSummaryRequest();
       setThematicSummaries([]);
       return;
@@ -617,7 +586,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
     try {
       const response = await fetchThematicSummaries({ signal: request.signal });
       if (request.isLatest()) {
-        setThematicSummaries(filterThematicSummariesForFeatures(response.items || [], aiSummaryFeatureState));
+        setThematicSummaries(Array.isArray(response.items) ? response.items : []);
         const readSummaryIds = mergeReadThematicSummaryIds(
           getStoredReadThematicSummaryIds(readThematicSummariesStorageKey),
           response.readSummaryIds || []
@@ -628,7 +597,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
     } catch {
       // Keep the last successful snapshot during transient refresh failures.
     }
-  }, [aiSummaryFeatureState, cancelSummaryRequest, needsSourceSetup, readThematicSummariesStorageKey, startSummaryRequest]);
+  }, [thematicSummariesEnabled, cancelSummaryRequest, needsSourceSetup, readThematicSummariesStorageKey, startSummaryRequest]);
 
   useTopicRefreshSocket({
     onTopicRefresh: handleTopicRefresh,
@@ -639,7 +608,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
   });
 
   useEffect(() => {
-    if (needsSourceSetup || !aiSummaryFeatureState.surfaceEnabled) {
+    if (needsSourceSetup || !thematicSummariesEnabled) {
       return undefined;
     }
 
@@ -656,7 +625,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
       window.removeEventListener('focus', refreshVisibleSummaries);
       document.removeEventListener('visibilitychange', refreshVisibleSummaries);
     };
-  }, [aiSummaryFeatureState.surfaceEnabled, loadThematicSummaries, needsSourceSetup]);
+  }, [thematicSummariesEnabled, loadThematicSummaries, needsSourceSetup]);
 
   useEffect(() => {
     if (needsSourceSetup) {
@@ -724,9 +693,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
     }
 
     setSelectedThematicSummary(summary);
-    const summaryIds = [...new Set(isPodcastSummary(summary)
-      ? [summary.id, ...visibleThematicSummaries.filter(isPodcastSummary).map((podcastSummary) => podcastSummary.id)].filter(Boolean)
-      : [summary.id])];
+    const summaryIds = [summary.id];
 
     setReadThematicSummaryIds((current) => {
       const unreadSummaryIds = summaryIds.filter((summaryId) => !current.includes(summaryId));
@@ -749,7 +716,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession, onOpen
         });
       })
       .catch(() => {});
-  }, [readThematicSummariesStorageKey, visibleThematicSummaries]);
+  }, [readThematicSummariesStorageKey]);
 
   const handleToggleReadLater = useCallback(async (group: NewsGroup) => {
     const articleIds = (group?.readLater ? (group.readLaterArticleIds || []) : (group?.items || []).map((item) => item.id)).filter((articleId): articleId is string => Boolean(articleId));

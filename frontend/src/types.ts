@@ -122,7 +122,7 @@ export interface CurrentUser {
   };
   features?: {
     feedback?: { enabled?: boolean; [key: string]: unknown };
-    ai?: { thematicSummariesEnabled?: boolean; podcastsEnabled?: boolean; [key: string]: unknown };
+    ai?: { thematicSummariesEnabled?: boolean; [key: string]: unknown };
     publicApi?: { authenticatedEnabled?: boolean; [key: string]: unknown };
     [key: string]: unknown;
   };
@@ -132,14 +132,7 @@ export interface CurrentUser {
   [key: string]: unknown;
 }
 
-export interface ThematicSummaryAudio {
-  audioStatus?: string;
-  audioUrl?: string;
-  audioLocale?: string;
-  [key: string]: unknown;
-}
-
-export interface ThematicSummary extends ThematicSummaryAudio {
+export interface ThematicSummary {
   id: string;
   type?: string;
   topicKey?: string;
@@ -150,13 +143,10 @@ export interface ThematicSummary extends ThematicSummaryAudio {
   generatedAt?: string;
   articleCount?: number;
   isStale?: boolean;
-  titleByLocale?: Partial<Record<Locale, string>>;
   summaryTextByLocale?: Partial<Record<Locale, string>>;
   summaryText?: string;
   summarySlot?: string;
-  podcastSlot?: string;
   status?: string;
-  audioByLocale?: Record<string, ThematicSummaryAudio>;
   sources?: Array<{ index?: number; source?: string; title?: string; url?: string; [key: string]: unknown }>;
   [key: string]: unknown;
 }

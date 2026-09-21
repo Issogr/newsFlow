@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/license-GPL--3.0-1d4ed8" alt="License: GPL-3.0" />
 </p>
 
-News Flow is a self-hosted RSS news hub with grouped stories, clean reader mode, per-user sources, and optional AI-powered topics, summaries, story grouping, and podcasts.
+News Flow is a self-hosted RSS news hub with grouped stories, clean reader mode, per-user sources, and optional AI-powered topics, summaries, and story grouping.
 
 ## Features
 
@@ -19,7 +19,7 @@ News Flow is a self-hosted RSS news hub with grouped stories, clean reader mode,
 - Add personal RSS feeds and source exclusions.
 - Read articles in a cleaned in-app reader.
 - Save read-later articles outside normal retention.
-- Use optional OpenRouter AI jobs for topic detection, story grouping, thematic summaries, and podcast briefings.
+- Use optional OpenRouter AI jobs for topic detection, story grouping, and thematic summaries.
 - Keep browser traffic same-origin on `/api/*`; Caddy is the only public service.
 
 ## Quick Start
@@ -139,18 +139,15 @@ AI runs only in the backend. Set `OPENROUTER_API_KEY` to enable provider-backed 
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | unset | Required for AI provider calls. |
 | `AI_TOPIC_DETECTION_ENABLED` | `true` | Adds AI topic metadata during ingestion. |
-| `AI_STORY_GROUPING_ENABLED`, `AI_SUMMARY_GENERATION_ENABLED`, `AI_PODCAST_GENERATION_ENABLED` | `false` | Enable individual optional AI jobs. |
+| `AI_STORY_GROUPING_ENABLED`, `AI_SUMMARY_GENERATION_ENABLED` | `false` | Enable individual optional AI jobs. |
 | `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips provider calls for articles the local classifier can topic with high confidence. |
 | `AI_SUMMARY_PROMPT_MAX_ARTICLES` | `24` | Max selected articles included in one thematic-summary prompt after dedupe/source balancing. |
 | `AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS` | `5000` | Debounces summary checks triggered by topic-classification completion. |
 | `AI_SUMMARY_READER_PREWARM_ENABLED` | `true` | Prewarms reader text before summary windows when summaries are enabled. |
 | `AI_SUMMARY_READER_PREWARM_RETRY_COOLDOWN_MS` | `300000` | Cooldown before retrying failed reader prewarm attempts. |
-| `AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES` | `2` | Additional retries for invalid summary or podcast-script output. |
+| `AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES` | `2` | Additional retries for invalid summary output. |
 | `AI_SUMMARY_PENDING_TOPIC_GRACE_MS` | `900000` | Grace period after a summary slot for pending topic classification. |
-| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | Time zone for the daily `20:00` summary/podcast slot. |
-| `AI_PODCAST_LANGUAGES` | `en` | Comma-separated locales: `en`, `it`. |
-| `AI_PODCAST_PROMPT_MAX_ARTICLES` | `40` | Max selected articles included in one podcast-script prompt after dedupe/source balancing. |
-| `AI_PODCAST_BACKGROUND_AUDIO_ENABLED` | `true` | Saves podcast scripts first and generates TTS audio in the background when enabled. |
+| `AI_SUMMARY_TIME_ZONE` | `Europe/Rome` | Time zone for the daily `20:00` summary slot. |
 
 Model overrides:
 
@@ -159,8 +156,6 @@ Model overrides:
 | `OPENROUTER_TOPIC_MODEL` | `mistralai/mistral-small-24b-instruct-2501` |
 | `OPENROUTER_SUMMARY_MODEL` | `qwen/qwen3.7-flash` |
 | `OPENROUTER_STORY_GROUPING_MODEL` | `qwen/qwen3.7-flash` |
-| `OPENROUTER_PODCAST_SCRIPT_MODEL` | `qwen/qwen3.7-flash` |
-| `OPENROUTER_PODCAST_AUDIO_MODEL` | `google/gemini-3.1-flash-tts-preview` |
 
 ### Feedback
 

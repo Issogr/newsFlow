@@ -1,10 +1,6 @@
 import { getLocalizedTopic } from '../i18n';
 import type { Locale, ThematicSummary } from '../types';
 
-export function isPodcastSummary(summary: Partial<ThematicSummary> = {}): boolean {
-  return summary?.type === 'podcast' || summary?.topicKey === 'podcast';
-}
-
 export function getThematicSummaryPresentationKey(summary: Partial<ThematicSummary> = {}) {
   return summary.topicKey || summary.topics?.[0] || summary.topicLabel;
 }

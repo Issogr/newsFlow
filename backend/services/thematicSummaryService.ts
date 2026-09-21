@@ -4,7 +4,6 @@ import { createHash } from 'node:crypto';
 const database = require('./database');
 const logger = require('../utils/logger');
 const aiSummaryGenerator = require('./aiSummaryGenerator');
-const aiPodcastGenerator = require('./aiPodcastGenerator');
 const readerService = require('./readerService');
 const websocketService = require('./websocketService');
 const { parseIntegerEnv } = require('../utils/env');
@@ -15,7 +14,6 @@ const { normalizeArticleUrl, normalizeIdentityText } = require('../utils/article
 
 const DEFAULT_SUMMARY_TIME_ZONE = 'Europe/Rome';
 const SUMMARY_HISTORY_RETAIN_COUNT = 1;
-const PODCAST_HISTORY_RETAIN_COUNT = parseIntegerEnv('AI_PODCAST_HISTORY_RETAIN_COUNT', 2, { min: 1, max: 10 });
 const SUMMARY_CHECK_INTERVAL_MS = parseIntegerEnv('THEMATIC_SUMMARY_CHECK_INTERVAL_MS', 60 * 1000, { min: 1000 });
 const SUMMARY_MAX_ARTICLES_PER_TOPIC = parseIntegerEnv('AI_SUMMARY_MAX_ARTICLES_PER_TOPIC', 120, { min: 1, max: 300 });
 const SUMMARY_READER_PREWARM_MINUTES_BEFORE = parseIntegerEnv('AI_SUMMARY_READER_PREWARM_MINUTES_BEFORE', 30, { min: 1, max: 180 });
@@ -28,12 +26,8 @@ const SUMMARY_FAILED_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_SUMMARY_FAILED_RETR
 const SUMMARY_INVALID_OUTPUT_MAX_RETRIES = parseIntegerEnv('AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES', 2, { min: 0, max: 10 });
 const SUMMARY_PENDING_TOPIC_GRACE_MS = parseIntegerEnv('AI_SUMMARY_PENDING_TOPIC_GRACE_MS', 15 * 60 * 1000, { min: 0, max: 6 * 60 * 60 * 1000 });
 const SUMMARY_PROMPT_MAX_ARTICLES = parseIntegerEnv('AI_SUMMARY_PROMPT_MAX_ARTICLES', 24, { min: 1, max: SUMMARY_MAX_ARTICLES_PER_TOPIC });
-const PODCAST_PROMPT_MAX_ARTICLES = parseIntegerEnv('AI_PODCAST_PROMPT_MAX_ARTICLES', 40, { min: 1, max: 300 });
-const PODCAST_TTS_RETRY_COOLDOWN_MS = parseIntegerEnv('AI_PODCAST_TTS_RETRY_COOLDOWN_MS', 10 * 60 * 1000, { min: 0, max: 24 * 60 * 60 * 1000 });
-const PODCAST_TTS_MAX_RETRIES = parseIntegerEnv('AI_PODCAST_TTS_MAX_RETRIES', 4, { min: 0, max: 20 });
 const TERMINAL_SUMMARY_STATUSES = new Set(['completed', 'empty']);
-const TERMINAL_PODCAST_STATUSES = new Set(['completed', 'empty', 'failed']);
-const NON_RETRYABLE_SUMMARY_FAILURE_CATEGORIES = new Set(['invalid_output', 'invalid_script']);
+const NON_RETRYABLE_SUMMARY_FAILURE_CATEGORIES = new Set(['invalid_output']);
 interface SummaryTopic {
   key: string;
   label: string;
@@ -84,27 +78,8 @@ interface SummarySource extends DynamicRecord {
   contentHash?: string;
 }
 
-interface PodcastAudioRecord extends DynamicRecord {
-  audio?: DynamicRecord;
-  audioErrorMessage?: string;
-  audioFailedAt?: string | null;
-  audioFailureCategory?: string;
-  audioModel?: string;
-  audioRetryCount?: number;
-  audioStatus?: string;
-  audioVoice?: string;
-}
-
 interface SummaryRecord extends DynamicRecord {
   articleCount?: number;
-  audioByLocale?: Record<string, PodcastAudioRecord>;
-  audioFailedAt?: string | null;
-  audioFailureCategory?: string;
-  audioLocale?: string;
-  audioModel?: string;
-  audioRetryCount?: number;
-  audioStatus?: string;
-  audioVoice?: string;
   errorMessage?: string;
   failureCategory?: string;
   generatedAt?: string;
@@ -114,13 +89,10 @@ interface SummaryRecord extends DynamicRecord {
   periodEnd?: string;
   periodStart?: string;
   retryCount?: number;
-  scriptText?: string;
   sources?: SummarySource[];
   status?: string;
   summaryText?: string;
   summaryTextByLocale?: Record<string, string>;
-  title?: string;
-  titleByLocale?: Record<string, string>;
   topicKey?: string;
 }
 
@@ -130,14 +102,7 @@ interface SummaryOptions extends DynamicRecord {
   canGenerateSummaries?: boolean;
   force?: boolean;
   referenceDate?: DateInput;
-  startPodcastAudioGeneration?: boolean;
   window?: SummaryWindow;
-}
-
-interface PodcastTtsConfig extends DynamicRecord {
-  apiKey?: string;
-  enabled: boolean;
-  model: string;
 }
 
 interface ReaderCacheEntry extends DynamicRecord {
@@ -146,7 +111,6 @@ interface ReaderCacheEntry extends DynamicRecord {
 
 interface DueSummaryResult extends DynamicRecord {
   items: SummaryRecord[];
-  podcastWindow: SummaryWindow;
   window: SummaryWindow;
 }
 
@@ -204,8 +168,6 @@ let generationPromise: Promise<DueSummaryResult | undefined> | null = null;
 let pendingGenerationOptions: Array<{ key: string; options: SummaryOptions }> = [];
 let prewarmPromise: Promise<DynamicRecord> | null = null;
 const attemptedPrewarmArticleIdsByWindow = new Map<string, Map<string, PrewarmAttempt>>();
-const podcastAudioGenerationPromises = new Map<string, Promise<unknown>>();
-const podcastAudioGenerationTimers = new Map<string, NodeJS.Timeout>();
 
 function getConfiguredSummaryTimeZone() {
   const configuredTimeZone = String(process.env.AI_SUMMARY_TIME_ZONE || DEFAULT_SUMMARY_TIME_ZONE).trim() || DEFAULT_SUMMARY_TIME_ZONE;
@@ -223,7 +185,7 @@ const SUMMARY_TIME_ZONE = getConfiguredSummaryTimeZone();
 
 function isReaderPrewarmEnabled() {
   return isAiToggleEnabled('AI_SUMMARY_READER_PREWARM_ENABLED')
-    && (aiSummaryGenerator.isAiSummaryGenerationAvailable() || aiPodcastGenerator.isAiPodcastGenerationAvailable());
+    && aiSummaryGenerator.isAiSummaryGenerationAvailable();
 }
 
 function getTimeZoneParts(date: Date, timeZone = SUMMARY_TIME_ZONE): LocalDateParts {
@@ -306,32 +268,6 @@ function getNextDueWindow(referenceDate: DateInput = new Date()): SummaryWindow 
   return getDailyWindow(referenceDate, true);
 }
 
-function getPodcastWindowSlot(summary: SummaryRecord = {}) {
-  const periodEnd = new Date(summary.periodEnd || '');
-  if (Number.isNaN(periodEnd.getTime())) {
-    return '';
-  }
-
-  return getTimeZoneParts(periodEnd, SUMMARY_TIME_ZONE).hour < 12 ? 'morning' : 'evening';
-}
-
-function getLatestPodcastSummariesBySlot(limit = PODCAST_HISTORY_RETAIN_COUNT) {
-  const requestedLimit = Math.max(PODCAST_HISTORY_RETAIN_COUNT * 3, 6);
-  const summaries = database.listLatestPodcastSummaries(requestedLimit);
-  const bySlot = new Map<string, SummaryRecord>();
-
-  summaries.forEach((summary: SummaryRecord) => {
-    const podcastSlot = getPodcastWindowSlot(summary);
-    if (!podcastSlot || bySlot.has(podcastSlot)) {
-      return;
-    }
-
-    bySlot.set(podcastSlot, { ...summary, podcastSlot });
-  });
-
-  return [...bySlot.values()].slice(0, Math.max(1, Number(limit) || 1));
-}
-
 function getSummaryWindowSlot(summary: SummaryRecord = {}) {
   const periodEnd = new Date(summary.periodEnd || '');
   if (Number.isNaN(periodEnd.getTime())) {
@@ -399,16 +335,9 @@ function buildSummaryId(topicKey: string, periodStart: string, periodEnd: string
     .replace(/[^a-zA-Z0-9_-]+/g, '-');
 }
 
-function buildPodcastSummaryId(periodStart: string, periodEnd: string) {
-  return buildSummaryId('podcast', periodStart, periodEnd);
-}
-
 function getSummaryFailureCategory(error: Partial<AppError> = {}) {
   if (error.code === 'OPENROUTER_PROVIDER_BACKOFF') {
     return 'provider_unavailable';
-  }
-  if (error.code === 'PODCAST_SCRIPT_VALIDATION_FAILED') {
-    return 'invalid_script';
   }
 
   if (error.code === 'SUMMARY_VALIDATION_FAILED') {
@@ -425,14 +354,6 @@ function getSummaryFailureCategory(error: Partial<AppError> = {}) {
   }
 
   return 'generation_error';
-}
-
-function getPodcastAudioFailureCategory(error: Partial<AppError> = {}) {
-  if (error.code === 'PODCAST_TTS_PROVIDER_ERROR') {
-    return 'provider_unavailable';
-  }
-
-  return 'tts_failed';
 }
 
 function isFailedSummaryRetryDue(summary: SummaryRecord = {}, referenceDate: DateInput = new Date()) {
@@ -521,28 +442,6 @@ function buildEmptySummaryPayload(topicConfig: SummaryTopic, window: SummaryWind
   };
 }
 
-function buildEmptyPodcastPayload(window: SummaryWindow) {
-  return {
-    id: buildPodcastSummaryId(window.periodStart, window.periodEnd),
-    periodStart: window.periodStart,
-    periodEnd: window.periodEnd,
-    title: 'No podcast available',
-    scriptText: '',
-    titleByLocale: { en: 'No podcast available', it: 'Podcast non disponibile' },
-    scriptTextByLocale: { en: '', it: '' },
-    articleCount: 0,
-    sources: [],
-    model: '',
-    audioStatus: 'not_available',
-    audioFailureCategory: '',
-    audioRetryCount: 0,
-    status: 'empty',
-    failureCategory: 'empty_window',
-    retryCount: 0,
-    generatedAt: new Date().toISOString()
-  };
-}
-
 function normalizeReaderText(value: unknown = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
@@ -574,12 +473,12 @@ function getThematicArticleIdentityKeys(article: Partial<SummaryArticle> = {}) {
   return keys;
 }
 
-function dedupeArticlesByIdentity(articles: SummaryArticle[] = [], getIdentityKeys: (article: SummaryArticle) => string[]) {
+function dedupeThematicCandidateArticles(articles: SummaryArticle[] = []) {
   const seenKeys = new Set<string>();
   const deduped: SummaryArticle[] = [];
 
   (Array.isArray(articles) ? articles : []).forEach((article) => {
-    const keys = getIdentityKeys(article);
+    const keys = getThematicArticleIdentityKeys(article);
     if (keys.length > 0 && keys.some((key) => seenKeys.has(key))) {
       return;
     }
@@ -589,10 +488,6 @@ function dedupeArticlesByIdentity(articles: SummaryArticle[] = [], getIdentityKe
   });
 
   return deduped;
-}
-
-function dedupeThematicCandidateArticles(articles: SummaryArticle[] = []) {
-  return dedupeArticlesByIdentity(articles, getThematicArticleIdentityKeys);
 }
 
 function getArticlesForSummaryTopic(topicConfig: SummaryTopic, window: SummaryWindow) {
@@ -646,58 +541,6 @@ function withCachedReaderText(articles: SummaryArticle[] = []) {
   }));
 }
 
-function getPodcastArticleIdentityKeys(article: Partial<SummaryArticle> = {}) {
-  const keys: string[] = [];
-  const articleId = String(article.id || '').trim();
-  const storyGroupId = String(article.storyGroupId || '').trim();
-  const articleUrl = normalizeArticleUrl(article.canonicalUrl || article.url || '');
-  const title = normalizeIdentityText(article.title || '', { lowercase: true });
-  const source = normalizeIdentityText(article.source || article.rawSource || article.sourceId || '', { lowercase: true });
-
-  if (articleId) {
-    keys.push(`id:${articleId}`);
-  }
-  if (storyGroupId) {
-    keys.push(`story:${storyGroupId}`);
-  }
-  if (articleUrl) {
-    keys.push(`url:${articleUrl}`);
-  }
-  if (title && source) {
-    keys.push(`title-source:${source}:${title}`);
-  }
-
-  return keys;
-}
-
-function dedupePodcastCandidateArticles(articles: SummaryArticle[] = []) {
-  return dedupeArticlesByIdentity(articles, getPodcastArticleIdentityKeys);
-}
-
-function getCandidateArticlesForWindow(window: SummaryWindow, articleContext: SummaryArticleContext | null = null) {
-  const candidates: SummaryArticle[] = [];
-  SUMMARY_TOPICS.forEach((topicConfig) => {
-    const articles = articleContext?.getArticlesForTopic
-      ? articleContext.getArticlesForTopic(topicConfig)
-      : getArticlesForSummaryTopic(topicConfig, window);
-
-    articles.forEach((article) => {
-      if (article?.id) {
-        candidates.push(article);
-      }
-    });
-  });
-
-  return dedupePodcastCandidateArticles(candidates);
-}
-
-function sortArticlesForPodcast(articles: SummaryArticle[] = []) {
-  return [...articles].sort((left, right) => {
-    const dateComparison = String(right.pubDate || '').localeCompare(String(left.pubDate || ''));
-    return dateComparison || String(right.id || '').localeCompare(String(left.id || ''));
-  });
-}
-
 function getPromptArticleSourceKey(article: Partial<SummaryArticle> = {}) {
   return normalizeIdentityText(article.source || article.rawSource || article.sourceId || '', { lowercase: true }) || 'unknown';
 }
@@ -745,15 +588,6 @@ function getSelectedSummaryArticles(topicConfig: SummaryTopic, window: SummaryWi
   return selectPromptArticles(articles, SUMMARY_PROMPT_MAX_ARTICLES);
 }
 
-function getSelectedPodcastArticles(window: SummaryWindow, articleContext: SummaryArticleContext | null = null, existingArticles: SummaryArticle[] | null = null) {
-  return selectPromptArticles(
-    Array.isArray(existingArticles)
-      ? existingArticles
-      : sortArticlesForPodcast(getCandidateArticlesForWindow(window, articleContext)),
-    PODCAST_PROMPT_MAX_ARTICLES
-  );
-}
-
 function getSummarySourceArticleIds(summary: SummaryRecord = {}) {
   return (Array.isArray(summary.sources) ? summary.sources : [])
     .map((source) => String(source?.articleId || '').trim())
@@ -769,40 +603,6 @@ function hasChangedArticleSelection(summary: SummaryRecord = {}, sources: Summar
   });
 }
 
-function getPodcastScriptTextByLocale(summary: SummaryRecord = {}): Record<string, string> {
-  const summaryTextByLocale = summary.summaryTextByLocale && typeof summary.summaryTextByLocale === 'object'
-    ? summary.summaryTextByLocale
-    : {};
-  const entries = Object.entries(summaryTextByLocale)
-    .map(([locale, text]) => [String(locale || '').trim().toLowerCase(), String(text || '').trim()])
-    .filter(([locale, text]) => locale && text);
-
-  if (entries.length === 0 && summary.summaryText) {
-    entries.push(['en', String(summary.summaryText || '').trim()]);
-  }
-
-  return Object.fromEntries(entries);
-}
-
-function buildPodcastUpdatePayload(summary: SummaryRecord = {}, updates: Partial<SummaryRecord> = {}) {
-  const scriptTextByLocale = getPodcastScriptTextByLocale(summary);
-  return {
-    id: summary.id || buildPodcastSummaryId(summary.periodStart || '', summary.periodEnd || ''),
-    periodStart: summary.periodStart,
-    periodEnd: summary.periodEnd,
-    title: summary.title || summary.titleByLocale?.en || summary.titleByLocale?.it || 'News podcast',
-    scriptText: scriptTextByLocale.en || scriptTextByLocale.it,
-    titleByLocale: summary.titleByLocale || { en: summary.title || 'News podcast', it: summary.title || 'Podcast news' },
-    scriptTextByLocale,
-    sources: summary.sources || [],
-    articleCount: summary.articleCount || 0,
-    model: summary.model || aiPodcastGenerator._getScriptConfig().model,
-    status: summary.status || 'completed',
-    ...updates,
-    generatedAt: new Date().toISOString()
-  };
-}
-
 function broadcastSummariesRefresh(options: SummaryOptions = {}) {
   if (options.broadcast !== false) {
     websocketService.broadcastFeedRefresh({ reason: 'summaries' });
@@ -811,209 +611,9 @@ function broadcastSummariesRefresh(options: SummaryOptions = {}) {
 
 function pruneGeneratedSummaryHistory(options: DynamicRecord = {}) {
   const result = database.pruneSummaryHistory(options);
-  if ((result?.thematicSummaries || 0) > 0 || (result?.podcastSummaries || 0) > 0) {
-    logger.info(`Pruned old AI summary history: thematic=${result.thematicSummaries || 0}, podcasts=${result.podcastSummaries || 0}, periodEnd=${options.periodEnd}`);
+  if ((result?.thematicSummaries || 0) > 0) {
+    logger.info(`Pruned old AI summary history: thematic=${result.thematicSummaries}, periodEnd=${options.periodEnd}`);
   }
-}
-
-function getAudioRetryDelayMs(summary: SummaryRecord = {}) {
-  if (PODCAST_TTS_RETRY_COOLDOWN_MS <= 0) {
-    return 0;
-  }
-
-  const retryCount = Math.max(0, Number(summary.audioRetryCount) || 0);
-  const multiplier = 2 ** Math.min(Math.max(retryCount - 1, 0), 4);
-  return Math.min(PODCAST_TTS_RETRY_COOLDOWN_MS * multiplier, 24 * 60 * 60 * 1000);
-}
-
-function isPodcastAudioRetryDue(summary: PodcastAudioRecord = {}, options: SummaryOptions = {}) {
-  if (PODCAST_TTS_MAX_RETRIES <= 0 || Number(summary.audioRetryCount || 0) >= PODCAST_TTS_MAX_RETRIES) {
-    return false;
-  }
-
-  const failedAtTime = Date.parse(summary.audioFailedAt || '');
-  if (!Number.isFinite(failedAtTime)) {
-    return true;
-  }
-
-  return new Date(options.referenceDate || new Date()).getTime() - failedAtTime >= getAudioRetryDelayMs(summary);
-}
-
-function isSamePodcastAudioConfig(audio: PodcastAudioRecord = {}, ttsConfig: PodcastTtsConfig, expectedVoice = '') {
-  return audio.audioModel === ttsConfig.model && audio.audioVoice === expectedVoice;
-}
-
-function getPodcastAudioLocalesToGenerate(summary: SummaryRecord = {}, options: SummaryOptions = {}) {
-  if (summary.status !== 'completed') {
-    return [];
-  }
-
-  const scriptTextByLocale = getPodcastScriptTextByLocale(summary);
-  const enabledLocales: string[] = aiPodcastGenerator._getEnabledPodcastLocales();
-  const localesWithScripts = enabledLocales.filter((locale) => scriptTextByLocale[locale]);
-  if (localesWithScripts.length === 0) {
-    return [];
-  }
-
-  const ttsConfig = aiPodcastGenerator._getTtsConfig();
-  if (!ttsConfig.enabled) {
-    logger.info(`AI podcast audio retry skipped: reason=${ttsConfig.apiKey ? 'disabled' : 'missing_api_key'}, windowEnd=${summary.periodEnd}`);
-    return [];
-  }
-
-  const expectedVoice = aiPodcastGenerator._getTtsVoice();
-  return localesWithScripts.filter((locale) => {
-    const audio = summary.audioByLocale?.[locale] || (summary.audioLocale === locale ? summary : null) || {};
-    const sameAudioConfig = isSamePodcastAudioConfig(audio, ttsConfig, expectedVoice);
-    const audioMatchesConfig = audio.audioStatus === 'completed' && sameAudioConfig;
-    if (audioMatchesConfig) {
-      return false;
-    }
-
-    if (audio.audioStatus === 'failed' && sameAudioConfig && !isPodcastAudioRetryDue(audio, options)) {
-      logger.debug(`AI podcast audio retry skipped during cooldown: locale=${locale}, windowEnd=${summary.periodEnd}`);
-      return false;
-    }
-
-    return true;
-  });
-}
-
-function shouldRetryPodcastAudio(summary: SummaryRecord = {}, options: SummaryOptions = {}) {
-  return getPodcastAudioLocalesToGenerate(summary, options).length > 0;
-}
-
-async function retryPodcastAudio(summary: SummaryRecord = {}, options: SummaryOptions = {}) {
-  const localesToGenerate = getPodcastAudioLocalesToGenerate(summary, options);
-  if (localesToGenerate.length === 0) {
-    return { summary, generatedNow: false };
-  }
-
-  const ttsConfig = aiPodcastGenerator._getTtsConfig();
-  const expectedVoice = aiPodcastGenerator._getTtsVoice();
-  const scriptTextByLocale = getPodcastScriptTextByLocale(summary);
-  const generatingAudioByLocale = Object.fromEntries(localesToGenerate.map((locale) => {
-    const audio = summary.audioByLocale?.[locale] || {};
-    const sameAudioConfig = isSamePodcastAudioConfig(audio, ttsConfig, expectedVoice);
-    const currentAudioRetryCount = sameAudioConfig ? Math.max(0, Number(audio.audioRetryCount) || 0) : 0;
-    return [locale, {
-      audioStatus: 'generating',
-      audioErrorMessage: '',
-      audioFailureCategory: '',
-      audioModel: ttsConfig.model,
-      audioVoice: expectedVoice,
-      audioRetryCount: currentAudioRetryCount,
-      audioFailedAt: audio.audioFailedAt || null
-    }];
-  }));
-  const generatingSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(summary, {
-    audioByLocale: generatingAudioByLocale,
-    status: 'completed'
-  }));
-  broadcastSummariesRefresh(options);
-
-  const completedAudioByLocale: Record<string, PodcastAudioRecord> = {};
-  for (const locale of localesToGenerate) {
-    const previousAudio = generatingSummary.audioByLocale?.[locale] || {};
-    const currentAudioRetryCount = Math.max(0, Number(previousAudio.audioRetryCount) || 0);
-    try {
-      const audio = await aiPodcastGenerator.generateAudioForLocale(scriptTextByLocale[locale], locale);
-      completedAudioByLocale[locale] = audio ? {
-        audio,
-        audioStatus: 'completed',
-        audioErrorMessage: '',
-        audioFailureCategory: '',
-        audioModel: audio.model || ttsConfig.model,
-        audioVoice: audio.voice || expectedVoice,
-        audioRetryCount: 0,
-        audioFailedAt: null
-      } : {
-        audioStatus: 'not_available',
-        audioErrorMessage: '',
-        audioFailureCategory: '',
-        audioRetryCount: currentAudioRetryCount,
-        audioFailedAt: null,
-        audioModel: ttsConfig.model,
-        audioVoice: expectedVoice
-      };
-    } catch (error) {
-      const failure = error as AppError;
-      const failedAt = new Date().toISOString();
-      logger.warn(`AI podcast audio retry failed: locale=${locale}, windowEnd=${summary.periodEnd}, error=${failure.message}`);
-      completedAudioByLocale[locale] = {
-        audioStatus: 'failed',
-        audioErrorMessage: failure.message,
-        audioFailureCategory: getPodcastAudioFailureCategory(failure),
-        audioModel: ttsConfig.model,
-        audioVoice: expectedVoice,
-        audioRetryCount: currentAudioRetryCount + 1,
-        audioFailedAt: failedAt
-      };
-    }
-  }
-
-  const completedSummary = database.upsertPodcastSummary(buildPodcastUpdatePayload(generatingSummary, {
-    audioByLocale: completedAudioByLocale,
-    status: 'completed'
-  }));
-  broadcastSummariesRefresh(options);
-  return {
-    summary: completedSummary,
-    generatedNow: Object.values(completedAudioByLocale).some((audio) => audio.audioStatus === 'completed')
-  };
-}
-
-function startPodcastAudioGeneration(summary: SummaryRecord = {}, options: SummaryOptions = {}) {
-  const summaryId = String(summary.id || '').trim();
-  if (options.startPodcastAudioGeneration === false
-    || !isAiToggleEnabled('AI_PODCAST_BACKGROUND_AUDIO_ENABLED')
-    || !summaryId
-    || !shouldRetryPodcastAudio(summary, options)) {
-    return null;
-  }
-
-  if (podcastAudioGenerationPromises.has(summaryId) || podcastAudioGenerationTimers.has(summaryId)) {
-    return podcastAudioGenerationPromises.get(summaryId) || null;
-  }
-
-  const timer = setTimeout(() => {
-    podcastAudioGenerationTimers.delete(summaryId);
-    const promise = retryPodcastAudio(summary, { ...options, broadcast: true })
-      .catch((error: AppError) => {
-        logger.warn(`Background AI podcast audio generation failed: windowEnd=${summary.periodEnd}, error=${error.message}`);
-      })
-      .finally(() => {
-        podcastAudioGenerationPromises.delete(summaryId);
-      });
-
-    podcastAudioGenerationPromises.set(summaryId, promise);
-  }, 0);
-  timer.unref?.();
-  podcastAudioGenerationTimers.set(summaryId, timer);
-  return null;
-}
-
-function buildInitialPodcastAudioByLocale(scriptTextByLocale: Record<string, string> = {}) {
-  const ttsConfig = aiPodcastGenerator._getTtsConfig();
-  const expectedVoice = aiPodcastGenerator._getTtsVoice();
-  const enabledLocales: string[] = aiPodcastGenerator._getEnabledPodcastLocales();
-  const audioStatus = ttsConfig.enabled ? 'generating' : 'not_available';
-
-  if (!ttsConfig.enabled) {
-    logger.info(`AI podcast audio generation skipped: reason=${ttsConfig.apiKey ? 'disabled' : 'missing_api_key'}`);
-  }
-
-  return Object.fromEntries(enabledLocales
-    .filter((locale) => String(scriptTextByLocale?.[locale] || '').trim())
-    .map((locale) => [locale, {
-      audioStatus,
-      audioErrorMessage: '',
-      audioFailureCategory: '',
-      audioModel: ttsConfig.model,
-      audioVoice: expectedVoice,
-      audioRetryCount: 0,
-      audioFailedAt: null
-    }]));
 }
 
 async function prewarmReaderCacheForDueWindow(options: SummaryOptions = {}) {
@@ -1048,10 +648,6 @@ async function prewarmReaderCacheForDueWindow(options: SummaryOptions = {}) {
         getSelectedSummaryArticles(topicConfig, window, articleContext)
           .forEach((article) => candidateArticlesById.set(article.id, article));
       });
-    }
-    if (aiPodcastGenerator.isAiPodcastGenerationAvailable() || options.force === true) {
-      getSelectedPodcastArticles(window, articleContext)
-        .forEach((article) => candidateArticlesById.set(article.id, article));
     }
     const candidateArticles = [...candidateArticlesById.values()];
     const readerCacheByArticleId: Map<string, ReaderCacheEntry> = database.getReaderCaches(candidateArticles.map((article) => article.id), null);
@@ -1227,102 +823,6 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
   }
 }
 
-async function generatePodcastForWindow(window: SummaryWindow, options: SummaryOptions = {}) {
-  const existingSummary = database.getPodcastSummary(window.periodStart, window.periodEnd);
-  if (existingSummary?.status === 'completed' && options.force !== true) {
-    if (podcastAudioGenerationTimers.has(existingSummary.id) || podcastAudioGenerationPromises.has(existingSummary.id)) {
-      return { summary: existingSummary, generatedNow: false };
-    }
-    return retryPodcastAudio(existingSummary, options);
-  }
-  if (existingSummary?.status === 'failed' && options.force !== true && !isFailedSummaryRetryDue(existingSummary, options.referenceDate || new Date())) {
-    logger.debug(`AI podcast retry skipped during cooldown: windowEnd=${window.periodEnd}`);
-    return { summary: null, generatedNow: false };
-  }
-
-  if (shouldWaitForPendingTopicProcessing(window, options)) {
-    return { summary: null, generatedNow: false };
-  }
-
-  const articles = sortArticlesForPodcast(getCandidateArticlesForWindow(window, options.articleContext));
-  if (articles.length === 0) {
-    if (existingSummary?.status === 'empty' && options.force !== true) {
-      return { summary: existingSummary, generatedNow: false };
-    }
-
-    return {
-      summary: database.upsertPodcastSummary(buildEmptyPodcastPayload(window)),
-      generatedNow: true
-    };
-  }
-
-  const enrichedArticles = withCachedReaderText(getSelectedPodcastArticles(window, options.articleContext, articles));
-  const sources = buildSourceList(enrichedArticles);
-  const basePayload = {
-    id: buildPodcastSummaryId(window.periodStart, window.periodEnd),
-    periodStart: window.periodStart,
-    periodEnd: window.periodEnd,
-    articleCount: enrichedArticles.length,
-    sources,
-    generatedAt: new Date().toISOString()
-  };
-
-  try {
-    const generated = await aiPodcastGenerator.generatePodcastScriptForArticles(window, enrichedArticles);
-    if (!generated) {
-      return { summary: null, generatedNow: false };
-    }
-    const audioByLocale = buildInitialPodcastAudioByLocale(generated.scriptTextByLocale || {});
-    const primaryLocale = Object.keys(audioByLocale)[0] || aiPodcastGenerator._getEnabledPodcastLocales()[0] || 'en';
-    const primaryAudio = audioByLocale[primaryLocale] || {};
-    const completedSummary = database.upsertPodcastSummary({
-      ...basePayload,
-      title: generated.title,
-      scriptText: generated.scriptText,
-      titleByLocale: generated.titleByLocale,
-      scriptTextByLocale: generated.scriptTextByLocale,
-      model: generated.model,
-      audioByLocale,
-      audioLocale: primaryLocale,
-      audio: null,
-      audioStatus: primaryAudio.audioStatus || 'not_available',
-      audioErrorMessage: '',
-      audioFailureCategory: '',
-      audioModel: primaryAudio.audioModel || aiPodcastGenerator._getTtsConfig().model,
-      audioVoice: primaryAudio.audioVoice || aiPodcastGenerator._getTtsVoice(),
-      audioRetryCount: 0,
-      audioFailedAt: null,
-      status: 'completed',
-      failureCategory: '',
-      retryCount: 0
-    });
-
-    startPodcastAudioGeneration(completedSummary, options);
-
-    return {
-      summary: completedSummary,
-      generatedNow: true
-    };
-  } catch (error) {
-    const failure = error as AppError;
-    const failureCategory = getSummaryFailureCategory(failure);
-    logger.warn(`AI podcast generation failed: windowEnd=${window.periodEnd}, error=${failure.message}`);
-    const failedSummary = database.upsertPodcastSummary({
-      ...basePayload,
-      title: 'News podcast',
-      scriptText: '',
-      titleByLocale: { en: 'News podcast', it: 'Podcast news' },
-      scriptTextByLocale: { en: '', it: '' },
-      model: aiPodcastGenerator._getScriptConfig().model,
-      status: 'failed',
-      failureCategory,
-      retryCount: (existingSummary?.retryCount || 0) + 1,
-      errorMessage: failure.message
-    });
-    return { summary: failedSummary, generatedNow: true };
-  }
-}
-
 async function runDueSummaries(options: SummaryOptions = {}): Promise<DueSummaryResult> {
     const referenceDate = options.referenceDate || new Date();
     const window = options.window || getLatestDueWindow(referenceDate);
@@ -1330,9 +830,7 @@ async function runDueSummaries(options: SummaryOptions = {}): Promise<DueSummary
     const summaries: SummaryRecord[] = [];
     let generatedCount = 0;
     const generatedTopicKeys: string[] = [];
-    let generatedPodcast = false;
     const canGenerateSummaries = aiSummaryGenerator.isAiSummaryGenerationAvailable();
-    const canGeneratePodcast = aiPodcastGenerator.isAiPodcastGenerationAvailable();
 
     const topicResults = canGenerateSummaries
       ? await mapSettledWithConcurrency(SUMMARY_TOPICS, SUMMARY_GENERATION_CONCURRENCY, async (topicConfig: SummaryTopic) => ({
@@ -1359,34 +857,12 @@ async function runDueSummaries(options: SummaryOptions = {}): Promise<DueSummary
       }
     }
 
-    if (canGeneratePodcast) {
-      const podcastResult = await generatePodcastForWindow(window, { ...options, articleContext });
-      if (TERMINAL_PODCAST_STATUSES.has(podcastResult.summary?.status)) {
-        summaries.unshift(podcastResult.summary);
-      }
-      if (podcastResult.generatedNow) {
-        generatedCount += 1;
-        if (TERMINAL_PODCAST_STATUSES.has(podcastResult.summary?.status)) {
-          generatedPodcast = true;
-        }
-      }
-    }
-
     if (generatedCount > 0) {
       if (generatedTopicKeys.length > 0) {
         pruneGeneratedSummaryHistory({
           periodEnd: window.periodEnd,
           topicKeys: generatedTopicKeys,
-          thematicRetainCount: SUMMARY_HISTORY_RETAIN_COUNT,
-          podcast: false
-        });
-      }
-      if (generatedPodcast) {
-        pruneGeneratedSummaryHistory({
-          periodEnd: window.periodEnd,
-          topicKeys: [],
-          podcast: true,
-          podcastRetainCount: PODCAST_HISTORY_RETAIN_COUNT
+          thematicRetainCount: SUMMARY_HISTORY_RETAIN_COUNT
         });
       }
       logger.info(`Thematic summaries ready: windowEnd=${window.periodEnd}, count=${generatedCount}`);
@@ -1395,7 +871,6 @@ async function runDueSummaries(options: SummaryOptions = {}): Promise<DueSummary
 
     return {
       window,
-      podcastWindow: window,
       items: summaries
     };
 }
@@ -1451,7 +926,6 @@ async function generateDueSummaries(options: SummaryOptions = {}) {
 
 function getLatestSummaries(options: SummaryOptions = {}) {
   const canShowSummaries = aiSummaryGenerator.isAiSummaryGenerationAvailable();
-  const canShowPodcasts = aiPodcastGenerator.isAiPodcastGenerationAvailable();
   const topicConfigs = canShowSummaries ? getSummaryTopics() : [];
   const latestDueWindow = getLatestDueWindow(options.referenceDate || new Date());
   const latestSummaries: SummaryRecord[] = database.listLatestThematicSummaries(
@@ -1480,10 +954,9 @@ function getLatestSummaries(options: SummaryOptions = {}) {
       } : null;
     })
     .filter((summary: SummaryRecord | null) => summary && summary.status !== 'empty');
-  const latestPodcasts = canShowPodcasts ? getLatestPodcastSummariesBySlot(PODCAST_HISTORY_RETAIN_COUNT) : [];
 
   return {
-    items: [...latestPodcasts, ...topicItems],
+    items: topicItems,
     topics: topicConfigs
   };
 }
@@ -1512,8 +985,6 @@ function stopScheduler() {
     clearInterval(schedulerHandle);
     schedulerHandle = null;
   }
-  podcastAudioGenerationTimers.forEach((timer) => clearTimeout(timer));
-  podcastAudioGenerationTimers.clear();
   attemptedPrewarmArticleIdsByWindow.clear();
   pendingGenerationOptions = [];
 }
@@ -1528,7 +999,6 @@ module.exports = {
   _getNextDueWindow: getNextDueWindow,
   _getSummaryTimeZone: () => SUMMARY_TIME_ZONE,
   _getSummaryTopics: getSummaryTopics,
-  _generatePodcastForWindow: generatePodcastForWindow,
   _getPrewarmAttemptWindowCount: () => attemptedPrewarmArticleIdsByWindow.size,
   _prunePrewarmAttempts: prunePrewarmAttempts
 };

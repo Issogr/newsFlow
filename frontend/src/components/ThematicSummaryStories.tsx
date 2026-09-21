@@ -1,5 +1,5 @@
 import { AI_ACCENT_GRADIENT_STYLE, getTopicPresentation } from '../topicPresentation';
-import { getLocalizedThematicSummary, getThematicSummaryPresentationKey, isPodcastSummary } from '../utils/thematicSummaryLocale';
+import { getLocalizedThematicSummary, getThematicSummaryPresentationKey } from '../utils/thematicSummaryLocale';
 import type { Locale, ThematicSummary, Translator } from '../types';
 
 function removeHoverClasses(className = '') {
@@ -18,29 +18,21 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
   }
 
   const readSummaryIdSet = new Set(readSummaryIds);
-  const podcastSummaries = summaries.filter(isPodcastSummary);
-  const topicSummaries = summaries.filter((summary) => !isPodcastSummary(summary));
-  const sortedSummaries = podcastSummaries.length > 0 ? [podcastSummaries[0], ...topicSummaries] : topicSummaries;
 
   return (
     <section className="mb-5" aria-label={t('thematicSummariesTitle')}>
       <div className="flex justify-start gap-3 overflow-x-auto py-1 [scrollbar-width:none] md:justify-center [&::-webkit-scrollbar]:hidden">
-        {sortedSummaries.map((summary) => {
+        {summaries.map((summary) => {
           const localizedSummary = getLocalizedThematicSummary(summary, locale);
           const primaryPresentation = getTopicPresentation(getThematicSummaryPresentationKey(summary));
           const circleClassName = removeHoverClasses(primaryPresentation.iconBadgeClassName);
           const PrimaryIcon = primaryPresentation.Icon;
-          const isPodcast = isPodcastSummary(summary);
-          const unread = isPodcast
-            ? podcastSummaries.some((podcastSummary) => !readSummaryIdSet.has(podcastSummary.id))
-            : !readSummaryIdSet.has(summary.id);
-          const ariaLabel = isPodcast
-            ? t('openPodcastSummary')
-            : t('openThematicSummary', { topic: localizedSummary.displayTopicLabel });
+          const unread = !readSummaryIdSet.has(summary.id);
+          const ariaLabel = t('openThematicSummary', { topic: localizedSummary.displayTopicLabel });
 
           return (
             <button
-              key={isPodcast ? 'podcast-summaries' : summary.id}
+              key={summary.id}
               type="button"
               onClick={(event) => {
                 event.currentTarget.focus({ preventScroll: true });

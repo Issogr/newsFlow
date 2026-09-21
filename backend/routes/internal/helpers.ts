@@ -64,68 +64,6 @@ function requireAuthenticatedPublicApiFeature(req: Request, res: Response, next:
   next(createError(404, 'Public API token access is disabled.', 'PUBLIC_API_DISABLED'));
 }
 
-function sniffAudioMimeType(audioBuffer: unknown, fallbackMimeType = 'audio/mpeg') {
-  if (!Buffer.isBuffer(audioBuffer) || audioBuffer.length < 4) {
-    return fallbackMimeType;
-  }
-
-  const signature = audioBuffer.subarray(0, 12).toString('ascii');
-  if (signature.startsWith('RIFF') && signature.slice(8, 12) === 'WAVE') {
-    return 'audio/wav';
-  }
-  if (signature.startsWith('ID3') || (audioBuffer[0] === 0xff && (audioBuffer[1] & 0xe0) === 0xe0)) {
-    return 'audio/mpeg';
-  }
-  if (signature.startsWith('OggS')) {
-    return 'audio/ogg';
-  }
-  if (signature.startsWith('fLaC')) {
-    return 'audio/flac';
-  }
-  if (audioBuffer.length >= 8 && audioBuffer.subarray(4, 8).toString('ascii') === 'ftyp') {
-    return 'audio/mp4';
-  }
-  if (audioBuffer[0] === 0xff && (audioBuffer[1] === 0xf1 || audioBuffer[1] === 0xf9)) {
-    return 'audio/aac';
-  }
-
-  return fallbackMimeType;
-}
-
-function sendAudioResponse(req: Request, res: Response, audio: { data: Buffer | Uint8Array; mimeType?: string }) {
-  const audioBuffer = Buffer.isBuffer(audio.data) ? audio.data : Buffer.from(audio.data || []);
-  const audioSize = audioBuffer.length;
-  const mimeType = sniffAudioMimeType(audioBuffer, audio.mimeType || 'audio/mpeg');
-
-  res.set('Content-Type', mimeType);
-  res.set('Cache-Control', 'private, max-age=86400, immutable');
-  res.set('Accept-Ranges', 'bytes');
-  res.set('Content-Disposition', 'inline');
-
-  if (!req.headers.range) {
-    res.set('Content-Length', String(audioSize));
-    res.send(audioBuffer);
-    return;
-  }
-
-  const ranges = /^bytes=(\d*)-(\d*)$/u.test(req.headers.range) ? req.range(audioSize) : undefined;
-  const suffixLength = Number(req.headers.range.match(/^bytes=-(\d+)$/u)?.[1]);
-  const range = audioSize > 0 && Number.isFinite(suffixLength) && suffixLength >= audioSize
-    ? { start: 0, end: audioSize - 1 }
-    : Array.isArray(ranges) && ranges.type === 'bytes' && ranges.length === 1 ? ranges[0] : null;
-  if (!range) {
-    res.set('Content-Range', `bytes */${audioSize}`);
-    res.status(416).end();
-    return;
-  }
-
-  const chunk = audioBuffer.subarray(range.start, range.end + 1);
-  res.status(206);
-  res.set('Content-Range', `bytes ${range.start}-${range.end}/${audioSize}`);
-  res.set('Content-Length', String(chunk.length));
-  res.send(chunk);
-}
-
 export = {
   clearSessionCookie,
   getRequestAbortSignal,
@@ -134,6 +72,5 @@ export = {
   refreshUserSourceInBackground,
   refreshUserSourcesInBackground,
   requireAuthenticatedPublicApiFeature,
-  sendAudioResponse,
   sendAuthResult,
 };

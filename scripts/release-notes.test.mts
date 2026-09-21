@@ -4,7 +4,7 @@ import { getReleaseNotes } from './release-notes.mts';
 
 test('prepares one dated release containing changes from multiple commits', () => {
   const entry = { id: '2026-09-21-02', date: '2026-09-21' };
-  const notes = '- Improved summaries.\n- Simplified podcast controls.';
+  const notes = '- Improved summaries.\n- Simplified reader controls.';
   assert.deepEqual(getReleaseNotes(`# Changelog\n\n## ${entry.id}\n\n${notes}\n\n## 3.7.0\n\n- Old change.\n`, entry), {
     tag: 'update-2026-09-21-02',
     title: 'News Flow — 2026-09-21-02',
