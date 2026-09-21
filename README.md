@@ -82,13 +82,15 @@ When using the image outside the bundled Compose stack, set both `APP_BASE_URL` 
 
 ## Publishing An Update
 
-Updates are batches of commits, not package versions. CI runs on pushes and pull requests, but publishing happens only when you manually run **Actions → Publish Update → Run workflow** on `main`.
+Updates are batches of commits, not package versions. CI runs on pushes and pull requests. **Publish Update** runs automatically on pushes to `main` whose tip commit has the exact title `Prepared update YYYY-MM-DD-NN`, matching the finalized changelog ID.
 
 1. Collect changes from as many commits as needed under `## Unreleased` in `CHANGELOG.md`. Keep the matching English/Italian user-facing notes in `frontend/src/config/changelog.ts`; draft metadata is `id: 'unreleased', date: ''`.
 2. When the batch is ready, choose a date and a unique announcement ID, for example `date: '2026-09-21'` and `id: '2026-09-21-01'`. Use `02`, `03`, etc. for additional updates on the same day. Rename the first changelog heading to `## 2026-09-21-01`.
-3. Check the release notes locally with `node scripts/release-notes.mts`, then commit and push the complete batch to `main` when ready.
-4. Run **Publish Update** on `main`. It validates both packages, audits production dependencies, runs the Compose smoke check, rejects unfinished or reused announcements, publishes the `:latest` image tag to GHCR and the optional private registry, then creates a GitHub Release tagged `update-2026-09-21-01` with that changelog section as its body. GitHub subscribers can follow **Watch → Custom → Releases**.
+3. Check the release notes locally with `node --test scripts/release-notes.test.mts` and `node scripts/release-notes.mts`. Create the release commit with the exact title `Prepared update 2026-09-21-01`.
+4. Push or merge the batch to `main` through the repository's approved process, preserving that title on the tip commit. This authorizes publication: **Publish Update** validates both packages, audits production dependencies, runs the Compose smoke check, rejects unfinished, mismatched, or reused announcement IDs, publishes the `:latest` image tag to GHCR and the optional private registry, then creates a GitHub Release tagged `update-2026-09-21-01` with that changelog section as its body. GitHub subscribers can follow **Watch → Custom → Releases**.
 5. For the next batch, add a new `Unreleased` section above the published history and reset the app metadata to the draft values while editing the new notes. Do not reuse a published announcement ID. Package versions do not need bumping.
+
+Only the pushed tip commit's first line controls publication; a release title in an earlier commit or in the message body does not trigger a release. A commit body is allowed, but additional text on the title line is rejected. Ordinary commits run CI without publishing, and no manual workflow dispatch is needed.
 
 The app displays a localized release date and tracks each user's acknowledgement by announcement ID. Draft notes are available from **Settings → What's new** without showing an update notice or recording an acknowledgement. The existing `lastSeenReleaseNotesVersion` settings field stores the ID for compatibility with current databases and settings exports.
 
