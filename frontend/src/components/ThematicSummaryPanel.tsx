@@ -223,8 +223,7 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   const [readerTextWidth, setReaderTextWidth] = useState(() => getStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth));
   const [readySummaryId, setReadySummaryId] = useState('');
   const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [summary, locale]);
-  const coverageStart = formatSummaryDate(summary.periodStart, locale);
-  const coverageEnd = formatSummaryDate(summary.periodEnd, locale);
+  const generatedAt = formatSummaryDate(summary.generatedAt, locale);
   const sourceByIndex = useMemo(() => new Map<number, SummarySource>((summary?.sources || []).map((source: SummarySource) => [Number(source.index), source])), [summary?.sources]);
   const showSummaryOpeningSkeleton = showOpeningSkeleton && readySummaryId !== summary?.id;
   const swipeSummaries = useMemo(() => getSwipeSummariesForPanel(summary, summaries), [summaries, summary]);
@@ -420,20 +419,12 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
                       </>
                     )}
                   </span>
-                  {coverageStart && coverageEnd && (
-                    <p className="mt-2 font-normal normal-case tracking-normal text-slate-500">
-                      {t('summaryCoverage')}{' '}
-                      <time dateTime={summary.periodStart}>{coverageStart}</time>
-                      {' – '}
-                      <time dateTime={summary.periodEnd}>{coverageEnd}</time>
-                    </p>
+                  {generatedAt && (
+                    <time dateTime={summary.generatedAt} className="mt-2 block font-normal normal-case tracking-normal text-slate-500">
+                      {generatedAt}
+                    </time>
                   )}
                 </div>
-                {summary.isStale && (
-                  <p role="status" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    {t('summaryStaleNotice')}
-                  </p>
-                )}
               </div>
 
               <article className="pb-8">

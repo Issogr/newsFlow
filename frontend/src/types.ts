@@ -235,7 +235,6 @@ export interface ChangelogContent {
   eyebrow: string;
   title: string;
   intro: string;
-  items: string[];
 }
 
-export type ReleaseNotes = ChangelogContent & { id: string; date: string; dateLabel: string };
+export type ReleaseNotes = ChangelogContent & { id: string; date: string; dateLabel: string; url: string };

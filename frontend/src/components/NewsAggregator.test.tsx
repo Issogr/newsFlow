@@ -463,8 +463,8 @@ describe('NewsAggregator', () => {
     });
 
     const storyButton = await screen.findByRole('button', { name: 'Apri sintesi Tecnologia' });
-    expect(screen.getByRole('heading', { name: 'Storie per topic' })).toBeInTheDocument();
-    expect(screen.getByText('Tecnologia')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Storie per topic' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Tecnologia')).not.toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(storyButton);

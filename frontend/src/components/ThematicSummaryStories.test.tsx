@@ -122,9 +122,6 @@ describe('thematic summary UI', () => {
     });
 
     expect(screen.getByText('Lunch time')).toBeInTheDocument();
-    expect(screen.getByText('Coverage:', { exact: false })).toBeInTheDocument();
-    expect(document.querySelector('time[datetime="2026-05-21T05:00:00.000Z"]')).toBeInTheDocument();
-    expect(document.querySelector('time[datetime="2026-05-21T11:00:00.000Z"]')).toBeInTheDocument();
     expect(screen.getByText('The first argument covers chip supply and infrastructure.')).toBeInTheDocument();
     expect(screen.getByText('The second argument moves to software policy and regulation.')).toBeInTheDocument();
   });
@@ -156,12 +153,22 @@ describe('thematic summary UI', () => {
     expect(screen.queryByRole('button', { name: 'Yesterday' })).not.toBeInTheDocument();
   });
 
-  test.each(['en', 'it'] as const)('shows localized stale status and clears it when the briefing updates (%s)', (locale) => {
+  test.each(['en', 'it'] as const)('shows the localized generation timestamp even when the briefing is stale (%s)', (locale) => {
     const translated = createTranslator(locale);
-    const summary = createTopicSummary('science', { isStale: true });
-    const { rerender } = renderSummaryPanel(summary, { locale, t: translated });
-    expect(screen.getByRole('status')).toHaveTextContent(translated('summaryStaleNotice'));
-    rerender(<ThematicSummaryPanel summary={{ ...summary, isStale: false }} locale={locale} t={translated} onClose={vi.fn()} />);
+    const summary = createTopicSummary('science', {
+      isStale: true,
+      periodStart: '2026-09-20T18:00:00.000Z',
+      periodEnd: '2026-09-21T18:00:00.000Z',
+      generatedAt: '2026-09-21T18:05:00.000Z',
+      lastAttemptAt: '2026-09-21T19:00:00.000Z'
+    });
+    const { container } = renderSummaryPanel(summary, { locale, t: translated });
+    const timestamps = container.querySelectorAll('time');
+    expect(timestamps).toHaveLength(1);
+    expect(timestamps[0]).toHaveAttribute('datetime', summary.generatedAt);
+    expect(timestamps[0]).toHaveTextContent(new Intl.DateTimeFormat(locale, {
+      dateStyle: 'medium', timeStyle: 'short'
+    }).format(new Date(summary.generatedAt!)));
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 

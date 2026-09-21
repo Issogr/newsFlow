@@ -1,5 +1,6 @@
 import { Sparkles, X } from 'lucide-react';
 import ProjectGitHubLink from './ProjectGitHubLink';
+import ExternalPillLink from './ExternalPillLink';
 import ModalDialog from './ModalDialog';
 import type { RefObject } from 'react';
 import type { ReleaseNotes, Translator } from '../types';
@@ -34,18 +35,14 @@ const ReleaseNotesModal = ({ t, releaseNotes, saving, onDismiss, restoreFocusRef
           </button>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto py-6 pl-[calc(1.5rem+env(safe-area-inset-left))] pr-[calc(1.5rem+env(safe-area-inset-right))] sm:px-6">
+        <div className="flex flex-1 flex-col items-start gap-5 overflow-y-auto py-6 pl-[calc(1.5rem+env(safe-area-inset-left))] pr-[calc(1.5rem+env(safe-area-inset-right))] sm:px-6">
           <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
             {releaseNotes.date ? <time dateTime={releaseNotes.date}>{releaseNotes.dateLabel}</time> : t('changelogUnreleased')}
           </span>
 
-          <ul className="list-disc space-y-4 pl-5 text-sm leading-6 text-slate-700 marker:text-sky-600">
-            {releaseNotes.items.map((item) => (
-              <li key={item} className="pl-1">
-                {item}
-              </li>
-            ))}
-          </ul>
+          <ExternalPillLink href={releaseNotes.url} target="_blank">
+            {t('releaseNotesFullChangelog')}
+          </ExternalPillLink>
         </div>
 
         <div className="flex shrink-0 items-center justify-between border-t border-slate-200 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pl-[calc(1.5rem+env(safe-area-inset-left))] pr-[calc(1.5rem+env(safe-area-inset-right))] pt-5 sm:px-6 sm:py-5">

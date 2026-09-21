@@ -184,7 +184,6 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }: {
           eyebrow={t('feedbackMenuItem')}
           icon={MessageSquare}
           onClose={onClose}
-          subtitle={t('feedbackSubtitle')}
           title={t('feedbackTitle')}
           titleId="feedback-panel-title"
         />

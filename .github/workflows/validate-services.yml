@@ -52,7 +52,7 @@ jobs:
         working-directory: ${{ matrix.service }}
         run: npm run test:coverage
 
-      - name: Test release notes preparation
+      - name: Test commit-based release generation
         if: matrix.service == 'backend'
         run: node --test scripts/release-notes.test.mts
 

@@ -11,8 +11,9 @@ import {
 } from './services/api';
 import type { CurrentUser, Locale, Translator } from './types';
 
-const CURRENT_CHANGELOG_ID = '2026-09-21-02';
-const originalChangelogMetadata = { id: CURRENT_CHANGELOG_ENTRY.id, date: CURRENT_CHANGELOG_ENTRY.date };
+const CURRENT_CHANGELOG_ID = 'a'.repeat(40);
+const CURRENT_CHANGELOG_URL = `https://github.com/issogr/newsflow/releases/tag/update-${CURRENT_CHANGELOG_ID}`;
+const originalChangelogMetadata = { id: CURRENT_CHANGELOG_ENTRY.id, date: CURRENT_CHANGELOG_ENTRY.date, url: CURRENT_CHANGELOG_ENTRY.url };
 
 vi.mock('./services/api', () => ({
   AUTH_EXPIRED_EVENT: 'newsflow:auth-expired',
@@ -68,7 +69,7 @@ vi.mock('./components/AdminDashboard', () => ({
 
 describe('App', () => {
   beforeEach(() => {
-    Object.assign(CURRENT_CHANGELOG_ENTRY, { id: CURRENT_CHANGELOG_ID, date: '2026-09-21' });
+    Object.assign(CURRENT_CHANGELOG_ENTRY, { id: CURRENT_CHANGELOG_ID, date: '2026-09-21', url: CURRENT_CHANGELOG_URL });
     vi.useRealTimers();
     window.localStorage.clear();
     document.body.style.overflow = '';
@@ -166,6 +167,7 @@ describe('App', () => {
 
     expect(await screen.findByText('What is new')).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'What is new' })).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByRole('link', { name: 'Read full changelog on GitHub' })).toHaveAttribute('href', CURRENT_CHANGELOG_URL);
     expect(document.body.style.overflow).toBe('hidden');
     expect(updateUserSettings).not.toHaveBeenCalled();
 
@@ -232,8 +234,8 @@ describe('App', () => {
     expect(await screen.findByText('What is new')).toBeInTheDocument();
   });
 
-  test('previews draft notes without announcing or acknowledging an unpublished update', async () => {
-    Object.assign(CURRENT_CHANGELOG_ENTRY, { id: 'unreleased', date: '' });
+  test('links local builds to release history without announcing or acknowledging an unpublished update', async () => {
+    Object.assign(CURRENT_CHANGELOG_ENTRY, { id: 'unreleased', date: '', url: 'https://github.com/issogr/newsflow/releases' });
     fetchCurrentUser.mockResolvedValue(createTestCurrentUser());
 
     render(<App />);
@@ -242,6 +244,7 @@ describe('App', () => {
     expect(screen.queryByText('Update released')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open release notes' }));
     expect(await screen.findByText('Unreleased')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Read full changelog on GitHub' })).toHaveAttribute('href', 'https://github.com/issogr/newsflow/releases');
     fireEvent.click(screen.getAllByRole('button', { name: 'Got it' })[0]);
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -257,7 +260,9 @@ describe('App', () => {
     render(<App />);
 
     expect(await screen.findByText('21 settembre 2026')).toHaveAttribute('datetime', '2026-09-21');
-    fireEvent.click(screen.getByRole('button', { name: 'Chiudi avviso aggiornamento' }));
+    fireEvent.click(screen.getByText('Aggiornamento disponibile'));
+    expect(await screen.findByRole('link', { name: 'Leggi il changelog completo su GitHub' })).toHaveAttribute('href', CURRENT_CHANGELOG_URL);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ho capito' })[0]);
     await waitFor(() => {
       expect(updateUserSettings).toHaveBeenCalledWith({ lastSeenReleaseNotesVersion: CURRENT_CHANGELOG_ID });
     });

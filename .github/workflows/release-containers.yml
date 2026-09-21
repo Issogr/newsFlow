@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   validate:
-    if: github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Prepared update ')
     uses: ./.github/workflows/validate-services.yml
     with:
       audit: true
@@ -23,6 +22,7 @@ jobs:
     name: Publish application image
     runs-on: ubuntu-latest
     needs: [validate, compose-smoke]
+    timeout-minutes: 60
     concurrency:
       group: publish-update
       cancel-in-progress: false
@@ -35,36 +35,40 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: '24.20.0'
 
-      - name: Prepare dated release notes
+      - name: Prepare release since the last publication
         id: release
         env:
-          RELEASE_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-        run: node scripts/release-notes.mts
-
-      - name: Check announcement has not already been published
-        env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
-          count=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$RELEASE_TAG" --jq 'length')
-          if [ "$count" -ne 0 ]; then
-            echo "Announcement $RELEASE_TAG already exists. Use a new changelog ID for a new update."
-            exit 1
+          current_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          if [ "$current_sha" != "$GITHUB_SHA" ]; then
+            echo "A newer push supersedes this run; its release will include these commits."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          previous_tag=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases \
+            --limit 1 --json tagName --jq '.[0].tagName // ""')
+          node scripts/release-notes.mts --base "$previous_tag" --ref "$GITHUB_SHA" --write
 
       - name: Set up QEMU
+        if: steps.release.outputs.publish == 'true'
         uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
+        if: steps.release.outputs.publish == 'true'
         uses: docker/setup-buildx-action@v4
 
       - name: Prepare image name
+        if: steps.release.outputs.publish == 'true'
         id: prep
         env:
           REPO_OWNER: ${{ github.repository_owner }}
@@ -75,6 +79,7 @@ jobs:
           echo "image=${owner}/${repo}" >> "$GITHUB_OUTPUT"
 
       - name: Extract Docker metadata
+        if: steps.release.outputs.publish == 'true'
         id: meta
         uses: docker/metadata-action@v6
         with:
@@ -91,6 +96,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
 
       - name: Log in to GitHub Container Registry
+        if: steps.release.outputs.publish == 'true'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -98,7 +104,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to private registry
-        if: env.PRIVATE_REGISTRY_ENDPOINT != ''
+        if: steps.release.outputs.publish == 'true' && env.PRIVATE_REGISTRY_ENDPOINT != ''
         uses: docker/login-action@v4
         with:
           registry: ${{ env.PRIVATE_REGISTRY_ENDPOINT }}
@@ -106,6 +112,7 @@ jobs:
           password: ${{ secrets.PRIVATE_REGISTRY_PASSWORD }}
 
       - name: Build and push image
+        if: steps.release.outputs.publish == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -118,6 +125,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=backend
 
       - name: Publish GitHub release
+        if: steps.release.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}

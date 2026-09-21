@@ -1,5 +1,14 @@
 # Changelog
 
+New releases are generated automatically from commits and published on [GitHub Releases](https://github.com/issogr/newsflow/releases). The manually maintained notes below are retained for reference; this file does not control publication.
+
+## Unreleased
+
+- automated releases for pushes to main, with commit-based changelogs since the last published release and localized in-app links to the full release notes
+- centered the topic-story circles and removed their visible section heading and icon captions
+- replaced AI summary coverage ranges and the outdated-briefing banner with the generation timestamp
+- removed the introductory description from the feedback panel
+
 ## 2026-09-21-01
 
 - refreshed the app with a consistent minimal visual system: flatter surfaces, shared controls, calmer navigation, clearer source/headline hierarchy, and labeled topic summaries across light and dark themes, while preserving source logos, topic colors, AI rings, and reading features

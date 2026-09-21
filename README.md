@@ -149,22 +149,22 @@ npm --prefix frontend test
 npm --prefix frontend run build
 ```
 
-The app shows the latest announcement under **Settings → What's new**. Full history is in [CHANGELOG.md](CHANGELOG.md) and [GitHub Releases](https://github.com/issogr/newsflow/releases). To follow published updates, choose **Watch → Custom → Releases** on GitHub.
+The app shows a localized release announcement under **Settings → What's new**, with a link to its full changelog on [GitHub Releases](https://github.com/issogr/newsflow/releases). Earlier manually maintained notes remain in [CHANGELOG.md](CHANGELOG.md). To follow published updates, choose **Watch → Custom → Releases** on GitHub.
 
 <details>
 <summary>Maintainers: publishing an update</summary>
 
-Updates are batches of commits, not package versions. The [Publish Update workflow](.github/workflows/release-containers.yml) publishes on pushes to `main` whose tip commit has the exact title `Prepared update YYYY-MM-DD-NN`, matching the finalized changelog ID.
+Every push to `main` starts the [Publish Update workflow](.github/workflows/release-containers.yml). Make as many local commits as needed, then push when the batch is ready. Commit titles and package versions need no special release format.
 
-1. Collect changes under `## Unreleased` in `CHANGELOG.md`. Keep matching English/Italian notes in `frontend/src/config/changelog.ts` with `id: 'unreleased', date: ''`. Draft notes do not trigger acknowledgement prompts and block publication.
-2. When ready to release, use the release date and next unused announcement ID, for example `2026-09-21-01`. Rename the top changelog heading and set matching app `id`/`date` values; use `02`, `03`, etc. for further updates that day. Published IDs are immutable.
-3. Run `node --test scripts/release-notes.test.mts` and `node scripts/release-notes.mts`. Create the release commit with the exact title `Prepared update 2026-09-21-01`.
-4. Push or merge through the repository's approved process, preserving that title on the tip commit of `main`. This triggers validation, production dependency audits, a Compose smoke check, image publication as `:latest`, and a GitHub Release tagged `update-2026-09-21-01` using the top changelog section.
-5. Start the next batch with a new `Unreleased` section and reset the app metadata to draft values. Package versions do not need bumping.
+1. Validate both packages: lint, typecheck, build, coverage tests, production dependency audits, and the shared Compose smoke test. Pull requests run validation through CI without publishing.
+2. Find the most recent published, non-prerelease GitHub Release and use its tag as the baseline. Generate a linked list of every commit since that release, plus a full comparison link. The first release includes the complete commit history.
+3. Build and push the multi-platform `latest` image, then create a GitHub Release tagged `update-<full-commit-sha>` with a dated title and the generated changelog. Descriptive commit subjects make the notes useful; skipped and failed release attempts remain included in the next successful release.
 
-Only the tip commit's first line controls publication. Earlier release commits or a release title in the body do not trigger it; extra text on the title line is rejected. Ordinary commits run CI without publishing, and no manual workflow dispatch is needed. A retry can finish creating the release after image upload while the release tag is absent; once that tag exists, use a new announcement for further changes.
+Publication is serialized. Before building the image, a run checks that its commit is still the tip of `main`; superseded runs skip publication. Retrying an already published commit is a no-op. If image upload succeeded but GitHub Release creation failed, rerun the failed workflow to finish publication. A previous release on divergent history or a conflicting tag stops publication rather than moving the baseline silently.
 
-The app tracks acknowledgement by announcement ID in the legacy `lastSeenReleaseNotesVersion` field. Users who skip updates see the newest announcement after updating and reloading.
+CI writes `frontend/src/config/release.json` in its checkout before building the image. The app uses that commit SHA, release date, and GitHub URL for its English/Italian announcement and acknowledgement tracking. The existing `lastSeenReleaseNotesVersion` field stores the 40-character SHA; older saved announcement IDs remain compatible. Local source builds use the committed `unreleased` metadata and do not show update prompts. No bot commits or manual changelog finalization are needed; GitHub Releases is the generated history.
+
+Test the generator with `node --test scripts/release-notes.test.mts`. For an offline preview, run `node scripts/release-notes.mts --base <previous-release-tag> --ref HEAD` using a tag available in your checkout; omit `--base` to preview a first release. `--help` lists options. Previewing does not write files or contact GitHub.
 
 To publish the same multi-platform image to an additional private registry, configure repository Actions secrets:
 
