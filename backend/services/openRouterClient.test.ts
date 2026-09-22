@@ -42,7 +42,8 @@ describe('openRouterClient', () => {
     });
     expect(logger.info).toHaveBeenCalledWith('AI request metric', expect.objectContaining({
       model: 'test/model', resolvedModel: 'resolved/model', generationId: 'generation-1',
-      serviceTier: 'default', cachedPromptTokens: 8, cost: 0.001, status: 'completed'
+      serviceTier: 'default', cachedPromptTokens: 8, cost: 0.001, status: 'completed',
+      promptChars: 4, outputChars: 11
     }));
   });
 
@@ -74,6 +75,12 @@ describe('openRouterClient', () => {
     fetchMock.mockResolvedValue(new Response('Service unavailable', { status: 503 }));
     await expect(openRouterClient.sendJsonChatCompletion(config, request)).rejects.toMatchObject({ statusCode: 503 });
     expect(() => openRouterClient.assertOpenRouterRequestAllowed('test/model')).toThrow('temporarily paused');
+  });
+
+  test('reads HTTP-date Retry-After values from native headers', () => {
+    const now = Date.parse('2026-09-23T12:00:00.000Z');
+    expect(openRouterClient.getRetryAfterMs({ headers: new Headers({ 'Retry-After': 'Wed, 23 Sep 2026 12:00:05 GMT' }) }, now)).toBe(5000);
+    expect(openRouterClient.getRetryAfterMs({ headers: new Headers({ 'Retry-After': 'invalid' }) }, now)).toBe(0);
   });
 
   test('aborts requests at the configured deadline', async () => {

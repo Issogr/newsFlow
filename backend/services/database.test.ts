@@ -6,7 +6,7 @@ import sourceCatalog from '../utils/sourceCatalog';
 const { cleanupTempNewsDb, setupTempNewsDb } = tempNewsDb;
 const {
   getCanonicalSourceId,
-  getCanonicalSourceName,
+  getCanonicalSourceMetadata,
   getConfiguredSourceGroups
 } = sourceCatalog;
 import type SqliteDatabaseConnection from './sqliteDatabase';
@@ -51,7 +51,7 @@ const groupedSourceFamilyName = groupedSourceFamily?.name || groupedSource?.name
 const alternateGroupedSource = configuredSources.find((source: TestSource) => source.id !== groupedSource?.id && groupedSourceFamily?.subSources.some((subSource: TestSource) => subSource.id === source.id))!;
 const primarySourceFamilyId = getCanonicalSourceId(primarySource.id, primarySource.name);
 const secondarySourceFamilyId = getCanonicalSourceId(secondarySource.id, secondarySource.name);
-const secondarySourceFamilyName = getCanonicalSourceName(secondarySource.id, secondarySource.name);
+const secondarySourceFamilyName = getCanonicalSourceMetadata(secondarySource.id, secondarySource.name).sourceName;
 
 describe('database migrations', () => {
   let tempDir: string;

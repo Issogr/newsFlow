@@ -90,10 +90,10 @@ const {
   _sourceFetchTimestamps
 }: ReturnType<typeof require> = (await import('./newsAggregatorIngestion')).default;
 const { mapSettledWithConcurrency } = (await import('../utils/concurrency')).default;
-const { getCanonicalSourceId, getCanonicalSourceName } = (await import('../utils/sourceCatalog')).default;
+const { getCanonicalSourceId, getCanonicalSourceMetadata } = (await import('../utils/sourceCatalog')).default;
 
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
-const ansaSourceName = getCanonicalSourceName('ansa_mondo', 'ANSA - Mondo');
+const ansaSourceName = getCanonicalSourceMetadata('ansa_mondo', 'ANSA - Mondo').sourceName;
 
 async function flushBackgroundAiProcessing() {
   await new Promise((resolve) => { setTimeout(resolve, 0); });

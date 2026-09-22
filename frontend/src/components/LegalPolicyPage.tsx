@@ -215,15 +215,15 @@ const LegalPolicyPage = ({ policy = 'privacy' }: { policy?: 'cookie' | 'privacy'
   const content = policyContent[policy];
 
   return (
-    <StaticInfoPageFrame content={content} introClassName="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+    <StaticInfoPageFrame content={content} introClassName="mt-2 max-w-3xl text-sm leading-6 text-ink-muted">
       {content.sections.map((section) => (
         <StaticInfoSection key={section.title}>
-          <h2 className="text-lg font-semibold text-slate-900">{section.title}</h2>
+          <h2 className="text-lg font-semibold text-ink-heading">{section.title}</h2>
           {section.paragraphs?.map((paragraph) => (
-            <p key={paragraph} className="mt-3 text-sm leading-6 text-slate-700">{paragraph}</p>
+            <p key={paragraph} className="mt-3 text-sm leading-6 text-ink-body">{paragraph}</p>
           ))}
           {section.bullets?.length ? (
-            <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-ink-body">
               {section.bullets.map((item) => (
                 <li key={item}>{item}</li>
               ))}
@@ -240,8 +240,8 @@ const LegalPolicyPage = ({ policy = 'privacy' }: { policy?: 'cookie' | 'privacy'
       </StaticInfoSection>
 
       <StaticInfoSection>
-        <h2 className="text-lg font-semibold text-slate-900">Technical Requirements For Developers</h2>
-        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+        <h2 className="text-lg font-semibold text-ink-heading">Technical Requirements For Developers</h2>
+        <ul className="mt-3 space-y-2 text-sm leading-6 text-ink-body">
           <li>Use only cookies strictly necessary for login and authenticated session management.</li>
           <li>Do not set analytics, profiling, advertising, or other unnecessary cookies.</li>
           <li>Use first-party cookies only for authentication and session purposes.</li>

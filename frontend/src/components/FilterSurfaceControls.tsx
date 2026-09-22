@@ -44,7 +44,7 @@ export function FilterSearchInput({
   return (
     <div className={className}>
       <label className="group flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl border border-line bg-surface px-3 transition-colors focus-within:border-sky-500">
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-slate-500 transition-colors group-focus-within:text-sky-600">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-ink-subtle transition-colors group-focus-within:text-sky-600">
           <Search className="h-4 w-4" aria-hidden="true" />
         </span>
         <input
@@ -55,13 +55,13 @@ export function FilterSearchInput({
           placeholder={t('searchPlaceholder')}
           aria-label={t('searchLabel')}
           tabIndex={inputTabIndex}
-          className="min-w-0 flex-1 bg-transparent text-base font-medium text-slate-800 outline-none placeholder:font-normal placeholder:text-slate-400 md:text-sm"
+          className="min-w-0 flex-1 bg-transparent text-base font-medium text-ink-emphasis outline-none placeholder:font-normal placeholder:text-ink-placeholder md:text-sm"
         />
         {search && (
           <button
             type="button"
             onClick={onSearchClear}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-subtle transition-colors hover:bg-hover-raised hover:text-ink-emphasis"
             aria-label={t('clearSearch')}
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />

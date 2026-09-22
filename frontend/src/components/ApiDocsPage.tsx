@@ -11,7 +11,7 @@ function renderTextWithInlineCode(text: string) {
       return (
         <code
           key={`${segment}-${index}`}
-          className="rounded-md bg-slate-200 px-1.5 py-0.5 font-mono text-[0.92em] text-slate-900"
+          className="rounded-md bg-surface-inset px-1.5 py-0.5 font-mono text-[0.92em] text-ink-heading"
         >
           {segment.slice(1, -1)}
         </code>
@@ -118,8 +118,8 @@ const ApiDocsPage = ({ locale }: { locale: Locale }) => {
     <StaticInfoPageFrame content={content}>
       {content.sections.map((section) => (
         <StaticInfoSection key={section.title}>
-          <h2 className="text-lg font-semibold text-slate-900">{section.title}</h2>
-          <ul className="mt-3 space-y-2 text-sm text-slate-700">
+          <h2 className="text-lg font-semibold text-ink-heading">{section.title}</h2>
+          <ul className="mt-3 space-y-2 text-sm text-ink-body">
             {section.items.map((item) => (
               <li key={item} className="leading-6">{renderTextWithInlineCode(item)}</li>
             ))}
@@ -128,7 +128,7 @@ const ApiDocsPage = ({ locale }: { locale: Locale }) => {
       ))}
 
       <StaticInfoSection>
-        <h2 className="text-lg font-semibold text-slate-900">{content.exampleTitle}</h2>
+        <h2 className="text-lg font-semibold text-ink-heading">{content.exampleTitle}</h2>
         <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950 px-4 py-3 text-sm text-slate-100"><code>{content.exampleRequest}</code></pre>
         <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950 px-4 py-3 text-sm text-slate-100"><code>{content.exampleAuthRequest}</code></pre>
       </StaticInfoSection>

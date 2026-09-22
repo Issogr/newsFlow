@@ -278,19 +278,19 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       aria-label={t('aiGroupedStory')}
       title={t('aiGroupedStory')}
     >
-      <div className="flex -space-x-2 rounded-full bg-white p-1">
+      <div className="flex -space-x-2 rounded-full bg-surface p-1">
         {sourceIconItems}
       </div>
     </div>
   ) : (
-    <div className="flex -space-x-2 rounded-full bg-white p-1 ring-1 ring-sky-200" aria-label={t('sources')}>
+    <div className="flex -space-x-2 rounded-full bg-surface p-1 ring-1 ring-sky-200" aria-label={t('sources')}>
       {sourceIconItems}
     </div>
   )) : (sourceIconItems[0] || null);
   const sourceSummary = getSourceSummary(group, sourceEntries);
   const publishedAt = getPublishedAt(group, locale);
   const topicBadges = topicEntries.length > 0 ? (
-    <div className="flex w-fit shrink-0 -space-x-2 text-xs font-medium text-slate-600">
+    <div className="flex w-fit shrink-0 -space-x-2 text-xs font-medium text-ink-muted">
       {topicEntries.map(({ topic, source }) => {
         const { Icon, iconBadgeClassName } = getTopicPresentation(topic);
         const localizedTopic = getLocalizedTopic(topic, locale);
@@ -366,19 +366,19 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   );
 
   return (
-    <article className="relative flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white md:h-full">
+    <article className="relative flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-line bg-surface md:h-full">
       <div className="flex min-w-0 items-center gap-2 px-4 pt-4 sm:gap-3 sm:px-5 sm:pt-5">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           {sourceIconStack}
           <div className="min-w-0 flex-1">
             {sourceSummary ? (
-              <p className="truncate text-sm font-medium text-slate-900">{sourceSummary}</p>
+              <p className="truncate text-sm font-medium text-ink-heading">{sourceSummary}</p>
             ) : null}
             {publishedAt ? (
               <time
                 dateTime={publishedAt.iso}
                 aria-label={t('publishedAt', { date: publishedAt.label })}
-                className="mt-0.5 inline-flex min-w-0 items-center gap-1.5 text-xs text-slate-500"
+                className="mt-0.5 inline-flex min-w-0 items-center gap-1.5 text-xs text-ink-subtle"
               >
                 <Clock3 className="h-3.5 w-3.5 shrink-0 text-sky-600" aria-hidden="true" />
                 <span className="truncate">{publishedAt.label}</span>
@@ -389,7 +389,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       </div>
 
       <div className="flex min-w-0 flex-col px-4 py-4 sm:px-5">
-        <h2 className="text-lg font-semibold leading-7 tracking-tight text-slate-900 sm:text-xl md:min-h-14">
+        <h2 className="text-lg font-semibold leading-7 tracking-tight text-ink-heading sm:text-xl md:min-h-14">
           <button
             type="button"
             className="block w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2"
@@ -404,7 +404,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       {imageUrl ? (
         <button
           type="button"
-          className="relative mt-auto block aspect-video w-full shrink-0 cursor-pointer overflow-hidden border-y border-slate-100 bg-slate-100 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400"
+          className="relative mt-auto block aspect-video w-full shrink-0 cursor-pointer overflow-hidden border-y border-line-soft bg-surface-raised text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400"
           aria-label={group.title}
           title={t('readHereHelp')}
           {...readerInteractionProps}

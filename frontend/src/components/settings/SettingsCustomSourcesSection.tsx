@@ -98,7 +98,7 @@ const SettingsCustomSourcesSection = ({
         <div className="space-y-4">
           <form onSubmit={handleDiscoverFeeds} className="space-y-3">
             <label className="block">
-              <span className="mb-2 block text-sm font-medium text-slate-700">{t('websiteUrl')}</span>
+              <span className="mb-2 block text-sm font-medium text-ink-body">{t('websiteUrl')}</span>
               <input
                 type="url"
                 inputMode="url"
@@ -117,13 +117,13 @@ const SettingsCustomSourcesSection = ({
                 required
               />
             </label>
-            <p className="text-sm text-slate-500">{t('rssDiscoveryHelp')}</p>
+            <p className="text-sm text-ink-subtle">{t('rssDiscoveryHelp')}</p>
             <div className="flex flex-wrap gap-2">
-              <button type="submit" disabled={saving || discoveringFeeds || sourceLimitReached || !websiteUrl.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-60">
+              <button type="submit" disabled={saving || discoveringFeeds || sourceLimitReached || !websiteUrl.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-200 bg-surface px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-60">
                 <Search className="h-4 w-4" aria-hidden="true" />
                 {discoveringFeeds ? t('findingRssFeeds') : t('findRssFeeds')}
               </button>
-              <button type="button" onClick={resetFeedDiscovery} disabled={saving || (!websiteUrl && discoveredFeeds === null && !discoveryError && !discoveringFeeds)} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60">
+              <button type="button" onClick={resetFeedDiscovery} disabled={saving || (!websiteUrl && discoveredFeeds === null && !discoveryError && !discoveringFeeds)} className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-muted hover:bg-hover-soft disabled:opacity-60">
                 {t('clearSearch')}
               </button>
             </div>
@@ -137,7 +137,7 @@ const SettingsCustomSourcesSection = ({
 
           {discoveryStatus ? (
             <div aria-busy={discoveringFeeds}>
-              <p role="status" aria-live="polite" className="text-sm font-medium text-slate-700">
+              <p role="status" aria-live="polite" className="text-sm font-medium text-ink-body">
                 {discoveryStatus}
               </p>
               {discoveredFeeds?.length ? (
@@ -155,14 +155,14 @@ const SettingsCustomSourcesSection = ({
                         disabled={saving || alreadyAdded || selectionLimitReached}
                         aria-pressed={selected}
                         aria-label={t(selected ? 'deselectRssFeed' : 'selectRssFeed', { title })}
-                        className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${selected ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'}`}
+                        className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${selected ? 'border-sky-200 bg-sky-50' : 'border-line bg-surface hover:border-sky-300 hover:bg-sky-50'}`}
                       >
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-medium text-slate-800">{title}</span>
-                          <span className="mt-0.5 block break-all text-xs text-slate-500">{feed.url}</span>
-                          {alreadyAdded ? <span className="mt-1 block text-xs font-medium text-slate-500">{t('rssFeedAlreadyAdded')}</span> : null}
+                          <span className="block text-sm font-medium text-ink-emphasis">{title}</span>
+                          <span className="mt-0.5 block break-all text-xs text-ink-subtle">{feed.url}</span>
+                          {alreadyAdded ? <span className="mt-1 block text-xs font-medium text-ink-subtle">{t('rssFeedAlreadyAdded')}</span> : null}
                         </span>
-                        <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${selected ? 'bg-sky-600 text-white' : 'bg-slate-200 text-transparent'}`} aria-hidden="true">
+                        <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${selected ? 'bg-sky-600 text-white' : 'bg-surface-inset text-transparent'}`} aria-hidden="true">
                           <Check className="h-3.5 w-3.5" />
                         </span>
                       </button>
@@ -182,7 +182,7 @@ const SettingsCustomSourcesSection = ({
           ) : null}
         </div>
         {Number.isFinite(maxSourceCount) && (
-          <p className="mt-2 text-xs text-slate-500">{t('customSourceLimit', { count: maxSourceCount })}</p>
+          <p className="mt-2 text-xs text-ink-subtle">{t('customSourceLimit', { count: maxSourceCount })}</p>
         )}
         {sourceError ? (
           <InlineAlert as="p" className="mt-3">

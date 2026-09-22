@@ -21,17 +21,17 @@ describe('aiMetrics', () => {
   test('extracts OpenRouter usage, cache, reasoning, and cost fields', () => {
     expect(extractUsage({
       usage: {
-        promptTokens: 100,
-        completionTokens: 20,
-        totalTokens: 120,
-        promptTokensDetails: { cachedTokens: 80, cacheWriteTokens: 0 },
-        completionTokensDetails: { reasoningTokens: 0 },
+        prompt_tokens: 100,
+        completion_tokens: 20,
+        total_tokens: 120,
+        prompt_tokens_details: { cached_tokens: 80, cache_write_tokens: 0 },
+        completion_tokens_details: { reasoning_tokens: 0 },
         cost: 0.0012,
-        isByok: false,
-        costDetails: {
-          upstreamInferenceCost: 0.001,
-          upstreamInferencePromptCost: 0.0008,
-          upstreamInferenceCompletionsCost: 0.0002
+        is_byok: false,
+        cost_details: {
+          upstream_inference_cost: 0.001,
+          upstream_inference_prompt_cost: 0.0008,
+          upstream_inference_completions_cost: 0.0002
         }
       }
     })).toEqual({

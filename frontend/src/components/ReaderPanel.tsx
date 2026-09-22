@@ -26,7 +26,7 @@ import { getStoredReaderTextSizePreference, getStoredReaderTextWidthPreference }
 import type { CurrentUser, NewsArticle, NewsGroup, ReaderBlock, ReaderResponse, Translator } from '../types';
 
 const sourceChipClassName = 'inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-medium text-sky-900';
-const readTimeChipClassName = 'inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600';
+const readTimeChipClassName = 'inline-flex items-center gap-2 rounded-full bg-surface-raised px-3 py-1.5 text-xs font-medium text-ink-muted';
 
 function getArticleSourceLabel(article: NewsArticle | null) {
   if (!article) {
@@ -73,7 +73,7 @@ function renderReaderBlock(block: ReaderBlock, index: number, readerTextStyles: 
       : block.level === 3
         ? readerTextStyles.headingLevel3
         : readerTextStyles.headingOther;
-    return <TagName key={`${block.type}-${index}`} className={`font-semibold leading-tight tracking-tight text-stone-900 ${sizeClass}`}>{block.text}</TagName>;
+    return <TagName key={`${block.type}-${index}`} className={`font-semibold leading-tight tracking-tight text-reader-heading ${sizeClass}`}>{block.text}</TagName>;
   }
 
   if (block.type === 'unordered-list' || block.type === 'ordered-list') {
@@ -306,13 +306,13 @@ const ReaderPanel = ({
       headerStart={headerStart}
       labelledBy="reader-panel-title"
       onClose={onClose}
-      panelClassName="flex h-full w-full flex-col overflow-hidden bg-white shadow-xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(72rem,calc(100vw-2rem))] lg:rounded-2xl lg:border lg:border-slate-200"
+      panelClassName="flex h-full w-full flex-col overflow-hidden bg-surface shadow-xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(72rem,calc(100vw-2rem))] lg:rounded-2xl lg:border lg:border-line"
     >
-          <div className="min-h-0 flex-1 overflow-y-auto bg-white pb-[calc(1.5rem+env(safe-area-inset-bottom))] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-6 sm:pl-[calc(1.25rem+env(safe-area-inset-left))] sm:pr-[calc(1.25rem+env(safe-area-inset-right))] md:pb-[calc(2rem+env(safe-area-inset-bottom))] md:pt-8 lg:pl-[calc(1.5rem+env(safe-area-inset-left))] lg:pr-[calc(1.5rem+env(safe-area-inset-right))]">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-surface pb-[calc(1.5rem+env(safe-area-inset-bottom))] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-6 sm:pl-[calc(1.25rem+env(safe-area-inset-left))] sm:pr-[calc(1.25rem+env(safe-area-inset-right))] md:pb-[calc(2rem+env(safe-area-inset-bottom))] md:pt-8 lg:pl-[calc(1.5rem+env(safe-area-inset-left))] lg:pr-[calc(1.5rem+env(safe-area-inset-right))]">
             {selectedArticle && (
               <div className={`mx-auto space-y-6 ${readerTextWidthClassName}`}>
-                <div className="border-b border-slate-200 pb-6 md:pb-7">
-                  <h2 className="text-pretty text-2xl font-semibold leading-tight tracking-tight text-stone-900 md:text-[2rem] md:leading-[1.15]">
+                <div className="border-b border-line pb-6 md:pb-7">
+                  <h2 className="text-pretty text-2xl font-semibold leading-tight tracking-tight text-reader-heading md:text-[2rem] md:leading-[1.15]">
                     {selectedArticle?.title || t('readerMode')}
                   </h2>
 
@@ -375,7 +375,7 @@ const ReaderPanel = ({
                     )}
 
                     {selectedReader.byline && (
-                      <p className="mb-6 text-sm font-medium text-stone-500">{selectedReader.byline}</p>
+                      <p className="mb-6 text-sm font-medium text-reader-subtle">{selectedReader.byline}</p>
                     )}
 
                     <div className="space-y-5">

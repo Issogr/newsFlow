@@ -31,7 +31,7 @@ export function getPasswordApiErrorMessage(apiMessage: unknown, t: Translator) {
 
 export const AuthTextInput = ({ label, ...inputProps }: { label: string } & InputHTMLAttributes<HTMLInputElement>) => (
   <label className="block">
-    <span className="mb-2 block text-sm font-medium text-slate-700">{label}</span>
+    <span className="mb-2 block text-sm font-medium text-ink-body">{label}</span>
     <input
       {...inputProps}
       className="ui-field"
@@ -41,13 +41,13 @@ export const AuthTextInput = ({ label, ...inputProps }: { label: string } & Inpu
 
 const AuthCard = ({ children, subtitle }: { children: ReactNode; subtitle: string }) => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-canvas px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-[max(2.5rem,env(safe-area-inset-top))] text-slate-900">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+    <div className="flex min-h-screen items-center justify-center bg-canvas px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-[max(2.5rem,env(safe-area-inset-top))] text-ink-heading">
+      <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 sm:p-8">
         <div className="mb-6 flex items-center gap-3">
           <BrandMark className="h-12 w-12" />
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">News Flow</h1>
-            <p className="text-sm text-slate-500">{subtitle}</p>
+            <p className="text-sm text-ink-subtle">{subtitle}</p>
           </div>
         </div>
 

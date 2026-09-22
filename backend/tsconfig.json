@@ -10,6 +10,7 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "ES2024",
+    "lib": ["ES2025", "DOM", "DOM.Iterable"],
     "types": ["node", "vitest/globals"]
   },
   "include": [

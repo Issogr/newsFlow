@@ -59,7 +59,7 @@ function summarizeResponseShape(response: DynamicRecord = {}, options: { include
   const message = choice.message && typeof choice.message === 'object' ? choice.message as DynamicRecord : {};
   const messageKeys = Object.keys(message).sort().join(',') || 'none';
   const contentType = Array.isArray(message.content) ? 'array' : typeof message.content;
-  const finishReason = choice.finishReason || choice.finish_reason || 'unknown';
+  const finishReason = choice.finish_reason || 'unknown';
   const baseSummary = `finishReason=${finishReason}, messageKeys=${messageKeys}, contentType=${contentType}`;
 
   if (!options.includeReasoningStats) {

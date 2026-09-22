@@ -213,9 +213,8 @@ describe('aiTopicClassifier', () => {
     process.env.AI_TOPIC_DETERMINISTIC_SKIP_ENABLED = 'true';
     process.env.OPENROUTER_FAILURE_BACKOFF_MS = '1000';
     process.env.OPENROUTER_FAILURE_MAX_BACKOFF_MS = '1000';
-    chatSend.mockRejectedValue(Object.assign(new Error('rate limited'), {
-      statusCode: 429,
-      headers: { 'retry-after': '1' }
+    fetchMock.mockResolvedValue(Response.json({ error: { message: 'rate limited' } }, {
+      status: 429, headers: { 'retry-after': '1' }
     }));
 
     const result = await aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus([
@@ -228,7 +227,7 @@ describe('aiTopicClassifier', () => {
       { id: 'provider-article-2', title: 'Markets react to the announcement' }
     ]);
 
-    expect(chatSend).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result.topicsByArticleId.get('local-article')).toEqual([
       expect.objectContaining({ source: 'local' })
     ]);
@@ -275,9 +274,7 @@ describe('aiTopicClassifier', () => {
       ]
     })).toBe('{"topicsById":[]}');
 
-    expect(extractAssistantContent({
-      output_text: '{"topicsById":[]}'
-    })).toBe('{"topicsById":[]}');
+    expect(extractAssistantContent({ choices: [{ message: { content: null } }] })).toBe('');
 
     expect(parseJsonContent('{"topicsById":[')).toBeNull();
     expect(parseJsonContent('```json\n{"topicsById":[{"id":"article-1"}]')).toBeNull();

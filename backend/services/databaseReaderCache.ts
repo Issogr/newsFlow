@@ -17,27 +17,13 @@ interface ReaderCacheEntry extends DynamicRecord {
   fetchedAt: string;
 }
 
-interface ReaderCacheRow extends DynamicRecord {
-  articleId: string;
-  byline: string | null;
-  contentBlocks: unknown;
-  contentText: string;
-  excerpt: string | null;
-  fetchedAt: string;
-  language: string | null;
-  minutesToRead: number;
-  siteName: string | null;
-  title: string;
-  url: string;
-}
-
 const READER_CACHE_SELECT = `
   article_id AS articleId, url, title, site_name AS siteName,
   byline, language, excerpt, content_text AS contentText,
   content_blocks AS contentBlocks, minutes_to_read AS minutesToRead, fetched_at AS fetchedAt
 `;
 
-function mapReaderCacheRow(row: ReaderCacheRow | undefined | null): ReaderCacheEntry | null {
+function mapReaderCacheRow(row: ReaderCacheEntry | undefined | null): ReaderCacheEntry | null {
   if (!row) {
     return null;
   }
@@ -48,7 +34,7 @@ function mapReaderCacheRow(row: ReaderCacheRow | undefined | null): ReaderCacheE
   };
 }
 
-function isReaderCacheFresh(row: ReaderCacheRow, maxAgeMs?: number) {
+function isReaderCacheFresh(row: ReaderCacheEntry, maxAgeMs?: number) {
   if (typeof maxAgeMs !== 'number' || !Number.isFinite(maxAgeMs)) {
     return true;
   }
@@ -69,7 +55,7 @@ function createReaderCacheRepository({
       return null;
     }
 
-    const row = getDb().prepare<ReaderCacheRow>(`
+    const row = getDb().prepare<ReaderCacheEntry>(`
       SELECT ${READER_CACHE_SELECT}
       FROM reader_cache
       WHERE article_id = ?
@@ -97,7 +83,7 @@ function createReaderCacheRepository({
     }
 
     chunkValues(normalizedArticleIds, 500).forEach((ids) => {
-      const rows = getDb().prepare<ReaderCacheRow>(`
+      const rows = getDb().prepare<ReaderCacheEntry>(`
         SELECT ${READER_CACHE_SELECT}
         FROM reader_cache
         WHERE article_id IN (${ids.map(() => '?').join(', ')})

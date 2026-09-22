@@ -6,12 +6,12 @@ const SKELETON_PARAGRAPHS = [
 
 const TextContentSkeleton = ({ label }: { label: string }) => (
   <div className="animate-pulse space-y-6" role="status" aria-label={label}>
-    <p className="text-sm font-medium text-stone-500">{label}</p>
+    <p className="text-sm font-medium text-reader-subtle">{label}</p>
     <div className="space-y-6" aria-hidden="true">
       {SKELETON_PARAGRAPHS.map((lines, paragraphIndex) => (
         <div key={paragraphIndex} className="space-y-3">
           {lines.map((width, lineIndex) => (
-            <div key={lineIndex} className={`h-3.5 rounded-full bg-slate-200 ${width}`} />
+            <div key={lineIndex} className={`h-3.5 rounded-full bg-surface-inset ${width}`} />
           ))}
         </div>
       ))}

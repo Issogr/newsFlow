@@ -114,7 +114,6 @@ describe('thematic summary UI', () => {
       topicLabel: 'Technology',
       periodStart: '2026-05-21T05:00:00.000Z',
       periodEnd: '2026-05-21T11:00:00.000Z',
-      summarySlot: 'lunch',
       articleCount: 2,
       summaryTextByLocale: {
         en: 'The first argument covers chip supply and infrastructure.\nThe second argument moves to software policy and regulation.'
@@ -131,7 +130,6 @@ describe('thematic summary UI', () => {
       id: 'summary-technology-current',
       topicKey: 'technology',
       topicLabel: 'Technology',
-      summarySlot: 'lunch',
       articleCount: 2,
       summaryTextByLocale: { en: 'Current technology briefing [1].' },
       sources: [{ index: 1, source: 'Current News', url: 'https://example.com/current' }],
@@ -139,7 +137,6 @@ describe('thematic summary UI', () => {
         id: 'summary-technology-previous',
         topicKey: 'technology',
         topicLabel: 'Technology',
-        summarySlot: 'morning',
         articleCount: 1,
         summaryTextByLocale: { en: 'Previous technology briefing [1].' },
         sources: [{ index: 1, source: 'Previous News', url: 'https://example.com/previous' }]
@@ -157,7 +154,6 @@ describe('thematic summary UI', () => {
     const translated = createTranslator(locale);
     const summary = createTopicSummary('science', {
       isStale: true,
-      summarySlot: 'evening',
       articleCount: 2,
       periodStart: '2026-09-20T18:00:00.000Z',
       periodEnd: '2026-09-21T18:00:00.000Z',

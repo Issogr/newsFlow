@@ -12,10 +12,10 @@ const SettingsActionButton = ({ icon: Icon, iconClassName, children, ...buttonPr
 } & ButtonHTMLAttributes<HTMLButtonElement>) => (
   <button
     type="button"
-    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
+    className="flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-left text-sm font-medium text-ink-body transition-colors hover:bg-hover-soft disabled:opacity-60"
     {...buttonProps}
   >
-    <span className="inline-flex h-8 w-8 items-center justify-center text-slate-700">
+    <span className="inline-flex h-8 w-8 items-center justify-center text-ink-body">
       <Icon className={`h-4 w-4 ${iconClassName}`} />
     </span>
     <span>{children}</span>
@@ -80,26 +80,26 @@ const SettingsAccessSection = ({
         <ExternalPillLink href="/cookie-policy" target="_blank">{t('cookiePolicyLink')}</ExternalPillLink>
       </div>
 
-      <details className="group overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-800 [&::-webkit-details-marker]:hidden">
+      <details className="group overflow-hidden rounded-2xl border border-line bg-surface">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ink-emphasis [&::-webkit-details-marker]:hidden">
           <span>{t('advancedSettings')}</span>
-          <ChevronDown className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" />
+          <ChevronDown className="h-4 w-4 text-ink-subtle transition-transform group-open:rotate-180" aria-hidden="true" />
         </summary>
 
-        <div className="space-y-6 border-t border-slate-200 bg-white px-4 py-5">
+        <div className="space-y-6 border-t border-line bg-surface px-4 py-5">
           {showApiTokenControls ? (
             <div className="space-y-5">
               <div className="space-y-3">
-                <p className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <p className="flex items-center gap-2 text-sm font-semibold text-ink-emphasis">
                   <KeyRound className="h-4 w-4 text-amber-600" />
                   {t('apiTokenTitle')}
                 </p>
-                <p className="max-w-2xl text-sm text-slate-600">{t('apiTokenHelp')}</p>
+                <p className="max-w-2xl text-sm text-ink-muted">{t('apiTokenHelp')}</p>
                 <div className="flex flex-wrap gap-2">
                   <ExternalPillLink href="/api/docs" target="_blank" className="border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100">
                     {t('apiTokenDocsLink')}
                   </ExternalPillLink>
-                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
+                  <span className="inline-flex items-center rounded-full border border-line bg-surface-soft px-3 py-1.5 text-xs font-medium text-ink-muted">
                     {t('apiTokenExpiryHelp', { days: settingsLimits.apiTokenTtlDays || 30 })}
                   </span>
                 </div>
@@ -110,7 +110,7 @@ const SettingsAccessSection = ({
                   type="button"
                   onClick={onCreateApiToken}
                   disabled={saving}
-                  className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-60"
+                  className="rounded-xl border border-line-strong bg-surface-soft px-4 py-2 text-sm font-medium text-ink-body transition-colors hover:bg-hover-raised disabled:opacity-60"
                 >
                   {apiToken ? t('apiTokenRegenerate') : t('apiTokenGenerate')}
                 </button>
@@ -127,16 +127,16 @@ const SettingsAccessSection = ({
               </div>
 
               {apiToken ? (
-                <div className="grid gap-x-5 gap-y-4 border-y border-slate-200 py-4 md:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-x-5 gap-y-4 border-y border-line py-4 md:grid-cols-2 xl:grid-cols-3">
                   {apiTokenStatusItems.map((item) => (
                     <div key={item.key} className="min-w-0">
-                      <p className={`text-xs font-medium ${item.labelClassName || 'text-slate-500'}`}>{item.label}</p>
-                      <p className={`mt-1 text-sm font-medium ${item.valueClassName || 'break-words text-slate-800'}`}>{item.value}</p>
+                      <p className={`text-xs font-medium ${item.labelClassName || 'text-ink-subtle'}`}>{item.label}</p>
+                      <p className={`mt-1 text-sm font-medium ${item.valueClassName || 'break-words text-ink-emphasis'}`}>{item.value}</p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm font-medium text-slate-500">{t('apiTokenInactive')}</p>
+                <p className="text-sm font-medium text-ink-subtle">{t('apiTokenInactive')}</p>
               )}
 
               {newApiToken ? (
@@ -149,7 +149,7 @@ const SettingsAccessSection = ({
             </div>
           ) : null}
 
-          <div className={`grid gap-3 md:grid-cols-2 ${showApiTokenControls ? 'border-t border-slate-200 pt-6' : ''}`}>
+          <div className={`grid gap-3 md:grid-cols-2 ${showApiTokenControls ? 'border-t border-line pt-6' : ''}`}>
             <SettingsActionButton
               onClick={onExport}
               disabled={saving}

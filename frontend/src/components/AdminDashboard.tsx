@@ -263,15 +263,15 @@ const AdminDashboard = ({ t, currentUser, onLogout, patchSession }: {
   const ThemeIcon = activeTheme === 'dark' ? Sun : Moon;
 
   return (
-    <div className="min-h-screen bg-canvas text-slate-900">
+    <div className="min-h-screen bg-canvas text-ink-heading">
       <div className="flex min-h-screen w-full flex-col">
-        <header className="border-b border-slate-200 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:px-6">
+        <header className="border-b border-line bg-surface px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:px-6">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <BrandMark className="h-9 w-9" />
               <div>
-                <h1 className="text-xl font-semibold tracking-tight text-slate-900">{t('adminDashboardTitle')}</h1>
-                <p className="text-sm text-slate-500">{currentUser?.user?.username}</p>
+                <h1 className="text-xl font-semibold tracking-tight text-ink-heading">{t('adminDashboardTitle')}</h1>
+                <p className="text-sm text-ink-subtle">{currentUser?.user?.username}</p>
               </div>
             </div>
 
@@ -290,7 +290,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, patchSession }: {
                 type="button"
                 onClick={() => loadUsers({ showRefreshingIndicator: true })}
                 disabled={refreshing || themeSaving}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-medium text-ink-body transition-colors hover:bg-hover-raised disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                 {refreshing ? t('refreshing') : t('refresh')}
@@ -308,16 +308,16 @@ const AdminDashboard = ({ t, currentUser, onLogout, patchSession }: {
         </header>
 
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-6 lg:px-6">
-          <section className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 lg:grid-cols-4">
+          <section className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-surface-inset lg:grid-cols-4">
             {summaryCards.map((card) => {
               const Icon = card.icon;
 
               return (
-                <div key={card.key} className="bg-white px-3.5 py-3">
+                <div key={card.key} className="bg-surface px-3.5 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-medium text-slate-500">{card.label}</p>
-                      <p className="mt-1.5 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{card.value}</p>
+                      <p className="text-xs font-medium text-ink-subtle">{card.label}</p>
+                      <p className="mt-1.5 text-xl font-semibold tracking-tight text-ink-heading sm:text-2xl">{card.value}</p>
                     </div>
                     <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${card.accent} sm:h-9 sm:w-9`}>
                       <Icon className="h-4 w-4" />
@@ -330,43 +330,43 @@ const AdminDashboard = ({ t, currentUser, onLogout, patchSession }: {
 
           <section className="mt-6">
             <div className="flex items-center gap-4">
-              <h2 className="text-lg font-semibold text-slate-900">{t('adminUsersTitle')}</h2>
-              <div className="h-px flex-1 bg-slate-200" aria-hidden="true" />
+              <h2 className="text-lg font-semibold text-ink-heading">{t('adminUsersTitle')}</h2>
+              <div className="h-px flex-1 bg-surface-inset" aria-hidden="true" />
             </div>
 
             <div className="mt-5">
               {loading ? (
-                <div className="text-sm text-slate-500">{t('loadingMore')}</div>
+                <div className="text-sm text-ink-subtle">{t('loadingMore')}</div>
               ) : managedUsers.length === 0 ? (
-                <div className="text-sm text-slate-500">{t('adminNoUsers')}</div>
+                <div className="text-sm text-ink-subtle">{t('adminNoUsers')}</div>
               ) : (
                 <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                   {managedUsers.map((user) => (
-                    <article key={user.id} className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                    <article key={user.id} className="flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface">
                       <div className="flex min-w-0 flex-1 flex-col p-5">
                         <div className="min-w-0">
                           <div className="flex min-w-0 items-center gap-3">
                             <span
-                              className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${user.isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                              className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${user.isOnline ? 'bg-emerald-500' : 'bg-surface-disabled'}`}
                               aria-label={user.isOnline ? t('onlineNow') : t('offlineNow')}
                             />
-                            <p className="truncate text-lg font-semibold text-slate-900">{user.username}</p>
+                            <p className="truncate text-lg font-semibold text-ink-heading">{user.username}</p>
                           </div>
 
-                          <div className="mt-4 grid grid-cols-3 divide-x divide-slate-200 border-y border-slate-200 py-3 text-sm text-slate-600">
+                          <div className="mt-4 grid grid-cols-3 divide-x divide-line border-y border-line py-3 text-sm text-ink-muted">
                             {[
                               { key: 'createdAt', label: t('createdAt'), value: formatDateTime(user.createdAt) },
                               { key: 'lastLoginAt', label: t('lastLoginAt'), value: formatDateTime(user.lastLoginAt) },
                               { key: 'lastActivityAt', label: t('lastActivityAt'), value: formatDateTime(user.lastActivityAt) }
                             ].map((card) => (
                               <div key={card.key} className="min-w-0 px-3 first:pl-0 last:pr-0">
-                                <p className="text-xs font-medium text-slate-500">{card.label}</p>
-                                <p className="mt-2 font-medium text-slate-800">{card.value}</p>
+                                <p className="text-xs font-medium text-ink-subtle">{card.label}</p>
+                                <p className="mt-2 font-medium text-ink-emphasis">{card.value}</p>
                               </div>
                             ))}
                           </div>
 
-                          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-slate-600">
+                          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-ink-muted">
                             <span>
                               {t('adminPublicApiRequestsValue', { count: user.publicApiRequestCount || 0 })}
                             </span>
@@ -379,13 +379,13 @@ const AdminDashboard = ({ t, currentUser, onLogout, patchSession }: {
                         </div>
                       </div>
 
-                      <div className="mt-auto border-t border-slate-200 px-5 py-4">
+                      <div className="mt-auto border-t border-line px-5 py-4">
                         <div className="grid grid-cols-2 gap-2.5">
                           <button
                             type="button"
                             onClick={() => handleCreateLink(user)}
                             disabled={creatingForUserId === user.id || deletingUserId === user.id}
-                            className="inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex min-w-0 items-center justify-center gap-2 rounded-xl border border-line-strong bg-surface px-4 py-3 text-sm font-medium text-ink-body transition-colors hover:bg-hover-raised disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <span>{creatingForUserId === user.id ? t('saving') : t('adminResetPasswordAction')}</span>
                           </button>
@@ -419,7 +419,7 @@ const AdminDashboard = ({ t, currentUser, onLogout, patchSession }: {
                   type="button"
                   onClick={handleCopyLink}
                   disabled={!navigator.clipboard?.writeText}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-medium text-emerald-800 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-surface px-4 py-2.5 text-sm font-medium text-emerald-800 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Copy className="h-4 w-4" />
                   {copiedLink ? t('copied') : t('copyLink')}

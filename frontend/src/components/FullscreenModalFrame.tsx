@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import ModalDialog from './ModalDialog';
 
 const DEFAULT_OVERLAY_CLASS_NAME = 'fixed inset-0 z-50 bg-slate-950/35 backdrop-blur-sm';
-const DEFAULT_HEADER_CLASS_NAME = 'flex shrink-0 items-center border-b border-slate-200 bg-white pb-3 pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-[calc(0.75rem+env(safe-area-inset-top))] sm:pb-4 sm:pl-[calc(1.25rem+env(safe-area-inset-left))] sm:pr-[calc(1.25rem+env(safe-area-inset-right))] sm:pt-[calc(1rem+env(safe-area-inset-top))] md:pl-[calc(1.5rem+env(safe-area-inset-left))] md:pr-[calc(1.5rem+env(safe-area-inset-right))]';
+const DEFAULT_HEADER_CLASS_NAME = 'flex shrink-0 items-center border-b border-line bg-surface pb-3 pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-[calc(0.75rem+env(safe-area-inset-top))] sm:pb-4 sm:pl-[calc(1.25rem+env(safe-area-inset-left))] sm:pr-[calc(1.25rem+env(safe-area-inset-right))] sm:pt-[calc(1rem+env(safe-area-inset-top))] md:pl-[calc(1.5rem+env(safe-area-inset-left))] md:pr-[calc(1.5rem+env(safe-area-inset-right))]';
 
 export const FullscreenPanelFrame = ({
   children,

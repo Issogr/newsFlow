@@ -1058,15 +1058,7 @@ function createArticleRepository({
       })
     );
     const selectArticleFieldsStmt = database.prepare<ArticleFieldRow>(`${articleFieldSelectSql} WHERE id = ?`);
-    const existingIdSet = new Set<string>(
-      chunkValues(articles.map((article) => article.id).filter(Boolean)).flatMap((articleIds) => {
-        return database.prepare<IdRow>(`
-          SELECT id
-          FROM articles
-          WHERE id IN (${articleIds.map(() => '?').join(', ')})
-        `).all(...articleIds).map((row) => row.id);
-      })
-    );
+    const existingIdSet = new Set(existingArticleFields.keys());
     const duplicateLookup = createArticleDuplicateLookup(database, articles, existingIdSet);
 
     const transaction = database.transaction((items: Article[]) => {

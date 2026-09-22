@@ -4,12 +4,12 @@ import { SourceFilterList, TopicFilterList } from './FilterOptionLists';
 import type { ActiveFilters, AvailableTopic, Locale, NewsSource, Translator } from '../types';
 
 const FilterHeader = ({ clearAriaLabel, clearClassName, count, onClear, title, t }: { clearAriaLabel: string; clearClassName: string; count: number; onClear: () => void; title: string; t: Translator }) => (
-  <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
-    <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+  <div className="mb-3 flex items-center justify-between gap-3 border-b border-line pb-3">
+    <h2 className="text-sm font-semibold text-ink-heading">{title}</h2>
     {count > 0 && (
-      <div className="flex shrink-0 items-center rounded-full bg-slate-100 p-1 pl-2 text-xs">
+      <div className="flex shrink-0 items-center rounded-full bg-surface-raised p-1 pl-2 text-xs">
         <span
-          className="min-w-4 text-center font-semibold text-slate-600"
+          className="min-w-4 text-center font-semibold text-ink-muted"
           aria-label={t('selectedFilterCount', { count })}
           aria-live="polite"
         >
@@ -20,7 +20,7 @@ const FilterHeader = ({ clearAriaLabel, clearClassName, count, onClear, title, t
           onClick={onClear}
           aria-label={clearAriaLabel}
           title={clearAriaLabel}
-          className={`ml-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/80 transition-colors hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 ${clearClassName}`}
+          className={`ml-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-surface-translucent transition-colors hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 ${clearClassName}`}
         >
           <X className="h-3.5 w-3.5" aria-hidden="true" />
         </button>

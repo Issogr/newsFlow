@@ -1,19 +1,19 @@
 import BrandMark from './BrandMark';
 import type { ReactNode } from 'react';
 
-export const StaticInfoSection = ({ children, className = 'border-slate-200 bg-white' }: { children: ReactNode; className?: string }) => (
+export const StaticInfoSection = ({ children, className = 'border-line bg-surface' }: { children: ReactNode; className?: string }) => (
   <section className={`rounded-2xl border p-5 ${className}`}>
     {children}
   </section>
 );
 
-const StaticInfoPageFrame = ({ children, content, introClassName = 'mt-2 max-w-3xl text-sm text-slate-600' }: {
+const StaticInfoPageFrame = ({ children, content, introClassName = 'mt-2 max-w-3xl text-sm text-ink-muted' }: {
   children: ReactNode;
   content: { eyebrow: string; title: string; intro: string };
   introClassName?: string;
 }) => (
-  <div className="min-h-screen bg-canvas text-slate-900 sm:px-4 sm:pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:pt-[max(2.5rem,env(safe-area-inset-top))]">
-    <div className="min-h-screen w-full bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))] sm:mx-auto sm:min-h-0 sm:max-w-4xl sm:rounded-2xl sm:border sm:border-slate-200 sm:p-8">
+  <div className="min-h-screen bg-canvas text-ink-heading sm:px-4 sm:pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:pt-[max(2.5rem,env(safe-area-inset-top))]">
+    <div className="min-h-screen w-full bg-surface px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))] sm:mx-auto sm:min-h-0 sm:max-w-4xl sm:rounded-2xl sm:border sm:border-line sm:p-8">
       <div className="mb-8 flex items-center gap-4">
         <BrandMark className="h-12 w-12" />
         <div>

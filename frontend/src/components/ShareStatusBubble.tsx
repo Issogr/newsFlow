@@ -9,7 +9,7 @@ function getShareStatusPresentation(shareState: ShareState, t: Translator) {
       Icon: Check,
       text: t('shareCopiedMessage'),
       className: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-      iconClassName: 'bg-white text-emerald-700',
+      iconClassName: 'bg-surface text-emerald-700',
     };
   }
 
@@ -18,7 +18,7 @@ function getShareStatusPresentation(shareState: ShareState, t: Translator) {
       Icon: AlertCircle,
       text: t('shareFailedMessage'),
       className: 'border-amber-200 bg-amber-50 text-amber-800',
-      iconClassName: 'bg-white text-amber-700',
+      iconClassName: 'bg-surface text-amber-700',
     };
   }
 

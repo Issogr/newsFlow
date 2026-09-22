@@ -232,23 +232,6 @@ function getNextDueWindow(referenceDate: DateInput = new Date()): SummaryWindow 
   return getDailyWindow(referenceDate, true);
 }
 
-function getSummaryWindowSlot(summary: SummaryRecord = {}) {
-  const periodEnd = new Date(summary.periodEnd || '');
-  if (Number.isNaN(periodEnd.getTime())) {
-    return '';
-  }
-
-  const hour = getTimeZoneParts(periodEnd, SUMMARY_TIME_ZONE).hour;
-  if (hour < 10) {
-    return 'morning';
-  }
-  if (hour < 16) {
-    return 'lunch';
-  }
-
-  return 'evening';
-}
-
 function getSummaryTopics() {
   return SUMMARY_TOPICS.map((topic) => ({ ...topic }));
 }
@@ -886,7 +869,6 @@ function getLatestSummaries(options: SummaryOptions = {}) {
       return summary ? {
         ...summary,
         topicLabel: topic.label,
-        summarySlot: getSummaryWindowSlot(summary),
         isStale: summary.periodEnd !== latestDueWindow.periodEnd || Boolean(summary.failureCategory)
       } : null;
     })

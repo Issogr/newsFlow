@@ -129,7 +129,7 @@ const MobileBottomNav = ({
             tabIndex={backToTopVisible ? 0 : -1}
             aria-hidden={!backToTopVisible}
             aria-label={t('backToTop')}
-            className={`relative z-10 inline-flex h-[3.95rem] min-w-0 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-line bg-surface text-slate-700 transition-[width,margin,transform,opacity] duration-200 ease-out hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 ${
+            className={`relative z-10 inline-flex h-[3.95rem] min-w-0 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-line bg-surface text-ink-body transition-[width,margin,transform,opacity] duration-200 ease-out hover:bg-hover-soft hover:text-ink-heading-strong focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 ${
               backToTopVisible
                 ? 'mr-2 w-[3.95rem] translate-x-0 scale-100 opacity-100'
                 : 'pointer-events-none mr-0 w-0 -translate-x-3 scale-75 opacity-0'
@@ -177,7 +177,7 @@ const MobileBottomNav = ({
                     refreshLabel={t('refresh')}
                     refreshTitle={refreshTitle}
                     search={search}
-                    searchActiveClassName="text-slate-900"
+                    searchActiveClassName="text-ink-heading"
                     t={t}
                   />
                 </div>

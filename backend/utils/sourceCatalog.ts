@@ -97,7 +97,7 @@ function deriveSubSourceLabel(source: SourceDefinition, groupName: string, membe
     return source.name;
   }
 
-  const escapedGroupName = groupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedGroupName = RegExp.escape(groupName);
   const remainder = source.name
     .replace(new RegExp(`^${escapedGroupName}(?:\\s*[-:|/]\\s*|\\s+)*`, 'i'), '')
     .trim();
@@ -213,18 +213,6 @@ function getCanonicalSourceId(sourceId: string, sourceName: string) {
   return getCanonicalSourceMetadata(sourceId, sourceName).sourceId;
 }
 
-function getCanonicalSourceName(sourceId: string, sourceName: string) {
-  return getCanonicalSourceMetadata(sourceId, sourceName).sourceName;
-}
-
-function getCanonicalSourceIconUrl(sourceId: string, sourceName: string) {
-  return getCanonicalSourceMetadata(sourceId, sourceName).sourceIconUrl;
-}
-
-function getSourceVariantLabel(sourceId: string, sourceName: string) {
-  return getCanonicalSourceMetadata(sourceId, sourceName).subSource;
-}
-
 function getSourceAliases(sourceId: string, sourceName: string) {
   const { sourceGroup } = resolveConfiguredSourceContext(sourceId, sourceName);
 
@@ -261,9 +249,6 @@ export default {
   getConfiguredSourceGroups,
   getCanonicalSourceMetadata,
   getCanonicalSourceId,
-  getCanonicalSourceName,
-  getCanonicalSourceIconUrl,
-  getSourceVariantLabel,
   getSourceAliases,
   getRawConfiguredSourceIds,
   getConfiguredSourceGroupIds,

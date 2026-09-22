@@ -202,11 +202,11 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }: {
           ) : (
             <form id={FEEDBACK_FORM_ID} noValidate onSubmit={handleSubmit}>
               <fieldset disabled={submitting} className="m-0 min-w-0 space-y-6 border-0 p-0">
-                <p className="text-xs leading-5 text-slate-500">{t('feedbackSenderHelp')}</p>
+                <p className="text-xs leading-5 text-ink-subtle">{t('feedbackSenderHelp')}</p>
 
-              <div className="border-b border-slate-200 pb-6">
+              <div className="border-b border-line pb-6">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-slate-700">{t('feedbackFieldCategory')}</span>
+                  <span className="text-sm font-medium text-ink-body">{t('feedbackFieldCategory')}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {FEEDBACK_CATEGORIES.map(({ id, labelKey, icon: Icon, badgeClassName, ringClassName }) => {
@@ -221,25 +221,25 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }: {
                           setSubmitError('');
                         }}
                         aria-pressed={isActive}
-                        className={`flex min-w-0 flex-col items-center rounded-xl border px-2 py-3 text-center transition-colors ${isActive ? ringClassName : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                        className={`flex min-w-0 flex-col items-center rounded-xl border px-2 py-3 text-center transition-colors ${isActive ? ringClassName : 'border-line bg-surface hover:bg-hover-soft'}`}
                       >
                         <span className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${badgeClassName}`}>
                           <Icon className="h-4 w-4" aria-hidden="true" />
                         </span>
-                        <span className="mt-2 truncate text-xs font-semibold text-slate-900 sm:text-sm">{t(labelKey)}</span>
+                        <span className="mt-2 truncate text-xs font-semibold text-ink-heading sm:text-sm">{t(labelKey)}</span>
                       </button>
                     );
                   })}
                 </div>
-                <p className="mt-3 text-sm leading-5 text-slate-600" aria-live="polite">{t(selectedCategory.helpKey)}</p>
+                <p className="mt-3 text-sm leading-5 text-ink-muted" aria-live="polite">{t(selectedCategory.helpKey)}</p>
               </div>
 
               <label className="block">
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-slate-700">
-                    {t('feedbackFieldTitle')} <span className="text-xs font-normal text-slate-400">({t('feedbackRequired')})</span>
+                  <span className="text-sm font-medium text-ink-body">
+                    {t('feedbackFieldTitle')} <span className="text-xs font-normal text-ink-faint">({t('feedbackRequired')})</span>
                   </span>
-                  {title.length > 0 && <span className="text-xs text-slate-400">{title.length}/{limits.feedbackTitleMaxLength}</span>}
+                  {title.length > 0 && <span className="text-xs text-ink-faint">{title.length}/{limits.feedbackTitleMaxLength}</span>}
                 </div>
                 <input
                   ref={titleInputRef}
@@ -263,12 +263,12 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }: {
 
               <label className="block">
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-slate-700">
-                    {t('feedbackFieldDescription')} <span className="text-xs font-normal text-slate-400">({t('feedbackRequired')})</span>
+                  <span className="text-sm font-medium text-ink-body">
+                    {t('feedbackFieldDescription')} <span className="text-xs font-normal text-ink-faint">({t('feedbackRequired')})</span>
                   </span>
-                  {description.length > 0 && <span className="text-xs text-slate-400">{description.length}/{limits.feedbackDescriptionMaxLength}</span>}
+                  {description.length > 0 && <span className="text-xs text-ink-faint">{description.length}/{limits.feedbackDescriptionMaxLength}</span>}
                 </div>
-                <p id="feedback-description-help" className="mb-2 text-sm leading-5 text-slate-500">{t(selectedCategory.descriptionHelpKey)}</p>
+                <p id="feedback-description-help" className="mb-2 text-sm leading-5 text-ink-subtle">{t(selectedCategory.descriptionHelpKey)}</p>
                 <textarea
                   ref={descriptionInputRef}
                   value={description}
@@ -287,16 +287,16 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }: {
                 {fieldErrors.description && <p id="feedback-description-error" className="mt-2 text-sm text-red-600" role="alert">{fieldErrors.description}</p>}
               </label>
 
-              <div className="border-t border-slate-200 pt-6">
+              <div className="border-t border-line pt-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-sm font-medium text-slate-700">
-                      {t('feedbackFieldImage')} <span className="text-xs font-normal text-slate-400">({t('feedbackOptional')})</span>
+                    <p className="text-sm font-medium text-ink-body">
+                      {t('feedbackFieldImage')} <span className="text-xs font-normal text-ink-faint">({t('feedbackOptional')})</span>
                     </p>
-                    {!attachment && <p className="mt-1 text-sm text-slate-500">{t('feedbackImageHelp')}</p>}
+                    {!attachment && <p className="mt-1 text-sm text-ink-subtle">{t('feedbackImageHelp')}</p>}
                   </div>
 
-                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-within:ring-2 focus-within:ring-sky-500">
+                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-medium text-ink-body transition-colors hover:bg-hover-soft focus-within:ring-2 focus-within:ring-sky-500">
                     {attachment ? <Paperclip className="h-4 w-4" /> : <ImagePlus className="h-4 w-4" />}
                     {attachment ? t('feedbackReplaceImage') : t('feedbackAttachImage')}
                     <input
@@ -327,7 +327,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }: {
                 {attachment && (
                   <div className="mt-5">
                     {attachmentPreviewUrl && (
-                      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                      <div className="overflow-hidden rounded-2xl border border-line bg-surface-soft">
                         {isVideoAttachment ? (
                           <video src={attachmentPreviewUrl} controls className="max-h-72 w-full bg-slate-950 object-contain" />
                         ) : (
@@ -338,7 +338,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }: {
 
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-slate-700">{attachmentLabel}</p>
+                        <p className="truncate text-sm font-medium text-ink-body">{attachmentLabel}</p>
                       </div>
                       <button
                         type="button"
@@ -365,7 +365,7 @@ const FeedbackModal = ({ t, onClose, feedbackLimits, restoreFocusRef }: {
           <div className="w-full">
             {submitError && <InlineAlert className="mb-3">{submitError}</InlineAlert>}
             <div className="flex items-center justify-between gap-4">
-              <button type="button" onClick={onClose} disabled={submitting} className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={onClose} disabled={submitting} className="rounded-xl border border-line bg-surface px-5 py-3 text-sm font-medium text-ink-body hover:bg-hover-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-50">
                 {sent ? t('close') : t('cancel')}
               </button>
               {!sent && (

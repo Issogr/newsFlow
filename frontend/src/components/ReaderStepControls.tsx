@@ -58,25 +58,25 @@ const ReaderStepControls = <T extends string>({
   };
 
   return (
-    <div className={`${className} h-11 items-center gap-1 rounded-xl border border-slate-200 bg-white px-1`} role="group" aria-label={groupLabel}>
+    <div className={`${className} h-11 items-center gap-1 rounded-xl border border-line bg-surface px-1`} role="group" aria-label={groupLabel}>
       <button
         type="button"
         onClick={() => updateValue(order[Math.max(valueIndex - 1, 0)])}
         disabled={valueIndex === 0}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-lg font-medium text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-lg font-medium text-ink-subtle transition-colors hover:bg-surface-inset hover:text-ink-heading disabled:cursor-not-allowed disabled:opacity-40"
         aria-label={decreaseLabel}
         title={decreaseLabel}
       >
         -
       </button>
-      <span className="inline-flex min-w-8 items-center justify-center text-center text-xs font-semibold tracking-[0.04em] text-slate-500 sm:min-w-[2.5rem] sm:text-sm sm:tracking-[0.08em]" aria-hidden="true">
+      <span className="inline-flex min-w-8 items-center justify-center text-center text-xs font-semibold tracking-[0.04em] text-ink-subtle sm:min-w-[2.5rem] sm:text-sm sm:tracking-[0.08em]" aria-hidden="true">
         {indicator}
       </span>
       <button
         type="button"
         onClick={() => updateValue(order[Math.min(valueIndex + 1, order.length - 1)])}
         disabled={valueIndex === order.length - 1}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-lg font-medium text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-lg font-medium text-ink-subtle transition-colors hover:bg-surface-inset hover:text-ink-heading disabled:cursor-not-allowed disabled:opacity-40"
         aria-label={increaseLabel}
         title={increaseLabel}
       >

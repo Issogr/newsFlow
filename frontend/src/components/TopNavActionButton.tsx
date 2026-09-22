@@ -19,7 +19,7 @@ const TopNavActionButton = ({
   icon: Icon,
   label,
   active = false,
-  activeClassName = 'text-slate-900',
+  activeClassName = 'text-ink-heading',
   sizeClassName = 'h-12 min-w-14 rounded-xl px-2',
   badge = null,
   badgeClassName = 'bg-slate-800 text-white',
@@ -34,10 +34,10 @@ const TopNavActionButton = ({
 }: TopNavActionButtonProps) => {
   const hasLabel = label !== null && label !== undefined && label !== '';
   const stateClassName = disabled
-    ? 'cursor-not-allowed text-slate-300'
+    ? 'cursor-not-allowed text-ink-disabled'
     : active
-      ? `${activeClassName} bg-slate-50`
-      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700';
+      ? `${activeClassName} bg-surface-soft`
+      : 'text-ink-subtle hover:bg-hover-soft hover:text-ink-hover';
 
   return (
     <button

@@ -160,11 +160,11 @@ const SettingsExclusionsSection = ({
                   }}
                   aria-disabled={saving}
                   aria-pressed={isShown}
-                  className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ${isShown ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
+                  className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ${isShown ? 'border-sky-200 bg-sky-50 text-sky-950' : 'border-line bg-surface text-ink-subtle hover:bg-hover-soft'}`}
                 >
                   <SourceIcon source={source} className="h-8 w-8" />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{source.name}</span>
-                  <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${isShown ? 'bg-sky-600 text-white' : 'bg-slate-200 text-transparent'}`} aria-hidden="true">
+                  <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${isShown ? 'bg-sky-600 text-white' : 'bg-surface-inset text-transparent'}`} aria-hidden="true">
                     <Check className="h-3.5 w-3.5" />
                   </span>
                 </button>
@@ -186,10 +186,10 @@ const SettingsExclusionsSection = ({
               </div>
 
               {containsEditingSource ? (
-                <div className="mt-3 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mt-3 space-y-3 rounded-2xl border border-line bg-surface-soft p-4">
                   <div className="grid gap-3 md:grid-cols-2">
                     <label className="block">
-                      <span className="mb-2 block text-sm font-medium text-slate-700">{t('sourceName')}</span>
+                      <span className="mb-2 block text-sm font-medium text-ink-body">{t('sourceName')}</span>
                       <input
                         value={editingSourceForm.name}
                         onChange={(event) => onEditingSourceFormChange((current) => ({ ...current, name: event.target.value }))}
@@ -198,7 +198,7 @@ const SettingsExclusionsSection = ({
                       />
                     </label>
                     <label className="block">
-                      <span className="mb-2 block text-sm font-medium text-slate-700">{t('language')}</span>
+                      <span className="mb-2 block text-sm font-medium text-ink-body">{t('language')}</span>
                       <select
                         value={editingSourceForm.language}
                         onChange={(event) => onEditingSourceFormChange((current) => ({ ...current, language: event.target.value }))}
@@ -212,7 +212,7 @@ const SettingsExclusionsSection = ({
                     </label>
                   </div>
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-slate-700">{t('rssUrl')}</span>
+                    <span className="mb-2 block text-sm font-medium text-ink-body">{t('rssUrl')}</span>
                     <input
                       type="url"
                       inputMode="url"
@@ -223,7 +223,7 @@ const SettingsExclusionsSection = ({
                     />
                   </label>
                   <div className="flex flex-wrap items-center gap-3">
-                    <button type="button" onClick={onCancelEditSource} disabled={saving} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60">
+                    <button type="button" onClick={onCancelEditSource} disabled={saving} className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-body hover:bg-hover-raised disabled:opacity-60">
                       {t('cancel')}
                     </button>
                   </div>
@@ -250,7 +250,7 @@ const SettingsExclusionsSection = ({
                             onToggleSubFeed(subSource.id);
                           }}
                           aria-pressed={isSubSourceShown}
-                          className={`inline-flex min-w-0 flex-1 items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors disabled:opacity-60 ${isSubSourceShown ? 'border-sky-200 bg-white text-sky-950' : 'border-slate-200 bg-slate-100 text-slate-500'}`}
+                          className={`inline-flex min-w-0 flex-1 items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors disabled:opacity-60 ${isSubSourceShown ? 'border-sky-200 bg-surface text-sky-950' : 'border-line bg-surface-raised text-ink-subtle'}`}
                         >
                           <SourceIcon source={{ ...source, iconUrl: subSource.iconUrl || source.iconUrl }} className="h-6 w-6" />
                           <span className="min-w-0 flex-1 truncate text-left">{subSourceName}</span>

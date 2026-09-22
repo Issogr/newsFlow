@@ -22,13 +22,13 @@ const UnsavedSettingsDialog = ({ t, saving, onCancel, onDiscard, onSave }: { t: 
     onRequestClose={onCancel}
     role="alertdialog"
   >
-    <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl" data-modal-content>
-      <h2 id="unsaved-settings-title" className="text-xl font-semibold text-slate-900 focus:outline-none" data-modal-title tabIndex={-1}>
+    <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-xl" data-modal-content>
+      <h2 id="unsaved-settings-title" className="text-xl font-semibold text-ink-heading focus:outline-none" data-modal-title tabIndex={-1}>
         {t('unsavedSettingsTitle')}
       </h2>
-      <p id="unsaved-settings-message" className="mt-3 text-sm leading-6 text-slate-600">{t('unsavedSettingsMessage')}</p>
+      <p id="unsaved-settings-message" className="mt-3 text-sm leading-6 text-ink-muted">{t('unsavedSettingsMessage')}</p>
       <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
-        <button type="button" onClick={onCancel} disabled={saving} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+        <button type="button" onClick={onCancel} disabled={saving} className="rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-medium text-ink-body hover:bg-hover-soft disabled:opacity-60">
           {t('continueEditing')}
         </button>
         <button type="button" onClick={onDiscard} disabled={saving} className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60">
@@ -205,7 +205,7 @@ const SettingsPanel = ({ t, currentUser, availableSources, onClose, patchSession
             href={releaseMetadata.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
+            className="text-sm font-medium text-ink-subtle transition-colors hover:text-ink-heading"
           >
             {t('changelogTitle')}
           </a>

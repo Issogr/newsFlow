@@ -14,7 +14,7 @@ import type { CurrentUser, Locale, ThematicSummary, Translator } from '../types'
 
 type SummarySource = NonNullable<ThematicSummary['sources']>[number];
 
-const metadataChipClassName = 'inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600';
+const metadataChipClassName = 'inline-flex items-center gap-2 rounded-full bg-surface-raised px-3 py-1.5 text-xs font-medium text-ink-muted';
 const MOBILE_SUMMARY_SWIPE_QUERY = '(max-width: 767px)';
 const SUMMARY_SWIPE_MIN_DISTANCE = 60;
 const SUMMARY_SWIPE_AXIS_RATIO = 1.35;
@@ -338,10 +338,10 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
       labelledBy="thematic-summary-panel-title"
       onClose={onClose}
       overlayClassName="fixed inset-0 z-50 h-[100dvh] w-full overflow-hidden overscroll-none bg-slate-950/35 backdrop-blur-sm"
-      panelClassName="flex h-full w-full flex-col overflow-hidden bg-white shadow-xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(64rem,calc(100vw-2rem))] lg:rounded-2xl lg:border lg:border-slate-200"
+      panelClassName="flex h-full w-full flex-col overflow-hidden bg-surface shadow-xl lg:m-4 lg:h-[calc(100dvh-2rem)] lg:w-[min(64rem,calc(100vw-2rem))] lg:rounded-2xl lg:border lg:border-line"
     >
           <div
-            className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain bg-white pb-[calc(1.5rem+env(safe-area-inset-bottom))] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-6 sm:pl-[calc(1.25rem+env(safe-area-inset-left))] sm:pr-[calc(1.25rem+env(safe-area-inset-right))] md:pb-[calc(2rem+env(safe-area-inset-bottom))] md:pt-8 lg:pl-[calc(1.5rem+env(safe-area-inset-left))] lg:pr-[calc(1.5rem+env(safe-area-inset-right))]"
+            className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain bg-surface pb-[calc(1.5rem+env(safe-area-inset-bottom))] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-6 sm:pl-[calc(1.25rem+env(safe-area-inset-left))] sm:pr-[calc(1.25rem+env(safe-area-inset-right))] md:pb-[calc(2rem+env(safe-area-inset-bottom))] md:pt-8 lg:pl-[calc(1.5rem+env(safe-area-inset-left))] lg:pr-[calc(1.5rem+env(safe-area-inset-right))]"
             onTouchCancel={handleTouchCancel}
             onTouchEnd={handleTouchEnd}
             onTouchMove={handleTouchMove}
@@ -352,13 +352,13 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
               data-testid="thematic-summary-swipe-frame"
               style={swipeFeedbackStyle}
             >
-              <div className="border-b border-slate-200 pb-6 md:pb-7">
+              <div className="border-b border-line pb-6 md:pb-7">
                 <div className="flex items-center gap-3">
                   <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${primaryPresentation.iconBadgeClassName}`}>
                     <PrimaryIcon className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div className="min-w-0">
-                    <h2 className="text-pretty text-2xl font-semibold leading-tight tracking-tight text-stone-900 md:text-[2rem] md:leading-[1.15]">
+                    <h2 className="text-pretty text-2xl font-semibold leading-tight tracking-tight text-reader-heading md:text-[2rem] md:leading-[1.15]">
                       {localizedSummary.displayTopicLabel}
                     </h2>
                   </div>

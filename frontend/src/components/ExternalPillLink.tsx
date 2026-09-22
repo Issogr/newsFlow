@@ -1,7 +1,7 @@
 import { ExternalLink } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-const DEFAULT_EXTERNAL_PILL_LINK_CLASS_NAME = 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100';
+const DEFAULT_EXTERNAL_PILL_LINK_CLASS_NAME = 'border-line bg-surface text-ink-body hover:bg-hover-raised';
 
 const ExternalPillLink = ({
   href,

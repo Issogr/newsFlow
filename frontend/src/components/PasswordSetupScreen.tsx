@@ -105,19 +105,19 @@ const PasswordSetupScreen = ({ t, token, onComplete }: { t: Translator; token: s
 
   return (
     <AuthCard subtitle={subtitle}>
-      <div className="mb-6 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+      <div className="mb-6 flex items-start gap-3 rounded-2xl border border-line bg-surface-soft px-4 py-4">
         <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${isAdminBootstrap ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>
           {isAdminBootstrap ? <ShieldCheck className="h-5 w-5" /> : <KeyRound className="h-5 w-5" />}
         </span>
         <div>
-          <p className="text-sm font-semibold text-slate-900">{title}</p>
-          {tokenDetails?.username && <p className="mt-1 text-sm text-slate-600">{t('passwordSetupAccount', { username: tokenDetails.username })}</p>}
-          {expiresAtLabel && <p className="mt-1 text-xs text-slate-500">{expiresAtLabel}</p>}
+          <p className="text-sm font-semibold text-ink-heading">{title}</p>
+          {tokenDetails?.username && <p className="mt-1 text-sm text-ink-muted">{t('passwordSetupAccount', { username: tokenDetails.username })}</p>}
+          {expiresAtLabel && <p className="mt-1 text-xs text-ink-subtle">{expiresAtLabel}</p>}
         </div>
       </div>
 
       {loading ? (
-        <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">{t('validatingSetupLink')}</div>
+        <div className="rounded-2xl bg-surface-soft px-4 py-3 text-sm text-ink-subtle">{t('validatingSetupLink')}</div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <AuthTextInput
@@ -133,7 +133,7 @@ const PasswordSetupScreen = ({ t, token, onComplete }: { t: Translator; token: s
             disabled={!tokenDetails || submitting}
           />
 
-          <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">{t('passwordHelp')}</p>
+          <p className="rounded-2xl bg-surface-soft px-4 py-3 text-sm text-ink-subtle">{t('passwordHelp')}</p>
 
           {error && (
             <InlineAlert>

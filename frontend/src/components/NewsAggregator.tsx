@@ -56,22 +56,22 @@ const SKELETON_CARD_COUNT = 6;
 
 function NewsCardSkeleton({ showImage }: { showImage: boolean }) {
   return (
-    <article className="relative flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white md:h-full" aria-hidden="true">
+    <article className="relative flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-line bg-surface md:h-full" aria-hidden="true">
       <div className="flex min-w-0 items-center gap-2 px-4 pt-4 sm:gap-3 sm:px-5 sm:pt-5">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <div className="h-8 w-8 shrink-0 rounded-full bg-sky-100 sm:h-9 sm:w-9" />
           <div className="flex-1 space-y-2">
-            <div className="h-3.5 w-2/5 rounded-full bg-slate-200" />
-            <div className="h-3 w-3/5 rounded-full bg-slate-100" />
+            <div className="h-3.5 w-2/5 rounded-full bg-surface-inset" />
+            <div className="h-3 w-3/5 rounded-full bg-surface-raised" />
           </div>
         </div>
       </div>
       <div className="space-y-3 px-4 py-4 sm:px-5 md:min-h-22">
-        <div className="h-4 w-full rounded-full bg-slate-200" />
-        <div className="h-4 w-4/5 rounded-full bg-slate-200" />
+        <div className="h-4 w-full rounded-full bg-surface-inset" />
+        <div className="h-4 w-4/5 rounded-full bg-surface-inset" />
       </div>
       {showImage ? (
-        <div className="mt-auto aspect-video w-full border-y border-slate-100 bg-slate-200" />
+        <div className="mt-auto aspect-video w-full border-y border-line-soft bg-surface-inset" />
       ) : null}
       <div className="mt-auto flex items-center justify-between gap-2 px-3 py-2 sm:px-4">
         <div className="flex -space-x-2">
@@ -79,9 +79,9 @@ function NewsCardSkeleton({ showImage }: { showImage: boolean }) {
           <div className="h-8 w-8 rounded-full bg-violet-100" />
         </div>
         <div className="flex gap-1.5 sm:gap-2">
-          <div className="h-11 w-11 rounded-xl border border-slate-200" />
-          <div className="h-11 w-11 rounded-xl border border-slate-200" />
-          <div className="h-11 w-11 rounded-xl border border-slate-200" />
+          <div className="h-11 w-11 rounded-xl border border-line" />
+          <div className="h-11 w-11 rounded-xl border border-line" />
+          <div className="h-11 w-11 rounded-xl border border-line" />
         </div>
       </div>
     </article>
@@ -105,7 +105,7 @@ function UserMenuItem({ icon: Icon, label, onClick, className = '', iconClassNam
     <button
       type="button"
       onClick={onClick}
-      className={className || 'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50'}
+      className={className || 'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-body transition-colors hover:bg-hover-soft'}
       role="menuitem"
     >
       <span className="flex items-center gap-3">
@@ -766,9 +766,9 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
   };
 
   return (
-    <div className="min-h-screen overflow-x-clip bg-canvas text-slate-900">
+    <div className="min-h-screen overflow-x-clip bg-canvas text-ink-heading">
       <header className="sticky top-0 z-50 bg-surface pt-[env(safe-area-inset-top)]">
-        <div className="border-b border-slate-200">
+        <div className="border-b border-line">
           <div className={`mx-auto flex max-w-7xl flex-col px-4 transition-[padding] duration-200 lg:px-6 ${topNavCompact ? 'py-2' : 'py-3'}`}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
@@ -906,9 +906,9 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
         ) : error ? (
           <ErrorMessage error={error} onRetry={() => loadNews({ page: 1, append: false, forceRefresh: true })} t={t} />
         ) : visibleNews.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center">
-            <h2 className="text-xl font-semibold text-slate-800">{isReadLaterView ? t('readLaterEmptyTitle') : t('noNewsTitle')}</h2>
-            <p className="mt-2 text-slate-500">{isReadLaterView ? t('readLaterEmptyText') : t('noNewsText')}</p>
+          <div className="rounded-2xl border border-line bg-surface px-6 py-12 text-center">
+            <h2 className="text-xl font-semibold text-ink-emphasis">{isReadLaterView ? t('readLaterEmptyTitle') : t('noNewsTitle')}</h2>
+            <p className="mt-2 text-ink-subtle">{isReadLaterView ? t('readLaterEmptyText') : t('noNewsText')}</p>
           </div>
         ) : (
           <>
@@ -947,7 +947,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
               {canLoadMore ? (
                 <div
                   ref={loadMoreSentinelRef}
-                  className="inline-flex items-center px-5 py-3 text-sm font-medium text-slate-500"
+                  className="inline-flex items-center px-5 py-3 text-sm font-medium text-ink-subtle"
                   role="status"
                   aria-label={t('loadingMore')}
                 >
@@ -958,7 +958,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
                   </span>
                 </div>
               ) : (
-                <p className="text-sm text-slate-500">{t('noMoreResults')}</p>
+                <p className="text-sm text-ink-subtle">{t('noMoreResults')}</p>
               )}
             </div>
           </>

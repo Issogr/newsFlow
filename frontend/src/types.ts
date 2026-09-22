@@ -145,7 +145,6 @@ export interface ThematicSummary {
   isStale?: boolean;
   summaryTextByLocale?: Partial<Record<Locale, string>>;
   summaryText?: string;
-  summarySlot?: string;
   status?: string;
   sources?: Array<{ index?: number; source?: string; title?: string; url?: string; [key: string]: unknown }>;
   [key: string]: unknown;

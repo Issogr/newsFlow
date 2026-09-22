@@ -37,8 +37,15 @@ describe('networkConfig utils', () => {
     ['local network hostname', 'http://fedora.local', ['@local-network'], true],
     ['private IPv4 address', 'http://192.168.1.188', ['@local-network'], true],
     ['private IPv4 address with port', 'http://10.0.0.25:8080', ['@local-network'], true],
+    ['loopback IPv4 address', 'http://127.0.0.2', ['@local-network'], true],
+    ['first private 172 subnet', 'http://172.16.0.1', ['@local-network'], true],
+    ['last private 172 subnet', 'http://172.31.255.255', ['@local-network'], true],
+    ['before private 172 range', 'http://172.15.255.255', ['@local-network'], false],
+    ['after private 172 range', 'http://172.32.0.1', ['@local-network'], false],
+    ['invalid IPv4 address', 'http://192.168.999.1', ['@local-network'], false],
     ['wildcard local origin', 'http://fedora.local', ['http://*.local'], true],
     ['wildcard subdomain origin', 'https://app.example.com', ['https://*.example.com'], true],
+    ['literal dots in wildcard origin', 'https://appXexample.com', ['https://*.example.com'], false],
     ['non-whitelisted origin', 'https://denied.example', ['https://allowed.example'], false],
     ['public origin with local-network token', 'https://public.example', ['@local-network'], false]
   ])('isOriginAllowed handles %s', (label, origin, allowedOrigins, expected) => {

@@ -16,7 +16,7 @@ const SettingsPreferencesSection = ({
     <SettingsSectionCard icon={Radio} title={t('preferences')} iconToneClassName="text-sky-600">
       <div className="grid gap-x-5 gap-y-6 md:grid-cols-2">
         <label className="block">
-          <span className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+          <span className="mb-2 flex items-center gap-2 text-sm font-medium text-ink-body">
             <Globe2 className="h-4 w-4 text-sky-600" />
             {t('defaultLanguageSetting')}
           </span>
@@ -33,7 +33,7 @@ const SettingsPreferencesSection = ({
         </label>
 
         <label className="block">
-          <span className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+          <span className="mb-2 flex items-center gap-2 text-sm font-medium text-ink-body">
             <MonitorSmartphone className="h-4 w-4 text-violet-600" />
             {t('themeModeSetting')}
           </span>
@@ -49,11 +49,11 @@ const SettingsPreferencesSection = ({
           </select>
         </label>
 
-        <fieldset disabled={saving} className="grid gap-x-5 gap-y-6 border-t border-slate-200 pt-5 md:col-span-2 md:grid-cols-2">
-          <legend className="mb-4 text-sm font-semibold text-slate-900">{t('readingSettings')}</legend>
+        <fieldset disabled={saving} className="grid gap-x-5 gap-y-6 border-t border-line pt-5 md:col-span-2 md:grid-cols-2">
+          <legend className="mb-4 text-sm font-semibold text-ink-heading">{t('readingSettings')}</legend>
 
           <label className="block">
-            <span className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <span className="mb-2 flex items-center gap-2 text-sm font-medium text-ink-body">
               <PanelRightOpen className="h-4 w-4 text-indigo-600" />
               {t('readerPanelPositionSetting')}
             </span>
@@ -69,7 +69,7 @@ const SettingsPreferencesSection = ({
           </label>
 
           <label className="block">
-            <span className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <span className="mb-2 flex items-center gap-2 text-sm font-medium text-ink-body">
               <Type className="h-4 w-4 text-rose-600" />
               {t('readerTextSizeSetting')}
             </span>
@@ -85,7 +85,7 @@ const SettingsPreferencesSection = ({
           </label>
 
           <label className="block">
-            <span className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <span className="mb-2 flex items-center gap-2 text-sm font-medium text-ink-body">
               <MoveHorizontal className="h-4 w-4 text-cyan-600" />
               {t('readerTextWidthSetting')}
             </span>
@@ -101,7 +101,7 @@ const SettingsPreferencesSection = ({
           </label>
 
           <div className="flex items-center justify-between gap-4 md:col-span-2">
-            <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-700">
+            <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-ink-body">
               <ImageIcon className="h-4 w-4 shrink-0 text-violet-600" />
               <span>{t('showNewsImagesSetting')}</span>
             </span>
@@ -114,11 +114,11 @@ const SettingsPreferencesSection = ({
               className={`inline-flex h-8 w-14 shrink-0 items-center rounded-full border p-1 transition-colors ${
                 showNewsImagesEnabled
                   ? 'border-emerald-200 bg-emerald-500/90 hover:bg-emerald-500'
-                  : 'border-slate-200 bg-slate-300 hover:bg-slate-400'
+                  : 'border-line bg-surface-disabled hover:bg-hover-strong'
               }`}
             >
               <span
-                className={`h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${
+                className={`h-6 w-6 rounded-full bg-[light-dark(white,var(--color-slate-50))] shadow-sm transition-transform ${
                   showNewsImagesEnabled ? 'translate-x-6' : 'translate-x-0'
                 }`}
                 aria-hidden="true"

@@ -3,10 +3,8 @@ const {
   extractRegistrableDomain,
   getCanonicalSourceMetadata,
   getCanonicalSourceId,
-  getCanonicalSourceName,
   getConfiguredSourceGroups,
-  getSourceAliases,
-  getSourceVariantLabel
+  getSourceAliases
 } = sourceCatalog;
 
 describe('sourceCatalog domain grouping', () => {
@@ -50,8 +48,7 @@ describe('sourceCatalog domain grouping', () => {
       subSource: null
     });
     expect(getCanonicalSourceId('bbc_home', 'BBC News - Home')).toBe('bbci.co.uk');
-    expect(getCanonicalSourceName('bbc_home', 'BBC News - Home')).toBe('BBC News');
-    expect(getSourceVariantLabel('bbc_world', 'BBC News - World')).toBe('World');
+    expect(getCanonicalSourceMetadata('bbc_home', 'BBC News - Home').sourceName).toBe('BBC News');
 
     expect(getSourceAliases('ansa.it', '').ids).toEqual(expect.arrayContaining(['ansa.it', 'ansa', 'ansa_home', 'ansa_mondo']));
   });

@@ -5,9 +5,6 @@ const { isOpenRouterFeatureEnabled } = aiFeatures;
 const {
   estimateTokenCountFromChars,
   extractUsage,
-  getChatOutputCharCount,
-  getChatPromptCharCount,
-  getFinishReason,
   logAiRequestMetric
 } = aiMetrics;
 import type { AppError, DynamicRecord } from '../utils/types';
@@ -36,10 +33,6 @@ interface OpenRouterConfig {
   timeoutMs: number;
 }
 
-interface HeaderMap extends DynamicRecord {
-  get?: (name: string) => unknown;
-}
-
 interface OpenRouterErrorRecord {
   code?: unknown;
   error?: {
@@ -49,38 +42,27 @@ interface OpenRouterErrorRecord {
       provider_code?: unknown;
     };
   };
-  headers?: HeaderMap;
+  headers?: Headers;
   message?: string;
   name?: string;
-  response?: {
-    headers?: HeaderMap;
-    status?: unknown;
-  };
-  status?: unknown;
   statusCode?: unknown;
 }
 
 interface ChatMessage extends DynamicRecord {
   content?: unknown;
-  text?: unknown;
 }
 
 interface ChatChoice extends DynamicRecord {
   error?: DynamicRecord;
+  finish_reason?: unknown;
   message?: ChatMessage;
-  text?: unknown;
 }
 
 interface ChatResponse extends DynamicRecord {
   choices?: ChatChoice[];
-  content?: unknown;
   error?: DynamicRecord;
   id?: unknown;
-  message?: ChatMessage;
   model?: unknown;
-  outputText?: unknown;
-  output_text?: unknown;
-  serviceTier?: unknown;
   service_tier?: unknown;
   usage?: DynamicRecord;
 }
@@ -126,23 +108,12 @@ function getOpenRouterConfig({
 }
 
 function getErrorStatus(error: OpenRouterErrorRecord = {}) {
-  const status = Number(error.statusCode ?? error.response?.status ?? error.status);
+  const status = Number(error.statusCode);
   return Number.isInteger(status) ? status : null;
 }
 
-function getErrorHeader(error: OpenRouterErrorRecord = {}, name = '') {
-  const headers = error.headers || error.response?.headers || {};
-  if (typeof headers.get === 'function') {
-    return headers.get(name);
-  }
-
-  const normalizedName = String(name || '').toLowerCase();
-  const key = Object.keys(headers).find((candidate) => candidate.toLowerCase() === normalizedName);
-  return key ? headers[key] : null;
-}
-
 function getRetryAfterMs(error: OpenRouterErrorRecord = {}, now = Date.now()) {
-  const value = String(getErrorHeader(error, 'retry-after') || '').trim();
+  const value = (error.headers?.get('retry-after') || '').trim();
   if (!value) {
     return 0;
   }
@@ -231,38 +202,12 @@ function assertOpenRouterRequestAllowed(model: unknown, now = Date.now()) {
   throw error;
 }
 
-function extractContentPart(value: unknown): string {
-  if (!value) {
-    return '';
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(extractContentPart).filter(Boolean).join('\n');
-  }
-
-  if (typeof value === 'object') {
-    const content = value as DynamicRecord;
-    return extractContentPart(content.text || content.content || content.outputText || content.output_text);
-  }
-
-  return '';
-}
-
 function extractAssistantContent(response: ChatResponse = {}) {
-  const choice = response.choices?.[0] || {};
-  return extractContentPart(
-    choice.message?.content
-      || choice.message?.text
-      || choice.text
-      || response.outputText
-      || response.output_text
-      || response.message?.content
-      || response.content
-  );
+  const content = response.choices?.[0]?.message?.content;
+  if (typeof content === 'string') return content;
+  return Array.isArray(content)
+    ? content.map((part) => typeof part?.text === 'string' ? part.text : '').filter(Boolean).join('\n')
+    : '';
 }
 
 function parseJsonContent(content: unknown): unknown {
@@ -333,7 +278,7 @@ async function sendJsonChatCompletion(config: OpenRouterConfig, chatRequest: Cha
   const request = buildJsonChatRequest(chatRequest);
   assertOpenRouterRequestAllowed(request.model || options.metrics?.model);
   const startedAt = Date.now();
-  const promptChars = getChatPromptCharCount(request);
+  const promptChars = request.messages.reduce((total, message) => total + message.content.length, 0);
   const baseMetric = {
     provider: 'openrouter',
     type: 'chat_completion',
@@ -346,9 +291,9 @@ async function sendJsonChatCompletion(config: OpenRouterConfig, chatRequest: Cha
 
   try {
     const response = await sendChatCompletion(config, request, options);
-    const outputChars = getChatOutputCharCount(response);
+    const outputChars = extractAssistantContent(response).length;
     const usage = extractUsage(response);
-    const finishReason = getFinishReason(response);
+    const finishReason = String(response.choices?.[0]?.finish_reason || '').trim() || null;
     if (finishReason === 'error' || finishReason === 'content_filter') {
       const responseError = response.error || response.choices?.[0]?.error || {};
       const error = new Error(String(responseError.message || 'OpenRouter returned an error completion')) as CompletionError;
@@ -369,7 +314,7 @@ async function sendJsonChatCompletion(config: OpenRouterConfig, chatRequest: Cha
       finishReason,
       generationId: response.id,
       resolvedModel: response.model,
-      serviceTier: response.serviceTier || response.service_tier,
+      serviceTier: response.service_tier,
       ...(usage || {})
     });
 
@@ -377,7 +322,7 @@ async function sendJsonChatCompletion(config: OpenRouterConfig, chatRequest: Cha
 
     return response;
   } catch (error) {
-    const requestError = error as AppError & OpenRouterErrorRecord;
+    const requestError = error as OpenRouterErrorRecord;
     const backoffMs = recordOpenRouterFailure(request.model || options.metrics?.model, requestError);
     logAiRequestMetric({
       ...baseMetric,

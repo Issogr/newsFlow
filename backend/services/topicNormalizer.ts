@@ -137,10 +137,6 @@ function cleanTopicValue(topic: unknown) {
     .trim();
 }
 
-function escapeRegex(value: unknown) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 function containsCleanPhrase(text: string, phrase: string) {
   const normalizedPhrase = cleanTopicValue(phrase);
   if (!normalizedPhrase) {
@@ -151,7 +147,7 @@ function containsCleanPhrase(text: string, phrase: string) {
     return true;
   }
 
-  return new RegExp(`(^|\\s)${escapeRegex(normalizedPhrase)}(\\s|$)`, 'u').test(text);
+  return new RegExp(`(^|\\s)${RegExp.escape(normalizedPhrase)}(\\s|$)`, 'u').test(text);
 }
 
 function topicAliasMatches(cleaned: string, alias: string) {

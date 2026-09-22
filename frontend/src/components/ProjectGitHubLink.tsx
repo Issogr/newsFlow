@@ -4,7 +4,7 @@ const ProjectGitHubLink = () => (
     target="_blank"
     rel="noopener noreferrer"
     aria-label="GitHub"
-    className="inline-flex items-center justify-center rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+    className="inline-flex items-center justify-center rounded-xl p-2 text-ink-subtle transition-colors hover:bg-hover-raised hover:text-ink-heading"
   >
     <svg
       xmlns="http://www.w3.org/2000/svg"

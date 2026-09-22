@@ -1,23 +1,12 @@
+import { BlockList } from 'node:net';
+
 const DEFAULT_PROD_ORIGINS = ['http://localhost', 'http://localhost:80', 'http://127.0.0.1', 'http://127.0.0.1:80'];
 
-function isPrivateIpv4Hostname(hostname: string) {
-  const ipv4Pattern = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
-  const match = String(hostname || '').match(ipv4Pattern);
-
-  if (!match) {
-    return false;
-  }
-
-  const octets = match.slice(1).map(Number);
-  if (octets.some((octet) => octet < 0 || octet > 255)) {
-    return false;
-  }
-
-  return octets[0] === 10
-    || octets[0] === 127
-    || (octets[0] === 192 && octets[1] === 168)
-    || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31);
-}
+const localIpv4Addresses = new BlockList();
+localIpv4Addresses.addSubnet('10.0.0.0', 8, 'ipv4');
+localIpv4Addresses.addSubnet('127.0.0.0', 8, 'ipv4');
+localIpv4Addresses.addSubnet('192.168.0.0', 16, 'ipv4');
+localIpv4Addresses.addSubnet('172.16.0.0', 12, 'ipv4');
 
 function isLocalNetworkOrigin(origin: string) {
   try {
@@ -27,14 +16,10 @@ function isLocalNetworkOrigin(origin: string) {
     return hostname === 'localhost'
       || hostname === '::1'
       || hostname.endsWith('.local')
-      || isPrivateIpv4Hostname(hostname);
+      || localIpv4Addresses.check(hostname, 'ipv4');
   } catch {
     return false;
   }
-}
-
-function escapeRegex(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function matchesAllowedOrigin(origin: string, allowedOrigin: string) {
@@ -47,7 +32,7 @@ function matchesAllowedOrigin(origin: string, allowedOrigin: string) {
   }
 
   if (allowedOrigin.includes('*')) {
-    const pattern = new RegExp(`^${escapeRegex(allowedOrigin).replace(/\\\*/g, '.*')}$`);
+    const pattern = new RegExp(`^${RegExp.escape(allowedOrigin).replace(/\\\*/g, '.*')}$`);
     return pattern.test(origin);
   }
 

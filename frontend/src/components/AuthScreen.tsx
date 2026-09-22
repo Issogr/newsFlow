@@ -99,14 +99,14 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }: { t: Translator; on
 
   return (
     <AuthCard subtitle={t('authSubtitle')}>
-      <div className="mb-6 grid grid-cols-2 rounded-2xl bg-slate-100 p-1 text-sm font-medium">
+      <div className="mb-6 grid grid-cols-2 rounded-2xl bg-surface-raised p-1 text-sm font-medium">
         <button
           type="button"
           onClick={() => {
             setMode('login');
             setClientError('');
           }}
-          className={`rounded-xl px-4 py-2.5 transition-colors ${mode === 'login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+          className={`rounded-xl px-4 py-2.5 transition-colors ${mode === 'login' ? 'bg-surface text-ink-heading shadow-sm' : 'text-ink-subtle'}`}
         >
           {t('signIn')}
         </button>
@@ -116,7 +116,7 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }: { t: Translator; on
             setMode('register');
             setClientError('');
           }}
-          className={`rounded-xl px-4 py-2.5 transition-colors ${mode === 'register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+          className={`rounded-xl px-4 py-2.5 transition-colors ${mode === 'register' ? 'bg-surface text-ink-heading shadow-sm' : 'text-ink-subtle'}`}
         >
           {t('createAccount')}
         </button>
@@ -147,7 +147,7 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }: { t: Translator; on
         />
 
         {mode === 'register' && (
-          <p className="text-sm leading-6 text-slate-500">{t('passwordHelp')}</p>
+          <p className="text-sm leading-6 text-ink-subtle">{t('passwordHelp')}</p>
         )}
 
         {Boolean(clientError || error) && (
@@ -168,7 +168,7 @@ const AuthScreen = ({ t, onLogin, onRegister, busy, error }: { t: Translator; on
           {mode === 'login' ? t('loginAction') : t('registerAction')}
         </button>
 
-        <div className="border-t border-slate-200 pt-4 text-xs leading-6 text-slate-500">
+        <div className="border-t border-line pt-4 text-xs leading-6 text-ink-subtle">
           <p>{t('technicalCookieNotice')}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <ExternalPillLink href="/privacy-policy">{t('privacyPolicyLink')}</ExternalPillLink>

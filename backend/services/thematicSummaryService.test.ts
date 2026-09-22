@@ -208,7 +208,7 @@ async function loadServiceWithMocks({
 }
 
 describe('thematic summary listing', () => {
-  test('adds generic slots to the latest topic summaries', async () => {
+  test('lists the latest topic summaries with their topic labels', async () => {
     const databaseMock = {
       listLatestThematicSummaries: jest.fn(() => [
         {
@@ -233,8 +233,7 @@ describe('thematic summary listing', () => {
       expect.objectContaining({
         id: 'summary-technology',
         topicKey: 'technology',
-        topicLabel: 'Technology',
-        summarySlot: 'evening'
+        topicLabel: 'Technology'
       })
     ]);
     expect(databaseMock.listLatestThematicSummaries).toHaveBeenCalledWith([

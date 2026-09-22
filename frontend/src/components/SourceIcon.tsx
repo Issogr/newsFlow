@@ -7,11 +7,11 @@ const getSourceInitial = (name = '') => String(name || '?').trim().charAt(0).toU
 const SourceIcon = ({ source, className = 'h-7 w-7' }: { source: Pick<NewsSource, 'name' | 'iconUrl'>; className?: string }) => {
   const [failedIconUrl, setFailedIconUrl] = useState('');
   const iconUrl = getSafeExternalUrl(source?.iconUrl);
-  const containerClassName = `inline-flex box-border shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200 ${className}`;
+  const containerClassName = `inline-flex box-border shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-raised ring-1 ring-inset ring-line-ring ${className}`;
 
   if (!iconUrl || failedIconUrl === iconUrl) {
     return (
-      <span aria-hidden="true" className={`${containerClassName} text-[0.68rem] font-semibold text-slate-600`}>
+      <span aria-hidden="true" className={`${containerClassName} text-[0.68rem] font-semibold text-ink-muted`}>
         {getSourceInitial(source?.name)}
       </span>
     );
