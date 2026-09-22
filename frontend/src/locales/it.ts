@@ -247,7 +247,7 @@ const it: TranslationDictionary = {
   loadingReader: 'Caricamento modalita lettura...',
   loadingThematicSummary: 'Caricamento sintesi IA...',
   readerUnavailable: 'La modalita lettura non e disponibile per questo articolo.',
-  readerFallback: 'Mostro il testo di fallback estratto dal feed.',
+  readerFallback: 'Non è stato possibile caricare l\'articolo completo. Questo testo proviene dal feed RSS dell\'editore e potrebbe essere incompleto. Apri l\'articolo originale per leggere di più.',
   readTime: ({ minutes }) => `${minutes} min di lettura`,
   sourceVersions: 'Versioni fonte',
   thematicSummariesTitle: 'Storie per topic',

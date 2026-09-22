@@ -3,6 +3,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Clock3,
+  Info,
   Newspaper,
   RefreshCw,
   Share2
@@ -274,6 +275,32 @@ const ReaderPanel = ({
         <>
           <ReaderTextWidthControls currentUser={currentUser} onChange={setReaderTextWidth} t={t} value={readerTextWidth} />
           <ReaderTextSizeControls currentUser={currentUser} onChange={setReaderTextSize} t={t} value={readerTextSize} />
+          <div className="relative inline-flex items-center">
+            <ShareStatusBubble
+              shareState={shareState}
+              t={t}
+              className="share-status-pill-from-button mr-2 max-w-[min(18rem,calc(100vw-6rem))]"
+            />
+            <button
+              type="button"
+              onClick={handleShare}
+              disabled={!safeOriginalUrl}
+              className="ui-icon-button"
+              aria-label={t('shareArticle')}
+            >
+              <Share2 className="h-4 w-4" />
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={refreshReader}
+            disabled={!selectedArticleId || loading}
+            className="ui-icon-button"
+            aria-label={t('refreshReader')}
+            title={t('refreshReader')}
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </>
       )}
       headerStart={headerStart}
@@ -289,64 +316,34 @@ const ReaderPanel = ({
                     {selectedArticle?.title || t('readerMode')}
                   </h2>
 
-                  <div className="mt-4 flex items-start gap-3">
-                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-3">
-                      {sourceVersionItems.length > 1 ? (
-                        <label className={`${sourceChipClassName} min-w-0 max-w-full`}>
-                          <Newspaper className="h-3.5 w-3.5 shrink-0" />
-                          <span className="sr-only">{t('sourceVersions')}</span>
-                          <select
-                            value={selectedArticle?.id || ''}
-                            onChange={(event) => setSelectedArticleId(event.target.value)}
-                            className="min-w-0 max-w-[14rem] bg-transparent text-xs font-medium text-sky-900 outline-none"
-                            aria-label={t('sourceVersions')}
-                          >
-                            {sourceVersionItems.map(({ item, label }) => (
-                              <option key={item.id} value={item.id}>{label}</option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : (
-                        <span className={`${sourceChipClassName} min-w-0 max-w-full`}>
-                          <Newspaper className="h-3.5 w-3.5 shrink-0" />
-                          <span className="min-w-0 truncate">{getArticleSourceLabel(selectedArticle)}</span>
-                        </span>
-                      )}
-                      {selectedReader?.minutesToRead && (
-                        <span className={`${readTimeChipClassName} shrink-0`}>
-                          <Clock3 className="h-3.5 w-3.5" />
-                          {t('readTime', { minutes: selectedReader.minutesToRead })}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <div className="relative inline-flex items-center">
-                        <ShareStatusBubble
-                          shareState={shareState}
-                          t={t}
-                          className="share-status-pill-from-button mr-2 max-w-[min(18rem,calc(100vw-6rem))]"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleShare}
-                          disabled={!safeOriginalUrl}
-                          className="ui-icon-button"
-                          aria-label={t('shareArticle')}
+                  <div className="mt-4 flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+                    {sourceVersionItems.length > 1 ? (
+                      <label className={`${sourceChipClassName} min-w-0 max-w-full`}>
+                        <Newspaper className="h-3.5 w-3.5 shrink-0" />
+                        <span className="sr-only">{t('sourceVersions')}</span>
+                        <select
+                          value={selectedArticle?.id || ''}
+                          onChange={(event) => setSelectedArticleId(event.target.value)}
+                          className="min-w-0 max-w-[14rem] bg-transparent text-xs font-medium text-sky-900 outline-none"
+                          aria-label={t('sourceVersions')}
                         >
-                          <Share2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={refreshReader}
-                        disabled={!selectedArticleId || loading}
-                        className="ui-icon-button"
-                        aria-label={t('refreshReader')}
-                        title={t('refreshReader')}
-                      >
-                        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                      </button>
-                    </div>
+                          {sourceVersionItems.map(({ item, label }) => (
+                            <option key={item.id} value={item.id}>{label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : (
+                      <span className={`${sourceChipClassName} min-w-0 max-w-full`}>
+                        <Newspaper className="h-3.5 w-3.5 shrink-0" />
+                        <span className="min-w-0 truncate">{getArticleSourceLabel(selectedArticle)}</span>
+                      </span>
+                    )}
+                    {selectedReader?.minutesToRead && (
+                      <span className={`${readTimeChipClassName} shrink-0`}>
+                        <Clock3 className="h-3.5 w-3.5" />
+                        {t('readTime', { minutes: selectedReader.minutesToRead })}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -371,8 +368,8 @@ const ReaderPanel = ({
                     )}
 
                     {selectedReader.fallback && (
-                      <div className="mb-8 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <div className="mb-8 inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                        <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
                         {t('readerFallback')}
                       </div>
                     )}

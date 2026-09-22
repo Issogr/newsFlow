@@ -151,14 +151,17 @@ describe('ReaderPanel', () => {
     const textSizeControls = screen.getByRole('group', { name: 'readerTextSizeSetting' });
     const textWidthControls = screen.getByRole('group', { name: 'readerTextWidthSetting' });
     const headerActions = textSizeControls.parentElement;
+    const shareButton = screen.getByRole('button', { name: 'shareArticle' });
+    const refreshButton = screen.getByRole('button', { name: 'refreshReader' });
     const closeButton = screen.getByRole('button', { name: 'closeReader' });
     expect(headerActions).toHaveClass('ml-auto', 'gap-1.5');
     expect(textWidthControls.nextElementSibling).toBe(textSizeControls);
     expect(textWidthControls).toHaveClass('hidden', 'sm:flex');
     expect(textWidthControls).toHaveTextContent('64ch');
-    expect(textSizeControls.nextElementSibling).toBe(closeButton);
-    expect(screen.getByRole('combobox', { name: 'sourceVersions' }).parentElement!.parentElement).toHaveClass('min-w-0', 'flex-1');
-    expect(screen.getByRole('button', { name: 'shareArticle' }).parentElement!.parentElement).toHaveClass('shrink-0');
+    expect(textSizeControls.nextElementSibling).toBe(shareButton.parentElement);
+    expect(shareButton.parentElement!.nextElementSibling).toBe(refreshButton);
+    expect(refreshButton.nextElementSibling).toBe(closeButton);
+    expect(screen.getByRole('combobox', { name: 'sourceVersions' }).parentElement!.parentElement).toHaveClass('min-w-0', 'flex-wrap');
     expect(fetchReaderArticle).toHaveBeenCalledWith('article-1', expect.objectContaining({
       refresh: false
     }));

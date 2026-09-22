@@ -247,7 +247,7 @@ const en: TranslationDictionary = {
   loadingReader: 'Loading reader view...',
   loadingThematicSummary: 'Loading AI summary...',
   readerUnavailable: 'Reader mode is not available for this article.',
-  readerFallback: 'Showing fallback text extracted from the feed.',
+  readerFallback: 'We couldn’t load the full article. This text is from the publisher’s RSS feed and may be incomplete. Open the original article to read more.',
   readTime: ({ minutes }) => `${minutes} min read`,
   sourceVersions: 'Source versions',
   thematicSummariesTitle: 'Topic stories',
