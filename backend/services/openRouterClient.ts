@@ -323,12 +323,7 @@ function buildJsonChatRequest(request: ChatRequest): ChatRequest {
     ...request,
     max_tokens: maxTokens,
     max_completion_tokens: request.max_completion_tokens ?? maxTokens,
-    reasoning: {
-      enabled: false,
-      effort: 'none',
-      max_tokens: 0,
-      ...(request.reasoning || {})
-    },
+    reasoning: request.reasoning || { enabled: false },
     response_format: request.response_format || { type: 'json_object' },
     stream: request.stream ?? false
   };

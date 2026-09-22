@@ -68,11 +68,7 @@ describe('aiTopicClassifier', () => {
     expect(status.topicsByArticleId.get('article-1').map((entry: { topic: string }) => entry.topic)).toEqual(['Tecnologia']);
     expect(requestBody.model).toBe('topic-classifier-model');
     expect(requestBody.response_format).toEqual({ type: 'json_object' });
-    expect(requestBody.reasoning).toEqual({
-      enabled: false,
-      effort: 'none',
-      max_tokens: 0,
-    });
+    expect(requestBody.reasoning).toEqual({ enabled: false });
     expect(requestBody.max_completion_tokens).toBe(440);
     expect(requestOptions.signal).toBeInstanceOf(AbortSignal);
     expect(fetchMock.mock.calls[0][0]).toBe('https://openrouter.ai/api/v1/chat/completions');

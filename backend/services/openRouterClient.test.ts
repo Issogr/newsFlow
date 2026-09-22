@@ -36,14 +36,20 @@ describe('openRouterClient', () => {
       method: 'POST', signal: expect.any(AbortSignal),
       headers: expect.objectContaining({ Authorization: 'Bearer test-key', 'Content-Type': 'application/json' })
     }));
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
       ...request, stream: false, max_completion_tokens: 20, response_format: { type: 'json_object' },
-      reasoning: { enabled: false, effort: 'none', max_tokens: 0 }
+      reasoning: { enabled: false }
     });
     expect(logger.info).toHaveBeenCalledWith('AI request metric', expect.objectContaining({
       model: 'test/model', resolvedModel: 'resolved/model', generationId: 'generation-1',
       serviceTier: 'default', cachedPromptTokens: 8, cost: 0.001, status: 'completed'
     }));
+  });
+
+  test.each([{ enabled: true }, { effort: 'low' }, { max_tokens: 512 }])('preserves explicit reasoning options without conflicting defaults: %j', async (reasoning) => {
+    fetchMock.mockResolvedValue(completed());
+    await openRouterClient.sendJsonChatCompletion(config, { ...request, reasoning });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).reasoning).toEqual(reasoning);
   });
 
   test('logs safe HTTP errors and opens model-specific backoff using Retry-After', async () => {
