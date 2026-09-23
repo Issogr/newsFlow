@@ -315,7 +315,6 @@ function App() {
             t={t}
             currentUser={authData}
             onLogout={handleLogout}
-            patchSession={patchSession}
           />
         ) : (
           <NewsAggregator

@@ -32,6 +32,7 @@ try {
 }
 
 websocketService.initialize(server);
+userService.startInactiveUserCleanupTimer();
 newsService.startScheduler();
 userService.startPublicApiUsageFlushTimer();
 startApiTokenUsageFlushTimer();
@@ -53,6 +54,7 @@ function shutdown(signal: NodeJS.Signals) {
   shuttingDown = true;
   logger.info(`${signal} ricevuto. Shutdown graceful in corso...`);
   newsService.stopScheduler();
+  userService.stopInactiveUserCleanupTimer();
   userService.stopPublicApiUsageFlushTimer();
   stopApiTokenUsageFlushTimer();
   try {

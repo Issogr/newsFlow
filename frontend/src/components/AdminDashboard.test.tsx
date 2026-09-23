@@ -1,22 +1,19 @@
-import { useState } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import AdminDashboard from './AdminDashboard';
 import { createTranslator } from '../i18n';
-import { createAdminPasswordSetupLink as createAdminPasswordSetupLinkImplementation, deleteAdminUser as deleteAdminUserImplementation, fetchAdminUsers as fetchAdminUsersImplementation, updateUserSettings as updateUserSettingsImplementation } from '../services/api';
+import { createAdminPasswordSetupLink as createAdminPasswordSetupLinkImplementation, deleteAdminUser as deleteAdminUserImplementation, fetchAdminUsers as fetchAdminUsersImplementation } from '../services/api';
 import type { AdminSummary, AdminUser, CurrentUser } from '../types';
 
 vi.mock('../services/api', () => ({
   fetchAdminUsers: vi.fn(),
   createAdminPasswordSetupLink: vi.fn(),
   deleteAdminUser: vi.fn(),
-  isRequestCanceled: vi.fn((error) => error?.code === 'ERR_CANCELED'),
-  updateUserSettings: vi.fn()
+  isRequestCanceled: vi.fn((error) => error?.code === 'ERR_CANCELED')
 }));
 
 const createAdminPasswordSetupLink = vi.mocked(createAdminPasswordSetupLinkImplementation);
 const deleteAdminUser = vi.mocked(deleteAdminUserImplementation);
 const fetchAdminUsers = vi.mocked(fetchAdminUsersImplementation);
-const updateUserSettings = vi.mocked(updateUserSettingsImplementation);
 
 describe('AdminDashboard', () => {
   const t = createTranslator('en');
@@ -85,7 +82,7 @@ describe('AdminDashboard', () => {
     }));
 
     try {
-      render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} patchSession={vi.fn()} />);
+      render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} />);
 
       expect(fetchAdminUsers).toHaveBeenCalledTimes(1);
 
@@ -109,37 +106,58 @@ describe('AdminDashboard', () => {
     }
   });
 
-  test('shows the top bar, summary cards, and user table', async () => {
+  test('shows only the two account totals and the requested details for every account', async () => {
     fetchAdminUsers.mockResolvedValue(usersResponse([
       adminUser({ isOnline: true }),
       regularUser({
-        isOnline: true,
+        isOnline: false,
         publicApiRequestCount: 3,
         publicApiLastUsedAt: '2026-03-27T11:05:00.000Z'
       })
     ], {
-      totalUsers: 3,
+      totalUsers: 2,
       onlineUsers: 1,
       activeUsers: 2,
       anonymousPublicApiRequests: 9
     }));
 
-    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} patchSession={vi.fn()} />);
+    const onLogout = vi.fn();
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={onLogout} />);
 
     expect(await screen.findByText('Admin dashboard')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Switch to dark theme' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Logout' })).toBeInTheDocument();
-    expect(screen.getAllByText('Online now').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Seen activity').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Total accounts').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Anonymous API requests').length).toBeGreaterThan(0);
-    expect(screen.getByText('Users')).toBeInTheDocument();
-    expect(await screen.findByText('alice')).toBeInTheDocument();
+    const header = within(screen.getByRole('banner'));
+    expect(header.getAllByRole('button')).toHaveLength(1);
+    fireEvent.click(header.getByRole('button', { name: 'Logout' }));
+    expect(onLogout).toHaveBeenCalledOnce();
+    expect(await screen.findByRole('heading', { name: 'alice' })).toBeInTheDocument();
+    const overview = within(screen.getByRole('region', { name: 'Account overview' }));
+    expect(overview.getAllByRole('heading')).toHaveLength(2);
+    expect(overview.getByRole('heading', { name: 'Online now' })).toBeInTheDocument();
+    expect(overview.getByText('1')).toBeInTheDocument();
+    expect(overview.getByRole('heading', { name: 'Total accounts' })).toBeInTheDocument();
+    expect(overview.getByText('2')).toBeInTheDocument();
+    expect(screen.queryByText('Seen activity')).not.toBeInTheDocument();
+    expect(screen.queryByText('Anonymous API requests')).not.toBeInTheDocument();
+    expect(screen.queryByText('Last login')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: 'Users' })).getAllByRole('listitem')).toHaveLength(2);
+    expect(screen.getByRole('heading', { name: 'admin' })).toBeInTheDocument();
+    const formatDate = (value: string) => new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    expect(screen.getAllByText(formatDate(defaultDate))).toHaveLength(2);
+    expect(screen.getAllByText(formatDate(defaultActivityDate))).toHaveLength(2);
     expect(screen.getByText('3 public API requests')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '🔑 Reset' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
-    expect(screen.queryByText('Online means active in the last 5 minutes.')).not.toBeInTheDocument();
+    expect(screen.getByText(`Last API use: ${formatDate('2026-03-27T11:05:00.000Z')}`)).toBeInTheDocument();
+    const aliceActions = within(screen.getByRole('group', { name: 'Actions for alice' }));
+    expect(aliceActions.getByRole('button', { name: 'Reset' })).toBeInTheDocument();
+    expect(aliceActions.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    const adminActions = within(screen.getByRole('group', { name: 'Actions for admin' }));
+    const protectedDelete = adminActions.getByRole('button', { name: 'Delete' });
+    expect(protectedDelete).toBeDisabled();
+    expect(protectedDelete).toHaveAttribute('title', 'Cannot be deleted');
+    fireEvent.click(protectedDelete);
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(deleteAdminUser).not.toHaveBeenCalled();
+    expect(screen.getByText('Online means active in the last 5 minutes.')).toBeInTheDocument();
+    expect(screen.getByText('Updates every 30 seconds.')).toBeInTheDocument();
   });
 
   test('shows backend error messages when loading users fails', async () => {
@@ -150,15 +168,16 @@ describe('AdminDashboard', () => {
       }
     });
 
-    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} patchSession={vi.fn()} />);
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} />);
 
     expect(await screen.findByText('Admin requests are temporarily limited.')).toBeInTheDocument();
+    expect(screen.getByText('Could not load users. Try refreshing.')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Account overview' })).queryByText('0')).not.toBeInTheDocument();
   });
 
   test('creates a password setup link for a user and allows deleting a user', async () => {
     const adminAndAliceResponse = usersResponse([adminUser(), regularUser()], { totalUsers: 2, activeUsers: 1 });
     fetchAdminUsers
-      .mockResolvedValueOnce(adminAndAliceResponse)
       .mockResolvedValueOnce(adminAndAliceResponse)
       .mockResolvedValueOnce(usersResponse([adminUser()], { activeUsers: 1 }));
 
@@ -168,16 +187,21 @@ describe('AdminDashboard', () => {
     });
     deleteAdminUser.mockResolvedValue({ success: true });
 
-    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} patchSession={vi.fn()} />);
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '🔑 Reset' }));
+    const aliceActions = within(await screen.findByRole('group', { name: 'Actions for alice' }));
+    fireEvent.click(aliceActions.getByRole('button', { name: 'Reset' }));
 
     await waitFor(() => {
       expect(createAdminPasswordSetupLink).toHaveBeenCalledWith('user-1');
     });
-    expect(await screen.findByText('Setup link ready for alice')).toBeInTheDocument();
+    const resetLink = await screen.findByRole('textbox', { name: 'Password reset link for alice' });
+    expect(resetLink).toHaveValue('http://localhost/password/setup#token=abc');
+    expect(resetLink).toHaveAttribute('readonly');
+    expect(screen.getByText(/Share this link with the user/)).toBeInTheDocument();
+    expect(fetchAdminUsers).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(aliceActions.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => {
       expect(deleteAdminUser).toHaveBeenCalledWith('user-1');
@@ -186,17 +210,46 @@ describe('AdminDashboard', () => {
     await waitFor(() => {
       expect(screen.queryByText('alice')).not.toBeInTheDocument();
     });
+    expect(screen.queryByRole('textbox', { name: 'Password reset link for alice' })).not.toBeInTheDocument();
+  });
+
+  test('does not delete the account when confirmation is canceled', async () => {
+    vi.mocked(window.confirm).mockReturnValue(false);
+    fetchAdminUsers.mockResolvedValue(usersResponse([adminUser(), regularUser()], { totalUsers: 2 }));
+
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} />);
+    const aliceActions = within(await screen.findByRole('group', { name: 'Actions for alice' }));
+    fireEvent.click(aliceActions.getByRole('button', { name: 'Delete' }));
+
+    expect(window.confirm).toHaveBeenCalledWith('Delete alice? This cannot be undone.');
+    expect(deleteAdminUser).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'alice' })).toBeInTheDocument();
+  });
+
+  test('keeps the account and allows retrying when deletion fails', async () => {
+    fetchAdminUsers.mockResolvedValue(usersResponse([adminUser(), regularUser()], { totalUsers: 2 }));
+    deleteAdminUser.mockRejectedValue(new Error('Delete failed'));
+
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} />);
+    const aliceActions = within(await screen.findByRole('group', { name: 'Actions for alice' }));
+    fireEvent.click(aliceActions.getByRole('button', { name: 'Delete' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Delete failed');
+    expect(screen.getByRole('heading', { name: 'alice' })).toBeInTheDocument();
+    expect(aliceActions.getByRole('button', { name: 'Delete' })).toBeEnabled();
+    expect(within(screen.getByRole('region', { name: 'Account overview' })).getByText('2')).toBeInTheDocument();
   });
 
   test('removes a deleted user locally even when the follow-up reload fails', async () => {
     fetchAdminUsers
-      .mockResolvedValueOnce(usersResponse([adminUser(), regularUser()], { totalUsers: 2, activeUsers: 1 }))
+      .mockResolvedValueOnce(usersResponse([adminUser(), regularUser({ isOnline: true })], { totalUsers: 2, onlineUsers: 1, activeUsers: 1 }))
       .mockRejectedValueOnce(new Error('Reload failed'));
     deleteAdminUser.mockResolvedValue({ success: true });
 
-    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} patchSession={vi.fn()} />);
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    const aliceActions = within(await screen.findByRole('group', { name: 'Actions for alice' }));
+    fireEvent.click(aliceActions.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => {
       expect(deleteAdminUser).toHaveBeenCalledWith('user-1');
@@ -204,41 +257,34 @@ describe('AdminDashboard', () => {
     await waitFor(() => {
       expect(screen.queryByText('alice')).not.toBeInTheDocument();
     });
+    const overview = within(screen.getByRole('region', { name: 'Account overview' }));
+    expect(overview.getByText('1')).toBeInTheDocument();
+    expect(overview.getByText('0')).toBeInTheDocument();
   });
 
-  test('toggles the admin theme with the header button', async () => {
-    fetchAdminUsers.mockResolvedValue(usersResponse([adminUser()]));
-    updateUserSettings.mockResolvedValue({
-      settings: {
-        ...currentUser.settings,
-        themeMode: 'dark'
-      }
-    });
-    const ThemeHarness = () => {
-      const [userState, setUserState] = useState(currentUser);
+  test('a stale poll cannot restore a deleted account or its totals', async () => {
+    const oldResponse = usersResponse([adminUser(), regularUser()], { totalUsers: 2 });
+    let resolvePoll!: (value: ReturnType<typeof usersResponse>) => void;
+    fetchAdminUsers
+      .mockResolvedValueOnce(oldResponse)
+      .mockImplementationOnce(() => new Promise((resolve) => { resolvePoll = resolve; }))
+      .mockResolvedValueOnce(usersResponse([adminUser()]));
+    deleteAdminUser.mockResolvedValue({ success: true });
 
-      return (
-        <AdminDashboard
-          t={t}
-          currentUser={userState}
-          onLogout={vi.fn()}
-          patchSession={(patch) => {
-            setUserState((current) => ({
-              ...current,
-              ...patch,
-            }));
-          }}
-        />
-      );
-    };
+    render(<AdminDashboard t={t} currentUser={currentUser} onLogout={vi.fn()} />);
+    await screen.findByRole('heading', { name: 'alice' });
+    fireEvent(document, new Event('visibilitychange'));
+    expect(fetchAdminUsers).toHaveBeenCalledTimes(2);
+    const pollSignal = fetchAdminUsers.mock.calls[1][0]?.signal;
 
-    render(<ThemeHarness />);
+    const aliceActions = within(screen.getByRole('group', { name: 'Actions for alice' }));
+    fireEvent.click(aliceActions.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(fetchAdminUsers).toHaveBeenCalledTimes(3));
+    expect(pollSignal?.aborted).toBe(true);
+    await act(async () => { resolvePoll(oldResponse); });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Switch to dark theme' }));
-
-    await waitFor(() => {
-      expect(updateUserSettings).toHaveBeenCalledWith({ themeMode: 'dark' });
-    });
-    expect(await screen.findByRole('button', { name: 'Switch to light theme' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'alice' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Account overview' })).getByText('1')).toBeInTheDocument();
   });
+
 });

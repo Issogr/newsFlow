@@ -42,6 +42,16 @@ This file documents the environment variables and build arguments that can chang
 | `ONLINE_ACTIVITY_WINDOW_MINUTES` | `5` | Window used to consider users recently active in admin views and scheduled source selection fallback. Minimum `0`. |
 | `FRONTEND_DIST_DIR` | `backend/public` | Directory served for built frontend assets. The Docker image copies `frontend/dist` here. |
 
+### Inactive Account Cleanup
+
+The backend automatically deletes non-admin accounts inactive for **more than six calendar months**. Cleanup runs at startup and every 24 hours while the backend is running. This is a fixed retention policy, not an environment setting.
+
+- Activity is the latest of account creation, browser activity (`last_activity_at`), and authenticated public API usage (`public_api_last_used_at`). Accounts with no activity are evaluated from their creation date. Buffered authenticated API usage is flushed before eligibility is checked; if the flush fails, cleanup stops and retries on the next run.
+- The cutoff uses UTC calendar months, clamping to the last day when the target month is shorter. Accounts exactly at the cutoff are retained. Accounts with invalid timestamps are skipped.
+- The configured `ADMIN_USERNAME` account is always excluded, ignoring case.
+- Deletion is permanent and uses the same transactional deletion path as the admin dashboard: custom sources and their private articles, settings, saved-article references, sessions, and tokens are removed, and active sockets are disconnected. Built-in articles and other users' data are preserved.
+- Cleanup runs without an interactive confirmation. Deletion counts and cleanup failures are logged.
+
 ## Bundled TLS Ingress
 
 Docker Compose runs Caddy as the only host-facing service. Caddy handles TLS and compression, then proxies HTTP, WebSocket, and static frontend requests to the backend. The backend has no published host port.

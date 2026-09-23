@@ -440,4 +440,150 @@ describe('userService imports', () => {
     expect(database.findUserById(firstUser.user.id).publicApiRequestCount).toBe(1);
     expect(database.findUserById(secondUser.user.id).publicApiRequestCount).toBe(1);
   });
+
+  describe('inactive account cleanup', () => {
+    const oldDate = '2023-01-01T00:00:00.000Z';
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      userService.stopInactiveUserCleanupTimer();
+      jest.useRealTimers();
+      jest.restoreAllMocks();
+    });
+
+    function createAccount(id: string, activity: {
+      createdAt?: string;
+      lastActivityAt?: string;
+      publicApiLastUsedAt?: string;
+    } = {}) {
+      database.createUser({ id, username: id, createdAt: activity.createdAt || oldDate, updatedAt: oldDate });
+      database.getDb().prepare(`
+        UPDATE users SET last_activity_at = ?, public_api_last_used_at = ? WHERE id = ?
+      `).run(activity.lastActivityAt ?? null, activity.publicApiLastUsedAt ?? null, id);
+    }
+
+    test.each([
+      ['2026-09-24T12:00:00.000Z', '2026-03-24T12:00:00.000Z'],
+      ['2026-08-31T12:00:00.000Z', '2026-02-28T12:00:00.000Z'],
+      ['2024-08-31T12:00:00.000Z', '2024-02-29T12:00:00.000Z']
+    ])('uses a strict six-calendar-month cutoff at %s and preserves active/admin accounts', (now, cutoff) => {
+      jest.setSystemTime(new Date(now));
+      const expired = new Date(Date.parse(cutoff) - 1).toISOString();
+      createAccount('stale-browser', { lastActivityAt: expired });
+      createAccount('stale-api', { publicApiLastUsedAt: expired });
+      createAccount('never-used');
+      createAccount('boundary-browser', { lastActivityAt: cutoff });
+      createAccount('boundary-api', { publicApiLastUsedAt: cutoff });
+      createAccount('boundary-created', { createdAt: cutoff });
+      createAccount('active-browser', { lastActivityAt: now, publicApiLastUsedAt: expired });
+      createAccount('active-api', { lastActivityAt: expired, publicApiLastUsedAt: now });
+      createAccount('new-account', { createdAt: now });
+      createAccount('invalid-activity', { lastActivityAt: 'invalid' });
+      createAccount('invalid-created', { createdAt: 'invalid' });
+      createAccount('invalid-api', { publicApiLastUsedAt: 'invalid' });
+      const admin = userService.ensureAdminBootstrap().user;
+      database.getDb().prepare('UPDATE users SET created_at = ?, username = ? WHERE id = ?')
+        .run(oldDate, admin.username.toUpperCase(), admin.id);
+
+      expect(userService.cleanupInactiveUsers()).toBe(3);
+      expect(database.listUsers().map((user: { id: string }) => user.id).sort()).toEqual([
+        'boundary-browser', 'boundary-api', 'boundary-created', 'active-browser', 'active-api',
+        'new-account', 'invalid-activity', 'invalid-created', 'invalid-api', admin.id
+      ].sort());
+      expect(userService.cleanupInactiveUsers()).toBe(0);
+    });
+
+    test('flushes pending API activity before deletion and aborts cleanup if the flush fails', () => {
+      createAccount('api-user');
+      createAccount('inactive-user');
+      userService.recordPublicApiRequestUsage({ authenticated: true, userId: 'api-user' });
+      expect(database.findUserById('api-user').publicApiRequestCount).toBe(0);
+      const flush = jest.spyOn(database, 'incrementUserPublicApiUsage').mockImplementationOnce(() => {
+        throw new Error('write failed');
+      });
+
+      expect(() => userService.cleanupInactiveUsers()).toThrow('write failed');
+      expect(database.findUserById('api-user')).not.toBeNull();
+      expect(database.findUserById('inactive-user')).not.toBeNull();
+      flush.mockRestore();
+
+      expect(userService.cleanupInactiveUsers()).toBe(1);
+      expect(database.findUserById('api-user')).toMatchObject({
+        publicApiRequestCount: 1,
+        publicApiLastUsedAt: new Date().toISOString()
+      });
+      expect(database.findUserById('inactive-user')).toBeNull();
+    });
+
+    test('deletes account data atomically, disconnects sockets, and preserves other owners and built-in articles', async () => {
+      const now = new Date().toISOString();
+      const expiresAt = new Date(Date.now() + dayMs).toISOString();
+      const sockets = (await import('./websocketService')).default;
+      const disconnect = jest.spyOn(sockets, 'disconnectUserSockets');
+      createAccount('inactive-user');
+      createAccount('active-user', { lastActivityAt: now });
+      database.upsertUserSettings('inactive-user', {});
+      database.createUserSession({ userId: 'inactive-user', tokenHash: 'session-hash', createdAt: now, expiresAt });
+      database.createApiToken({ id: 'api-token', userId: 'inactive-user', tokenHash: 'api-hash', tokenPrefix: 'nf_', createdAt: now, expiresAt });
+      database.createPasswordSetupToken({ userId: 'inactive-user', tokenHash: 'setup-hash', purpose: 'password-setup', createdAt: now, expiresAt });
+      for (const userId of ['inactive-user', 'active-user']) {
+        database.createUserSource({ id: `${userId}-source`, userId, name: 'Shared feed', url: 'https://example.com/feed.xml', createdAt: now, updatedAt: now });
+      }
+      database.upsertArticles(['inactive-user', 'active-user', null].map((userId) => ({
+        id: userId || 'built-in', ownerUserId: userId, sourceId: userId ? `${userId}-source` : 'bbc',
+        source: 'Example', title: 'Article', url: 'https://example.com/article', pubDate: now
+      })));
+      database.saveReadLaterArticles('inactive-user', ['built-in'], { userId: 'inactive-user' });
+      database.saveReadLaterArticles('active-user', ['built-in'], { userId: 'active-user' });
+      const deletion = jest.spyOn(database, 'deleteUser').mockReturnValueOnce(0);
+
+      expect(() => userService.cleanupInactiveUsers()).toThrow('Unable to delete user');
+      expect(database.findUserById('inactive-user')).not.toBeNull();
+      expect(database.listUserSources('inactive-user')).toHaveLength(1);
+      expect(database.getDb().prepare('SELECT id FROM articles WHERE id = ?').get('inactive-user')).toBeDefined();
+      expect(disconnect).not.toHaveBeenCalled();
+      deletion.mockRestore();
+
+      expect(userService.cleanupInactiveUsers()).toBe(1);
+      expect(database.findUserById('inactive-user')).toBeNull();
+      expect(database.getUserSettings('inactive-user')).toBeNull();
+      expect(database.listUserSources('inactive-user')).toEqual([]);
+      expect(database.findSessionByTokenHash('session-hash')).toBeUndefined();
+      expect(database.getLatestActiveApiTokenForUser('inactive-user')).toBeNull();
+      expect(database.getDb().prepare('SELECT id FROM password_setup_tokens WHERE user_id = ?').get('inactive-user')).toBeUndefined();
+      expect(database.isReadLaterArticle('inactive-user', 'built-in')).toBe(false);
+      expect(disconnect).toHaveBeenCalledExactlyOnceWith('inactive-user');
+      expect(database.listUserSources('active-user')).toHaveLength(1);
+      expect(database.isReadLaterArticle('active-user', 'built-in')).toBe(true);
+      expect(database.getDb().prepare('SELECT id FROM articles ORDER BY id').all()).toEqual([{ id: 'active-user' }, { id: 'built-in' }]);
+    });
+
+    test('runs at startup and daily, retries failures, and stops cleanly without duplicate timers', () => {
+      createAccount('inactive-user');
+      const deletion = jest.spyOn(database, 'deleteUser').mockImplementationOnce(() => {
+        throw new Error('database busy');
+      });
+
+      const timer = userService.startInactiveUserCleanupTimer();
+      expect(deletion).toHaveBeenCalledTimes(1);
+      expect(database.findUserById('inactive-user')).not.toBeNull();
+      expect(userService.startInactiveUserCleanupTimer()).toBe(timer);
+      expect(deletion).toHaveBeenCalledTimes(1);
+      jest.advanceTimersByTime(dayMs - 1);
+      expect(database.findUserById('inactive-user')).not.toBeNull();
+      jest.advanceTimersByTime(1);
+      expect(database.findUserById('inactive-user')).toBeNull();
+
+      createAccount('next-user');
+      userService.stopInactiveUserCleanupTimer();
+      jest.advanceTimersByTime(dayMs);
+      expect(database.findUserById('next-user')).not.toBeNull();
+      userService.startInactiveUserCleanupTimer();
+      expect(database.findUserById('next-user')).toBeNull();
+    });
+  });
 });

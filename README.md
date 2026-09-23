@@ -90,6 +90,8 @@ APP_BASE_URL=http://localhost:5173 node -e "console.log(require('./dist/services
 
 Open the printed link to set the password. It expires after 30 minutes by default. Once the admin password is configured, the command returns `null` instead of creating another bootstrap link. Use the same `NEWS_DB_PATH` as the running backend if you have overridden it.
 
+Non-admin accounts with no app or authenticated API activity for more than **six calendar months** are automatically and permanently deleted at startup or during daily cleanup. Accounts that have never been active are evaluated from their creation date. See [inactive account cleanup](CONFIGURATION.md#inactive-account-cleanup) for the retention rules.
+
 ## Storage and privacy
 
 Accounts, settings, cached articles, reader content, saved-article references, and summaries are stored in SQLite. Both local runs and the bundled Compose setup persist the database at `backend/data/news.db` on the host; Compose mounts that directory at `/usr/src/app/data` inside the container. Keep `backend/data/` when rebuilding or upgrading, and back it up while the app is stopped or with a SQLite-aware backup tool. Settings exports are not full database backups.

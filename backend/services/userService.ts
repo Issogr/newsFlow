@@ -4,6 +4,7 @@ import rssParser from './rssParser';
 import feedbackService from './feedbackService';
 import websocketService from './websocketService';
 import { createError } from '../utils/errorHandler';
+import logger from '../utils/logger';
 import concurrency from '../utils/concurrency';
 import { parseIntegerEnv } from '../utils/env';
 import sourceIcons from '../utils/sourceIcons';
@@ -60,6 +61,7 @@ const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || 'admin').trim().slic
 const PASSWORD_SETUP_TTL_MINUTES = parseIntegerEnv('PASSWORD_SETUP_TTL_MINUTES', 60, { min: 1 });
 const ADMIN_BOOTSTRAP_TTL_MINUTES = parseIntegerEnv('ADMIN_BOOTSTRAP_TTL_MINUTES', 30, { min: 1 });
 const ONLINE_ACTIVITY_WINDOW_MINUTES = parseIntegerEnv('ONLINE_ACTIVITY_WINDOW_MINUTES', 5, { min: 0 });
+const INACTIVE_USER_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS = parseIntegerEnv('ANONYMOUS_PUBLIC_USAGE_FLUSH_INTERVAL_MS', 5000, { min: 1000 });
 const ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD = parseIntegerEnv('ANONYMOUS_PUBLIC_USAGE_FLUSH_THRESHOLD', 100, { min: 1 });
 const AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS = parseIntegerEnv('AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS', 5000, { min: 1000 });
@@ -80,6 +82,7 @@ let pendingAuthenticatedPublicApiRequests = new Map<string, { count: number; use
 let pendingAuthenticatedPublicApiRequestCount = 0;
 let lastAuthenticatedPublicApiUsageFlushAt = Date.now();
 let publicApiUsageFlushTimer: NodeJS.Timeout | null = null;
+let inactiveUserCleanupTimer: NodeJS.Timeout | null = null;
 
 function flushAuthenticatedPublicApiUsage({ force = false } = {}) {
   if (pendingAuthenticatedPublicApiRequestCount <= 0) {
@@ -972,6 +975,17 @@ function createUserPasswordSetupLink(adminUserId: string, targetUserId: string) 
   };
 }
 
+function deleteUserAccount(user: UserRecord) {
+  database.getDb().transaction(() => {
+    database.deleteAllUserSources(user.id);
+    if (!database.deleteUser(user.id)) {
+      throw createError(500, 'Unable to delete user', 'DELETE_USER_FAILED');
+    }
+  })();
+
+  websocketService.disconnectUserSockets(user.id);
+}
+
 function deleteUserAsAdmin(adminUserId: string, targetUserId: string) {
   const adminUser = database.findUserById(adminUserId);
   const targetUser = database.findUserById(targetUserId);
@@ -992,19 +1006,70 @@ function deleteUserAsAdmin(adminUserId: string, targetUserId: string) {
     throw createError(403, 'You cannot delete your own account', 'FORBIDDEN');
   }
 
-  database.deleteAllUserSources(targetUser.id);
-  const deleted = database.deleteUser(targetUser.id);
-
-  if (!deleted) {
-    throw createError(500, 'Unable to delete user', 'DELETE_USER_FAILED');
-  }
-
-  websocketService.disconnectUserSockets(targetUser.id);
+  deleteUserAccount(targetUser);
 
   return {
     success: true,
     user: buildUserPayload(targetUser)
   };
+}
+
+function cleanupInactiveUsers() {
+  flushAuthenticatedPublicApiUsage({ force: true });
+
+  const cutoff = new Date();
+  const day = cutoff.getUTCDate();
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - 6);
+  if (cutoff.getUTCDate() !== day) {
+    // Clamp to the last day of the target month instead of rolling into the next month.
+    cutoff.setUTCDate(0);
+  }
+
+  let deletedCount = 0;
+  for (const user of database.listUsers()) {
+    if (user.username.toLowerCase() === ADMIN_USERNAME.toLowerCase()) {
+      continue;
+    }
+
+    const lastActivityAt = Math.max(...[user.createdAt, user.lastActivityAt, user.publicApiLastUsedAt]
+      .filter((value) => value != null)
+      .map((value) => Date.parse(String(value))));
+    if (Number.isFinite(lastActivityAt) && lastActivityAt < cutoff.getTime()) {
+      deleteUserAccount(user);
+      deletedCount += 1;
+    }
+  }
+
+  return deletedCount;
+}
+
+function startInactiveUserCleanupTimer() {
+  if (inactiveUserCleanupTimer) {
+    return inactiveUserCleanupTimer;
+  }
+
+  const runCleanup = () => {
+    try {
+      const deletedCount = cleanupInactiveUsers();
+      if (deletedCount > 0) {
+        logger.info(`Inactive account cleanup deleted ${deletedCount} account(s)`);
+      }
+    } catch (error) {
+      logger.warn(`Inactive account cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  runCleanup();
+  inactiveUserCleanupTimer = setInterval(runCleanup, INACTIVE_USER_CLEANUP_INTERVAL_MS);
+  inactiveUserCleanupTimer.unref?.();
+  return inactiveUserCleanupTimer;
+}
+
+function stopInactiveUserCleanupTimer() {
+  if (inactiveUserCleanupTimer) {
+    clearInterval(inactiveUserCleanupTimer);
+    inactiveUserCleanupTimer = null;
+  }
 }
 
 async function importUserSettings(userId: string, payload: DynamicRecord = {}, options: AbortOptions = {}) {
@@ -1089,6 +1154,9 @@ export default {
   stopPublicApiUsageFlushTimer,
   createUserPasswordSetupLink,
   deleteUserAsAdmin,
+  cleanupInactiveUsers,
+  startInactiveUserCleanupTimer,
+  stopInactiveUserCleanupTimer,
   updateUserSettings,
   getUserApiToken,
   createUserApiToken,
