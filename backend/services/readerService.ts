@@ -349,7 +349,7 @@ async function fetchReaderPayload(article: ReaderArticle) {
     timeout: READER_TIMEOUT,
     maxResponseBytes: READER_MAX_RESPONSE_BYTES,
     headers: {
-      'User-Agent': 'newsflow-reader/1.0 (+https://localhost)',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 NewsFlow/2.0',
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
     }
   });

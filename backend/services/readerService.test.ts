@@ -111,6 +111,9 @@ describe('readerService', () => {
       { type: 'paragraph', text: 'Second paragraph.' }
     ]);
     expect(payload.paragraphs).toEqual(['First paragraph.', 'Second paragraph.']);
+    expect(fetchSafeTextUrl).toHaveBeenCalledWith(article.url, expect.objectContaining({
+      headers: expect.objectContaining({ 'User-Agent': expect.stringContaining('Mozilla/5.0') })
+    }));
     expect(database.upsertReaderCache).toHaveBeenCalledWith(article.id, expect.objectContaining({
       title: 'Readable headline',
       contentText: expect.stringContaining('First paragraph.')
