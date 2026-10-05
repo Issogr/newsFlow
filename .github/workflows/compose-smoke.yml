@@ -9,7 +9,7 @@ permissions:
 jobs:
   compose-smoke:
     name: Docker Compose Smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       APP_BASE_URL: https://localhost

@@ -20,7 +20,7 @@ jobs:
 
   publish:
     name: Publish application image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [validate, compose-smoke]
     timeout-minutes: 60
     concurrency:
