@@ -33,6 +33,7 @@ const it: TranslationDictionary = {
   exportSettings: 'Esporta impostazioni',
   importSettings: 'Importa impostazioni',
   logout: 'Esci',
+  logoutErrorMessage: 'Impossibile confermare l\'uscita. La sessione potrebbe essere ancora attiva. Riprova.',
   feedbackMenuItem: 'Invia feedback',
   feedbackTitle: 'Aiuta a migliorare News Flow',
   feedbackSenderHelp: 'Username e ID account vengono inclusi. Segnalazioni e allegati vengono inviati alla destinazione Telegram configurata.',

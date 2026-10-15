@@ -9,7 +9,7 @@ import type SqliteDatabase from './sqliteDatabase';
 const { getCurrentPublicationDay, normalizePublicationDate } = publicationDate;
 const { parseJsonArray } = json;
 const { normalizeArticleUrl, normalizeIdentityText } = articleIdentity;
-const { getRawConfiguredSourceIds, getConfiguredSourceGroupIds, getLegacyConfiguredSourceGroupIds, getGroupedConfiguredSourceIds } = sourceCatalog;
+const { extractRegistrableDomain, getRawConfiguredSourceIds, getConfiguredSourceGroupIds, getLegacyConfiguredSourceGroupIds, getGroupedConfiguredSourceIds } = sourceCatalog;
 
 const ARTICLE_SELECT_COLUMNS = `
   a.id, a.source_id AS sourceId, a.source_name AS source,
@@ -189,6 +189,7 @@ interface AggregatedSourceStat extends DynamicRecord {
 interface UserSourceRow extends DynamicRecord {
   id: string;
   userId: string;
+  url: string;
 }
 
 interface ArticleRepositoryDependencies {
@@ -2197,7 +2198,7 @@ function createArticleRepository({
              excluded_sub_source_ids AS excludedSubSourceIds
       FROM user_settings
     `);
-    const selectUserSourceIds = database.prepare<UserSourceRow>('SELECT user_id AS userId, id FROM user_sources');
+    const selectUserSources = database.prepare<UserSourceRow>('SELECT user_id AS userId, id, url FROM user_sources');
     const updateSettings = database.prepare(`
       UPDATE user_settings
       SET excluded_source_ids = ?,
@@ -2223,24 +2224,20 @@ function createArticleRepository({
         DELETE FROM articles
         WHERE ${removableArticleFilter}
       `);
-      const customSourceIdsByUserId = new Map<string, Set<string>>();
-
-      selectUserSourceIds.all().forEach((source) => {
-        const sourceIds = customSourceIdsByUserId.get(String(source.userId)) || new Set<string>();
-        sourceIds.add(source.id);
-        customSourceIdsByUserId.set(String(source.userId), sourceIds);
-      });
+      const customSourcesByUserId = Map.groupBy(selectUserSources.all(), (source) => source.userId);
 
       const removedArticles = deleteArticles.run(...retainedGlobalSourceIds).changes;
 
       selectSettings.all().forEach((row) => {
         const excludedSourceIds = parseJsonArray<string>(row.excludedSourceIds);
         const excludedSubSourceIds = parseJsonArray<string>(row.excludedSubSourceIds);
-        const customSourceIds = customSourceIdsByUserId.get(String(row.userId)) || new Set<string>();
+        const customSources = customSourcesByUserId.get(String(row.userId)) || [];
+        const customSourceIds = new Set(customSources.map((source) => source.id));
+        const customGroupIds = new Set(customSources.map((source) => extractRegistrableDomain(source.url) || source.id));
         const nextExcludedSourceIds = excludedSourceIds.filter((sourceId) => {
-          return configuredSourceGroupIds.has(sourceId) || customSourceIds.has(sourceId);
+          return configuredSourceGroupIds.has(sourceId) || customSourceIds.has(sourceId) || customGroupIds.has(sourceId);
         });
-        const nextExcludedSubSourceIds = excludedSubSourceIds.filter((sourceId) => groupedConfiguredSourceIds.has(sourceId));
+        const nextExcludedSubSourceIds = excludedSubSourceIds.filter((sourceId) => groupedConfiguredSourceIds.has(sourceId) || customSourceIds.has(sourceId));
 
         if (
           nextExcludedSourceIds.length === excludedSourceIds.length

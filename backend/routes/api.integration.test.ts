@@ -11,7 +11,7 @@ type RuntimeModule = ReturnType<typeof require>;
 type MockModule = Record<string, Mock>;
 
 const { getCanonicalSourceId } = sourceCatalog;
-const { MAX_FEEDBACK_IMAGE_BYTES } = feedback;
+const { MAX_FEEDBACK_IMAGE_BYTES, MAX_FEEDBACK_DESCRIPTION_LENGTH } = feedback;
 const { cleanupTempNewsDb, setupTempNewsDb } = tempNewsDb;
 
 const ansaSourceId = getCanonicalSourceId('ansa_mondo', 'ANSA - Mondo');
@@ -1041,6 +1041,36 @@ describe('API auth and user flows', () => {
       .expect(200);
 
     expect(summariesResponse.body.readSummaryIds).toEqual(expect.arrayContaining(['summary-technology', 'summary-science']));
+  });
+
+  test.each(['extra field', 'oversized field'])('rejects feedback with an %s before delivery', async (kind) => {
+    const registerResponse = await registerTestUser(app, 'feedback-fields');
+    const upload = request(app)
+      .post('/api/me/feedback')
+      .set('Cookie', getSessionCookie(registerResponse))
+      .field('category', 'bug')
+      .field('title', 'Feedback test')
+      .field('description', kind === 'oversized field' ? 'x'.repeat(MAX_FEEDBACK_DESCRIPTION_LENGTH * 4 + 1) : 'Description');
+    if (kind === 'extra field') {
+      upload.field('unused', 'extra text');
+    }
+
+    const response = await upload.expect(400);
+    expect(response.body.error.code).toBe('INVALID_FEEDBACK_PAYLOAD');
+    expect(feedbackService.sendFeedback).not.toHaveBeenCalled();
+  });
+
+  test('accepts a full-length Unicode feedback description', async () => {
+    const registerResponse = await registerTestUser(app, 'feedback-unicode');
+    const description = '界'.repeat(MAX_FEEDBACK_DESCRIPTION_LENGTH);
+    await request(app)
+      .post('/api/me/feedback')
+      .set('Cookie', getSessionCookie(registerResponse))
+      .field('category', 'feedback')
+      .field('title', 'Unicode feedback')
+      .field('description', description)
+      .expect(201);
+    expect(feedbackService.sendFeedback).toHaveBeenCalledWith(expect.objectContaining({ description }));
   });
 
   test('rejects feedback submission with an invalid category', async () => {

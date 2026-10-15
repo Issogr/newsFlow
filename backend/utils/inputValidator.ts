@@ -27,19 +27,6 @@ function sanitizeHtml(input: unknown) {
     .trim();
 }
 
-function sanitizeQuery(paramNames: string | string[]): RequestHandler {
-  const names = Array.isArray(paramNames) ? paramNames : [paramNames];
-
-  return (req, res, next) => {
-    names.forEach((paramName) => {
-      if (req.query[paramName]) {
-        req.query[paramName] = sanitizeString(req.query[paramName]);
-      }
-    });
-    return next();
-  };
-}
-
 function validateAndSanitizeParam(paramName: string, errorMessage = 'Parameter missing or invalid'): RequestHandler {
   return (req, res, next) => {
     if (!req.params[paramName]) {
@@ -69,7 +56,6 @@ function sanitizeBody(fieldNames: string[] = []): RequestHandler {
 
 export default {
   sanitizeHtml,
-  sanitizeQuery,
   validateAndSanitizeParam,
   sanitizeBody
 };

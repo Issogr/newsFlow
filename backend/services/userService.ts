@@ -517,13 +517,19 @@ async function loginUser(payload: DynamicRecord = {}) {
 
   const sessionToken = generateSessionToken();
   const now = new Date().toISOString();
-  database.createUserSession({
-    tokenHash: hashSessionToken(sessionToken),
-    userId: user.id,
-    createdAt: now,
-    expiresAt: createSessionExpiryDate()
-  });
-  database.updateUserLogin(user.id, now);
+  database.getDb().transaction(() => {
+    if (database.findUserById(user.id)?.passwordHash !== user.passwordHash) {
+      throw createError(401, 'Invalid username or password', 'UNAUTHORIZED');
+    }
+
+    database.createUserSession({
+      tokenHash: hashSessionToken(sessionToken),
+      userId: user.id,
+      createdAt: now,
+      expiresAt: createSessionExpiryDate()
+    });
+    database.updateUserLogin(user.id, now);
+  })();
 
   return buildAuthResponse(user, sessionToken);
 }
@@ -1073,10 +1079,14 @@ function stopInactiveUserCleanupTimer() {
 }
 
 async function importUserSettings(userId: string, payload: DynamicRecord = {}, options: AbortOptions = {}) {
-  const importedSettings = payload.settings && typeof payload.settings === 'object'
-    ? payload.settings as DynamicRecord
-    : {};
-  const importedCustomSources = Array.isArray(payload.customSources) ? payload.customSources : [];
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+    || !payload.settings || typeof payload.settings !== 'object' || Array.isArray(payload.settings)
+    || !Array.isArray(payload.customSources)) {
+    throw createError(400, 'Settings backups must include settings and a customSources array', 'INVALID_IMPORT_PAYLOAD');
+  }
+
+  const importedSettings = payload.settings as DynamicRecord;
+  const importedCustomSources = payload.customSources;
   const globalSourceIds = getConfiguredSourceGroupIds();
   const groupedSubSourceIds = getGroupedConfiguredSourceIds();
 

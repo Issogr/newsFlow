@@ -2506,8 +2506,8 @@ describe('database queries and user data', () => {
       defaultLanguage: 'en',
       readerPanelPosition: 'center',
       lastSeenReleaseNotesVersion: '3.2.3',
-      excludedSourceIds: ['retired-source', primarySourceFamilyId, 'custom-1'],
-      excludedSubSourceIds: ['retired-sub-source', groupedSource?.id || 'missing-sub-source']
+      excludedSourceIds: ['retired-source', primarySourceFamilyId, 'custom-1', 'example.com'],
+      excludedSubSourceIds: ['retired-sub-source', groupedSource?.id || 'missing-sub-source', 'custom-1']
     });
 
     database.createUserSource({
@@ -2584,8 +2584,8 @@ describe('database queries and user data', () => {
     expect(database.isReadLaterArticle('user-1', 'saved-retired-global')).toBe(true);
     expect(database.getReaderCache('saved-retired-global')).toEqual(expect.objectContaining({ contentText: 'Saved reader text' }));
     expect(database.getUserSettings('user-1')).toEqual(expect.objectContaining({
-      excludedSourceIds: [primarySourceFamilyId, 'custom-1'],
-      excludedSubSourceIds: groupedSource ? [groupedSource.id] : []
+      excludedSourceIds: [primarySourceFamilyId, 'custom-1', 'example.com'],
+      excludedSubSourceIds: [...(groupedSource ? [groupedSource.id] : []), 'custom-1']
     }));
   });
 

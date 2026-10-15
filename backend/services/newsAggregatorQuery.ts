@@ -202,7 +202,13 @@ function buildNextCursor(groups: FeedGroup[] = [], existingExcludeArticleIds: st
 
 function compareFeedPosition(left: DynamicRecord = {}, right: DynamicRecord = {}) {
   const pubDateComparison = String(right.pubDate || '').localeCompare(String(left.pubDate || ''));
-  return pubDateComparison || String(right.id || '').localeCompare(String(left.id || ''));
+  if (pubDateComparison) {
+    return pubDateComparison;
+  }
+
+  const leftId = String(left.cursorId || '');
+  const rightId = String(right.cursorId || '');
+  return leftId < rightId ? 1 : leftId > rightId ? -1 : 0;
 }
 
 function annotateReadLaterGroups(groups: FeedGroup[] = [], userId: string | null = null) {

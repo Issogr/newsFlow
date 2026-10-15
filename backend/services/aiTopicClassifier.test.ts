@@ -234,6 +234,36 @@ describe('aiTopicClassifier', () => {
     expect(result.failedArticleIds).toEqual(['provider-article-1', 'provider-article-2']);
   });
 
+  test.each([1, 2])('shares the topic request limit of %i across overlapping refreshes', async (limit) => {
+    jest.resetModules();
+    process.env.AI_TOPIC_BATCH_CONCURRENCY = String(limit);
+    const classifier = (await import('./aiTopicClassifier')).default;
+    const gate = Promise.withResolvers<void>();
+    let active = 0;
+    let peak = 0;
+    chatSend.mockImplementation(async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await gate.promise;
+      active -= 1;
+      return { choices: [{ message: { content: '{"topicsByRef":[]}' } }] };
+    });
+    const requests = Array.from({ length: 3 }, (_, index) => classifier.classifyTopicDetailsForArticlesWithStatus([
+      { id: `article-${index}`, title: `Report ${index}`, description: '', content: '', topics: [],
+        url: `https://example.com/${index}`, pubDate: new Date().toISOString(), source: 'Example' }
+    ]));
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(chatSend).toHaveBeenCalledTimes(limit);
+      expect(peak).toBe(limit);
+    } finally {
+      gate.resolve();
+      await Promise.all(requests);
+    }
+    expect(chatSend).toHaveBeenCalledTimes(3);
+    expect(peak).toBe(limit);
+  });
+
   test('drops unknown ids and topics outside the supported taxonomy', () => {
     const result = aiTopicClassifier._normalizeClassifierDetails({
       topicsById: [

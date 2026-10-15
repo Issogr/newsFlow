@@ -16,6 +16,7 @@ import {
   setStoredReaderTextWidthPreference
 } from '../../utils/readerPreferences';
 import type { ApiTokenInfo, CurrentUser, NewsSource, UserSettings } from '../../types';
+import { getApiErrorStatus } from '../../utils/apiError';
 
 const createInitialEditingSourceForm = () => ({ name: '', url: '', language: 'it' });
 const getCurrentUserIdentity = (currentUser: CurrentUser) => currentUser?.user?.id || currentUser?.user?.username || currentUser?.id || '';
@@ -241,12 +242,23 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
 
       if (hasEditingSourceChanges) {
         nextCustomSources = await persistSourceUpdate(editingSourceId, nextCustomSources);
+        syncCustomSourcesState(nextCustomSources);
+        setEditingSourceId('');
+        setEditingSourceForm(createInitialEditingSourceForm());
       }
 
       for (const sourceId of pendingDeletedSourceIds) {
-        await deleteUserSource(sourceId);
+        try {
+          await deleteUserSource(sourceId);
+        } catch (requestError) {
+          if (getApiErrorStatus(requestError) !== 404) {
+            throw requestError;
+          }
+        }
+        nextCustomSources = nextCustomSources.filter((source) => source.id !== sourceId);
+        setPendingDeletedSourceIds((current) => current.filter((id) => id !== sourceId));
+        syncCustomSourcesState(nextCustomSources);
       }
-      nextCustomSources = nextCustomSources.filter((source) => !pendingDeletedSourceIds.includes(source.id));
 
       if (Object.keys(settingsPatch).length > 0) {
         const response = await updateUserSettings(settingsPatch);
@@ -273,7 +285,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
     setPendingDeletedSourceIds([]);
     syncPersistedUserState(nextSettings, result.nextCustomSources);
     return true;
-  }, [customSources, editingSourceId, hasEditingSourceChanges, pendingDeletedSourceIds, persistSourceUpdate, runSavingAction, settings, syncPersistedUserState]);
+  }, [customSources, editingSourceId, hasEditingSourceChanges, pendingDeletedSourceIds, persistSourceUpdate, runSavingAction, settings, syncCustomSourcesState, syncPersistedUserState]);
 
   const handleCreateApiToken = useCallback(async () => {
     await runSavingAction(async () => {

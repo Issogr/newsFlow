@@ -221,10 +221,17 @@ function App() {
   const handleRegister = useCallback((credentials: { username: string; password: string }) => runAuthAction(registerUser, credentials), [runAuthAction]);
 
   const handleLogout = useCallback(async () => {
+    setAuthBusy(true);
+    setAuthError(null);
     try {
       await logoutUser();
-    } catch {
-      // ignore logout errors during local cleanup
+    } catch (error) {
+      if (getApiErrorStatus(error) !== 401) {
+        setAuthError(error);
+        return;
+      }
+    } finally {
+      setAuthBusy(false);
     }
 
     setAuthData(null);
@@ -309,6 +316,14 @@ function App() {
 
   return (
     <div className="App">
+      {Boolean(authError) && (
+        <InlineAlert className="fixed inset-x-4 bottom-24 z-[80] mx-auto flex max-w-xl items-center justify-between gap-4 shadow-lg">
+          <span>{t('logoutErrorMessage')}</span>
+          <button type="button" onClick={handleLogout} disabled={authBusy} className="rounded-lg px-3 py-2 font-semibold underline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60">
+            {t('retry')}
+          </button>
+        </InlineAlert>
+      )}
       <Suspense fallback={null}>
         {authData?.user?.isAdmin ? (
           <AdminDashboard

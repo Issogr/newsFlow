@@ -32,6 +32,7 @@ const en: TranslationDictionary = {
   exportSettings: 'Export settings',
   importSettings: 'Import settings',
   logout: 'Logout',
+  logoutErrorMessage: 'Could not confirm logout. Your session may still be active. Please try again.',
   feedbackMenuItem: 'Send feedback',
   feedbackTitle: 'Help improve News Flow',
   feedbackSenderHelp: 'Your username and account ID are included. Reports and attachments are sent to the configured Telegram destination.',

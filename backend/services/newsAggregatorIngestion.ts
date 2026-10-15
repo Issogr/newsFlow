@@ -10,7 +10,7 @@ import { parseIntegerEnv } from '../utils/env';
 import articleRetention from '../config/articleRetention';
 import newsAggregatorGrouping from './newsAggregatorGrouping';
 import aiStoryGrouper from './aiStoryGrouper';
-const { mapSettledWithConcurrency } = concurrency;
+const { createConcurrencyLimiter, mapSettledWithConcurrency } = concurrency;
 const {
   classifyTopicDetailsForArticlesWithStatus,
   isAiTopicDetectionAvailable
@@ -91,6 +91,7 @@ const SOURCE_FETCH_FRESHNESS_RETENTION_MS = parseIntegerEnv(
 const SOURCE_FETCH_FAILURE_BACKOFF_MS = parseIntegerEnv('SOURCE_FETCH_FAILURE_BACKOFF_MS', 2 * 60 * 1000, { min: 0 });
 const SOURCE_FETCH_FAILURE_MAX_BACKOFF_MS = parseIntegerEnv('SOURCE_FETCH_FAILURE_MAX_BACKOFF_MS', 30 * 60 * 1000, { min: 1000 });
 const AI_STORY_GROUPING_CONCURRENCY = parseIntegerEnv('AI_STORY_GROUPING_CONCURRENCY', 1, { min: 1, max: 4 });
+const limitStoryGrouping = createConcurrencyLimiter(AI_STORY_GROUPING_CONCURRENCY);
 const AI_STORY_GROUPING_WINDOW_HOURS = parseIntegerEnv('AI_STORY_GROUPING_WINDOW_HOURS', 24, { min: 1, max: 72 });
 const AI_STORY_GROUPING_CANDIDATE_LIMIT = parseIntegerEnv('AI_STORY_GROUPING_CANDIDATE_LIMIT', 64, { min: 8, max: 100 });
 const AI_STORY_GROUPING_RETRY_LIMIT = parseIntegerEnv('AI_STORY_GROUPING_RETRY_LIMIT', 12, { min: 0, max: 50 });
@@ -575,7 +576,8 @@ async function processAiStoryGroupingForArticle(article: Pick<NewsArticle, 'id'>
   }
 
   const result = await findSimilarStoriesForArticle(target, candidates);
-  const storedTarget = database.getArticleById(articleId, { maxArticleAgeHours: null });
+  const queryOptions = { userId: target.ownerUserId || null, maxArticleAgeHours: null };
+  const storedTarget = database.getArticleById(articleId, queryOptions);
   if (!storedTarget || storedTarget.aiStoryGroupStatus === 'matched') {
     return;
   }
@@ -592,7 +594,7 @@ async function processAiStoryGroupingForArticle(article: Pick<NewsArticle, 'id'>
 
   const currentCandidates = (result.candidates || candidates)
     .map((candidate: StoryCandidate) => {
-      const storedCandidate = database.getArticleById(candidate.id, { maxArticleAgeHours: null });
+      const storedCandidate = database.getArticleById(candidate.id, queryOptions);
       return storedCandidate ? { ...candidate, ...storedCandidate } : null;
     })
     .filter((candidate) => candidate !== null);
@@ -640,7 +642,8 @@ async function processAiStoryGroupingForPendingArticles(articles: Pick<NewsArtic
   }
 
   try {
-    const results: PromiseSettledResult<void>[] = await mapSettledWithConcurrency(articles, AI_STORY_GROUPING_CONCURRENCY, processAiStoryGroupingForArticle);
+    const results: PromiseSettledResult<void>[] = await mapSettledWithConcurrency(articles, AI_STORY_GROUPING_CONCURRENCY,
+      (article) => limitStoryGrouping(() => processAiStoryGroupingForArticle(article)));
     const failedArticleIds = results
       .map((result: PromiseSettledResult<void>, index: number) => result.status === 'rejected' ? articles[index]?.id : null)
       .filter((articleId: string | null): articleId is string => Boolean(articleId));

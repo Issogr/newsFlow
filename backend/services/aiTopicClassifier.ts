@@ -5,7 +5,7 @@ import topicNormalizer from './topicNormalizer';
 import classifierUtils from './aiClassifierUtils';
 import openRouterClient from './openRouterClient';
 import aiArticlePayload from './aiArticlePayload';
-const { mapSettledWithConcurrency } = concurrency;
+const { createConcurrencyLimiter } = concurrency;
 const { isAiToggleEnabled } = aiFeatures;
 const {
   extractAssistantContent,
@@ -25,6 +25,7 @@ import type { DynamicRecord, NewsArticle } from '../utils/types';
 
 const DEFAULT_OPENROUTER_TOPIC_MODEL = 'mistralai/mistral-small-24b-instruct-2501';
 const DEFAULT_TIMEOUT_MS = 30000;
+const limitTopicBatch = createConcurrencyLimiter(getClassifierBatchConfig().batchConcurrency);
 const TOPIC_GUIDANCE = [
   'Politica: government, elections, parties, institutions, protests, policy, public ceremonies.',
   'Economia: markets, business, companies, finance, inflation, jobs, trade.',
@@ -368,10 +369,10 @@ async function classifyTopicDetailsForArticlesWithStatus(articles: NewsArticle[]
     batches.push(aiArticles.slice(index, index + config.batchSize));
   }
   logger.info(`AI topic detection started: model=${config.model}, articles=${limitedArticles.length}, deterministic=${deterministicTopicsByArticleId.size}, aiArticles=${aiArticles.length}, batches=${batches.length}`);
-  const batchResults: PromiseSettledResult<Map<string, DynamicRecord[]>>[] = await mapSettledWithConcurrency(batches, config.batchConcurrency, (batch: NewsArticle[], batchIndex: number) => classifyBatch(batch, config, {
+  const batchResults = await Promise.allSettled(batches.map((batch, batchIndex) => limitTopicBatch(() => classifyBatch(batch, config, {
     batchIndex,
     batchCount: batches.length
-  }));
+  }))));
   const failedArticleIds: string[] = [];
   batchResults.forEach((result, index) => {
     if (result.status === 'rejected') {

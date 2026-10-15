@@ -403,6 +403,65 @@ describe('useSettingsPanelState', () => {
     }));
   });
 
+  test.each([false, true])('retries only pending deletions after a partial save (already deleted: %s)', async (alreadyDeleted) => {
+    const currentUser = {
+      ...baseCurrentUser,
+      customSources: ['first', 'second'].map((id) => ({ id, name: id, url: `https://example.com/${id}` }))
+    };
+    deleteUserSource.mockResolvedValueOnce({ success: true }).mockRejectedValueOnce(new Error('Connection lost'));
+    if (alreadyDeleted) {
+      deleteUserSource.mockRejectedValueOnce({ response: { status: 404 } });
+    } else {
+      deleteUserSource.mockResolvedValueOnce({ success: true });
+    }
+    const { result, patchSession } = renderSettingsHook({ currentUser });
+    act(() => {
+      result.current.handleDeleteSource('first');
+      result.current.handleDeleteSource('second');
+    });
+
+    await act(async () => { expect(await result.current.handleSave()).toBe(false); });
+    expect(result.current.pendingDeletedSourceIds).toEqual(['second']);
+    expect(result.current.customSources).toEqual([currentUser.customSources[1]]);
+    expect(patchSession).toHaveBeenLastCalledWith({ customSources: [currentUser.customSources[1]] });
+
+    await act(async () => { expect(await result.current.handleSave()).toBe(true); });
+    expect(deleteUserSource.mock.calls.map(([id]) => id)).toEqual(['first', 'second', 'second']);
+    expect(result.current.pendingDeletedSourceIds).toEqual([]);
+    expect(result.current.customSources).toEqual([]);
+    expect(result.current.hasUnsavedChanges).toBe(false);
+  });
+
+  test('keeps completed source edits and deletions when the settings request fails', async () => {
+    const currentUser = {
+      ...baseCurrentUser,
+      customSources: ['edited', 'deleted'].map((id) => ({ id, name: id, url: `https://example.com/${id}`, language: 'en' }))
+    };
+    const editedSource = { ...currentUser.customSources[0], name: 'Updated feed' };
+    updateUserSource.mockResolvedValueOnce({ source: editedSource });
+    deleteUserSource.mockResolvedValueOnce({ success: true });
+    updateUserSettings.mockRejectedValueOnce(new Error('Settings unavailable'))
+      .mockResolvedValueOnce({ settings: { ...currentUser.settings, themeMode: 'dark' } });
+    const { result } = renderSettingsHook({ currentUser });
+    act(() => {
+      result.current.startEditSource(currentUser.customSources[0]);
+      result.current.setEditingSourceForm({ name: editedSource.name, url: editedSource.url, language: 'en' });
+      result.current.handleDeleteSource('deleted');
+      result.current.setSetting('themeMode', 'dark');
+    });
+
+    await act(async () => { expect(await result.current.handleSave()).toBe(false); });
+    expect(result.current.customSources).toEqual([editedSource]);
+    expect(result.current.pendingDeletedSourceIds).toEqual([]);
+    expect(result.current.settings.themeMode).toBe('dark');
+
+    await act(async () => { expect(await result.current.handleSave()).toBe(true); });
+    expect(updateUserSource).toHaveBeenCalledTimes(1);
+    expect(deleteUserSource).toHaveBeenCalledTimes(1);
+    expect(updateUserSettings).toHaveBeenCalledTimes(2);
+    expect(result.current.hasUnsavedChanges).toBe(false);
+  });
+
   test('patches only API token session state when creating and revoking a token', async () => {
     const tokenInfo = { id: 'token-1', expiresAt: '2026-09-01T00:00:00.000Z' };
     createApiToken.mockResolvedValue({ token: 'raw-token', tokenInfo });

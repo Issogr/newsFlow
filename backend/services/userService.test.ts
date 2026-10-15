@@ -96,6 +96,33 @@ describe('userService imports', () => {
     expect(database.getUserSettings(userId)).not.toHaveProperty('recentHours');
   });
 
+  test('rejects malformed backups without deleting sources or saved articles', async () => {
+    const { user } = await userService.registerUser({ username: 'import-owner', password: 'secret123' });
+    const now = new Date().toISOString();
+    database.createUserSource({
+      id: 'custom-source', userId: user.id, name: 'Custom', url: 'https://example.com/feed',
+      isActive: true, createdAt: now, updatedAt: now
+    });
+    database.upsertArticles([{
+      id: 'saved-private', ownerUserId: user.id, sourceId: 'custom-source', source: 'Custom',
+      title: 'Saved private article', url: 'https://example.com/saved', pubDate: now
+    }]);
+    expect(database.saveReadLaterArticles(user.id, ['saved-private'], { userId: user.id }).savedCount).toBe(1);
+    const settings = database.getUserSettings(user.id);
+    const sources = database.listUserSources(user.id);
+
+    for (const payload of [null, [], {}, { customSources: [] }, { settings: {} },
+      { settings: [], customSources: [] }, { settings: {}, customSources: {} }]) {
+      await expect(userService.importUserSettings(user.id, payload)).rejects.toMatchObject({
+        status: 400, code: 'INVALID_IMPORT_PAYLOAD'
+      });
+      expect(database.getUserSettings(user.id)).toEqual(settings);
+      expect(database.listUserSources(user.id)).toEqual(sources);
+      expect(database.isReadLaterArticle(user.id, 'saved-private')).toBe(true);
+    }
+    expect(rssParser.validateFeedUrl).not.toHaveBeenCalled();
+  });
+
   test('exported settings preserve showNewsImages across import', async () => {
     const sourceAuthPayload = await userService.registerUser({ username: 'source-user', password: 'secret123' });
     const targetAuthPayload = await userService.registerUser({ username: 'target-user', password: 'secret123' });
@@ -171,6 +198,7 @@ describe('userService imports', () => {
 
     rssParser.validateFeedUrl.mockClear();
     await expect(userService.importUserSettings(userId, {
+      settings: {},
       customSources: Array.from({ length: 9 }, (_, index) => ({
         name: `Imported ${index}`,
         url: `https://example.com/imported-${index}.xml`
@@ -294,6 +322,24 @@ describe('userService imports', () => {
     expect(results.find((result) => result.status === 'rejected')!.reason).toMatchObject({
       status: 409,
       code: 'USER_ALREADY_EXISTS'
+    });
+  });
+
+  test('rejects an in-flight login after the password changes and sessions are revoked', async () => {
+    const { user } = await userService.registerUser({ username: 'reset-race', password: 'secret123' });
+    const auth = (await import('../utils/auth')).default;
+    const nextHash = await auth.hashPassword('replacement123');
+    const login = userService.loginUser({ username: 'reset-race', password: 'secret123' });
+
+    database.getDb().transaction(() => {
+      database.updateUserPassword(user.id, nextHash, new Date().toISOString());
+      database.deleteSessionsByUserId(user.id);
+    })();
+
+    await expect(login).rejects.toMatchObject({ status: 401, code: 'UNAUTHORIZED' });
+    expect(database.getDb().prepare('SELECT COUNT(*) AS count FROM user_sessions WHERE user_id = ?').get(user.id).count).toBe(0);
+    await expect(userService.loginUser({ username: 'reset-race', password: 'replacement123' })).resolves.toMatchObject({
+      user: { id: user.id }
     });
   });
 

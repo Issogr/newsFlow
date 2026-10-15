@@ -7,7 +7,7 @@ import { buildRateLimitMessage } from '../../utils/errorHandler';
 import inputValidator from '../../utils/inputValidator';
 import helpers from './helpers';
 const { requireAuthenticatedUser } = auth;
-const { sanitizeBody, sanitizeQuery } = inputValidator;
+const { sanitizeBody } = inputValidator;
 const { clearSessionCookie, sendAuthResult } = helpers;
 
 const router = express.Router();
@@ -55,7 +55,7 @@ router.post('/auth/login', [authRateLimit, sanitizeBody(['username'])], async (r
   sendAuthResult(req, res, result);
 });
 
-router.get('/auth/password-setup/validate', [passwordSetupRateLimit, sanitizeQuery('token')], async (req: Request, res: Response) => {
+router.get('/auth/password-setup/validate', passwordSetupRateLimit, async (req: Request, res: Response) => {
   const details = userService.getPasswordSetupTokenDetails(req.query.token);
   res.json(details);
 });

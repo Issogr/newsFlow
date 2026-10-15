@@ -2,23 +2,21 @@ import express from 'express';
 import type { Request, Response } from 'express';
 import newsService from '../../services/newsAggregator';
 import auth from '../../utils/auth';
-import inputValidator from '../../utils/inputValidator';
 import newsQuery from '../../utils/newsQuery';
 import helpers from './helpers';
 const { requireAuthenticatedUser } = auth;
-const { sanitizeQuery } = inputValidator;
 const { parseNewsQuery } = newsQuery;
 const { getRequestIds, getUserContext } = helpers;
 
 const router = express.Router();
 
-router.get('/news', [requireAuthenticatedUser, sanitizeQuery(['search', 'beforePubDate', 'beforeId'])], async (req: Request, res: Response) => {
+router.get('/news', requireAuthenticatedUser, async (req: Request, res: Response) => {
   const filters = parseNewsQuery(req.query);
   const result = await newsService.getNewsFeed(filters, getUserContext(req));
   res.json(result);
 });
 
-router.get('/read-later', [requireAuthenticatedUser, sanitizeQuery('search')], async (req: Request, res: Response) => {
+router.get('/read-later', requireAuthenticatedUser, async (req: Request, res: Response) => {
   const filters = parseNewsQuery(req.query);
   const result = await newsService.getReadLaterFeed(filters, getUserContext(req));
   res.json(result);

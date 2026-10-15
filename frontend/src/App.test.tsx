@@ -5,6 +5,7 @@ import {
   AUTH_EXPIRED_EVENT,
   completePasswordSetup as completePasswordSetupImplementation,
   fetchCurrentUser as fetchCurrentUserImplementation,
+  logoutUser as logoutUserImplementation,
   updateUserSettings as updateUserSettingsImplementation,
   validatePasswordSetupToken as validatePasswordSetupTokenImplementation
 } from './services/api';
@@ -27,13 +28,15 @@ vi.mock('./services/api', () => ({
 
 const completePasswordSetup = vi.mocked(completePasswordSetupImplementation);
 const fetchCurrentUser = vi.mocked(fetchCurrentUserImplementation);
+const logoutUser = vi.mocked(logoutUserImplementation);
 const updateUserSettings = vi.mocked(updateUserSettingsImplementation);
 const validatePasswordSetupToken = vi.mocked(validatePasswordSetupTokenImplementation);
 
 vi.mock('./components/NewsAggregator', () => ({
-  default: ({ currentUser, locale, t, patchSession }: { currentUser: CurrentUser; locale: Locale; t: Translator; patchSession: (patch: Record<string, unknown>) => void }) => (
+  default: ({ currentUser, locale, t, patchSession, onLogout }: { currentUser: CurrentUser; locale: Locale; t: Translator; patchSession: (patch: Record<string, unknown>) => void; onLogout: () => void }) => (
     <div>
       <div>Authenticated app</div>
+      <button type="button" onClick={onLogout}>Logout</button>
       <div data-testid="active-locale">{locale}: {t('settings')}</div>
       <div>Session fields: {currentUser.apiToken?.id || 'none'}, {currentUser.customSources?.length || 0} sources</div>
       <button
@@ -188,6 +191,31 @@ describe('App', () => {
 
     expect(await screen.findByText('Authenticated app')).toBeInTheDocument();
     expect(fetchCurrentUser).toHaveBeenCalledTimes(2);
+  });
+
+  test.each([new Error('Network failure'), { response: { status: 429 } }])('keeps the session visible after failed logout and allows retry (%j)', async (error) => {
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser());
+    logoutUser.mockRejectedValueOnce(error).mockResolvedValueOnce({ success: true });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Logout' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not confirm logout');
+    expect(screen.getByText('Authenticated app')).toBeInTheDocument();
+    expect(screen.queryByText('Sign in')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByText('Sign in')).toBeInTheDocument();
+    expect(screen.queryByText('Authenticated app')).not.toBeInTheDocument();
+    expect(logoutUser).toHaveBeenCalledTimes(2);
+  });
+
+  test('clears the local session when logout confirms it has already expired', async () => {
+    fetchCurrentUser.mockResolvedValue(createTestCurrentUser());
+    logoutUser.mockRejectedValueOnce({ response: { status: 401 } });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Logout' }));
+    expect(await screen.findByText('Sign in')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   test('renders the password setup screen on setup routes', async () => {

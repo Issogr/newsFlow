@@ -150,7 +150,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 | --- | --- | --- |
 | `OPENROUTER_TOPIC_MODEL` | `mistralai/mistral-small-24b-instruct-2501` | Model used for AI topic classification. |
 | `AI_TOPIC_BATCH_SIZE` | `10` | Articles per topic-classification request. `Number` parsing, rounded down and clamped to `1..50`. |
-| `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Concurrent topic-classification requests. `Number` parsing, rounded down and clamped to `1..4`. |
+| `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Process-wide concurrent topic-classification requests, shared across refreshes. Read at startup; `Number` parsing, rounded down and clamped to `1..4`. |
 | `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles sent to AI per refresh. `Number` parsing, rounded down and clamped to `1..1000`. |
 | `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one topic-classification request. `Number` parsing, rounded down and clamped to `1000..120000`. |
 | `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips OpenRouter classification for articles with high-confidence local topic matches. Invalid values disable it. |
@@ -162,7 +162,7 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 | --- | --- | --- |
 | `OPENROUTER_STORY_GROUPING_MODEL` | `qwen/qwen3.7-flash` | Model used to decide whether articles describe the same story. |
 | `AI_STORY_GROUPING_REQUEST_TIMEOUT_MS` | `120000` | Timeout for one story-grouping request. `Number` parsing, rounded down; valid `1000..120000`. Invalid/out-of-range values fall back to the default. |
-| `AI_STORY_GROUPING_CONCURRENCY` | `1` | Concurrent story-grouping jobs during ingestion. Minimum `1`, maximum `4`. |
+| `AI_STORY_GROUPING_CONCURRENCY` | `1` | Process-wide concurrent story-grouping jobs, shared across ingestions. Read at startup. Minimum `1`, maximum `4`. |
 | `AI_STORY_GROUPING_WINDOW_HOURS` | `24` | Candidate article age window for grouping. Minimum `1`, maximum `72`. |
 | `AI_STORY_GROUPING_CANDIDATE_LIMIT` | `64` | Candidate articles considered before AI filtering. Minimum `8`, maximum `100`. |
 | `AI_STORY_GROUPING_AI_CANDIDATE_LIMIT` | `8` | Candidate articles sent to AI for one grouping decision after lexical/topic filtering. Minimum `1`, maximum `12`. |

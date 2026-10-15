@@ -32,6 +32,9 @@ const feedbackUpload = multer({
   limits: {
     files: 1,
     fileSize: MAX_FEEDBACK_ATTACHMENT_BYTES,
+    fields: 3,
+    fieldSize: MAX_FEEDBACK_DESCRIPTION_LENGTH * 4,
+    parts: 5, // Busboy reports the limit as soon as this count is reached.
   },
   fileFilter: (req, file, callback) => {
     const mimeType = String(file?.mimetype || '');
@@ -75,6 +78,11 @@ const handleFeedbackUpload: RequestHandler = (req, res, next) => {
 
       if (error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE') {
         next(createError(400, 'Attach only one image or video.', 'INVALID_FEEDBACK_IMAGE'));
+        return;
+      }
+
+      if (['LIMIT_FIELD_COUNT', 'LIMIT_FIELD_VALUE', 'LIMIT_PART_COUNT', 'LIMIT_FIELD_KEY'].includes(error.code)) {
+        next(createError(400, 'Feedback form contains too many or oversized fields.', 'INVALID_FEEDBACK_PAYLOAD'));
         return;
       }
 

@@ -6,12 +6,10 @@ import type { AppError } from '../utils/types';
 import newsService from '../services/newsAggregator';
 import userService from '../services/userService';
 import { buildRateLimitMessage, createError } from '../utils/errorHandler';
-import inputValidator from '../utils/inputValidator';
 import auth from '../utils/auth';
 import newsQuery from '../utils/newsQuery';
 import userContext from '../utils/userContext';
 import publicApi from '../config/publicApi';
-const { sanitizeQuery } = inputValidator;
 const { extractBearerToken, resolveAuthenticatedApiToken } = auth;
 const { parseNewsQuery } = newsQuery;
 const { buildUserContext } = userContext;
@@ -178,8 +176,7 @@ router.get('/news', [
   bearerPublicNewsTokenRateLimit,
   rejectInvalidExternalApiToken,
   anonymousPublicNewsRateLimit,
-  authenticatedPublicNewsRateLimit,
-  sanitizeQuery(['search', 'beforePubDate', 'beforeId'])
+  authenticatedPublicNewsRateLimit
 ], async (req: Request, res: Response) => {
   const filters = parseNewsQuery(req.query);
   const result = await newsService.getCachedNewsFeed(filters, getExternalUserContext(req));
