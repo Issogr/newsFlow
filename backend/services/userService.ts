@@ -13,6 +13,8 @@ import aiFeatures from '../config/aiFeatures';
 import feedback from '../utils/feedback';
 import sourceCatalog from '../utils/sourceCatalog';
 import auth from '../utils/auth';
+import inputValidator from '../utils/inputValidator';
+const { sanitizeUsername } = inputValidator;
 const { isFeedbackConfigured } = feedbackService;
 const { mapWithConcurrency } = concurrency;
 const { getProviderIconUrl } = sourceIcons;
@@ -27,7 +29,7 @@ const {
   MAX_FEEDBACK_TITLE_LENGTH,
   MAX_FEEDBACK_VIDEO_BYTES,
 } = feedback;
-const { getConfiguredSourceGroupIds, getConfiguredSourceGroups, getGroupedConfiguredSourceIds } = sourceCatalog;
+const { buildDomainSourceGroups, getConfiguredSourceGroupIds, getConfiguredSourceGroups, getGroupedConfiguredSourceIds } = sourceCatalog;
 const {
   hashPassword,
   verifyPassword,
@@ -162,10 +164,6 @@ function isUniqueConstraintError(error: unknown) {
   const databaseError = error as AppError;
   return String(databaseError?.code || '').startsWith('SQLITE_CONSTRAINT')
     || String(databaseError?.message || '').toLowerCase().includes('unique constraint failed');
-}
-
-function sanitizeUsername(username: unknown) {
-  return String(username || '').trim().slice(0, 40);
 }
 
 function normalizeEnumValue(value: unknown, allowedValues: Set<string>, fallback: string) {
@@ -769,7 +767,7 @@ function exportUserSettings(userId: string) {
   const customSourceIds = new Set(customSources.map((source) => source.id));
 
   return {
-    version: 10,
+    version: 11,
     exportedAt: new Date().toISOString(),
     settings: {
       defaultLanguage: settings.defaultLanguage,
@@ -780,7 +778,7 @@ function exportUserSettings(userId: string) {
       readerTextWidth: settings.readerTextWidth || 'default',
       lastSeenReleaseNotesVersion: settings.lastSeenReleaseNotesVersion || '',
       excludedSourceIds: settings.excludedSourceIds.filter((sourceId) => !customSourceIds.has(sourceId)),
-      excludedSubSourceIds: settings.excludedSubSourceIds
+      excludedSubSourceIds: settings.excludedSubSourceIds.filter((sourceId) => !customSourceIds.has(sourceId))
     },
     customSources: customSources.map((source) => ({
       name: source.name,
@@ -788,7 +786,8 @@ function exportUserSettings(userId: string) {
       language: source.language,
       iconUrl: source.iconUrl || getProviderIconUrl(source.url),
       isActive: source.isActive !== false,
-      isExcluded: settings.excludedSourceIds.includes(source.id)
+      isExcluded: settings.excludedSourceIds.includes(source.id),
+      isSubExcluded: settings.excludedSubSourceIds.includes(source.id)
     }))
   };
 }
@@ -1110,24 +1109,30 @@ async function importUserSettings(userId: string, payload: DynamicRecord = {}, o
   });
 
   const now = new Date().toISOString();
+  const existingSourcesByUrl = new Map(database.listUserSources(userId).map((source) => [source.url, source]));
   const recreatedSources = importedCustomSources.map((source: DynamicRecord) => {
+    const url = String(source.url).trim();
+    const existingSource = existingSourcesByUrl.get(url);
     return {
-      id: createId(),
+      id: existingSource?.id || createId(),
       userId,
       name: String(source.name).trim().slice(0, 80),
-      url: String(source.url).trim(),
+      url,
       language: String(source.language || 'it').trim().toLowerCase().slice(0, 5) || 'it',
       iconUrl: getProviderIconUrl(source.url),
       isActive: source.isActive !== false,
-      createdAt: now,
+      createdAt: existingSource?.createdAt || now,
       updatedAt: now,
       validatedAt: now,
-      isExcluded: Boolean(source.isExcluded)
+      isExcluded: Boolean(source.isExcluded),
+      isSubExcluded: Boolean(source.isSubExcluded)
     };
   });
 
-  const excludedGlobalSourceIds = Array.isArray(importedSettings.excludedSourceIds)
-    ? importedSettings.excludedSourceIds.filter((sourceId: string) => globalSourceIds.has(sourceId))
+  const customGroupIds = new Set(buildDomainSourceGroups(recreatedSources).keys());
+  recreatedSources.forEach((source) => groupedSubSourceIds.add(source.id));
+  const excludedGroupIds = Array.isArray(importedSettings.excludedSourceIds)
+    ? importedSettings.excludedSourceIds.filter((sourceId: string) => globalSourceIds.has(sourceId) || customGroupIds.has(sourceId))
     : [];
   const excludedSubSourceIds = Array.isArray(importedSettings.excludedSubSourceIds)
     ? importedSettings.excludedSubSourceIds.filter((sourceId: string) => groupedSubSourceIds.has(sourceId))
@@ -1136,14 +1141,14 @@ async function importUserSettings(userId: string, payload: DynamicRecord = {}, o
     .filter((source) => source.isExcluded)
     .map((source) => source.id);
   const nextSettings = normalizeUserSettingsPayload(importedSettings, getUserSettings(userId), {
-    excludedSourceIds: [...excludedGlobalSourceIds, ...excludedCustomSourceIds],
-    excludedSubSourceIds
+    excludedSourceIds: [...excludedGroupIds, ...excludedCustomSourceIds],
+    excludedSubSourceIds: [...excludedSubSourceIds, ...recreatedSources.filter((source) => source.isSubExcluded).map((source) => source.id)]
   });
 
   options.signal?.throwIfAborted();
   return database.importUserState(
     userId,
-    recreatedSources.map(({ isExcluded, ...source }) => source),
+    recreatedSources.map(({ isExcluded, isSubExcluded, ...source }) => source),
     nextSettings
   );
 }

@@ -18,7 +18,7 @@ import sessionCookie from './utils/sessionCookie';
 const { getTrustProxySetting, requireSameOriginRequest } = browserSecurity;
 const { redactUrlForLog } = logRedaction;
 const { getAllowedOrigins, isOriginAllowed } = networkConfig;
-const { extractSessionCookie } = auth;
+const { extractSessionCookie, requireAuthenticatedUser } = auth;
 const { clearSessionCookie, getSessionCookieOptions } = sessionCookie;
 
 const packageRoot = path.basename(__dirname) === 'dist' ? path.dirname(__dirname) : __dirname;
@@ -74,6 +74,14 @@ function createApp(options: CreateAppOptions = {}): express.Express {
     keyGenerator: (req) => ipKeyGenerator(req.ip || ''),
     message: buildRateLimitMessage('Too many requests. Please try again later.'),
   });
+  const accountRateLimit = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.user.id,
+    message: buildRateLimitMessage('Too many requests. Please try again later.'),
+  });
 
   const publicCors = cors({
     origin: (origin, callback) => {
@@ -118,33 +126,41 @@ function createApp(options: CreateAppOptions = {}): express.Express {
     const requestPath = req.path.toLowerCase().replace(/\/+$/u, '') || '/';
 
     if (req.method === 'GET' && requestPath === '/auth/password-setup/validate') {
-      next();
+      baseRateLimit(req, res, next);
       return;
     }
 
     if (req.method === 'POST' && SESSION_CREATING_PATHS.has(requestPath)) {
-      requireSameOriginUnsafeRequest(req, res, next);
+      baseRateLimit(req, res, () => requireSameOriginUnsafeRequest(req, res, next));
       return;
     }
 
     if (req.method === 'POST' && requestPath === '/auth/logout' && !extractSessionCookie(req.headers.cookie)) {
-      requireSameOriginUnsafeRequest(req, res, () => {
+      baseRateLimit(req, res, () => requireSameOriginUnsafeRequest(req, res, () => {
         clearSessionCookie(req, res);
         res.status(200).json({ success: true });
-      });
+      }));
       return;
     }
 
     if (!extractSessionCookie(req.headers.cookie)) {
-      clearSessionCookie(req, res);
-      next(createError(401, 'Authentication required', 'UNAUTHORIZED'));
+      baseRateLimit(req, res, () => {
+        clearSessionCookie(req, res);
+        next(createError(401, 'Authentication required', 'UNAUTHORIZED'));
+      });
       return;
     }
 
-    requireSameOriginUnsafeRequest(req, res, next);
+    requireSameOriginUnsafeRequest(req, res, (originError) => {
+      if (originError) return next(originError);
+      requireAuthenticatedUser(req, res, (authError) => {
+        if (authError) return baseRateLimit(req, res, () => next(authError));
+        accountRateLimit(req, res, next);
+      });
+    });
   };
 
-  app.use('/api', baseRateLimit, browserApiBoundary, jsonParser, urlencodedParser, apiRoutes);
+  app.use('/api', browserApiBoundary, jsonParser, urlencodedParser, apiRoutes);
   app.use('/api', (req, _res, next) => {
     next(createError(404, `Resource not found: ${req.originalUrl}`, 'RESOURCE_NOT_FOUND'));
   });

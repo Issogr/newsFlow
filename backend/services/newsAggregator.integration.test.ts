@@ -119,3 +119,73 @@ test('shares the story-grouping concurrency limit across overlapping ingestions'
     });
   }
 });
+
+test.each(['target', 'candidate'])('retries grouping against corrected %s evidence instead of publishing an old match', async (changed) => {
+  const target = article('target');
+  const candidate = article('candidate');
+  database.upsertArticles([target, candidate]);
+  const pending = Promise.withResolvers<Awaited<ReturnType<typeof grouper.findSimilarStoriesForArticle>>>();
+  vi.mocked(grouper.findSimilarStoriesForArticle).mockReturnValueOnce(pending.promise);
+  ingestion.scheduleAiStoryGroupingForPendingArticles([target], { retryAnchorArticleIds: [] });
+  await vi.waitFor(() => expect(grouper.findSimilarStoriesForArticle).toHaveBeenCalledTimes(1));
+  database.upsertArticles([{ ...(changed === 'target' ? target : candidate), title: 'Corrected unrelated event' }]);
+  pending.resolve({ matches: [{ articleId: candidate.id, confidence: 0.99, reason: 'Old evidence' }], model: 'test-model', candidates: [candidate] });
+  await vi.waitFor(() => expect(grouper.findSimilarStoriesForArticle).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(database.getArticleById(target.id)?.aiStoryGroupStatus).toBe('no_match'));
+  expect(database.getArticleById(target.id)?.storyGroupId).toBeNull();
+  expect(database.getArticleById(candidate.id)?.storyGroupId).toBeNull();
+});
+
+test('returns complete long-running stories exactly once across cursors and preserves source scope', async () => {
+  const now = Date.now();
+  const articles = Array.from({ length: 351 }, (_, index) => article(`item-${String(index).padStart(3, '0')}`, {
+    pubDate: new Date(now - (index * 60_000) - 1000).toISOString()
+  }));
+  articles.push(article('old-member', { pubDate: new Date(now - 18 * 3600_000).toISOString() }));
+  database.upsertArticles(articles);
+  database.assignArticlesToStoryGroup([articles[0].id, 'old-member'], 'long-story', 'test', []);
+  let cursor = {};
+  const seen: string[] = [];
+  let response;
+  do {
+    response = await query.getNewsFeed({ ...cursor, pageSize: 30, includeFilters: false });
+    if (!seen.length) expect(response.items[0].items.map((item) => item.id)).toEqual([articles[0].id, 'old-member']);
+    seen.push(...response.items.flatMap((group) => group.items.map((item) => item.id)));
+    cursor = response.meta.nextCursor || {};
+  } while (response.meta.hasMore && seen.length <= articles.length);
+  expect(seen.sort()).toEqual(articles.map((item) => item.id).sort());
+});
+
+test('saved cursors survive removal and reach beyond 240 groups', async () => {
+  const now = new Date().toISOString();
+  database.createUser({ id: 'reader', username: 'reader', createdAt: now, updatedAt: now });
+  const articles = Array.from({ length: 301 }, (_, index) => article(`saved-${String(index).padStart(3, '0')}`));
+  database.upsertArticles(articles);
+  database.saveReadLaterArticles('reader', articles.map((item) => item.id));
+  const context = { userId: 'reader' };
+  let response = await query.getReadLaterFeed({ pageSize: 12, includeFilters: false }, context);
+  const seen = response.items.flatMap((group) => group.items.map((item) => item.id));
+  // Removing the last returned card must not invalidate the saved position.
+  database.removeReadLaterArticles('reader', [seen[seen.length - 1]]);
+  while (response.meta.hasMore && seen.length <= articles.length) {
+    response = await query.getReadLaterFeed({ ...response.meta.nextCursor, pageSize: 12, includeFilters: false }, context);
+    seen.push(...response.items.flatMap((group) => group.items.map((item) => item.id)));
+  }
+  expect(response.meta.hasMore).toBe(false);
+  expect(seen.sort()).toEqual(articles.map((item) => item.id).sort());
+});
+
+test('read-later writes reject oversized batches without saving only part', async () => {
+  const news = (await import('./newsAggregator')).default;
+  const now = new Date().toISOString();
+  database.createUser({ id: 'reader', username: 'reader', createdAt: now, updatedAt: now });
+  const articles = Array.from({ length: 21 }, (_, index) => article(`member-${index}`));
+  database.upsertArticles(articles);
+  const ids = articles.map((item) => item.id);
+  expect(() => news.saveReadLaterArticles({ userId: 'reader' }, ids)).toThrow('at most 20');
+  expect(database.getReadLaterArticleIdSet('reader', ids).size).toBe(0);
+  for (let index = 0; index < ids.length; index += 20) news.saveReadLaterArticles({ userId: 'reader' }, ids.slice(index, index + 20));
+  expect(database.getReadLaterArticleIdSet('reader', ids).size).toBe(21);
+  for (let index = 0; index < ids.length; index += 20) news.removeReadLaterArticles({ userId: 'reader' }, ids.slice(index, index + 20));
+  expect(database.getReadLaterArticleIdSet('reader', ids).size).toBe(0);
+});

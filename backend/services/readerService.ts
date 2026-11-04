@@ -1,4 +1,5 @@
 import { JSDOM } from 'jsdom';
+import { createHash } from 'node:crypto';
 import { Readability } from '@mozilla/readability';
 import database from './database';
 import logger from '../utils/logger';
@@ -39,7 +40,7 @@ const READER_EXTRACTION_MAX_PENDING = parseIntegerEnv('READER_EXTRACTION_MAX_PEN
 const READER_EXTRACTION_MAX_PENDING_PER_USER = parseIntegerEnv('READER_EXTRACTION_MAX_PENDING_PER_USER', 20, { min: 1 });
 const CONTAINER_TAGS = new Set(['ARTICLE', 'SECTION', 'DIV', 'MAIN']);
 const readerExtractionPromises = new Map<string, Promise<DynamicRecord>>();
-const readerFallbackCache = new Map<string, { expiresAt: number; payload: DynamicRecord }>();
+const readerFallbackCache = new Map<string, { expiresAt: number; fingerprint: string; payload: DynamicRecord }>();
 const readerExtractionQueue: ReaderQueueEntry[] = [];
 const readerExtractionsByUser = new Map<string, number>();
 let readerFallbackPruneHandle: NodeJS.Timeout | null = null;
@@ -384,13 +385,20 @@ async function fetchReaderPayload(article: ReaderArticle) {
   });
 }
 
-function getCachedFallbackPayload(articleId: string) {
+function getReaderFingerprint(article: ReaderArticle) {
+  return createHash('sha256').update(JSON.stringify([
+    article.url, article.title, article.description, article.content, article.author,
+    article.language, article.rawSource || article.source, article.ownerUserId, article.pubDate
+  ])).digest('hex');
+}
+
+function getCachedFallbackPayload(articleId: string, fingerprint: string) {
   const cached = readerFallbackCache.get(articleId);
   if (!cached) {
     return null;
   }
 
-  if (cached.expiresAt <= Date.now()) {
+  if (cached.expiresAt <= Date.now() || cached.fingerprint !== fingerprint) {
     readerFallbackCache.delete(articleId);
     return null;
   }
@@ -432,13 +440,14 @@ function ensureFallbackCachePruneInterval() {
   readerFallbackPruneHandle.unref?.();
 }
 
-function setCachedFallbackPayload(articleId: string, payload: DynamicRecord) {
+function setCachedFallbackPayload(articleId: string, fingerprint: string, payload: DynamicRecord) {
   if (READER_FALLBACK_CACHE_TTL_MS <= 0) {
     return;
   }
 
   pruneExpiredFallbackCache();
   readerFallbackCache.set(articleId, {
+    fingerprint,
     expiresAt: Date.now() + READER_FALLBACK_CACHE_TTL_MS,
     payload: { ...payload }
   });
@@ -446,38 +455,47 @@ function setCachedFallbackPayload(articleId: string, payload: DynamicRecord) {
 }
 
 async function loadFreshReaderPayload(articleId: string, article: ReaderArticle) {
+  let payload: DynamicRecord;
   try {
-    const payload = await fetchReaderPayload(article);
-    database.upsertReaderCache(articleId, payload);
-    readerFallbackCache.delete(articleId);
-    return payload;
+    payload = await fetchReaderPayload(article);
   } catch (error) {
     logger.debug(`Reader mode extraction fell back for ${article.url}: ${summarizeErrorMessage(error)}`);
 
-    const fallbackPayload = {
+    payload = {
       ...buildFallbackPayload(article),
       cached: false,
       fallback: true
     };
-    setCachedFallbackPayload(articleId, fallbackPayload);
-    return fallbackPayload;
   }
+  const current = database.getArticleById(articleId, { userId: article.ownerUserId || null });
+  if (!current) throw createError(404, 'Article not found.', 'RESOURCE_NOT_FOUND');
+  const fingerprint = getReaderFingerprint(article);
+  if (getReaderFingerprint(current) !== fingerprint) {
+    throw createError(409, 'Article changed during extraction. Please try again.', 'READER_ARTICLE_CHANGED');
+  }
+  if (payload.fallback) setCachedFallbackPayload(articleId, fingerprint, payload);
+  else {
+    database.upsertReaderCache(articleId, payload);
+    readerFallbackCache.delete(articleId);
+  }
+  return payload;
 }
 
 function getOrCreateReaderExtractionPromise(articleId: string, article: ReaderArticle, options: DynamicRecord = {}) {
-  if (readerExtractionPromises.has(articleId)) {
-    return readerExtractionPromises.get(articleId);
+  const key = `${articleId}:${getReaderFingerprint(article)}`;
+  if (readerExtractionPromises.has(key)) {
+    return readerExtractionPromises.get(key);
   }
 
   const extractionPromise = runWithReaderExtractionConcurrency(() => loadFreshReaderPayload(articleId, article), {
     userId: options.userId
   })
     .finally(() => {
-      if (readerExtractionPromises.get(articleId) === extractionPromise) {
-        readerExtractionPromises.delete(articleId);
+      if (readerExtractionPromises.get(key) === extractionPromise) {
+        readerExtractionPromises.delete(key);
       }
     });
-  readerExtractionPromises.set(articleId, extractionPromise);
+  readerExtractionPromises.set(key, extractionPromise);
   return extractionPromise;
 }
 
@@ -509,7 +527,7 @@ async function getReaderArticle(articleId: string, options: { userId?: string | 
       return buildPayload(article, cached, true);
     }
 
-    const cachedFallback = getCachedFallbackPayload(articleId);
+    const cachedFallback = getCachedFallbackPayload(articleId, getReaderFingerprint(article));
     if (cachedFallback) {
       return cachedFallback;
     }

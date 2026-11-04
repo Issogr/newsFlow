@@ -6,7 +6,7 @@ import { parseIntegerEnv } from './env';
 import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 import type { LookupAddress, LookupOptions } from 'node:dns';
 import type { AppError } from './types';
-import type { Readable } from 'node:stream';
+import { addAbortSignal, type Readable } from 'node:stream';
 
 const MAX_REDIRECTS = parseIntegerEnv('OUTBOUND_MAX_REDIRECTS', 5, { min: 0 });
 const MAX_RESPONSE_BYTES = parseIntegerEnv('OUTBOUND_MAX_RESPONSE_BYTES', 2097152, { min: 1 });
@@ -175,7 +175,8 @@ function isReadableResponse(value: unknown): value is Readable {
   return Boolean(value && typeof value === 'object' && Symbol.asyncIterator in value && 'destroy' in value);
 }
 
-async function readResponseText(responseData: unknown, maxResponseBytes: number): Promise<string> {
+async function readResponseText(responseData: unknown, maxResponseBytes: number, signal?: AbortSignal): Promise<string> {
+  signal?.throwIfAborted();
   if (typeof responseData === 'string') {
     if (Buffer.byteLength(responseData, 'utf8') > maxResponseBytes) {
       throw createOversizedResponseError(maxResponseBytes);
@@ -198,6 +199,9 @@ async function readResponseText(responseData: unknown, maxResponseBytes: number)
 
   const chunks: Buffer[] = [];
   let totalLength = 0;
+  if (signal) {
+    addAbortSignal(signal, responseData);
+  }
   try {
     for await (const chunk of responseData) {
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
@@ -208,6 +212,7 @@ async function readResponseText(responseData: unknown, maxResponseBytes: number)
       chunks.push(buffer);
     }
   } catch (error) {
+    signal?.throwIfAborted();
     if ((error as AppError).code === 'ERR_STREAM_PREMATURE_CLOSE') {
       throw createError(502, 'Outbound response was aborted', 'CONNECTION_ERROR');
     }
@@ -227,6 +232,12 @@ async function fetchSafeTextUrl(rawUrl: unknown, requestConfig: SafeRequestConfi
   resolvedAddress: string;
 }> {
   requestConfig.signal?.throwIfAborted();
+  const timeoutSignal = requestConfig.timeout && Number.isFinite(requestConfig.timeout) && requestConfig.timeout > 0
+    ? AbortSignal.timeout(Math.ceil(requestConfig.timeout))
+    : null;
+  const signal = timeoutSignal
+    ? AbortSignal.any([timeoutSignal, ...(requestConfig.signal ? [requestConfig.signal] : [])])
+    : requestConfig.signal;
   const maxRedirects = Number.isFinite(requestConfig.maxRedirects)
     ? requestConfig.maxRedirects!
     : MAX_REDIRECTS;
@@ -240,19 +251,20 @@ async function fetchSafeTextUrl(rawUrl: unknown, requestConfig: SafeRequestConfi
   } = requestConfig;
   const axiosConfig: AxiosRequestConfig = {
     ...baseRequestConfig,
+    signal,
     maxRedirects: 0,
     responseType: 'stream',
     transformResponse: [(data: unknown) => data],
     validateStatus: () => true
   };
-  let currentTarget = await resolveSafeOutboundTarget(rawUrl, requestConfig);
+  let currentTarget = await resolveSafeOutboundTarget(rawUrl, { signal });
 
   for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
-    requestConfig.signal?.throwIfAborted();
-    const response = await axios.get(currentTarget.url, {
+    signal?.throwIfAborted();
+    const response = await waitForAbortable(axios.get(currentTarget.url, {
       ...axiosConfig,
       lookup: createPinnedLookup(currentTarget) as AxiosRequestConfig['lookup']
-    });
+    }), signal);
 
     if (response.status >= 300 && response.status < 400) {
       const redirectLocation = response.headers?.location;
@@ -262,7 +274,7 @@ async function fetchSafeTextUrl(rawUrl: unknown, requestConfig: SafeRequestConfi
       }
 
       destroyResponseData(response.data);
-      currentTarget = await resolveSafeOutboundTarget(new URL(redirectLocation, currentTarget.url).toString(), requestConfig);
+      currentTarget = await resolveSafeOutboundTarget(new URL(redirectLocation, currentTarget.url).toString(), { signal });
       continue;
     }
 
@@ -273,7 +285,7 @@ async function fetchSafeTextUrl(rawUrl: unknown, requestConfig: SafeRequestConfi
 
     return {
       ...response,
-      data: await readResponseText(response.data, maxResponseBytes),
+      data: await readResponseText(response.data, maxResponseBytes, signal),
       finalUrl: currentTarget.url,
       resolvedAddress: currentTarget.address
     };

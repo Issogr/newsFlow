@@ -46,6 +46,8 @@ For npm runs, pass configuration through the backend process environment; the ro
 
 Choose built-in sources during account setup, then use **Settings** to change source selections or add personal RSS feeds. Each account can keep up to eight custom feeds by default. Settings and custom sources can be exported and imported.
 
+Importing settings preserves existing saved articles, keeps matching feeds by URL, and restores custom publisher and subfeed exclusions from new exports. Saved articles are not included in settings exports; use a database backup to transfer them to another server.
+
 Filter the feed by source, topic, or time, and search the articles already cached on your server. Related coverage appears together in a story card so you can compare publishers without working through a separate card for every article.
 
 Feed reads use cached data. A manual refresh queues source updates in the background and has a five-minute cooldown by default. Scheduled ingestion runs every 15 minutes for sources assigned to recently active users.

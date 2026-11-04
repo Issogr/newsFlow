@@ -151,6 +151,7 @@ export interface ThematicSummary {
 }
 
 export interface FeedCursor {
+  beforeSavedAt?: string;
   beforePubDate?: string;
   beforeId?: string;
   excludeArticleIds?: string[];

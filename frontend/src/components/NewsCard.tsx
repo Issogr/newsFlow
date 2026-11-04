@@ -264,7 +264,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   };
 
   const sourceIconItems = sourceEntries.slice(0, 2).map((source) => (
-    <span key={source.id} title={source.name} aria-label={source.name} className="flex h-8 w-8 shrink-0 leading-none sm:h-9 sm:w-9">
+    <span key={source.id} role="img" title={source.name} aria-label={source.name} className="flex h-8 w-8 shrink-0 leading-none sm:h-9 sm:w-9">
       <SourceIcon
         source={source}
         className="h-8 w-8 outline outline-2 outline-white sm:h-9 sm:w-9"
@@ -275,6 +275,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
     <div
       className="inline-flex rounded-full p-0.5"
       style={AI_ACCENT_GRADIENT_STYLE}
+      role="group"
       aria-label={t('aiGroupedStory')}
       title={t('aiGroupedStory')}
     >
@@ -283,7 +284,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
       </div>
     </div>
   ) : (
-    <div className="flex -space-x-2 rounded-full bg-surface p-1 ring-1 ring-sky-200" aria-label={t('sources')}>
+    <div className="flex -space-x-2 rounded-full bg-surface p-1 ring-1 ring-sky-200" role="group" aria-label={t('sources')}>
       {sourceIconItems}
     </div>
   )) : (sourceIconItems[0] || null);
@@ -302,6 +303,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
               key={topic}
               className="inline-flex h-8 w-8 items-center justify-center rounded-full p-[1.5px]"
               style={AI_ACCENT_GRADIENT_STYLE}
+              role="img"
               aria-label={localizedTopic}
               title={localizedTopic}
             >
@@ -316,6 +318,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
           <span
             key={topic}
             className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${iconBadgeClassName}`}
+            role="img"
             aria-label={localizedTopic}
             title={localizedTopic}
           >

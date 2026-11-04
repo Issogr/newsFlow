@@ -93,8 +93,8 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('46');
-    expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['input_json', 'last_attempt_at']));
+    expect(migrationVersion).toBe('47');
+    expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['input_json', 'last_attempt_at', 'last_attempt_sources_json']));
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
     expect(articleColumns).toContain('ai_topics_status');
@@ -180,7 +180,7 @@ describe('database migrations', () => {
     const width = migratedDb.prepare('SELECT reader_text_width AS readerTextWidth FROM user_settings WHERE user_id = ?').get('user-1')?.readerTextWidth;
     migratedDb.close();
 
-    expect(migrationVersion).toBe('46');
+    expect(migrationVersion).toBe('47');
     expect(width).toBe('default');
   });
 
@@ -211,7 +211,7 @@ describe('database migrations', () => {
     const articleIndexes = migratedDb.prepare('PRAGMA index_list(articles)').all().map((index) => index.name);
     migratedDb.close();
 
-    expect(migrationVersion).toBe('46');
+    expect(migrationVersion).toBe('47');
     expect(articleColumns).toEqual(expect.not.arrayContaining(['clickbait_label', 'clickbait_score', 'clickbait_source', 'clickbait_confidence', 'clickbait_model', 'clickbait_reason_code', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(articleIndexes).not.toContain('idx_articles_ai_clickbait_processed_at');
   });
@@ -231,7 +231,7 @@ describe('database migrations', () => {
     expect(database.getThematicSummary('science', window.periodStart, window.periodEnd)).toMatchObject({
       summaryText: 'Saved briefing [1].', inputArticles: []
     });
-    expect(getMigrationVersion(database.getDb())).toBe('46');
+    expect(getMigrationVersion(database.getDb())).toBe('47');
   });
 
   test('migrates an unversioned legacy database instead of marking it current', async () => {
@@ -280,7 +280,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('46');
+    expect(migratedVersion).toBe('47');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
@@ -398,7 +398,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('46');
+    expect(migratedVersion).toBe('47');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason']));
     expect(articleColumns).toEqual(expect.not.arrayContaining(['clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
@@ -509,7 +509,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source: Identified) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article: Identified) => article.id);
 
-    expect(migratedVersion).toBe('46');
+    expect(migratedVersion).toBe('47');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source: Identified) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -605,7 +605,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('46');
+    expect(migratedVersion).toBe('47');
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
     expect(row).toEqual({
       summaryText: 'English text [1]',
@@ -739,7 +739,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('46');
+    expect(migratedVersion).toBe('47');
     expect(podcastTables).toEqual([]);
   });
 
@@ -767,7 +767,7 @@ describe('database migrations', () => {
     jest.resetModules();
     database = (await import('./database')).default;
 
-    expect(getMigrationVersion(database.getDb())).toBe('46');
+    expect(getMigrationVersion(database.getDb())).toBe('47');
     expect(database.getDb().prepare("SELECT name FROM sqlite_master WHERE name IN ('podcast_summaries', 'podcast_summary_audio')").all()).toEqual([]);
     expect(database.listReadThematicSummaryIds('user-1')).toEqual(['summary-science']);
     expect(database.getThematicSummary('science', window.periodStart, window.periodEnd)).toMatchObject({ summaryText: 'Saved briefing [1].' });
@@ -860,6 +860,40 @@ describe('database migrations', () => {
     expect(searchRows).toEqual([{ articleId: 'migration-search-article' }]);
     expect(triggerCount).toBe(3);
     expect(database.getArticles({ search: 'rebuilt' }).map((article: Identified) => article.id)).toEqual(['migration-search-article']);
+  });
+
+  test('migrates version 46 search rows to indexed keys while preserving summaries', async () => {
+    database = (await import('./database')).default;
+    database.upsertArticles([{
+      id: 'legacy-search', sourceId: primarySource.id, source: primarySource.name,
+      title: 'Legacy searchable headline', url: 'https://example.com/legacy', pubDate: new Date().toISOString()
+    }]);
+    const window = { periodStart: '2026-05-20T18:00:00.000Z', periodEnd: '2026-05-21T18:00:00.000Z' };
+    database.upsertThematicSummary({ ...window, topicKey: 'science', summaryText: 'Saved briefing [1].' });
+    database.getDb().exec(`
+      DROP TRIGGER article_search_after_insert;
+      DROP TRIGGER article_search_after_update;
+      DROP TRIGGER article_search_after_delete;
+      DROP TABLE article_search_keys;
+      UPDATE article_search SET rowid = rowid + 100;
+      ALTER TABLE thematic_summaries DROP COLUMN last_attempt_sources_json;
+      UPDATE app_meta SET value = '46' WHERE key = 'migration_version';
+    `);
+    database.closeDb();
+
+    const sqlite = database.getDb();
+    expect(getMigrationVersion(sqlite)).toBe('47');
+    expect(database.getArticles({ search: 'legacy' }).map((article: Identified) => article.id)).toEqual(['legacy-search']);
+    expect(database.getThematicSummary('science', window.periodStart, window.periodEnd)).toMatchObject({
+      summaryText: 'Saved briefing [1].', lastAttemptSources: []
+    });
+    sqlite.exec('VACUUM');
+    sqlite.prepare('UPDATE articles SET title = ? WHERE id = ?').run('Corrected headline', 'legacy-search');
+    expect(database.getArticles({ search: 'legacy' })).toEqual([]);
+    expect(database.getArticles({ search: 'corrected' }).map((article: Identified) => article.id)).toEqual(['legacy-search']);
+    sqlite.prepare('DELETE FROM articles WHERE id = ?').run('legacy-search');
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM article_search').get().count).toBe(0);
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM article_search_keys').get().count).toBe(0);
   });
 
   test('rejects databases on an older schema version', async () => {
@@ -1039,7 +1073,9 @@ describe('database queries and user data', () => {
     expect(database.getArticles({ search: 'inserted' })).toEqual([]);
     expect(database.getArticles({ search: 'updated' }).map((article: Identified) => article.id)).toEqual(['trigger-search-article']);
 
-    sqlite.prepare('DELETE FROM articles WHERE id = ?').run('trigger-search-article');
+    sqlite.prepare('UPDATE articles SET id = ? WHERE id = ?').run('renamed-search-article', 'trigger-search-article');
+    expect(database.getArticles({ search: 'updated' }).map((article: Identified) => article.id)).toEqual(['renamed-search-article']);
+    sqlite.prepare('DELETE FROM articles WHERE id = ?').run('renamed-search-article');
     expect(sqlite.prepare('SELECT COUNT(*) AS count FROM article_search WHERE article_id = ?').get('trigger-search-article').count).toBe(0);
   });
 
@@ -1209,6 +1245,24 @@ describe('database queries and user data', () => {
     expect(secondUpdatedAt).toBe(firstUpdatedAt);
   });
 
+  test.each(['title', 'description', 'content'])('requeues topics after changed %s but preserves them for metadata-only updates', (field) => {
+    const article = {
+      id: 'corrected-topics', sourceId: primarySource.id, source: primarySource.name,
+      title: 'Initial technology story', description: 'Initial description', content: 'Initial body',
+      url: 'https://example.com/corrected-topics', pubDate: new Date().toISOString()
+    };
+    database.upsertArticles([article]);
+    database.replaceTopicsForArticles([{ articleId: article.id, topics: [{ topic: 'Tecnologia', source: 'ai' }] }]);
+    database.markArticlesAiTopicProcessing([article.id], 'completed');
+    database.upsertArticles([{ ...article, image: 'https://example.com/photo.jpg' }]);
+    expect(database.getArticleIdsPendingAiTopicProcessing([article.id])).toEqual([]);
+    expect(database.getArticleById(article.id).topics).toEqual(['Tecnologia']);
+
+    database.upsertArticles([{ ...article, [field]: 'Corrected politics report' }]);
+    expect(database.getArticleIdsPendingAiTopicProcessing([article.id])).toEqual([article.id]);
+    expect(database.getArticleById(article.id).topics).toEqual([]);
+  });
+
   test('requeues story grouping when an existing article text changes', () => {
     const pubDate = new Date().toISOString();
     const article = {
@@ -1354,8 +1408,8 @@ describe('database queries and user data', () => {
         sourceId: alternateGroupedSource.id,
         source: alternateGroupedSource.name,
         title: 'Grouped AI fallback story',
-        description: 'Second version',
-        content: 'Second body',
+        description: 'First version',
+        content: 'First body',
         url: 'https://example.com/grouped-ai-b',
         language: 'it',
         pubDate: new Date(now + 20 * 60 * 1000).toISOString()
@@ -1525,6 +1579,7 @@ describe('database queries and user data', () => {
       inputArticles: [{ ref: 1, title: 'AI chips accelerate', description: 'Exact excerpt sent to the model.', contentType: 'rss_metadata' }],
       generatedAt: '2025-05-21T13:01:00.000Z',
       lastAttemptAt: '2025-05-21T13:10:00.000Z',
+      lastAttemptSources: [{ articleId: 'summary-global-tech', contentHash: 'attempt-hash' }],
       articleCount: 1,
       model: 'test-model'
     });
@@ -1537,6 +1592,7 @@ describe('database queries and user data', () => {
       inputArticles: [expect.objectContaining({ ref: 1, description: 'Exact excerpt sent to the model.' })],
       generatedAt: '2025-05-21T13:01:00.000Z',
       lastAttemptAt: '2025-05-21T13:10:00.000Z',
+      lastAttemptSources: [{ articleId: 'summary-global-tech', contentHash: 'attempt-hash' }],
       failureCategory: '',
       retryCount: 0
     }));

@@ -44,6 +44,7 @@ export interface SummaryRecord extends DynamicRecord {
   failureCategory?: string;
   generatedAt?: string;
   lastAttemptAt?: string;
+  lastAttemptSources?: SummarySource[];
   id?: string;
   model?: string;
   periodEnd?: string;

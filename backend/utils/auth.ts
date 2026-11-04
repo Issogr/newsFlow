@@ -283,6 +283,7 @@ function stopApiTokenUsageFlushTimer() {
 }
 
 const requireAuthenticatedUser: RequestHandler = (req, res, next) => {
+  if (req.user) return next();
   try {
     const resolved = resolveAuthenticatedSession({
       headers: req.headers || {},

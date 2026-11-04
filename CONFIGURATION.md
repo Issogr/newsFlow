@@ -42,6 +42,14 @@ This file documents the environment variables and build arguments that can chang
 | `ONLINE_ACTIVITY_WINDOW_MINUTES` | `5` | Window used to consider users recently active in admin views and scheduled source selection fallback. Minimum `0`. |
 | `FRONTEND_DIST_DIR` | `backend/public` | Directory served for built frontend assets. The Docker image copies `frontend/dist` here. |
 
+### Browser Request Limits
+
+Authenticated browser requests allow 200 requests per account per 15 minutes. Login, registration, password-setup, and unauthenticated requests have a separate 200-request IP budget; exhausting that budget does not block existing authenticated accounts. Route-specific limits still apply.
+
+Socket filter subscriptions allow 30 updates per connection per 10 seconds. Malformed or excessive subscriptions disconnect the client before database work. Lists allow 40 topics or 80 source IDs, with values up to 120 characters and search text up to 500 characters.
+
+Read-later mutations accept at most 20 article IDs per request and reject larger batches without applying changes. The browser batches larger stories and reflects each acknowledged batch. Both feeds paginate complete grouped snapshots; read-later cursors include `beforeSavedAt`, `beforePubDate`, and `beforeId`, allowing navigation beyond the numbered-page limit and after deletions.
+
 ### Inactive Account Cleanup
 
 The backend automatically deletes non-admin accounts inactive for **more than six calendar months**. Cleanup runs at startup and every 24 hours while the backend is running. This is a fixed retention policy, not an environment setting.
@@ -105,6 +113,8 @@ The public API is read-only and cache-only. It must not trigger RSS refreshes, a
 
 ## Reader, Images, And Outbound Safety
 
+RSS, discovery, validation, reader, and image-fetch timeouts are total deadlines for each network attempt, including DNS resolution, redirects, and the entire response body. Queue waits and delays between retry attempts are separate; caller cancellation still stops the request immediately.
+
 | Variable | Default | Details |
 | --- | --- | --- |
 | `READER_TIMEOUT` | `12000` | Reader-mode article fetch timeout in ms. Minimum `1`. |
@@ -146,12 +156,14 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 
 ## AI Topic Detection
 
+Changes to an article's title, description, or content invalidate its stored topics and queue classification again. Metadata-only changes preserve classification; results from an older in-flight version cannot overwrite a correction.
+
 | Variable | Default | Details |
 | --- | --- | --- |
 | `OPENROUTER_TOPIC_MODEL` | `mistralai/mistral-small-24b-instruct-2501` | Model used for AI topic classification. |
 | `AI_TOPIC_BATCH_SIZE` | `10` | Articles per topic-classification request. `Number` parsing, rounded down and clamped to `1..50`. |
 | `AI_TOPIC_BATCH_CONCURRENCY` | `1` | Process-wide concurrent topic-classification requests, shared across refreshes. Read at startup; `Number` parsing, rounded down and clamped to `1..4`. |
-| `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max newly inserted articles sent to AI per refresh. `Number` parsing, rounded down and clamped to `1..1000`. |
+| `AI_TOPIC_MAX_ARTICLES_PER_REFRESH` | `160` | Max pending articles sent to AI per refresh, including corrected articles. `Number` parsing, rounded down and clamped to `1..1000`. |
 | `AI_TOPIC_REQUEST_TIMEOUT_MS` | `30000` | Timeout for one topic-classification request. `Number` parsing, rounded down and clamped to `1000..120000`. |
 | `AI_TOPIC_DETERMINISTIC_SKIP_ENABLED` | `true` | Skips OpenRouter classification for articles with high-confidence local topic matches. Invalid values disable it. |
 | `AI_TOPIC_DEBUG_LOG_ARTICLES` | `false` | Enables verbose topic debug logging only when set to `true`. Invalid values disable it. |
@@ -173,6 +185,8 @@ AI features run only in the backend, and provider-backed work requires `OPENROUT
 Each thematic summary uses two sequential requests to `OPENROUTER_SUMMARY_MODEL`: bilingual generation, then a source-grounding review of the exact same excerpts. The review checks claim support, citations, contradictions, uncertainty, and translation consistency; failed or malformed reviews are retried through the existing invalid-output policy. This is an additional AI check, not an independent fact-check of the publishers.
 
 The default selection prioritizes stories covered by multiple publishers, deduplicates them, and balances sources across up to 24 stories. The 30,000-character text budget allows up to 1,250 characters per story at that cap, including longer RSS content when reader text is unavailable. Completed summaries retain their exact input excerpts in SQLite for later evaluation. Source fingerprints trigger regeneration for changed evidence or replacement articles, while retention-only removals preserve the previous briefing. Reader caches are invalidated when article text changes. The reader panel shows the last successful generation timestamp.
+
+Failed regeneration preserves the last successful text and timestamp. After invalid-output retries are exhausted, changed evidence allows one further attempt, including for previously completed summaries. The last attempted source fingerprints are persisted so unchanged inputs and retention-only removals do not trigger repeated attempts.
 
 To check the configured model against a small fixed evidence set, run `npm run eval:summaries` in `backend/` with `OPENROUTER_API_KEY` set. This makes seven live grounding requests covering supported facts, invented numbers, uncertainty, contradictions, geographic scope, and language consistency; it exits nonzero for mismatches or invalid responses. `npm run eval:summaries -- --help` is offline. Use this smoke evaluation alongside manual reviews of saved excerpts before changing models or prompts.
 

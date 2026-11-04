@@ -57,6 +57,13 @@ test('preserves the request budgets and composes caller cancellation', async () 
   expect(fetchMock.mock.calls.slice(1, 6).every(([, options]) => options?.signal?.aborted)).toBe(true);
 });
 
+test('sends the saved-list cursor when loading another page', async () => {
+  await fetchReadLaterNews({ beforeSavedAt: '2026-11-04T10:00:00.000Z', beforePubDate: '2026-11-03T09:00:00.000Z', beforeId: 'last-saved', includeFilters: false });
+  const url = new URL(String(fetchMock.mock.lastCall?.[0]), 'https://news.example');
+  expect(url.searchParams.get('beforeSavedAt')).toBe('2026-11-04T10:00:00.000Z');
+  expect(url.searchParams.get('beforeId')).toBe('last-saved');
+});
+
 test('lets the browser set multipart feedback boundaries', async () => {
   const attachment = new File(['image'], 'screenshot.png', { type: 'image/png' });
   await submitFeedback({ category: 'bug', title: 'Upload bug', description: 'Details', attachment });

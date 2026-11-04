@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, type RenderResult } from '@tes
 import NewsAggregator from './NewsAggregator';
 import { fetchNews as fetchNewsImplementation, fetchReadLaterNews as fetchReadLaterNewsImplementation, fetchThematicSummaries as fetchThematicSummariesImplementation, isRequestCanceled as isRequestCanceledImplementation, markThematicSummariesRead as markThematicSummariesReadImplementation, updateUserSettings as updateUserSettingsImplementation } from '../services/api';
 import useTopicRefreshSocketImplementation, { type NewsUpdatePayload, type TopicRefreshSocketOptions } from '../hooks/useTopicRefreshSocket';
+import { saveReadLaterArticles, removeReadLaterArticles } from '../services/api';
 import { createDeferred, resolveDeferred } from '../test-utils/deferred';
 import { createTestCurrentUser } from '../test-utils/currentUser';
 import { createTranslator } from '../i18n';
@@ -50,10 +51,14 @@ vi.mock('./NewsCard', () => {
   };
 
   return {
-    default: ({ group, onOpenReader }: { group: NewsGroup; onOpenReader: (group: NewsGroup, articleId?: string) => void }) => (
+    default: ({ group, onOpenReader, onToggleReadLater, readLaterUpdating }: { group: NewsGroup; onOpenReader: (group: NewsGroup, articleId?: string) => void; onToggleReadLater: (group: NewsGroup) => Promise<void>; readLaterUpdating: boolean }) => (
       <div>
         <div>{group.title}</div>
         <div data-testid={`topics-${group.id}`}>{getRenderedTopicSummary(group)}</div>
+        <div data-testid={`saved-${group.id}`}>{group.readLaterArticleIds?.length || 0}</div>
+        <button type="button" disabled={readLaterUpdating} onClick={() => onToggleReadLater(group)}>
+          {group.readLater ? 'Remove' : 'Save'} {group.id}
+        </button>
         <button type="button" onClick={() => onOpenReader(group, group.items?.[0]?.id)}>
           Open reader {group.id}
         </button>
@@ -349,6 +354,23 @@ describe('NewsAggregator', () => {
 
     await resolveDeferred(request, createFeedResponse([], { meta: { totalGroups: 0 } }));
     await waitFor(() => expect(screen.queryByRole('status', { name: 'Loading...' })).not.toBeInTheDocument());
+  });
+
+  test.each([false, true])('saves large stories in acknowledged batches (second batch fails: %s)', async (fails) => {
+    const ids = Array.from({ length: 21 }, (_, index) => `large-${index}`);
+    fetchNews.mockResolvedValue(createFeedResponse([{ id: 'large', title: 'Large story', items: ids.map((id) => ({ id })) }]));
+    vi.mocked(saveReadLaterArticles).mockImplementation(async (articleIds = []) => ({ articleIds }));
+    vi.mocked(removeReadLaterArticles).mockImplementation(async (articleIds = []) => ({ articleIds }));
+    if (fails) vi.mocked(saveReadLaterArticles).mockResolvedValueOnce({ articleIds: ids.slice(0, 20) }).mockRejectedValueOnce(new Error('Second batch failed'));
+    await renderNewsAggregator();
+    fireEvent.click(await screen.findByRole('button', { name: 'Save large' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Remove large' })).toBeEnabled());
+    expect(screen.getByTestId('saved-large')).toHaveTextContent(fails ? '20' : '21');
+    expect(vi.mocked(saveReadLaterArticles).mock.calls.map(([batch]) => batch?.length)).toEqual([20, 1]);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove large' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save large' })).toBeEnabled());
+    expect(screen.getByTestId('saved-large')).toHaveTextContent('0');
+    expect(vi.mocked(removeReadLaterArticles).mock.calls.map(([batch]) => batch?.length)).toEqual(fails ? [20] : [20, 1]);
   });
 
   test('ignores main-feed refresh socket events while viewing read later', async () => {

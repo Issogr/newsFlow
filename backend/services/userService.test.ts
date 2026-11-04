@@ -123,6 +123,55 @@ describe('userService imports', () => {
     expect(rssParser.validateFeedUrl).not.toHaveBeenCalled();
   });
 
+  test('settings restores preserve source IDs and saved articles, including removed feeds', async () => {
+    const { user } = await userService.registerUser({ username: 'restore-owner', password: 'secret123' });
+    const now = new Date().toISOString();
+    for (const id of ['kept-feed', 'removed-feed']) {
+      database.createUserSource({ id, userId: user.id, name: id, url: `https://example.com/${id}`, isActive: true, createdAt: now, updatedAt: now });
+      database.upsertArticles(['saved', 'unsaved'].map((kind) => ({
+        id: `${id}-${kind}`, ownerUserId: user.id, sourceId: id, source: id,
+        title: `${id} ${kind}`, url: `https://example.com/${id}/${kind}`, pubDate: now
+      })));
+      database.saveReadLaterArticles(user.id, [`${id}-saved`], { userId: user.id });
+      database.upsertReaderCache(`${id}-saved`, { title: id, contentText: 'Saved reader content' });
+    }
+    rssParser.validateFeedUrl.mockResolvedValue({ title: 'Feed', itemCount: 1 });
+    const backup = userService.exportUserSettings(user.id);
+    const restored = await userService.importUserSettings(user.id, backup);
+    expect(restored.customSources.map((source: { id: string }) => source.id).sort()).toEqual(['kept-feed', 'removed-feed']);
+    expect(database.getArticleById('kept-feed-unsaved', { userId: user.id })).toBeTruthy();
+
+    backup.customSources = backup.customSources.filter((source: { name: string }) => source.name === 'kept-feed');
+    await userService.importUserSettings(user.id, backup);
+    expect(database.getArticleById('removed-feed-unsaved', { userId: user.id })).toBeNull();
+    expect(database.getReadLaterArticles(user.id).map((article: { id: string }) => article.id).sort())
+      .toEqual(['kept-feed-saved', 'removed-feed-saved']);
+    expect(database.getReaderCache('removed-feed-saved')).toMatchObject({ contentText: 'Saved reader content' });
+  });
+
+  test('round-trips custom publisher and subfeed exclusions into another account', async () => {
+    const { user } = await userService.registerUser({ username: 'exclusion-owner', password: 'secret123' });
+    const { user: target } = await userService.registerUser({ username: 'exclusion-target', password: 'secret123' });
+    const now = new Date().toISOString();
+    for (const [id, url] of [['hidden', 'https://example.com/feed'], ['hidden-sub', 'https://other.org/a'], ['visible-sub', 'https://other.org/b']]) {
+      database.createUserSource({ id, userId: user.id, name: id, url, isActive: true, createdAt: now, updatedAt: now });
+    }
+    userService.updateUserSettings(user.id, { excludedSourceIds: ['example.com'], excludedSubSourceIds: ['hidden-sub'] });
+    rssParser.validateFeedUrl.mockResolvedValue({ title: 'Feed', itemCount: 1 });
+    const restored = await userService.importUserSettings(target.id, userService.exportUserSettings(user.id));
+    const hiddenSub = restored.customSources.find((source: { name: string }) => source.name === 'hidden-sub');
+    expect(hiddenSub.id).not.toBe('hidden-sub');
+    expect(restored.settings.excludedSourceIds).toEqual(['example.com']);
+    expect(restored.settings.excludedSubSourceIds).toEqual([hiddenSub.id]);
+
+    const legacyBackup = userService.exportUserSettings(user.id);
+    legacyBackup.version = 10;
+    legacyBackup.settings.excludedSubSourceIds = ['hidden-sub'];
+    legacyBackup.customSources.forEach((source: { isSubExcluded?: boolean }) => { delete source.isSubExcluded; });
+    const legacyRestored = await userService.importUserSettings(user.id, legacyBackup);
+    expect(legacyRestored.settings.excludedSubSourceIds).toEqual(['hidden-sub']);
+  });
+
   test('exported settings preserve showNewsImages across import', async () => {
     const sourceAuthPayload = await userService.registerUser({ username: 'source-user', password: 'secret123' });
     const targetAuthPayload = await userService.registerUser({ username: 'target-user', password: 'secret123' });
@@ -144,7 +193,7 @@ describe('userService imports', () => {
       readerTextSize: 'small',
       readerTextWidth: 'wide'
     });
-    expect(exportedSettings.version).toBe(10);
+    expect(exportedSettings.version).toBe(11);
     expect(exportedSettings.settings).not.toHaveProperty('articleRetentionHours');
     expect(exportedSettings.settings).not.toHaveProperty('recentHours');
     expect(exportedSettings.settings).not.toHaveProperty('compactNewsCards');

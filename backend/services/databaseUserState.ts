@@ -310,8 +310,6 @@ function createUserStateRepository({ getDb }: { getDb: () => SqliteDatabase }) {
     const upsertSettingsStmt = database.prepare(USER_SETTINGS_UPSERT_SQL);
 
     const transaction = database.transaction((ownerId: string, importedSources: SourceDefinition[], nextSettings: UserSettings) => {
-      deleteOwnedArticles(database, ownerId);
-
       database.prepare(`
         DELETE FROM user_sources
         WHERE user_id = ?
@@ -320,6 +318,13 @@ function createUserStateRepository({ getDb }: { getDb: () => SqliteDatabase }) {
       importedSources.forEach((source) => {
         insertSourceStmt.run(...getUserSourceValues(source, ownerId));
       });
+
+      database.prepare(`
+        DELETE FROM articles
+        WHERE owner_user_id = ?
+          AND NOT EXISTS (SELECT 1 FROM user_sources WHERE user_id = articles.owner_user_id AND id = articles.source_id)
+          AND NOT EXISTS (SELECT 1 FROM user_read_later_articles WHERE article_id = articles.id)
+      `).run(ownerId);
 
       upsertSettingsStmt.run(...getUserSettingsValues(ownerId, nextSettings, nextSettings.updatedAt || now));
     });

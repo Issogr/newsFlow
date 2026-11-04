@@ -127,6 +127,22 @@ describe('browser application boundary', () => {
       .expect(403);
   });
 
+  test('isolates browsing quotas from other accounts and anonymous traffic on the same IP', async () => {
+    const cookies: string[] = [];
+    for (const username of ['quota-alice', 'quota-bob']) {
+      const response = await request(app).post('/api/auth/register').set('Origin', 'http://localhost')
+        .send({ username, password: 'secret123' }).expect(201);
+      cookies.push(getCookiePair(response));
+    }
+    for (let index = 0; index < 200; index += 1) await request(app).get('/api/me');
+    await request(app).get('/api/me').expect(429);
+    for (let index = 0; index < 200; index += 1) {
+      await request(app).get('/api/me').set('Cookie', cookies[0]).expect(200);
+    }
+    await request(app).get('/api/me').set('Cookie', cookies[0]).expect(429);
+    await request(app).get('/api/me').set('Cookie', cookies[1]).expect(200);
+  }, 15_000);
+
   test('emits a secure session cookie behind the trusted HTTPS proxy', async () => {
     process.env.APP_BASE_URL = 'https://news.example';
     process.env.TRUST_PROXY = '1';

@@ -65,6 +65,7 @@ function parseNewsQuery(query: Record<string, unknown> = {}): NewsQuery {
     topics: parseBoundedCsvParam(query.topics, { limit: MAX_TOPIC_FILTERS, name: 'topics' }),
     recentHours: parseOptionalBoundedPositiveInteger(query.recentHours, MAX_RECENT_HOURS),
     beforePubDate: typeof query.beforePubDate === 'string' ? query.beforePubDate : '',
+    beforeSavedAt: typeof query.beforeSavedAt === 'string' ? query.beforeSavedAt : '',
     beforeId: typeof query.beforeId === 'string' ? query.beforeId : '',
     excludeArticleIds: parseLimitedCsvParam(query.excludeArticleIds, 300),
     page: parseBoundedPositiveInteger(query.page, 1, MAX_NEWS_PAGE),
@@ -79,5 +80,6 @@ export default {
   MAX_RECENT_HOURS,
   MAX_SOURCE_FILTERS,
   MAX_TOPIC_FILTERS,
+  MAX_FILTER_VALUE_LENGTH,
   parseNewsQuery,
 };

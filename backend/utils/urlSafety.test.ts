@@ -164,4 +164,37 @@ describe('urlSafety', () => {
     await expect(fetchSafeTextUrl('https://example.com/feed'))
       .rejects.toMatchObject({ status: 502, code: 'CONNECTION_ERROR' });
   });
+
+  test('applies the request deadline during DNS resolution', async () => {
+    dns.lookup.mockReturnValue(new Promise(() => {}));
+    await expect(fetchSafeTextUrl('https://example.com/feed', { timeout: 20 }))
+      .rejects.toMatchObject({ name: 'TimeoutError' });
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  test('keeps one deadline across redirects and destroys a slowly streamed body', async () => {
+    dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    const stream = new Readable({ read() {} });
+    axios.get.mockResolvedValueOnce({ status: 302, headers: { location: '/redirected' } })
+      .mockResolvedValueOnce({ status: 200, data: stream, headers: {} });
+    const timer = setInterval(() => stream.push('x'), 5);
+    try {
+      await expect(fetchSafeTextUrl('https://example.com/feed', { timeout: 50 }))
+        .rejects.toMatchObject({ name: 'TimeoutError' });
+      expect(stream.destroyed).toBe(true);
+      expect(axios.get.mock.calls[1][1].signal).toBe(axios.get.mock.calls[0][1].signal);
+    } finally {
+      clearInterval(timer);
+      stream.destroy();
+    }
+  });
+
+  test('preserves caller cancellation while a deadline is active', async () => {
+    const controller = new AbortController();
+    dns.lookup.mockReturnValue(new Promise(() => {}));
+    const request = fetchSafeTextUrl('https://example.com/feed', { timeout: 1000, signal: controller.signal });
+    controller.abort(new Error('Caller canceled'));
+    await expect(request).rejects.toThrow('Caller canceled');
+    expect(axios.get).not.toHaveBeenCalled();
+  });
 });

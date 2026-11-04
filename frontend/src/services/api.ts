@@ -145,6 +145,7 @@ export const createAdminPasswordSetupLink = (userId: string) => request<{ setupL
 export const deleteAdminUser = (userId: string) => request(`/admin/users/${userId}`, { method: 'DELETE' });
 
 export interface FeedRequestOptions extends RequestOptions {
+  beforeSavedAt?: string;
   page?: number;
   pageSize?: number;
   search?: string;
@@ -215,17 +216,17 @@ export const fetchNews = async ({
   return request<FeedResponse>('/news', { params, signal });
 };
 
-export const fetchReadLaterNews = ({ signal, ...filters }: FeedRequestOptions) => request<FeedResponse>('/read-later', {
-  params: buildFeedParams(filters), signal
+export const fetchReadLaterNews = ({ signal, beforeSavedAt, beforePubDate, beforeId, ...filters }: FeedRequestOptions) => request<FeedResponse>('/read-later', {
+  params: { ...buildFeedParams(filters), ...(beforeSavedAt ? { beforeSavedAt, beforePubDate: beforePubDate || '', beforeId: beforeId || '' } : {}) }, signal
 });
 
 export const fetchThematicSummaries = ({ signal }: RequestOptions = {}) => request<{ items: ThematicSummary[]; readSummaryIds?: string[] }>('/thematic-summaries', { signal });
 
 export const markThematicSummariesRead = (summaryIds: string[] = []) => request<{ readSummaryIds?: string[] }>('/me/thematic-summaries/read', { method: 'POST', body: { summaryIds } });
 
-export const saveReadLaterArticles = (articleIds: string[] = []) => request('/me/read-later', { method: 'POST', body: { articleIds } });
+export const saveReadLaterArticles = (articleIds: string[] = []) => request<{ articleIds: string[] }>('/me/read-later', { method: 'POST', body: { articleIds } });
 
-export const removeReadLaterArticles = (articleIds: string[] = []) => request('/me/read-later/remove', { method: 'POST', body: { articleIds } });
+export const removeReadLaterArticles = (articleIds: string[] = []) => request<{ articleIds: string[] }>('/me/read-later/remove', { method: 'POST', body: { articleIds } });
 
 export const fetchReaderArticle = (articleId: string, { refresh = false, signal }: RequestOptions & { refresh?: boolean } = {}) => request<ReaderResponse>(`/articles/${encodeURIComponent(articleId)}/reader`, {
   params: refresh ? { refresh: 'true' } : undefined,

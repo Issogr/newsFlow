@@ -7,7 +7,7 @@ import { buildRateLimitMessage } from '../../utils/errorHandler';
 import inputValidator from '../../utils/inputValidator';
 import helpers from './helpers';
 const { requireAuthenticatedUser } = auth;
-const { sanitizeBody } = inputValidator;
+const { sanitizeUsername } = inputValidator;
 const { clearSessionCookie, sendAuthResult } = helpers;
 
 const router = express.Router();
@@ -18,7 +18,7 @@ const authRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
-    const username = String(req.body?.username || '').trim().toLowerCase();
+    const username = sanitizeUsername(req.body?.username).toLowerCase();
     return `${ipKeyGenerator(req.ip || '')}:${username}`;
   },
   message: buildRateLimitMessage('Too many authentication attempts. Please try again later.'),
@@ -45,12 +45,12 @@ const passwordSetupRateLimit = rateLimit({
   message: buildRateLimitMessage('Too many password setup attempts. Please try again later.'),
 });
 
-router.post('/auth/register', [registrationIpRateLimit, authRateLimit, sanitizeBody(['username'])], async (req: Request, res: Response) => {
+router.post('/auth/register', [registrationIpRateLimit, authRateLimit], async (req: Request, res: Response) => {
   const result = await userService.registerUser(req.body || {});
   sendAuthResult(req, res, result, 201);
 });
 
-router.post('/auth/login', [authRateLimit, sanitizeBody(['username'])], async (req: Request, res: Response) => {
+router.post('/auth/login', authRateLimit, async (req: Request, res: Response) => {
   const result = await userService.loginUser(req.body || {});
   sendAuthResult(req, res, result);
 });

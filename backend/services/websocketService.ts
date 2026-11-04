@@ -6,6 +6,8 @@ import { parseIntegerEnv } from '../utils/env';
 import sourceCatalog from '../utils/sourceCatalog';
 import database from './database';
 import auth from '../utils/auth';
+import newsQuery from '../utils/newsQuery';
+const { MAX_SOURCE_FILTERS, MAX_TOPIC_FILTERS, MAX_FILTER_VALUE_LENGTH, MAX_RECENT_HOURS } = newsQuery;
 const { getAllowedOrigins, isOriginAllowed } = networkConfig;
 const { hasSameOriginRequestHeaders } = browserSecurity;
 const { buildDomainSourceGroups } = sourceCatalog;
@@ -68,7 +70,7 @@ interface SocketLike {
   handshake?: { headers?: IncomingHttpHeaders };
   id: string;
   on(event: 'disconnect', listener: () => void): void;
-  on(event: 'subscribe:filters', listener: (filters?: SocketFilterInput) => void): void;
+  on(event: 'subscribe:filters', listener: (filters?: unknown) => void): void;
 }
 
 interface SocketServerLike {
@@ -170,7 +172,20 @@ function normalizeSearchValue(value: unknown = '') {
 
 function normalizeRecentHours(value: unknown) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, MAX_RECENT_HOURS) : null;
+}
+
+function isValidSocketFilters(value: unknown): value is SocketFilterInput {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const filters = value as SocketFilterInput;
+  if (filters.search !== undefined && (typeof filters.search !== 'string' || filters.search.length > 500)) return false;
+  if (filters.recentHours != null && (typeof filters.recentHours !== 'number' || !Number.isFinite(filters.recentHours))) return false;
+  return ['topics', 'sourceIds', 'excludedSourceIds', 'excludedSubSourceIds'].every((key) => {
+    const values = filters[key];
+    return values === undefined || (Array.isArray(values)
+      && values.length <= (key === 'topics' ? MAX_TOPIC_FILTERS : MAX_SOURCE_FILTERS)
+      && values.every((item) => typeof item === 'string' && item.length <= MAX_FILTER_VALUE_LENGTH));
+  });
 }
 
 function buildSearchableText(group: NewsGroup = {}) {
@@ -264,9 +279,26 @@ function initialize(server: HttpServer) {
     Object.assign(socket.data, buildSocketFilters());
     scheduleSessionExpiryCheck(socket);
 
+    let subscriptionWindowStart = Date.now();
+    let subscriptionCount = 0;
     socket.on('subscribe:filters', (filters = {}) => {
-      database.touchUserActivity(socket.data.userId!, new Date().toISOString(), 60);
-      Object.assign(socket.data, buildSocketFilters(filters));
+      if (!activeConnections.has(socket.id)) return;
+      const now = Date.now();
+      if (now - subscriptionWindowStart >= 10_000) {
+        subscriptionWindowStart = now;
+        subscriptionCount = 0;
+      }
+      if (++subscriptionCount > 30 || !isValidSocketFilters(filters)) {
+        disconnectSocket(socket);
+        return;
+      }
+      try {
+        Object.assign(socket.data, buildSocketFilters(filters));
+        database.touchUserActivity(socket.data.userId!, new Date(now).toISOString(), 60);
+      } catch (error) {
+        logger.warn(`WebSocket subscription failed: ${(error as AppError).message}`);
+        disconnectSocket(socket);
+      }
     });
 
     socket.on('disconnect', () => {

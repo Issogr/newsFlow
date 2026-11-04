@@ -57,6 +57,7 @@ interface ArticleOptions extends DynamicRecord {
   readLaterUserId?: string | null;
   sourceMetadataCache?: SourceMetadataCache;
   userId?: string | null;
+  unpaginated?: boolean;
 }
 
 interface SourceMetadata extends DynamicRecord {
@@ -469,7 +470,7 @@ function createArticleRepository({
       LIMIT ? OFFSET ?
     `;
 
-    params.push(state.limit, state.offset);
+    params.push(options.unpaginated ? -1 : state.limit, options.unpaginated ? 0 : state.offset);
 
     return { sql, params };
   }
@@ -1044,6 +1045,8 @@ function createArticleRepository({
     `);
     const deleteArticleStmt = database.prepare('DELETE FROM articles WHERE id = ?');
     const deleteReaderCacheStmt = database.prepare('DELETE FROM reader_cache WHERE article_id = ?');
+    const resetTopicProcessingStmt = database.prepare('UPDATE articles SET ai_topics_processed_at = NULL, ai_topics_status = NULL WHERE id = ?');
+    const deleteTopicsStmt = database.prepare('DELETE FROM article_topics WHERE article_id = ?');
     const articleFieldSelectSql = `
       SELECT id, source_id AS sourceId, source_name AS sourceName, owner_user_id AS ownerUserId,
              title, description, content, url, canonical_url AS canonicalUrl, image, author,
@@ -1135,7 +1138,17 @@ function createArticleRepository({
 
           if (exists && storyGroupingFieldsChanged(previousArticleFields, values)) {
             resetStoryGroupingStmt.run(persistedArticleId);
+          }
+          if (exists && (storyGroupingFieldsChanged(previousArticleFields, values)
+            || previousArticleFields?.url !== values.url || previousArticleFields?.author !== values.author
+            || previousArticleFields?.language !== values.language || previousArticleFields?.sourceName !== values.sourceName)) {
             deleteReaderCacheStmt.run(persistedArticleId);
+          }
+          if (exists && (previousArticleFields?.title !== values.title
+            || previousArticleFields?.description !== values.description
+            || previousArticleFields?.content !== values.content)) {
+            resetTopicProcessingStmt.run(persistedArticleId);
+            deleteTopicsStmt.run(persistedArticleId);
           }
         }
 
@@ -1804,7 +1817,7 @@ function createArticleRepository({
       WHERE ${where.join(' AND ')}
       ORDER BY rl.saved_at DESC, a.id DESC
       LIMIT ? OFFSET ?
-    `).all(...params, state.limit, state.offset);
+    `).all(...params, options.unpaginated ? -1 : state.limit, options.unpaginated ? 0 : state.offset);
 
     return hydrateArticleRows(rows, { ...options, userId: normalizedUserId });
   }
@@ -1955,6 +1968,7 @@ function createArticleRepository({
       sourcesJson: JSON.stringify(normalizeSummarySources(summary.sources || [])),
       inputJson: JSON.stringify(Array.isArray(summary.inputArticles) ? summary.inputArticles : []),
       lastAttemptAt: String(summary.lastAttemptAt || summary.generatedAt || '').trim(),
+      lastAttemptSourcesJson: JSON.stringify(Array.isArray(summary.lastAttemptSources) ? summary.lastAttemptSources : []),
       articleCount: Math.max(0, Number(summary.articleCount) || 0),
       model: String(summary.model || '').trim().slice(0, 120),
       status: String(summary.status || 'completed').trim().slice(0, 40),
@@ -1986,6 +2000,7 @@ function createArticleRepository({
       sources: parseJsonArray(row.sourcesJson),
       ...(row.inputJson !== undefined ? { inputArticles: parseJsonArray(row.inputJson) } : {}),
       lastAttemptAt: row.lastAttemptAt || row.generatedAt,
+      ...(row.lastAttemptSourcesJson !== undefined ? { lastAttemptSources: parseJsonArray(row.lastAttemptSourcesJson) } : {}),
       articleCount: row.articleCount,
       model: row.model,
       status: row.status,
@@ -2006,9 +2021,9 @@ function createArticleRepository({
       INSERT INTO thematic_summaries (
         id, topic_key, topic_label, topics_json, period_start, period_end,
         summary_text, summary_text_en, summary_text_it,
-        sources_json, input_json, last_attempt_at, article_count, model, status, failure_category, retry_count, error_message, generated_at
+        sources_json, input_json, last_attempt_at, last_attempt_sources_json, article_count, model, status, failure_category, retry_count, error_message, generated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(topic_key, period_start, period_end) DO UPDATE SET
         topic_label = excluded.topic_label,
         topics_json = excluded.topics_json,
@@ -2018,6 +2033,7 @@ function createArticleRepository({
         sources_json = excluded.sources_json,
         input_json = excluded.input_json,
         last_attempt_at = excluded.last_attempt_at,
+        last_attempt_sources_json = excluded.last_attempt_sources_json,
         article_count = excluded.article_count,
         model = excluded.model,
         status = excluded.status,
@@ -2038,6 +2054,7 @@ function createArticleRepository({
       normalized.sourcesJson,
       normalized.inputJson,
       normalized.lastAttemptAt,
+      normalized.lastAttemptSourcesJson,
       normalized.articleCount,
       normalized.model,
       normalized.status,
@@ -2058,7 +2075,7 @@ function createArticleRepository({
              sources_json AS sourcesJson, article_count AS articleCount, model, status,
              failure_category AS failureCategory, retry_count AS retryCount,
              error_message AS errorMessage, generated_at AS generatedAt,
-             input_json AS inputJson, last_attempt_at AS lastAttemptAt
+             input_json AS inputJson, last_attempt_at AS lastAttemptAt, last_attempt_sources_json AS lastAttemptSourcesJson
       FROM thematic_summaries
       WHERE topic_key = ? AND period_start = ? AND period_end = ?
       LIMIT 1

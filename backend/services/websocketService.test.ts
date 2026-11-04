@@ -101,6 +101,36 @@ describe('websocketService', () => {
     websocketService.initialize({});
   });
 
+  test.each([null, [], 'filters', { search: {} }, { search: 'x'.repeat(501) },
+    { topics: Array(41).fill('topic') }, { sourceIds: ['x'.repeat(121)] }, { recentHours: {} }])('rejects malformed subscriptions before database work: %j', (filters) => {
+    const socket = createSocket('invalid-subscription');
+    socket.data.userId = 'user-1';
+    ioMock.connectionHandler!(socket);
+
+    expect(() => socket.handlers['subscribe:filters'](filters)).not.toThrow();
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+    expect(databaseMock.touchUserActivity).not.toHaveBeenCalled();
+  });
+
+  test('bounds database work during a subscription burst', () => {
+    const socket = createSocket('burst-subscription');
+    socket.data.userId = 'user-1';
+    ioMock.connectionHandler!(socket);
+
+    for (let index = 0; index < 1000; index += 1) socket.handlers['subscribe:filters']({});
+
+    expect(databaseMock.touchUserActivity).toHaveBeenCalledTimes(30);
+    expect(socket.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  test('contains database failures in subscription handlers', () => {
+    const socket = createSocket('failed-subscription');
+    ioMock.connectionHandler!(socket);
+    databaseMock.touchUserActivity.mockImplementation(() => { throw new Error('Database unavailable'); });
+    expect(() => socket.handlers['subscribe:filters']({})).not.toThrow();
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+  });
+
   test('authenticates a socket from its backend session cookie and ignores auth payload tokens', () => {
     const socket = createSocket('socket-1', {
       auth: { token: 'legacy-session-token' },

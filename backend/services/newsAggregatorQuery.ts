@@ -7,7 +7,7 @@ import { parseIntegerEnv } from '../utils/env';
 import articleRetention from '../config/articleRetention';
 const { buildDomainSourceGroups, getConfiguredSourceGroups } = sourceCatalog;
 const { MAX_NEWS_PAGE } = newsQuery;
-const { TITLE_GROUP_WINDOW_MS, groupSimilarNews } = newsAggregatorGrouping;
+const { groupSimilarNews } = newsAggregatorGrouping;
 const { getArticleRetentionHours } = articleRetention;
 import type { DynamicRecord, NewsArticle, SourceDefinition, SourceGroup } from '../utils/types';
 
@@ -28,6 +28,7 @@ interface UserContext extends DynamicRecord {
 interface FeedFilters extends DynamicRecord {
   beforeId?: string;
   beforePubDate?: string;
+  beforeSavedAt?: string;
   excludeArticleIds?: string[];
   includeFilters?: boolean;
   page?: number;
@@ -63,8 +64,6 @@ interface FeedRuntime extends DynamicRecord {
 }
 
 const ARTICLE_RETENTION_HOURS = getArticleRetentionHours({ allowNegative: true });
-const GROUP_PAGINATION_ARTICLE_BATCH_SIZE = 250;
-const READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE = 250;
 const FILTER_STATS_CACHE_TTL_MS = parseIntegerEnv('FILTER_STATS_CACHE_TTL_MS', 10 * 1000, { min: 0, max: 5 * 60 * 1000 });
 const FILTER_STATS_CACHE_MAX_ENTRIES = parseIntegerEnv('FILTER_STATS_CACHE_MAX_ENTRIES', 200, { min: 1, max: 5000 });
 const filterStatsCache = new Map<string, { cachedAt: number; value: DynamicRecord }>();
@@ -182,7 +181,7 @@ function collectGroupArticleIds(groups: FeedGroup[] = []) {
   return groups.flatMap((group) => (group.items || []).map((item: FeedArticle) => item.id).filter(Boolean));
 }
 
-function buildNextCursor(groups: FeedGroup[] = [], existingExcludeArticleIds: string[] = []) {
+function buildNextCursor(groups: FeedGroup[] = [], existingExcludeArticleIds: string[] = [], readLater = false) {
   const lastItem = groups[groups.length - 1];
   if (!lastItem?.pubDate || !lastItem?.cursorId) {
     return null;
@@ -196,6 +195,7 @@ function buildNextCursor(groups: FeedGroup[] = [], existingExcludeArticleIds: st
   return {
     beforePubDate: lastItem.pubDate,
     beforeId: lastItem.cursorId,
+    ...(readLater ? { beforeSavedAt: String(lastItem.readLaterSavedAt || '') } : {}),
     excludeArticleIds
   };
 }
@@ -255,149 +255,33 @@ function buildReadLaterGroup(group: FeedGroup): FeedGroup {
   };
 }
 
-function fetchGroupedReadLaterPage(filters: FeedFilters = {}, queryOptions: QueryOptions = {}, page = 1, pageSize = 12) {
-  const articles: FeedArticle[] = [];
-  let offset = 0;
-  let hasMoreArticles = true;
-  let groups: FeedGroup[] = [];
-  const pageStart = (page - 1) * pageSize;
-  const requiredGroups = pageStart + pageSize + 1;
-
-  while (hasMoreArticles) {
-    const batch = database.getReadLaterArticles(queryOptions.userId || '', {
-      search: filters.search,
-      sourceIds: filters.sourceIds,
-      topics: filters.topics,
-      limit: READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE + 1,
-      offset
-    }, queryOptions);
-
-    const pageArticles = batch.length > READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE
-      ? batch.slice(0, READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE)
-      : batch;
-
-    articles.push(...pageArticles);
-    hasMoreArticles = batch.length > READ_LATER_PAGINATION_ARTICLE_BATCH_SIZE;
-    groups = groupSimilarNews(articles)
-      .map(buildReadLaterGroup)
-      .sort(compareReadLaterPosition);
-
-    if (!hasMoreArticles || groups.length >= requiredGroups) {
-      break;
-    }
-
-    offset += pageArticles.length;
-    if (pageArticles.length === 0) {
-      break;
-    }
-  }
-
-  const pageGroups = groups.slice(pageStart, pageStart + pageSize);
-
-  return {
-    articles,
-    hasMore: groups.length > pageStart + pageSize || hasMoreArticles,
-    pageGroups,
-    totalGroups: hasMoreArticles ? null : groups.length
-  };
-}
-
-function getArticleCursor(articles: FeedArticle[] = []) {
-  const lastArticle = articles[articles.length - 1];
-  if (!lastArticle?.pubDate || !lastArticle?.id) {
-    return null;
-  }
-
-  return {
-    beforePubDate: lastArticle.pubDate,
-    beforeId: lastArticle.id
-  };
-}
-
-function getOldestReturnedGroupTimestamp(groups: FeedGroup[] = [], pageStart = 0, pageSize = 12) {
-  const returnedGroups = groups.slice(pageStart, pageStart + pageSize);
-  if (returnedGroups.length === 0) {
-    return null;
-  }
-
-  return returnedGroups.reduce<number | null>((oldestTimestamp, group) => {
-    const groupTimestamp = Date.parse(group.pubDate || '');
-    if (!Number.isFinite(groupTimestamp)) {
-      return oldestTimestamp;
-    }
-
-    return oldestTimestamp === null ? groupTimestamp : Math.min(oldestTimestamp, groupTimestamp);
-  }, null);
-}
-
-function hasScannedGroupingWindow(articles: FeedArticle[] = [], groups: FeedGroup[] = [], pageStart = 0, pageSize = 12) {
-  const oldestReturnedTimestamp = getOldestReturnedGroupTimestamp(groups, pageStart, pageSize);
-  const lastFetchedArticle = articles[articles.length - 1];
-  const lastFetchedTimestamp = Date.parse(lastFetchedArticle?.pubDate || '');
-
-  if (oldestReturnedTimestamp === null || !Number.isFinite(lastFetchedTimestamp)) {
-    return false;
-  }
-
-  return lastFetchedTimestamp < oldestReturnedTimestamp - TITLE_GROUP_WINDOW_MS;
-}
-
-function fetchGroupedNewsPage(filters: FeedFilters = {}, queryOptions: QueryOptions = {}, page = 1, pageSize = 12) {
-  const articles: FeedArticle[] = [];
-  let cursor = {
-    beforePubDate: filters.beforePubDate || '',
-    beforeId: filters.beforeId || ''
-  };
-  let hasMoreArticles = true;
-  let groups: FeedGroup[] = [];
-  const cursorMode = Boolean(filters.beforePubDate || filters.beforeId);
+function fetchGroupedPage(filters: FeedFilters = {}, queryOptions: QueryOptions = {}, page = 1, pageSize = 12, readLater = false) {
+  const cursorMode = Boolean(readLater ? filters.beforeSavedAt : filters.beforePubDate);
   const pageStart = cursorMode ? 0 : (page - 1) * pageSize;
-  const requiredGroups = pageStart + pageSize + 1;
+  const articleFilters = {
+    search: filters.search,
+    sourceIds: filters.sourceIds,
+    topics: filters.topics,
+    recentHours: readLater ? undefined : filters.recentHours
+  };
+  const snapshotOptions = { ...queryOptions, unpaginated: true };
+  const articles = readLater
+    ? database.getReadLaterArticles(queryOptions.userId || '', articleFilters, snapshotOptions)
+    : database.getArticles(articleFilters, snapshotOptions);
 
-  while (hasMoreArticles) {
-    const batch = database.getArticles({
-      search: filters.search,
-      sourceIds: filters.sourceIds,
-      topics: filters.topics,
-      recentHours: filters.recentHours,
-      beforePubDate: cursor.beforePubDate,
-      beforeId: cursor.beforeId,
-      excludeArticleIds: filters.excludeArticleIds,
-      limit: GROUP_PAGINATION_ARTICLE_BATCH_SIZE + 1,
-      offset: 0
-    }, queryOptions);
-    const pageArticles = batch.length > GROUP_PAGINATION_ARTICLE_BATCH_SIZE
-      ? batch.slice(0, GROUP_PAGINATION_ARTICLE_BATCH_SIZE)
-      : batch;
-
-    articles.push(...pageArticles);
-    hasMoreArticles = batch.length > GROUP_PAGINATION_ARTICLE_BATCH_SIZE;
-    groups = groupSimilarNews(articles).sort(compareFeedPosition);
-
-    if (!hasMoreArticles) {
-      break;
-    }
-
-    const hasEnoughGroups = groups.length >= requiredGroups;
-    if (hasEnoughGroups && hasScannedGroupingWindow(articles, groups, pageStart, pageSize)) {
-      break;
-    }
-
-    const nextCursor = getArticleCursor(pageArticles);
-    if (!nextCursor) {
-      break;
-    }
-
-    cursor = nextCursor;
-  }
-
-  const pageGroups = groups.slice(pageStart, pageStart + pageSize);
-  const hasMore = groups.length > pageStart + pageSize || hasMoreArticles;
+  // shortcut: group the visible snapshot once; use indexed group pagination if large archives exceed the request budget.
+  const compare = readLater ? compareReadLaterPosition : compareFeedPosition;
+  const groups = groupSimilarNews(articles).map((group) => readLater ? buildReadLaterGroup(group) : group).sort(compare);
+  const cursor = { pubDate: filters.beforePubDate, cursorId: filters.beforeId, readLaterSavedAt: filters.beforeSavedAt };
+  const excludedIds = new Set(filters.excludeArticleIds || []);
+  const remainingGroups = groups.filter((group) => (!cursorMode || compare(group, cursor) > 0)
+    && !group.items.some((item) => excludedIds.has(item.id)));
 
   return {
     articles,
-    hasMore,
-    pageGroups
+    hasMore: remainingGroups.length > pageStart + pageSize,
+    pageGroups: remainingGroups.slice(pageStart, pageStart + pageSize),
+    totalGroups: groups.length
   };
 }
 
@@ -475,7 +359,7 @@ async function getNewsFeed(filters: FeedFilters = {}, userContext: UserContext =
   const availableSources = getAvailableSources(userSources);
 
   const { page, pageSize } = getPagination(filters);
-  const groupedPage = fetchGroupedNewsPage(filters, queryOptions, page, pageSize);
+  const groupedPage = fetchGroupedPage(filters, queryOptions, page, pageSize);
   const pageGroups = annotateReadLaterGroups(groupedPage.pageGroups, userContext.userId || null);
   const cursorMode = Boolean(filters.beforePubDate || filters.beforeId);
   const hasMore = !cursorMode && page >= MAX_NEWS_PAGE ? false : groupedPage.hasMore;
@@ -521,8 +405,8 @@ async function getReadLaterFeed(filters: FeedFilters = {}, userContext: UserCont
 
   const { page, pageSize } = getPagination(filters);
   const includeFilters = filters.includeFilters !== false;
-  const groupedPage = fetchGroupedReadLaterPage(filters, queryOptions, page, pageSize);
-  const hasMore = page >= MAX_NEWS_PAGE ? false : groupedPage.hasMore;
+  const groupedPage = fetchGroupedPage(filters, queryOptions, page, pageSize, true);
+  const hasMore = !filters.beforeSavedAt && page >= MAX_NEWS_PAGE ? false : groupedPage.hasMore;
 
   return {
     items: groupedPage.pageGroups,
@@ -530,7 +414,7 @@ async function getReadLaterFeed(filters: FeedFilters = {}, userContext: UserCont
       page,
       pageSize,
       hasMore,
-      nextCursor: null,
+      nextCursor: hasMore ? buildNextCursor(groupedPage.pageGroups, [], true) : null,
       returnedGroups: groupedPage.pageGroups.length,
       totalGroups: groupedPage.totalGroups,
       scannedArticles: groupedPage.articles.length,

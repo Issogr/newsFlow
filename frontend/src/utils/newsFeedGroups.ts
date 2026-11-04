@@ -142,8 +142,6 @@ export const mergeGroups = (primaryGroups: NewsGroup[], secondaryGroups: NewsGro
     if (!targetGroup) {
       targetGroup = cloneGroup(group);
       mergedGroups.push(targetGroup);
-    } else {
-      mergeGroupIntoTarget(targetGroup, group);
     }
 
     candidates.slice(1).forEach((candidate) => {
@@ -155,6 +153,7 @@ export const mergeGroups = (primaryGroups: NewsGroup[], secondaryGroups: NewsGro
       }
     });
 
+    if (candidates.length > 0) mergeGroupIntoTarget(targetGroup, group);
     addGroupKeys(targetGroup);
   });
 
@@ -190,8 +189,9 @@ export function buildFeedRequestParams({
     search,
     sourceIds: activeFilters.sourceIds,
     topics: activeFilters.topics,
-    beforePubDate: !isReadLaterView && append ? cursor?.beforePubDate : '',
-    beforeId: !isReadLaterView && append ? cursor?.beforeId : '',
+    beforePubDate: append ? cursor?.beforePubDate : '',
+    beforeId: append ? cursor?.beforeId : '',
+    beforeSavedAt: isReadLaterView && append ? cursor?.beforeSavedAt : '',
     excludeArticleIds: !isReadLaterView && append ? cursor?.excludeArticleIds : [],
     refresh: !isReadLaterView && forceRefresh,
     includeFilters,
@@ -218,11 +218,6 @@ export function getLoadedNewsGroups(currentGroups: NewsGroup[], {
 
   if (!append && silent) {
     nextNews = mergeGroups(currentGroups, filterGroupsMatchingCurrent(currentGroups, mergedItems));
-  }
-
-  if (!append && silent && currentGroups.length > nextNews.length) {
-    const preservedTail = currentGroups.slice(nextNews.length);
-    nextNews = mergeGroups(nextNews, preservedTail).slice(0, currentGroups.length);
   }
 
   if (!isReadLaterView && nextNews.length > maxRetainedGroups) {

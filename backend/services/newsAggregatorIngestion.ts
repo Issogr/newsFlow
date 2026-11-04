@@ -97,7 +97,7 @@ const AI_STORY_GROUPING_CANDIDATE_LIMIT = parseIntegerEnv('AI_STORY_GROUPING_CAN
 const AI_STORY_GROUPING_RETRY_LIMIT = parseIntegerEnv('AI_STORY_GROUPING_RETRY_LIMIT', 12, { min: 0, max: 50 });
 const EXISTING_STORY_GROUP_MERGE_MIN_CONFIDENCE = 0.9;
 const SUMMARY_POST_TOPIC_DEBOUNCE_MS = parseIntegerEnv('AI_SUMMARY_POST_TOPIC_DEBOUNCE_MS', 5000, { min: 0, max: 60000 });
-const pendingAiTopicProcessingIds = new Set<string>();
+const pendingAiTopicProcessing = new Map<string, NewsArticle>();
 const pendingAiStoryGroupingIds = new Set<string>();
 const sourceFetchTimestamps = new Map<string, number>();
 const sourceFetchResults = new Map<string, SourceFetchResult>();
@@ -401,20 +401,22 @@ async function processAiTopicsForPendingArticles(articles: NewsArticle[] = [], o
   }
 
   const articleIds = articles.map((article) => article.id).filter(Boolean);
+  const articlesById = new Map(articles.map((article) => [article.id, article]));
+  const isCurrent = (id: string) => articlesById.has(id) && pendingAiTopicProcessing.get(id) === articlesById.get(id);
 
   try {
     const classification = await classifyTopicDetailsForArticlesWithStatus(articles);
     const topicsByArticleId: Map<string, DynamicRecord[]> = classification.topicsByArticleId || new Map();
-    const attemptedArticleIds: string[] = Array.isArray(classification.attemptedArticleIds)
+    const attemptedArticleIds: string[] = (Array.isArray(classification.attemptedArticleIds)
       ? classification.attemptedArticleIds
-      : articleIds;
-    const failedArticleIds = new Set<string>(classification.failedArticleIds || []);
-    const cappedArticleIds = new Set<string>(classification.cappedArticleIds || []);
+      : articleIds).filter(isCurrent);
+    const failedArticleIds = new Set<string>((classification.failedArticleIds || []).filter(isCurrent));
+    const cappedArticleIds = new Set<string>((classification.cappedArticleIds || []).filter(isCurrent));
     const classifiedIds: string[] = [];
     const topicEntries: Array<{ articleId: string; topics: DynamicRecord[] }> = [];
 
     topicsByArticleId.forEach((topicDetails: DynamicRecord[], articleId: string) => {
-      if (Array.isArray(topicDetails) && topicDetails.length > 0) {
+      if (isCurrent(articleId) && Array.isArray(topicDetails) && topicDetails.length > 0) {
         classifiedIds.push(articleId);
         topicEntries.push({ articleId, topics: topicDetails });
       }
@@ -438,12 +440,13 @@ async function processAiTopicsForPendingArticles(articles: NewsArticle[] = [], o
     scheduleThematicSummariesAfterTopicProcessing(articles, attemptedArticleIds);
   } catch (error) {
     logger.warn(`Background AI topic processing failed: ${(error as AppError).message}`);
-    database.markArticlesAiTopicProcessing(articleIds, 'failed');
+    database.markArticlesAiTopicProcessing(articleIds.filter(isCurrent), 'failed');
   } finally {
-    articleIds.forEach((articleId) => pendingAiTopicProcessingIds.delete(articleId));
-    if (typeof options.onComplete === 'function') {
+    const currentArticles = articles.filter((article) => isCurrent(article.id));
+    currentArticles.forEach((article) => pendingAiTopicProcessing.delete(article.id));
+    if (currentArticles.length > 0 && typeof options.onComplete === 'function') {
       try {
-        options.onComplete(articles);
+        options.onComplete(currentArticles);
       } catch (error) {
         logger.warn(`Background AI topic completion hook failed: ${(error as AppError).message}`);
       }
@@ -490,11 +493,13 @@ function scheduleAiTopicsForPendingArticles(normalizedArticles: NewsArticle[] = 
 
   const pendingArticleIdSet = new Set(pendingArticleIds);
   const pendingArticles = normalizedArticles.filter((article) => {
-    if (!pendingArticleIdSet.has(article.id) || pendingAiTopicProcessingIds.has(article.id)) {
+    const pending = pendingAiTopicProcessing.get(article.id);
+    if (!pendingArticleIdSet.has(article.id) || (pending
+      && pending.title === article.title && pending.description === article.description && pending.content === article.content)) {
       return false;
     }
 
-    pendingAiTopicProcessingIds.add(article.id);
+    pendingAiTopicProcessing.set(article.id, article);
     return true;
   });
 
@@ -542,6 +547,12 @@ function selectMatchesForConservativeMerge(target: StoryCandidate = { id: '' }, 
   });
 }
 
+function getStoryEvidence(article: StoryCandidate) {
+  return JSON.stringify([article.title || '', article.description || '', article.content || '',
+    article.pubDate || '', article.url || '', article.canonicalUrl || '', article.ownerUserId || '',
+    article.rawSource || article.source || '', [...(Array.isArray(article.topics) ? article.topics : [])].sort()]);
+}
+
 async function processAiStoryGroupingForArticle(article: Pick<NewsArticle, 'id'>) {
   const articleId = article?.id;
   if (!articleId) {
@@ -575,13 +586,30 @@ async function processAiStoryGroupingForArticle(article: Pick<NewsArticle, 'id'>
     return;
   }
 
-  const result = await findSimilarStoriesForArticle(target, candidates);
+  let result: Awaited<ReturnType<typeof findSimilarStoriesForArticle>> | undefined;
+  let failure: unknown;
+  try {
+    result = await findSimilarStoriesForArticle(target, candidates);
+  } catch (error) {
+    failure = error;
+  }
   const queryOptions = { userId: target.ownerUserId || null, maxArticleAgeHours: null };
   const storedTarget = database.getArticleById(articleId, queryOptions);
   if (!storedTarget || storedTarget.aiStoryGroupStatus === 'matched') {
     return;
   }
   const currentTarget = { ...target, ...storedTarget };
+  const currentCandidates = candidates
+    .map((candidate: StoryCandidate) => {
+      const storedCandidate = database.getArticleById(candidate.id, queryOptions);
+      return storedCandidate ? { ...candidate, ...storedCandidate } : null;
+    });
+  if (getStoryEvidence(target) !== getStoryEvidence(currentTarget)
+    || currentCandidates.some((candidate, index) => candidate && getStoryEvidence(candidate) !== getStoryEvidence(candidates[index]))) {
+    return true;
+  }
+  if (failure) throw failure;
+  if (!result) return;
   if (result.skipped === 'no_candidates') {
     database.markArticlesAiStoryGrouping([articleId], 'no_candidates', result.model);
     return;
@@ -592,16 +620,12 @@ async function processAiStoryGroupingForArticle(article: Pick<NewsArticle, 'id'>
     return;
   }
 
-  const currentCandidates = (result.candidates || candidates)
-    .map((candidate: StoryCandidate) => {
-      const storedCandidate = database.getArticleById(candidate.id, queryOptions);
-      return storedCandidate ? { ...candidate, ...storedCandidate } : null;
-    })
-    .filter((candidate) => candidate !== null);
-  const matches = selectMatchesForConservativeMerge(currentTarget, currentCandidates, result.matches || []);
+  const evaluatedIds = new Set((result.candidates || candidates).map((candidate: StoryCandidate) => candidate.id));
+  const evaluatedCandidates = currentCandidates.filter((candidate) => candidate !== null).filter((candidate) => evaluatedIds.has(candidate.id));
+  const matches = selectMatchesForConservativeMerge(currentTarget, evaluatedCandidates, result.matches || []);
   if (matches.length === 0) {
     database.markArticlesAiStoryGrouping([articleId], 'no_match', result.model, {
-      matchIds: currentCandidates.map((candidate) => candidate.id).filter(Boolean).sort(),
+      matchIds: evaluatedCandidates.map((candidate) => candidate.id).filter(Boolean).sort(),
       reason: 'unchanged_candidate_signature'
     });
     return;
@@ -609,7 +633,7 @@ async function processAiStoryGroupingForArticle(article: Pick<NewsArticle, 'id'>
 
   const matchesByArticleId = getMatchesByArticleId(matches);
   const matchedIds = matches.map((match) => match.articleId);
-  const matchedCandidates = currentCandidates.filter((candidate) => matchedIds.includes(candidate.id));
+  const matchedCandidates = evaluatedCandidates.filter((candidate) => matchedIds.includes(candidate.id));
   const involvedStoryGroupIds = [...new Set([currentTarget, ...matchedCandidates]
     .map(getStoryGroupId)
     .filter(Boolean))];
@@ -641,11 +665,13 @@ async function processAiStoryGroupingForPendingArticles(articles: Pick<NewsArtic
     return;
   }
 
+  let changedArticles: Pick<NewsArticle, 'id'>[] = [];
   try {
-    const results: PromiseSettledResult<void>[] = await mapSettledWithConcurrency(articles, AI_STORY_GROUPING_CONCURRENCY,
+    const results = await mapSettledWithConcurrency(articles, AI_STORY_GROUPING_CONCURRENCY,
       (article) => limitStoryGrouping(() => processAiStoryGroupingForArticle(article)));
+    changedArticles = articles.filter((_, index) => results[index]?.status === 'fulfilled' && results[index].value === true);
     const failedArticleIds = results
-      .map((result: PromiseSettledResult<void>, index: number) => result.status === 'rejected' ? articles[index]?.id : null)
+      .map((result, index: number) => result.status === 'rejected' ? articles[index]?.id : null)
       .filter((articleId: string | null): articleId is string => Boolean(articleId));
 
     if (failedArticleIds.length > 0) {
@@ -659,6 +685,7 @@ async function processAiStoryGroupingForPendingArticles(articles: Pick<NewsArtic
     database.markArticlesAiStoryGrouping(articles.map((article) => article.id).filter(Boolean), 'failed');
   } finally {
     articles.forEach((article) => pendingAiStoryGroupingIds.delete(article.id));
+    scheduleAiStoryGroupingForPendingArticles(changedArticles, { retryAnchorArticleIds: [] });
   }
 }
 
@@ -706,7 +733,7 @@ function scheduleAiStoryGroupingForPendingArticles(normalizedArticles: Pick<News
 }
 
 function resetRuntimeStateForTests() {
-  pendingAiTopicProcessingIds.clear();
+  pendingAiTopicProcessing.clear();
   pendingAiStoryGroupingIds.clear();
   sourceFetchTimestamps.clear();
   sourceFetchResults.clear();
@@ -755,7 +782,7 @@ async function persistNormalizedArticles(normalizedArticles: NewsArticle[] = [])
   };
   mergeNormalizedArticleTopics(currentArticles);
   const scheduledTopicProcessing = scheduleAiTopicsForPendingArticles(currentArticles, {
-    onComplete: () => scheduleAiStoryGroupingForPendingArticles(currentArticles, storyGroupingOptions)
+    onComplete: (articles: NewsArticle[]) => scheduleAiStoryGroupingForPendingArticles(articles, storyGroupingOptions)
   });
 
   if (!scheduledTopicProcessing) {

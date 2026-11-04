@@ -176,6 +176,16 @@ describe('API auth and user flows', () => {
     expect(getSessionCookie(loginResponse)).toContain('newsflow_session=');
   });
 
+  test.each(['alias-user', 'a'.repeat(40)])('shares the login limit across equivalent usernames: %s', async (username) => {
+    await userService.registerUser({ username, password: 'secret123' });
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await request(app).post('/api/auth/login').send({ username, password: 'wrong' }).expect(401);
+    }
+    for (const alias of [` ${username.toUpperCase()} `, `${username}<tag>`, ...(username.length === 40 ? [`${username}suffix`] : [])]) {
+      await request(app).post('/api/auth/login').send({ username: alias, password: 'secret123' }).expect(429);
+    }
+  });
+
   test('rate limits registration bursts by IP even with unique usernames', async () => {
     for (let index = 0; index < 20; index += 1) {
       await registerTestUser(app, `burst-user-${index}`);

@@ -621,11 +621,10 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
   const existingSummary = database.getThematicSummary(topicConfig.key, window.periodStart, window.periodEnd);
   const failedRetryDue = isFailedSummaryRetryDue(existingSummary || {}, options.referenceDate || new Date());
   const exhaustedInvalidOutputRetries = hasExhaustedInvalidOutputRetries(existingSummary || {});
-  const canRetryExhaustedInvalidOutput = exhaustedInvalidOutputRetries && existingSummary?.status === 'failed';
   if ((existingSummary?.status === 'failed' || existingSummary?.failureCategory)
     && options.force !== true
     && !failedRetryDue
-    && !canRetryExhaustedInvalidOutput) {
+    && !exhaustedInvalidOutputRetries) {
     logger.debug(`Thematic summary retry skipped during cooldown: topic=${topicConfig.key}, windowEnd=${window.periodEnd}`);
     return {
       summary: TERMINAL_SUMMARY_STATUSES.has(existingSummary.status || '') ? existingSummary : null,
@@ -645,9 +644,12 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
   const enrichedArticles = withCachedReaderText(selectedArticles);
   const sources = buildSourceList(enrichedArticles);
 
-  if (canRetryExhaustedInvalidOutput && options.force !== true && !hasChangedArticleSelection(existingSummary, sources)) {
+  const lastAttemptSources = existingSummary?.lastAttemptSources?.length
+    ? existingSummary.lastAttemptSources
+    : existingSummary?.sources || [];
+  if (exhaustedInvalidOutputRetries && options.force !== true && !hasChangedArticleSelection({ sources: lastAttemptSources }, sources)) {
     logger.debug(`Thematic summary retry skipped after invalid output limit: topic=${topicConfig.key}, windowEnd=${window.periodEnd}`);
-    return { summary: null, generatedNow: false };
+    return { summary: existingSummary?.status === 'completed' ? existingSummary : null, generatedNow: false };
   }
 
   if (existingSummary?.status === 'completed' && options.force !== true) {
@@ -682,6 +684,7 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
     periodEnd: window.periodEnd,
     articleCount: enrichedArticles.length,
     sources,
+    lastAttemptSources: sources.map(({ articleId, contentHash }) => ({ articleId, contentHash })),
     generatedAt: new Date().toISOString()
   };
 
@@ -720,7 +723,8 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
         failureCategory,
         retryCount: (existingSummary.retryCount || 0) + 1,
         errorMessage: failure.message,
-        lastAttemptAt: basePayload.generatedAt
+        lastAttemptAt: basePayload.generatedAt,
+        lastAttemptSources: basePayload.lastAttemptSources
       });
       if (!existingSummary.failureCategory) {
         broadcastSummariesRefresh(options);

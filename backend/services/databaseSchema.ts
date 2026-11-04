@@ -10,7 +10,7 @@ import type SqliteDatabase from './sqliteDatabase';
 import type { SourceDefinition } from '../utils/types';
 
 function createDatabaseSchema({ logger }: { logger: typeof appLogger }) {
-  const CURRENT_SCHEMA_VERSION = 46;
+  const CURRENT_SCHEMA_VERSION = 47;
   const MIN_SUPPORTED_SCHEMA_VERSION = 15;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
@@ -458,6 +458,10 @@ function createDatabaseSchema({ logger }: { logger: typeof appLogger }) {
 
     if (!thematicSummaryColumns.has('input_json') || !thematicSummaryColumns.has('last_attempt_at')) {
       return 44;
+    }
+
+    if (!thematicSummaryColumns.has('last_attempt_sources_json') || !tableExists(database, 'article_search_keys')) {
+      return 46;
     }
 
     return CURRENT_SCHEMA_VERSION;
@@ -1098,6 +1102,48 @@ function createDatabaseSchema({ logger }: { logger: typeof appLogger }) {
       database.exec(`
         DROP TABLE IF EXISTS podcast_summary_audio;
         DROP TABLE IF EXISTS podcast_summaries;
+      `);
+      return;
+    }
+
+    if (currentVersion === 46) {
+      if (!getColumnNames(database, 'thematic_summaries').has('last_attempt_sources_json')) {
+        database.exec("ALTER TABLE thematic_summaries ADD COLUMN last_attempt_sources_json TEXT NOT NULL DEFAULT '[]'");
+      }
+      // Explicit integer keys stay stable across VACUUM, unlike implicit article rowids.
+      database.exec(`
+        DROP TRIGGER IF EXISTS article_search_after_insert;
+        DROP TRIGGER IF EXISTS article_search_after_update;
+        DROP TRIGGER IF EXISTS article_search_after_delete;
+        CREATE TABLE IF NOT EXISTS article_search_keys (
+          id INTEGER PRIMARY KEY,
+          article_id TEXT NOT NULL UNIQUE
+        );
+        DELETE FROM article_search;
+        DELETE FROM article_search_keys;
+        INSERT INTO article_search_keys (article_id) SELECT id FROM articles;
+        INSERT INTO article_search (rowid, article_id, title, description, content)
+        SELECT keys.id, a.id, a.title, a.description, a.content
+        FROM articles a JOIN article_search_keys keys ON keys.article_id = a.id;
+
+        CREATE TRIGGER article_search_after_insert AFTER INSERT ON articles
+        BEGIN
+          INSERT INTO article_search_keys (article_id) VALUES (NEW.id);
+          INSERT INTO article_search (rowid, article_id, title, description, content)
+          VALUES ((SELECT id FROM article_search_keys WHERE article_id = NEW.id), NEW.id, NEW.title, NEW.description, NEW.content);
+        END;
+        CREATE TRIGGER article_search_after_update
+        AFTER UPDATE OF id, title, description, content ON articles
+        BEGIN
+          UPDATE article_search SET article_id = NEW.id, title = NEW.title, description = NEW.description, content = NEW.content
+          WHERE rowid = (SELECT id FROM article_search_keys WHERE article_id = OLD.id);
+          UPDATE article_search_keys SET article_id = NEW.id WHERE article_id = OLD.id;
+        END;
+        CREATE TRIGGER article_search_after_delete AFTER DELETE ON articles
+        BEGIN
+          DELETE FROM article_search WHERE rowid = (SELECT id FROM article_search_keys WHERE article_id = OLD.id);
+          DELETE FROM article_search_keys WHERE article_id = OLD.id;
+        END;
       `);
       return;
     }

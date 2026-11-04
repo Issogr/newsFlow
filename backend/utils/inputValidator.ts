@@ -38,24 +38,12 @@ function validateAndSanitizeParam(paramName: string, errorMessage = 'Parameter m
   };
 }
 
-function sanitizeBody(fieldNames: string[] = []): RequestHandler {
-  return (req, res, next) => {
-    if (!req.body || !Array.isArray(fieldNames)) {
-      return next();
-    }
-
-    fieldNames.forEach((fieldName) => {
-      if (typeof req.body[fieldName] === 'string') {
-        req.body[fieldName] = sanitizeString(req.body[fieldName]);
-      }
-    });
-
-    return next();
-  };
+function sanitizeUsername(username: unknown) {
+  return sanitizeString(String(username || '')).slice(0, 40);
 }
 
 export default {
   sanitizeHtml,
   validateAndSanitizeParam,
-  sanitizeBody
+  sanitizeUsername
 };

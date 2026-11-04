@@ -158,6 +158,32 @@ describe('readerService', () => {
     expect(readerService._getFallbackCacheSize()).toBe(0);
   });
 
+  test('invalidates fallback content when an article is corrected', async () => {
+    fetchSafeTextUrl.mockRejectedValue(new Error('Offline'));
+    await readerService.getReaderArticle(article.id, { userId: 'user-1' });
+    database.getArticleById.mockReturnValue({ ...article, title: 'Corrected', description: 'New evidence' });
+    const payload = await readerService.getReaderArticle(article.id, { userId: 'user-1' });
+    expect(payload).toMatchObject({ title: 'Corrected', excerpt: 'New evidence' });
+    expect(fetchSafeTextUrl).toHaveBeenCalledTimes(2);
+  });
+
+  test.each([false, true])('discards stale extraction after correction (fallback: %s)', async (fallback) => {
+    const oldFetch = Promise.withResolvers<FetchResponse>();
+    fetchSafeTextUrl.mockReturnValueOnce(oldFetch.promise).mockRejectedValue(new Error('Offline'));
+    mockReadableArticle('Original extraction');
+    const oldRequest = readerService.getReaderArticle(article.id, { userId: 'user-1' });
+    const rejected = expect(oldRequest).rejects.toMatchObject({ code: 'READER_ARTICLE_CHANGED' });
+    await Promise.resolve();
+    database.getArticleById.mockReturnValue({ ...article, title: 'Corrected' });
+    const corrected = await readerService.getReaderArticle(article.id, { userId: 'user-1' });
+    expect(corrected.title).toBe('Corrected');
+    if (fallback) oldFetch.reject(new Error('Old fetch failed'));
+    else oldFetch.resolve({ data: '<html><body><article>Old article</article></body></html>' });
+    await rejected;
+    expect(database.upsertReaderCache).not.toHaveBeenCalled();
+    expect((await readerService.getReaderArticle(article.id, { userId: 'user-1' })).title).toBe('Corrected');
+  });
+
   test('deduplicates concurrent extraction requests for the same article', async () => {
     let resolveFetch!: (value: FetchResponse) => void;
     const fetchPromise = new Promise<FetchResponse>((resolve) => {

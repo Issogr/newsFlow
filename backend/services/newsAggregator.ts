@@ -333,7 +333,11 @@ async function getCachedNewsFeed(filters: DynamicRecord = {}, userContext: UserC
 }
 
 function normalizeReadLaterArticleIds(articleIds: unknown[] = []) {
-  return [...new Set((Array.isArray(articleIds) ? articleIds : []).map((articleId) => String(articleId || '').trim()).filter(Boolean))].slice(0, 20);
+  const ids = [...new Set((Array.isArray(articleIds) ? articleIds : []).map((articleId) => String(articleId || '').trim()).filter(Boolean))];
+  if (ids.length > 20) {
+    throw createError(400, 'Send at most 20 article IDs per request.', 'INVALID_READ_LATER_PAYLOAD');
+  }
+  return ids;
 }
 
 async function getReadLaterFeed(filters: DynamicRecord = {}, userContext: UserContext = {}) {

@@ -5,6 +5,7 @@ import promotionalContent from '../utils/promotionalContent';
 const { isPromotionalDealArticle } = promotionalContent;
 import { vi as jest, type Mock } from 'vitest';
 import type { MockLogger } from '../test-utils/mockLogger';
+import type { SummaryRecord } from '../utils/types';
 
 type RuntimeModule = ReturnType<typeof require>;
 type MockModule = Record<string, Mock>;
@@ -1137,6 +1138,60 @@ describe('thematic summary generation retries', () => {
     expect(databaseMock.pruneSummaryHistory).not.toHaveBeenCalled();
     expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledTimes(1);
     expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'summaries' });
+  });
+
+  test('retries exhausted completed-summary refreshes only for changed attempted evidence', async () => {
+    const window = createSummaryWindow();
+    let stored: SummaryRecord | null = null;
+    let articles = ['a', 'b'].map((id) => ({
+      id, title: `Report ${id}`, description: 'Original evidence', content: '',
+      source: id, url: `https://example.com/${id}`, pubDate: window.periodStart
+    }));
+    let readerText = '';
+    const generated = { summaryText: 'Successful briefing [1].', summaryTextByLocale: { en: 'Successful briefing [1].' }, model: 'test-model' };
+    const generator = createAiSummaryGeneratorMock({ generateSummaryForArticles: jest.fn().mockResolvedValue(generated) });
+    const { service } = await loadServiceWithMocks({
+      env: { ...OPENROUTER_TEST_ENV, AI_SUMMARY_FAILED_RETRY_COOLDOWN_MS: '0', AI_SUMMARY_INVALID_OUTPUT_MAX_RETRIES: '2' },
+      aiSummaryGeneratorMock: generator,
+      databaseMock: {
+        getThematicSummary: jest.fn((key) => key === 'technology' ? stored : { status: 'empty' }),
+        getArticlesForThematicSummary: jest.fn(({ topics }) => topics.includes('Tecnologia') ? articles : []),
+        getReaderCache: jest.fn(() => ({ contentText: readerText })),
+        upsertThematicSummary: jest.fn((payload) => {
+          if (payload.topicKey === 'technology') stored = payload;
+          return payload;
+        })
+      }
+    });
+    const run = () => service.generateDueSummaries({ window, broadcast: false });
+    await run();
+    const successful = stored!;
+    generator.generateSummaryForArticles.mockRejectedValue(Object.assign(new Error('Invalid output'), { code: 'SUMMARY_VALIDATION_FAILED' }));
+    articles[0].description = 'Corrected evidence';
+    for (let attempt = 0; attempt < 3; attempt += 1) await run();
+    expect(stored).toMatchObject({ status: 'completed', retryCount: 3, summaryText: successful.summaryText, generatedAt: successful.generatedAt, sources: successful.sources });
+    expect(generator.generateSummaryForArticles).toHaveBeenCalledTimes(4);
+
+    await run();
+    articles = articles.slice(0, 1);
+    await run();
+    expect(generator.generateSummaryForArticles).toHaveBeenCalledTimes(4);
+
+    articles[0].description = 'Further correction';
+    await run();
+    await run();
+    expect(generator.generateSummaryForArticles).toHaveBeenCalledTimes(5);
+    readerText = 'New cached reader evidence. '.repeat(20);
+    await run();
+    await run();
+    expect(generator.generateSummaryForArticles).toHaveBeenCalledTimes(6);
+    expect(stored).toMatchObject({ summaryText: successful.summaryText, generatedAt: successful.generatedAt });
+
+    generator.generateSummaryForArticles.mockResolvedValue({ ...generated, summaryText: 'Updated briefing [1].' });
+    articles[0].description = 'Final correction';
+    await run();
+    expect(generator.generateSummaryForArticles).toHaveBeenCalledTimes(7);
+    expect(stored).toMatchObject({ status: 'completed', failureCategory: '', retryCount: 0, summaryText: 'Updated briefing [1].' });
   });
 
   test('deduplicates topic summaries and queries each topic once', async () => {

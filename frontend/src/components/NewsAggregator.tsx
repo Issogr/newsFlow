@@ -724,14 +724,20 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
     setError(null);
 
     try {
-      if (group.readLater) {
-        await removeReadLaterArticles(articleIds);
-        setNews((current) => isReadLaterView
-          ? current.filter((item) => item.id !== groupId)
-          : current.map((item) => item.id === groupId ? { ...item, readLater: false, readLaterArticleIds: [] } : item));
-      } else {
-        await saveReadLaterArticles(articleIds);
-        setNews((current) => current.map((item) => item.id === groupId ? { ...item, readLater: true, readLaterArticleIds: articleIds } : item));
+      const toggle = group.readLater ? removeReadLaterArticles : saveReadLaterArticles;
+      for (let offset = 0; offset < articleIds.length; offset += 20) {
+        const response = await toggle(articleIds.slice(offset, offset + 20));
+        const changedIds = new Set(response.articleIds);
+        setNews((current) => current.map((item) => {
+          if (!(item.items || []).some((article) => article.id && changedIds.has(article.id))) return item;
+          const savedIds = new Set(item.readLaterArticleIds || []);
+          for (const article of item.items || []) {
+            if (!article.id || !changedIds.has(article.id)) continue;
+            if (group.readLater) savedIds.delete(article.id);
+            else savedIds.add(article.id);
+          }
+          return { ...item, readLater: savedIds.size > 0, readLaterArticleIds: [...savedIds] };
+        }).filter((item) => !isReadLaterView || item.readLater));
       }
     } catch (requestError) {
       if (!isRequestCanceled(requestError)) {
@@ -893,6 +899,9 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
           />
         )}
 
+        {Boolean(error) && visibleNews.length > 0 && (
+          <ErrorMessage error={error} onRetry={() => loadNews({ page: 1, append: false })} t={t} />
+        )}
         {loading && !loadingMore ? (
           <div
             className="grid w-full min-w-0 animate-pulse grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
@@ -903,7 +912,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
               <NewsCardSkeleton key={index} showImage={showNewsImages} />
             ))}
           </div>
-        ) : error ? (
+        ) : error && visibleNews.length === 0 ? (
           <ErrorMessage error={error} onRetry={() => loadNews({ page: 1, append: false, forceRefresh: true })} t={t} />
         ) : visibleNews.length === 0 ? (
           <div className="rounded-2xl border border-line bg-surface px-6 py-12 text-center">

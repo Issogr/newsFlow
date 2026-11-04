@@ -172,7 +172,7 @@ describe('newsAggregator service flows', () => {
       expect.objectContaining({ id: ansaSourceId, name: ansaSourceName }),
       expect.objectContaining({ id: 'example.com', name: 'My Feed', language: 'en' })
     ]));
-    expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({ limit: 251, offset: 0 }), expect.objectContaining({ userId: 'user-1' }));
+    expect(database.getArticles).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ userId: 'user-1', unpaginated: true }));
   });
 
   test('getNewsFeed returns immediately while empty-database seed ingestion runs in the background', async () => {
@@ -307,9 +307,9 @@ describe('newsAggregator service flows', () => {
     }));
 
     database.getArticles.mockClear();
-    database.getArticles.mockReturnValueOnce([]);
+    database.getArticles.mockReturnValueOnce([primaryStoryArticle, separateArticle, secondaryStoryArticle]);
 
-    await newsAggregator.getNewsFeed({
+    const nextPage = await newsAggregator.getNewsFeed({
       page: 1,
       pageSize: 1,
       beforePubDate: firstPage.meta.nextCursor.beforePubDate,
@@ -317,9 +317,7 @@ describe('newsAggregator service flows', () => {
       excludeArticleIds: firstPage.meta.nextCursor.excludeArticleIds
     }, { userId: 'user-1' });
 
-    expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({
-      excludeArticleIds: ['story-new', 'story-old']
-    }), expect.any(Object));
+    expect(nextPage.items).toMatchObject([{ items: [{ id: 'separate-story' }] }]);
   });
 
   test('deduplicates concurrent fetches for the same custom RSS URL', async () => {
@@ -370,14 +368,15 @@ describe('newsAggregator service flows', () => {
   });
 
   test('getNewsFeed applies page offsets after story grouping when no cursor is provided', async () => {
-    database.getArticles.mockReturnValue([]);
+    database.getArticles.mockReturnValue(Array.from({ length: 31 }, (_, index) => ({
+      id: `page-item-${index}`, title: `Unique report${index}`, pubDate: recentIso({ minutesAgo: index })
+    })));
 
-    await newsAggregator.getNewsFeed({ page: 3, pageSize: 10 }, { userId: 'user-1' });
+    const result = await newsAggregator.getNewsFeed({ page: 3, pageSize: 10 }, { userId: 'user-1' });
 
-    expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({
-      limit: 251,
-      offset: 0
-    }), expect.objectContaining({ userId: 'user-1' }));
+    expect(result.items).toHaveLength(10);
+    expect(result.items[0]).toMatchObject({ items: [{ id: 'page-item-20' }] });
+    expect(result.items[9]).toMatchObject({ items: [{ id: 'page-item-29' }] });
   });
 
   test('getNewsFeed caps very deep page numbers', async () => {
@@ -409,7 +408,7 @@ describe('newsAggregator service flows', () => {
     }));
   });
 
-  test('getReadLaterFeed scans multiple article batches before reporting more pages', async () => {
+  test('getReadLaterFeed groups the entire saved snapshot before reporting more pages', async () => {
     const firstBatch = Array.from({ length: 250 }, (_, index) => ({
       id: `saved-${index + 1}`,
       sourceId: ansaSourceId,
@@ -420,16 +419,6 @@ describe('newsAggregator service flows', () => {
       readLaterSavedAt: recentIso({ hoursAgo: index * 100 }),
       url: `https://example.com/saved-${index + 1}`
     }));
-    const sentinelArticle = {
-      id: 'saved-251',
-      sourceId: ansaSourceId,
-      source: 'ANSA',
-      title: 'Saved story 251',
-      description: 'Saved article',
-      pubDate: recentIso({ hoursAgo: 25100 }),
-      readLaterSavedAt: recentIso({ hoursAgo: 25100 }),
-      url: 'https://example.com/saved-251'
-    };
     const secondBatch = Array.from({ length: 20 }, (_, index) => ({
       id: `saved-next-${index + 1}`,
       sourceId: ansaSourceId,
@@ -441,9 +430,7 @@ describe('newsAggregator service flows', () => {
       url: `https://example.com/saved-next-${index + 1}`
     }));
 
-    database.getReadLaterArticles
-      .mockReturnValueOnce([...firstBatch, sentinelArticle])
-      .mockReturnValueOnce(secondBatch);
+    database.getReadLaterArticles.mockReturnValueOnce([...firstBatch, ...secondBatch]);
 
     const result = await newsAggregator.getReadLaterFeed({ page: 9, pageSize: 30 }, { userId: 'user-1' });
 
@@ -456,29 +443,27 @@ describe('newsAggregator service flows', () => {
       scannedArticles: 270,
       readLater: true
     });
-    expect(database.getReadLaterArticles).toHaveBeenNthCalledWith(1, 'user-1', expect.objectContaining({ limit: 251, offset: 0 }), expect.objectContaining({ userId: 'user-1' }));
-    expect(database.getReadLaterArticles).toHaveBeenNthCalledWith(2, 'user-1', expect.objectContaining({ limit: 251, offset: 250 }), expect.objectContaining({ userId: 'user-1' }));
+    expect(database.getReadLaterArticles).toHaveBeenCalledTimes(1);
+    expect(database.getReadLaterArticles).toHaveBeenCalledWith('user-1', expect.any(Object), expect.objectContaining({ userId: 'user-1', unpaginated: true }));
   });
 
-  test('getNewsFeed passes article cursors to the database query', async () => {
-    database.getArticles.mockReturnValue([]);
+  test('getNewsFeed applies the cursor to complete groups instead of applying a page offset', async () => {
+    database.getArticles.mockReturnValue([
+      { id: 'article-1', title: 'First report', pubDate: '2026-03-07T10:00:00.000Z' },
+      { id: 'article-2', title: 'Later report', pubDate: '2026-03-07T09:00:00.000Z' }
+    ]);
 
-    await newsAggregator.getNewsFeed({
+    const result = await newsAggregator.getNewsFeed({
       page: 3,
       pageSize: 10,
       beforePubDate: '2026-03-07T10:00:00.000Z',
       beforeId: 'article-1'
     }, { userId: 'user-1' });
 
-    expect(database.getArticles).toHaveBeenCalledWith(expect.objectContaining({
-      beforePubDate: '2026-03-07T10:00:00.000Z',
-      beforeId: 'article-1',
-      limit: 251,
-      offset: 0
-    }), expect.objectContaining({ userId: 'user-1' }));
+    expect(result.items).toMatchObject([{ items: [{ id: 'article-2' }] }]);
   });
 
-  test('getNewsFeed stops scanning once it has enough complete grouped stories', async () => {
+  test('getNewsFeed scans beyond the old title window before forming complete story groups', async () => {
     const articles = Array.from({ length: 251 }, (_, index) => ({
       id: `article-${index + 1}`,
       sourceId: 'source-a',
@@ -498,7 +483,7 @@ describe('newsAggregator service flows', () => {
     expect(result.items).toHaveLength(12);
     expect(result.meta).toEqual(expect.objectContaining({
       hasMore: true,
-      scannedArticles: 250
+      scannedArticles: 251
     }));
   });
 
@@ -922,6 +907,28 @@ describe('newsAggregator service flows', () => {
 
     expect(database.replaceTopicsForArticles).not.toHaveBeenCalled();
     expect(database.markArticlesAiTopicProcessing).toHaveBeenCalledWith(['inserted-1'], 'no_topics');
+  });
+
+  test.each([false, true])('ignores stale classification after an article correction (old request fails: %s)', async (oldRequestFails) => {
+    const first = createDeferred();
+    const second = createDeferred();
+    database.getArticleIdsPendingAiTopicProcessing.mockReturnValue(['corrected']);
+    aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const original = { id: 'corrected', title: 'Technology report', description: 'Initial report', content: '' };
+    scheduleAiTopicsForPendingArticles([original]);
+    await flushBackgroundAiProcessing();
+    expect(scheduleAiTopicsForPendingArticles([{ ...original }])).toBe(false);
+    scheduleAiTopicsForPendingArticles([{ ...original, title: 'Politics correction' }]);
+    await flushBackgroundAiProcessing();
+    const result = (topic: string) => ({ topicsByArticleId: new Map([['corrected', [{ topic, source: 'ai' }]]]), attemptedArticleIds: ['corrected'] });
+    second.resolve(result('Politica'));
+    await flushBackgroundAiProcessing();
+    if (oldRequestFails) first.reject(new Error('Old request failed'));
+    else first.resolve(result('Tecnologia'));
+    await flushBackgroundAiProcessing();
+    expect(database.replaceTopicsForArticles).toHaveBeenCalledTimes(1);
+    expect(database.replaceTopicsForArticles).toHaveBeenCalledWith([{ articleId: 'corrected', topics: [{ topic: 'Politica', source: 'ai' }] }]);
+    expect(database.markArticlesAiTopicProcessing).not.toHaveBeenCalledWith(['corrected'], 'failed');
   });
 
   test('AI story grouping waits until pending topic processing finishes', async () => {
