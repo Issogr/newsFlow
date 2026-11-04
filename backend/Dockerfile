@@ -13,19 +13,15 @@ RUN npm run build
 
 FROM --platform=$BUILDPLATFORM node:24.20.0-bookworm-slim AS backend-build
 
-ARG TARGETARCH
-
 # Imposta la directory di lavoro
 WORKDIR /app/backend
 
 # Copia i file di configurazione delle dipendenze
 COPY backend/package*.json ./
 
-# Installa le dipendenze e compila TypeScript per la piattaforma target senza emulare npm sotto QEMU
+# TypeScript 7 uses a native compiler, so build dependencies must match BUILDPLATFORM.
 RUN --mount=type=cache,id=newsflow-backend-npm,target=/root/.npm,sharing=locked \
-    npm_arch="${TARGETARCH:-$(node -p 'process.arch')}" && \
-    if [ "$npm_arch" = "amd64" ]; then npm_arch="x64"; fi && \
-    npm_config_os=linux npm_config_cpu="$npm_arch" npm_config_libc=glibc npm ci --no-audit --no-fund
+    npm ci --no-audit --no-fund
 
 COPY backend/tsconfig*.json ./
 COPY backend/app.ts backend/server.ts ./
@@ -34,7 +30,15 @@ COPY backend/routes ./routes
 COPY backend/services ./services
 COPY backend/utils ./utils
 
-RUN npm run build && npm prune --omit=dev
+RUN npm run build
+
+ARG TARGETARCH
+
+# Install only runtime dependencies for the target, without emulating npm under QEMU.
+RUN --mount=type=cache,id=newsflow-backend-npm,target=/root/.npm,sharing=locked \
+    npm_arch="${TARGETARCH:-$(node -p 'process.arch')}" && \
+    if [ "$npm_arch" = "amd64" ]; then npm_arch="x64"; fi && \
+    npm_config_os=linux npm_config_cpu="$npm_arch" npm_config_libc=glibc npm ci --omit=dev --no-audit --no-fund
 
 # Production stage
 FROM node:24.20.0-bookworm-slim

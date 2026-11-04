@@ -140,6 +140,8 @@ For all environment variables, defaults, and limits—including ingestion, reten
 
 `backend/` contains the Express + Socket.IO server, SQLite persistence, ingestion, authentication, reader extraction, and AI jobs. `frontend/` contains the Vite React app, whose browser requests use same-origin `/api/*` routes.
 
+Both packages use Oxlint for linting (`.oxlintrc.json`) and TypeScript 7's `tsc` for typechecking. The frontend includes React Hooks checks; the backend keeps the TypeScript recommended checks and project overrides.
+
 After installing both packages, run checks from the repository root:
 
 ```bash

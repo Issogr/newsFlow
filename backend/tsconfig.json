@@ -22,7 +22,6 @@
     "services/**/*.ts",
     "utils/**/*.ts",
     "test-utils/**/*.ts",
-    "eslint.config.ts",
     "vitest.config.mts"
   ],
   "exclude": ["dist", "node_modules"]

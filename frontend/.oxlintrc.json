@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react"],
+  "categories": {
+    "correctness": "off"
+  },
+  "ignorePatterns": ["dist/**", "coverage/**"],
+  "overrides": [
+    {
+      "files": ["src/**/*.{ts,tsx}", "vite.config.mts"],
+      "rules": {
+        "no-unused-vars": ["error", {
+          "args": "none",
+          "caughtErrors": "all",
+          "ignoreRestSiblings": true,
+          "reportVarsOnlyUsedAsTypes": true
+        }],
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "error"
+      }
+    }
+  ]
+}
