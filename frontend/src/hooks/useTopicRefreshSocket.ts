@@ -69,6 +69,7 @@ const useTopicRefreshSocket = ({
     let hasConnected = false;
     const handleConnect = () => {
       socket.emit('subscribe:filters', subscriptionRef.current || {});
+      topicRefreshCallbackRef.current?.({ refresh: true, reason: 'reconnect' });
       if (hasConnected) {
         summariesRefreshCallbackRef.current?.();
       }

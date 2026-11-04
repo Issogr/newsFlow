@@ -106,33 +106,23 @@ function renderReaderBlock(block: ReaderBlock, index: number, readerTextStyles: 
   return <p key={`${block.type}-${index}`} className={readerTextStyles.paragraph}>{block.text}</p>;
 }
 
-function getReaderGroupKey(group: NewsGroup | null) {
-  if (group?.id) {
-    return group.id;
-  }
-
-  return (Array.isArray(group?.items) ? group.items : [])
-    .map((item) => item?.id)
-    .filter(Boolean)
-    .join('|');
-}
-
 const ReaderPanel = ({
   group,
-  initialArticleId,
+  articleId,
+  onSelectArticle,
   readerPosition = 'right',
   t,
   onClose,
   currentUser
 }: {
   group: NewsGroup;
-  initialArticleId?: string | null;
+  articleId?: string | null;
+  onSelectArticle: (articleId: string) => void;
   readerPosition?: string;
   t: Translator;
   onClose: () => void;
   currentUser?: CurrentUser;
 }) => {
-  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(initialArticleId || group?.items?.[0]?.id || null);
   const [readerByArticleId, setReaderByArticleId] = useState<Record<string, ReaderResponse>>({});
   const readerByArticleIdRef = useRef<Record<string, ReaderResponse>>({});
   const [loading, setLoading] = useState(false);
@@ -141,33 +131,6 @@ const ReaderPanel = ({
   const [readerTextWidth, setReaderTextWidth] = useState(() => getStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth));
   const [error, setError] = useState<unknown>(null);
   const { startLatestRequest, resetLatestRequest } = useLatestRequest();
-  const groupKey = useMemo(() => getReaderGroupKey(group), [group]);
-  const previousGroupKeyRef = useRef(groupKey);
-  const firstGroupArticleId = group?.items?.[0]?.id || null;
-  const groupArticleIds = useMemo(() => {
-    return new Set((Array.isArray(group?.items) ? group.items : []).map((item) => item?.id).filter((id): id is string => Boolean(id)));
-  }, [group?.items]);
-
-  useEffect(() => {
-    const groupChanged = previousGroupKeyRef.current !== groupKey;
-    const fallbackArticleId = initialArticleId || firstGroupArticleId;
-
-    previousGroupKeyRef.current = groupKey;
-
-    setSelectedArticleId((currentArticleId) => {
-      if (!groupChanged && currentArticleId && groupArticleIds.has(currentArticleId)) {
-        return currentArticleId;
-      }
-
-      return fallbackArticleId;
-    });
-    setError(null);
-
-    if (groupChanged) {
-      resetShareState();
-      resetLatestRequest();
-    }
-  }, [firstGroupArticleId, groupArticleIds, groupKey, initialArticleId, resetLatestRequest, resetShareState]);
 
   useEffect(() => {
     setReaderTextSize(getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
@@ -178,8 +141,13 @@ const ReaderPanel = ({
   }, [currentUser?.settings?.readerTextWidth]);
 
   const selectedArticle = useMemo(() => {
-    return group?.items?.find((item) => item.id === selectedArticleId) || group?.items?.[0] || null;
-  }, [group?.items, selectedArticleId]);
+    return group?.items?.find((item) => item.id === articleId) || group?.items?.[0] || null;
+  }, [group?.items, articleId]);
+  const selectedArticleId = selectedArticle?.id;
+
+  useEffect(() => {
+    resetShareState();
+  }, [selectedArticleId, resetShareState]);
 
   const sourceVersionItems = useMemo(() => {
     return getSourceVersionItems(group?.items || []);
@@ -323,7 +291,7 @@ const ReaderPanel = ({
                         <span className="sr-only">{t('sourceVersions')}</span>
                         <select
                           value={selectedArticle?.id || ''}
-                          onChange={(event) => setSelectedArticleId(event.target.value)}
+                          onChange={(event) => onSelectArticle(event.target.value)}
                           className="min-w-0 max-w-[14rem] bg-transparent text-xs font-medium text-sky-900 outline-none"
                           aria-label={t('sourceVersions')}
                         >

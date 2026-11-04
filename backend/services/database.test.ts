@@ -1043,6 +1043,26 @@ describe('database queries and user data', () => {
     expect(recentFiltered.map((article: Identified) => article.id)).toEqual(['private-1', 'global-2', 'global-1']);
   });
 
+  test('filters built-in and custom feeds together without matching retired feeds by name', () => {
+    const now = new Date().toISOString();
+    database.createUser({ id: 'user-1', username: 'alice', passwordHash: null, createdAt: now, updatedAt: now });
+    database.createUserSource({
+      id: 'custom-1', userId: 'user-1', name: 'Custom Feed',
+      url: `https://${primarySourceFamilyId}/custom.xml`, isActive: true, createdAt: now, updatedAt: now
+    });
+    database.upsertArticles([
+      { id: 'built-in', sourceId: primarySource.id, source: primarySource.name, title: 'Built-in story', pubDate: now },
+      { id: 'custom', sourceId: 'custom-1', source: 'Custom Feed', ownerUserId: 'user-1', title: 'Custom story', pubDate: now },
+      { id: 'saved', sourceId: 'retired-feed', source: 'Custom Feed', ownerUserId: 'user-1', title: 'Saved story', pubDate: now }
+    ]);
+    database.saveReadLaterArticles('user-1', ['saved'], { userId: 'user-1' });
+
+    expect(database.getArticles({ sourceIds: [primarySourceFamilyId] }, { userId: 'user-1' })
+      .map((article: Identified) => article.id).sort()).toEqual(['built-in', 'custom']);
+    expect(database.getArticles({}, { userId: 'user-1', excludedSourceIds: [primarySourceFamilyId] })
+      .map((article: Identified) => article.id)).toEqual(['saved']);
+  });
+
   test('keeps article search synchronized through native insert, update, and delete triggers', () => {
     const now = new Date().toISOString();
     const sqlite = database.getDb();

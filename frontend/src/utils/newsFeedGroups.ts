@@ -80,17 +80,19 @@ export function groupSharesAnyKey(group: Partial<NewsGroup>, keySet: Set<string>
   return [...getGroupMergeKeys(group)].some((key) => keySet.has(key));
 }
 
-function filterGroupsMatchingCurrent(currentGroups: NewsGroup[] = [], incomingGroups: NewsGroup[] = []) {
-  const currentKeys = new Set<string>();
-  currentGroups.forEach((group) => {
-    getGroupMergeKeys(group).forEach((key) => currentKeys.add(key));
+function refreshVisibleGroups(currentGroups: NewsGroup[], incomingGroups: NewsGroup[]) {
+  const inserted = new Set<NewsGroup>();
+  return currentGroups.flatMap((group) => {
+    const keys = getGroupMergeKeys(group);
+    const replacements = incomingGroups.filter((incoming) => groupSharesAnyKey(incoming, keys));
+    if (replacements.length === 0) return [group];
+
+    return replacements.filter((incoming) => {
+      if (inserted.has(incoming)) return false;
+      inserted.add(incoming);
+      return true;
+    }).map(cloneGroup);
   });
-
-  if (currentKeys.size === 0) {
-    return [];
-  }
-
-  return incomingGroups.filter((group) => groupSharesAnyKey(group, currentKeys));
 }
 
 function mergeGroupIntoTarget(targetGroup: NewsGroup, incomingGroup: NewsGroup) {
@@ -217,7 +219,7 @@ export function getLoadedNewsGroups(currentGroups: NewsGroup[], {
   let nextNews = append ? mergeGroups(currentGroups, responseItems) : mergedItems;
 
   if (!append && silent) {
-    nextNews = mergeGroups(currentGroups, filterGroupsMatchingCurrent(currentGroups, mergedItems));
+    nextNews = refreshVisibleGroups(currentGroups, mergedItems);
   }
 
   if (!isReadLaterView && nextNews.length > maxRetainedGroups) {

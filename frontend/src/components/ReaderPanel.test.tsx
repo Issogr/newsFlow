@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ReaderPanel from './ReaderPanel';
 import { fetchReaderArticle as fetchReaderArticleImplementation, updateUserSettings as updateUserSettingsImplementation } from '../services/api';
 import { createDeferred, resolveDeferred } from '../test-utils/deferred';
-import type { ComponentProps } from 'react';
+import { useState, type ComponentProps } from 'react';
 import type { CurrentUser, NewsGroup, ReaderResponse, Translator } from '../types';
 
 vi.mock('../services/api', () => ({
@@ -54,18 +54,24 @@ const currentUser: CurrentUser = {
   }
 };
 
-function buildReaderPanel(props: Partial<ComponentProps<typeof ReaderPanel>> = {}) {
+function ReaderPanelHarness(props: Partial<ComponentProps<typeof ReaderPanel>>) {
+  const [articleId, setArticleId] = useState(props.articleId || 'article-1');
   return (
     <ReaderPanel
       group={group}
-      initialArticleId="article-1"
       readerPosition="right"
       t={t}
       currentUser={currentUser}
       onClose={vi.fn()}
       {...props}
+      articleId={articleId}
+      onSelectArticle={setArticleId}
     />
   );
+}
+
+function buildReaderPanel(props: Partial<ComponentProps<typeof ReaderPanel>> = {}) {
+  return <ReaderPanelHarness {...props} />;
 }
 
 function renderReaderPanel(props: Partial<ComponentProps<typeof ReaderPanel>> = {}) {
@@ -242,7 +248,7 @@ describe('ReaderPanel', () => {
     expect(fetchReaderArticle).toHaveBeenCalledTimes(2);
   });
 
-  test('preserves the selected source version across refreshed group objects', async () => {
+  test.each(['same', 'merged', 'split'])('preserves the selected source version across %s groups', async (change) => {
     fetchReaderArticle
       .mockResolvedValueOnce(createReaderPayload('First body'))
       .mockResolvedValueOnce(createReaderPayload('Second body'));
@@ -255,7 +261,8 @@ describe('ReaderPanel', () => {
     rerender(buildReaderPanel({
       group: {
         ...group,
-        items: group.items.map((item) => ({
+        id: change === 'same' ? group.id : 'corrected-group',
+        items: group.items.filter((item) => change !== 'split' || item.id === 'article-2').map((item) => ({
           ...item,
           title: `${item.title} refreshed`
         }))
@@ -264,6 +271,22 @@ describe('ReaderPanel', () => {
 
     expect(screen.getByText('Second body')).toBeInTheDocument();
     expect(screen.getByText('Article two refreshed')).toBeInTheDocument();
+    expect(fetchReaderArticle).toHaveBeenCalledTimes(2);
+  });
+
+  test('keeps an in-flight reader request when its article moves to another group', async () => {
+    const secondRequest = createDeferred<ReaderResponse>();
+    fetchReaderArticle.mockResolvedValueOnce(createReaderPayload('First body')).mockReturnValueOnce(secondRequest.promise);
+    const { rerender } = renderReaderPanel();
+    await screen.findByText('First body');
+    selectSourceVersion('article-2');
+    const signal = fetchReaderArticle.mock.calls[1][1]?.signal;
+
+    rerender(buildReaderPanel({ group: { id: 'split-group', items: [group.items[1]] } }));
+    expect(signal?.aborted).toBe(false);
+    await resolveDeferred(secondRequest, createReaderPayload('Second body'));
+    expect(await screen.findByText('Second body')).toBeInTheDocument();
+    expect(screen.getByText('Article two')).toBeInTheDocument();
     expect(fetchReaderArticle).toHaveBeenCalledTimes(2);
   });
 
@@ -296,7 +319,7 @@ describe('ReaderPanel', () => {
             }
           ]
         },
-      initialArticleId: 'same-source-1'
+      articleId: 'same-source-1'
     });
 
     expect(await screen.findByText('First body')).toBeInTheDocument();
@@ -327,7 +350,7 @@ describe('ReaderPanel', () => {
 
     renderReaderPanel({
       group: sixSourceGroup,
-      initialArticleId: 'similar-article-1'
+      articleId: 'similar-article-1'
     });
 
     expect(await screen.findByText('Body')).toBeInTheDocument();

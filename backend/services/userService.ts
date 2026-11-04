@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import database from './database';
 import rssParser from './rssParser';
 import feedbackService from './feedbackService';
@@ -29,7 +30,7 @@ const {
   MAX_FEEDBACK_TITLE_LENGTH,
   MAX_FEEDBACK_VIDEO_BYTES,
 } = feedback;
-const { buildDomainSourceGroups, getConfiguredSourceGroupIds, getConfiguredSourceGroups, getGroupedConfiguredSourceIds } = sourceCatalog;
+const { buildDomainSourceGroups, extractRegistrableDomain, getConfiguredSourceGroupIds, getConfiguredSourceGroups, getGroupedConfiguredSourceIds } = sourceCatalog;
 const {
   hashPassword,
   verifyPassword,
@@ -695,6 +696,7 @@ async function updateUserSource(userId: string, sourceId: string, payload: Dynam
   const preview = urlChanged ? await previewUserSource({ url }, options) : null;
 
   const nextSource = {
+    id: urlChanged ? createId() : sourceId,
     name: String(payload.name || preview?.name || existingSource.name).trim().slice(0, 80),
     url,
     language: String(payload.language || preview?.language || existingSource.language).trim().toLowerCase().slice(0, 5) || existingSource.language,
@@ -710,18 +712,37 @@ async function updateUserSource(userId: string, sourceId: string, payload: Dynam
 
   try {
     options.signal?.throwIfAborted();
-    database.updateUserSource(userId, sourceId, nextSource);
+    return database.getDb().transaction(() => {
+      const currentSource = database.findUserSourceById(userId, sourceId);
+      if (!currentSource) {
+        throw createError(404, 'Source not found', 'RESOURCE_NOT_FOUND');
+      }
+      if (!isDeepStrictEqual(currentSource, existingSource)) {
+        throw createError(409, 'Source changed during validation. Reload and try again.', 'SOURCE_CHANGED');
+      }
+      database.updateUserSource(userId, sourceId, nextSource);
+      if (urlChanged) {
+        database.deleteArticlesForUserSource(userId, sourceId);
+        const settings = getUserSettings(userId);
+        const excludedSubSourceIds = new Set(settings.excludedSubSourceIds.map((id) => id === sourceId ? nextSource.id : id));
+        // Keep this feed hidden without hiding other feeds at its new publisher.
+        if (settings.excludedSourceIds.includes(extractRegistrableDomain(existingSource.url))) {
+          excludedSubSourceIds.add(nextSource.id);
+        }
+        database.upsertUserSettings(userId, {
+          ...settings,
+          excludedSourceIds: settings.excludedSourceIds.map((id) => id === sourceId ? nextSource.id : id),
+          excludedSubSourceIds: [...excludedSubSourceIds]
+        });
+      }
+      return { ...currentSource, ...nextSource };
+    })();
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       throw createError(409, 'This RSS source already exists for the user', 'SOURCE_ALREADY_EXISTS', error instanceof Error ? error : new Error(String(error)));
     }
     throw error;
   }
-
-  if (urlChanged) {
-    database.deleteArticlesForUserSource(userId, sourceId);
-  }
-  return database.findUserSourceById(userId, sourceId);
 }
 
 async function previewUserSource(payload: DynamicRecord = {}, options: AbortOptions = {}) {

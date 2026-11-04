@@ -48,6 +48,8 @@ Choose built-in sources during account setup, then use **Settings** to change so
 
 Importing settings preserves existing saved articles, keeps matching feeds by URL, and restores custom publisher and subfeed exclusions from new exports. Saved articles are not included in settings exports; use a database backup to transfer them to another server.
 
+Deleting a custom feed or changing its URL preserves saved articles and their cached reader text. A URL change replaces the feed's identity while carrying over its source selections, so new feed items cannot overwrite the saved ones.
+
 Filter the feed by source, topic, or time, and search the articles already cached on your server. Related coverage appears together in a story card so you can compare publishers without working through a separate card for every article.
 
 Feed reads use cached data. A manual refresh queues source updates in the background and has a five-minute cooldown by default. Scheduled ingestion runs every 15 minutes for sources assigned to recently active users.

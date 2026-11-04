@@ -1,4 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
+import { useState } from 'react';
 import useSettingsPanelState from './useSettingsPanelState';
 import {
   addUserSource as addUserSourceImplementation,
@@ -244,6 +245,17 @@ describe('useSettingsPanelState', () => {
     expect(result.current.settings).toEqual(nextSettings);
   });
 
+  test('can show a publisher whose only feed has a carried-over exclusion', () => {
+    const { result } = renderSettingsHook({
+      currentUser: { ...baseCurrentUser, settings: { ...baseCurrentUser.settings, excludedSubSourceIds: ['moved-feed'] } },
+      availableSources: [{ id: 'new.example', name: 'New publisher', subSources: [{ id: 'moved-feed' }] }]
+    });
+
+    act(() => { result.current.toggleExcludedSource('new.example'); });
+
+    expect(result.current.settings).toMatchObject({ excludedSourceIds: [], excludedSubSourceIds: [] });
+  });
+
   test('hides a parent source when its final visible sub-feed is hidden', async () => {
     const source = {
       id: 'source-1',
@@ -401,6 +413,121 @@ describe('useSettingsPanelState', () => {
       settings: expect.objectContaining({ excludedSourceIds: [] }),
       customSources: []
     }));
+  });
+
+  test.each([false, true])('remaps source selections after a URL change (unsaved selection changes: %s)', async (dirty) => {
+    const original = { id: 'old-source', name: 'Feed', url: 'https://example.com/old.xml', language: 'en' };
+    const replacement = { ...original, id: 'new-source', url: 'https://example.com/new.xml' };
+    const currentUser = {
+      ...baseCurrentUser,
+      customSources: [original],
+      settings: { ...baseCurrentUser.settings, excludedSourceIds: [original.id], excludedSubSourceIds: [original.id] }
+    };
+    updateUserSource.mockResolvedValueOnce({ source: replacement });
+    if (dirty) updateUserSettings.mockImplementationOnce(async (patch) => ({ settings: { ...currentUser.settings, ...patch } }));
+    const { result, patchSession } = renderSettingsHook({ currentUser });
+    act(() => {
+      result.current.startEditSource(original);
+      result.current.setEditingSourceForm({ name: replacement.name, url: replacement.url, language: 'en' });
+      if (dirty) {
+        result.current.setSetting('excludedSourceIds', [original.id, 'other-source']);
+        result.current.setSetting('excludedSubSourceIds', [original.id, 'other-subfeed']);
+      }
+    });
+
+    await act(async () => { expect(await result.current.handleSave()).toBe(true); });
+
+    const selections = {
+      excludedSourceIds: dirty ? [replacement.id, 'other-source'] : [replacement.id],
+      excludedSubSourceIds: dirty ? [replacement.id, 'other-subfeed'] : [replacement.id]
+    };
+    expect(result.current.settings).toMatchObject(selections);
+    expect(result.current.customSources).toEqual([replacement]);
+    expect(result.current.hasUnsavedChanges).toBe(false);
+    expect(patchSession).toHaveBeenLastCalledWith({ settings: { ...currentUser.settings, ...selections }, customSources: [replacement] });
+    if (dirty) expect(updateUserSettings).toHaveBeenCalledWith(selections);
+    else expect(updateUserSettings).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { persistedHidden: true, draftHidden: true, fails: false },
+    { persistedHidden: false, draftHidden: true, fails: false },
+    { persistedHidden: true, draftHidden: false, fails: false },
+    { persistedHidden: false, draftHidden: true, fails: true },
+    { persistedHidden: true, draftHidden: false, fails: true }
+  ])('carries publisher exclusions through a domain change: %j', async ({ persistedHidden, draftHidden, fails }) => {
+    const original = { id: 'old-source', name: 'Feed', url: 'https://old.example/feed.xml', language: 'en' };
+    const replacement = { ...original, id: 'new-source', url: 'https://new.example/feed.xml' };
+    const initialUser = {
+      ...baseCurrentUser,
+      customSources: [original],
+      settings: { ...baseCurrentUser.settings, excludedSourceIds: persistedHidden ? ['old.example'] : [], excludedSubSourceIds: ['unrelated-feed'] }
+    };
+    updateUserSource.mockResolvedValueOnce({ source: replacement });
+    if (fails) updateUserSettings.mockRejectedValueOnce(new Error('Settings unavailable'));
+    updateUserSettings.mockImplementation(async (patch) => ({ settings: { ...initialUser.settings, ...patch } }));
+    const { result } = renderHook(() => {
+      const [currentUser, setCurrentUser] = useState<CurrentUser>(initialUser);
+      return useSettingsPanelState({
+        currentUser,
+        availableSources: [{ id: 'old.example', name: 'Old publisher', subSources: [{ id: original.id }] }],
+        patchSession: (patch) => setCurrentUser((current) => ({ ...current, ...patch }))
+      });
+    });
+    act(() => {
+      result.current.startEditSource(original);
+      result.current.setEditingSourceForm({ name: replacement.name, url: replacement.url, language: 'en' });
+      if (persistedHidden !== draftHidden) result.current.toggleExcludedSource('old.example');
+    });
+
+    await act(async () => { expect(await result.current.handleSave()).toBe(!fails); });
+    const selections = {
+      excludedSourceIds: draftHidden ? ['old.example'] : [],
+      excludedSubSourceIds: draftHidden ? ['unrelated-feed', replacement.id] : ['unrelated-feed']
+    };
+    expect(result.current.settings).toMatchObject(selections);
+    expect(result.current.customSources).toEqual([replacement]);
+    if (fails) {
+      expect(result.current.hasUnsavedChanges).toBe(true);
+      await act(async () => { expect(await result.current.handleSave()).toBe(true); });
+    }
+
+    expect(result.current.hasUnsavedChanges).toBe(false);
+    expect(updateUserSource).toHaveBeenCalledTimes(1);
+    if (persistedHidden !== draftHidden) expect(updateUserSettings).toHaveBeenLastCalledWith(selections);
+    else expect(updateUserSettings).not.toHaveBeenCalled();
+  });
+
+  test('keeps remapped drafts when settings fail after replacing a source', async () => {
+    const original = { id: 'old-source', name: 'Feed', url: 'https://example.com/old.xml', language: 'en' };
+    const replacement = { ...original, id: 'new-source', url: 'https://example.com/new.xml' };
+    updateUserSource.mockResolvedValueOnce({ source: replacement });
+    updateUserSettings.mockRejectedValueOnce(new Error('Settings unavailable'))
+      .mockImplementationOnce(async (patch) => ({ settings: { ...baseCurrentUser.settings, ...patch } }));
+    const { result } = renderHook(() => {
+      const [currentUser, setCurrentUser] = useState<CurrentUser>({ ...baseCurrentUser, customSources: [original] });
+      return useSettingsPanelState({
+        currentUser,
+        availableSources: [],
+        patchSession: (patch) => setCurrentUser((current) => ({ ...current, ...patch }))
+      });
+    });
+    act(() => {
+      result.current.startEditSource(original);
+      result.current.setEditingSourceForm({ name: replacement.name, url: replacement.url, language: 'en' });
+      result.current.setSetting('excludedSubSourceIds', [original.id]);
+      result.current.setSetting('themeMode', 'dark');
+    });
+
+    await act(async () => { expect(await result.current.handleSave()).toBe(false); });
+    expect(result.current.settings).toMatchObject({ excludedSubSourceIds: [replacement.id], themeMode: 'dark' });
+    expect(result.current.customSources).toEqual([replacement]);
+    expect(result.current.hasUnsavedChanges).toBe(true);
+    await act(async () => { expect(await result.current.handleSave()).toBe(true); });
+
+    expect(updateUserSource).toHaveBeenCalledTimes(1);
+    expect(updateUserSettings).toHaveBeenLastCalledWith({ excludedSubSourceIds: [replacement.id], themeMode: 'dark' });
+    expect(result.current.hasUnsavedChanges).toBe(false);
   });
 
   test.each([false, true])('retries only pending deletions after a partial save (already deleted: %s)', async (alreadyDeleted) => {

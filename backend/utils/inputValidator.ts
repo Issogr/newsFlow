@@ -8,7 +8,7 @@ function sanitizeString(input: unknown) {
   }
 
   return input
-    .replace(/<[^>]*>/g, ' ')
+    .replace(/<[^<>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -18,9 +18,21 @@ function sanitizeHtml(input: unknown) {
     return '';
   }
 
-  const withoutScripts = input
-    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<[^>]*>/g, ' ');
+  const parts: string[] = [];
+  let cursor = 0;
+  let ignoredTag = '';
+  for (const match of input.matchAll(/<(\/?)(script|style)\b[^<>]*>/gi)) {
+    const tag = match[2].toLowerCase();
+    if (!ignoredTag) {
+      parts.push(input.slice(cursor, match.index), ' ');
+      if (!match[1]) ignoredTag = tag;
+    } else if (match[1] && tag === ignoredTag) {
+      ignoredTag = '';
+    }
+    cursor = match.index + match[0].length;
+  }
+  if (!ignoredTag) parts.push(input.slice(cursor));
+  const withoutScripts = parts.join('').replace(/<[^<>]*>/g, ' ');
 
   return decode(withoutScripts)
     .replace(/\s+/g, ' ')
@@ -39,7 +51,10 @@ function validateAndSanitizeParam(paramName: string, errorMessage = 'Parameter m
 }
 
 function sanitizeUsername(username: unknown) {
-  return sanitizeString(String(username || '')).slice(0, 40);
+  if (typeof username !== 'string' || username.length > 256) {
+    throw createError(400, 'Username must be a string of at most 256 characters', 'INVALID_USERNAME');
+  }
+  return sanitizeString(username).slice(0, 40);
 }
 
 export default {

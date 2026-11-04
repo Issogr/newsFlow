@@ -7,6 +7,7 @@ import summarizeErrorMessage from '../utils/summarizeError';
 import { createError } from '../utils/errorHandler';
 import urlSafety from '../utils/urlSafety';
 import { parseIntegerEnv } from '../utils/env';
+import { assertHtmlParseBudget } from '../utils/htmlSafety';
 const { fetchSafeTextUrl } = urlSafety;
 import type { DynamicRecord, NewsArticle } from '../utils/types';
 
@@ -262,20 +263,21 @@ function dedupeAdjacentBlocks(blocks: ReaderBlock[] = []) {
   }, []);
 }
 
-function buildBlocksFromHtml(html: string) {
+async function buildBlocksFromHtml(html: string) {
   if (!html) {
     return [];
   }
 
-  const dom = new JSDOM(`<article>${html}</article>`);
-  cleanupReadableDocument(dom.window.document);
-  const articleNode = dom.window.document.querySelector('article');
-
-  if (!articleNode) {
-    return [];
+  const documentHtml = `<article>${html}</article>`;
+  await assertHtmlParseBudget(documentHtml);
+  const dom = new JSDOM(documentHtml);
+  try {
+    cleanupReadableDocument(dom.window.document);
+    const articleNode = dom.window.document.querySelector('article');
+    return articleNode ? dedupeAdjacentBlocks(extractBlocksFromElement(articleNode, [])) : [];
+  } finally {
+    dom.window.close();
   }
-
-  return dedupeAdjacentBlocks(extractBlocksFromElement(articleNode, []));
 }
 
 function buildBlocksFromPlainText(text: unknown): ReaderBlock[] {
@@ -355,20 +357,24 @@ async function fetchReaderPayload(article: ReaderArticle) {
     }
   });
 
+  await assertHtmlParseBudget(response.data);
   const dom = new JSDOM(response.data, { url: article.url });
-  cleanupReadableDocument(dom.window.document);
-
-  const readability = new Readability(dom.window.document, {
-    charThreshold: 200,
-    keepClasses: false
-  });
-
-  const parsed = readability.parse();
+  let parsed;
+  try {
+    cleanupReadableDocument(dom.window.document);
+    parsed = new Readability(dom.window.document, {
+      charThreshold: 200,
+      keepClasses: false,
+      maxElemsToParse: 10_000
+    }).parse();
+  } finally {
+    dom.window.close();
+  }
   if (!parsed?.textContent) {
     throw new Error('Readable content extraction failed');
   }
 
-  const contentBlocks = buildBlocksFromHtml(parsed.content || '');
+  const contentBlocks = await buildBlocksFromHtml(parsed.content || '');
   const contentText = blocksToText(contentBlocks.length > 0 ? contentBlocks : buildBlocksFromPlainText(parsed.textContent));
 
   return buildPayload(article, {

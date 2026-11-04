@@ -54,7 +54,6 @@ let refreshPromise: Promise<DynamicRecord> | null = null;
 let lastRefreshAt: string | null = null;
 let schedulerHandle: NodeJS.Timeout | null = null;
 let seedIngestionPromise: Promise<unknown> | null = null;
-const usersRefreshedSinceScheduledIngestion = new Set<string>();
 const userImmediateRefreshPromises = new Map<string, Promise<DynamicRecord>>();
 const userManualRefreshTimestamps = new Map<string, number>();
 
@@ -183,7 +182,7 @@ function startUserAssignedSourceRefresh(userContext: UserContext = {}, options: 
     return userImmediateRefreshPromises.get(userId);
   }
 
-  if (!userId || (!options.force && usersRefreshedSinceScheduledIngestion.has(userId))) {
+  if (!userId) {
     return createEmptyRefreshPayload(getLastRefreshAt());
   }
 
@@ -191,7 +190,6 @@ function startUserAssignedSourceRefresh(userContext: UserContext = {}, options: 
     return createEmptyRefreshPayload(getLastRefreshAt());
   }
 
-  usersRefreshedSinceScheduledIngestion.add(userId);
   if (manual && Number.isFinite(MANUAL_REFRESH_COOLDOWN_MS) && MANUAL_REFRESH_COOLDOWN_MS > 0) {
     userManualRefreshTimestamps.set(userId, Date.now());
   }
@@ -202,24 +200,21 @@ function startUserAssignedSourceRefresh(userContext: UserContext = {}, options: 
       return createEmptyRefreshPayload(getLastRefreshAt());
     }
 
-    const payload = await ingestSourceConfigs(sourceConfigs, {
+    return ingestSourceConfigs(sourceConfigs, {
       broadcast: options.broadcast === true,
       includeMaintenance: false,
       failWhenEmpty: false,
       updateRefreshTimestamp: true,
       trackIngestionRun: false
     }, getIngestionRuntime());
-
+  })().finally(() => {
+    userImmediateRefreshPromises.delete(userId);
     if (options.broadcastRefreshOnCompletion === true) {
       websocketService.broadcastFeedRefresh({ userIds: [userId], reason: 'news' });
     }
-
-    return payload;
-  })().catch((error: AppError) => {
+  }).catch((error: AppError) => {
     logger.warn(`Immediate assigned-source refresh failed for user ${userId}: ${error.message}`);
     return createEmptyRefreshPayload(getLastRefreshAt());
-  }).finally(() => {
-    userImmediateRefreshPromises.delete(userId);
   });
 
   userImmediateRefreshPromises.set(userId, refreshTask);
@@ -249,8 +244,6 @@ async function ingestAllNews(options: DynamicRecord = {}): Promise<DynamicRecord
         updateRefreshTimestamp: sourceConfigs.length > 0,
         trackIngestionRun: true
       }, getIngestionRuntime());
-
-      usersRefreshedSinceScheduledIngestion.clear();
 
       logger.info(`Ingestion completed: ${payload.fetchedCount} fetched, ${payload.insertedCount} inserted, ${payload.updatedCount} updated`);
       return payload;
@@ -315,7 +308,7 @@ async function getNewsFeed(filters: DynamicRecord = {}, userContext: UserContext
   startSeedDataRefresh();
 
   if (filters.refresh) {
-    startUserAssignedSourceRefresh(userContext, { broadcast: false, force: true, manual: true, broadcastRefreshOnCompletion: true });
+    startUserAssignedSourceRefresh(userContext, { broadcast: false, manual: true, broadcastRefreshOnCompletion: true });
   }
 
   return buildNewsFeed(filters, userContext, {
@@ -413,7 +406,6 @@ function stopScheduler() {
 }
 
 function resetImmediateRefreshState() {
-  usersRefreshedSinceScheduledIngestion.clear();
   userImmediateRefreshPromises.clear();
   userManualRefreshTimestamps.clear();
   seedIngestionPromise = null;

@@ -634,6 +634,27 @@ describe('newsAggregator service flows', () => {
     expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(false);
   });
 
+  test.each(['success', 'failure', 'no sources'])('clears pending state before notifying refresh completion: %s', async (outcome) => {
+    const userContext = {
+      userId: 'user-1',
+      excludedSourceIds: [...new Set(newsAggregator.newsSources.map((source: { id: string; name: string }) => getCanonicalSourceId(source.id, source.name)))],
+      excludedSubSourceIds: []
+    };
+    database.listUserSources.mockReturnValue(outcome === 'no sources' ? [] : [{
+      id: 'custom-1', name: 'Feed', url: 'https://example.com/feed.xml', userId: 'user-1', isActive: true
+    }]);
+    if (outcome === 'failure') rssParser.parseFeed.mockRejectedValue(new Error('Offline'));
+    websocketService.broadcastFeedRefresh.mockImplementation(() => {
+      expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(false);
+    });
+
+    await newsAggregator._startUserAssignedSourceRefresh(userContext, { manual: true, broadcastRefreshOnCompletion: true });
+
+    expect(websocketService.broadcastFeedRefresh).toHaveBeenCalledTimes(1);
+    expect(websocketService.broadcastFeedRefresh).toHaveBeenCalledWith({ userIds: ['user-1'], reason: 'news' });
+    expect(newsAggregator._hasPendingUserAssignedSourceRefresh(userContext)).toBe(false);
+  });
+
   test('user source refreshes are not blocked by another user refresh in progress', async () => {
     const slowSource = { id: 'slow-source', name: 'Slow Feed', url: 'https://example.com/slow.xml', language: 'en', userId: 'user-1', isActive: true };
     const fastSource = { id: 'fast-source', name: 'Fast Feed', url: 'https://example.com/fast.xml', language: 'en', userId: 'user-2', isActive: true };
@@ -656,7 +677,7 @@ describe('newsAggregator service flows', () => {
       return [];
     });
 
-    const slowRefresh = newsAggregator._startUserAssignedSourceRefresh({ userId: 'user-1', excludedSourceIds: [], excludedSubSourceIds: [] }, { force: true });
+    const slowRefresh = newsAggregator._startUserAssignedSourceRefresh({ userId: 'user-1', excludedSourceIds: [], excludedSubSourceIds: [] });
     await slowStarted;
 
     await expect(newsAggregator.refreshUserSources('user-2')).resolves.toMatchObject({ success: true });
@@ -674,7 +695,7 @@ describe('newsAggregator service flows', () => {
     database.listUserSources.mockReturnValue([customSource]);
     rssParser.parseFeed.mockResolvedValue([]);
 
-    await newsAggregator._startUserAssignedSourceRefresh(userContext, { force: true, manual: true });
+    await newsAggregator._startUserAssignedSourceRefresh(userContext, { manual: true });
 
     const secondResult = await newsAggregator.getNewsFeed({ refresh: true }, userContext);
 

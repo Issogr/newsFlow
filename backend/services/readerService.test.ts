@@ -120,6 +120,18 @@ describe('readerService', () => {
     }));
   });
 
+  test.each(['markup', 'copied attributes'])('falls back before DOM/readability extraction for oversized %s', async (kind) => {
+    const html = kind === 'markup' ? '<br>'.repeat(10_001)
+      : `<p><b title="${'&'.repeat(64 * 1024)}">start</p>` + '<p>paragraph</p>'.repeat(40);
+    fetchSafeTextUrl.mockResolvedValue({ data: html });
+
+    const payload = await readerService.getReaderArticle(article.id, { userId: 'user-1' });
+
+    expect(payload).toMatchObject({ fallback: true, paragraphs: ['Short description', 'Fallback body paragraph.'] });
+    expect(Readability).not.toHaveBeenCalled();
+    expect(database.upsertReaderCache).not.toHaveBeenCalled();
+  });
+
   test('falls back to feed content when extraction fails', async () => {
     fetchSafeTextUrl.mockRejectedValue(new Error('Network failed'));
 

@@ -28,6 +28,7 @@ function deleteOwnedArticles(database: SqliteDatabase, ownerId: string, sourceId
   return database.prepare(`
     DELETE FROM articles
     WHERE ${ownerFilter}
+      ${sourceScoped ? 'AND NOT EXISTS (SELECT 1 FROM user_read_later_articles WHERE article_id = articles.id)' : ''}
   `).run(...params).changes;
 }
 
@@ -188,7 +189,8 @@ function createUserStateRepository({ getDb }: { getDb: () => SqliteDatabase }) {
 
     return getDb().prepare(`
       UPDATE user_sources
-      SET name = ?,
+      SET id = ?,
+          name = ?,
           url = ?,
           language = ?,
           icon_url = ?,
@@ -197,6 +199,7 @@ function createUserStateRepository({ getDb }: { getDb: () => SqliteDatabase }) {
           validated_at = ?
       WHERE user_id = ? AND id = ?
     `).run(
+      updates.id || sourceId,
       updates.name,
       updates.url,
       updates.language,

@@ -47,7 +47,7 @@ function getCustomSourceGroups(userId: string | null, customSourceGroups: Map<st
   return buildDomainSourceGroups(userStateRepository.listUserSources(userId));
 }
 
-function resolveCustomSourceGroup(sourceId: string, sourceName: string | null, userId: string | null, customSourceGroups: Map<string, SourceGroup> | null = null) {
+function resolveCustomSourceGroup(sourceId: string, userId: string | null, customSourceGroups: Map<string, SourceGroup> | null = null) {
   if (!userId) {
     return null;
   }
@@ -55,7 +55,7 @@ function resolveCustomSourceGroup(sourceId: string, sourceName: string | null, u
   const resolvedCustomSourceGroups = getCustomSourceGroups(userId, customSourceGroups);
 
   for (const group of resolvedCustomSourceGroups.values()) {
-    if (group.id === sourceId || group.memberIds.has(sourceId) || group.memberNames.has(sourceName || '')) {
+    if (group.id === sourceId || group.memberIds.has(sourceId)) {
       return group;
     }
   }
@@ -65,15 +65,16 @@ function resolveCustomSourceGroup(sourceId: string, sourceName: string | null, u
 
 function getResolvedSourceAliases(sourceId: string, sourceName: string | null, userId: string | null, customSourceGroups: Map<string, SourceGroup> | null = null) {
   const configuredAliases = getSourceAliases(sourceId, sourceName || '');
-  const customSourceGroup = resolveCustomSourceGroup(sourceId, sourceName, userId, customSourceGroups);
+  const customSourceGroup = resolveCustomSourceGroup(sourceId, userId, customSourceGroups);
 
   if (!customSourceGroup) {
     return configuredAliases;
   }
 
   return {
-    ids: [...new Set([...configuredAliases.ids, customSourceGroup.id, ...customSourceGroup.memberIds])],
-    names: [...new Set([...configuredAliases.names, customSourceGroup.name, ...customSourceGroup.memberNames])]
+    ids: [...new Set([sourceId, ...configuredAliases.ids, customSourceGroup.id, ...customSourceGroup.memberIds])],
+    // Saved articles from a replaced feed must not match its successor by display name.
+    names: []
   };
 }
 
@@ -84,7 +85,7 @@ function getResolvedSourceMetadata(sourceId: string, sourceName: string, userId:
     return configuredMetadata;
   }
 
-  const customSourceGroup = resolveCustomSourceGroup(sourceId, sourceName, userId, customSourceGroups);
+  const customSourceGroup = resolveCustomSourceGroup(sourceId, userId, customSourceGroups);
   if (!customSourceGroup) {
     return {
       sourceId,

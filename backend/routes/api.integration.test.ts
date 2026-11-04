@@ -176,6 +176,12 @@ describe('API auth and user flows', () => {
     expect(getSessionCookie(loginResponse)).toContain('newsflow_session=');
   });
 
+  test.each(['login', 'register'])('rejects oversized usernames before %s rate-limit key cleanup', async (action) => {
+    const response = await request(app).post(`/api/auth/${action}`)
+      .send({ username: '<'.repeat(64_000), password: 'secret123' }).expect(400);
+    expect(response.body.error.code).toBe('INVALID_USERNAME');
+  });
+
   test.each(['alias-user', 'a'.repeat(40)])('shares the login limit across equivalent usernames: %s', async (username) => {
     await userService.registerUser({ username, password: 'secret123' });
     for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -852,15 +858,17 @@ describe('API auth and user flows', () => {
     expect(updateResponse.body).toMatchObject({
       success: true,
       source: {
-        id: sourceId,
+        id: expect.any(String),
         name: 'Updated Feed',
         url: 'https://example.com/updated.xml',
         language: 'it'
       }
     });
 
+    const replacementSourceId = updateResponse.body.source.id;
+    expect(replacementSourceId).not.toBe(sourceId);
     await request(app)
-      .delete(`/api/me/sources/${sourceId}`)
+      .delete(`/api/me/sources/${replacementSourceId}`)
       .set('Cookie', sessionCookie)
       .expect(200, { success: true });
 
@@ -873,7 +881,7 @@ describe('API auth and user flows', () => {
     expect(rssParser.validateFeedUrl).toHaveBeenCalledTimes(2);
     expect(newsService.refreshUserSources).toHaveBeenCalledTimes(2);
     expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(1, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: true }));
-    expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(2, expect.any(String), expect.objectContaining({ sourceIds: [sourceId], broadcast: true }));
+    expect(newsService.refreshUserSources).toHaveBeenNthCalledWith(2, expect.any(String), expect.objectContaining({ sourceIds: [replacementSourceId], broadcast: true }));
   });
 
   test('discovers feeds for an authenticated user without saving or refreshing them', async () => {

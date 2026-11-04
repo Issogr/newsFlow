@@ -26,7 +26,7 @@ router.patch('/me/sources/:sourceId', [
   validateAndSanitizeParam('sourceId', 'Invalid source ID')
 ], async (req: Request, res: Response) => {
   const source = await userService.updateUserSource(req.user.id, req.params.sourceId as string, req.body || {}, { signal: getRequestAbortSignal(req, res) });
-  refreshUserSourceInBackground(req.user.id, source!.id);
+  refreshUserSourceInBackground(req.user.id, source.id);
   res.json({ success: true, source });
 });
 

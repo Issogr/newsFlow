@@ -9,6 +9,7 @@ import articleIdentity from '../utils/articleIdentity';
 import publicationDate from '../utils/publicationDate';
 import urlSafety from '../utils/urlSafety';
 import { parseIntegerEnv } from '../utils/env';
+import { assertHtmlParseBudget } from '../utils/htmlSafety';
 import logRedaction from '../utils/logRedaction';
 import concurrency from '../utils/concurrency';
 const { sanitizeHtml } = inputValidator;
@@ -524,6 +525,7 @@ async function discoverFeedUrls(url: string, options: RssOptions = {}): Promise<
     // Website HTML is expected when the submitted URL is not already a feed.
   }
 
+  await assertHtmlParseBudget(response.data);
   const feeds = new Map<string, DiscoveredFeed>();
   const inspectHtml = (html: string, pageUrl: string, { collectFeedAnchors = false, findDirectory = false } = {}) => {
     const dom = new JSDOM(html, { url: pageUrl });
@@ -603,6 +605,7 @@ async function discoverFeedUrls(url: string, options: RssOptions = {}): Promise<
         signal: options.signal,
         headers: RSS_REQUEST_HEADERS
       }), options);
+      await assertHtmlParseBudget(directoryResponse.data);
       inspectHtml(directoryResponse.data, directoryResponse.finalUrl || directoryUrl, { collectFeedAnchors: true });
     } catch (error) {
       options.signal?.throwIfAborted();

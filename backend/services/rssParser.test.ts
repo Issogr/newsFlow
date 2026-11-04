@@ -119,6 +119,27 @@ describe('rssParser article ids', () => {
     ]);
   });
 
+  test('discovers direct full-text RSS feeds without applying HTML-only limits', async () => {
+    dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    const body = '<p>Article paragraph.</p>'.repeat(50);
+    const xml = '<rss version="2.0"><channel><title>Full-text feed</title>'
+      + Array.from({ length: 100 }, (_, index) => `<item><title>Story ${index}</title><description><![CDATA[${body}]]></description></item>`).join('')
+      + '</channel></rss>';
+    axios.get.mockResolvedValue({ status: 200, headers: {}, data: Readable.from([xml]) });
+
+    await expect(rssParser.discoverFeedUrls('https://example.com/full-text.xml')).resolves.toEqual([
+      { title: 'Full-text feed', url: 'https://example.com/full-text.xml' }
+    ]);
+  });
+
+  test('rejects structurally oversized discovery HTML before constructing a DOM', async () => {
+    dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    axios.get.mockResolvedValue({ status: 200, headers: {}, data: Readable.from(['<a href="/x">x</a>'.repeat(10_001)]) });
+
+    await expect(rssParser.discoverFeedUrls('https://example.com/dense'))
+      .rejects.toMatchObject({ status: 422, code: 'HTML_TOO_COMPLEX' });
+  });
+
   test('discovers feeds from a linked same-origin RSS directory', async () => {
     dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
     axios.get

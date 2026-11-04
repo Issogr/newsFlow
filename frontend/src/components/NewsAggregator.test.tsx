@@ -67,7 +67,14 @@ vi.mock('./NewsCard', () => {
   };
 });
 vi.mock('./ReaderPanel', () => ({
-  default: ({ group }: { group: NewsGroup }) => <div data-testid="reader-item-count">{group.items?.length || 0}</div>
+  default: ({ group, articleId, onSelectArticle }: { group: NewsGroup; articleId?: string; onSelectArticle: (id: string) => void }) => (
+    <div>
+      <div data-testid="reader-item-count">{group.items?.length || 0}</div>
+      <div data-testid="reader-current-group">{group.id}</div>
+      <div data-testid="reader-selected-article">{articleId}</div>
+      {group.items.map((item) => <button key={item.id} onClick={() => onSelectArticle(item.id!)}>Read version {item.id}</button>)}
+    </div>
+  )
 }));
 vi.mock('./BrandMark', () => ({
   default: () => <div />
@@ -112,7 +119,7 @@ function openDesktopSearch() {
 }
 
 function getDesktopRefreshButton() {
-  return screen.getAllByRole('button', { name: 'Refresh' })[0];
+  return screen.getAllByRole('button', { name: /^Refresh(?: already in progress)?$/ })[0];
 }
 
 function createGroups(prefix: string, start: number, count: number): NewsGroup[] {
@@ -373,6 +380,27 @@ describe('NewsAggregator', () => {
     expect(vi.mocked(removeReadLaterArticles).mock.calls.map(([batch]) => batch?.length)).toEqual(fails ? [20] : [20, 1]);
   });
 
+  test.each([false, true])('retries stale silent responses after a bookmark change (initially saved: %s)', async (saved) => {
+    const socketHandlers = captureSocketHandlers();
+    const staleRequest = createDeferred<FeedResponse>();
+    const initial = { ...createGroup('story', 'Story'), readLater: saved, readLaterArticleIds: saved ? ['article-story'] : [] };
+    const updated = { ...initial, readLater: !saved, readLaterArticleIds: saved ? [] : ['article-story'] };
+    fetchNews.mockResolvedValueOnce(createFeedResponse([initial])).mockReturnValueOnce(staleRequest.promise)
+      .mockResolvedValue(createFeedResponse([updated]));
+    vi.mocked(saveReadLaterArticles).mockResolvedValue({ articleIds: ['article-story'] });
+    vi.mocked(removeReadLaterArticles).mockResolvedValue({ articleIds: ['article-story'] });
+    await renderNewsAggregator();
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
+    fireEvent.click(screen.getByRole('button', { name: `${saved ? 'Remove' : 'Save'} story` }));
+    await waitFor(() => expect(screen.getByRole('button', { name: `${saved ? 'Save' : 'Remove'} story` })).toBeEnabled());
+
+    await resolveDeferred(staleRequest, createFeedResponse([initial]));
+
+    await waitFor(() => expect(fetchNews).toHaveBeenCalledTimes(3));
+    expect(screen.getByTestId('saved-story')).toHaveTextContent(saved ? '0' : '1');
+    expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: false }));
+  });
+
   test('ignores main-feed refresh socket events while viewing read later', async () => {
     const socketHandlers = captureSocketHandlers();
     fetchNews.mockResolvedValue(createSingleGroupFeedResponse('news', 'News headline'));
@@ -413,6 +441,25 @@ describe('NewsAggregator', () => {
     await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
 
     await waitFor(() => expect(screen.getByTestId('reader-item-count')).toHaveTextContent('2'));
+  });
+
+  test.each(['split', 'merged', 'outside page'])('follows the selected reader article after stories are %s', async (change) => {
+    const socketHandlers = captureSocketHandlers();
+    const first = createGroup('first', 'First source');
+    const second = createGroup('second', 'Second source');
+    const joined = { ...first, id: 'joined', items: [...first.items, ...second.items] };
+    const incoming = change === 'split' ? [first, second]
+      : change === 'merged' ? [{ ...joined, id: 'merged' }] : [first];
+    fetchNews.mockResolvedValueOnce(createFeedResponse([joined])).mockResolvedValueOnce(createFeedResponse(incoming));
+    await renderNewsAggregator();
+    fireEvent.click(screen.getByRole('button', { name: 'Open reader joined' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Read version article-second' }));
+
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
+
+    expect(screen.getByTestId('reader-selected-article')).toHaveTextContent('article-second');
+    expect(screen.getByTestId('reader-current-group')).toHaveTextContent(change === 'split' ? 'second' : change === 'merged' ? 'merged' : 'joined');
+    expect(screen.getByRole('button', { name: 'Read version article-second' })).toBeInTheDocument();
   });
 
   test('keeps the latest news response when an older request resolves later', async () => {
@@ -950,7 +997,7 @@ describe('NewsAggregator', () => {
     expect(screen.getByTestId('topics-group-1')).not.toHaveTextContent('Economia');
   });
 
-  test('adds brand-new cards when a manual refresh completion reload arrives', async () => {
+  test.each(['news', 'reconnect'])('settles pending manual refresh and loads new cards on %s', async (reason) => {
     const socketHandlers = captureSocketHandlers();
     fetchNews
       .mockResolvedValueOnce(createSingleGroupFeedResponse('group-current', 'Current headline'))
@@ -966,15 +1013,64 @@ describe('NewsAggregator', () => {
     fireEvent.click(getDesktopRefreshButton());
     await waitFor(() => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: true }));
+      expect(screen.getAllByRole('button', { name: 'Refresh already in progress' })[0]).toBeDisabled();
     });
+    expect(getDesktopRefreshButton()).toBeDisabled();
 
-    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'news' });
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason });
 
     expect(await screen.findByText('Fresh manual refresh headline')).toBeInTheDocument();
+    expect(getDesktopRefreshButton()).toBeEnabled();
     expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({
       refresh: false,
       includeFilters: true
     }));
+  });
+
+  test('queues a full reload when reconnect precedes the manual-refresh response', async () => {
+    const socketHandlers = captureSocketHandlers();
+    const manualResponse = createDeferred<FeedResponse>();
+    fetchNews
+      .mockResolvedValueOnce(createSingleGroupFeedResponse('current', 'Current headline'))
+      .mockReturnValueOnce(manualResponse.promise)
+      .mockResolvedValueOnce(createFeedResponse([
+        createGroup('new', 'New recovered headline'),
+        createGroup('current', 'Current headline')
+      ], { meta: { pendingUserRefresh: false } }));
+    await renderNewsAggregator();
+    fireEvent.click(getDesktopRefreshButton());
+
+    for (const reason of ['topics', 'reconnect', 'topics']) {
+      await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason });
+    }
+    expect(fetchNews).toHaveBeenCalledTimes(2);
+    expect(fetchNews.mock.calls[1][0]?.signal?.aborted).toBe(false);
+
+    await resolveDeferred(manualResponse, createSingleGroupFeedResponse('current', 'Current headline', {
+      meta: { pendingUserRefresh: true }
+    }));
+
+    expect(screen.getByText('New recovered headline')).toBeInTheDocument();
+    expect(getDesktopRefreshButton()).toBeEnabled();
+    expect(fetchNews).toHaveBeenCalledTimes(3);
+    expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: false, includeFilters: true }));
+  });
+
+  test('updates pending refresh state even when a silent reload preserves the visible tail', async () => {
+    const socketHandlers = captureSocketHandlers();
+    fetchNews
+      .mockResolvedValueOnce(createFeedResponse([
+        createGroup('current', 'Current headline'), createGroup('tail', 'Tail headline')
+      ], { meta: { pendingUserRefresh: true } }))
+      .mockResolvedValueOnce(createSingleGroupFeedResponse('current', 'Updated headline', { meta: { pendingUserRefresh: false } }));
+    await renderNewsAggregator();
+    expect(getDesktopRefreshButton()).toBeDisabled();
+
+    await dispatchSocketHandler(socketHandlers.onTopicRefresh, { refresh: true, reason: 'topics' });
+
+    expect(await screen.findByText('Updated headline')).toBeInTheDocument();
+    expect(screen.getByText('Tail headline')).toBeInTheDocument();
+    expect(getDesktopRefreshButton()).toBeEnabled();
   });
 
   test('keeps pending new article notice after silent topic reloads', async () => {

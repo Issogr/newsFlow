@@ -22,10 +22,8 @@ import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import { setStoredReaderTextSizePreference, setStoredReaderTextWidthPreference } from '../utils/readerPreferences';
 import {
   buildFeedRequestParams,
-  getGroupMergeKeys,
   getLoadedNewsGroups,
   getSourceReloadSignature,
-  groupSharesAnyKey,
   mergeGroups,
 } from '../utils/newsFeedGroups';
 import {
@@ -183,7 +181,8 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
   const visibleNewsCountRef = useRef(0);
   const preservedNewsCountRef = useRef(0);
   const activeListLoadingRequestIdRef = useRef<number | null>(null);
-  const pendingListRefreshRef = useRef(false);
+  const pendingListRefreshRef = useRef<'silent' | 'reload' | null>(null);
+  const readLaterVersionRef = useRef(0);
   const excludedSourceIds = useMemo(() => currentUser?.settings?.excludedSourceIds || [], [currentUser?.settings?.excludedSourceIds]);
   const excludedSubSourceIds = useMemo(() => currentUser?.settings?.excludedSubSourceIds || [], [currentUser?.settings?.excludedSubSourceIds]);
   const sourceReloadSignature = useMemo(() => {
@@ -217,9 +216,8 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
       return null;
     }
 
-    const readerGroupKeys = getGroupMergeKeys(readerState.group);
-    return news.find((group) => groupSharesAnyKey(group, readerGroupKeys)) || readerState.group;
-  }, [news, readerState.group]);
+    return news.find((group) => group.items.some((item) => item.id === readerState.articleId)) || readerState.group;
+  }, [news, readerState]);
 
   useEffect(() => {
     if (selectedThematicSummary?.id && !displayedThematicSummary) {
@@ -359,6 +357,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
   }: { page?: number; append?: boolean; cursor?: FeedCursor | null; forceRefresh?: boolean; silent?: boolean; minimumItemCount?: number } = {}) {
     const setBusyState = append ? setLoadingMore : (silent ? () => {} : setLoading);
     const request = append ? startPaginationRequest() : startListRequest();
+    const readLaterVersion = readLaterVersionRef.current;
     const tracksListLoading = !append && !silent;
 
     if (tracksListLoading) {
@@ -437,6 +436,11 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
         nextMeta = nextPage.meta || nextMeta;
       }
 
+      if (readLaterVersion !== readLaterVersionRef.current) {
+        void loadNewsRequest({ page, append, cursor, silent, minimumItemCount });
+        return;
+      }
+
       setNews((current) => {
         const nextNews = getLoadedNewsGroups(current, {
           append,
@@ -453,7 +457,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
       });
       setMeta((currentMeta) => {
         if (!append && silent && visibleNewsCountRef.current > mergedItems.length) {
-          return currentMeta || metaRef.current || nextMeta;
+          return { ...(currentMeta || metaRef.current || nextMeta), pendingUserRefresh: nextMeta?.pendingUserRefresh };
         }
 
         return nextMeta;
@@ -476,13 +480,14 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
         setLoading(false);
 
         if (pendingListRefreshRef.current) {
-          pendingListRefreshRef.current = false;
           const hasVisibleNews = Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current) > 0;
+          const silent = hasVisibleNews && pendingListRefreshRef.current === 'silent';
+          pendingListRefreshRef.current = null;
           void loadNewsRequest({
             page: 1,
             append: false,
-            silent: hasVisibleNews,
-            minimumItemCount: hasVisibleNews ? Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current) : 0
+            silent,
+            minimumItemCount: silent ? Math.max(visibleNewsCountRef.current, preservedNewsCountRef.current) : 0
           });
         }
       } else if (!tracksListLoading && request.isLatest()) {
@@ -532,7 +537,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
       return;
     }
 
-    if (payload.reason === 'news') {
+    if (payload.reason === 'news' || (payload.reason === 'reconnect' && metaRef.current?.pendingUserRefresh)) {
       if (isReadLaterView) {
         return;
       }
@@ -542,7 +547,9 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
     }
 
     if (activeListLoadingRequestIdRef.current !== null) {
-      pendingListRefreshRef.current = true;
+      pendingListRefreshRef.current = payload.reason === 'reconnect'
+        ? 'reload'
+        : (pendingListRefreshRef.current || 'silent');
       return;
     }
 
@@ -675,8 +682,12 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
   }, []);
 
   const openReader = useCallback((group: NewsGroup, articleId?: string) => {
-    setReaderState({ group, articleId });
+    setReaderState({ group, articleId: articleId || group.items[0]?.id });
   }, []);
+
+  const selectReaderArticle = useCallback((articleId: string) => {
+    setReaderState({ group: currentReaderGroup, articleId });
+  }, [currentReaderGroup]);
 
   const closeReader = useCallback(() => {
     setReaderState({ group: null, articleId: null });
@@ -727,6 +738,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
       const toggle = group.readLater ? removeReadLaterArticles : saveReadLaterArticles;
       for (let offset = 0; offset < articleIds.length; offset += 20) {
         const response = await toggle(articleIds.slice(offset, offset + 20));
+        readLaterVersionRef.current += 1;
         const changedIds = new Set(response.articleIds);
         setNews((current) => current.map((item) => {
           if (!(item.items || []).some((article) => article.id && changedIds.has(article.id))) return item;
@@ -977,7 +989,8 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
       {currentReaderGroup && (
         <ReaderPanel
           group={currentReaderGroup}
-          initialArticleId={readerState.articleId}
+          articleId={readerState.articleId}
+          onSelectArticle={selectReaderArticle}
           readerPosition={currentUser?.settings?.readerPanelPosition || 'right'}
           t={t}
           currentUser={currentUser}

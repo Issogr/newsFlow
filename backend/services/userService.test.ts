@@ -469,6 +469,149 @@ describe('userService imports', () => {
     expect(database.getReaderCache('custom-article-1', 60 * 60 * 1000)?.contentText).toBe('Reader body');
   });
 
+  test.each(['delete', 'change URL'])('%s preserves saved articles and reader content', async (action) => {
+    const { user } = await userService.registerUser({ username: 'saved-owner', password: 'secret123' });
+    rssParser.validateFeedUrl.mockResolvedValue({ title: 'Feed', itemCount: 1 });
+    const source = await userService.addUserSource(user.id, { url: 'https://example.com/old.xml' });
+    database.upsertArticles(['saved', 'unsaved'].map((id) => ({
+      id, sourceId: source.id, ownerUserId: user.id, source: source.name, title: id,
+      url: `https://example.com/${id}`, pubDate: new Date().toISOString()
+    })));
+    database.saveReadLaterArticles(user.id, ['saved'], { userId: user.id });
+    database.upsertReaderCache('saved', { title: 'Saved', contentText: 'Reader body' });
+
+    if (action === 'delete') userService.removeUserSource(user.id, source.id);
+    else await userService.updateUserSource(user.id, source.id, { url: 'https://example.com/new.xml' });
+
+    expect(database.getReadLaterArticles(user.id).map((article: { id: string }) => article.id)).toEqual(['saved']);
+    expect(database.getReaderCache('saved')?.contentText).toBe('Reader body');
+    expect(database.getArticleById('unsaved', { userId: user.id })).toBeNull();
+  });
+
+  test.each(['delete', 'edit'])('rejects a source update after a concurrent %s during validation', async (action) => {
+    const { user } = await userService.registerUser({ username: 'source-race', password: 'secret123' });
+    rssParser.validateFeedUrl.mockResolvedValue({ title: 'Feed', itemCount: 1 });
+    const source = await userService.addUserSource(user.id, { url: 'https://example.com/old.xml' });
+    const validation = Promise.withResolvers<{ title: string; itemCount: number }>();
+    rssParser.validateFeedUrl.mockReturnValueOnce(validation.promise);
+    const pending = userService.updateUserSource(user.id, source.id, { url: 'https://example.com/new.xml' });
+
+    if (action === 'delete') userService.removeUserSource(user.id, source.id);
+    else await userService.updateUserSource(user.id, source.id, { name: 'New name', isActive: false });
+    const currentSource = database.findUserSourceById(user.id, source.id);
+    validation.resolve({ title: 'Validated feed', itemCount: 1 });
+
+    await expect(pending).rejects.toMatchObject({ status: action === 'delete' ? 404 : 409 });
+    expect(database.findUserSourceById(user.id, source.id)).toEqual(currentSource);
+  });
+
+  test.each(['Original story', 'Different story'])('keeps saved articles isolated when a replacement feed reuses a GUID (%s)', async (title) => {
+    const { default: realRssParser } = await jest.importActual<typeof import('./rssParser')>('./rssParser');
+    const { user } = await userService.registerUser({ username: 'replacement-owner', password: 'secret123' });
+    rssParser.validateFeedUrl.mockResolvedValue({ title: 'Feed', itemCount: 1 });
+    const source = await userService.addUserSource(user.id, { url: 'https://example.com/old.xml' });
+    userService.updateUserSettings(user.id, {
+      excludedSourceIds: ['unrelated-source', source.id],
+      excludedSubSourceIds: [source.id, 'unrelated-subfeed']
+    });
+    const savedId = realRssParser._buildArticleId(source, { guid: 'post-1', title: 'Original story' });
+    const article = {
+      id: savedId, sourceId: source.id, ownerUserId: user.id, source: source.name,
+      title: 'Original story', content: 'Original text', pubDate: new Date().toISOString()
+    };
+    database.upsertArticles([article]);
+    database.saveReadLaterArticles(user.id, [savedId], { userId: user.id });
+    database.upsertReaderCache(savedId, { title: article.title, contentText: 'Original reader text' });
+
+    const replacement = await userService.updateUserSource(user.id, source.id, { url: 'https://example.com/new.xml' });
+    const replacementId = realRssParser._buildArticleId(replacement, { guid: 'post-1', title });
+    database.upsertArticles([{
+      ...article, id: replacementId, sourceId: replacement.id, source: replacement.name,
+      title, content: 'Replacement text'
+    }]);
+
+    expect(replacement.id).not.toBe(source.id);
+    expect(database.listUserSources(user.id)).toEqual([replacement]);
+    expect(userService.getUserSettings(user.id)).toMatchObject({
+      excludedSourceIds: ['unrelated-source', replacement.id],
+      excludedSubSourceIds: [replacement.id, 'unrelated-subfeed']
+    });
+    expect(userService.exportUserSettings(user.id).customSources).toEqual([
+      expect.objectContaining({ isExcluded: true, isSubExcluded: true })
+    ]);
+    expect(database.getReadLaterArticles(user.id)).toEqual([
+      expect.objectContaining({ id: savedId, sourceId: source.id, title: 'Original story', content: 'Original text' })
+    ]);
+    expect(database.getArticleById(replacementId, { userId: user.id })).toMatchObject({ title, content: 'Replacement text' });
+    expect(database.getReaderCache(savedId)?.contentText).toBe('Original reader text');
+    realRssParser.shutdown();
+  });
+
+  test.each([false, true])('keeps a moved feed excluded without changing its publishers\' other feeds (old sibling: %s)', async (keepOldSibling) => {
+    const { user } = await userService.registerUser({ username: 'hidden-feed-owner', password: 'secret123' });
+    rssParser.validateFeedUrl.mockResolvedValue({ title: 'Feed', itemCount: 1 });
+    const original = await userService.addUserSource(user.id, { url: 'https://feeds.old.example/feed.xml' });
+    const oldSibling = keepOldSibling
+      ? await userService.addUserSource(user.id, { url: 'https://old.example/other.xml' }) : null;
+    const newSibling = await userService.addUserSource(user.id, { url: 'https://new.example/other.xml' });
+    userService.updateUserSettings(user.id, { excludedSourceIds: ['old.example'] });
+
+    const replacement = await userService.updateUserSource(user.id, original.id, { url: 'https://new.example/feed.xml' });
+    const settings = userService.getUserSettings(user.id);
+    database.upsertArticles([replacement, newSibling, ...(oldSibling ? [oldSibling] : [])].map((source) => ({
+      id: `article-${source.id}`, sourceId: source.id, source: source.name, ownerUserId: user.id,
+      title: source.id, pubDate: new Date().toISOString()
+    })));
+
+    expect(settings).toMatchObject({ excludedSourceIds: ['old.example'], excludedSubSourceIds: [replacement.id] });
+    expect(database.getArticles({}, { userId: user.id, ...settings }).map((article: { id: string }) => article.id))
+      .toEqual([`article-${newSibling.id}`]);
+    expect(userService.exportUserSettings(user.id).customSources).toContainEqual(
+      expect.objectContaining({ url: replacement.url, isSubExcluded: true })
+    );
+  });
+
+  test('rolls back a source URL update if article cleanup fails', async () => {
+    const { user } = await userService.registerUser({ username: 'source-rollback', password: 'secret123' });
+    rssParser.validateFeedUrl.mockResolvedValue({ title: 'Feed', itemCount: 1 });
+    const source = await userService.addUserSource(user.id, { url: 'https://example.com/old.xml' });
+    database.upsertArticles([{
+      id: 'cached', sourceId: source.id, ownerUserId: user.id, source: source.name, title: 'Cached',
+      url: 'https://example.com/cached', pubDate: new Date().toISOString()
+    }]);
+    const cleanup = database.deleteArticlesForUserSource;
+    const spy = jest.spyOn(database, 'deleteArticlesForUserSource').mockImplementation((userId, sourceId) => {
+      cleanup(userId, sourceId);
+      throw new Error('Cleanup failed');
+    });
+    try {
+      await expect(userService.updateUserSource(user.id, source.id, { url: 'https://example.com/new.xml' })).rejects.toThrow('Cleanup failed');
+      expect(database.findUserSourceById(user.id, source.id)).toEqual(source);
+      expect(database.listUserSources(user.id)).toEqual([source]);
+      expect(database.getArticleById('cached', { userId: user.id })).toBeTruthy();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('authorizes the bootstrapped admin when the configured name exceeds 40 characters', async () => {
+    jest.stubEnv('ADMIN_USERNAME', ` ${'A'.repeat(41)} `);
+    jest.stubEnv('APP_BASE_URL', 'http://localhost:5000');
+    jest.resetModules();
+    try {
+      userService = (await import('./userService')).default;
+      database = (await import('./database')).default;
+      const auth = (await import('../utils/auth')).default;
+      const bootstrap = userService.ensureAdminBootstrap();
+      const result = await userService.completePasswordSetup({ token: bootstrap.token, password: 'secret123' });
+
+      expect(result.user).toMatchObject({ username: 'A'.repeat(40), isAdmin: true });
+      expect(auth.resolveAuthenticatedSession({ headers: { cookie: `newsflow_session=${result.token}` } }).user.isAdmin).toBe(true);
+    } finally {
+      jest.unstubAllEnvs();
+    }
+  });
+
   test('batches authenticated public API usage until an explicit flush', async () => {
     const authPayload = await userService.registerUser({ username: 'api-user', password: 'secret123' });
     const userId = authPayload.user.id;

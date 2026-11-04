@@ -30,7 +30,7 @@ This file documents the environment variables and build arguments that can chang
 | Variable | Default | Details |
 | --- | --- | --- |
 | `NEWS_DB_PATH` | `backend/data/news.db`; Docker `/usr/src/app/data/news.db` | SQLite database path for articles, users, settings, summaries, sessions, and public API data. Compose persists `/usr/src/app/data` in the host's `backend/data/` directory. |
-| `ADMIN_USERNAME` | `admin` | Reserved admin account username. Backend auth lowercases it; user-service display/bootstrap handling trims to 40 chars. |
+| `ADMIN_USERNAME` | `admin` | Reserved admin account username. Bootstrap and authorization trim whitespace and truncate to 40 characters; authorization compares ignoring case. |
 | `ALLOWED_ORIGINS` | Development `*`; production localhost origins; Compose `APP_BASE_URL` | Comma-separated public API and Socket.IO origin allowlist. Private browser APIs additionally require the exact same origin as `APP_BASE_URL`. Supports exact origins, `*`, wildcard patterns, and `@local-network`. |
 | `SERVER_TIMEOUT` | `60000` | Backend HTTP server timeout in ms. Minimum `1000`. |
 | `LOG_LEVEL` | `info` in production, `debug` otherwise | Console log threshold: `error`, `warn`, `info`, `http`, `verbose`, `debug`, or `silly`. Logs include an ISO timestamp and are silent in tests. |
@@ -45,6 +45,8 @@ This file documents the environment variables and build arguments that can chang
 ### Browser Request Limits
 
 Authenticated browser requests allow 200 requests per account per 15 minutes. Login, registration, password-setup, and unauthenticated requests have a separate 200-request IP budget; exhausting that budget does not block existing authenticated accounts. Route-specific limits still apply.
+
+Login and registration reject non-string usernames and raw username inputs longer than 256 characters before normalization or rate-limit key construction. Accepted inputs retain the existing whitespace/markup cleanup and 40-character canonical username limit.
 
 Socket filter subscriptions allow 30 updates per connection per 10 seconds. Malformed or excessive subscriptions disconnect the client before database work. Lists allow 40 topics or 80 source IDs, with values up to 120 characters and search text up to 500 characters.
 
@@ -114,6 +116,8 @@ The public API is read-only and cache-only. It must not trigger RSS refreshes, a
 ## Reader, Images, And Outbound Safety
 
 RSS, discovery, validation, reader, and image-fetch timeouts are total deadlines for each network attempt, including DNS resolution, redirects, and the entire response body. Queue waits and delays between retry attempts are separate; caller cancellation still stops the request immediately.
+
+Before constructing a browser document, discovery and reader extraction enforce a fixed 2 MiB input budget, at most 10,000 `<` characters (including scripts and comments), and a parser preflight budget of 10,000 elements plus attributes and 128 levels of open elements. A per-tag limit of 256 attributes is enforced during tokenization, before expensive duplicate-name checks. The preflight includes elements created by HTML error recovery and attributes adopted from repeated HTML/body tags, with a separate 2 MiB budget for attribute names and values that counts every repaired copy. These limits apply even if network byte limits are increased. Direct RSS/Atom responses bypass these HTML-only limits; network response limits still apply. Oversized discovery pages are rejected; reader extraction falls back to RSS text. Reader documents are closed after extraction to release their resources.
 
 | Variable | Default | Details |
 | --- | --- | --- |

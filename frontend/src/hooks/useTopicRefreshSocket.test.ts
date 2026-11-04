@@ -63,12 +63,13 @@ describe('useTopicRefreshSocket', () => {
     expect(onSummariesRefresh).toHaveBeenCalledWith({ refresh: true, reason: 'summaries' });
   });
 
-  test('resubscribes current filters and refreshes summaries after socket reconnect', () => {
+  test('resubscribes current filters and reconciles feed and summaries after socket reconnect', () => {
     const subscription = { search: 'markets', topics: ['Economy'] };
+    const onTopicRefresh = vi.fn();
     const onSummariesRefresh = vi.fn();
 
     const { rerender } = renderHook(({ nextSubscription }) => useTopicRefreshSocket({
-      onTopicRefresh: vi.fn(),
+      onTopicRefresh,
       onSummariesRefresh,
       subscription: nextSubscription
     }), {
@@ -79,10 +80,26 @@ describe('useTopicRefreshSocket', () => {
     rerender({ nextSubscription: updatedSubscription });
 
     handlers.get('connect')!();
+    expect(onTopicRefresh).toHaveBeenCalledTimes(1);
+    expect(onSummariesRefresh).not.toHaveBeenCalled();
     handlers.get('connect')!();
 
     expect(socket.emit).toHaveBeenLastCalledWith('subscribe:filters', updatedSubscription);
+    expect(onTopicRefresh).toHaveBeenCalledTimes(2);
+    expect(onTopicRefresh).toHaveBeenCalledWith({ refresh: true, reason: 'reconnect' });
     expect(onSummariesRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  test('reconciles a missed refresh completion on a delayed first connection', () => {
+    const reconcileFeed = vi.fn();
+    const { rerender } = renderHook(({ pending }) => useTopicRefreshSocket({
+      onTopicRefresh: () => { if (pending) reconcileFeed(); }
+    }), { initialProps: { pending: false } });
+
+    rerender({ pending: true });
+    expect(reconcileFeed).not.toHaveBeenCalled();
+    handlers.get('connect')!();
+    expect(reconcileFeed).toHaveBeenCalledTimes(1);
   });
 
   test('does not connect while disabled', () => {

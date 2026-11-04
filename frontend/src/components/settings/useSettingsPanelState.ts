@@ -79,7 +79,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
 
   const subSourceIdsBySourceId = useMemo(() => {
     return new Map<string, Set<string>>(excludedSourceCatalog
-      .filter((source) => Array.isArray(source.subSources) && source.subSources.length > 1)
+      .filter((source) => Array.isArray(source.subSources) && source.subSources.length > 0)
       .map((source) => [source.id, new Set((source.subSources || []).map((subSource) => subSource.id))]));
   }, [excludedSourceCatalog]);
 
@@ -220,20 +220,26 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
     || editingSourceForm.language !== (editingSource?.language || 'it')
   );
 
-  const persistSourceUpdate = useCallback(async (sourceId: string, existingSources: NewsSource[] = customSources) => {
-    const response = await updateUserSource(sourceId, editingSourceForm);
-    return existingSources.map((source) => (
-      source.id === sourceId ? response.source : source
-    ));
-  }, [customSources, editingSourceForm]);
-
   const handleSave = useCallback(async () => {
     const dirtySettingKeys = [...dirtySettingKeysRef.current];
-    const settingsPatch = createSettingsPatch(settings, currentUserRef.current, dirtySettingKeys);
+    let settingsPatch = createSettingsPatch(settings, currentUserRef.current, dirtySettingKeys);
     if (Object.keys(settingsPatch).length === 0 && !hasEditingSourceChanges && pendingDeletedSourceIds.length === 0) {
       dirtySettingKeysRef.current.clear();
       return true;
     }
+
+    let savedSourceId = editingSourceId;
+    const publisherId = availableSources.find((source) => source.subSources?.some((subSource) => subSource.id === editingSourceId))?.id;
+    const remapSourceSettings = (value: UserSettings): UserSettings => {
+      const next = { ...value };
+      for (const key of ['excludedSourceIds', 'excludedSubSourceIds'] as const) {
+        if (next[key]) next[key] = next[key].map((id) => id === editingSourceId ? savedSourceId : id);
+      }
+      if (savedSourceId !== editingSourceId && publisherId && value.excludedSourceIds?.includes(publisherId)) {
+        next.excludedSubSourceIds = [...new Set([...(next.excludedSubSourceIds || []), savedSourceId])];
+      }
+      return next;
+    };
 
     setSourceError(null);
     const result = await runSavingAction(async () => {
@@ -241,8 +247,21 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
       let nextSettings = getInitialSettings(currentUserRef.current);
 
       if (hasEditingSourceChanges) {
-        nextCustomSources = await persistSourceUpdate(editingSourceId, nextCustomSources);
-        syncCustomSourcesState(nextCustomSources);
+        const { source } = await updateUserSource(editingSourceId, editingSourceForm);
+        nextCustomSources = nextCustomSources.map((current) => current.id === editingSourceId ? source : current);
+        savedSourceId = source.id;
+        if (savedSourceId !== editingSourceId) {
+          const persistedSettings = remapSourceSettings(getInitialSettings(currentUserRef.current));
+          const draftSettings = remapSourceSettings(settings);
+          settingsPatch = createSettingsPatch(draftSettings, { ...currentUserRef.current, settings: persistedSettings }, [
+            ...dirtySettingKeys, 'excludedSubSourceIds'
+          ]);
+          Object.keys(settingsPatch).forEach((key) => dirtySettingKeysRef.current.add(key));
+          setSettings(draftSettings);
+          syncCustomSourcesState(nextCustomSources, persistedSettings);
+        } else {
+          syncCustomSourcesState(nextCustomSources);
+        }
         setEditingSourceId('');
         setEditingSourceForm(createInitialEditingSourceForm());
       }
@@ -266,7 +285,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
           ...patch,
           [key]: response.settings[key]
         }), {});
-        nextSettings = { ...getInitialSettings(currentUserRef.current), ...persistedPatch };
+        nextSettings = { ...remapSourceSettings(getInitialSettings(currentUserRef.current)), ...persistedPatch };
       }
 
       return { nextCustomSources, nextSettings };
@@ -277,7 +296,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
 
     const nextSettings = Object.keys(settingsPatch).length > 0
       ? result.nextSettings
-      : getInitialSettings(currentUserRef.current);
+      : remapSourceSettings(getInitialSettings(currentUserRef.current));
     setStoredReaderTextSizePreference(nextSettings.readerTextSize);
     setStoredReaderTextWidthPreference(nextSettings.readerTextWidth);
     setEditingSourceId('');
@@ -285,7 +304,7 @@ const useSettingsPanelState = ({ currentUser, availableSources, patchSession }: 
     setPendingDeletedSourceIds([]);
     syncPersistedUserState(nextSettings, result.nextCustomSources);
     return true;
-  }, [customSources, editingSourceId, hasEditingSourceChanges, pendingDeletedSourceIds, persistSourceUpdate, runSavingAction, settings, syncCustomSourcesState, syncPersistedUserState]);
+  }, [availableSources, customSources, editingSourceForm, editingSourceId, hasEditingSourceChanges, pendingDeletedSourceIds, runSavingAction, settings, syncCustomSourcesState, syncPersistedUserState]);
 
   const handleCreateApiToken = useCallback(async () => {
     await runSavingAction(async () => {
