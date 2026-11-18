@@ -1,24 +1,6 @@
 import { Search, X } from 'lucide-react';
-import type { CSSProperties, ReactNode, RefObject } from 'react';
+import type { RefObject } from 'react';
 import type { Translator } from '../types';
-
-export function FilterBubble({ children, open, className, closedClassName = 'translate-y-2', maxHeight }: { children: ReactNode; open: boolean; className: string; closedClassName?: string; maxHeight: string }) {
-  return (
-    <div
-      className={`${className} transition-all duration-200 ease-out ${
-        open
-          ? 'pointer-events-auto translate-y-0 opacity-100'
-          : `pointer-events-none ${closedClassName} opacity-0`
-      }`}
-      aria-hidden={!open}
-      inert={open ? undefined : true}
-    >
-      <div className="max-h-[var(--filter-bubble-max-height)] overflow-y-auto overscroll-contain p-4" style={{ '--filter-bubble-max-height': maxHeight } as CSSProperties}>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 export function FilterSearchInput({
   cancelIconClassName = 'h-4 w-4',

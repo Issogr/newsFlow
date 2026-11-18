@@ -1,28 +1,20 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ArrowUp } from 'lucide-react';
-import { useOnClickOutside } from '../hooks/useOnClickOutside';
-import useFilterSurfaceState from '../hooks/useFilterSurfaceState';
+import useFeedSearch from '../hooks/useFeedSearch';
 import { FilterSearchInput } from './FilterSurfaceControls';
-import FilterBubbles from './FilterBubbles';
 import FilterNavActions from './FilterNavActions';
-import type { ActiveFilters, AvailableTopic, Locale, NewsSource, Translator } from '../types';
-
-const BUBBLE_MAX_HEIGHT = 'min(50vh, 24rem)';
-const MOBILE_BUBBLE_CLASS_NAME = 'ui-popover absolute bottom-full left-0 right-0 z-[60] mb-3';
+import type { Translator } from '../types';
 
 const MOBILE_NAV_BUTTON_SIZE_CLASS_NAME = 'h-full min-w-0 rounded-none px-1';
 const MOBILE_NAV_BADGE_SIZE_CLASS_NAME = 'h-3.5 w-3.5 px-0';
 
 const MobileBottomNav = ({
-  visibleSources,
-  availableTopics,
-  activeFilters,
+  filterCount,
+  filtersOpen,
+  onOpenFilters,
   search,
   t,
-  locale,
   onRefresh,
-  onClearFilter,
-  onToggleFilter,
   onSearchChange,
   onSearchClear,
   activeView = 'news',
@@ -34,15 +26,12 @@ const MobileBottomNav = ({
   backToTopVisible = false,
   onBackToTop,
 }: {
-  visibleSources: NewsSource[];
-  availableTopics: AvailableTopic[];
-  activeFilters: ActiveFilters;
+  filterCount: number;
+  filtersOpen: boolean;
+  onOpenFilters: React.MouseEventHandler<HTMLButtonElement>;
   search: string;
   t: Translator;
-  locale: Locale;
   onRefresh?: () => void;
-  onClearFilter: (type: keyof ActiveFilters) => void;
-  onToggleFilter: (type: keyof ActiveFilters, value: string) => void;
   onSearchChange: (value: string) => void;
   onSearchClear: () => void;
   activeView?: string;
@@ -55,19 +44,7 @@ const MobileBottomNav = ({
   onBackToTop?: () => void;
 }) => {
   const [keyboardOffset, setKeyboardOffset] = useState(0);
-  const {
-    closeAll,
-    handleBubbleButtonClick,
-    handleBubbleButtonPress,
-    handleEnterSearch,
-    handleExitSearch,
-    openBubble,
-    searchInputRef,
-    searchMode,
-    surfaceRef,
-  } = useFilterSurfaceState({ onSearchClear });
-
-  useOnClickOutside(surfaceRef, () => closeAll());
+  const { handleEnterSearch, handleExitSearch, searchInputRef, searchMode } = useFeedSearch({ onSearchClear });
 
   useEffect(() => {
     if (!searchMode || !window.visualViewport) {
@@ -92,119 +69,81 @@ const MobileBottomNav = ({
   }, [searchMode]);
 
   const readLaterActive = activeView === 'readLater';
-  const surfaceVisible = visible || backToTopVisible;
+  const toolbarVisible = visible || searchMode;
 
   return (
     <div
-      className={`fixed bottom-0 left-[env(safe-area-inset-left)] right-[env(safe-area-inset-right)] z-50 transition-transform duration-200 ease-out md:hidden ${
-        surfaceVisible ? 'translate-y-0' : 'translate-y-full'
-      }`}
+      className="pointer-events-none fixed bottom-0 left-[env(safe-area-inset-left)] right-[env(safe-area-inset-right)] z-50 md:hidden"
       role="navigation"
     >
-      {/* Bubbles + Nav wrapped together for outside-click detection */}
       <div
-        ref={surfaceRef}
         className="relative mx-auto w-[calc(100%-2rem)] max-w-md pb-[calc(env(safe-area-inset-bottom)+1rem+var(--mobile-keyboard-offset,0px))] transition-[padding-bottom] duration-200 ease-out"
         style={{ '--mobile-keyboard-offset': `${keyboardOffset}px` } as CSSProperties}
       >
-        <FilterBubbles
-          activeFilters={activeFilters}
-          availableTopics={availableTopics}
-          bubbleClassName={MOBILE_BUBBLE_CLASS_NAME}
-          emptyLabel={t('noNewsText')}
-          locale={locale}
-          maxHeight={BUBBLE_MAX_HEIGHT}
-          onClearFilter={onClearFilter}
-          onToggleFilter={onToggleFilter}
-          openBubble={openBubble}
-          t={t}
-          visibleSources={visibleSources}
-        />
-
-        <div className="flex items-end">
+        {backToTopVisible && !searchMode && (
           <button
             type="button"
             onClick={onBackToTop}
-            disabled={!backToTopVisible}
-            tabIndex={backToTopVisible ? 0 : -1}
-            aria-hidden={!backToTopVisible}
             aria-label={t('backToTop')}
-            className={`relative z-10 inline-flex h-[3.95rem] min-w-0 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-line bg-surface text-ink-body transition-[width,margin,transform,opacity] duration-200 ease-out hover:bg-hover-soft hover:text-ink-heading-strong focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 ${
-              backToTopVisible
-                ? 'mr-2 w-[3.95rem] translate-x-0 scale-100 opacity-100'
-                : 'pointer-events-none mr-0 w-0 -translate-x-3 scale-75 opacity-0'
-            }`}
+            className={`ui-icon-button pointer-events-auto absolute right-0 shadow-sm ${visible ? 'bottom-full mb-2' : 'bottom-[calc(1rem+env(safe-area-inset-bottom))]'}`}
           >
             <ArrowUp className="h-5 w-5 shrink-0" aria-hidden="true" />
           </button>
-
+        )}
+        <div
+          className={`relative h-[3.95rem] overflow-hidden rounded-2xl border border-line bg-surface shadow-lg transition-transform duration-200 ease-out ${
+            toolbarVisible ? 'pointer-events-auto' : 'translate-y-[calc(100%+1rem+env(safe-area-inset-bottom))]'
+          }`}
+          aria-hidden={!toolbarVisible}
+          inert={toolbarVisible ? undefined : true}
+        >
           <div
-            className={`mobile-nav-liquid relative min-w-0 ${backToTopVisible ? 'mobile-nav-liquid-with-button' : 'mobile-nav-liquid-full'} ${
-              visible
-                ? 'mobile-nav-liquid-visible'
-                : 'mobile-nav-liquid-hidden'
+            className={`absolute inset-0 grid ${onRefresh ? 'grid-cols-4' : 'grid-cols-3'} transition-opacity duration-200 ease-out ${
+              searchMode ? 'pointer-events-none opacity-0' : 'opacity-100'
             }`}
-            aria-hidden={!visible}
-            inert={visible ? undefined : true}
+            aria-hidden={searchMode}
+            inert={searchMode ? true : undefined}
           >
-            <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-lg">
-              <div className="relative h-[3.95rem] overflow-hidden">
-                <div
-                  className={`absolute inset-0 grid ${onRefresh ? 'grid-cols-5' : 'grid-cols-4'} transition-opacity duration-200 ease-out ${
-                    searchMode
-                      ? 'pointer-events-none opacity-0'
-                      : 'opacity-100'
-                  }`}
-                  aria-hidden={searchMode}
-                  inert={searchMode ? true : undefined}
-                >
-                  <FilterNavActions
-                    activeFilters={activeFilters}
-                    badgeSizeClassName={MOBILE_NAV_BADGE_SIZE_CLASS_NAME}
-                    buttonSizeClassName={MOBILE_NAV_BUTTON_SIZE_CLASS_NAME}
-                    handleBubbleButtonClick={handleBubbleButtonClick}
-                    handleBubbleButtonPress={handleBubbleButtonPress}
-                    handleEnterSearch={handleEnterSearch}
-                    onRefresh={onRefresh}
-                    onReadLaterClick={() => onViewChange?.(readLaterActive ? 'news' : 'readLater')}
-                    openBubble={openBubble}
-                    readLaterActive={readLaterActive}
-                    readLaterBadge
-                    readLaterLabel={t('readLaterShort')}
-                    refreshActive={refreshActive}
-                    refreshAriaLabel={refreshTitle}
-                    refreshDisabled={refreshDisabled}
-                    refreshLabel={t('refresh')}
-                    refreshTitle={refreshTitle}
-                    search={search}
-                    searchActiveClassName="text-ink-heading"
-                    t={t}
-                  />
-                </div>
-
-                <div
-                  className={`absolute inset-0 flex items-center gap-2 px-2 py-1.5 transition-opacity duration-200 ease-out ${
-                    searchMode
-                      ? 'opacity-100'
-                      : 'pointer-events-none opacity-0'
-                  }`}
-                  aria-hidden={!searchMode}
-                  inert={searchMode ? undefined : true}
-                >
-                  <FilterSearchInput
-                    className="flex h-full min-w-0 flex-1 items-center gap-2"
-                    inputTabIndex={searchMode ? 0 : -1}
-                    cancelIconClassName="h-4.5 w-4.5"
-                    onCancel={handleExitSearch}
-                    onSearchChange={onSearchChange}
-                    onSearchClear={onSearchClear}
-                    search={search}
-                    searchInputRef={searchInputRef}
-                    t={t}
-                  />
-                </div>
-              </div>
-            </div>
+            <FilterNavActions
+              filterCount={filterCount}
+              filtersOpen={filtersOpen}
+              onOpenFilters={onOpenFilters}
+              badgeSizeClassName={MOBILE_NAV_BADGE_SIZE_CLASS_NAME}
+              buttonSizeClassName={MOBILE_NAV_BUTTON_SIZE_CLASS_NAME}
+              handleEnterSearch={handleEnterSearch}
+              onRefresh={onRefresh}
+              onReadLaterClick={() => onViewChange?.(readLaterActive ? 'news' : 'readLater')}
+              readLaterActive={readLaterActive}
+              readLaterBadge
+              readLaterLabel={t('readLaterShort')}
+              refreshActive={refreshActive}
+              refreshAriaLabel={refreshTitle}
+              refreshDisabled={refreshDisabled}
+              refreshLabel={t('refresh')}
+              refreshTitle={refreshTitle}
+              search={search}
+              searchActiveClassName="text-ink-heading"
+              t={t}
+            />
+          </div>
+          <div
+            className={`absolute inset-0 flex items-center gap-2 px-2 py-1.5 transition-opacity duration-200 ease-out ${
+              searchMode ? 'opacity-100' : 'pointer-events-none opacity-0'
+            }`}
+            aria-hidden={!searchMode}
+            inert={searchMode ? undefined : true}
+          >
+            <FilterSearchInput
+              className="flex h-full min-w-0 flex-1 items-center gap-2"
+              inputTabIndex={searchMode ? 0 : -1}
+              cancelIconClassName="h-4.5 w-4.5"
+              onCancel={handleExitSearch}
+              onSearchChange={onSearchChange}
+              onSearchClear={onSearchClear}
+              search={search}
+              searchInputRef={searchInputRef}
+              t={t}
+            />
           </div>
         </div>
       </div>

@@ -76,7 +76,9 @@ describe('thematic summary UI', () => {
     expect(buttons).toHaveLength(2);
     expect(buttons[0]).toHaveAccessibleName('Open Technology summary');
     expect(buttons[1]).toHaveAccessibleName('Open Science summary');
-    expect(buttons[0].getAttribute('style')).toContain('conic-gradient');
+    expect(screen.getByRole('heading', { name: 'Daily briefings' })).toBeVisible();
+    expect(buttons[0]).toHaveTextContent('Technology');
+    expect(buttons[1]).toHaveTextContent('Science');
     expect(screen.getAllByTestId('thematic-summary-new-dot')).toHaveLength(2);
 
     fireEvent.click(buttons[0]);
@@ -100,10 +102,10 @@ describe('thematic summary UI', () => {
 
     const buttons = screen.getAllByRole('button');
     expect(buttons).toHaveLength(2);
-    expect(buttons[0]).toHaveClass('rounded-full');
-    expect(buttons[0].firstElementChild).toHaveClass('rounded-full');
-    expect(buttons[0].getAttribute('style')).toContain('conic-gradient');
-    expect(buttons[1].getAttribute('style')).toContain('conic-gradient');
+    for (const button of buttons) {
+      expect(button.firstElementChild).toHaveClass('rounded-full');
+      expect(button.firstElementChild?.getAttribute('style')).toContain('conic-gradient');
+    }
     expect(screen.queryAllByTestId('thematic-summary-new-dot')).toHaveLength(0);
   });
 

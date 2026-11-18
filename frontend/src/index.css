@@ -262,6 +262,16 @@ body {
   animation: feed-card-enter 180ms ease-out both;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .feed-filter-bubble {
+    animation: feed-filter-open 140ms ease-out;
+  }
+}
+
+@keyframes feed-filter-open {
+  from { opacity: 0; transform: scale(.97); }
+}
+
 @keyframes feed-card-enter {
   from {
     opacity: 0;
@@ -270,36 +280,6 @@ body {
   to {
     opacity: 1;
   }
-}
-
-.mobile-nav-liquid {
-  --mobile-nav-target-width: 100%;
-
-  flex: 0 0 auto;
-  overflow: hidden;
-  width: var(--mobile-nav-target-width);
-  transform-origin: left center;
-  transition:
-    width 200ms ease-out,
-    transform 200ms ease-out;
-}
-
-.mobile-nav-liquid-with-button {
-  --mobile-nav-target-width: calc(100% - 4.45rem);
-}
-
-.mobile-nav-liquid-full {
-  --mobile-nav-target-width: 100%;
-}
-
-.mobile-nav-liquid-visible {
-  transform: translateX(0);
-}
-
-.mobile-nav-liquid-hidden {
-  width: 0;
-  pointer-events: none;
-  transform: translateX(-0.5rem);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -8,8 +8,10 @@ import {
   Rss,
   User,
 } from 'lucide-react';
+import { getLocalizedTopic } from '../i18n';
 import { fetchNews, fetchReadLaterNews, fetchThematicSummaries, isRequestCanceled, markThematicSummariesRead, removeReadLaterArticles, saveReadLaterArticles } from '../services/api';
 import ErrorMessage from './ErrorMessage';
+import FeedFilterPanel from './FeedFilterPanel';
 import NewsCard from './NewsCard';
 import ReaderPanel from './ReaderPanel';
 import BrandMark from './BrandMark';
@@ -150,6 +152,8 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filterOpenerRef = useRef<HTMLButtonElement>(null);
   const [activeView, setActiveView] = useState<'news' | 'readLater'>('news');
   const [readerState, setReaderState] = useState<{ group: NewsGroup | null; articleId?: string | null }>({ group: null, articleId: null });
   const [thematicSummaries, setThematicSummaries] = useState<ThematicSummary[]>([]);
@@ -257,7 +261,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
       scrollFrameRef.current = window.requestAnimationFrame(() => {
         const currentY = window.scrollY;
         const nextShowBackToTop = currentY > BACK_TO_TOP_THRESHOLD;
-        const nextShowMobileBackToTop = currentY > 0;
+        const nextShowMobileBackToTop = currentY >= window.innerHeight;
         const nextTopNavCompact = currentY > TOP_NAV_SHRINK_THRESHOLD;
         const scrollingDown = currentY > lastScrollY.current;
         const shouldHideMobileNav = scrollingDown && currentY > 50;
@@ -667,10 +671,6 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
     });
   }, []);
 
-  const clearFilter = useCallback((type: keyof ActiveFilters) => {
-    setActiveFilters((current) => ({ ...current, [type]: [] }));
-  }, []);
-
   const openReader = useCallback((group: NewsGroup, articleId?: string) => {
     setReaderState({ group, articleId: articleId || group.items[0]?.id });
   }, []);
@@ -760,15 +760,41 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
     setDebouncedSearch('');
   }, []);
 
+  const filterCount = activeFilters.sourceIds.length + activeFilters.topics.length;
+  const contextLabel = [
+    ...activeFilters.sourceIds.map((id) => availableSources.find((source) => source.id === id)?.name || id),
+    ...activeFilters.topics.map((topic) => getLocalizedTopic(topic, locale)),
+    ...(debouncedSearch ? [`${t('searchLabel')}: ${debouncedSearch}`] : [])
+  ].join(' · ');
+  const emptyTitle = contextLabel
+    ? (isReadLaterView ? 'noMatchingSavedStories' : 'noMatchingStories')
+    : (isReadLaterView ? 'readLaterEmptyTitle' : 'noNewsTitle');
+
+  const closeFilters = useCallback((restoreFocus = false) => {
+    setFiltersOpen(false);
+    mobileNavVisibleRef.current = true;
+    setShowMobileNav(true);
+    if (restoreFocus) {
+      const opener = filterOpenerRef.current;
+      const target = opener?.isConnected ? opener : document.querySelector<HTMLElement>('[data-focus-fallback]');
+      target?.focus({ preventScroll: true });
+    }
+  }, []);
+  const toggleFilters = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (filtersOpen) {
+      closeFilters();
+      return;
+    }
+    filterOpenerRef.current = event.currentTarget;
+    setUserMenuOpen(false);
+    setFiltersOpen(true);
+  };
   const filterSurfaceProps = {
-    visibleSources: visibleAvailableSources,
-    availableTopics,
-    activeFilters,
+    filterCount,
+    filtersOpen,
+    onOpenFilters: toggleFilters,
     search,
     t,
-    locale,
-    onClearFilter: clearFilter,
-    onToggleFilter: toggleFilter,
     onSearchChange: setSearch,
     onSearchClear: clearSearch
   };
@@ -788,15 +814,26 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
                 </div>
               </div>
 
-              <div className="flex shrink-0 items-center gap-3">
+              <div className="relative flex shrink-0 items-center gap-3">
                 <DesktopTopNavFilters
                   {...filterSurfaceProps}
                   onToggleReadLater={() => setActiveView((current) => current === 'readLater' ? 'news' : 'readLater')}
                   onOpenSurface={() => setUserMenuOpen(false)}
                   readLaterActive={isReadLaterView}
                   closeSignal={desktopFiltersCloseSignal}
-                  compact={topNavCompact}
                 />
+                {filtersOpen && (
+                  <FeedFilterPanel
+                    sources={visibleAvailableSources}
+                    topics={availableTopics}
+                    activeFilters={activeFilters}
+                    onToggle={toggleFilter}
+                    onClear={() => setActiveFilters(EMPTY_FILTERS)}
+                    onClose={closeFilters}
+                    locale={locale}
+                    t={t}
+                  />
+                )}
 
                 <div className="relative hidden md:block">
                   <TopNavActionButton
@@ -901,10 +938,16 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
           />
         )}
 
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-ink-heading">
+            {t(isReadLaterView ? 'savedStories' : 'latestStories')}
+          </h2>
+          {contextLabel && <p className="mt-1 text-sm wrap-anywhere text-ink-muted">{contextLabel}</p>}
+        </div>
         {Boolean(error) && visibleNews.length > 0 && (
           <ErrorMessage error={error} onRetry={() => loadNews({ page: 1, append: false })} t={t} />
         )}
-        {loading && !loadingMore ? (
+        {loading && !loadingMore && !(filtersOpen && visibleNews.length > 0) ? (
           <div
             className="grid w-full min-w-0 animate-pulse grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
             role="status"
@@ -918,8 +961,14 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
           <ErrorMessage error={error} onRetry={() => loadNews({ page: 1, append: false, forceRefresh: true })} t={t} />
         ) : visibleNews.length === 0 ? (
           <div className="rounded-2xl border border-line bg-surface px-6 py-12 text-center">
-            <h2 className="text-xl font-semibold text-ink-emphasis">{isReadLaterView ? t('readLaterEmptyTitle') : t('noNewsTitle')}</h2>
-            <p className="mt-2 text-ink-subtle">{isReadLaterView ? t('readLaterEmptyText') : t('noNewsText')}</p>
+            <h3 className="text-xl font-semibold text-ink-emphasis">{t(emptyTitle)}</h3>
+            {contextLabel ? (
+              <button type="button" onClick={filterCount ? toggleFilters : clearSearch}
+                aria-controls={filterCount ? 'feed-filters' : undefined} aria-expanded={filterCount ? filtersOpen : undefined}
+                className="mt-3 min-h-11 rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-ink-body hover:bg-hover-soft">
+                {t(filterCount ? 'editFeedFilters' : 'clearSearch')}
+              </button>
+            ) : <p className="mt-2 text-ink-subtle">{t(isReadLaterView ? 'readLaterEmptyText' : 'noNewsText')}</p>}
           </div>
         ) : (
           <>
@@ -938,7 +987,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
               </div>
             )}
 
-            <div className="grid w-full min-w-0 grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <div aria-busy={loading} className="grid w-full min-w-0 grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
               {visibleNews.map((group) => (
                 <NewsCard
                   key={group.id || group.cursorId || group.items?.[0]?.id}
@@ -1055,8 +1104,8 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
           refreshActive={refreshDisabled}
           refreshDisabled={refreshDisabled}
           refreshTitle={refreshTitle}
-          visible={showMobileNav}
-          backToTopVisible={showMobileBackToTop}
+          visible={showMobileNav || filtersOpen}
+          backToTopVisible={showMobileBackToTop && !filtersOpen}
           onBackToTop={scrollToTop}
         />
       ) : null}

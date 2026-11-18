@@ -226,6 +226,17 @@ describe('ReaderPanel', () => {
     expect(screen.queryByText('readerUnavailable')).not.toBeInTheDocument();
   });
 
+  test('offers the selected publisher link and retries a failed article in place', async () => {
+    fetchReaderArticle.mockRejectedValueOnce(new Error('Unavailable')).mockResolvedValueOnce(createReaderPayload('Recovered body'));
+    renderReaderPanel({ articleId: 'article-2' });
+    expect(await screen.findByRole('alert')).toHaveTextContent('readerUnavailable');
+    expect(screen.getByRole('link', { name: 'openOriginalSource' })).toHaveAttribute('href', 'https://example.com/two');
+    fireEvent.click(screen.getByRole('button', { name: 'retry' }));
+    expect(await screen.findByText('Recovered body')).toBeVisible();
+    expect(fetchReaderArticle).toHaveBeenLastCalledWith('article-2', expect.objectContaining({ refresh: true }));
+    expect(screen.queryByRole('button', { name: 'retry' })).not.toBeInTheDocument();
+  });
+
   test('reuses cached reader content when returning to a source version', async () => {
     fetchReaderArticle
       .mockResolvedValueOnce(createReaderPayload('First body', {
@@ -366,6 +377,7 @@ describe('ReaderPanel', () => {
 
   test('disables unsafe original-source links', async () => {
     fetchReaderArticle.mockResolvedValue(createReaderPayload('Unsafe body', {
+      fallback: true,
       title: 'Unsafe reader title',
       excerpt: 'Unsafe excerpt'
     }));
@@ -382,6 +394,8 @@ describe('ReaderPanel', () => {
 
     await screen.findByText('Unsafe body');
 
+    expect(screen.getByText('readerFallback')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'retry' })).toBeEnabled();
     expect(screen.queryByRole('link', { name: 'openOriginalSource' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'shareArticle' })).toBeDisabled();
   });
@@ -486,7 +500,7 @@ describe('ReaderPanel', () => {
     });
 
     expect(screen.getByText('Body')).toBeInTheDocument();
-    expect(screen.getByText('readerUnavailable')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('readerRefreshFailed');
   });
 
 });

@@ -1,24 +1,21 @@
 import {
   Bookmark,
   RefreshCw,
-  Rss,
+  SlidersHorizontal,
   Search,
-  Tags,
 } from 'lucide-react';
 import TopNavActionButton from './TopNavActionButton';
-import type { SyntheticEvent } from 'react';
-import type { ActiveFilters, Translator } from '../types';
+import type { Translator } from '../types';
 
 const FilterNavActions = ({
-  activeFilters,
+  filterCount,
+  filtersOpen,
   badgeSizeClassName,
   buttonSizeClassName,
-  handleBubbleButtonClick,
-  handleBubbleButtonPress,
+  onOpenFilters,
   handleEnterSearch,
   onRefresh,
   onReadLaterClick,
-  openBubble,
   readLaterActive,
   readLaterAriaLabel,
   readLaterBadge = false,
@@ -33,15 +30,14 @@ const FilterNavActions = ({
   searchActiveClassName,
   t,
 }: {
-  activeFilters: ActiveFilters;
+  filterCount: number;
+  filtersOpen: boolean;
   badgeSizeClassName?: string;
   buttonSizeClassName?: string;
-  handleBubbleButtonClick: (event: SyntheticEvent, name: 'sources' | 'topics') => void;
-  handleBubbleButtonPress: (event: SyntheticEvent, name: 'sources' | 'topics') => void;
+  onOpenFilters: React.MouseEventHandler<HTMLButtonElement>;
   handleEnterSearch: () => void;
   onRefresh?: () => void;
   onReadLaterClick: () => void;
-  openBubble: 'sources' | 'topics' | null;
   readLaterActive: boolean;
   readLaterAriaLabel?: string;
   readLaterBadge?: boolean;
@@ -56,38 +52,23 @@ const FilterNavActions = ({
   searchActiveClassName?: string;
   t: Translator;
 }) => {
-  const sourceCount = activeFilters.sourceIds.length;
-  const topicCount = activeFilters.topics.length;
   const searchCount = search ? 1 : 0;
 
   return (
     <>
       <TopNavActionButton
-        icon={Rss}
-        label={t('sources')}
-        onPointerDown={(event) => handleBubbleButtonPress(event, 'sources')}
-        onClick={(event) => handleBubbleButtonClick(event, 'sources')}
-        aria-expanded={openBubble === 'sources'}
-        active={openBubble === 'sources'}
+        icon={SlidersHorizontal}
+        label={t('feedFilters')}
+        onClick={onOpenFilters}
+        aria-haspopup="dialog"
+        aria-expanded={filtersOpen}
+        aria-controls="feed-filters"
+        active={filtersOpen || filterCount > 0}
         activeClassName="text-sky-600"
         sizeClassName={buttonSizeClassName}
-        badge={sourceCount > 0 ? sourceCount : null}
+        badge={filterCount || null}
         badgeSizeClassName={badgeSizeClassName}
         badgeClassName="bg-sky-600 text-white"
-      />
-
-      <TopNavActionButton
-        icon={Tags}
-        label={t('topics')}
-        onPointerDown={(event) => handleBubbleButtonPress(event, 'topics')}
-        onClick={(event) => handleBubbleButtonClick(event, 'topics')}
-        aria-expanded={openBubble === 'topics'}
-        active={openBubble === 'topics'}
-        activeClassName="text-emerald-600"
-        sizeClassName={buttonSizeClassName}
-        badge={topicCount > 0 ? topicCount : null}
-        badgeSizeClassName={badgeSizeClassName}
-        badgeClassName="bg-emerald-600 text-white"
       />
 
       {onRefresh ? (
@@ -109,6 +90,7 @@ const FilterNavActions = ({
         label={readLaterLabel}
         onClick={onReadLaterClick}
         active={readLaterActive}
+        aria-pressed={readLaterActive}
         activeClassName="text-amber-600"
         sizeClassName={buttonSizeClassName}
         badge={readLaterBadge && readLaterActive ? '' : null}

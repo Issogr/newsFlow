@@ -20,8 +20,9 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
   const readSummaryIdSet = new Set(readSummaryIds);
 
   return (
-    <section className="mb-6" aria-label={t('thematicSummariesTitle')}>
-      <div className="mx-auto flex w-max max-w-full gap-4 overflow-x-auto px-1 py-1">
+    <section className="mb-6" aria-labelledby="daily-briefings-title">
+      <h2 id="daily-briefings-title" className="mb-2 text-lg font-semibold text-ink-heading">{t('thematicSummariesTitle')}</h2>
+      <div className="flex gap-3 overflow-x-auto p-1">
         {summaries.map((summary) => {
           const localizedSummary = getLocalizedThematicSummary(summary, locale);
           const primaryPresentation = getTopicPresentation(getThematicSummaryPresentationKey(summary));
@@ -38,21 +39,21 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
                 event.currentTarget.focus({ preventScroll: true });
                 onOpenSummary(summary);
               }}
-              className="group relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full p-[1.5px] focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-              style={AI_ACCENT_GRADIENT_STYLE}
+              className="group inline-flex w-24 shrink-0 flex-col items-center gap-1.5 rounded-xl px-1 text-center focus-visible:ring-2 focus-visible:ring-sky-400"
               aria-label={summary.isStale ? `${ariaLabel} · ${t('summaryOutdated')}` : ariaLabel}
               title={summary.isStale ? t('summaryOutdated') : undefined}
             >
-              <span className={`inline-flex h-full w-full items-center justify-center rounded-full transition-[filter] group-hover:brightness-110 ${circleClassName}`}>
-                <PrimaryIcon className="h-5 w-5" aria-hidden="true" />
+              <span className="relative inline-flex h-12 w-12 rounded-full p-[1.5px]" style={AI_ACCENT_GRADIENT_STYLE}>
+                <span className={`inline-flex h-full w-full items-center justify-center rounded-full transition-[filter] group-hover:brightness-110 ${circleClassName}`}>
+                  <PrimaryIcon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                {unread && (
+                  <span className="absolute right-0 top-0 h-3 w-3 rounded-full border-2 border-surface bg-violet-600" aria-hidden="true" data-testid="thematic-summary-new-dot" />
+                )}
               </span>
-              {unread && (
-                <span
-                  className="absolute right-0 top-0 h-3 w-3 rounded-full border-2 border-white bg-violet-600 shadow-sm"
-                  aria-hidden="true"
-                  data-testid="thematic-summary-new-dot"
-                />
-              )}
+              <span className="max-w-full text-xs font-medium wrap-anywhere text-ink-body">
+                {localizedSummary.displayTopicLabel}
+              </span>
             </button>
           );
         })}

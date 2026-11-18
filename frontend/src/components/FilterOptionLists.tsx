@@ -67,9 +67,11 @@ export function TopicFilterList({ topics, activeTopics, emptyLabel, locale, onTo
             </span>
             <span>{getLocalizedTopic(topic.topic, locale)}</span>
             {isActive && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
-            <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-surface-soft text-ink-muted'}`}>
-              {topic.count}
-            </span>
+              {topic.count != null && (
+                <span className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-white/20 text-white' : 'bg-surface-soft text-ink-muted'}`}>
+                  {topic.count}
+                </span>
+              )}
           </button>
         );
       })}

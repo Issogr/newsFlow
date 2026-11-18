@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, type RenderResult } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within, type RenderResult } from '@testing-library/react';
 import NewsAggregator from './NewsAggregator';
 import { fetchNews as fetchNewsImplementation, fetchReadLaterNews as fetchReadLaterNewsImplementation, fetchThematicSummaries as fetchThematicSummariesImplementation, isRequestCanceled as isRequestCanceledImplementation, markThematicSummariesRead as markThematicSummariesReadImplementation, updateUserSettings as updateUserSettingsImplementation } from '../services/api';
 import useTopicRefreshSocketImplementation, { type NewsUpdatePayload, type TopicRefreshSocketOptions } from '../hooks/useTopicRefreshSocket';
@@ -325,29 +325,36 @@ describe('NewsAggregator', () => {
 
   test('shows the mobile navbar only after enough upward scroll and a delay', async () => {
     fetchNews.mockResolvedValue(createFeedResponse([], { meta: { totalGroups: 0 } }));
-    const view = await renderNewsAggregator();
-    const mobileNav = view.container.querySelector('.mobile-nav-liquid');
+    await renderNewsAggregator();
+    const nav = within(screen.getByRole('navigation'));
 
     act(() => vi.advanceTimersToNextFrame());
     window.scrollY = 100;
     fireEvent.scroll(window);
     act(() => vi.advanceTimersToNextFrame());
-    expect(mobileNav).toHaveClass('mobile-nav-liquid-hidden');
+    expect(nav.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
+    expect(nav.queryByRole('button', { name: 'Back to top' })).not.toBeInTheDocument();
 
     window.scrollY = 99;
     fireEvent.scroll(window);
     act(() => vi.advanceTimersToNextFrame());
     act(() => vi.advanceTimersByTime(300));
-    expect(mobileNav).toHaveClass('mobile-nav-liquid-hidden');
+    expect(nav.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
 
     window.scrollY = 76;
     fireEvent.scroll(window);
     act(() => vi.advanceTimersToNextFrame());
     act(() => vi.advanceTimersByTime(249));
-    expect(mobileNav).toHaveClass('mobile-nav-liquid-hidden');
+    expect(nav.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
 
     act(() => vi.advanceTimersByTime(1));
-    expect(mobileNav).toHaveClass('mobile-nav-liquid-visible');
+    expect(nav.getByRole('button', { name: 'Search' })).toBeInTheDocument();
+
+    window.scrollY = window.innerHeight;
+    fireEvent.scroll(window);
+    act(() => vi.advanceTimersToNextFrame());
+    fireEvent.click(nav.getByRole('button', { name: 'Back to top' }));
+    expect(window.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
   });
 
   test('shows card-shaped placeholders while the initial feed loads', async () => {
@@ -531,8 +538,8 @@ describe('NewsAggregator', () => {
     });
 
     const storyButton = await screen.findByRole('button', { name: 'Apri sintesi Tecnologia' });
-    expect(screen.queryByRole('heading', { name: 'Storie per topic' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Tecnologia')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sintesi del giorno' })).toBeVisible();
+    expect(storyButton).toHaveTextContent('Tecnologia');
 
     await act(async () => {
       fireEvent.click(storyButton);
@@ -827,7 +834,7 @@ describe('NewsAggregator', () => {
     fetchNews.mockResolvedValue(sourceResponse);
     const view = await renderNewsAggregator({ currentUser: userWithSource, patchSession, onLogout });
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Sources' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Filters' })[0]);
     fireEvent.click(screen.getByRole('button', { name: /Custom Feed/ }));
     await waitFor(() => {
       expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ sourceIds: ['custom-source'] }));
@@ -851,6 +858,75 @@ describe('NewsAggregator', () => {
     await waitFor(() => {
       expect(fetchNews.mock.calls.slice(activeFilterCallCount).some(([params]) => (params.sourceIds || []).length === 0)).toBe(true);
     });
+  });
+
+  test('edits sources and topics in one panel and keeps Saved and its search when clearing filters', async () => {
+    const filters = { sources: [{ id: 'bbc', name: 'BBC News' }], topics: [{ topic: 'Scienza', count: 1 }], sourceCatalog: [] };
+    const empty = createFeedResponse([], { filters });
+    const saved = createSingleGroupFeedResponse('saved', 'Saved headline', { filters });
+    fetchNews.mockResolvedValue(empty);
+    fetchReadLaterNews.mockImplementation(async ({ search, topics, sourceIds }) => {
+      if (topics?.length) return createFeedResponse([], { filters: { ...filters, topics: [] } });
+      return search || sourceIds?.length ? empty : saved;
+    });
+    await renderNewsAggregator();
+    expect(screen.getByRole('heading', { name: 'Latest stories' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Read later' }));
+    await screen.findByText('Saved headline');
+
+    openDesktopSearch();
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'orbit' } });
+    await act(async () => { vi.advanceTimersByTime(350); });
+    fireEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: 'Filters' }));
+    const panel = () => within(screen.getByRole('dialog', { name: 'Filters' }));
+    fireEvent.click(panel().getByRole('button', { name: /BBC News/ }));
+    fireEvent.click(panel().getByRole('button', { name: 'Topics' }));
+    fireEvent.click(panel().getByRole('button', { name: /Science/ }));
+    await waitFor(() => expect(fetchReadLaterNews).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'orbit', topics: ['Scienza'], sourceIds: ['bbc'] })));
+    fireEvent.click(panel().getByRole('button', { name: 'Close' }));
+    const feed = within(screen.getByRole('main'));
+    expect(feed.getByText('BBC News · Science · Search: orbit')).toBeVisible();
+    expect(feed.queryByRole('button', { name: /BBC News|Science|Clear filters/ })).not.toBeInTheDocument();
+    expect(feed.getByRole('heading', { name: 'No saved stories match these filters' })).toBeVisible();
+    fireEvent.click(feed.getByRole('button', { name: 'Edit filters' }));
+    fireEvent.click(panel().getByRole('button', { name: /Topics/ }));
+    const selectedTopic = panel().getByRole('button', { name: /Science/ });
+    expect(selectedTopic).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(selectedTopic);
+    await waitFor(() => expect(fetchReadLaterNews).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'orbit', topics: [], sourceIds: ['bbc'] })));
+    fireEvent.click(panel().getByRole('button', { name: 'Clear filters' }));
+    await waitFor(() => expect(fetchReadLaterNews).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'orbit', topics: [], sourceIds: [] })));
+    fireEvent.click(panel().getByRole('button', { name: 'Close' }));
+    expect(feed.getByText('Search: orbit')).toBeVisible();
+    fireEvent.click(feed.getByRole('button', { name: 'Clear search' }));
+    expect(await screen.findByText('Saved headline')).toBeVisible();
+    expect(feed.getByRole('heading', { name: 'Saved stories' })).toBeVisible();
+    expect(fetchNews).toHaveBeenCalledTimes(1);
+  });
+
+  test('opens a non-modal filter bubble, restores focus on Escape, and toggles from the toolbar', async () => {
+    const current = createSingleGroupFeedResponse('g', 'Current headline', {
+      filters: { sources: [{ id: 'bbc', name: 'BBC News' }], topics: [], sourceCatalog: [] }
+    });
+    const request = createDeferred<FeedResponse>();
+    fetchNews.mockResolvedValueOnce(current).mockReturnValueOnce(request.promise);
+    await renderNewsAggregator();
+    const trigger = within(screen.getByRole('navigation')).getByRole('button', { name: 'Filters' });
+    fireEvent.click(trigger);
+    const bubble = screen.getByRole('dialog', { name: 'Filters' });
+    expect(bubble).not.toHaveAttribute('aria-modal', 'true');
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(bubble).toContainElement(document.activeElement as HTMLElement);
+    fireEvent.click(within(bubble).getByRole('button', { name: /BBC News/ }));
+    expect(screen.getByText('Current headline')).toBeVisible();
+    await resolveDeferred(request, createSingleGroupFeedResponse('g2', 'Filtered headline', { filters: current.filters }));
+    expect(screen.getByText('Filtered headline')).toBeVisible();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('dialog', { name: 'Filters' })).not.toBeInTheDocument();
   });
 
   test('loads cached news on open without forcing a source refresh', async () => {

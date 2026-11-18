@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ElementType } from 'react';
 import {
   AlertCircle,
-  AlertTriangle,
   Clock3,
   Info,
   Newspaper,
@@ -13,6 +12,7 @@ import useLatestRequest from '../hooks/useLatestRequest';
 import useShareArticle from '../hooks/useShareArticle';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { FullscreenPanelFrame } from './FullscreenModalFrame';
+import ExternalPillLink from './ExternalPillLink';
 import ReaderTextSizeControls from './ReaderTextSizeControls';
 import ReaderTextWidthControls from './ReaderTextWidthControls';
 import ShareStatusBubble from './ShareStatusBubble';
@@ -315,33 +315,41 @@ const ReaderPanel = ({
                   </div>
                 </div>
 
+                {(Boolean(error) || selectedReader?.fallback) && (
+                  <div className={`space-y-2 rounded-2xl border p-4 text-sm ${
+                    error ? (selectedReader ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-red-200 bg-red-50 text-red-700') : 'border-sky-200 bg-sky-50 text-sky-800'
+                  }`}>
+                    {Boolean(error) && (
+                      <p role="alert" className="flex items-center gap-2 font-medium">
+                        <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        {t(selectedReader ? 'readerRefreshFailed' : 'readerUnavailable')}
+                      </p>
+                    )}
+                    {selectedReader?.fallback && (
+                      <p className="flex items-center gap-2">
+                        <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        {t('readerFallback')}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={refreshReader} disabled={!selectedArticleId || loading}
+                        className="min-h-11 rounded-full border border-line bg-surface px-4 font-semibold text-ink-body hover:bg-hover-soft disabled:opacity-50">
+                        {t('retry')}
+                      </button>
+                      {safeOriginalUrl && (
+                        <ExternalPillLink href={safeOriginalUrl} target="_blank" className="min-h-11 border-line bg-surface text-ink-body hover:bg-hover-soft">
+                          {t('openOriginalSource')}
+                        </ExternalPillLink>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {loading && !selectedReader ? (
                   <div className="py-2">
                     <TextContentSkeleton label={t('loadingReader')} />
                   </div>
-                ) : error && !selectedReader ? (
-                  <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-8 text-center text-red-700">
-                    <p className="inline-flex items-center gap-2 font-medium">
-                      <AlertCircle className="h-4 w-4" />
-                      {t('readerUnavailable')}
-                    </p>
-                  </div>
                 ) : selectedReader ? (
                   <article className="pb-8">
-                    {Boolean(error) && (
-                      <div className="mb-8 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                        <AlertTriangle className="h-4 w-4 shrink-0" />
-                        {t('readerUnavailable')}
-                      </div>
-                    )}
-
-                    {selectedReader.fallback && (
-                      <div className="mb-8 inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-                        <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
-                        {t('readerFallback')}
-                      </div>
-                    )}
-
                     {selectedReader.byline && (
                       <p className="mb-6 text-sm font-medium text-reader-subtle">{selectedReader.byline}</p>
                     )}
