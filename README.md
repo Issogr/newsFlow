@@ -50,13 +50,13 @@ Importing settings preserves existing saved articles, keeps matching feeds by UR
 
 Deleting a custom feed or changing its URL preserves saved articles and their cached reader text. A URL change replaces the feed's identity while carrying over its source selections, so new feed items cannot overwrite the saved ones.
 
-Filter the feed by source, topic, or time, and search the articles already cached on your server. Related coverage appears together in a story card so you can compare publishers without working through a separate card for every article.
+Filter the feed by source, topic, or time, and search the articles already cached on your server. When several sources cover a story, choose **Compare sources** on its card. Swipe sideways or use the arrows to browse publisher headlines, then select one to read that version.
 
 Feed reads use cached data. A manual refresh queues source updates in the background and has a five-minute cooldown by default. Scheduled ingestion runs every 15 minutes for sources assigned to recently active users.
 
 ## Read and save articles
 
-Choose **Read here** to open the cleaned reader view or **Open original** to visit the publisher. Reader extraction depends on the source page; the original link remains available when an article cannot be extracted.
+Select a headline or photo to open the cleaned reader view. The card’s **More story actions** menu lets you share the link or choose **Open original** to visit the publisher. Reader extraction depends on the source page; the original link remains available when an article cannot be extracted.
 
 Save articles to **Read later** to keep them beyond the normal retention window, which defaults to 24 hours. The interface supports English and Italian, light and dark themes, and adjustable reader text size and width.
 

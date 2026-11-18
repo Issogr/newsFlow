@@ -84,6 +84,24 @@
   .ui-popover {
     @apply overflow-hidden rounded-2xl border border-line bg-surface shadow-lg;
   }
+
+  .story-actions {
+    position: fixed;
+    inset: 0;
+    width: max-content;
+    height: fit-content;
+    margin: auto;
+  }
+
+  @supports (top: anchor(bottom)) {
+    .story-actions {
+      inset: auto;
+      top: anchor(bottom);
+      right: anchor(right);
+      margin: 0.25rem 0;
+      position-try-fallbacks: flip-block;
+    }
+  }
 }
 
 :root {

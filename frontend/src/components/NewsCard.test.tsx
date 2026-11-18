@@ -1,9 +1,10 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import NewsCard from './NewsCard';
+import { createTranslator } from '../i18n';
 import type { ComponentProps } from 'react';
-import type { NewsArticle, NewsGroup, Translator } from '../types';
+import type { NewsArticle, NewsGroup } from '../types';
 
-const t: Translator = (key) => key;
+const t = createTranslator('en');
 
 const group: NewsGroup = {
   id: 'group-1',
@@ -54,6 +55,13 @@ function renderNewsCard({ cardGroup = group, ...props }: NewsCardTestProps = {})
   return render(createNewsCardElement({ cardGroup, ...props }));
 }
 
+function storyAction(label: string) {
+  const toggle = screen.getByRole('button', { name: t('storyActions') });
+  const popover = document.getElementById(toggle.getAttribute('popovertarget')!)!;
+  // jsdom renders popovers but does not implement native light-dismiss or toggling.
+  return within(popover).getByText(label, { selector: 'button' });
+}
+
 describe('NewsCard', () => {
   const originalShare = navigator.share;
   const originalClipboard = navigator.clipboard;
@@ -66,22 +74,12 @@ describe('NewsCard', () => {
     vi.restoreAllMocks();
   });
 
-  test('clamps the headline to two lines', () => {
-    renderNewsCard();
-
-    expect(screen.getByText('Headline', { selector: 'span' })).toHaveClass('line-clamp-2');
-  });
-
-  test('keeps source metadata above the headline and actions below the story', () => {
-    renderNewsCard();
-
-    const sourceRow = screen.getByText('Source A').parentElement?.parentElement;
-    const actions = screen.getByRole('button', { name: 'shareArticle' }).parentElement;
-
+  test('puts the topic before the headline and publisher attribution after it', () => {
+    renderNewsCard({ cardGroup: createGroup({ topics: ['Scienza'] }) });
     const headline = screen.getByRole('heading', { name: 'Headline' });
-    expect(sourceRow!.compareDocumentPosition(headline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(headline.compareDocumentPosition(actions!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(sourceRow?.parentElement).not.toContainElement(actions);
+    expect(screen.getByText('Science').compareDocumentPosition(headline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(headline.compareDocumentPosition(screen.getByText('Source A')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Compare/ })).not.toBeInTheDocument();
   });
 
   test('opens a safe external url in a new tab', () => {
@@ -89,16 +87,12 @@ describe('NewsCard', () => {
 
     renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
-    const originalSourceButton = screen.getByRole('button', { name: 'openOriginalSource' });
-    const readLaterButton = screen.getByRole('button', { name: 'saveReadLater' });
-
-    expect(originalSourceButton.nextElementSibling).toBe(readLaterButton);
-    fireEvent.click(originalSourceButton);
+    fireEvent.click(storyAction(t('openOriginalSource')));
 
     expect(window.open).toHaveBeenCalledWith('https://example.com/story', '_blank', 'noopener,noreferrer');
   });
 
-  test('uses safe static covers and falls back when images are unavailable or disabled', () => {
+  test('uses real, safe static photos and omits unavailable or disabled images', () => {
     const { rerender } = renderNewsCard({
       cardGroup: createGroup({
         id: 'safe-image',
@@ -131,7 +125,7 @@ describe('NewsCard', () => {
       createNewsCardElement({ cardGroup: createGroup({ id: 'no-image' }) })
     );
 
-    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
 
     rerender(
       createNewsCardElement({
@@ -142,7 +136,7 @@ describe('NewsCard', () => {
       })
     );
 
-    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
 
     rerender(
       createNewsCardElement({
@@ -155,7 +149,7 @@ describe('NewsCard', () => {
 
     fireEvent.error(screen.getByRole('img', { name: 'Headline' }));
 
-    expect(screen.getByRole('img', { name: 'genericNewsCoverAlt' })).toHaveAttribute('src', expect.stringMatching(/generic-news-cover/));
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
 
     rerender(
       createNewsCardElement({
@@ -167,92 +161,61 @@ describe('NewsCard', () => {
       })
     );
 
-    expect(screen.queryByRole('img', { name: 'Headline' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('img', { name: 'genericNewsCoverAlt' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 
-  test('renders icon-only topic pills on standard cards', () => {
+  test('names topics in the feed language and preserves AI topic rings without photos', () => {
     const topicGroup = createGroup({
       topicDetails: [
         { topic: 'Tecnologia', source: 'ai' },
         { topic: 'Economia', source: 'canonical' }
       ]
     });
-    const { rerender } = renderNewsCard({ cardGroup: topicGroup });
-
-    const technologyTopic = screen.getByLabelText('Technology');
-    expect(technologyTopic).toHaveClass('rounded-full');
-    expect(technologyTopic.firstElementChild).toHaveClass('rounded-full');
-    expect(technologyTopic.getAttribute('style')).toContain('conic-gradient');
-    expect(screen.getByLabelText('Economy')).toHaveClass('rounded-full');
-    expect(screen.queryByText('Technology')).not.toBeInTheDocument();
-    expect(screen.queryByText('Economy')).not.toBeInTheDocument();
-
-    rerender(createNewsCardElement({ cardGroup: topicGroup, showImages: false }));
-
-    expect(screen.getByLabelText('Technology')).toBeInTheDocument();
-    expect(screen.getByLabelText('Economy')).toBeInTheDocument();
+    renderNewsCard({ cardGroup: topicGroup, showImages: false });
+    expect(screen.getByText('Technology').closest('[style]')?.getAttribute('style')).toContain('conic-gradient');
+    expect(screen.getByText('Economy').closest('[style]')).toBeNull();
   });
 
   test('renders the published date and time pill', () => {
     renderNewsCard();
 
-    const publishedAt = screen.getByLabelText('publishedAt');
+    const publishedAt = screen.getByLabelText(/^Published:/);
     expect(publishedAt.tagName).toBe('TIME');
     expect(publishedAt).toHaveAttribute('dateTime', '2026-03-07T10:00:00.000Z');
     expect(publishedAt).toHaveTextContent(/\d/);
   });
 
-  test('renders source favicons and a social source summary', () => {
-    renderNewsCard({
-      cardGroup: createGroup({
-        items: [
-          createItem({ sourceIconUrl: 'https://example.com/a.ico', image: 'https://example.com/image.jpg' }),
-          createItem({
-            id: 'article-2',
-            sourceId: 'source-b',
-            source: 'Source B',
-            sourceIconUrl: 'https://example.com/b.ico',
-            image: 'https://example.com/image-b.jpg'
-          })
-        ]
-      })
+  test('compares a headline per publisher and opens the chosen version after a tap, not a swipe', () => {
+    const onOpenReader = vi.fn();
+    const cardGroup = createGroup({
+      items: [
+        createItem({ title: 'First angle', sourceIconUrl: 'https://example.com/a.ico' }),
+        createItem({ id: 'article-2', title: 'Later update' }),
+        createItem({ id: 'article-3', sourceId: 'source-b', source: 'Source B', title: 'Another angle', sourceIconUrl: 'https://example.com/b.ico' }),
+        createItem({ id: 'article-4', sourceId: 'source-c', source: 'Source C', title: 'Local angle' })
+      ]
     });
-
-    expect(screen.getByLabelText('Source A')).toBeInTheDocument();
-    expect(screen.getByLabelText('Source B')).toBeInTheDocument();
-    expect(screen.getByLabelText('Source A').querySelector('img')).toHaveAttribute('src', 'https://example.com/a.ico');
-    expect(screen.getByLabelText('Source B').querySelector('img')).toHaveAttribute('src', 'https://example.com/b.ico');
-    expect(screen.getByLabelText('sources')).toHaveClass('rounded-full');
-    expect(screen.getByText('Source A +1')).toBeInTheDocument();
-    expect(screen.queryByText('Source B')).not.toBeInTheDocument();
-  });
-
-  test('renders a single source icon without the aggregation container', () => {
-    renderNewsCard();
-
-    expect(screen.getByLabelText('Source A')).toBeInTheDocument();
-    expect(screen.queryByLabelText('sources')).not.toBeInTheDocument();
-  });
-
-  test('limits combined story source circles and keeps overflow in the summary text', () => {
-    renderNewsCard({
-      cardGroup: createGroup({
-        items: [
-          createItem({ sourceIconUrl: 'https://example.com/a.ico' }),
-          createItem({ id: 'article-2', sourceId: 'source-b', source: 'Source B', sourceIconUrl: 'https://example.com/b.ico' }),
-          createItem({ id: 'article-3', sourceId: 'source-c', source: 'Source C', sourceIconUrl: 'https://example.com/c.ico' }),
-          createItem({ id: 'article-4', sourceId: 'source-d', source: 'Source D', sourceIconUrl: 'https://example.com/d.ico' })
-        ]
-      })
-    });
-
-    expect(screen.getByLabelText('Source A')).toBeInTheDocument();
-    expect(screen.getByLabelText('Source B')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Source C')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Source D')).not.toBeInTheDocument();
-    expect(screen.getByText('Source A +3')).toBeInTheDocument();
-    expect(screen.queryByText('+2')).not.toBeInTheDocument();
+    const { container } = renderNewsCard({ cardGroup, onOpenReader });
+    expect(screen.getByText('Source A · Source B')).toBeInTheDocument();
+    expect(Array.from(container.querySelectorAll('img'), (img) => img.src)).toEqual(['https://example.com/a.ico', 'https://example.com/b.ico']);
+    const toggle = screen.getByRole('button', { name: 'Compare 3 sources' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    const strip = within(screen.getByRole('region', { name: t('sourceVersions') }));
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(strip.queryByText('Later update')).not.toBeInTheDocument();
+    expect(strip.getByRole('button', { name: 'Source C Local angle' })).toBeInTheDocument();
+    const other = strip.getByRole('button', { name: 'Source B Another angle' });
+    fireEvent.touchStart(other, { touches: [{ clientX: 150, clientY: 50 }] });
+    fireEvent.touchEnd(other, { changedTouches: [{ clientX: 40, clientY: 55 }] });
+    fireEvent.click(other);
+    expect(onOpenReader).not.toHaveBeenCalled();
+    fireEvent.touchStart(other, { touches: [{ clientX: 45, clientY: 55 }] });
+    fireEvent.touchEnd(other, { changedTouches: [{ clientX: 45, clientY: 55 }] });
+    fireEvent.click(other);
+    expect(onOpenReader).toHaveBeenCalledWith(cardGroup, 'article-3');
+    fireEvent.click(toggle);
+    expect(screen.queryByRole('region', { name: t('sourceVersions') })).not.toBeInTheDocument();
   });
 
   test('surfaces merged same-source versions in the source summary', () => {
@@ -260,12 +223,14 @@ describe('NewsCard', () => {
       cardGroup: createGroup({
         items: [
           createItem({ image: 'https://example.com/image.jpg' }),
+          createItem({ image: 'https://example.com/image.jpg' }),
           createItem({ id: 'article-2', image: 'https://example.com/image-b.jpg' })
         ]
       })
     });
 
-    expect(screen.getByText('Source A +1')).toBeInTheDocument();
+    expect(screen.getByText('2 articles from Source A')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Compare/ })).not.toBeInTheDocument();
   });
 
   test('shows an AI-grouped source border only for matched AI stories', () => {
@@ -278,7 +243,7 @@ describe('NewsCard', () => {
       })
     });
 
-    const aiGroupedSourceStack = screen.getByLabelText('aiGroupedStory');
+    const aiGroupedSourceStack = screen.getByLabelText(t('aiGroupedStory'));
     expect(aiGroupedSourceStack).toHaveClass('rounded-full');
     expect(aiGroupedSourceStack.firstElementChild).toHaveClass('rounded-full');
     expect(aiGroupedSourceStack.getAttribute('style')).toContain('conic-gradient');
@@ -291,21 +256,21 @@ describe('NewsCard', () => {
       })
     );
 
-    expect(screen.queryByLabelText('aiGroupedStory')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(t('aiGroupedStory'))).not.toBeInTheDocument();
 
     rerender(
       createNewsCardElement()
     );
 
-    expect(screen.queryByLabelText('aiGroupedStory')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(t('aiGroupedStory'))).not.toBeInTheDocument();
   });
 
-  test('toggles the read-later action from the card header', () => {
+  test('toggles read later directly from the card', () => {
     const onToggleReadLater = vi.fn();
 
     renderNewsCard({ onToggleReadLater });
 
-    fireEvent.click(screen.getByRole('button', { name: 'saveReadLater' }));
+    fireEvent.click(screen.getByRole('button', { name: t('saveReadLater') }));
 
     expect(onToggleReadLater).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }));
   });
@@ -313,9 +278,8 @@ describe('NewsCard', () => {
   test('disables unsafe external links', () => {
     renderNewsCard({ cardGroup: createGroup({ url: 'javascript:alert(1)' }) });
 
-    expect(screen.getByRole('button', { name: 'openOriginalSource' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'openOriginalSource' })).toHaveAttribute('title', 'openOriginalSourceUnavailable');
-    expect(screen.queryByText('openOriginalSourceUnavailable')).not.toBeInTheDocument();
+    expect(storyAction(t('openOriginalSource'))).toBeDisabled();
+    expect(storyAction(t('shareArticle'))).toBeDisabled();
   });
 
   test('shows a share status bubble when clipboard fallback is used', async () => {
@@ -327,11 +291,11 @@ describe('NewsCard', () => {
     renderNewsCard({ cardGroup: createGroup({ url: 'https://example.com/story' }) });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'shareArticle' }));
+      fireEvent.click(storyAction(t('shareArticle')));
     });
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.com/story');
-    expect(screen.getByText('shareCopiedMessage')).toBeInTheDocument();
+    expect(screen.getByText(t('shareCopiedMessage'))).toBeInTheDocument();
   });
 
   test('opens reader mode on a single title or image click without a separate reader button', () => {
@@ -346,20 +310,12 @@ describe('NewsCard', () => {
 
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
     expect(screen.getByText('Headline').compareDocumentPosition(screen.getByRole('img', { name: 'Headline' })) & globalThis.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    const imageButton = screen.getByRole('img', { name: 'Headline' }).parentElement;
-    const card = imageButton?.closest('article');
-    expect(imageButton).toHaveClass('aspect-video');
-    expect(imageButton).not.toHaveClass('grow');
-    expect(card).toHaveClass('md:h-full');
-    expect(card).not.toHaveClass('h-full');
-    expect(card).not.toHaveClass('min-h-[20rem]');
-
     onOpenReader.mockClear();
     vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000);
     fireEvent.click(screen.getByRole('img', { name: 'Headline' }));
 
     expect(onOpenReader).toHaveBeenCalledWith(expect.objectContaining({ id: 'group-1' }), 'article-1');
-    expect(screen.getAllByTitle('readHereHelp')).toHaveLength(2);
+    expect(screen.getAllByTitle(t('readHereHelp'))).toHaveLength(2);
   });
 
   test('opens reader mode after a stationary touch', () => {

@@ -54,33 +54,23 @@ const SKELETON_CARD_COUNT = 6;
 
 function NewsCardSkeleton({ showImage }: { showImage: boolean }) {
   return (
-    <article className="relative flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-line bg-surface md:h-full" aria-hidden="true">
-      <div className="flex min-w-0 items-center gap-2 px-4 pt-4 sm:gap-3 sm:px-5 sm:pt-5">
-        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-          <div className="h-8 w-8 shrink-0 rounded-full bg-sky-100 sm:h-9 sm:w-9" />
-          <div className="flex-1 space-y-2">
-            <div className="h-3.5 w-2/5 rounded-full bg-surface-inset" />
-            <div className="h-3 w-3/5 rounded-full bg-surface-raised" />
-          </div>
-        </div>
+    <article className="min-w-0 space-y-3 rounded-2xl border border-line bg-surface p-4 sm:p-5" aria-hidden="true">
+      <div className="flex items-center justify-between">
+        <div className="h-6 w-20 rounded-full bg-surface-inset" />
+        <div className="h-3 w-24 rounded-full bg-surface-raised" />
       </div>
-      <div className="space-y-3 px-4 py-4 sm:px-5 md:min-h-22">
-        <div className="h-4 w-full rounded-full bg-surface-inset" />
-        <div className="h-4 w-4/5 rounded-full bg-surface-inset" />
+      <div className="flex items-start gap-3 md:flex-col">
+        <div className="w-full min-w-0 space-y-2">
+          <div className="h-5 w-full rounded-full bg-surface-inset" />
+          <div className="h-5 w-4/5 rounded-full bg-surface-inset" />
+        </div>
+        {showImage && <div className="aspect-square w-20 shrink-0 rounded-xl bg-surface-raised sm:w-24 md:aspect-video md:w-full" />}
       </div>
-      {showImage ? (
-        <div className="mt-auto aspect-video w-full border-y border-line-soft bg-surface-inset" />
-      ) : null}
-      <div className="mt-auto flex items-center justify-between gap-2 px-3 py-2 sm:px-4">
-        <div className="flex -space-x-2">
-          <div className="h-8 w-8 rounded-full bg-sky-100" />
-          <div className="h-8 w-8 rounded-full bg-violet-100" />
-        </div>
-        <div className="flex gap-1.5 sm:gap-2">
-          <div className="h-11 w-11 rounded-xl border border-line" />
-          <div className="h-11 w-11 rounded-xl border border-line" />
-          <div className="h-11 w-11 rounded-xl border border-line" />
-        </div>
+      <div className="flex items-center gap-2 border-t border-line-soft pt-2">
+        <div className="h-6 w-6 rounded-full bg-surface-inset" />
+        <div className="mr-auto h-3 w-1/3 rounded-full bg-surface-inset" />
+        <div className="h-11 w-11 rounded-xl border border-line" />
+        <div className="h-11 w-11 rounded-xl border border-line" />
       </div>
     </article>
   );
@@ -950,17 +940,16 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
 
             <div className="grid w-full min-w-0 grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
               {visibleNews.map((group) => (
-                <div key={group.id || group.cursorId || group.items?.[0]?.id} className="feed-card-enter md:h-full">
-                  <NewsCard
-                    group={group}
-                    showImages={showNewsImages}
-                    locale={locale}
-                    t={t}
-                    onOpenReader={openReader}
-                    onToggleReadLater={handleToggleReadLater}
-                    readLaterUpdating={Boolean(group.id && readLaterUpdatingGroupIds.includes(group.id))}
-                  />
-                </div>
+                <NewsCard
+                  key={group.id || group.cursorId || group.items?.[0]?.id}
+                  group={group}
+                  showImages={showNewsImages}
+                  locale={locale}
+                  t={t}
+                  onOpenReader={openReader}
+                  onToggleReadLater={handleToggleReadLater}
+                  readLaterUpdating={Boolean(group.id && readLaterUpdatingGroupIds.includes(group.id))}
+                />
               ))}
             </div>
 
