@@ -22,7 +22,7 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
   return (
     <section className="mb-6" aria-labelledby="daily-briefings-title">
       <h2 id="daily-briefings-title" className="mb-2 text-lg font-semibold text-ink-heading">{t('thematicSummariesTitle')}</h2>
-      <div className="flex gap-3 overflow-x-auto p-1">
+      <div className="flex gap-1 overflow-x-auto p-1">
         {summaries.map((summary) => {
           const localizedSummary = getLocalizedThematicSummary(summary, locale);
           const primaryPresentation = getTopicPresentation(getThematicSummaryPresentationKey(summary));
@@ -39,7 +39,7 @@ const ThematicSummaryStories = ({ summaries = [], locale, readSummaryIds = [], t
                 event.currentTarget.focus({ preventScroll: true });
                 onOpenSummary(summary);
               }}
-              className="group inline-flex w-24 shrink-0 flex-col items-center gap-1.5 rounded-xl px-1 text-center focus-visible:ring-2 focus-visible:ring-sky-400"
+              className="group inline-flex w-16 shrink-0 flex-col items-center gap-1.5 rounded-xl text-center focus-visible:ring-2 focus-visible:ring-sky-400"
               aria-label={summary.isStale ? `${ariaLabel} · ${t('summaryOutdated')}` : ariaLabel}
               title={summary.isStale ? t('summaryOutdated') : undefined}
             >
