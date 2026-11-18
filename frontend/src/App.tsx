@@ -1,10 +1,12 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { createTranslator, LOCALE_STORAGE_KEY, resolvePreferredLocale } from './i18n';
 import AuthCard, { AUTH_PRIMARY_BUTTON_CLASS_NAME } from './components/AuthCard';
 import InlineAlert from './components/InlineAlert';
 import { getApiErrorStatus } from './utils/apiError';
 import {
   AUTH_EXPIRED_EVENT,
+  SESSION_CHANGED_EVENT,
+  setDisplayedUserId,
   fetchCurrentUser,
   loginUser,
   logoutUser,
@@ -38,6 +40,9 @@ const LEGAL_POLICY_BY_PATH: Record<string, 'privacy' | 'cookie'> = {
   '/cookie-policy': 'cookie'
 };
 const APP_LOADING_FALLBACK = <div className="App min-h-screen bg-canvas" />;
+function notifyOtherTabs() {
+  try { window.localStorage.setItem(SESSION_CHANGED_EVENT, String(Math.random())); } catch { /* Requests also check the displayed account. */ }
+}
 
 function normalizeRoutePath(pathname = '/') {
   const path = String(pathname || '/');
@@ -66,6 +71,27 @@ function App() {
   const [loadingSession, setLoadingSession] = useState<boolean>(() => shouldLoadSessionForPath(window.location.pathname));
   const [sessionLoadFailed, setSessionLoadFailed] = useState<boolean>(false);
   const [sessionLoadAttempt, setSessionLoadAttempt] = useState(0);
+  useLayoutEffect(() => {
+    setDisplayedUserId(authData?.user.id);
+  }, [authData?.user.id]);
+
+  useEffect(() => {
+    const reloadSession = () => {
+      setAuthData(null);
+      setAuthError(null);
+      setLoadingSession(true);
+      setSessionLoadAttempt((current) => current + 1);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === SESSION_CHANGED_EVENT) reloadSession();
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener(SESSION_CHANGED_EVENT, reloadSession);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(SESSION_CHANGED_EVENT, reloadSession);
+    };
+  }, []);
 
   const locale = resolvePreferredLocale(authData?.settings?.defaultLanguage);
   const themeMode = authData?.settings?.themeMode || 'system';
@@ -186,6 +212,7 @@ function App() {
   }, [locale]);
 
   const handleAuthSuccess = useCallback((payload: CurrentUser) => {
+    notifyOtherTabs();
     setAuthData({
       user: payload.user,
       settings: payload.settings,
@@ -236,14 +263,16 @@ function App() {
 
     setAuthData(null);
     setAuthError(null);
+    notifyOtherTabs();
   }, []);
 
+  const displayedId = authData?.user.id;
   const patchSession = useCallback((patch: Partial<CurrentUser>) => {
-    setAuthData((current) => (current ? {
+    setAuthData((current) => (current && current.user.id === displayedId ? {
       ...current,
       ...patch
     } : current));
-  }, []);
+  }, [displayedId]);
 
   if (loadingSession) {
     return APP_LOADING_FALLBACK;

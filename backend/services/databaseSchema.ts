@@ -10,7 +10,7 @@ import type SqliteDatabase from './sqliteDatabase';
 import type { SourceDefinition } from '../utils/types';
 
 function createDatabaseSchema({ logger }: { logger: typeof appLogger }) {
-  const CURRENT_SCHEMA_VERSION = 47;
+  const CURRENT_SCHEMA_VERSION = 48;
   const MIN_SUPPORTED_SCHEMA_VERSION = 15;
   const DEFAULT_SOURCE_REVIEW_VERSION = 24;
 
@@ -464,7 +464,7 @@ function createDatabaseSchema({ logger }: { logger: typeof appLogger }) {
       return 46;
     }
 
-    return CURRENT_SCHEMA_VERSION;
+    return tableExists(database, 'undated_feed_items') ? CURRENT_SCHEMA_VERSION : 47;
   }
 
   function setCurrentSchemaVersion(database: SqliteDatabase, version = CURRENT_SCHEMA_VERSION) {
@@ -1148,6 +1148,18 @@ function createDatabaseSchema({ logger }: { logger: typeof appLogger }) {
       return;
     }
 
+    if (currentVersion === 47) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS undated_feed_items (
+          article_id TEXT PRIMARY KEY,
+          owner_user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+          published_at TEXT NOT NULL,
+          last_seen_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_undated_items_seen ON undated_feed_items(last_seen_at);
+      `);
+      return;
+    }
     throw new Error(
       `Unsupported database schema version ${currentVersion}. Expected ${CURRENT_SCHEMA_VERSION}. Recreate the database file before starting this version of the app.`
     );

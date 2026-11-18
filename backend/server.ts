@@ -18,27 +18,29 @@ const PORT = process.env.PORT || 5000;
 const SERVER_TIMEOUT = parseIntegerEnv('SERVER_TIMEOUT', 60000, { min: 1000 });
 
 const server = http.createServer(app);
-try {
-  const dbWriteStatus = database.verifyWriteAccess();
-  logger.info(`Database write check passed at ${dbWriteStatus.checkedAt}`);
-
-  const adminBootstrap = userService.ensureAdminBootstrap();
-  if (adminBootstrap.required) {
-    logger.warn(`Admin account "${adminBootstrap.user.username}" is not configured. Complete setup before expiry ${adminBootstrap.expiresAt}.`);
-  }
-} catch (error) {
-  logger.error(`Startup check failed: ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-}
-
 websocketService.initialize(server);
-userService.startInactiveUserCleanupTimer();
-newsService.startScheduler();
-userService.startPublicApiUsageFlushTimer();
-startApiTokenUsageFlushTimer();
 let shuttingDown = false;
 
+server.once('error', (error) => {
+  logger.error('HTTP server failed:', error);
+  process.exit(1);
+});
 server.listen(PORT, () => {
+  try {
+    const dbWriteStatus = database.verifyWriteAccess();
+    logger.info(`Database write check passed at ${dbWriteStatus.checkedAt}`);
+    const adminBootstrap = userService.ensureAdminBootstrap();
+    if (adminBootstrap.required) {
+      logger.warn(`Admin account "${adminBootstrap.user.username}" is not configured. Complete setup before expiry ${adminBootstrap.expiresAt}.`);
+    }
+  } catch (error) {
+    logger.error(`Startup check failed: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+  userService.startInactiveUserCleanupTimer();
+  newsService.startScheduler();
+  userService.startPublicApiUsageFlushTimer();
+  startApiTokenUsageFlushTimer();
   logger.info(`Server running on port ${PORT}`);
 });
 

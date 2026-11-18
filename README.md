@@ -81,7 +81,7 @@ Compose enables only the topic-detection switch by default; story grouping and s
 
 ## Set up the admin account
 
-The backend reserves an `admin` account on startup. Setup links are deliberately omitted from logs. To generate a single-use link in a running Compose installation:
+The backend reserves an `admin` account on startup. Its database ID owns admin rights; keep the original `ADMIN_USERNAME` when upgrading or restoring. Setup links are deliberately omitted from logs. To generate a single-use link in a running Compose installation:
 
 ```bash
 docker compose exec newsflow node -e "console.log(require('./dist/services/userService').default.ensureAdminBootstrap().setupLink)"

@@ -572,9 +572,7 @@ describe('NewsAggregator', () => {
     expect(markThematicSummariesRead).toHaveBeenCalledWith(['summary-technology']);
     expect(screen.queryByText('Ora di pranzo')).not.toBeInTheDocument();
     expect(screen.getByText('1 articolo valutato')).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Caricamento sintesi IA...' })).toBeInTheDocument();
-    expect(screen.queryByText('I chip AI sono avanzati rapidamente nella finestra [1].')).not.toBeInTheDocument();
-    expect(await screen.findByRole('link', { name: 'Apri articolo fonte: BBC' })).toHaveAttribute('href', 'https://example.com/ai');
+    expect(screen.getByRole('link', { name: 'Apri articolo fonte: BBC' })).toHaveAttribute('href', 'https://example.com/ai');
     expect(screen.queryByText('AI chips accelerate')).not.toBeInTheDocument();
   });
 
@@ -1025,6 +1023,16 @@ describe('NewsAggregator', () => {
       refresh: false,
       includeFilters: false
     }));
+  });
+
+  test('fills an empty first visit when the RSS seed finishes without AI', async () => {
+    const socket = captureSocketHandlers();
+    fetchNews.mockResolvedValueOnce({ items: [], meta: {} })
+      .mockResolvedValue(createSingleGroupFeedResponse('first', 'First bulletin'));
+    await renderNewsAggregator();
+    await dispatchSocketHandler(socket.onTopicRefresh, { refresh: true, reason: 'seed' });
+    expect(await screen.findByText('First bulletin')).toBeInTheDocument();
+    expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: false }));
   });
 
   test('runs a queued story refresh after the initial feed load', async () => {
@@ -1626,6 +1634,7 @@ describe('NewsAggregator', () => {
 
     openDesktopSearch();
     const searchInput = screen.getByRole('searchbox', { name: 'Search' });
+    expect(searchInput).toHaveAttribute('maxlength', '500');
     fireEvent.change(searchInput, { target: { value: 'economy' } });
 
     expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();

@@ -105,12 +105,9 @@ function getManualRefreshMeta(userContext: UserContext = {}, referenceTime = Dat
 }
 
 function isRecentlyActive(user: ActiveUser, referenceTime = Date.now()) {
-  if (!user?.lastActivityAt || !Number.isFinite(ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES) || ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES <= 0) {
-    return false;
-  }
-
-  const activityTime = new Date(user.lastActivityAt).getTime();
-  return Number.isFinite(activityTime) && activityTime >= referenceTime - (ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES * 60 * 1000);
+  const cutoff = referenceTime - ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES * 60_000;
+  return ACTIVE_SOURCE_REFRESH_WINDOW_MINUTES > 0 && [user.lastActivityAt, user.publicApiLastUsedAt]
+    .some((value) => typeof value === 'string' && Date.parse(value) >= cutoff);
 }
 
 function getSettingsForSourceAssignment(userId: string): SourceSettings {
@@ -245,6 +242,7 @@ async function ingestAllNews(options: DynamicRecord = {}): Promise<DynamicRecord
         trackIngestionRun: true
       }, getIngestionRuntime());
 
+      if (databaseIsEmpty && payload.insertedCount > 0) websocketService.broadcastFeedRefresh({ reason: 'seed' });
       logger.info(`Ingestion completed: ${payload.fetchedCount} fetched, ${payload.insertedCount} inserted, ${payload.updatedCount} updated`);
       return payload;
     } catch (error) {

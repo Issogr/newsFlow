@@ -3,7 +3,7 @@ import {
   addUserSource, AUTH_EXPIRED_EVENT, discoverRssFeeds, fetchCurrentUser, fetchNews,
   fetchReadLaterNews, fetchReaderArticle, fetchThematicSummaries, importUserSettings,
   isRequestCanceled, loginUser, removeReadLaterArticles, saveReadLaterArticles,
-  submitFeedback, updateUserSource, updateUserSettings
+  setDisplayedUserId, submitFeedback, updateUserSource, updateUserSettings
 } from './api';
 
 let fetchMock: MockedFunction<typeof fetch>;
@@ -75,6 +75,21 @@ test('lets the browser set multipart feedback boundaries', async () => {
   expect(body.get('title')).toBe('Upload bug');
   expect(body.get('description')).toBe('Details');
   expect(body.get('attachment')).toBe(attachment);
+});
+
+test('pins writes to the displayed account and discards replies after a switch', async () => {
+  setDisplayedUserId('alice');
+  try {
+    const response = Promise.withResolvers<Response>();
+    fetchMock.mockReturnValueOnce(response.promise);
+    const update = updateUserSettings({ themeMode: 'dark' });
+    expect(fetchMock.mock.lastCall?.[1]?.headers).toMatchObject({ 'X-Newsflow-User': 'alice' });
+    setDisplayedUserId('bob');
+    response.resolve(Response.json({ success: true }));
+    await expect(update).rejects.toMatchObject({ name: 'AbortError' });
+  } finally {
+    setDisplayedUserId(undefined);
+  }
 });
 
 test('uses cached summary, RSS discovery and read-later endpoints', async () => {

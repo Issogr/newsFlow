@@ -6,11 +6,13 @@ let database: typeof import('./database').default;
 let query: typeof import('./newsAggregatorQuery').default;
 let ingestion: typeof import('./newsAggregatorIngestion').default;
 let grouper: typeof import('./aiStoryGrouper').default;
+const fetchFixture = vi.fn();
 
 beforeEach(async () => {
   vi.resetModules();
   vi.stubEnv('NEWS_DB_PATH', ':memory:');
   vi.stubEnv('AI_STORY_GROUPING_CONCURRENCY', '1');
+  vi.doMock('../utils/urlSafety', () => ({ default: { fetchSafeTextUrl: fetchFixture } }));
   vi.doMock('./aiStoryGrouper', async () => {
     const { default: actual } = await vi.importActual<typeof import('./aiStoryGrouper')>('./aiStoryGrouper');
     return { default: {
@@ -188,4 +190,44 @@ test('read-later writes reject oversized batches without saving only part', asyn
   expect(database.getReadLaterArticleIdSet('reader', ids).size).toBe(21);
   for (let index = 0; index < ids.length; index += 20) news.removeReadLaterArticles({ userId: 'reader' }, ids.slice(index, index + 20));
   expect(database.getReadLaterArticleIdSet('reader', ids).size).toBe(0);
+});
+
+test('shared linkless RSS entries keep their own identity, publication time, and saved text', async () => {
+  const parser = (await import('./rssParser')).default;
+  const url = 'https://fixture.example/bulletins';
+  const now = new Date().toISOString();
+  const sources = ['alice', 'bob'].map((id) => {
+    database.createUser({ id, username: id, createdAt: now, updatedAt: now });
+    const source = { id: `${id}-feed`, name: 'Bulletins', url, userId: id, ownerUserId: id, isActive: true, createdAt: now, updatedAt: now };
+    database.createUserSource(source);
+    return source;
+  });
+  const xml = (guid: string) => `<rss version="2.0"><channel><item><guid isPermaLink="false">${guid}</guid>
+    <title>Daily report</title><description>Bulletin</description><content:encoded xmlns:content="urn:content">${guid}</content:encoded>
+    </item></channel></rss>`;
+  fetchFixture.mockResolvedValue({ data: xml('edition-1') });
+  vi.spyOn(grouper, 'isAiStoryGroupingAvailable').mockReturnValue(false);
+  try {
+    const refresh = () => ingestion.ingestSourceConfigs(sources, { bypassSourceFreshness: true });
+    await refresh();
+    const savedId = parser._buildArticleId(sources[0], { guid: 'edition-1' });
+    database.saveReadLaterArticles('alice', [savedId]);
+    database.upsertReaderCache(savedId, { contentText: 'Archived first edition' });
+    const date = database.getArticleById(savedId, { userId: 'alice' })!.pubDate;
+    parser.shutdown(); // Simulate the XML cache expiring between upstream responses.
+    await refresh();
+    expect(database.getArticleById(savedId, { userId: 'alice' })!.pubDate).toBe(date);
+    expect(database.getReaderCache(savedId)?.contentText).toBe('Archived first edition');
+    parser.shutdown();
+    fetchFixture.mockResolvedValue({ data: xml('edition-2') });
+    await refresh();
+    expect(database.getReadLaterArticles('alice')[0].content).toBe('edition-1');
+    expect(database.getArticles({}, { userId: 'bob' })).toHaveLength(2);
+    database.deleteUserSource('alice', sources[0].id);
+    expect((await query.getNewsFeed({}, { userId: 'alice' })).items).toEqual([]);
+    expect((await query.getReadLaterFeed({}, { userId: 'alice' })).items).toHaveLength(1);
+  } finally {
+    fetchFixture.mockReset();
+    parser.shutdown();
+  }
 });

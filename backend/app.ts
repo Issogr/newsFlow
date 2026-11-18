@@ -155,6 +155,10 @@ function createApp(options: CreateAppOptions = {}): express.Express {
       if (originError) return next(originError);
       requireAuthenticatedUser(req, res, (authError) => {
         if (authError) return baseRateLimit(req, res, () => next(authError));
+        const expectedUser = req.get('X-Newsflow-User');
+        if (expectedUser && expectedUser !== req.user.id) {
+          return next(createError(409, 'The signed-in account changed. Reload your session.', 'SESSION_CHANGED'));
+        }
         accountRateLimit(req, res, next);
       });
     });

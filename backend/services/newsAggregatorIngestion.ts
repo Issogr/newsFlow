@@ -270,6 +270,7 @@ function cloneArticleForSource(article: IngestionArticle, source: SourceConfig):
     ...article,
     id: rssParser._buildArticleId(source, {
       link: article.url,
+      guid: article.publisherGuid,
       title: article.title,
       description: article.description,
       content: article.content,
@@ -594,14 +595,16 @@ async function processAiStoryGroupingForArticle(article: Pick<NewsArticle, 'id'>
     failure = error;
   }
   const queryOptions = { userId: target.ownerUserId || null, maxArticleAgeHours: null };
-  const storedTarget = database.getArticleById(articleId, queryOptions);
+  const storedById = new Map(database.getArticlesByIds([articleId, ...candidates.map((candidate) => candidate.id)], queryOptions)
+    .map((item) => [item.id, item]));
+  const storedTarget = storedById.get(articleId);
   if (!storedTarget || storedTarget.aiStoryGroupStatus === 'matched') {
     return;
   }
   const currentTarget = { ...target, ...storedTarget };
   const currentCandidates = candidates
     .map((candidate: StoryCandidate) => {
-      const storedCandidate = database.getArticleById(candidate.id, queryOptions);
+      const storedCandidate = storedById.get(candidate.id);
       return storedCandidate ? { ...candidate, ...storedCandidate } : null;
     });
   if (getStoryEvidence(target) !== getStoryEvidence(currentTarget)
@@ -760,7 +763,7 @@ function mergeNormalizedArticleTopics(normalizedArticles: NewsArticle[] = []) {
 
 async function persistNormalizedArticles(normalizedArticles: NewsArticle[] = []) {
   const currentSourceById = new Map<string, DynamicRecord | null>();
-  const currentArticles = normalizedArticles.filter((article) => {
+  const validArticles = normalizedArticles.filter((article) => {
     if (!article?.ownerUserId) {
       return true;
     }
@@ -776,6 +779,8 @@ async function persistNormalizedArticles(normalizedArticles: NewsArticle[] = [])
       && normalizeSourceFetchUrl(currentSource?.url) === article.sourceFeedUrl
       && (!article.sourceUpdatedAt || currentSource?.updatedAt === article.sourceUpdatedAt);
   });
+  database.stampUndatedArticles(validArticles.filter((article) => !article.pubDate));
+  const currentArticles = filterArticlesWithinRetention(validArticles);
   const upsertResult = database.upsertArticles(currentArticles);
   const storyGroupingOptions = {
     retryAnchorArticleIds: [...new Set([...(upsertResult.insertedIds || []), ...(upsertResult.updatedIds || [])])]
@@ -850,9 +855,7 @@ async function ingestSourceConfigs(sourceConfigs: SourceConfig[] = [], options: 
       throw createError(503, 'Unable to connect to news feeds. Please try again later.', 'CONNECTION_ERROR');
     }
 
-    const retainedArticles = filterArticlesWithinRetention(normalizedArticles);
-
-    const upsertResult = await persistNormalizedArticles(retainedArticles);
+    const upsertResult = await persistNormalizedArticles(normalizedArticles);
     const insertedGroups = buildInsertedGroupsByOwner(upsertResult.articles, upsertResult.insertedIds);
 
     if (broadcast) {
@@ -865,7 +868,7 @@ async function ingestSourceConfigs(sourceConfigs: SourceConfig[] = [], options: 
 
     const payload = {
       success: true,
-      fetchedCount: retainedArticles.length,
+      fetchedCount: upsertResult.articles.length,
       insertedCount: upsertResult.insertedCount,
       updatedCount: upsertResult.updatedCount,
       lastRefreshAt: getLastRefreshAt()

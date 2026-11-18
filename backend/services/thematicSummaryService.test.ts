@@ -970,12 +970,13 @@ describe('thematic summary generation retries', () => {
     expect(websocketServiceMock.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'summaries' });
   });
 
-  test.each(['replacement at cap', 'RSS correction', 'reader enrichment', 'retention only'])('tracks input revisions: %s', async (change) => {
+  test.each(['replacement at cap', 'RSS correction', 'reader enrichment', 'retention only', 'footer only', 'link only'])('tracks input revisions: %s', async (change) => {
     const window = createSummaryWindow();
     let articles = [
-      { id: 'one', title: 'First article', description: 'Original report', source: 'BBC', pubDate: window.periodStart },
-      { id: 'two', title: 'Second article', description: 'Another report', source: 'Reuters', pubDate: window.periodStart }
+      { id: 'one', title: 'First article', description: 'Original report', source: 'BBC', pubDate: window.periodStart, url: '' },
+      { id: 'two', title: 'Second article', description: 'Another report', source: 'Reuters', pubDate: window.periodStart, url: '' }
     ];
+    if (change === 'footer only') articles[0].description = 'Detailed reporting. '.repeat(300);
     let readerText = '';
     let stored: Record<string, unknown> | null = null;
     const generator = createAiSummaryGeneratorMock({ generateSummaryForArticles: jest.fn().mockResolvedValue({
@@ -1003,9 +1004,12 @@ describe('thematic summary generation retries', () => {
     if (change === 'RSS correction') articles = [{ ...articles[0], description: 'Correction: no funding was approved.' }, articles[1]];
     if (change === 'reader enrichment') readerText = 'New full article evidence. '.repeat(30);
     if (change === 'retention only') articles = [articles[1]];
+    if (change === 'footer only') articles[0].description += 'New footer';
+    if (change === 'link only') articles[0].url = 'https://example.com/corrected-link';
     await service.generateDueSummaries({ window });
     await service.generateDueSummaries({ window });
-    expect(generator.generateSummaryForArticles).toHaveBeenCalledTimes(change === 'retention only' ? 1 : 2);
+    expect(generator.generateSummaryForArticles).toHaveBeenCalledTimes(['retention only', 'footer only', 'link only'].includes(change) ? 1 : 2);
+    if (change === 'link only') expect(stored).toMatchObject({ sources: expect.arrayContaining([expect.objectContaining({ index: 1, url: articles[0].url })]) });
   });
 
   test('keeps a completed summary when retention only removes selected articles', async () => {
@@ -1189,6 +1193,9 @@ describe('thematic summary generation retries', () => {
 
     generator.generateSummaryForArticles.mockResolvedValue({ ...generated, summaryText: 'Updated briefing [1].' });
     articles[0].description = 'Final correction';
+    await run();
+    expect(generator.generateSummaryForArticles).toHaveBeenCalledTimes(6);
+    readerText = 'Updated cached reader evidence. '.repeat(20);
     await run();
     expect(generator.generateSummaryForArticles).toHaveBeenCalledTimes(7);
     expect(stored).toMatchObject({ status: 'completed', failureCategory: '', retryCount: 0, summaryText: 'Updated briefing [1].' });

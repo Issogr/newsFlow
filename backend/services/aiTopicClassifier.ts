@@ -236,7 +236,7 @@ function summarizeClassifierResult(payload: unknown, allowedIds = new Set<string
   }
 
   const entries = getClassifierEntries(payload, ['topicsByRef', 'topicsById']);
-  if (entries.length === 0) {
+  if (!entries?.length) {
     return 'missing_topics_array';
   }
 
@@ -262,7 +262,7 @@ function normalizeClassifierDetails(
   const entries = getClassifierEntries(payload, ['topicsByRef', 'topicsById']);
   const result = new Map<string, DynamicRecord[]>();
 
-  entries.forEach((entry) => {
+  entries?.forEach((entry) => {
     const id = resolveClassifierEntryId(entry, allowedIds, refToArticleId);
     if (!id) {
       return;
@@ -330,6 +330,9 @@ async function classifyBatch(batch: NewsArticle[], config: ReturnType<typeof get
 
   const content = extractAssistantContent(response);
   const payload = parseJsonContent(content);
+  if (!getClassifierEntries(payload, ['topicsByRef', 'topicsById']) || response.choices?.[0]?.finish_reason === 'length') {
+    throw new Error('Incomplete AI topic classification response');
+  }
   const result = normalizeClassifierDetails(payload, allowedIds, articlesById, refToArticleId);
 
   if (result.size === 0) {

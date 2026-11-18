@@ -267,7 +267,6 @@ const it: TranslationDictionary = {
   closeReader: 'Chiudi lettura',
   refreshReader: 'Riprova lettura',
   loadingReader: 'Caricamento modalita lettura...',
-  loadingThematicSummary: 'Caricamento sintesi IA...',
   readerUnavailable: 'La modalità lettura non è disponibile per questo articolo.',
   readerRefreshFailed: 'Impossibile aggiornare l’articolo. Qui sotto trovi la versione precedente.',
   readerFallback: 'Non è stato possibile caricare l\'articolo completo. Questo testo proviene dal feed RSS dell\'editore e potrebbe essere incompleto. Apri l\'articolo originale per leggere di più.',

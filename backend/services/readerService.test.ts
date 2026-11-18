@@ -160,6 +160,15 @@ describe('readerService', () => {
     expect(fetchSafeTextUrl).toHaveBeenCalledTimes(1);
   });
 
+  test('uses archived full text after a failed refresh without extending its freshness', async () => {
+    database.getArticleById.mockReturnValue({ ...article, content: '', description: '' });
+    database.getReaderCache.mockImplementation((_id: string, ttl?: number) => ttl ? null : { contentText: 'Archived full story' });
+    fetchSafeTextUrl.mockRejectedValue(new Error('Publisher offline'));
+    const result = await readerService.getReaderArticle(article.id, { userId: 'reader' });
+    expect(result).toMatchObject({ cached: true, contentText: 'Archived full story' });
+    expect(database.upsertReaderCache).not.toHaveBeenCalled();
+  });
+
   test('prunes expired cold fallback cache entries', async () => {
     fetchSafeTextUrl.mockRejectedValue(new Error('Network failed'));
 

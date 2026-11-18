@@ -9,6 +9,7 @@ jest.doMock('./database', () => ({ default: {
   completeIngestionRun: jest.fn(),
   countArticles: jest.fn(() => 1),
   deleteArticlesOlderThan: jest.fn(() => 0),
+  stampUndatedArticles: jest.fn(),
   normalizeFuturePublicationDates: jest.fn(() => 0),
   cleanupRemovedConfiguredSourceData: jest.fn(() => ({ removedArticles: 0, updatedSettings: 0 })),
   upsertArticles: jest.fn(() => ({ insertedIds: [], insertedCount: 0, updatedCount: 0 })),
@@ -27,7 +28,7 @@ jest.doMock('./database', () => ({ default: {
   saveReadLaterArticles: jest.fn(() => ({ savedArticleIds: [], savedCount: 0 })),
   removeReadLaterArticles: jest.fn(() => ({ removedArticleIds: [], removedCount: 0, deletedExpiredArticleCount: 0 })),
   getArticles: jest.fn(() => []),
-  getArticleById: jest.fn((articleId) => ({ id: articleId })),
+  getArticlesByIds: jest.fn((ids: string[]) => ids.map((id) => ({ id }))),
   getLatestIngestionRun: jest.fn(() => null),
   getSourceStats: jest.fn(() => []),
   getTopicStatsByFilters: jest.fn(() => []),
@@ -187,8 +188,10 @@ describe('newsAggregator service flows', () => {
     expect(rssParser.parseFeed).toHaveBeenCalled();
 
     const seedPromise = newsAggregator._startSeedDataRefresh();
-    deferred.resolve([]);
+    database.upsertArticles.mockReturnValue({ insertedIds: ['first'], insertedCount: 1, updatedCount: 0 });
+    deferred.resolve([{ id: 'first', title: 'First bulletin', sourceId: 'ansa_home', pubDate: recentIso() }]);
     await seedPromise;
+    expect(websocketService.broadcastFeedRefresh).toHaveBeenCalledWith({ reason: 'seed' });
   });
 
   test('tracked ingestion skips run creation when no source tasks exist', async () => {
@@ -529,10 +532,10 @@ describe('newsAggregator service flows', () => {
     expect(result.meta).toMatchObject({ hasMore: false, returnedGroups: 2, scannedArticles: 3 });
   });
 
-  test('active assigned source selection skips inactive users and excluded default sources', () => {
+  test.each(['lastActivityAt', 'publicApiLastUsedAt'])('selects assigned sources for recent %s activity', (activityField) => {
     const now = Date.now();
     database.listUsers.mockReturnValue([
-      { id: 'active-user', lastActivityAt: new Date(now).toISOString() },
+      { id: 'active-user', [activityField]: new Date(now).toISOString() },
       { id: 'inactive-user', lastActivityAt: new Date(now - (20 * 60 * 1000)).toISOString() }
     ]);
     database.getUserSettings.mockImplementation((userId: string) => ({
@@ -1087,7 +1090,7 @@ describe('newsAggregator service flows', () => {
 
     scheduleAiStoryGroupingForPendingArticles([target]);
     await flushBackgroundAiProcessing();
-    database.getArticleById.mockReturnValue({ ...target, aiStoryGroupStatus: 'matched', storyGroupId: 'story-newer' });
+    database.getArticlesByIds.mockReturnValue([{ ...target, aiStoryGroupStatus: 'matched', storyGroupId: 'story-newer' }]);
     deferredResult.resolve({ matches: [], model: 'test-story-model', candidates: [candidate] });
     await flushBackgroundAiProcessing();
 
@@ -1107,9 +1110,7 @@ describe('newsAggregator service flows', () => {
 
     scheduleAiStoryGroupingForPendingArticles([target]);
     await flushBackgroundAiProcessing();
-    database.getArticleById.mockImplementation((articleId: string) => articleId === candidate.id
-      ? { ...candidate, aiStoryGroupStatus: 'matched', storyGroupId: 'story-newer' }
-      : target);
+    database.getArticlesByIds.mockReturnValue([target, { ...candidate, aiStoryGroupStatus: 'matched', storyGroupId: 'story-newer' }]);
     database.getArticleIdsForStoryGroups.mockReturnValue(['story-candidate']);
     deferredResult.resolve({
       matches: [{ articleId: candidate.id, confidence: 0.9 }],
@@ -1138,7 +1139,7 @@ describe('newsAggregator service flows', () => {
 
     scheduleAiStoryGroupingForPendingArticles([target]);
     await flushBackgroundAiProcessing();
-    database.getArticleById.mockImplementation((articleId: string) => articleId === candidate.id ? null : target);
+    database.getArticlesByIds.mockReturnValue([target]);
     deferredResult.resolve({
       matches: [{ articleId: candidate.id, confidence: 0.9 }],
       model: 'test-story-model',

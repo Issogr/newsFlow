@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createTranslator } from '../i18n';
 import ThematicSummaryStories from './ThematicSummaryStories';
 import ThematicSummaryPanel from './ThematicSummaryPanel';
@@ -172,28 +172,6 @@ describe('thematic summary UI', () => {
     expect(screen.getByText(translated('summaryArticleCount', { count: 2 }))).toBeInTheDocument();
     expect(screen.queryByText(locale === 'en' ? 'Evening' : 'Sera')).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
-  });
-
-  test('shows text-shaped loading feedback while a thematic summary opens', () => {
-    vi.useFakeTimers();
-
-    try {
-      renderSummaryPanel(createTopicSummary('technology'), {
-        showOpeningSkeleton: true
-      });
-
-      const loadingStatus = screen.getByRole('status', { name: 'Loading AI summary...' });
-      expect(loadingStatus).toHaveClass('animate-pulse');
-      expect(loadingStatus.querySelectorAll('.rounded-full')).toHaveLength(8);
-      expect(screen.queryByText('Technology summary')).not.toBeInTheDocument();
-
-      act(() => vi.advanceTimersByTime(500));
-
-      expect(screen.queryByRole('status', { name: 'Loading AI summary...' })).not.toBeInTheDocument();
-      expect(screen.getByText('Technology summary')).toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   test('uses reader sizing and direct circular source links', () => {

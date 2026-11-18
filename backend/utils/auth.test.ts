@@ -64,6 +64,9 @@ describe('auth session cleanup throttling', () => {
 
     const auth = (await import('./auth')).default;
 
+    const socket = auth.resolveAuthenticatedSession({ headers: { cookie: 'newsflow_session=my-session-token' }, renew: false });
+    expect(socket.sessionRefreshed).toBe(false);
+    expect(databaseMock.refreshSessionExpiry).not.toHaveBeenCalled();
     const resolved = auth.resolveAuthenticatedSession({
       headers: {
         cookie: 'newsflow_session=my-session-token'

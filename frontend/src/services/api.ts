@@ -16,6 +16,9 @@ const READER_REQUEST_TIMEOUT_MS = 30000;
 const FEEDBACK_REQUEST_TIMEOUT_MS = 60000;
 const CUSTOM_SOURCE_REQUEST_TIMEOUT_MS = 45000;
 export const AUTH_EXPIRED_EVENT = 'newsflow:auth-expired';
+export const SESSION_CHANGED_EVENT = 'newsflow:session-changed';
+let displayedUserId: string | undefined;
+export function setDisplayedUserId(id?: string) { displayedUserId = id; }
 
 export const isRequestCanceled = (error: unknown) => {
   const candidate = error && typeof error === 'object' ? error as ApiErrorLike : {};
@@ -33,19 +36,27 @@ async function request<T>(path: string, { method = 'GET', body, params = {}, sig
   const requestSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
   const query = new URLSearchParams(Object.entries(params).map(([key, value]) => [key, String(value)])).toString();
   const multipart = body instanceof FormData;
+  const headers: Record<string, string> = {};
+  if (body !== undefined && !multipart) headers['Content-Type'] = 'application/json';
+  const expectedUser = path === '/auth/logout' || (!path.startsWith('/auth/') && path !== '/me') ? displayedUserId : undefined;
+  if (expectedUser) headers['X-Newsflow-User'] = expectedUser;
   try {
     requestSignal.throwIfAborted();
     const response = await fetch(`/api${path}${query ? `?${query}` : ''}`, {
       method,
       credentials: 'same-origin',
       signal: requestSignal,
-      headers: body !== undefined && !multipart ? { 'Content-Type': 'application/json' } : undefined,
+      headers: Object.keys(headers).length ? headers : undefined,
       body: multipart ? body : body === undefined ? undefined : JSON.stringify(body)
     });
     const text = await response.text();
+    if (expectedUser && displayedUserId !== expectedUser) throw new DOMException('Account changed', 'AbortError');
     let data: unknown = text;
     try { data = JSON.parse(text); } catch { /* Match empty and non-JSON HTTP responses. */ }
     if (!response.ok) {
+      if (response.status === 409 && (data as { error?: { code?: string } } | null)?.error?.code === 'SESSION_CHANGED') {
+        window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
+      }
       if (response.status === 401 && !path.includes('/auth/')) {
         window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
       }
@@ -55,6 +66,7 @@ async function request<T>(path: string, { method = 'GET', body, params = {}, sig
     }
     return data as T;
   } catch (cause) {
+    if (isRequestCanceled(cause) && !requestSignal.aborted) throw cause;
     if (requestSignal.aborted) {
       if (requestSignal.reason?.name === 'TimeoutError') {
         throw Object.assign(new Error(`timeout of ${timeout}ms exceeded`), { code: 'ECONNABORTED', newsFlowClientCode: 'timeout' });

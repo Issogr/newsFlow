@@ -531,7 +531,8 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
       return;
     }
 
-    if (payload.reason === 'news' || (payload.reason === 'reconnect' && metaRef.current?.pendingUserRefresh)) {
+    if (payload.reason === 'seed' && (isReadLaterView || visibleNewsCountRef.current > 0)) return;
+    if (payload.reason === 'news' || payload.reason === 'seed' || (payload.reason === 'reconnect' && metaRef.current?.pendingUserRefresh)) {
       if (isReadLaterView) {
         return;
       }
@@ -563,12 +564,16 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
       return;
     }
 
+    if (!isReadLaterView && !visibleNewsCountRef.current) {
+      handleTopicRefresh({ reason: 'seed' });
+      return;
+    }
     setPendingNewsGroupIds((current) => {
       const nextIds = new Set(current);
       incomingGroupIds.forEach((groupId) => nextIds.add(groupId));
       return nextIds.size === current.length ? current : [...nextIds];
     });
-  }, []);
+  }, [handleTopicRefresh, isReadLaterView]);
 
   const loadThematicSummaries = useCallback(async () => {
     if (needsSourceSetup || !thematicSummariesEnabled) {
@@ -1031,7 +1036,6 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
           t={t}
           onClose={() => setSelectedThematicSummary(null)}
           onSelectSummary={openThematicSummary}
-          showOpeningSkeleton
         />
       )}
 

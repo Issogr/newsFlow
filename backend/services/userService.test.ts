@@ -123,6 +123,20 @@ describe('userService imports', () => {
     expect(rssParser.validateFeedUrl).not.toHaveBeenCalled();
   });
 
+  test('identifies a rejected imported feed without exposing its URL', async () => {
+    const secretUrl = 'https://feeds.example/subscriber/private-key?signature=private-key';
+    rssParser.validateFeedUrl.mockRejectedValue(new Error(`Failed: ${secretUrl}`));
+    const log = jest.spyOn((await import('../utils/logger')).default, 'error');
+    try {
+      await expect(userService.importUserSettings('reader', {
+        settings: {}, customSources: [{ name: 'Private feed', url: secretUrl }]
+      })).rejects.toMatchObject({ message: 'Invalid RSS URL in imported feed 1' });
+      expect(JSON.stringify(log.mock.calls)).not.toContain('private-key');
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   test('settings restores preserve source IDs and saved articles, including removed feeds', async () => {
     const { user } = await userService.registerUser({ username: 'restore-owner', password: 'secret123' });
     const now = new Date().toISOString();
@@ -608,6 +622,29 @@ describe('userService imports', () => {
       expect(result.user).toMatchObject({ username: 'A'.repeat(40), isAdmin: true });
       expect(auth.resolveAuthenticatedSession({ headers: { cookie: `newsflow_session=${result.token}` } }).user.isAdmin).toBe(true);
     } finally {
+      jest.unstubAllEnvs();
+    }
+  });
+
+  test('binds only the original bootstrap account, including on upgrade and restart', async () => {
+    const admin = userService.ensureAdminBootstrap();
+    await userService.completePasswordSetup({ token: admin.token, password: 'secret123' });
+    const reader = await userService.registerUser({ username: 'other-admin', password: 'secret123' });
+    const sql = database.getDb();
+    sql.exec("DELETE FROM app_meta WHERE key = 'admin_user_id'");
+    expect(userService.ensureAdminBootstrap().user.id).toBe(admin.user.id);
+    expect(database.getAdminId()).toBe(admin.user.id);
+    jest.stubEnv('ADMIN_USERNAME', 'other-admin');
+    jest.resetModules();
+    try {
+      const restarted = (await import('./userService')).default;
+      expect(() => restarted.ensureAdminBootstrap()).toThrow('bound to this database');
+      expect(restarted.getCurrentUser(reader.user.id).user.isAdmin).toBe(false);
+      sql.exec("DELETE FROM app_meta WHERE key = 'admin_user_id'");
+      expect(() => restarted.ensureAdminBootstrap()).toThrow('Cannot verify');
+      expect(database.getAdminId()).toBeNull();
+    } finally {
+      (await import('./database')).default.closeDb();
       jest.unstubAllEnvs();
     }
   });

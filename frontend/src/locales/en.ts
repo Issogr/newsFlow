@@ -267,7 +267,6 @@ const en: TranslationDictionary = {
   closeReader: 'Close reader',
   refreshReader: 'Refresh reader',
   loadingReader: 'Loading reader view...',
-  loadingThematicSummary: 'Loading AI summary...',
   readerUnavailable: 'Reader mode is not available for this article.',
   readerRefreshFailed: 'Couldn’t refresh this article. The previous version is shown below.',
   readerFallback: 'We couldn’t load the full article. This text is from the publisher’s RSS feed and may be incomplete. Open the original article to read more.',

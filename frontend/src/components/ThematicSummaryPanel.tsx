@@ -9,7 +9,6 @@ import { getStoredReaderTextSizePreference, getStoredReaderTextWidthPreference }
 import { FullscreenPanelFrame } from './FullscreenModalFrame';
 import ReaderTextSizeControls from './ReaderTextSizeControls';
 import ReaderTextWidthControls from './ReaderTextWidthControls';
-import TextContentSkeleton from './TextContentSkeleton';
 import type { CurrentUser, Locale, ThematicSummary, Translator } from '../types';
 
 type SummarySource = NonNullable<ThematicSummary['sources']>[number];
@@ -19,7 +18,6 @@ const MOBILE_SUMMARY_SWIPE_QUERY = '(max-width: 767px)';
 const SUMMARY_SWIPE_MIN_DISTANCE = 60;
 const SUMMARY_SWIPE_AXIS_RATIO = 1.35;
 const SUMMARY_SWIPE_FEEDBACK_MAX_OFFSET = 72;
-const SUMMARY_OPENING_SKELETON_MS = 500;
 
 function splitLongParagraph(paragraph = '', maxParagraphChars = 520) {
   const normalizedParagraph = String(paragraph || '').replace(/\s+/g, ' ').trim();
@@ -161,14 +159,13 @@ function renderParagraphWithSources(paragraph: string, paragraphIndex: number, s
   return parts;
 }
 
-const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onSelectSummary, showOpeningSkeleton = false, currentUser }: {
+const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onSelectSummary, currentUser }: {
   summary: ThematicSummary;
   summaries?: ThematicSummary[];
   locale: Locale;
   t: Translator;
   onClose: () => void;
   onSelectSummary?: (summary: ThematicSummary) => void;
-  showOpeningSkeleton?: boolean;
   currentUser?: CurrentUser;
 }) => {
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -177,11 +174,9 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
   const [swipeFeedbackOffset, setSwipeFeedbackOffset] = useState(0);
   const [readerTextSize, setReaderTextSize] = useState(() => getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   const [readerTextWidth, setReaderTextWidth] = useState(() => getStoredReaderTextWidthPreference(currentUser?.settings?.readerTextWidth));
-  const [readySummaryId, setReadySummaryId] = useState('');
   const localizedSummary = useMemo(() => getLocalizedThematicSummary(summary, locale), [summary, locale]);
   const generatedAt = formatSummaryDate(summary.generatedAt, locale);
   const sourceByIndex = useMemo(() => new Map<number, SummarySource>((summary?.sources || []).map((source: SummarySource) => [Number(source.index), source])), [summary?.sources]);
-  const showSummaryOpeningSkeleton = showOpeningSkeleton && readySummaryId !== summary?.id;
   const swipeSummaries = useMemo(() => getSwipeSummariesForPanel(summary, summaries), [summaries, summary]);
   const swipeSummaryIndex = swipeSummaries.findIndex((availableSummary) => availableSummary.id === summary.id);
   const paragraphs = useMemo(() => {
@@ -243,14 +238,6 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
       }
     };
   }, []);
-  useEffect(() => {
-    if (!showOpeningSkeleton || !summary?.id) {
-      return undefined;
-    }
-
-    const timeoutId = setTimeout(() => setReadySummaryId(summary.id), SUMMARY_OPENING_SKELETON_MS);
-    return () => clearTimeout(timeoutId);
-  }, [showOpeningSkeleton, summary?.id]);
   useEffect(() => {
     setReaderTextSize(getStoredReaderTextSizePreference(currentUser?.settings?.readerTextSize));
   }, [currentUser?.settings?.readerTextSize]);
@@ -380,16 +367,11 @@ const ThematicSummaryPanel = ({ summary, summaries = [], locale, t, onClose, onS
               </div>
 
               <article className="pb-8">
-                {showSummaryOpeningSkeleton ? (
-                  <TextContentSkeleton label={t('loadingThematicSummary')} />
-                ) : (
-                  <div className={`space-y-5 ${readerTextStyles.paragraph}`}>
-                    {paragraphs.map((paragraph, index) => (
-                      <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex, t)}</p>
-                    ))}
-                  </div>
-                )}
-
+                <div className={`space-y-5 ${readerTextStyles.paragraph}`}>
+                  {paragraphs.map((paragraph, index) => (
+                    <p key={`${summary.id}-paragraph-${index}`}>{renderParagraphWithSources(paragraph, index, sourceByIndex, t)}</p>
+                  ))}
+                </div>
               </article>
             </div>
           </div>

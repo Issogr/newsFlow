@@ -30,6 +30,7 @@ export function FilterSearchInput({
         <input
           ref={searchInputRef}
           type="search"
+          maxLength={500}
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder={t('searchStories')}

@@ -114,6 +114,9 @@ describe('browser application boundary', () => {
     const currentUser = await request(app).get('/api/me').set('Cookie', cookie).expect(200);
     expect(currentUser.body.user.username).toBe('alice');
     expect(currentUser.headers).not.toHaveProperty('access-control-allow-origin');
+    await request(app).patch('/api/me/settings').set('Cookie', cookie).set('Origin', 'http://localhost')
+      .set('X-Newsflow-User', 'another-reader').send({ themeMode: 'dark' }).expect(409);
+    expect(database.getUserSettings(registration.body.user.id).themeMode).toBe('system');
 
     await request(app)
       .get('/api/me')

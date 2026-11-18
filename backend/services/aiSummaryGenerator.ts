@@ -3,7 +3,7 @@ import promotionalContent from '../utils/promotionalContent';
 import aiArticlePayload from './aiArticlePayload';
 import openRouterClient from './openRouterClient';
 const { removePromotionalSentences } = promotionalContent;
-const { buildArticlePayload, getArticleTextLimit: getSharedArticleTextLimit } = aiArticlePayload;
+const { buildSummaryExcerpt, getArticleTextLimit } = aiArticlePayload;
 const {
   extractAssistantContent,
   getOpenRouterConfig,
@@ -26,7 +26,6 @@ interface GeneratedSummary extends DynamicRecord {
 
 const DEFAULT_OPENROUTER_SUMMARY_MODEL = 'qwen/qwen3.7-flash';
 const DEFAULT_TIMEOUT_MS = 120000;
-const DEFAULT_PROMPT_TEXT_BUDGET_CHARS = 30000;
 const MIN_SUMMARY_TEXT_LENGTH = 60;
 const LOCALIZED_SUMMARY_SCHEMA = {
   type: 'object',
@@ -52,24 +51,13 @@ function getConfig() {
   });
 }
 
-function getArticleTextLimit(articleCount: number) {
-  return getSharedArticleTextLimit(articleCount, {
-    envName: 'AI_SUMMARY_PROMPT_TEXT_BUDGET_CHARS',
-    defaultBudgetChars: DEFAULT_PROMPT_TEXT_BUDGET_CHARS
-  });
-}
-
 function buildInput(topicConfig: TopicConfig, articles: NewsArticle[] = []) {
-  const articleTextLimit = getArticleTextLimit(articles.length);
   return {
     topic: topicConfig.label || topicConfig.key,
     canonicalTopics: topicConfig.topics || [],
     periodStart: topicConfig.periodStart,
     periodEnd: topicConfig.periodEnd,
-    articles: articles.map((article, index) => buildArticlePayload(article, index, {
-      articleTextLimit,
-      rssMetadataMaxChars: articleTextLimit
-    }))
+    articles: articles.map((article, index) => buildSummaryExcerpt(article, index, articles.length))
   };
 }
 

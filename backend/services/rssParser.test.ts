@@ -169,6 +169,16 @@ describe('rssParser article ids', () => {
     expect(axios.get).toHaveBeenCalledTimes(2);
   });
 
+  test('checks feed XML structure before previewing or ingesting it', async () => {
+    dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    const data = `<rss version="2.0"><channel>${'<entry>'.repeat(129)}${'</entry>'.repeat(129)}</channel></rss>`;
+    axios.get.mockResolvedValue({ status: 200, headers: {}, data });
+    const url = 'https://example.com/nested.rss';
+    await expect(rssParser.discoverFeedUrls(url)).rejects.toMatchObject({ code: 'RSS_TOO_COMPLEX' });
+    await expect(rssParser.validateFeedUrl(url)).rejects.toMatchObject({ code: 'RSS_TOO_COMPLEX' });
+    await expect(rssParser.parseFeed({ id: 'nested', url }, { throwOnError: true })).rejects.toMatchObject({ code: 'RSS_TOO_COMPLEX' });
+  });
+
   test('falls back to Le Monde public feeds when its RSS directory blocks discovery', async () => {
     dns.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
     axios.get

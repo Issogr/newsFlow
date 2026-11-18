@@ -28,7 +28,13 @@ function redactSecretsForLog(value: unknown, options: RedactionOptions = {}) {
     .replace(/((?:["']?(?:api[_-]?key|apikey|secret|access[_-]?token|refresh[_-]?token)["']?)\s*[=:]\s*["']?)[^"'\s,;&}]+/giu, '$1[REDACTED]');
 }
 
+function redactErrorForLog(value: unknown) {
+  // Subscription secrets may also be embedded in a URL path, with no recognizable key.
+  return redactSecretsForLog(String(value || '').replace(/https?:\/\/\S+/giu, '[URL]'), { redactAllQuery: true });
+}
+
 export default {
+  redactErrorForLog,
   redactSecretsForLog,
   redactUrlForLog
 };

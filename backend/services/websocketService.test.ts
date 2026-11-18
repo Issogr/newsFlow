@@ -142,6 +142,7 @@ describe('websocketService', () => {
 
     expect(authMock.resolveAuthenticatedSession).toHaveBeenCalledWith({
       headers: { cookie: 'newsflow_session=cookie-token' },
+      renew: false,
       touchActivitySeconds: 60
     });
     expect(socket.data).toMatchObject({

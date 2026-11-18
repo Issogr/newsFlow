@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import { setTimeout as wait } from 'node:timers/promises';
 import { JSDOM } from 'jsdom';
 import RSSParser from 'rss-parser';
+import { SaxesParser } from 'saxes';
+import { createError } from '../utils/errorHandler';
 import logger from '../utils/logger';
 import summarizeErrorMessage from '../utils/summarizeError';
 import inputValidator from '../utils/inputValidator';
@@ -16,7 +18,7 @@ const { sanitizeHtml } = inputValidator;
 const { normalizeArticleUrl, normalizeIdentityText } = articleIdentity;
 const { normalizePublicationDate } = publicationDate;
 const { fetchSafeTextUrl } = urlSafety;
-const { redactUrlForLog } = logRedaction;
+const { redactErrorForLog } = logRedaction;
 const { createConcurrencyLimiter } = concurrency;
 import type { AppError, DynamicRecord, SourceDefinition } from '../utils/types';
 
@@ -432,7 +434,7 @@ async function fetchArticleImage(url: string, options: RssOptions = {}) {
     return imageUrl;
   } catch (error) {
     options.signal?.throwIfAborted();
-    logger.debug(`Article image fallback failed for ${url}: ${summarizeErrorMessage(error)}`);
+    logger.debug(`Article image fallback failed: ${redactErrorForLog(summarizeErrorMessage(error))}`);
     articleImageCache.set(url, {
       data: null,
       timestamp: Date.now()
@@ -491,12 +493,40 @@ async function fetchFeedXml(url: string, options: RssOptions = {}) {
       }
 
       const retryDelay = RSS_RETRY_DELAY * attempt;
-      logger.warn(`Retry ${attempt}/${maxRetries} for ${redactUrlForLog(url, { redactAllQuery: true })} after ${retryDelay}ms`);
+      logger.warn(`Retrying RSS request (${attempt}/${maxRetries}) after ${retryDelay}ms`);
       await wait(retryDelay, undefined, { signal: options.signal });
     }
   }
 
   throw lastError;
+}
+
+// Inspect without building a tree. HTML leaves this path as soon as its root is known.
+function isBoundedFeedXml(xml: string) {
+  const scanner = new SaxesParser();
+  let feedRoot = false;
+  let depth = 0;
+  let nodes = 0;
+  const count = () => {
+    if (++nodes > 25_000 || depth > 128) {
+      throw createError(422, 'Feed is too complex to parse safely', 'RSS_TOO_COMPLEX');
+    }
+  };
+  scanner.on('opentagstart', ({ name }) => {
+    if (!feedRoot && !['rss', 'feed', 'rdf:RDF'].includes(name)) throw new Error('Not a feed root');
+    feedRoot = true;
+    depth++;
+    count();
+  });
+  scanner.on('attribute', count);
+  scanner.on('closetag', () => { depth--; });
+  try {
+    scanner.write(xml).close();
+  } catch (error) {
+    if (!feedRoot) return false;
+    throw error;
+  }
+  return feedRoot;
 }
 
 async function parseFeedPreview(xml: string, baseUrl: string) {
@@ -518,11 +548,9 @@ async function discoverFeedUrls(url: string, options: RssOptions = {}): Promise<
   }), options);
   const finalUrl = response.finalUrl || url;
 
-  try {
+  if (isBoundedFeedXml(response.data)) {
     const preview = await parseFeedPreview(response.data, finalUrl);
     return [{ url: finalUrl, title: preview.title.slice(0, 160) }];
-  } catch {
-    // Website HTML is expected when the submitted URL is not already a feed.
   }
 
   await assertHtmlParseBudget(response.data);
@@ -609,7 +637,7 @@ async function discoverFeedUrls(url: string, options: RssOptions = {}): Promise<
       inspectHtml(directoryResponse.data, directoryResponse.finalUrl || directoryUrl, { collectFeedAnchors: true });
     } catch (error) {
       options.signal?.throwIfAborted();
-      logger.debug(`RSS directory discovery failed for ${redactUrlForLog(directoryUrl, { redactAllQuery: true })}: ${summarizeErrorMessage(error)}`);
+      logger.debug(`RSS directory discovery failed: ${redactErrorForLog(summarizeErrorMessage(error))}`);
     }
   }
 
@@ -635,6 +663,7 @@ async function parseFeed(source: RssSource, options: RssOptions = {}) {
 
   try {
     const xml = await fetchFeedXml(url, options);
+    if (!isBoundedFeedXml(xml)) throw new Error('Expected an RSS or Atom feed');
     const feed = await parser.parseString(xml);
     const items: DynamicRecord[] = Array.isArray(feed?.items) ? feed.items.slice(0, MAX_ARTICLES_PER_SOURCE) : [];
 
@@ -642,13 +671,15 @@ async function parseFeed(source: RssSource, options: RssOptions = {}) {
       .filter((item) => item?.title)
       .map((item) => {
         const canonicalUrl = normalizeArticleUrl(item.link || '');
+        const publishedAt = normalizeOptionalDate(item.pubDate || item.dcdate || item.isoDate);
 
         return {
           id: buildArticleId(source, item, canonicalUrl),
+          publisherGuid: normalizeIdentityText(item.guid || item.id),
           title: sanitizeHtml(item.title),
           description: sanitizeHtml(item.description || item.contentSnippet || ''),
           content: sanitizeHtml(item.contentEncoded || item.content || ''),
-          pubDate: normalizePublicationDate((item.pubDate || item.dcdate || item.isoDate) as string | undefined),
+          pubDate: publishedAt ? normalizePublicationDate(publishedAt) : '',
           source: source.name,
           sourceId: source.id,
           url: String(item.link || ''),
@@ -669,7 +700,7 @@ async function parseFeed(source: RssSource, options: RssOptions = {}) {
 
     return normalizedItems;
   } catch (error) {
-    logger.error(`Failed to parse RSS feed ${source.name} (${redactUrlForLog(url, { redactAllQuery: true })}): ${redactUrlForLog(summarizeErrorMessage(error), { redactAllQuery: true })}`);
+    logger.error(`Failed to parse RSS feed ${source.id}: ${redactErrorForLog(summarizeErrorMessage(error))}`);
     if (options.throwOnError) {
       throw error;
     }
@@ -688,6 +719,7 @@ export default {
       timeout: options.timeout || RSS_VALIDATION_TIMEOUT,
       signal: options.signal
     });
+    if (!isBoundedFeedXml(xml)) throw new Error('Expected an RSS or Atom feed');
     return parseFeedPreview(xml, url);
   },
   _buildArticleId: buildArticleId,

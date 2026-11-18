@@ -4,7 +4,7 @@
 
 import logger from './logger';
 import logRedaction from './logRedaction';
-const { redactUrlForLog } = logRedaction;
+const { redactUrlForLog, redactErrorForLog: redactError } = logRedaction;
 import type { ErrorRequestHandler } from 'express';
 import type { AppError, UnknownRecord } from './types';
 
@@ -50,10 +50,9 @@ const ERROR_MESSAGES: Record<string, string> = {
 export const createError = (status: number, message: string, code: string, originalError: Error | null = null): AppError => {
   // Log the original error when available
   if (originalError) {
-    logger.error(`${code || 'ERROR'}: ${message} - Original error: ${redactUrlForLog(originalError.message)}`, {
+    logger.error(redactError(`${code || 'ERROR'}: ${message} - Original error: ${originalError.message}`), {
       status,
-      stack: originalError.stack,
-      originalMessage: redactUrlForLog(originalError.message)
+      stack: redactError(originalError.stack)
     });
   }
 
@@ -108,12 +107,12 @@ export const errorMiddleware: ErrorRequestHandler = (err: AppError, req, res, ne
   const redactedOriginalUrl = redactUrlForLog(req.originalUrl, { redactAllQuery: true });
 
   if (status >= 500) {
-    logger.error(`${status} - ${redactUrlForLog(err.message || 'Unknown error')} - ${redactedOriginalUrl} - ${req.method} - ${req.ip}`, {
-      stack: err.stack,
+    logger.error(`${status} - ${redactError(err.message || 'Unknown error')} - ${redactedOriginalUrl} - ${req.method} - ${req.ip}`, {
+      stack: redactError(err.stack),
       request: requestContext
     });
   } else if (status >= 400) {
-    logger.warn(`${status} - ${redactUrlForLog(err.message || 'Client error')} - ${redactedOriginalUrl} - ${req.method} - ${req.ip}`, {
+    logger.warn(`${status} - ${redactError(err.message || 'Client error')} - ${redactedOriginalUrl} - ${req.method} - ${req.ip}`, {
       request: requestContext
     });
   }

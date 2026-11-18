@@ -178,7 +178,7 @@ function normalizeRecentHours(value: unknown) {
 function isValidSocketFilters(value: unknown): value is SocketFilterInput {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const filters = value as SocketFilterInput;
-  if (filters.search !== undefined && (typeof filters.search !== 'string' || filters.search.length > 500)) return false;
+  if (filters.search !== undefined && (typeof filters.search !== 'string' || filters.search.length > newsQuery.MAX_SEARCH_LENGTH)) return false;
   if (filters.recentHours != null && (typeof filters.recentHours !== 'number' || !Number.isFinite(filters.recentHours))) return false;
   return ['topics', 'sourceIds', 'excludedSourceIds', 'excludedSubSourceIds'].every((key) => {
     const values = filters[key];
@@ -261,6 +261,7 @@ function initialize(server: HttpServer) {
     try {
       const { session, user } = resolveAuthenticatedSession({
         headers: socket.handshake?.headers || {},
+        renew: false,
         touchActivitySeconds: 60
       });
 

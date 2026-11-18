@@ -38,7 +38,7 @@ function resolveClassifierEntryId(entry: DynamicRecord = {}, allowedIds = new Se
   return mappedId && allowedIds.has(mappedId) ? mappedId : '';
 }
 
-function getClassifierEntries(payload: unknown, preferredKeys: string[] = []): DynamicRecord[] {
+function getClassifierEntries(payload: unknown, preferredKeys: string[] = []): DynamicRecord[] | null {
   if (Array.isArray(payload)) {
     return payload;
   }
@@ -50,7 +50,7 @@ function getClassifierEntries(payload: unknown, preferredKeys: string[] = []): D
     record.classifications,
     record.articles,
     record.items
-  ].find(Array.isArray) || [];
+  ].find(Array.isArray) ?? null;
 }
 
 function summarizeResponseShape(response: DynamicRecord = {}, options: { includeReasoningStats?: boolean } = {}) {

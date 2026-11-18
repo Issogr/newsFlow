@@ -93,7 +93,7 @@ describe('database migrations', () => {
 
     sqlite.close();
 
-    expect(migrationVersion).toBe('47');
+    expect(migrationVersion).toBe('48');
     expect(thematicSummaryColumns).toEqual(expect.arrayContaining(['input_json', 'last_attempt_at', 'last_attempt_sources_json']));
     expect(articleColumns).toContain('canonical_url');
     expect(articleColumns).toContain('ai_topics_processed_at');
@@ -180,7 +180,7 @@ describe('database migrations', () => {
     const width = migratedDb.prepare('SELECT reader_text_width AS readerTextWidth FROM user_settings WHERE user_id = ?').get('user-1')?.readerTextWidth;
     migratedDb.close();
 
-    expect(migrationVersion).toBe('47');
+    expect(migrationVersion).toBe('48');
     expect(width).toBe('default');
   });
 
@@ -211,7 +211,7 @@ describe('database migrations', () => {
     const articleIndexes = migratedDb.prepare('PRAGMA index_list(articles)').all().map((index) => index.name);
     migratedDb.close();
 
-    expect(migrationVersion).toBe('47');
+    expect(migrationVersion).toBe('48');
     expect(articleColumns).toEqual(expect.not.arrayContaining(['clickbait_label', 'clickbait_score', 'clickbait_source', 'clickbait_confidence', 'clickbait_model', 'clickbait_reason_code', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(articleIndexes).not.toContain('idx_articles_ai_clickbait_processed_at');
   });
@@ -231,7 +231,7 @@ describe('database migrations', () => {
     expect(database.getThematicSummary('science', window.periodStart, window.periodEnd)).toMatchObject({
       summaryText: 'Saved briefing [1].', inputArticles: []
     });
-    expect(getMigrationVersion(database.getDb())).toBe('47');
+    expect(getMigrationVersion(database.getDb())).toBe('48');
   });
 
   test('migrates an unversioned legacy database instead of marking it current', async () => {
@@ -280,7 +280,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('47');
+    expect(migratedVersion).toBe('48');
     expect(settingsColumns).toEqual(expect.arrayContaining(['compact_news_cards', 'compact_news_cards_mode']));
     expect(settingsColumns).toContain('source_setup_completed');
     expect(settingsColumns).toContain('excluded_source_ids');
@@ -398,7 +398,7 @@ describe('database migrations', () => {
 
     expect(topicRows).toEqual([{ articleId: 'article-1', topic: 'economy' }]);
     expect(articleRows).toEqual([{ id: 'article-1', canonicalUrl: 'https://example.com/story' }]);
-    expect(migratedVersion).toBe('47');
+    expect(migratedVersion).toBe('48');
     expect(articleColumns).toEqual(expect.arrayContaining(['ai_topics_processed_at', 'ai_topics_status', 'story_group_id', 'ai_story_group_processed_at', 'ai_story_group_status', 'ai_story_group_model', 'ai_story_group_match_ids', 'ai_story_group_confidence', 'ai_story_group_reason']));
     expect(articleColumns).toEqual(expect.not.arrayContaining(['clickbait_label', 'ai_clickbait_processed_at', 'ai_clickbait_status']));
     expect(articleAiState).toEqual({ processedAt: expect.any(String), status: 'legacy' });
@@ -509,7 +509,7 @@ describe('database migrations', () => {
     const sourceIds = database.listUserSources('user-1').map((source: Identified) => source.id);
     const articleIds = database.getArticles({}, { userId: 'user-1' }).map((article: Identified) => article.id);
 
-    expect(migratedVersion).toBe('47');
+    expect(migratedVersion).toBe('48');
     expect(settings.sourceSetupCompleted).toBe(false);
     expect(settings.excludedSourceIds).toEqual(sourceGroups.map((source: Identified) => source.id));
     expect(settings.excludedSubSourceIds).toEqual([]);
@@ -605,7 +605,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('47');
+    expect(migratedVersion).toBe('48');
     expect(thematicSummaryColumns).toEqual(expect.not.arrayContaining(['title', 'title_en', 'title_it']));
     expect(row).toEqual({
       summaryText: 'English text [1]',
@@ -739,7 +739,7 @@ describe('database migrations', () => {
 
     migratedDb.close();
 
-    expect(migratedVersion).toBe('47');
+    expect(migratedVersion).toBe('48');
     expect(podcastTables).toEqual([]);
   });
 
@@ -767,7 +767,7 @@ describe('database migrations', () => {
     jest.resetModules();
     database = (await import('./database')).default;
 
-    expect(getMigrationVersion(database.getDb())).toBe('47');
+    expect(getMigrationVersion(database.getDb())).toBe('48');
     expect(database.getDb().prepare("SELECT name FROM sqlite_master WHERE name IN ('podcast_summaries', 'podcast_summary_audio')").all()).toEqual([]);
     expect(database.listReadThematicSummaryIds('user-1')).toEqual(['summary-science']);
     expect(database.getThematicSummary('science', window.periodStart, window.periodEnd)).toMatchObject({ summaryText: 'Saved briefing [1].' });
@@ -882,7 +882,7 @@ describe('database migrations', () => {
     database.closeDb();
 
     const sqlite = database.getDb();
-    expect(getMigrationVersion(sqlite)).toBe('47');
+    expect(getMigrationVersion(sqlite)).toBe('48');
     expect(database.getArticles({ search: 'legacy' }).map((article: Identified) => article.id)).toEqual(['legacy-search']);
     expect(database.getThematicSummary('science', window.periodStart, window.periodEnd)).toMatchObject({
       summaryText: 'Saved briefing [1].', lastAttemptSources: []
@@ -2052,6 +2052,27 @@ describe('database queries and user data', () => {
       `).get('future-article');
 
       expect(storedArticle.pubDate).toBe('2026-03-15T00:00:00.000Z');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('retention removes an undated article without renewing its publication date on the next sighting', () => {
+    const item = { id: 'timeless', sourceId: primarySource.id, source: primarySource.name, title: 'Weekly report', pubDate: '' };
+    const firstSeen = '2026-05-21T08:00:00.000Z';
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(new Date(firstSeen));
+      database.stampUndatedArticles([item]);
+      database.upsertArticles([item]);
+      jest.setSystemTime(new Date('2026-05-21T20:00:00.000Z'));
+      database.stampUndatedArticles([{ ...item, pubDate: '' }]);
+      expect(database.deleteArticlesOlderThan('2026-05-21T09:00:00.000Z')).toBe(1);
+      const next = { ...item, pubDate: '' };
+      database.stampUndatedArticles([next]);
+      expect(next.pubDate).toBe(firstSeen);
+      database.deleteArticlesOlderThan('2026-05-23T00:00:00.000Z');
+      expect(database.getDb().prepare('SELECT COUNT(*) AS n FROM undated_feed_items').get().n).toBe(0);
     } finally {
       jest.useRealTimers();
     }

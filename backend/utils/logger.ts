@@ -45,7 +45,7 @@ function setupGlobalErrorHandlers() {
     return;
   }
 
-  process.on('uncaughtException', (error) => {
+  process.on('uncaughtExceptionMonitor', (error) => {
     logger.error('Uncaught exception', {
       message: error?.message || 'Unknown uncaught exception',
       stack: error?.stack

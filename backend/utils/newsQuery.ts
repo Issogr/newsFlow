@@ -6,6 +6,7 @@ const MAX_RECENT_HOURS = 24;
 const MAX_SOURCE_FILTERS = 80;
 const MAX_TOPIC_FILTERS = 40;
 const MAX_FILTER_VALUE_LENGTH = 120;
+const MAX_SEARCH_LENGTH = 500;
 
 function parseCsvParam(value: unknown): string[] {
   if (!value) {
@@ -59,6 +60,9 @@ function parseOptionalBoundedPositiveInteger(value: unknown, max: number) {
 }
 
 function parseNewsQuery(query: Record<string, unknown> = {}): NewsQuery {
+  if (typeof query.search === 'string' && query.search.length > MAX_SEARCH_LENGTH) {
+    throw createError(400, `Search must be ${MAX_SEARCH_LENGTH} characters or fewer.`, 'INVALID_NEWS_QUERY');
+  }
   return {
     search: typeof query.search === 'string' ? query.search : '',
     sourceIds: parseBoundedCsvParam(query.sources, { limit: MAX_SOURCE_FILTERS, name: 'sources' }),
@@ -77,6 +81,7 @@ function parseNewsQuery(query: Record<string, unknown> = {}): NewsQuery {
 
 export default {
   MAX_NEWS_PAGE,
+  MAX_SEARCH_LENGTH,
   MAX_RECENT_HOURS,
   MAX_SOURCE_FILTERS,
   MAX_TOPIC_FILTERS,

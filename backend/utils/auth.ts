@@ -12,7 +12,6 @@ import type { ApiTokenRecord, AppError, AuthUser, SessionRecord } from './types'
 const SESSION_TTL_DAYS = parseIntegerEnv('SESSION_TTL_DAYS', 30, { min: 1 });
 const API_TOKEN_TTL_DAYS = 30;
 const SESSION_PURGE_INTERVAL_MS = parseIntegerEnv('SESSION_PURGE_INTERVAL_MS', 300000, { min: 1000 });
-const ADMIN_USERNAME = (String(process.env.ADMIN_USERNAME || 'admin').trim().slice(0, 40) || 'admin').toLowerCase();
 const USER_ACTIVITY_TOUCH_INTERVAL_SECONDS = parseIntegerEnv('USER_ACTIVITY_TOUCH_INTERVAL_SECONDS', 60, { min: 0 });
 const SESSION_REFRESH_WINDOW_MS = parseIntegerEnv('SESSION_REFRESH_WINDOW_MS', 24 * 60 * 60 * 1000, { min: 0 });
 const API_TOKEN_USAGE_FLUSH_INTERVAL_MS = parseIntegerEnv('API_TOKEN_USAGE_FLUSH_INTERVAL_MS', 5000, { min: 1000 });
@@ -139,9 +138,11 @@ function createApiTokenExpiryDate() {
 
 function resolveAuthenticatedSession({
   headers = {},
+  renew = true,
   touchActivitySeconds = USER_ACTIVITY_TOUCH_INTERVAL_SECONDS
 }: {
   headers?: IncomingHttpHeaders;
+  renew?: boolean;
   touchActivitySeconds?: number;
 } = {}): { sessionRefreshed: boolean; sessionToken: string; session: SessionRecord; user: AuthUser } {
   purgeExpiredSessionsIfNeeded();
@@ -160,11 +161,11 @@ function resolveAuthenticatedSession({
   const user: AuthUser = {
     id: session.userId,
     username: session.username,
-    isAdmin: String(session.username || '').toLowerCase() === ADMIN_USERNAME,
+    isAdmin: Boolean(session.isAdmin),
     sessionToken
   };
 
-  const refreshedExpiresAt = shouldRefreshSessionExpiry(session.expiresAt) ? createSessionExpiryDate() : session.expiresAt;
+  const refreshedExpiresAt = renew && shouldRefreshSessionExpiry(session.expiresAt) ? createSessionExpiryDate() : session.expiresAt;
   if (refreshedExpiresAt !== session.expiresAt) {
     database.refreshSessionExpiry(session.tokenHash, refreshedExpiresAt);
   }
@@ -340,7 +341,7 @@ function resolveAuthenticatedApiToken({ headers = {} }: { headers?: IncomingHttp
     user: {
       id: tokenRecord.userId,
       username: tokenRecord.username,
-      isAdmin: String(tokenRecord.username || '').toLowerCase() === ADMIN_USERNAME
+      isAdmin: Boolean(tokenRecord.isAdmin)
     }
   };
 }

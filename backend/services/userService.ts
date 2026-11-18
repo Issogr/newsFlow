@@ -243,7 +243,7 @@ function buildAdminUserSummary(user: UserRecord) {
   return {
     id: user.id,
     username: user.username,
-    isAdmin: user.username.toLowerCase() === ADMIN_USERNAME.toLowerCase(),
+    isAdmin: Boolean(user.isAdmin),
     passwordConfigured: Boolean(user.passwordConfigured),
     publicApiLastUsedAt: user.publicApiLastUsedAt || null,
     publicApiRequestCount: Number(user.publicApiRequestCount || 0),
@@ -314,8 +314,21 @@ function getPasswordSetupTokenRecord(rawToken: unknown): PasswordSetupTokenRecor
 
 function ensureAdminAccount() {
   const existingAdmin = database.findUserByUsername(ADMIN_USERNAME);
+  const boundId = database.getAdminId();
+  if (boundId) {
+    if (existingAdmin?.id === boundId) return existingAdmin;
+    throw new Error('ADMIN_USERNAME does not match the administrator bound to this database.');
+  }
+  const legacyIds = database.legacyAdminIds();
   if (existingAdmin) {
-    return existingAdmin;
+    if (legacyIds.length !== 1 || legacyIds[0] !== existingAdmin.id) {
+      throw new Error('Cannot verify the existing administrator. Restore the original ADMIN_USERNAME and bootstrap records.');
+    }
+    database.bindAdminId(existingAdmin.id);
+    return { ...existingAdmin, isAdmin: true };
+  }
+  if (legacyIds.length) {
+    throw new Error('Existing bootstrap records do not match ADMIN_USERNAME.');
   }
 
   const now = new Date().toISOString();
@@ -328,6 +341,7 @@ function ensureAdminAccount() {
   };
 
   database.createUser(adminUser);
+  database.bindAdminId(adminUser.id);
   database.upsertUserSettings(adminUser.id, getDefaultSettings());
 
   return database.findUserById(adminUser.id)!;
@@ -356,7 +370,7 @@ function buildUserPayload(user: UserRecord) {
   return {
     id: user.id,
     username: user.username,
-    isAdmin: String(user.username || '').toLowerCase() === ADMIN_USERNAME.toLowerCase()
+    isAdmin: Boolean(user.isAdmin)
   };
 }
 
@@ -814,6 +828,10 @@ function exportUserSettings(userId: string) {
 }
 
 function ensureAdminBootstrap() {
+  return database.getDb().transaction(bootstrapAdmin)();
+}
+
+function bootstrapAdmin() {
   const adminUser = ensureAdminAccount();
 
   if (adminUser.passwordHash) {
@@ -845,7 +863,7 @@ function getPasswordSetupTokenDetails(rawToken: unknown) {
 
   return {
     username: tokenRecord.username,
-    isAdmin: tokenRecord.username.toLowerCase() === ADMIN_USERNAME.toLowerCase(),
+    isAdmin: Boolean(tokenRecord.isAdmin),
     purpose: tokenRecord.purpose,
     expiresAt: tokenRecord.expiresAt
   };
@@ -1024,7 +1042,7 @@ function deleteUserAsAdmin(adminUserId: string, targetUserId: string) {
     throw createError(404, 'User not found', 'RESOURCE_NOT_FOUND');
   }
 
-  if (String(targetUser.username || '').toLowerCase() === ADMIN_USERNAME.toLowerCase()) {
+  if (targetUser.isAdmin) {
     throw createError(403, 'The admin account cannot be deleted', 'FORBIDDEN');
   }
 
@@ -1053,7 +1071,7 @@ function cleanupInactiveUsers() {
 
   let deletedCount = 0;
   for (const user of database.listUsers()) {
-    if (user.username.toLowerCase() === ADMIN_USERNAME.toLowerCase()) {
+    if (user.isAdmin) {
       continue;
     }
 
@@ -1114,7 +1132,7 @@ async function importUserSettings(userId: string, payload: DynamicRecord = {}, o
     throw createError(409, `A user can have at most ${MAX_CUSTOM_SOURCES_PER_USER} custom sources`, 'CUSTOM_SOURCE_LIMIT_REACHED');
   }
 
-  await mapWithConcurrency(importedCustomSources, 4, async (source: DynamicRecord) => {
+  await mapWithConcurrency(importedCustomSources, 4, async (source: DynamicRecord, index) => {
     const name = String(source?.name || '').trim();
     const url = String(source?.url || '').trim();
     if (!name || !url || url.length > MAX_CUSTOM_SOURCE_URL_LENGTH) {
@@ -1123,9 +1141,9 @@ async function importUserSettings(userId: string, payload: DynamicRecord = {}, o
 
     try {
       await validateInteractiveFeedUrl(url, options);
-    } catch (error) {
+    } catch {
       options.signal?.throwIfAborted();
-      throw createError(400, `Imported RSS URL is not valid: ${url}`, 'INVALID_RSS_URL', error instanceof Error ? error : new Error(String(error)));
+      throw createError(400, `Invalid RSS URL in imported feed ${index + 1}`, 'INVALID_RSS_URL');
     }
   });
 

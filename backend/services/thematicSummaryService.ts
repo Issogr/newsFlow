@@ -11,6 +11,7 @@ import aiFeatures from '../config/aiFeatures';
 import concurrency from '../utils/concurrency';
 import promotionalContent from '../utils/promotionalContent';
 import articleIdentity from '../utils/articleIdentity';
+import aiArticlePayload from './aiArticlePayload';
 const { isAiToggleEnabled } = aiFeatures;
 const { mapSettledWithConcurrency } = concurrency;
 const { isPromotionalDealArticle } = promotionalContent;
@@ -350,18 +351,20 @@ function shouldWaitForPendingTopicProcessing(window: Partial<SummaryWindow> = {}
   return referenceTime - periodEndTime < SUMMARY_PENDING_TOPIC_GRACE_MS;
 }
 
-function buildSourceList(articles: SummaryArticle[] = []) {
+function hashExcerpt({ title, description, contentType, source, publishedAt }: DynamicRecord) {
+  // A citation's position can shift after retention; it isn't evidence.
+  return createHash('sha256').update(JSON.stringify([title, description, contentType, source, publishedAt])).digest('hex');
+}
+
+function buildSourceList(articles: SummaryArticle[] = [], budgetCount = articles.length) {
   return articles.map((article, index) => ({
     index: index + 1,
     articleId: article.id,
-    contentHash: createHash('sha256').update(JSON.stringify([
-      article.title, article.description, article.content, article.readerText,
-      article.source || article.rawSource, article.url, article.pubDate
-    ].map(normalizeReaderText))).digest('hex'),
+    contentHash: hashExcerpt(aiArticlePayload.buildSummaryExcerpt(article, index, budgetCount)),
     title: article.title,
     source: article.source || article.rawSource || '',
     sourceIconUrl: article.sourceIconUrl || '',
-    url: article.url || '',
+    url: String(article.url || '').trim().slice(0, 1000),
     publishedAt: article.pubDate || ''
   }));
 }
@@ -643,17 +646,32 @@ async function generateSummaryForTopic(topicConfig: SummaryTopic, window: Summar
   const selectedArticles = selectPromptArticles(articles, SUMMARY_PROMPT_MAX_ARTICLES);
   const enrichedArticles = withCachedReaderText(selectedArticles);
   const sources = buildSourceList(enrichedArticles);
+  const changedSince = (previous: SummarySource[]) => hasChangedArticleSelection({ sources: previous },
+    previous.length > sources.length ? buildSourceList(enrichedArticles, previous.length) : sources);
 
   const lastAttemptSources = existingSummary?.lastAttemptSources?.length
     ? existingSummary.lastAttemptSources
     : existingSummary?.sources || [];
-  if (exhaustedInvalidOutputRetries && options.force !== true && !hasChangedArticleSelection({ sources: lastAttemptSources }, sources)) {
+  if (exhaustedInvalidOutputRetries && options.force !== true && !changedSince(lastAttemptSources)) {
     logger.debug(`Thematic summary retry skipped after invalid output limit: topic=${topicConfig.key}, windowEnd=${window.periodEnd}`);
     return { summary: existingSummary?.status === 'completed' ? existingSummary : null, generatedNow: false };
   }
 
   if (existingSummary?.status === 'completed' && options.force !== true) {
-    if (!hasChangedArticleSelection(existingSummary, sources)) {
+    // Older releases hashed the full RSS body. Their stored prompt excerpts are authoritative.
+    const publishedSources = (existingSummary.sources || []).map((source) => {
+      const excerpt = Array.isArray(existingSummary.inputArticles) ? existingSummary.inputArticles[Number(source.index) - 1] : null;
+      return excerpt?.contentType ? { ...source, contentHash: hashExcerpt(excerpt) } : source;
+    });
+    if (!changedSince(publishedSources)) {
+      const byId = new Map(sources.map((source) => [source.articleId, source]));
+      const refreshed = (existingSummary.sources || []).map((source) => {
+        const current = byId.get(source.articleId || '');
+        return current && (source.url || '') !== current.url ? { ...source, url: current.url } : source;
+      });
+      if (refreshed.some((source, i) => source !== existingSummary.sources?.[i])) {
+        return { summary: database.upsertThematicSummary({ ...existingSummary, sources: refreshed }), generatedNow: true };
+      }
       return { summary: existingSummary, generatedNow: false };
     }
 

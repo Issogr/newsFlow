@@ -315,6 +315,17 @@ describe('aiTopicClassifier', () => {
     expect(aiTopicClassifier._getCompletionTokenBudget(4)).toBe(800);
   });
 
+  test.each([
+    ['{"topicsByRef":[', 'stop', true],
+    ['{"message":"unavailable"}', 'stop', true],
+    ['{"topicsByRef":[]}', 'length', true],
+    ['{"topicsByRef":[]}', 'stop', false]
+  ])('distinguishes failed output from an omitted topic: %s %s', async (content, finishReason, failed) => {
+    chatSend.mockResolvedValue({ choices: [{ message: { content }, finish_reason: finishReason }] });
+    const result = await aiTopicClassifier.classifyTopicDetailsForArticlesWithStatus([{ id: 'test', title: 'Local event' }]);
+    expect(result.failedArticleIds).toEqual(failed ? ['test'] : []);
+  });
+
   test('skips provider calls for high-confidence deterministic local topics', async () => {
     process.env.AI_TOPIC_DETERMINISTIC_SKIP_ENABLED = 'true';
 

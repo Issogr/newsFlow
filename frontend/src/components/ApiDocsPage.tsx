@@ -22,7 +22,8 @@ function renderTextWithInlineCode(text: string) {
   });
 }
 
-const docsContent: Record<Locale, { eyebrow: string; title: string; intro: string; sections: Array<{ title: string; items: string[] }>; exampleTitle: string; exampleRequest: string; exampleAuthRequest: string }> = {
+const exampleAuthRequest = `curl -H "Authorization: Bearer nfapi_..." 'https://your-host/api/public/news?sources=ansa&topics=Politica'`;
+const docsContent: Record<Locale, { eyebrow: string; title: string; intro: string; sections: Array<{ title: string; items: string[] }>; exampleTitle: string; exampleRequest: string }> = {
   en: {
     eyebrow: 'Public API',
     title: 'External News API',
@@ -64,7 +65,6 @@ const docsContent: Record<Locale, { eyebrow: string; title: string; intro: strin
     ],
     exampleTitle: 'Example',
     exampleRequest: 'curl https://your-host/api/public/news',
-    exampleAuthRequest: 'curl -H "Authorization: Bearer nfapi_..." https://your-host/api/public/news?sources=ansa&topics=Politics',
   },
   it: {
     eyebrow: 'API pubblica',
@@ -107,7 +107,6 @@ const docsContent: Record<Locale, { eyebrow: string; title: string; intro: strin
     ],
     exampleTitle: 'Esempio',
     exampleRequest: 'curl https://your-host/api/public/news',
-    exampleAuthRequest: 'curl -H "Authorization: Bearer nfapi_..." https://your-host/api/public/news?sources=ansa&topics=Politics',
   }
 };
 
@@ -130,7 +129,7 @@ const ApiDocsPage = ({ locale }: { locale: Locale }) => {
       <StaticInfoSection>
         <h2 className="text-lg font-semibold text-ink-heading">{content.exampleTitle}</h2>
         <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950 px-4 py-3 text-sm text-slate-100"><code>{content.exampleRequest}</code></pre>
-        <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950 px-4 py-3 text-sm text-slate-100"><code>{content.exampleAuthRequest}</code></pre>
+        <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950 px-4 py-3 text-sm text-slate-100"><code>{exampleAuthRequest}</code></pre>
       </StaticInfoSection>
     </StaticInfoPageFrame>
   );

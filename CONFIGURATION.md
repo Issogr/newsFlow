@@ -30,7 +30,7 @@ This file documents the environment variables and build arguments that can chang
 | Variable | Default | Details |
 | --- | --- | --- |
 | `NEWS_DB_PATH` | `backend/data/news.db`; Docker `/usr/src/app/data/news.db` | SQLite database path for articles, users, settings, summaries, sessions, and public API data. Compose persists `/usr/src/app/data` in the host's `backend/data/` directory. |
-| `ADMIN_USERNAME` | `admin` | Reserved admin account username. Bootstrap and authorization trim whitespace and truncate to 40 characters; authorization compares ignoring case. |
+| `ADMIN_USERNAME` | `admin` | Reserved bootstrap name, trimmed to 40 characters. Admin rights are bound to the account ID in SQLite. On upgrade the configured account must match the original bootstrap record; a conflicting name stops startup. Keep the original value when restoring a database. |
 | `ALLOWED_ORIGINS` | Development `*`; production localhost origins; Compose `APP_BASE_URL` | Comma-separated public API and Socket.IO origin allowlist. Private browser APIs additionally require the exact same origin as `APP_BASE_URL`. Supports exact origins, `*`, wildcard patterns, and `@local-network`. |
 | `SERVER_TIMEOUT` | `60000` | Backend HTTP server timeout in ms. Minimum `1000`. |
 | `LOG_LEVEL` | `info` in production, `debug` otherwise | Console log threshold: `error`, `warn`, `info`, `http`, `verbose`, `debug`, or `silly`. Logs include an ISO timestamp and are silent in tests. |
@@ -48,7 +48,7 @@ Authenticated browser requests allow 200 requests per account per 15 minutes. Lo
 
 Login and registration reject non-string usernames and raw username inputs longer than 256 characters before normalization or rate-limit key construction. Accepted inputs retain the existing whitespace/markup cleanup and 40-character canonical username limit.
 
-Socket filter subscriptions allow 30 updates per connection per 10 seconds. Malformed or excessive subscriptions disconnect the client before database work. Lists allow 40 topics or 80 source IDs, with values up to 120 characters and search text up to 500 characters.
+Socket filter subscriptions allow 30 updates per connection per 10 seconds. Malformed or excessive subscriptions disconnect the client before database work. Lists allow 40 topics or 80 source IDs, with values up to 120 characters. The browser, HTTP feed API, and socket all limit search text to 500 characters.
 
 Read-later mutations accept at most 20 article IDs per request and reject larger batches without applying changes. The browser batches larger stories and reflects each acknowledged batch. Both feeds paginate complete grouped snapshots; read-later cursors include `beforeSavedAt`, `beforePubDate`, and `beforeId`, allowing navigation beyond the numbered-page limit and after deletions.
 
@@ -58,7 +58,7 @@ The backend automatically deletes non-admin accounts inactive for **more than si
 
 - Activity is the latest of account creation, browser activity (`last_activity_at`), and authenticated public API usage (`public_api_last_used_at`). Accounts with no activity are evaluated from their creation date. Buffered authenticated API usage is flushed before eligibility is checked; if the flush fails, cleanup stops and retries on the next run.
 - The cutoff uses UTC calendar months, clamping to the last day when the target month is shorter. Accounts exactly at the cutoff are retained. Accounts with invalid timestamps are skipped.
-- The configured `ADMIN_USERNAME` account is always excluded, ignoring case.
+- The bound admin account is always excluded.
 - Deletion is permanent and uses the same transactional deletion path as the admin dashboard: custom sources and their private articles, settings, saved-article references, sessions, and tokens are removed, and active sockets are disconnected. Built-in articles and other users' data are preserved.
 - Cleanup runs without an interactive confirmation. Deletion counts and cleanup failures are logged.
 
@@ -81,7 +81,7 @@ Docker Compose runs Caddy as the only host-facing service. Caddy handles TLS and
 | `AUTHENTICATED_PUBLIC_USAGE_FLUSH_INTERVAL_MS` | `5000` | Flush interval for authenticated public API usage counters. Minimum `1000`. |
 | `AUTHENTICATED_PUBLIC_USAGE_FLUSH_THRESHOLD` | `50` | Number of authenticated public API requests that triggers an early usage-counter flush. Minimum `1`. |
 
-The public API is read-only and cache-only. It must not trigger RSS refreshes, article extraction, or AI work.
+The public API is read-only and cache-only. It must not trigger RSS refreshes, article extraction, or AI work. Token usage can make an account eligible for the next scheduled refresh.
 
 ## Feed, RSS, And Storage
 
@@ -90,7 +90,7 @@ The public API is read-only and cache-only. It must not trigger RSS refreshes, a
 | `ARTICLE_RETENTION_HOURS` | `24` | Article and reader-cache retention window. Minimum `0`; `0` disables age cutoff in ingestion paths. |
 | `SCRAPE_INTERVAL_MS` | `900000` | Scheduled RSS ingestion interval. Minimum `1000`. |
 | `MANUAL_REFRESH_COOLDOWN_MS` | `300000` | Per-user cooldown for manual refresh attempts. Minimum `0`. |
-| `SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES` | `ONLINE_ACTIVITY_WINDOW_MINUTES` or `5`; Compose `5` | Scheduled ingestion refreshes sources assigned to users active in this window. Minimum `0`. |
+| `SOURCE_REFRESH_ACTIVE_WINDOW_MINUTES` | `ONLINE_ACTIVITY_WINDOW_MINUTES` or `5`; Compose `5` | Scheduled ingestion uses the later of browser activity and successful authenticated public API activity. Minimum `0`. |
 | `SOURCE_FETCH_FRESHNESS_MS` | `300000` | De-dupe window that skips upstream RSS fetches recently completed by any refresh path. Minimum `0`. |
 | `SOURCE_FETCH_FRESHNESS_MAX_ENTRIES` | `1000` | Max source freshness records retained in memory. Minimum `1`. |
 | `SOURCE_FETCH_FRESHNESS_RETENTION_MS` | `max(SOURCE_FETCH_FRESHNESS_MS * 6, 3600000)` | Retention for source freshness records. Minimum `1000`. |
@@ -115,6 +115,8 @@ The public API is read-only and cache-only. It must not trigger RSS refreshes, a
 
 ## Reader, Images, And Outbound Safety
 
+User-supplied URLs are fetched directly, ignoring environment proxies, so the connection uses the checked IP address. RSS discovery checks the document root before parsing HTML or feed XML. XML feeds allow up to 25,000 elements plus attributes and 128 nesting levels; markup inside article CDATA is text. Undated entries keep their first observed publication date. After article cleanup, SQLite keeps just an ID and timestamps while those undated entries continue to appear; old unseen markers expire with retention.
+
 RSS, discovery, validation, reader, and image-fetch timeouts are total deadlines for each network attempt, including DNS resolution, redirects, and the entire response body. Queue waits and delays between retry attempts are separate; caller cancellation still stops the request immediately.
 
 Before constructing a browser document, discovery and reader extraction enforce a fixed 2 MiB input budget, at most 10,000 `<` characters (including scripts and comments), and a parser preflight budget of 10,000 elements plus attributes and 128 levels of open elements. A per-tag limit of 256 attributes is enforced during tokenization, before expensive duplicate-name checks. The preflight includes elements created by HTML error recovery and attributes adopted from repeated HTML/body tags, with a separate 2 MiB budget for attribute names and values that counts every repaired copy. These limits apply even if network byte limits are increased. Direct RSS/Atom responses bypass these HTML-only limits; network response limits still apply. Oversized discovery pages are rejected; reader extraction falls back to RSS text. Reader documents are closed after extraction to release their resources.
@@ -122,7 +124,7 @@ Before constructing a browser document, discovery and reader extraction enforce 
 | Variable | Default | Details |
 | --- | --- | --- |
 | `READER_TIMEOUT` | `12000` | Reader-mode article fetch timeout in ms. Minimum `1`. |
-| `READER_CACHE_TTL_MS` | `86400000` | Successful reader-cache TTL. Minimum `0`. |
+| `READER_CACHE_TTL_MS` | `86400000` | Successful reader-cache freshness. After expiry, a failed refresh falls back to the stored full text before RSS text. Corrections invalidate the stored copy. Minimum `0`. |
 | `READER_FALLBACK_CACHE_TTL_MS` | `900000` | Failed or empty reader fallback cache TTL. Minimum `0`. |
 | `READER_FALLBACK_CACHE_PRUNE_INTERVAL_MS` | `min(max(READER_FALLBACK_CACHE_TTL_MS or 60000, 1000), 60000)` | Cleanup interval for reader fallback cache. Minimum `1000`. |
 | `READER_MAX_RESPONSE_BYTES` | `2097152` | Max fetched article HTML size for reader extraction. Minimum `1`. |
@@ -190,7 +192,7 @@ Each thematic summary uses two sequential requests to `OPENROUTER_SUMMARY_MODEL`
 
 The default selection prioritizes stories covered by multiple publishers, deduplicates them, and balances sources across up to 24 stories. The 30,000-character text budget allows up to 1,250 characters per story at that cap, including longer RSS content when reader text is unavailable. Completed summaries retain their exact input excerpts in SQLite for later evaluation. Source fingerprints trigger regeneration for changed evidence or replacement articles, while retention-only removals preserve the previous briefing. Reader caches are invalidated when article text changes. The reader panel shows the last successful generation timestamp.
 
-Failed regeneration preserves the last successful text and timestamp. After invalid-output retries are exhausted, changed evidence allows one further attempt, including for previously completed summaries. The last attempted source fingerprints are persisted so unchanged inputs and retention-only removals do not trigger repeated attempts.
+Failed regeneration preserves the last successful text and timestamp. After invalid-output retries are exhausted, changed evidence allows one further attempt, including for previously completed summaries. Fingerprints cover the metadata and excerpt actually sent to the model. Changes outside the excerpt and retention-only removals do not trigger regeneration. Citation URL corrections update the existing source list without paying for another briefing.
 
 To check the configured model against a small fixed evidence set, run `npm run eval:summaries` in `backend/` with `OPENROUTER_API_KEY` set. This makes seven live grounding requests covering supported facts, invented numbers, uncertainty, contradictions, geographic scope, and language consistency; it exits nonzero for mismatches or invalid responses. `npm run eval:summaries -- --help` is offline. Use this smoke evaluation alongside manual reviews of saved excerpts before changing models or prompts.
 

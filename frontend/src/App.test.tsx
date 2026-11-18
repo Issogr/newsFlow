@@ -17,6 +17,8 @@ vi.mock('./config/release.json', () => ({
 
 vi.mock('./services/api', () => ({
   AUTH_EXPIRED_EVENT: 'newsflow:auth-expired',
+  SESSION_CHANGED_EVENT: 'newsflow:session-changed',
+  setDisplayedUserId: vi.fn(),
   completePasswordSetup: vi.fn(),
   fetchCurrentUser: vi.fn(),
   loginUser: vi.fn(),
@@ -175,6 +177,18 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('Sign in')).toBeInTheDocument();
     });
+  });
+
+  test('clears the displayed account while reloading a session changed by another tab', async () => {
+    fetchCurrentUser.mockResolvedValueOnce(createTestCurrentUser());
+    const next = Promise.withResolvers<CurrentUser>();
+    fetchCurrentUser.mockReturnValueOnce(next.promise);
+    render(<App />);
+    await screen.findByText('Authenticated app');
+    act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'newsflow:session-changed' })); });
+    expect(screen.queryByText('Authenticated app')).not.toBeInTheDocument();
+    await act(async () => next.resolve(createTestCurrentUser({ user: { username: 'new-admin', isAdmin: true } })));
+    expect(await screen.findByText('Admin dashboard for new-admin')).toBeInTheDocument();
   });
 
   test('shows a retryable error instead of logout during a session service outage', async () => {

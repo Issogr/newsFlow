@@ -2,6 +2,22 @@ import type { DynamicRecord, PasswordSetupTokenRecord, SessionRecord, UserRecord
 import type SqliteDatabase from './sqliteDatabase';
 
 function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
+  const adminIdSql = "(SELECT value FROM app_meta WHERE key = 'admin_user_id')";
+  const adminColumn = `users.id IS ${adminIdSql} AS isAdmin`;
+
+  function getAdminId() {
+    return getDb().prepare<{ id: string | null }>(`SELECT ${adminIdSql} AS id`).get()?.id;
+  }
+
+  function legacyAdminIds() {
+    return getDb().prepare<{ id: string }>("SELECT DISTINCT user_id AS id FROM password_setup_tokens WHERE purpose = 'admin-bootstrap' LIMIT 2")
+      .all().map((row) => row.id);
+  }
+
+  function bindAdminId(userId: string) {
+    getDb().prepare("INSERT INTO app_meta (key, value) VALUES ('admin_user_id', ?)").run(userId);
+  }
+
   function normalizeTouchIntervalSeconds(minIntervalSeconds: unknown) {
     const parsed = Number(minIntervalSeconds);
     return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
@@ -43,7 +59,7 @@ function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
     }
 
     return mapUserRow(getDb().prepare(`
-      SELECT id, username, password_hash AS passwordHash,
+      SELECT id, username, password_hash AS passwordHash, ${adminColumn},
               last_login_at AS lastLoginAt, last_activity_at AS lastActivityAt,
               public_api_request_count AS publicApiRequestCount,
               public_api_last_used_at AS publicApiLastUsedAt,
@@ -60,7 +76,7 @@ function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
     }
 
     return mapUserRow(getDb().prepare(`
-      SELECT id, username, password_hash AS passwordHash,
+      SELECT id, username, password_hash AS passwordHash, ${adminColumn},
               last_login_at AS lastLoginAt, last_activity_at AS lastActivityAt,
               public_api_request_count AS publicApiRequestCount,
               public_api_last_used_at AS publicApiLastUsedAt,
@@ -73,7 +89,7 @@ function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
 
   function listUsers() {
     return getDb().prepare(`
-      SELECT id, username, last_login_at AS lastLoginAt, last_activity_at AS lastActivityAt,
+      SELECT id, username, ${adminColumn}, last_login_at AS lastLoginAt, last_activity_at AS lastActivityAt,
              public_api_request_count AS publicApiRequestCount,
              public_api_last_used_at AS publicApiLastUsedAt,
              created_at AS createdAt, updated_at AS updatedAt,
@@ -179,7 +195,8 @@ function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
       expiresAt: row.expiresAt,
       revokedAt: row.revokedAt || null,
       lastUsedAt: row.lastUsedAt || null,
-      username: row.username || null
+      username: row.username || null,
+      isAdmin: Boolean(row.isAdmin)
     };
   }
 
@@ -211,7 +228,7 @@ function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
              api_tokens.token_prefix AS tokenPrefix, api_tokens.label,
              api_tokens.created_at AS createdAt, api_tokens.expires_at AS expiresAt,
              api_tokens.revoked_at AS revokedAt, api_tokens.last_used_at AS lastUsedAt,
-             users.username AS username
+             users.username AS username, ${adminColumn}
       FROM api_tokens
       JOIN users ON users.id = api_tokens.user_id
       WHERE api_tokens.token_hash = ?
@@ -297,7 +314,7 @@ function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
     return getDb().prepare<SessionRecord>(`
       SELECT user_sessions.token_hash AS tokenHash, user_sessions.user_id AS userId,
              user_sessions.created_at AS createdAt, user_sessions.expires_at AS expiresAt,
-             users.username AS username
+             users.username AS username, ${adminColumn}
       FROM user_sessions
       JOIN users ON users.id = user_sessions.user_id
       WHERE user_sessions.token_hash = ?
@@ -368,7 +385,7 @@ function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
              password_setup_tokens.expires_at AS expiresAt,
              password_setup_tokens.used_at AS usedAt,
              users.username AS username,
-             users.password_hash AS passwordHash
+             users.password_hash AS passwordHash, ${adminColumn}
       FROM password_setup_tokens
       JOIN users ON users.id = password_setup_tokens.user_id
       WHERE password_setup_tokens.token_hash = ?
@@ -428,6 +445,9 @@ function createAuthRepository({ getDb }: { getDb: () => SqliteDatabase }) {
   }
 
   return {
+    getAdminId,
+    legacyAdminIds,
+    bindAdminId,
     createUser,
     findUserByUsername,
     findUserById,

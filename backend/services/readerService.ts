@@ -465,13 +465,11 @@ async function loadFreshReaderPayload(articleId: string, article: ReaderArticle)
   try {
     payload = await fetchReaderPayload(article);
   } catch (error) {
-    logger.debug(`Reader mode extraction fell back for ${article.url}: ${summarizeErrorMessage(error)}`);
-
-    payload = {
-      ...buildFallbackPayload(article),
-      cached: false,
-      fallback: true
-    };
+    logger.debug(`Reader mode extraction fell back for article ${articleId}: ${summarizeErrorMessage(error)}`);
+    const archived = database.getReaderCache(articleId);
+    payload = archived?.contentText
+      ? buildPayload(article, archived, true)
+      : { ...buildFallbackPayload(article), fallback: true };
   }
   const current = database.getArticleById(articleId, { userId: article.ownerUserId || null });
   if (!current) throw createError(404, 'Article not found.', 'RESOURCE_NOT_FOUND');
@@ -479,7 +477,7 @@ async function loadFreshReaderPayload(articleId: string, article: ReaderArticle)
   if (getReaderFingerprint(current) !== fingerprint) {
     throw createError(409, 'Article changed during extraction. Please try again.', 'READER_ARTICLE_CHANGED');
   }
-  if (payload.fallback) setCachedFallbackPayload(articleId, fingerprint, payload);
+  if (payload.fallback || payload.cached) setCachedFallbackPayload(articleId, fingerprint, payload);
   else {
     database.upsertReaderCache(articleId, payload);
     readerFallbackCache.delete(articleId);

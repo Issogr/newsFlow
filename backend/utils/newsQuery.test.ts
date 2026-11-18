@@ -27,6 +27,8 @@ describe('newsQuery', () => {
   });
 
   test('rejects abusive source and topic filter lists before SQL construction', () => {
+    expect(parseNewsQuery({ search: 'x'.repeat(500) }).search).toHaveLength(500);
+    expect(() => parseNewsQuery({ search: 'x'.repeat(501) })).toThrow('Search must be 500');
     const tooManySources = Array.from({ length: MAX_SOURCE_FILTERS + 1 }, (_, index) => `source-${index}`).join(',');
     const tooManyTopics = Array.from({ length: MAX_TOPIC_FILTERS + 1 }, (_, index) => `topic-${index}`).join(',');
 

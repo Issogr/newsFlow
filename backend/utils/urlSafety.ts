@@ -251,6 +251,7 @@ async function fetchSafeTextUrl(rawUrl: unknown, requestConfig: SafeRequestConfi
   } = requestConfig;
   const axiosConfig: AxiosRequestConfig = {
     ...baseRequestConfig,
+    proxy: false,
     signal,
     maxRedirects: 0,
     responseType: 'stream',

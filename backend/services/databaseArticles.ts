@@ -326,10 +326,12 @@ function createArticleRepository({
       ...getConfiguredSourceGroupIds(),
       ...getLegacyConfiguredSourceGroupIds()
     ])];
+    const currentPrivateSource = `${alias}.owner_user_id IS NOT NULL AND EXISTS (SELECT 1 FROM user_sources us
+      WHERE us.user_id = ${alias}.owner_user_id AND us.id = ${alias}.source_id AND us.is_active = 1)`;
     return {
       clause: sourceIds.length > 0
-        ? `(${alias}.owner_user_id IS NOT NULL OR ${alias}.source_id IN (${sourceIds.map(() => '?').join(', ')}))`
-        : `${alias}.owner_user_id IS NOT NULL`,
+        ? `((${alias}.owner_user_id IS NULL AND ${alias}.source_id IN (${sourceIds.map(() => '?').join(', ')})) OR (${currentPrivateSource}))`
+        : currentPrivateSource,
       params: sourceIds
     };
   }
@@ -1078,7 +1080,7 @@ function createArticleRepository({
         const canonicalMatch = !existingIdSet.has(article.id)
           ? canonicalMatches.find((row) => row.id !== article.id)
           : null;
-        const titleMatches = !existingIdSet.has(article.id) && !canonicalMatch
+        const titleMatches = !article.publisherGuid && !existingIdSet.has(article.id) && !canonicalMatch
           ? duplicateLookup.getTitleMatches(article)
           : [];
         const titleMatch = titleMatches.find((row) => row.id !== article.id) || null;
@@ -1087,7 +1089,8 @@ function createArticleRepository({
           .map((row) => row.id)
           .filter((id) => id && id !== persistedArticleId);
         const exists = existingIdSet.has(persistedArticleId) || Boolean(canonicalMatch) || Boolean(titleMatch);
-        const normalizedPubDate = normalizePublicationDate(article.pubDate, now);
+        const previousArticleFields = existingArticleFields.get(persistedArticleId) || (exists ? selectArticleFieldsStmt.get(persistedArticleId) : null);
+        const normalizedPubDate = normalizePublicationDate(article.pubDate || previousArticleFields?.pubDate, now);
 
         article.id = persistedArticleId;
         article.canonicalUrl = canonicalUrl;
@@ -1114,7 +1117,6 @@ function createArticleRepository({
           language: article.language || 'it',
           pubDate: normalizedPubDate
         };
-        const previousArticleFields = existingArticleFields.get(persistedArticleId) || (exists ? selectArticleFieldsStmt.get(persistedArticleId) : null);
         const shouldWriteArticle = !exists || articleFieldsChanged(previousArticleFields, values);
 
         if (shouldWriteArticle) {
@@ -2178,6 +2180,7 @@ function createArticleRepository({
       return 0;
     }
 
+    getDb().prepare('DELETE FROM undated_feed_items WHERE last_seen_at < ?').run(isoTimestamp);
     return getDb().prepare(`
       DELETE FROM articles
       WHERE published_at < ?
@@ -2187,6 +2190,23 @@ function createArticleRepository({
           WHERE user_read_later_articles.article_id = articles.id
         )
     `).run(isoTimestamp).changes;
+  }
+
+  function stampUndatedArticles(articles: Article[]) {
+    if (!articles.length) return;
+    const database = getDb();
+    const now = new Date().toISOString();
+    // Keep only identity and date after article retention, while the feed keeps returning the entry.
+    const stamp = database.prepare<{ published_at: string }>(`
+      INSERT INTO undated_feed_items (article_id, owner_user_id, published_at, last_seen_at)
+      VALUES (?, ?, COALESCE((SELECT published_at FROM articles WHERE id = ?), ?), ?)
+      ON CONFLICT(article_id) DO UPDATE SET last_seen_at = excluded.last_seen_at,
+        published_at = COALESCE((SELECT published_at FROM articles WHERE id = excluded.article_id), undated_feed_items.published_at)
+      RETURNING published_at
+    `);
+    database.transaction(() => {
+      for (const article of articles) article.pubDate = stamp.get(article.id, article.ownerUserId || null, article.id, now, now)!.published_at;
+    })();
   }
 
   function normalizeFuturePublicationDates(referenceTimestamp = new Date().toISOString()) {
@@ -2462,6 +2482,7 @@ function createArticleRepository({
   return {
     getArticles,
     getArticleById,
+    getArticlesByIds,
     getReadLaterArticles,
     getArticlesForThematicSummary,
     hasPendingTopicProcessingForThematicSummary,
@@ -2487,6 +2508,7 @@ function createArticleRepository({
     upsertArticles,
     countArticles,
     deleteArticlesOlderThan,
+    stampUndatedArticles,
     normalizeFuturePublicationDates,
     cleanupRemovedConfiguredSourceData,
     getSourceStats,
