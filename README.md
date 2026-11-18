@@ -60,7 +60,7 @@ Feed reads use cached data. A manual refresh queues source updates in the backgr
 
 Select a headline or photo to open the cleaned reader view. The card’s **More story actions** menu lets you share the link or visit the publisher. If the reader can’t load the full article, choose **Retry** or **Open original** beside the notice.
 
-Save articles to **Read later** to keep them beyond the normal retention window, which defaults to 24 hours. The interface supports English and Italian, light and dark themes, and adjustable reader text size and width.
+Bookmark articles to keep them beyond the normal retention window, which defaults to 24 hours. Switch between **Latest** and **Saved** in the desktop header or mobile dock. Refresh is in the header on both. The interface supports English and Italian, light and dark themes, and adjustable reader text size and width.
 
 ## Optional AI features
 

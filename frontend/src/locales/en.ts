@@ -21,6 +21,8 @@ const en: TranslationDictionary = {
   selectedFilterCount: ({ count }) => `Selected: ${count}`,
   noNewsTitle: 'No news found',
   latestStories: 'Latest stories',
+  latestShort: 'Latest',
+  searchStories: 'Search stories…',
   savedStories: 'Saved stories',
   clearFeedFilters: 'Clear filters',
   noMatchingStories: 'No stories match these filters',

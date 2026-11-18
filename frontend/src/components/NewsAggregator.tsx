@@ -36,7 +36,7 @@ import {
 } from '../utils/thematicSummaryReadState';
 import MobileBottomNav from './MobileBottomNav';
 import DesktopTopNavFilters from './DesktopTopNavFilters';
-import TopNavActionButton from './TopNavActionButton';
+import { FeedViewButtons } from './FeedNavControls';
 import ThematicSummaryStories from './ThematicSummaryStories';
 import ThematicSummaryPanel from './ThematicSummaryPanel';
 import type { LucideIcon } from 'lucide-react';
@@ -805,21 +805,22 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
         <div className="border-b border-line">
           <div className={`mx-auto flex max-w-7xl flex-col px-4 transition-[padding] duration-200 lg:px-6 ${topNavCompact ? 'py-2' : 'py-3'}`}>
             <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-4 lg:gap-6">
+                <div className="flex min-w-0 items-center gap-2.5">
                   <BrandMark className="h-9 w-9 shrink-0" />
                   <div className="min-w-0">
                     <h1 className="truncate text-xl font-semibold tracking-tight focus:outline-none" data-focus-fallback tabIndex={-1}>{t('pageTitle')}</h1>
                   </div>
                 </div>
+                <div className="hidden shrink-0 items-center gap-1 rounded-2xl bg-surface-raised p-1 md:flex">
+                  <FeedViewButtons activeView={activeView} onViewChange={setActiveView} t={t} />
+                </div>
               </div>
 
-              <div className="relative flex shrink-0 items-center gap-3">
+              <div className="relative flex shrink-0 items-center gap-1.5 lg:gap-2">
                 <DesktopTopNavFilters
                   {...filterSurfaceProps}
-                  onToggleReadLater={() => setActiveView((current) => current === 'readLater' ? 'news' : 'readLater')}
                   onOpenSurface={() => setUserMenuOpen(false)}
-                  readLaterActive={isReadLaterView}
                   closeSignal={desktopFiltersCloseSignal}
                 />
                 {filtersOpen && (
@@ -835,29 +836,15 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
                   />
                 )}
 
-                <div className="relative hidden md:block">
-                  <TopNavActionButton
-                    icon={RefreshCw}
-                    label={t('refresh')}
-                    onClick={handleManualRefresh}
-                    disabled={refreshDisabled}
-                    aria-label={refreshTitle}
-                    title={refreshTitle}
-                    iconClassName={refreshDisabled ? 'animate-spin' : ''}
-                  />
-                </div>
+                <button type="button" onClick={handleManualRefresh} disabled={refreshDisabled}
+                   className="ui-icon-button text-ink-muted" aria-label={refreshTitle} title={refreshTitle}>
+                  <RefreshCw className={`h-4 w-4 ${refreshDisabled ? 'animate-spin' : ''}`} aria-hidden="true" />
+                </button>
 
                 <div className="relative" ref={userMenuRef}>
-                  <TopNavActionButton
-                    icon={User}
-                    iconNode={userInitials ? (
-                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-200 text-xs font-bold leading-none text-sky-800" aria-hidden="true">
-                        {userInitials}
-                      </span>
-                    ) : (
-                      <User className="h-7 w-7" aria-hidden="true" />
-                    )}
-                    label={null}
+                  <button
+                    type="button"
+                    ref={userMenuButtonRef}
                     onClick={() => {
                       setUserMenuOpen((current) => {
                         const nextOpen = !current;
@@ -867,14 +854,13 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
                         return nextOpen;
                       });
                     }}
-                    active={userMenuOpen}
-                    buttonRef={userMenuButtonRef}
-                    className="z-20"
-                    sizeClassName="h-11 w-11 min-w-11 shrink-0 rounded-xl px-0"
+                    className={`ui-icon-button ${userInitials ? 'border-sky-200 bg-sky-200 text-sm font-bold text-sky-800 hover:bg-sky-100' : ''}`}
                     aria-expanded={userMenuOpen}
                     aria-haspopup="menu"
                     aria-label={t('userMenu')}
-                  />
+                  >
+                    {userInitials || <User className="h-7 w-7" aria-hidden="true" />}
+                  </button>
 
                   {userMenuOpen && (
                     <div className="ui-popover absolute right-0 top-[calc(100%+0.75rem)] z-50 w-60" role="menu">
@@ -1099,11 +1085,7 @@ const NewsAggregator = ({ currentUser, locale, t, onLogout, patchSession }: {
         <MobileBottomNav
           {...filterSurfaceProps}
           activeView={activeView}
-          onRefresh={handleManualRefresh}
           onViewChange={setActiveView}
-          refreshActive={refreshDisabled}
-          refreshDisabled={refreshDisabled}
-          refreshTitle={refreshTitle}
           visible={showMobileNav || filtersOpen}
           backToTopVisible={showMobileBackToTop && !filtersOpen}
           onBackToTop={scrollToTop}

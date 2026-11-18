@@ -414,7 +414,7 @@ describe('NewsAggregator', () => {
     fetchReadLaterNews.mockResolvedValue(createSingleGroupFeedResponse('saved', 'Saved headline'));
 
     await renderNewsAggregator();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Read later' })[0]);
+    fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Saved' }));
     await waitFor(() => expect(fetchReadLaterNews).toHaveBeenCalled());
     fetchNews.mockClear();
     fetchReadLaterNews.mockClear();
@@ -423,6 +423,29 @@ describe('NewsAggregator', () => {
 
     expect(fetchNews).not.toHaveBeenCalled();
     expect(fetchReadLaterNews).not.toHaveBeenCalled();
+  });
+
+  test('keeps both feed destinations available while searching and reuses the query in each view', async () => {
+    fetchNews.mockResolvedValue(createSingleGroupFeedResponse('news', 'News headline'));
+    fetchReadLaterNews.mockResolvedValue(createSingleGroupFeedResponse('saved', 'Saved headline'));
+    await renderNewsAggregator();
+    const header = within(screen.getByRole('banner'));
+    openDesktopSearch();
+    fireEvent.change(header.getByRole('searchbox'), { target: { value: 'orbit' } });
+    await act(async () => { vi.advanceTimersByTime(350); });
+    const saved = header.getByRole('button', { name: 'Saved' });
+    const latest = header.getByRole('button', { name: 'Latest' });
+    fireEvent.click(saved);
+    expect(await screen.findByText('Saved headline')).toBeVisible();
+    expect(saved).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(saved);
+    expect(fetchReadLaterNews).toHaveBeenCalledTimes(1);
+    expect(fetchReadLaterNews).toHaveBeenCalledWith(expect.objectContaining({ search: 'orbit' }));
+    fireEvent.click(latest);
+    expect(await screen.findByText('News headline')).toBeVisible();
+    expect(latest).toHaveAttribute('aria-pressed', 'true');
+    expect(header.getByRole('searchbox')).toHaveValue('orbit');
+    expect(fetchNews).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'orbit' }));
   });
 
   test('keeps an open reader synchronized with refreshed feed groups', async () => {
@@ -871,7 +894,7 @@ describe('NewsAggregator', () => {
     });
     await renderNewsAggregator();
     expect(screen.getByRole('heading', { name: 'Latest stories' })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Read later' }));
+    fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Saved' }));
     await screen.findByText('Saved headline');
 
     openDesktopSearch();

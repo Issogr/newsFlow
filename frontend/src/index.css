@@ -73,6 +73,10 @@
 }
 
 @layer components {
+  .feed-nav-button {
+    @apply inline-flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-xl text-xs font-medium transition-colors focus-visible:-outline-offset-2 md:flex-row md:gap-2 md:text-sm;
+  }
+
   .ui-field {
     @apply w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink transition-colors placeholder:text-ink-placeholder focus:border-sky-500 disabled:cursor-not-allowed disabled:opacity-60;
   }

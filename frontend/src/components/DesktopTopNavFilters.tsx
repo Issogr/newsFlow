@@ -1,73 +1,47 @@
 import { useRef } from 'react';
+import { Search } from 'lucide-react';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import useFeedSearch from '../hooks/useFeedSearch';
 import { FilterSearchInput } from './FilterSurfaceControls';
-import FilterNavActions from './FilterNavActions';
-import type { Translator } from '../types';
+import { FeedFilterButton, type FeedFilterButtonProps } from './FeedNavControls';
 
-const DesktopTopNavFilters = ({
-  filterCount,
-  filtersOpen,
-  onOpenFilters,
-  search,
-  t,
-  onSearchChange,
-  onSearchClear,
-  onToggleReadLater,
-  onOpenSurface,
-  readLaterActive,
-  closeSignal = 0,
-}: {
-  filterCount: number;
-  filtersOpen: boolean;
-  onOpenFilters: React.MouseEventHandler<HTMLButtonElement>;
+export default function DesktopTopNavFilters({ search, t, onSearchChange, onSearchClear, onOpenSurface, closeSignal, ...filters }: FeedFilterButtonProps & {
   search: string;
-  t: Translator;
   onSearchChange: (value: string) => void;
   onSearchClear: () => void;
-  onToggleReadLater: () => void;
-  onOpenSurface?: () => void;
-  readLaterActive: boolean;
-  closeSignal?: number;
-}) => {
-  const surfaceRef = useRef<HTMLDivElement>(null);
-  const { closeSearch, handleEnterSearch, handleExitSearch, searchInputRef, searchMode } = useFeedSearch({ onOpenSurface, onSearchClear, closeSignal });
-  useOnClickOutside(surfaceRef, closeSearch);
+  onOpenSurface: () => void;
+  closeSignal: number;
+}) {
+  const searchRef = useRef<HTMLDivElement>(null);
+  const { closeSearch, handleEnterSearch, handleExitSearch, searchButtonRef, searchInputRef, searchMode } = useFeedSearch({ onOpenSurface, onSearchClear, closeSignal });
+  useOnClickOutside(searchRef, (event) => {
+    // Collapsing on pointer down would move other toolbar buttons before the click lands.
+    if (!(event.target instanceof Element && event.target.closest('header'))) closeSearch();
+  });
 
   return (
-    <div ref={surfaceRef} className="relative hidden md:block">
-      {searchMode ? (
-        <div className="flex items-center gap-1.5 transition-all duration-200 ease-out">
-          <FilterSearchInput
-            className="flex h-12 w-[clamp(14rem,36vw,30rem)] items-center gap-2"
-            cancelIconClassName="h-[1.125rem] w-[1.125rem]"
-            onCancel={handleExitSearch}
-            onSearchChange={onSearchChange}
-            onSearchClear={onSearchClear}
-            search={search}
-            searchInputRef={searchInputRef}
-            t={t}
-          />
-        </div>
-      ) : (
-        <div className="flex items-center gap-1.5">
-          <FilterNavActions
-            filterCount={filterCount}
-            filtersOpen={filtersOpen}
-            onOpenFilters={onOpenFilters}
-            handleEnterSearch={handleEnterSearch}
-            onReadLaterClick={onToggleReadLater}
-            readLaterActive={readLaterActive}
-            readLaterAriaLabel={t('readLater')}
-            readLaterLabel={t('readLater')}
-            readLaterTitle={t('readLater')}
-            search={search}
-            t={t}
-          />
-        </div>
-      )}
+    <div className="hidden items-center gap-2 md:flex">
+      <div ref={searchRef} className="flex items-center">
+        <button
+          ref={searchButtonRef}
+          type="button"
+          onClick={handleEnterSearch}
+          className={`feed-nav-button px-2 hover:bg-hover-soft lg:hidden ${search ? 'text-sky-700' : 'text-ink-muted'} ${searchMode ? 'hidden' : ''}`}
+        >
+          <Search className="h-4 w-4" aria-hidden="true" />{t('searchLabel')}
+        </button>
+        <FilterSearchInput
+          className={`${searchMode ? 'flex' : 'hidden'} h-11 w-60 items-center gap-1 lg:flex xl:w-72`}
+          cancelClassName="lg:hidden"
+          onCancel={handleExitSearch}
+          onSearchChange={onSearchChange}
+          onSearchClear={onSearchClear}
+          search={search}
+          searchInputRef={searchInputRef}
+          t={t}
+        />
+      </div>
+      <FeedFilterButton {...filters} t={t} />
     </div>
   );
-};
-
-export default DesktopTopNavFilters;
+}
