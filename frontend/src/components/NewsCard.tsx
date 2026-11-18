@@ -10,6 +10,10 @@ import {
 import { getLocalizedTopic } from '../i18n';
 import { getSafeExternalUrl } from '../utils/urlSafety';
 import { addTopicEntry } from '../utils/topicEntries';
+import genericCover from '../assets/generic-news-cover.webp';
+import genericCover2 from '../assets/generic-news-cover-2.webp';
+import genericCover3 from '../assets/generic-news-cover-3.webp';
+import genericCover4 from '../assets/generic-news-cover-4.webp';
 import useShareArticle from '../hooks/useShareArticle';
 import { AI_ACCENT_GRADIENT_STYLE, getTopicPresentation } from '../topicPresentation';
 import ShareStatusBubble from './ShareStatusBubble';
@@ -17,6 +21,7 @@ import SourceComparison from './SourceComparison';
 import SourceIcon from './SourceIcon';
 import type { Locale, NewsArticle, NewsGroup, TopicEntry, Translator } from '../types';
 
+const GENERIC_COVERS = [genericCover, genericCover2, genericCover3, genericCover4];
 const READER_TOUCH_MOVE_TOLERANCE = 8;
 const READER_CLICK_SUPPRESSION_MS = 500;
 
@@ -116,7 +121,9 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
   const topicEntries = getTopicEntries(group);
   const safeOriginalUrl = getSafeExternalUrl(group?.url);
   const safeImageUrl = showImages ? getGroupImageUrl(group) : '';
-  const [failedImageUrl, setFailedImageUrl] = useState('');
+  const [fallbackCover] = useState(() => GENERIC_COVERS[Math.floor(Math.random() * GENERIC_COVERS.length)]);
+  const [failedImages, setFailedImages] = useState<string[]>([]);
+  const coverUrl = [safeImageUrl, fallbackCover].find(url => url && !failedImages.includes(url));
   const [comparing, setComparing] = useState(false);
   const comparisonId = useId();
   const actionsId = useId();
@@ -237,7 +244,7 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
             {group.title}
           </button>
         </h2>
-        {safeImageUrl && safeImageUrl !== failedImageUrl && (
+        {showImages && coverUrl && (
           <button
             type="button"
             className="aspect-square w-20 shrink-0 overflow-hidden rounded-xl bg-surface-raised sm:w-24 md:aspect-video md:w-full"
@@ -245,7 +252,13 @@ const NewsCard = memo(({ group, showImages = true, locale, t, onOpenReader, onTo
             title={t('readHereHelp')}
             onClick={() => openReader()}
           >
-            <img src={safeImageUrl} alt={group.title} loading="lazy" className="h-full w-full object-cover" onError={() => setFailedImageUrl(safeImageUrl)} />
+            <img
+              src={coverUrl}
+              alt={coverUrl === fallbackCover ? t('genericNewsCoverAlt') : group.title}
+              loading="lazy"
+              className="h-full w-full object-cover"
+              onError={() => setFailedImages(previous => [...previous, coverUrl])}
+            />
           </button>
         )}
       </div>

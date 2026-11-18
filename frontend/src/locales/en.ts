@@ -11,6 +11,7 @@ const en: TranslationDictionary = {
   searchLabel: 'Search',
   clearSearch: 'Clear search',
   backToTop: 'Back to top',
+  genericNewsCoverAlt: 'Generic news cover illustration',
   sources: 'Sources',
   topics: 'Topics',
   feedFilters: 'Filters',

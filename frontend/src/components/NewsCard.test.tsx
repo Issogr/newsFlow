@@ -92,7 +92,9 @@ describe('NewsCard', () => {
     expect(window.open).toHaveBeenCalledWith('https://example.com/story', '_blank', 'noopener,noreferrer');
   });
 
-  test('uses real, safe static photos and omits unavailable or disabled images', () => {
+  test('prefers safe static photos, falls back to a bundled cover, and respects the image setting', () => {
+    const fallbackCover = () => screen.getByRole('img', { name: t('genericNewsCoverAlt') });
+    const bundledCover = expect.stringMatching(/generic-news-cover(?:-[234])?\.webp$/);
     const { rerender } = renderNewsCard({
       cardGroup: createGroup({
         id: 'safe-image',
@@ -125,7 +127,7 @@ describe('NewsCard', () => {
       createNewsCardElement({ cardGroup: createGroup({ id: 'no-image' }) })
     );
 
-    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(fallbackCover()).toHaveAttribute('src', bundledCover);
 
     rerender(
       createNewsCardElement({
@@ -136,7 +138,7 @@ describe('NewsCard', () => {
       })
     );
 
-    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(fallbackCover()).toHaveAttribute('src', bundledCover);
 
     rerender(
       createNewsCardElement({
@@ -149,6 +151,8 @@ describe('NewsCard', () => {
 
     fireEvent.error(screen.getByRole('img', { name: 'Headline' }));
 
+    expect(fallbackCover()).toHaveAttribute('src', bundledCover);
+    fireEvent.error(fallbackCover());
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
 
     rerender(
@@ -195,9 +199,9 @@ describe('NewsCard', () => {
         createItem({ id: 'article-4', sourceId: 'source-c', source: 'Source C', title: 'Local angle' })
       ]
     });
-    const { container } = renderNewsCard({ cardGroup, onOpenReader });
+    renderNewsCard({ cardGroup, onOpenReader });
     expect(screen.getByText('Source A · Source B')).toBeInTheDocument();
-    expect(Array.from(container.querySelectorAll('img'), (img) => img.src)).toEqual(['https://example.com/a.ico', 'https://example.com/b.ico']);
+    expect(screen.getAllByAltText('').map(img => img.getAttribute('src'))).toEqual(['https://example.com/a.ico', 'https://example.com/b.ico']);
     const toggle = screen.getByRole('button', { name: 'Compare 3 sources' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(toggle);

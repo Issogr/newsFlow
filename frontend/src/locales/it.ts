@@ -11,6 +11,7 @@ const it: TranslationDictionary = {
   searchLabel: 'Cerca',
   clearSearch: 'Cancella ricerca',
   backToTop: 'Torna in cima',
+  genericNewsCoverAlt: 'Illustrazione generica per una notizia senza immagine',
   openOriginalSourceUnavailable: 'Il link originale dell articolo non e disponibile per questa card.',
   sources: 'Fonti',
   topics: 'Topic',
